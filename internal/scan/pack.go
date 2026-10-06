@@ -127,7 +127,7 @@ var packRuleStages = []PackStage{
 // chunk is counted on the review (Complete reports it) and the rule
 // stages' findings stand.
 func (o *Orchestrator) ScanPack(ctx context.Context, files []PackFile) PackReport {
-	r, hits := o.scanPack(ctx, files)
+	r, hits := o.scanPack(ctx, files, nil)
 	for _, h := range hits {
 		r.Findings = append(r.Findings, h.packFinding())
 	}
@@ -159,7 +159,7 @@ func (h packHit) packFinding() PackFinding {
 // instructions about writing as instructions to the reader. Its findings
 // carry no excerpt, as a pack's do.
 func (o *Orchestrator) ScanProse(ctx context.Context, files []PackFile) PackReport {
-	r, hits, _, _ := o.scanPackRules(ctx, files)
+	r, hits, _, _ := o.scanPackRules(ctx, files, nil)
 	for _, h := range hits {
 		r.Findings = append(r.Findings, h.packFinding())
 	}
@@ -169,18 +169,21 @@ func (o *Orchestrator) ScanProse(ctx context.Context, files []PackFile) PackRepo
 // scanPack is ScanPack's reading: the report without its findings, and
 // the findings whole — excerpts included — for a caller that keeps them
 // where excerpts belong (a release's own report, ScanShipped).
-func (o *Orchestrator) scanPack(ctx context.Context, files []PackFile) (PackReport, []packHit) {
-	r, hits, read, part := o.scanPackRules(ctx, files)
+func (o *Orchestrator) scanPack(ctx context.Context, files []PackFile, manifestJSON []byte) (PackReport, []packHit) {
+	r, hits, read, part := o.scanPackRules(ctx, files, manifestJSON)
 	return r, append(hits, o.reviewPack(ctx, &r, read, part)...)
 }
 
 // scanPackRules runs the rule stages over the text files: the report
 // without findings or review, the findings, the files read and the half
 // each is in.
-func (o *Orchestrator) scanPackRules(ctx context.Context, files []PackFile) (PackReport, []packHit, []FileEntry, map[string]PackPart) {
+// manifestJSON is the shipping release's manifest, which S4's rating by
+// declaration reads (agentry#893); nil for a pack or a voice on its own,
+// which declares nothing.
+func (o *Orchestrator) scanPackRules(ctx context.Context, files []PackFile, manifestJSON []byte) (PackReport, []packHit, []FileEntry, map[string]PackPart) {
 	r := PackReport{Schema: PackReportSchema, Stages: append([]PackStage(nil), packRuleStages...), Findings: []PackFinding{}}
 	r.Read.NotRead = []string{}
-	in := &Input{}
+	in := &Input{ManifestJSON: manifestJSON}
 	part := map[string]PackPart{}
 	sorted := append([]PackFile(nil), files...)
 	sort.Slice(sorted, func(i, k int) bool { return sorted[i].Path < sorted[k].Path })

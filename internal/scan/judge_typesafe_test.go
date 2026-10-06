@@ -534,15 +534,16 @@ func TestS5ReadsEveryTextFile(t *testing.T) {
 }
 
 // The rubric hash each request shape records. The six texts moved into
-// pkg/judge (agentry#608) byte for byte without moving it; it moved once
-// since, when the state began to say what the runner grants every run and
-// C3 to name it (agentry#731, DEV-113's addendum). A change to anything
+// pkg/judge (agentry#608) byte for byte without moving it; it moved when
+// the state began to say what the runner grants every run and C3 to name it
+// (agentry#731, DEV-113's addendum), and when C3 began to ask what the text
+// instructs rather than what it describes (agentry#893, DEV-221). A change to anything
 // that moves a verdict shows here as a changed pin.
 func TestTypeSafeRubricHashPerShape(t *testing.T) {
 	want := map[int]string{
-		1: "sha256:fe02fa960f6ccbc5cb0da23bedea6988df42cfc8085bd01c0f571a204fe3ce3a",
-		2: "sha256:68e81e5274de12f97fe05f25f80ba8887f401262c85e8e65360b4f99487c339a",
-		6: "sha256:afb9ea217663969867c299199ef07bbdd5c98850d5699b221af5a8de708f4f44",
+		1: "sha256:7dcac32cc33c6786c623b6c6141cf0a84ff619bc00783da84b37117d86663f86",
+		2: "sha256:820e6887a159f82d83ebfb5d41f5a9ef0f05451f5079a4de5618a9108f84380e",
+		6: "sha256:1d670d31568c5829901fe2e0d5ecc5de85e5ed4ad9eb526a22369a424e8afc2d",
 	}
 	for _, batch := range []int{1, 2, 6} {
 		j := NewTypeSafeJudge(JudgeConfig{Provider: "typesafe", APIKey: "k"})

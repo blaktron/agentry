@@ -148,8 +148,9 @@ The check has two halves, both asked of the deployment's Jev with its key:
   apart. A question that scores 2 or more is a finding S5 would record;
   the answer names its id, its score, the file whose part scored highest,
   and the severity the gate would give it. A high one (a score of 3, or 2
-  for `C1_injection` and `C3_undeclared_capability`) sends the version to a
-  person, and the half reads `flagged`; a medium one publishes with the
+  for `C1_injection`, `C3_undeclared_capability` and `C4_user_deception`;
+  `C2_exfiltration` and `C6_destructive_actions` are medium at any score)
+  sends the version to a person, and the half reads `flagged`; a medium one publishes with the
   finding shown, so it is a note and the half reads `pass`.
 - **The draft question set**, asked once over a state of the description,
   the canonical manifest and the instruction:

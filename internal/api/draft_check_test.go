@@ -21,8 +21,8 @@ import (
 
 // draftJudge answers both of the check's sets: "IGNORE YOUR INSTRUCTIONS"
 // in a file is the rubric's injection, "PROBABLY MISLEADING" a probable
-// deception and "PROBABLY UNDECLARED" a probable undeclared capability (both
-// score 2), "OFF-TASK" in an instruction the draft set's off-task question,
+// deception, "PROBABLY OBFUSCATED" a probable obfuscation and "PROBABLY
+// UNDECLARED" a probable undeclared capability (each score 2), "OFF-TASK" in an instruction the draft set's off-task question,
 // "JUDGE-ERROR" a failed request. It records what it was asked.
 type draftJudge struct {
 	mu    sync.Mutex
@@ -50,6 +50,8 @@ func (f *draftJudge) Ask(_ context.Context, state map[string]string, qs []judge.
 		case q.ID == judge.DraftIDOffTask && strings.Contains(state["instruction"], "OFF-TASK"):
 			out[q.ID] = 0.81
 		case q.ID == judge.RubricIDDeception && strings.Contains(state["content"], "PROBABLY MISLEADING"):
+			out[q.ID] = 0.81
+		case q.ID == judge.RubricIDObfuscation && strings.Contains(state["content"], "PROBABLY OBFUSCATED"):
 			out[q.ID] = 0.81
 		case q.ID == judge.RubricIDUndeclaredCapability && strings.Contains(state["content"], "PROBABLY UNDECLARED"):
 			out[q.ID] = 0.81
@@ -120,17 +122,24 @@ func checkDraft(t *testing.T, env *testEnv, c caller, headers map[string]string,
 }
 
 // The draft check flags what would hold the version, as the gate does since
-// ruleset 0.3.0 (agentry#773): a probable deception is a medium finding, a
-// note on a pass; a probable undeclared capability is high and flags.
+// ruleset 0.3.0 (agentry#773): a probable obfuscation is a medium finding, a
+// note on a pass; a probable undeclared capability is high and flags, and so
+// is a probable deception since ruleset 0.4.0 (agentry#893).
 func TestTheDraftCheckFlagsOnlyWhatTheGateHolds(t *testing.T) {
 	env := newTestEnvWith(t, func(s *api.Server) { s.SetDraftChecker(draftcheck.New(&draftJudge{})) })
 	staff := staffCaller(t, env, "dc-bar")
 	desc := "Give me a three-line weather brief for a city I name."
 
-	st, b, _ := checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY MISLEADING\n")})
+	st, b, _ := checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY OBFUSCATED\n")})
 	if st != http.StatusOK || b.Rubric.Verdict != "pass" || len(b.Rubric.Findings) != 1 ||
-		b.Rubric.Findings[0].ID != "C4_user_deception" || b.Rubric.Findings[0].Score != 2 || b.Rubric.Findings[0].Severity != "medium" {
+		b.Rubric.Findings[0].ID != "C5_obfuscation" || b.Rubric.Findings[0].Score != 2 || b.Rubric.Findings[0].Severity != "medium" {
 		t.Fatalf("a medium is a note on a pass: %d %+v", st, b.Rubric)
+	}
+
+	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY MISLEADING\n")})
+	if st != http.StatusOK || b.Rubric.Verdict != "flagged" || len(b.Rubric.Findings) != 1 ||
+		b.Rubric.Findings[0].ID != "C4_user_deception" || b.Rubric.Findings[0].Score != 2 || b.Rubric.Findings[0].Severity != "high" {
+		t.Fatalf("a deception at 2 flags: %d %+v", st, b.Rubric)
 	}
 
 	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY UNDECLARED\n")})
