@@ -1,0 +1,183 @@
+package registry
+
+// Retire, Restore and the tombstone Delete: what a publisher does with a
+// QuickAgent of their own that they no longer want in front of anyone
+// (plan forks-and-publisher.md M1, agentry#942; D1–D4, D13).
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/blaktron/agentry/internal/audit"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
+)
+
+// ErrRetired reports a write a retired agent does not take: a submission,
+// or making it public other than by Restore. The API answers 409
+// agent-retired.
+var ErrRetired = errors.New("registry: this QuickAgent is retired")
+
+// ErrNotRetired reports a Restore of an agent that is not retired.
+var ErrNotRetired = errors.New("registry: this QuickAgent is not retired")
+
+// ErrPipelineSkipOnRestore reports a Restore to public of an agent whose
+// pipeline: skip was set while it was retired: a public agent is always
+// scanned (DEV-115).
+var ErrPipelineSkipOnRestore = errors.New("registry: this QuickAgent is off the pipeline and cannot be made public")
+
+// UnscannedStandingError reports a Restore to public refused because N
+// versions admitted unscanned still stand (DEV-115).
+type UnscannedStandingError struct{ N int64 }
+
+func (e *UnscannedStandingError) Error() string {
+	return fmt.Sprintf("registry: %d unscanned versions stand", e.N)
+}
+
+// tombstoneYankReason is what a deleted agent's published versions carry
+// as their yank reason: the record says who withdrew them and why.
+const tombstoneYankReason = "The publisher deleted this QuickAgent."
+
+// ResolveIncludingDeleted is Resolve with a deleted agent's tombstone
+// found, not hidden: the trust & safety actions' door to an agent its
+// publisher deleted. Nothing a publisher or a consumer calls uses it.
+func (s *Service) ResolveIncludingDeleted(ctx context.Context, namespace, name string) (Agent, error) {
+	return s.resolve(ctx, namespace, name, true)
+}
+
+// Retire makes the agent private and labels it retired, keeping the
+// visibility it had for Restore (D2). It takes no new submission until it
+// is restored. A retired agent holds no place under the private-agent cap
+// (D13), so retiring is never refused by it. Retiring an agent that is
+// already retired changes nothing and is not an error.
+func (s *Service) Retire(ctx context.Context, a Agent, actorEvent audit.Event) error {
+	return s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		locked, err := q.GetAgentForUpdate(ctx, a.ID)
+		if err != nil {
+			return fmt.Errorf("registry: lock agent: %w", err)
+		}
+		if locked.RetiredAt != nil {
+			return nil
+		}
+		if _, err := q.RetireAgent(ctx, a.ID); err != nil {
+			return fmt.Errorf("registry: retire: %w", err)
+		}
+		e := actorEvent
+		e.Action = audit.ActionAgentRetire
+		if a.NamespaceKind == "org" {
+			e.OrgID = a.NamespaceID
+		}
+		e.TargetKind, e.TargetID = "agent", a.ID
+		e.Detail = map[string]any{"namespace": a.Namespace, "name": a.Name, "visibility": locked.Visibility}
+		return s.aud.Write(ctx, q, e)
+	})
+}
+
+// Restore returns a retired agent to the visibility it had. Back to public
+// it meets the rules any agent becoming public meets (DEV-115): not off
+// the pipeline, no unscanned version standing. Back to private it takes a
+// place under the private-agent cap again, so the cap is checked under the
+// namespace's lock.
+func (s *Service) Restore(ctx context.Context, a Agent, actorEvent audit.Event) error {
+	return s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		locked, err := q.GetAgentForUpdate(ctx, a.ID)
+		if err != nil {
+			return fmt.Errorf("registry: lock agent: %w", err)
+		}
+		if locked.RetiredAt == nil || locked.RetiredVisibility == nil {
+			return ErrNotRetired
+		}
+		to := *locked.RetiredVisibility
+		switch to {
+		case "public":
+			if locked.PipelineSkip {
+				return ErrPipelineSkipOnRestore
+			}
+			n, err := q.CountUnscannedVersionsStanding(ctx, a.ID)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return &UnscannedStandingError{N: n}
+			}
+		case "private":
+			if err := s.CheckPrivateAgentCapInTx(ctx, q, a); err != nil {
+				return err
+			}
+		}
+		if _, err := q.RestoreAgent(ctx, a.ID); err != nil {
+			return fmt.Errorf("registry: restore: %w", err)
+		}
+		e := actorEvent
+		e.Action = audit.ActionAgentRestore
+		if a.NamespaceKind == "org" {
+			e.OrgID = a.NamespaceID
+		}
+		e.TargetKind, e.TargetID = "agent", a.ID
+		e.Detail = map[string]any{"namespace": a.Namespace, "name": a.Name, "visibility": to}
+		return s.aud.Write(ctx, q, e)
+	})
+}
+
+// Tombstone deletes an agent that has version history (D3). Every
+// published or quarantined version is yanked, the agent becomes private
+// and deleted, and every read by name stops finding it. Nothing is
+// removed: the version rows (which the 00004 trigger keeps), the
+// archives, the receipts and the audit trail all stay, and the row holds
+// the name in its namespace for good (D4). The caller has already refused
+// the cases the tombstone does not take: trust & safety records and
+// versions still in flight. It reports how many versions were yanked.
+func (s *Service) Tombstone(ctx context.Context, a Agent, actorEvent audit.Event) (int, error) {
+	var results []TransitionResult
+	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		if _, err := q.GetAgentForUpdate(ctx, a.ID); err != nil {
+			return fmt.Errorf("registry: lock agent: %w", err)
+		}
+		versions, err := q.ListVersions(ctx, a.ID)
+		if err != nil {
+			return err
+		}
+		yank := actorEvent
+		yank.Action = audit.ActionVersionYank
+		if a.NamespaceKind == "org" {
+			yank.OrgID = a.NamespaceID
+		}
+		for _, v := range versions {
+			switch Status(v.Status) {
+			case StatusPublished, StatusQuarantined:
+			default:
+				continue
+			}
+			res, err := s.TransitionInTx(ctx, q, v.ID, StatusYanked, tombstoneYankReason, yank)
+			if err != nil {
+				return fmt.Errorf("registry: yank %s: %w", v.Version, err)
+			}
+			results = append(results, res)
+		}
+		n, err := q.TombstoneAgent(ctx, a.ID)
+		if err != nil {
+			return fmt.Errorf("registry: tombstone: %w", err)
+		}
+		if n != 1 {
+			return ErrNotFound
+		}
+		e := actorEvent
+		e.Action = audit.ActionAgentDelete
+		if a.NamespaceKind == "org" {
+			e.OrgID = a.NamespaceID
+		}
+		e.TargetKind, e.TargetID = "agent", a.ID
+		e.Detail = map[string]any{
+			"namespace": a.Namespace, "name": a.Name,
+			"tombstone": true, "versionsYanked": len(results),
+		}
+		return s.aud.Write(ctx, q, e)
+	})
+	if err != nil {
+		return 0, err
+	}
+	for _, res := range results {
+		s.EmitTransition(ctx, res)
+	}
+	return len(results), nil
+}

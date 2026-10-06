@@ -569,6 +569,27 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/agents/" + s.orgH + "/mx-undeletable"
 			},
 		},
+		// Retire changes the agent it touches, so each case retires a
+		// public agent of its own, made in the path (prep runs only for
+		// allowed callers, and a refused caller must meet a public agent to
+		// be refused with a 403 rather than a missing name's 404).
+		"retireAgent": {
+			method: "POST",
+			path: func(s *matrixSeed, caseID string) string {
+				s.env.doJSON(s.sessions["admin"], http.MethodPost, "/api/v1/agents", map[string]any{
+					"namespace": s.orgH, "name": caseID, "modes": []string{"autonomous"}, "visibility": "public",
+				}, nil, http.StatusCreated)
+				return "/api/v1/agents/" + s.orgH + "/" + caseID + "/retire"
+			},
+		},
+		// The fixture agent is not retired: an allowed caller gets 409
+		// agent-not-retired, a refused one its 403, and nothing changes.
+		"restoreAgent": {
+			method: "POST",
+			path: func(s *matrixSeed, _ string) string {
+				return "/api/v1/agents/" + s.orgH + "/mx-agent/restore"
+			},
+		},
 		"listAgentsByTag": {method: "GET", path: sPath("/api/v1/tags/matrix")},
 		"setAgentUserGrant": {
 			method: "PUT",

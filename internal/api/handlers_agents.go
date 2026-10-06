@@ -42,6 +42,7 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 		QuarantineState: AgentQuarantineState(a.QuarantineState),
 		Builtin:         a.Builtin,
 		CreatedAt:       a.CreatedAt,
+		RetiredAt:       a.RetiredAt,
 	}
 	if u := s.gitSSHURL(a.Namespace, a.Name); u != "" {
 		out.GitSshUrl = &u
@@ -163,6 +164,9 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		case s.orgGateProblem(w, r, req.Namespace, err):
 		case errors.Is(err, registry.ErrDenied):
 			problemValidation(w, r, sentence(err.Error()))
+		case isUniqueViolation(err) && s.nameHeld(r.Context(), req.Namespace, req.Name):
+			writeProblem(w, r, http.StatusConflict, "name-held", "That name is held",
+				"A QuickAgent of that name was deleted from this namespace, and a deleted QuickAgent's name is never used again, so no one who installed it can be handed something else under it. Choose another name.")
 		case isUniqueViolation(err):
 			problemConflict(w, r, "This namespace already has a QuickAgent with that name.")
 		default:
@@ -211,9 +215,24 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 			includePrivate = auth.NamespaceDerivedAgentRole(p, h.Kind, h.ID, p.Role(h.ID)) != auth.AgentRoleNone
 		}
 	}
-	rows, err := s.q().ListAgentsByNamespace(r.Context(), storegen.ListAgentsByNamespaceParams{
-		Handle: params.Namespace, IncludePrivate: includePrivate,
-	})
+	lp := storegen.ListAgentsByNamespaceParams{Handle: params.Namespace, IncludePrivate: includePrivate}
+	if params.Q != nil {
+		q := strings.TrimSpace(*params.Q)
+		if len(q) > 200 {
+			problemValidation(w, r, "The search term must be at most 200 characters.")
+			return
+		}
+		// ILIKE's own wildcards are matched literally: the term is a
+		// substring, not a pattern.
+		lp.Query = strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(q)
+	}
+	if params.State != nil {
+		lp.State = string(*params.State)
+	}
+	if params.Sort != nil && *params.Sort != ListAgentsParamsSortName {
+		lp.Sort = string(*params.Sort)
+	}
+	rows, err := s.q().ListAgentsByNamespace(r.Context(), lp)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "list agents", "err", err)
 		problemInternal(w, r)
@@ -222,6 +241,7 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	out := make([]Agent, 0, len(rows))
 	base := strings.TrimSuffix(s.cfg.BaseURL, "/")
 	for _, row := range rows {
+		installs := int(row.Installs)
 		out = append(out, Agent{
 			Id: row.ID, Namespace: row.Namespace, Name: row.Name,
 			Modes: apiModes(row.Modes), Visibility: AgentVisibility(row.Visibility),
@@ -230,9 +250,21 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 			QuarantineState: AgentQuarantineState(row.QuarantineState),
 			Builtin:         row.Builtin,
 			CreatedAt:       row.CreatedAt,
+			RetiredAt:       row.RetiredAt,
+			Installs30d:     &installs,
+			LastSubmittedAt: row.LastSubmittedAt,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// nameHeld reports whether ns/name is a deleted agent's tombstone, whose
+// name is never used again (agentry#942, D4) — what a create that collided
+// on the name collided with. A lookup that fails says nothing is held, and
+// the create's own conflict answers.
+func (s *Server) nameHeld(ctx context.Context, ns, name string) bool {
+	a, err := s.reg.ResolveIncludingDeleted(ctx, ns, name)
+	return err == nil && a.DeletedAt != nil
 }
 
 // GetAgent implements GET /agents/{ns}/{name}.
@@ -292,6 +324,13 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	if req.Visibility != nil && string(*req.Visibility) != a.Visibility && !administers() {
 		problemForbidden(w, r, "Changing this QuickAgent's visibility needs the "+a.Namespace+" namespace's administrators.")
+		return
+	}
+	// A retired agent comes back by Restore, which puts back the
+	// visibility it had (agentry#942); making it public here would leave
+	// it public and retired at once. Decided again under the row lock.
+	if req.Visibility != nil && string(*req.Visibility) == "public" && a.RetiredAt != nil {
+		problemAgentRetired(w, r)
 		return
 	}
 	if req.AllowForcePush != nil && *req.AllowForcePush != a.AllowForcePush && !administers() {
@@ -398,6 +437,10 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 				}
 				return err
 			}
+		}
+		if req.Visibility != nil && string(*req.Visibility) == "public" && locked.RetiredAt != nil {
+			refuse = func() { problemAgentRetired(w, r) }
+			return errRefused
 		}
 		visibility, skip := locked.Visibility, locked.PipelineSkip
 		if req.Visibility != nil {

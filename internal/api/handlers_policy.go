@@ -150,7 +150,10 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 		problemForbidden(w, r, "Trust & safety actions are open to platform staff only.")
 		return
 	}
-	a, err := s.reg.Resolve(r.Context(), ns, name)
+	// A deleted agent's tombstone stays within trust & safety's reach
+	// (agentry#942): whoever installed it before its publisher deleted it
+	// still holds a copy.
+	a, err := s.reg.ResolveIncludingDeleted(r.Context(), ns, name)
 	if err != nil {
 		problemNotFound(w, r)
 		return

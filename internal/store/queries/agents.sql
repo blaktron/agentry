@@ -15,11 +15,15 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetAgentByPath :one
+-- A deleted agent's tombstone (agentry#942) is absent from every read path
+-- that asks for it by name; include_deleted is the platform staff's door to
+-- it, for the trust & safety actions only.
 SELECT a.*, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 JOIN repos r ON r.id = a.repo_id
-WHERE h.handle = $1 AND a.name = $2;
+WHERE h.handle = $1 AND a.name = $2
+  AND (a.deleted_at IS NULL OR sqlc.arg(include_deleted)::boolean);
 
 -- name: UpdateAgentSettings :exec
 UPDATE agents SET
@@ -55,14 +59,40 @@ WHERE agent_id = $1 AND scan_status = 'skipped'
 -- name: ListAgentsByNamespace :many
 -- A suspended or erased organization's agents are absent (agentry#363);
 -- the handler answers 404 for the namespace before this runs, and the
--- predicate keeps the listing honest on its own.
-SELECT a.*, h.handle AS namespace
+-- predicate keeps the listing honest on its own. A deleted agent's
+-- tombstone is never listed (agentry#942). The publisher's page searches
+-- (query: name and summary, case-folded), filters by state (active,
+-- retired; empty is both) and sorts (name, newest, installs, submitted —
+-- the last submission of any version); the trailing keys keep every
+-- ordering total.
+SELECT a.*, h.handle AS namespace,
+       coalesce(d.installs, 0)::bigint AS installs,
+       ls.created_at AS last_submitted_at
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 LEFT JOIN orgs o ON o.id = a.namespace_id
+LEFT JOIN (
+  SELECT agent_id, sum(installs) AS installs
+  FROM download_stats WHERE day >= current_date - 30 GROUP BY agent_id
+) d ON d.agent_id = a.id
+LEFT JOIN agent_versions ls ON ls.id = (
+  SELECT av.id FROM agent_versions av
+  WHERE av.agent_id = a.id ORDER BY av.created_at DESC, av.id DESC LIMIT 1
+)
 WHERE h.handle = $1
+  AND a.deleted_at IS NULL
   AND (a.visibility = 'public' OR sqlc.arg(include_private)::boolean)
   AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
-ORDER BY a.name;
+  AND (sqlc.arg(state)::text = ''
+       OR (sqlc.arg(state)::text = 'active' AND a.retired_at IS NULL)
+       OR (sqlc.arg(state)::text = 'retired' AND a.retired_at IS NOT NULL))
+  AND (sqlc.arg(query)::text = ''
+       OR a.name::text ILIKE '%' || sqlc.arg(query)::text || '%'
+       OR a.summary ILIKE '%' || sqlc.arg(query)::text || '%')
+ORDER BY
+  CASE WHEN sqlc.arg(sort)::text = 'newest' THEN a.created_at END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'submitted' THEN ls.created_at END DESC NULLS LAST,
+  a.name, a.id;
 
 -- LockNamespace serialises the per-namespace counts — the agent quota and
 -- the private-agent cap — inside the transaction that inserts or flips:
@@ -72,12 +102,19 @@ ORDER BY a.name;
 SELECT id FROM handles WHERE id = $1 FOR UPDATE;
 
 -- name: CountAgentsInNamespace :one
-SELECT count(*) FROM agents WHERE namespace_id = $1;
+-- A deleted agent's tombstone holds its name, not a place in the quota
+-- (agentry#942).
+SELECT count(*) FROM agents WHERE namespace_id = $1 AND deleted_at IS NULL;
 
 -- The private-agent cap a subscription tier sets (plan subscription-tiers
 -- §5.3): what a namespace holds today, so one more can be refused.
 -- name: CountPrivateAgentsInNamespace :one
-SELECT count(*) FROM agents WHERE namespace_id = $1 AND visibility = 'private';
+-- A retired agent (D13 of plan forks-and-publisher.md) and a deleted one's
+-- tombstone are private but put away: neither takes a submission or runs
+-- for anyone, so neither holds a place under the cap (agentry#942).
+SELECT count(*) FROM agents
+WHERE namespace_id = $1 AND visibility = 'private'
+  AND retired_at IS NULL AND deleted_at IS NULL;
 
 -- name: UpsertAgentUserGrant :exec
 INSERT INTO agent_user_grants (agent_id, user_id, role) VALUES ($1, $2, $3)
@@ -345,6 +382,10 @@ LIMIT $1;
 SELECT
   (SELECT count(*) FROM agent_versions av WHERE av.agent_id = $1)::bigint AS versions,
   (SELECT count(*) FROM agent_versions av2 WHERE av2.agent_id = $1 AND av2.status <> 'submitted')::bigint AS versions_past_submitted,
+  -- Versions the pipeline or a reviewer has yet to decide: a tombstone waits
+  -- for them, so nothing is published onto a deleted agent (agentry#942).
+  (SELECT count(*) FROM agent_versions av3 WHERE av3.agent_id = $1
+     AND av3.status IN ('submitted', 'scanning', 'needs_review', 'approved'))::bigint AS versions_in_flight,
   (SELECT count(*) FROM advisories adv WHERE adv.agent_id = $1)::bigint AS advisories,
   (SELECT count(*) FROM abuse_reports ab WHERE ab.agent_id = $1)::bigint AS abuse_reports;
 
@@ -353,6 +394,27 @@ DELETE FROM agents WHERE id = $1;
 
 -- name: DeleteRepoByID :exec
 DELETE FROM repos WHERE id = $1;
+
+-- name: RetireAgent :execrows
+-- Retire (agentry#942, D2): private, the visibility it had kept for Restore.
+-- Already retired, nothing moves.
+UPDATE agents SET retired_at = now(), retired_visibility = visibility,
+  visibility = 'private', updated_at = now()
+WHERE id = $1 AND retired_at IS NULL AND deleted_at IS NULL;
+
+-- name: RestoreAgent :execrows
+-- Restore (agentry#942): the visibility the agent had when it was retired.
+-- The caller has decided, under the row lock, that it may hold it.
+UPDATE agents SET visibility = retired_visibility, retired_at = NULL,
+  retired_visibility = NULL, updated_at = now()
+WHERE id = $1 AND retired_at IS NOT NULL AND deleted_at IS NULL;
+
+-- name: TombstoneAgent :execrows
+-- Delete of an agent with version history (agentry#942, D3): the row stays
+-- as a tombstone, private, taking no tag-push submissions.
+UPDATE agents SET deleted_at = now(), visibility = 'private',
+  auto_publish_tags = false, updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: SetAgentNamespace :exec
 -- Moves an agent between namespaces (§12.7 deletion-with-transfer).

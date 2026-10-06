@@ -1287,6 +1287,48 @@ func (e SsoKind) Valid() bool {
 	}
 }
 
+// Defines values for ListAgentsParamsState.
+const (
+	ListAgentsParamsStateActive  ListAgentsParamsState = "active"
+	ListAgentsParamsStateRetired ListAgentsParamsState = "retired"
+)
+
+// Valid indicates whether the value is a known member of the ListAgentsParamsState enum.
+func (e ListAgentsParamsState) Valid() bool {
+	switch e {
+	case ListAgentsParamsStateActive:
+		return true
+	case ListAgentsParamsStateRetired:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAgentsParamsSort.
+const (
+	ListAgentsParamsSortInstalls  ListAgentsParamsSort = "installs"
+	ListAgentsParamsSortName      ListAgentsParamsSort = "name"
+	ListAgentsParamsSortNewest    ListAgentsParamsSort = "newest"
+	ListAgentsParamsSortSubmitted ListAgentsParamsSort = "submitted"
+)
+
+// Valid indicates whether the value is a known member of the ListAgentsParamsSort enum.
+func (e ListAgentsParamsSort) Valid() bool {
+	switch e {
+	case ListAgentsParamsSortInstalls:
+		return true
+	case ListAgentsParamsSortName:
+		return true
+	case ListAgentsParamsSortNewest:
+		return true
+	case ListAgentsParamsSortSubmitted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentJSONBodyVisibility.
 const (
 	UpdateAgentJSONBodyVisibilityPrivate UpdateAgentJSONBodyVisibility = "private"
@@ -1613,19 +1655,19 @@ func (e ListReviewQueueParamsQueue) Valid() bool {
 
 // Defines values for SearchAgentsParamsSort.
 const (
-	Installs  SearchAgentsParamsSort = "installs"
-	Newest    SearchAgentsParamsSort = "newest"
-	Relevance SearchAgentsParamsSort = "relevance"
+	SearchAgentsParamsSortInstalls  SearchAgentsParamsSort = "installs"
+	SearchAgentsParamsSortNewest    SearchAgentsParamsSort = "newest"
+	SearchAgentsParamsSortRelevance SearchAgentsParamsSort = "relevance"
 )
 
 // Valid indicates whether the value is a known member of the SearchAgentsParamsSort enum.
 func (e SearchAgentsParamsSort) Valid() bool {
 	switch e {
-	case Installs:
+	case SearchAgentsParamsSortInstalls:
 		return true
-	case Newest:
+	case SearchAgentsParamsSortNewest:
 		return true
-	case Relevance:
+	case SearchAgentsParamsSortRelevance:
 		return true
 	default:
 		return false
@@ -1834,6 +1876,12 @@ type Agent struct {
 	GitSshUrl *string            `json:"gitSshUrl,omitempty"`
 	Id        openapi_types.UUID `json:"id"`
 
+	// Installs30d Installs over the last 30 days. Present on `GET /agents?namespace=`.
+	Installs30d *int `json:"installs30d,omitempty"`
+
+	// LastSubmittedAt When a version of this agent was last submitted, whatever became of it. Present on `GET /agents?namespace=` for an agent with at least one version.
+	LastSubmittedAt *time.Time `json:"lastSubmittedAt,omitempty"`
+
 	// Modes The run modes a release supports; at least one.
 	Modes     AgentModes `json:"modes"`
 	Name      string     `json:"name"`
@@ -1842,8 +1890,11 @@ type Agent struct {
 	// PipelineSkip Present for callers with maintain; whether submissions are admitted without a scan (an organization's private agent only, plan organization-subscriptions §4). A version so admitted is served with `scanStatus: skipped` and the report's verdict `unscanned`.
 	PipelineSkip    *bool                `json:"pipelineSkip,omitempty"`
 	QuarantineState AgentQuarantineState `json:"quarantineState"`
-	Summary         string               `json:"summary"`
-	Visibility      AgentVisibility      `json:"visibility"`
+
+	// RetiredAt When the agent was retired (agentry#942): it is private, takes no submission, and `POST …/restore` returns the visibility it had. Absent on an agent that is not retired.
+	RetiredAt  *time.Time      `json:"retiredAt,omitempty"`
+	Summary    string          `json:"summary"`
+	Visibility AgentVisibility `json:"visibility"`
 }
 
 // AgentQuarantineState defines model for Agent.QuarantineState.
@@ -3475,6 +3526,27 @@ type ListAdvisoriesParams struct {
 // ListAgentsParams defines parameters for ListAgents.
 type ListAgentsParams struct {
 	Namespace string `form:"namespace" json:"namespace"`
+
+	// Q Case-insensitive substring of the agent's name or summary.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// State `active` lists agents that are not retired, `retired` only the retired ones; absent, both.
+	State *ListAgentsParamsState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Sort `name` (the default), `newest` (created), `installs` (the last 30 days) or `submitted` (the newest submission of any version).
+	Sort *ListAgentsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+}
+
+// ListAgentsParamsState defines parameters for ListAgents.
+type ListAgentsParamsState string
+
+// ListAgentsParamsSort defines parameters for ListAgents.
+type ListAgentsParamsSort string
+
+// DeleteAgentParams defines parameters for DeleteAgent.
+type DeleteAgentParams struct {
+	// Confirm The agent's name, required to delete an agent with version history.
+	Confirm *string `form:"confirm,omitempty" json:"confirm,omitempty"`
 }
 
 // UpdateAgentJSONBody defines parameters for UpdateAgent.
@@ -3490,9 +3562,11 @@ type UpdateAgentJSONBody struct {
 	Modes *AgentModes `json:"modes,omitempty"`
 
 	// PipelineSkip Admit submissions to this agent without a scan (plan organization-subscriptions §4, D16). Settable by the namespace's administrators on a private agent of an organization's whose subscription includes unscanned agents; refused on a public agent (`pipeline-skip-public`) and in a personal namespace (`pipeline-skip-personal`), and with `feature-not-included` where the tier lacks it. While it is set, and while a version published unscanned stands, the agent cannot be made public (`agent-unscanned`). Clearing it changes nothing already published; the next submission goes through the whole pipeline.
-	PipelineSkip *bool                          `json:"pipelineSkip,omitempty"`
-	Summary      *string                        `json:"summary,omitempty"`
-	Visibility   *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
+	PipelineSkip *bool   `json:"pipelineSkip,omitempty"`
+	Summary      *string `json:"summary,omitempty"`
+
+	// Visibility `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back.
+	Visibility *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
 }
 
 // UpdateAgentJSONBodyVisibility defines parameters for UpdateAgent.
@@ -4132,6 +4206,8 @@ type ClientInterface interface {
 
 	// ListAgents List agents in a namespace (public ones for everyone).
 	//
+	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt` and, when it is retired, `retiredAt`.
+	//
 	// Corresponds with GET /agents (the `ListAgents` operationId).
 	ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4153,12 +4229,12 @@ type ClientInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgent(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteAgent Delete an agent that was never published (maintain, §9.2).
+	// DeleteAgent Delete an agent (the namespace's administrators, §9.2, agentry#942).
 	//
-	// Deletes the agent and its hosted repository. Refused (409) once the agent has any version row, because §4.3 forbids deleting version rows: a version past `submitted` is history consumers may depend on, and a version still at `submitted` is mid-pipeline. Published agents are yanked or blocked, never deleted.
+	// An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 	//
 	// Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
-	DeleteAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteAgent(ctx context.Context, ns Namespace, name AgentName, params *DeleteAgentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgent Agent metadata (public agents readable by anyone).
 	//
@@ -4251,6 +4327,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
 	GetAgentReadme(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RestoreAgent Restore a retired agent (the namespace's administrators, agentry#942).
+	//
+	// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, `409 pipeline-skip-public`); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
+	RestoreAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RetireAgent Retire an agent (the namespace's administrators, agentry#942).
+	//
+	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/retire (the `RetireAgent` operationId).
+	RetireAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgentStats Star count and install counts for an agent (§9.2).
 	//
@@ -5704,6 +5794,8 @@ func (c *Client) GetAdvisory(ctx context.Context, advisoryId openapi_types.UUID,
 
 // ListAgents List agents in a namespace (public ones for everyone).
 //
+// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt` and, when it is retired, `retiredAt`.
+//
 // Corresponds with GET /agents (the `ListAgents` operationId).
 func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAgentsRequest(c.Server, params)
@@ -5755,13 +5847,13 @@ func (c *Client) CreateAgent(ctx context.Context, body CreateAgentJSONRequestBod
 	return c.Client.Do(req)
 }
 
-// DeleteAgent Delete an agent that was never published (maintain, §9.2).
+// DeleteAgent Delete an agent (the namespace's administrators, §9.2, agentry#942).
 //
-// Deletes the agent and its hosted repository. Refused (409) once the agent has any version row, because §4.3 forbids deleting version rows: a version past `submitted` is history consumers may depend on, and a version still at `submitted` is mid-pipeline. Published agents are yanked or blocked, never deleted.
+// An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 //
 // Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
-func (c *Client) DeleteAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteAgentRequest(c.Server, ns, name)
+func (c *Client) DeleteAgent(ctx context.Context, ns Namespace, name AgentName, params *DeleteAgentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAgentRequest(c.Server, ns, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5994,6 +6086,40 @@ func (c *Client) SetAgentUserGrant(ctx context.Context, ns Namespace, name Agent
 // Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
 func (c *Client) GetAgentReadme(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAgentReadmeRequest(c.Server, ns, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RestoreAgent Restore a retired agent (the namespace's administrators, agentry#942).
+//
+// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, `409 pipeline-skip-public`); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+//
+// Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
+func (c *Client) RestoreAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestoreAgentRequest(c.Server, ns, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RetireAgent Retire an agent (the namespace's administrators, agentry#942).
+//
+// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+//
+// Corresponds with POST /agents/{ns}/{name}/retire (the `RetireAgent` operationId).
+func (c *Client) RetireAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRetireAgentRequest(c.Server, ns, name)
 	if err != nil {
 		return nil, err
 	}
@@ -9619,6 +9745,42 @@ func NewListAgentsRequest(server string, params *ListAgentsParams) (*http.Reques
 			}
 		}
 
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.State != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -9674,7 +9836,7 @@ func NewCreateAgentRequestWithBody(server string, contentType string, body io.Re
 }
 
 // NewDeleteAgentRequest constructs an http.Request for the DeleteAgent method
-func NewDeleteAgentRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+func NewDeleteAgentRequest(server string, ns Namespace, name AgentName, params *DeleteAgentParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9704,6 +9866,33 @@ func NewDeleteAgentRequest(server string, ns Namespace, name AgentName) (*http.R
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Confirm != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "confirm", *params.Confirm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
@@ -10263,6 +10452,88 @@ func NewGetAgentReadmeRequest(server string, ns Namespace, name AgentName, param
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRestoreAgentRequest constructs an http.Request for the RestoreAgent method
+func NewRestoreAgentRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/restore", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRetireAgentRequest constructs an http.Request for the RetireAgent method
+func NewRetireAgentRequest(server string, ns Namespace, name AgentName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/retire", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -17062,6 +17333,8 @@ type ClientWithResponsesInterface interface {
 
 	// ListAgentsWithResponse List agents in a namespace (public ones for everyone).
 	//
+	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt` and, when it is retired, `retiredAt`.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /agents (the `ListAgents` operationId).
@@ -17085,14 +17358,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgentWithResponse(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentResponse, error)
 
-	// DeleteAgentWithResponse Delete an agent that was never published (maintain, §9.2).
+	// DeleteAgentWithResponse Delete an agent (the namespace's administrators, §9.2, agentry#942).
 	//
-	// Deletes the agent and its hosted repository. Refused (409) once the agent has any version row, because §4.3 forbids deleting version rows: a version past `submitted` is history consumers may depend on, and a version still at `submitted` is mid-pipeline. Published agents are yanked or blocked, never deleted.
+	// An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
-	DeleteAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*DeleteAgentResponse, error)
+	DeleteAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, params *DeleteAgentParams, reqEditors ...RequestEditorFn) (*DeleteAgentResponse, error)
 
 	// GetAgentWithResponse Agent metadata (public agents readable by anyone).
 	//
@@ -17197,6 +17470,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
 	GetAgentReadmeWithResponse(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*GetAgentReadmeResponse, error)
+
+	// RestoreAgentWithResponse Restore a retired agent (the namespace's administrators, agentry#942).
+	//
+	// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, `409 pipeline-skip-public`); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
+	RestoreAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*RestoreAgentResponse, error)
+
+	// RetireAgentWithResponse Retire an agent (the namespace's administrators, agentry#942).
+	//
+	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/retire (the `RetireAgent` operationId).
+	RetireAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*RetireAgentResponse, error)
 
 	// GetAgentStatsWithResponse Star count and install counts for an agent (§9.2).
 	//
@@ -19504,6 +19795,102 @@ func (r GetAgentReadmeResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetAgentReadmeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RestoreAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Agent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RestoreAgentResponse) GetJSON200() *Agent {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RestoreAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RestoreAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RestoreAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestoreAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestoreAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RetireAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Agent
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RetireAgentResponse) GetJSON200() *Agent {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RetireAgentResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RetireAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RetireAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RetireAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RetireAgentResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -26936,6 +27323,8 @@ func (c *ClientWithResponses) GetAdvisoryWithResponse(ctx context.Context, advis
 
 // ListAgentsWithResponse List agents in a namespace (public ones for everyone).
 //
+// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt` and, when it is retired, `retiredAt`.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /agents (the `ListAgents` operationId).
@@ -26977,15 +27366,15 @@ func (c *ClientWithResponses) CreateAgentWithResponse(ctx context.Context, body 
 	return ParseCreateAgentResponse(rsp)
 }
 
-// DeleteAgentWithResponse Delete an agent that was never published (maintain, §9.2).
+// DeleteAgentWithResponse Delete an agent (the namespace's administrators, §9.2, agentry#942).
 //
-// Deletes the agent and its hosted repository. Refused (409) once the agent has any version row, because §4.3 forbids deleting version rows: a version past `submitted` is history consumers may depend on, and a version still at `submitted` is mid-pipeline. Published agents are yanked or blocked, never deleted.
+// An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
-func (c *ClientWithResponses) DeleteAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*DeleteAgentResponse, error) {
-	rsp, err := c.DeleteAgent(ctx, ns, name, reqEditors...)
+func (c *ClientWithResponses) DeleteAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, params *DeleteAgentParams, reqEditors ...RequestEditorFn) (*DeleteAgentResponse, error) {
+	rsp, err := c.DeleteAgent(ctx, ns, name, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -27178,6 +27567,36 @@ func (c *ClientWithResponses) GetAgentReadmeWithResponse(ctx context.Context, ns
 		return nil, err
 	}
 	return ParseGetAgentReadmeResponse(rsp)
+}
+
+// RestoreAgentWithResponse Restore a retired agent (the namespace's administrators, agentry#942).
+//
+// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, `409 pipeline-skip-public`); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
+func (c *ClientWithResponses) RestoreAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*RestoreAgentResponse, error) {
+	rsp, err := c.RestoreAgent(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestoreAgentResponse(rsp)
+}
+
+// RetireAgentWithResponse Retire an agent (the namespace's administrators, agentry#942).
+//
+// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/retire (the `RetireAgent` operationId).
+func (c *ClientWithResponses) RetireAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*RetireAgentResponse, error) {
+	rsp, err := c.RetireAgent(ctx, ns, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRetireAgentResponse(rsp)
 }
 
 // GetAgentStatsWithResponse Star count and install counts for an agent (§9.2).
@@ -30202,6 +30621,9 @@ func ParseDeleteAgentResponse(rsp *http.Response) (*DeleteAgentResponse, error) 
 	case rsp.StatusCode == 409:
 		break // No content-type
 
+	case rsp.StatusCode == 422:
+		break // No content-type
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -30505,6 +30927,72 @@ func ParseGetAgentReadmeResponse(rsp *http.Response) (*GetAgentReadmeResponse, e
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRestoreAgentResponse parses an HTTP response from a RestoreAgentWithResponse call
+func ParseRestoreAgentResponse(rsp *http.Response) (*RestoreAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestoreAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRetireAgentResponse parses an HTTP response from a RetireAgentWithResponse call
+func ParseRetireAgentResponse(rsp *http.Response) (*RetireAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RetireAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
