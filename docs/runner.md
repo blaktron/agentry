@@ -462,6 +462,43 @@ holding `$NAME`, `${NAME}` or `{{…}}`), an empty one, or one carrying the
 run's `@@…@@` placeholder marker: a declared value is literal or it is not
 declared.
 
+**Remote servers** (agentry-cli#663). A server declared by its `url` (see
+the [QuickAgent reference](quickagents.md)) is not installed and has no
+store. The gateway would call such a server from its own process, and the
+gateway has no network of its own, so the run reaches it through the runner
+image's `bridge` role instead: a stdio MCP server the gateway launches like
+any declared server, on its relay network behind one relay to the address's
+host on port 443, under the run's docker filter and the policy's runtime. The
+bridge forwards each message to the address over streamable HTTP, or over
+the older HTTP+SSE transport when the server refuses a streamable
+`initialize` with 400, 404 or 405; the message address that transport names
+must be on the server's own origin. It follows no redirect. The registry's
+vulnerability check does not apply: there is no package version to look up,
+and the line says `remote (not looked up …)`.
+
+- `auth: none` sends no credential. A server that answers 401 ends that call
+  with "the remote MCP server <host> asks for a sign-in (HTTP 401), and this
+  QuickAgent declares it with auth: none".
+- `auth: secret` sends the server's one declared secret as
+  `Authorization: Bearer`. The value is resolved like any declared secret
+  (the MCP profile, then the policy's source; missing is exit 11, an
+  optional one is written empty and sends nothing). The runner writes it into
+  the run's `cfg/connections/<server>/bearer` (0600, in a 0700 folder),
+  which is mounted read-only into that server's bridge and no other
+  container. It is not in the gateway's secrets file, so the gateway never
+  holds it. The bridge reads the file at every request. A 401 or 403 ends
+  that call with a sentence naming the server; the run goes on.
+- `auth: oauth`, and an `oauth` block on a package server, need the person's
+  connection, which this runner cannot make yet: the plan is refused with
+  exit 11, naming the server (agentry-cli#664, agentry-cli#665).
+
+The receipt's `capabilities_enforced["mcpServers.remote"]` names each remote
+server, its auth, the bearer secret by name, its tool filter and its one
+host; the `secrets` line says where the bearer went. The consent prompt shows
+the address and auth, and a release that declares a remote server always
+asks to be confirmed. What the vendor's server does with a call is not
+something the run checks.
+
 **Known vulnerabilities.** Before a declared server is resolved, the runner
 asks the registry what its scan and daily sweep recorded for that exact
 package version (`GET /mcp-servers/scan`). A known **high or critical**
@@ -666,6 +703,7 @@ Hosted runs are why the knob exists: the platform's run worker renders
 | `filesystem.*` | mount table on the tools container (`:ro`/`:rw`, per-path binds) + server-side grant checks; the agent container never mounts the workspace |
 | `exec: {commands}` | `run_command` argv0 allowlist + a shim `PATH` containing only the declared commands |
 | `secrets: [names]` | values only in the profile, the per-run secrets file (0600, deleted at teardown), the tools container env (a declared server's own: that server's container env), and the MCP gateway's container, which reads the whole secrets file to inject them — never in plans, receipts, or process listings |
+| a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane, served by always-granted `list_inputs`/`read_input`; job output and receipts live on the separate `/out` volume |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
@@ -676,8 +714,8 @@ Every claim above appears, mechanism named, in the run's
 `capabilities_enforced` — the receipts stay honest about what is enforced
 versus declared.
 
-Teardown deletes the run's `secrets.env` and its copies of any knowledge
-packs, even with `--keep-run-dir`. On Windows it retries a failed delete for
+Teardown deletes the run's `secrets.env`, its remote servers' bearer
+files and its copies of any knowledge packs, even with `--keep-run-dir`. On Windows it retries a failed delete for
 a few seconds, since Docker Desktop can hold a file briefly after its
 container is removed. The `teardown` line appears only when one of those
 files still stands after the whole teardown. The file is named in a warning
