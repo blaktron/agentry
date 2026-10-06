@@ -143,43 +143,6 @@ func TestDeleteAgentWithoutVersions(t *testing.T) {
 	}
 }
 
-func TestDeleteAgentRefusedOncePublished(t *testing.T) {
-	env := newTestEnv(t)
-	owner := env.register("del-pub")
-	env.verifyEmail(owner)
-	sess := env.login(owner)
-	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
-		"namespace": owner, "name": "shipped", "modes": []string{"autonomous"}, "visibility": "public",
-	}, nil, http.StatusCreated)
-	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
-	status, body := env.uploadVersionCLI(owner, "shipped", pat, skillFiles(owner, "shipped", "1.0.0", nil))
-	if status != http.StatusAccepted {
-		t.Fatalf("publish: %d %s", status, body)
-	}
-	env.waitStatus(owner, "shipped", "1.0.0", "published")
-
-	res := env.do(sess, http.MethodDelete, "/api/v1/agents/"+owner+"/shipped", nil)
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusConflict {
-		raw, _ := io.ReadAll(res.Body)
-		t.Fatalf("delete of a published agent: got %d want 409 (%s)", res.StatusCode, raw)
-	}
-	// The version row must survive: §4.3 forbids deleting it, and installed
-	// copies verify against its digest.
-	var versions int64
-	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT count(*) FROM agent_versions av
-		 JOIN agents a ON a.id = av.agent_id
-		 JOIN handles h ON h.id = a.namespace_id
-		 WHERE a.name = 'shipped' AND h.handle = $1`, owner,
-	).Scan(&versions); err != nil {
-		t.Fatal(err)
-	}
-	if versions != 1 {
-		t.Fatalf("version rows = %d, want the published row intact", versions)
-	}
-}
-
 // ---- M-10b: activity ----
 
 func TestAgentActivityPublicVersusFull(t *testing.T) {

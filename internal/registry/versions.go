@@ -455,6 +455,11 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	if p == nil || p.Anonymous {
 		return Version{}, auth.ErrUnauthorized
 	}
+	// A retired agent takes no submission until it is restored
+	// (agentry#942, D2), whichever door the submission came through.
+	if a.RetiredAt != nil {
+		return Version{}, ErrRetired
+	}
 	// A git-tag submission on a role that hands the archive write off
 	// (the git role, agentry#508) builds the archive for its digest and
 	// leaves the store to the worker.

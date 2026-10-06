@@ -76,6 +76,8 @@ var routeAuthz = map[string]RouteDecl{
 	// builtin against platform staff (agentry#737, DEV-174).
 	"updateAgent":       {Action: auth.ActAgentMaintain, AgentScoped: true},
 	"deleteAgent":       {Action: auth.ActAgentAdminister, AgentScoped: true},
+	"retireAgent":       {Action: auth.ActAgentAdminister, AgentScoped: true},
+	"restoreAgent":      {Action: auth.ActAgentAdminister, AgentScoped: true},
 	"listAgentActivity": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"getAgentStats":     {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	// Stars are per-agent reads that mutate the CALLER's list, so they carry
