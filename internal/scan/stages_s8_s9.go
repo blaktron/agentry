@@ -537,6 +537,14 @@ func s9Escalate(sc stageContext, in *Input, prevFiles []FileEntry, current []Fin
 }
 
 func isDiffEscalatable(f Finding) bool {
+	// A capability family's hit rated by declaration is about a capability
+	// the manifest declares (a high one holds already): what this release
+	// newly declares is the manifest diff's to report (S9/new-egress,
+	// S9/capability-widened), never an escalation of the text that uses it
+	// (ruleset 0.4.0, agentry#893).
+	if _, rated := f.Detail[rules.DeclarationDetail]; rated {
+		return false
+	}
 	return strings.HasPrefix(f.Scanner, "S3/") ||
 		strings.HasPrefix(f.Scanner, "S4/")
 }

@@ -185,6 +185,7 @@ type gitleaksFinding struct {
 	StartLine   int     `json:"StartLine"`
 	EndLine     int     `json:"EndLine"`
 	Match       string  `json:"Match"`
+	Secret      string  `json:"Secret"`
 	Entropy     float64 `json:"Entropy"`
 	Tags        []string
 }
@@ -271,6 +272,9 @@ func runGitleaks(ctx context.Context, t *ExecTool, dir string, seen map[string]b
 	for _, h := range hits {
 		if len(out) >= execToolMaxFindings {
 			break
+		}
+		if documentedPlaceholder(firstNonEmpty(h.Secret, h.Match)) {
+			continue
 		}
 		path := relPath(dir, h.File)
 		key := path + "|" + fmt.Sprint(h.StartLine)
