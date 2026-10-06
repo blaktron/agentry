@@ -52,6 +52,7 @@ var benchTargets = map[string]string{
 	"partial":    judge.DraftIDOffTask,
 	"undeclared": benchIDUndeclared,
 	"redundant":  benchIDRedundantAsk,
+	"wont_run":   benchIDWontRun,
 }
 
 // benchVariant is one entry of variants.json: a fixture's draft, changed
@@ -519,4 +520,156 @@ func compareWordings(t *testing.T, c *judge.Client) {
 	for id, tl := range per {
 		t.Logf("alternative %-14s targeted flagged %d/%d; good flagged %d/%d (one sample)", id, tl.hit, tl.targeted, tl.goodHit, tl.good)
 	}
+}
+
+// The wont_run question and the runtime statement it is asked against
+// (plan drafter-knowledge.md §4.7, D15–D16; agentry#909), benched before
+// either ships: the question is asked beside off_task in the one request
+// the check would send, over the draft state with the statement added. Its
+// targets are the wont_run variants, ten drafts each broken one way the
+// runner cannot run (a server on the CLI's Does not run here list, a step
+// needing git, a filesystem-style server over the inputs, a host on a port
+// other than 443, a server needing arguments). The criterion is agentry-notes
+// measurements/draft-check-bench.md's, written before the first full run.
+const benchIDWontRun = "wont_run"
+
+// benchRuntime states what every run of a QuickAgent gets, from the CLI's
+// runtime facts and its docs (agentry-cli pkg/drafter/knowledge
+// drafting-guide: runtime-facts.md, how-a-run-works.md, mcp-servers.md,
+// exec.md, inputs.md) on 2026-10-06. It is a constant; nothing of a draft is
+// in it.
+const benchRuntime = "A run works only through the tools the runner gives it, in a sandbox. " +
+	"Inputs: the files the person adds, read-only at /inputs through list_inputs, read_input and search_inputs " +
+	"(documents are turned into text first and archives unpacked), and the answers to the intake's questions; " +
+	"a run may also have no files and only the person's text or conversation. " +
+	"Output: files written through write_report and the final answer; nothing is kept from one run to the next. " +
+	"Network: none unless network egress lists hosts; then the fetch tool reaches only those hosts, over HTTPS on " +
+	"port 443. Plain http, any other port (a database, SMTP, a custom port) and a redirect to an unlisted host fail. " +
+	"There is no web search and no browser. " +
+	"Commands: none unless exec lists them, each run by name with arguments, with no shell and no pipe, writing only " +
+	"under /tmp. Every runner provides only these: base64, basename, bunzip2, bzcat, cat, cksum, cmp, comm, cut, diff, " +
+	"dirname, du, fold, grep, gunzip, head, hexdump, ls, md5sum, nl, od, paste, realpath, rev, sha1sum, sha256sum, " +
+	"sha512sum, sort, stat, strings, tac, tail, tar, tr, tree, uniq, unxz, unzip, wc, xzcat, zcat. A run in Agentry " +
+	"(hosted) refuses any other command, and so does a run on the person's computer unless its operator has added " +
+	"it; only the desktop app's Unsafe Mode installs others. " +
+	"Declared MCP servers: npm packages run on Node 24 and PyPI packages on Python 3.12, on Alpine Linux (musl), " +
+	"installed without install scripts and from wheels only. Each starts as its package's one program with no " +
+	"arguments and no subcommand; only its env entries and its declared secrets, as environment variables, reach it. " +
+	"It speaks stdio only, so a remote or HTTP-only server cannot run. It sees its own installed files read-only and " +
+	"none of the run's files: not the inputs, the workspace or the reports. It reaches only the hosts its own egress " +
+	"lists, on port 443. Its container has no git, no browser, no Docker and no program beyond its own runtime. " +
+	"A server that signs in through a browser cannot run. " +
+	"Secrets: only the declared ones; the agent never sees a value, fetch adds one to a request and a server gets its own."
+
+var benchWontRun = judge.Question{ID: benchIDWontRun, Text: "The state holds a person's description of a task " +
+	"(description), the manifest of an AI agent drafted for it (manifest), the instruction that agent follows " +
+	"(instruction) and what the runtime gives every run of it (runtime). Would this agent, following this " +
+	"instruction with this manifest, fail to run as described in that runtime: because a step needs something the " +
+	"runtime does not give (a command it does not provide, git, a browser, a port other than 443, plain http, a " +
+	"file a declared server cannot see, a way to start a server it does not have), or a declared MCP server cannot " +
+	"install, start or do its tools' work there? Steps the runtime gives what they need do not count, and neither " +
+	"does a need the instruction meets another way."}
+
+// TestWontRunBench is the by-hand bench of wont_run (agentry#909): it asks
+// off_task and wont_run together about every variant, over the state
+// {description, manifest, instruction, runtime}, Samples times, one request
+// each, and writes one CSV row per variant × sample × question. The
+// summary it logs, per class and banded as the check bands, is what
+// agentry-notes measurements/draft-check-bench.md records. It never runs
+// in CI: it needs AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY, and
+// writes to AGENTRY_JUDGE_BENCH_OUT (default wont-run-bench.csv in the
+// system temp dir).
+func TestWontRunBench(t *testing.T) {
+	if os.Getenv("AGENTRY_JUDGE_BENCH") != "1" {
+		t.Skip("set AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY to run the live wont_run bench")
+	}
+	key := os.Getenv("AGENTRY_JUDGE_API_KEY")
+	if key == "" {
+		t.Skip("AGENTRY_JUDGE_API_KEY not set")
+	}
+	out := os.Getenv("AGENTRY_JUDGE_BENCH_OUT")
+	if out == "" {
+		out = filepath.Join(os.TempDir(), "wont-run-bench.csv")
+	}
+	c, err := judge.New(judge.Config{APIKey: key, Model: os.Getenv("AGENTRY_JUDGE_MODEL"), BaseURL: os.Getenv("AGENTRY_JUDGE_BASE_URL")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	w := csv.NewWriter(f)
+	_ = w.Write([]string{"fixture", "class", "sample", "question", "p", "input_tokens"})
+
+	qs := []judge.Question{judge.DraftQuestions()[0], benchWontRun}
+	type cell struct {
+		hit, n int
+		lo, hi float64
+	}
+	per := map[string]map[string]*cell{} // question → class → tally
+	tokens, requests := 0, 0
+	for _, v := range readVariants(t) {
+		p := v.build(t)
+		rd, err := Read(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state := map[string]string{"description": p.Description, "manifest": string(rd.ManifestJSON), "instruction": rd.Instruction, "runtime": benchRuntime}
+		var runs []map[string]float64
+		for i := 0; i < judge.Samples; i++ {
+			probs, u, err := c.Ask(context.Background(), state, qs)
+			if err != nil {
+				t.Fatalf("%s/%s sample %d: %v", v.Fixture, v.Class, i+1, err)
+			}
+			tokens += u.InputTokens
+			requests += u.Requests
+			runs = append(runs, probs)
+			for _, q := range qs {
+				_ = w.Write([]string{v.Fixture, v.Class, fmt.Sprint(i + 1), q.ID, fmt.Sprintf("%.3f", probs[q.ID]), fmt.Sprint(u.InputTokens)})
+			}
+		}
+		w.Flush()
+		var line []string
+		for _, q := range qs {
+			best := runs[0][q.ID]
+			if best >= judge.BandLow && best <= judge.BandHigh {
+				for _, run := range runs[1:] {
+					best = max(best, run[q.ID])
+				}
+			}
+			if per[q.ID] == nil {
+				per[q.ID] = map[string]*cell{}
+			}
+			cl := per[q.ID][v.Class]
+			if cl == nil {
+				cl = &cell{lo: 1}
+				per[q.ID][v.Class] = cl
+			}
+			cl.n++
+			cl.lo, cl.hi = min(cl.lo, best), max(cl.hi, best)
+			if judge.ScoreFromProbability(best) >= judge.WithholdScore {
+				cl.hit++
+			}
+			var ps []string
+			for _, run := range runs {
+				ps = append(ps, fmt.Sprintf("%.2f", run[q.ID]))
+			}
+			line = append(line, fmt.Sprintf("%s=%s(%.2f)", q.ID, strings.Join(ps, "/"), best))
+		}
+		t.Logf("%-22s %-10s %s", v.Fixture, v.Class, strings.Join(line, " "))
+	}
+	classes := []string{"good", "off_task", "partial", "undeclared", "redundant", "wont_run"}
+	for _, q := range qs {
+		var parts []string
+		for _, cls := range classes {
+			if cl := per[q.ID][cls]; cl != nil {
+				parts = append(parts, fmt.Sprintf("%s %d/%d [%.2f–%.2f]", cls, cl.hit, cl.n, cl.lo, cl.hi))
+			}
+		}
+		t.Logf("banded flagged, %-9s %s", q.ID, strings.Join(parts, "; "))
+	}
+	t.Logf("requests %d, input tokens %d, model %s, runtime statement %d bytes, question %d bytes", requests, tokens, c.Model(), len(benchRuntime), len(benchWontRun.Text))
+	t.Logf("rows written to %s", out)
 }

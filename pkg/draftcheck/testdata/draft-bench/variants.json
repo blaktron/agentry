@@ -330,5 +330,132 @@
     "instructionFile": "long.AGENT.md",
     "description": "Give me a three-line weather brief for a city I name, from a free public weather API that needs no key.",
     "what": "the long csv instruction under the weather-brief description: a long draft made for another task (agentry#789)"
+  },
+  {
+    "fixture": "weather-brief",
+    "class": "wont_run",
+    "replace": [
+      [
+        "If the fetch fails twice, output the single line `The weather service did not answer. Try again shortly.` and stop.",
+        "If the fetch fails twice, open `https://www.yr.no/en/search?q=<city>` with `browser_navigate`, follow the first result, and read today's and tomorrow's forecast from `browser_snapshot` instead. If that page does not load either, output the single line `The weather service did not answer. Try again shortly.` and stop."
+      ]
+    ],
+    "capabilities": "capabilities:\n  network:\n    egress:\n      - geocoding-api.open-meteo.com\n      - api.open-meteo.com\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess: []\n  mcpServers:\n    - npm: '@playwright/mcp'\n      version: 0.0.83\n      tools:\n        - browser_navigate\n        - browser_snapshot\n      egress:\n        - www.yr.no\n",
+    "what": "does not run here: a fallback step reads a forecast page through @playwright/mcp, which needs a browser the container does not have"
+  },
+  {
+    "fixture": "release-notes",
+    "class": "wont_run",
+    "replace": [
+      [
+        "1. Split the task text into commit entries.",
+        "1. If the task names a repository path instead of pasting commits, call `git_log` with `repo_path` set to that path and `max_count` 200, and use the messages it returns as the task text. Split the task text into commit entries."
+      ]
+    ],
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess:\n    - code\n  mcpServers:\n    - pypi: mcp-server-git\n      version: 2026.8.18\n      tools:\n        - git_log\n",
+    "what": "does not run here: commits can come from a repository through mcp-server-git, which runs the git program the container does not have and sees no repository"
+  },
+  {
+    "fixture": "github-pr-review",
+    "class": "wont_run",
+    "replace": [
+      [
+        "2. Call `list_pull_request_files` for the diff.",
+        "2. Run `git clone --filter=blob:none https://github.com/<owner>/<repo> /tmp/repo`, then `git -C /tmp/repo fetch origin pull/<number>/head` and `git -C /tmp/repo diff --stat <base>...FETCH_HEAD`, to see the whole files around each hunk. Call `list_pull_request_files` for the diff."
+      ]
+    ],
+    "capabilities": "capabilities:\n  network:\n    egress:\n      - github.com\n  filesystem:\n    read: none\n    write: none\n  exec:\n    commands:\n      - git\n  secrets:\n    - GITHUB_TOKEN\n  dataAccess:\n    - code\n  mcpServers:\n    - npm: github-mcp-server-js\n      version: 0.1.7\n      tools:\n        - get_pull_request\n        - list_pull_request_files\n        - list_pull_request_commits\n        - list_pull_request_reviews\n        - list_comments\n      egress:\n        - api.github.com\n      secrets:\n        - GITHUB_TOKEN\n      env:\n        GITHUB_PERMISSION: read-only\n",
+    "what": "a step needing git: it clones the repository with a declared git command, which no run provides"
+  },
+  {
+    "fixture": "dependency-advisories",
+    "class": "wont_run",
+    "replace": [
+      [
+        "3. Query in chunks of at most 100 tuples per `osv_query_batch` call.",
+        "3. If the person added the project as a repository archive (`.tar.gz` with a `.git` folder), unpack it with `tar -xzf /inputs/<archive> -C /tmp/src` and run `git -C /tmp/src log --format='%h %ad' -S'<name>' -- <lockfile>` for each package, so the report can say when each vulnerable version came in. Query in chunks of at most 100 tuples per `osv_query_batch` call."
+      ]
+    ],
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec:\n    commands:\n      - tar\n      - git\n  dataAccess:\n    - code\n  mcpServers:\n    - npm: '@cyanheads/osv-advisory-mcp-server'\n      version: 0.1.13\n      tools:\n        - osv_query_batch\n        - osv_get_vulnerability\n        - osv_list_ecosystems\n      egress:\n        - api.osv.dev\n      env:\n        LOGS_DIR: /tmp/osv-logs\n",
+    "what": "a step needing git: it reads the history of a lockfile with a declared git command, which no run provides"
+  },
+  {
+    "fixture": "csv-quality",
+    "class": "wont_run",
+    "replace": [
+      [
+        "1. **Find the file.** List `/inputs`.",
+        "1. **Find the file.** Call the filesystem server's `list_directory` on `/inputs`."
+      ],
+      [
+        "3. **Read the whole file in pages.** Use `read_input` with increasing `offset` until the file is exhausted;",
+        "3. **Read the whole file in pages.** Call `read_text_file` with the file's path under `/inputs` and increasing `head`/`tail` windows until the file is exhausted;"
+      ]
+    ],
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess:\n    - files\n  mcpServers:\n    - npm: '@modelcontextprotocol/server-filesystem'\n      version: 2026.8.31\n      tools:\n        - list_directory\n        - read_text_file\n",
+    "what": "a filesystem-style server over the inputs: it reads the CSV through @modelcontextprotocol/server-filesystem, whose container holds none of the run's files"
+  },
+  {
+    "fixture": "invoice-extract",
+    "class": "wont_run",
+    "replace": [
+      [
+        "1. List `/inputs` and read every file, page through a long one until you have\n   read all of it.",
+        "1. Call the desktop-commander server's `list_directory` on `/inputs`, then `read_file` on every file it lists, with `offset` and `length` to page\n   through a long one until you have read all of it."
+      ]
+    ],
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess:\n    - files\n    - payments\n  mcpServers:\n    - npm: '@wonderwhy-er/desktop-commander'\n      version: 0.2.52\n      tools:\n        - list_directory\n        - read_file\n",
+    "what": "a filesystem-style server over the inputs: it reads the invoices through @wonderwhy-er/desktop-commander, whose container holds none of the run's files"
+  },
+  {
+    "fixture": "meeting-actions",
+    "class": "wont_run",
+    "replace": [
+      [
+        "7. **Order the actions.**",
+        "7. **Name owners consistently.** For each owner, call `execute_sql` with `SELECT full_name FROM people WHERE nickname = $1 OR first_name = $1` against the team directory (PostgreSQL at `team-db.example.com:5432`, the DSN in `TEAM_DB_DSN`) and use the full name it returns; keep the name as written when it returns none.\n8. **Order the actions.**"
+      ],
+      [
+        "8. **Write the report**",
+        "9. **Write the report**"
+      ]
+    ],
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  secrets:\n    - TEAM_DB_DSN\n  dataAccess:\n    - files\n  mcpServers:\n    - npm: '@bytebase/dbhub'\n      version: 1.4.0\n      tools:\n        - execute_sql\n      egress:\n        - team-db.example.com\n      secrets:\n        - TEAM_DB_DSN\n      env:\n        DSN_ENV: TEAM_DB_DSN\n",
+    "what": "a host on a non-443 port: it looks owners up in a PostgreSQL database on port 5432 through @bytebase/dbhub"
+  },
+  {
+    "fixture": "feed-digest",
+    "class": "wont_run",
+    "replace": [
+      [
+        "GET https://api.rss2json.com/v1/api.json?rss_url=<the feed URL, percent-encoded>",
+        "GET http://api.rss2json.com:80/v1/api.json?rss_url=<the feed URL, percent-encoded>"
+      ]
+    ],
+    "what": "a host on a non-443 port: every feed is fetched over plain http, port 80, where the runner reaches declared hosts on 443 only"
+  },
+  {
+    "fixture": "slack-standup",
+    "class": "wont_run",
+    "replace": [
+      [
+        "6. `mode: post` — `fetch` one request, the Slack Web API method\n   `chat.postMessage`:\n   - `POST https://slack.com/api/chat.postMessage`\n   - headers: `Authorization: Bearer <SLACK_BOT_TOKEN>`,\n     `Content-Type: application/json`\n   - body: `{\"channel\": \"<channel>\", \"text\": \"<message>\", \"unfurl_links\": false}`",
+        "6. `mode: post` — call `slack_send_message` once, through `mcp-remote`, which is started as `mcp-remote https://mcp.slack.com/mcp --header \"Authorization: Bearer ${SLACK_BOT_TOKEN}\"` and proxies Slack's hosted MCP server:\n   - arguments: `{\"channel_id\": \"<channel>\", \"message\": \"<message>\"}`"
+      ]
+    ],
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  secrets:\n    - SLACK_BOT_TOKEN\n  dataAccess:\n    - messages\n  mcpServers:\n    - npm: mcp-remote\n      version: 0.14.3\n      tools:\n        - slack_send_message\n      egress:\n        - mcp.slack.com\n      secrets:\n        - SLACK_BOT_TOKEN\n",
+    "what": "a server needing arguments: it posts through mcp-remote, which needs Slack's server URL as its argument, and the runner starts a server with none"
+  },
+  {
+    "fixture": "interview-practice",
+    "class": "wont_run",
+    "replace": [
+      [
+        "Do not show the whole list.",
+        "Do not show the whole list. Call `create_workbook` for `scores.xlsx` once; after each answer, call `write_data_to_excel` with the question, the five scores and one line of feedback. The server is started as `excel-mcp-server stdio`, the subcommand its README gives for local use."
+      ]
+    ],
+    "capabilities": "capabilities:\n  network:\n    egress: none\n  filesystem:\n    read: none\n    write: none\n  exec: none\n  dataAccess:\n    - files\n  mcpServers:\n    - pypi: excel-mcp-server\n      version: 1.1.1\n      tools:\n        - create_workbook\n        - write_data_to_excel\n      env:\n        EXCEL_FILES_PATH: /tmp/practice\n",
+    "what": "a server needing arguments: it keeps a score sheet through excel-mcp-server, which starts only with its stdio subcommand, and the runner starts a server with none"
   }
 ]
