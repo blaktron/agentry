@@ -64,6 +64,30 @@ func evalRule(cr *compiledRule, path string, content []byte, lm *lineMap) []Find
 			}
 			seenLine[lineStart] = true
 			matched := string(content[loc[0]:loc[1]])
+			detail := map[string]string{
+				"family":  cr.Family,
+				"pattern": re.String(),
+			}
+			// What the capability families' rating by declaration reads:
+			// the destinations or programs the hit's lines name.
+			lines := lineSpanText(lm, lineStart, lineEnd)
+			switch capabilityOf[cr.Family] {
+			case capSecrets:
+				if n := secretsNamed(lines); n != "" {
+					detail["secrets"] = n
+				}
+				if d := destinations(lines); d != "" {
+					detail["destinations"] = d
+				}
+			case capNetwork:
+				if d := destinations(lines); d != "" {
+					detail["destinations"] = d
+				}
+			case capExec:
+				if c := commands(lines); c != "" {
+					detail["commands"] = c
+				}
+			}
 			out = append(out, Finding{
 				RuleID:     "S4/" + cr.ID,
 				Scanner:    scannerS4,
@@ -74,11 +98,8 @@ func evalRule(cr *compiledRule, path string, content []byte, lm *lineMap) []Find
 				LineStart:  lineStart,
 				LineEnd:    lineEnd,
 				Excerpt:    renderExcerpt(truncateForExcerpt(collapseWS(matched))),
-				Detail: map[string]string{
-					"family":  cr.Family,
-					"pattern": re.String(),
-				},
-				Taxonomy: injectionTaxonomy(),
+				Detail:     detail,
+				Taxonomy:   injectionTaxonomy(),
 			})
 		}
 	}

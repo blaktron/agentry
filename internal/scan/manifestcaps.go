@@ -2,8 +2,10 @@ package scan
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/blaktron/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // manifestCaps is the capabilities block of the canonical manifest JSON, as
@@ -97,4 +99,46 @@ func onlyNone(egress []string) bool {
 		}
 	}
 	return true
+}
+
+// declarationOf is what the manifest declares, as S4's rating by
+// declaration reads it (ruleset 0.4.0, agentry#893). An unreadable manifest
+// declares nothing, so every capability family's hit is high.
+func declarationOf(manifestJSON []byte) rules.Declared {
+	d := rules.Declared{BaseCommands: manifest.BaseExecCommands()}
+	c, ok := readManifestCaps(manifestJSON)
+	if !ok {
+		return d
+	}
+	for _, h := range c.Network.Egress.Hosts {
+		switch h {
+		case "", "none":
+		case "*":
+			d.EgressAny = true
+		default:
+			d.Egress = append(d.Egress, strings.ToLower(h))
+		}
+	}
+	for _, h := range c.remoteServerHosts() {
+		d.ServerHosts = append(d.ServerHosts, strings.ToLower(h))
+	}
+	d.MCPServers = len(c.MCPServers) > 0
+	d.Secrets = append([]string(nil), c.Secrets...)
+	for _, srv := range c.MCPServers {
+		d.Secrets = append(d.Secrets, srv.Secrets...)
+	}
+	d.FileWrite = notNone(c.Filesystem.Write)
+	if notNone(c.Exec) {
+		var x struct {
+			Commands []string `json:"commands"`
+		}
+		// An exec block that does not decode names no command: every
+		// program a hit names then reads as undeclared, which holds.
+		_ = json.Unmarshal(c.Exec, &x)
+		d.Exec = x.Commands
+		if d.Exec == nil {
+			d.Exec = []string{}
+		}
+	}
+	return d
 }

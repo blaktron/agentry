@@ -195,25 +195,35 @@ func TestGateHoldsWhatCouldNotBeScanned(t *testing.T) {
 }
 
 // TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable
-// pins D16 (agentry#771): the two classes the operator keeps in front of a
-// person are high at score 2; the other four axes stay medium there.
+// pins D16 (agentry#771): the classes the operator keeps in front of a
+// person are high at score 2 (deceiving the user too since ruleset 0.4.0);
+// exfiltration and destructive actions are medium at any score since
+// ruleset 0.4.0 (agentry#893), and obfuscation stays medium at 2.
 func TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable(t *testing.T) {
-	scores := map[JudgeCategory]int{}
-	for _, c := range AllJudgeCategories() {
-		scores[c] = 2
-	}
-	got := map[string]Severity{}
-	for _, f := range verdictFindings(JudgeVerdict{Scores: scores}) {
-		got[f.Scanner] = f.Severity
-	}
-	want := map[string]Severity{
-		"S5/" + string(CatInjection): SevHigh, "S5/" + string(CatUndeclaredCap): SevHigh,
-		"S5/" + string(CatExfiltration): SevMedium, "S5/" + string(CatDeception): SevMedium,
-		"S5/" + string(CatObfuscation): SevMedium, "S5/" + string(CatDestructive): SevMedium,
-	}
-	for id, sev := range want {
-		if got[id] != sev {
-			t.Errorf("%s at score 2 = %q, want %q", id, got[id], sev)
+	for score, want := range map[int]map[string]Severity{
+		2: {
+			"S5/" + string(CatInjection): SevHigh, "S5/" + string(CatUndeclaredCap): SevHigh,
+			"S5/" + string(CatExfiltration): SevMedium, "S5/" + string(CatDeception): SevHigh,
+			"S5/" + string(CatObfuscation): SevMedium, "S5/" + string(CatDestructive): SevMedium,
+		},
+		3: {
+			"S5/" + string(CatInjection): SevHigh, "S5/" + string(CatUndeclaredCap): SevHigh,
+			"S5/" + string(CatExfiltration): SevMedium, "S5/" + string(CatDeception): SevHigh,
+			"S5/" + string(CatObfuscation): SevHigh, "S5/" + string(CatDestructive): SevMedium,
+		},
+	} {
+		scores := map[JudgeCategory]int{}
+		for _, c := range AllJudgeCategories() {
+			scores[c] = score
+		}
+		got := map[string]Severity{}
+		for _, f := range verdictFindings(JudgeVerdict{Scores: scores}) {
+			got[f.Scanner] = f.Severity
+		}
+		for id, sev := range want {
+			if got[id] != sev {
+				t.Errorf("%s at score %d = %q, want %q", id, score, got[id], sev)
+			}
 		}
 	}
 }
