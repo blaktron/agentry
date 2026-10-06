@@ -54,8 +54,16 @@ var (
 	doubleBracedRE = regexp.MustCompile(`\{\{[A-Za-z_]+\}\}`)
 )
 
-// oauthFileNameRE is a plain file name in the token folder.
-var oauthFileNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+// oauthFileNameRE is a plain file name in the token folder. `@` is in it
+// because a server may look its token file up by an account's email
+// (workspace-mcp reads `<email>.json`; agentry#937).
+var oauthFileNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$`)
+
+// validOAuthFileName reports whether p is a plain file name the token
+// folder may hold: the rule above, and not only dots.
+func validOAuthFileName(p string) bool {
+	return oauthFileNameRE.MatchString(p) && strings.Trim(p, ".") != ""
+}
 
 // unsupportedOAuthPackages are npm/PyPI servers known not to run on an
 // access token alone (they insist on a refresh token, or open a browser
@@ -322,8 +330,8 @@ func validateMCPOAuth(s *issues, p string, major int, srv MCPServer, agentSecret
 	for i, f := range o.Files {
 		fp := fmt.Sprintf("%s.files[%d]", op, i)
 		switch {
-		case !oauthFileNameRE.MatchString(f.Path) || strings.Trim(f.Path, ".") == "":
-			s.errf("V5", fp+".path", "%q must be a plain file name in the token folder (letters, digits, '.', '_', '-'; at most 64)", f.Path)
+		case !validOAuthFileName(f.Path):
+			s.errf("V5", fp+".path", "%q must be a plain file name in the token folder (letters, digits, '.', '_', '-', '@'; at most 64)", f.Path)
 		case seenFile[f.Path]:
 			s.errf("V5", fp+".path", "duplicate file %q", f.Path)
 		}
