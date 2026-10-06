@@ -15,29 +15,31 @@ import (
 const countAgentDeleteBlockers = `-- name: CountAgentDeleteBlockers :one
 SELECT
   (SELECT count(*) FROM agent_versions av WHERE av.agent_id = $1)::bigint AS versions,
-  (SELECT count(*) FROM agent_versions av2 WHERE av2.agent_id = $1 AND av2.status <> 'submitted')::bigint AS versions_past_submitted,
+  -- Versions the pipeline or a reviewer has yet to decide: a tombstone waits
+  -- for them, so nothing is published onto a deleted agent (agentry#942).
+  (SELECT count(*) FROM agent_versions av3 WHERE av3.agent_id = $1
+     AND av3.status IN ('submitted', 'scanning', 'needs_review', 'approved'))::bigint AS versions_in_flight,
   (SELECT count(*) FROM advisories adv WHERE adv.agent_id = $1)::bigint AS advisories,
   (SELECT count(*) FROM abuse_reports ab WHERE ab.agent_id = $1)::bigint AS abuse_reports
 `
 
 type CountAgentDeleteBlockersRow struct {
-	Versions              int64 `json:"versions"`
-	VersionsPastSubmitted int64 `json:"versions_past_submitted"`
-	Advisories            int64 `json:"advisories"`
-	AbuseReports          int64 `json:"abuse_reports"`
+	Versions         int64 `json:"versions"`
+	VersionsInFlight int64 `json:"versions_in_flight"`
+	Advisories       int64 `json:"advisories"`
+	AbuseReports     int64 `json:"abuse_reports"`
 }
 
-// Everything that makes DELETE /agents/{ns}/{name} unsafe (§9.2, §4.3).
-// Version rows can never be deleted, so ANY version row blocks the delete;
-// versions_past_submitted separates "never published" from "in flight" for
-// the error message. Advisories and abuse reports are trust & safety
-// records: they outlive the author's wish to remove the agent.
+// What DELETE /agents/{ns}/{name} must know (§9.2, §4.3, agentry#942).
+// Version rows can never be deleted, so an agent with any is deleted as a
+// tombstone rather than outright. Advisories and abuse reports are trust &
+// safety records: they outlive the author's wish to remove the agent.
 func (q *Queries) CountAgentDeleteBlockers(ctx context.Context, agentID uuid.UUID) (CountAgentDeleteBlockersRow, error) {
 	row := q.db.QueryRow(ctx, countAgentDeleteBlockers, agentID)
 	var i CountAgentDeleteBlockersRow
 	err := row.Scan(
 		&i.Versions,
-		&i.VersionsPastSubmitted,
+		&i.VersionsInFlight,
 		&i.Advisories,
 		&i.AbuseReports,
 	)
@@ -45,9 +47,11 @@ func (q *Queries) CountAgentDeleteBlockers(ctx context.Context, agentID uuid.UUI
 }
 
 const countAgentsInNamespace = `-- name: CountAgentsInNamespace :one
-SELECT count(*) FROM agents WHERE namespace_id = $1
+SELECT count(*) FROM agents WHERE namespace_id = $1 AND deleted_at IS NULL
 `
 
+// A deleted agent's tombstone holds its name, not a place in the quota
+// (agentry#942).
 func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countAgentsInNamespace, namespaceID)
 	var count int64
@@ -56,11 +60,16 @@ func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.U
 }
 
 const countPrivateAgentsInNamespace = `-- name: CountPrivateAgentsInNamespace :one
-SELECT count(*) FROM agents WHERE namespace_id = $1 AND visibility = 'private'
+SELECT count(*) FROM agents
+WHERE namespace_id = $1 AND visibility = 'private'
+  AND retired_at IS NULL AND deleted_at IS NULL
 `
 
 // The private-agent cap a subscription tier sets (plan subscription-tiers
 // §5.3): what a namespace holds today, so one more can be refused.
+// A retired agent (D13 of plan forks-and-publisher.md) and a deleted one's
+// tombstone are private but put away: neither takes a submission or runs
+// for anyone, so neither holds a place under the cap (agentry#942).
 func (q *Queries) CountPrivateAgentsInNamespace(ctx context.Context, namespaceID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countPrivateAgentsInNamespace, namespaceID)
 	var count int64
@@ -164,7 +173,7 @@ func (q *Queries) CountUnscannedVersionsStanding(ctx context.Context, agentID uu
 const createAgent = `-- name: CreateAgent :one
 INSERT INTO agents (id, namespace_id, name, visibility, repo_id, summary, modes)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, namespace_id, name, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes, pipeline_skip, builtin
+RETURNING id, namespace_id, name, visibility, repo_id, summary, latest_published_version_id, quarantine_state, auto_publish_tags, search_tsv, created_at, updated_at, readme_text, allow_force_push, modes, pipeline_skip, builtin, retired_at, retired_visibility, deleted_at
 `
 
 type CreateAgentParams struct {
@@ -206,6 +215,9 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) (Agent
 		&i.Modes,
 		&i.PipelineSkip,
 		&i.Builtin,
+		&i.RetiredAt,
+		&i.RetiredVisibility,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -285,7 +297,7 @@ func (q *Queries) DeleteRepoByID(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAgentByID = `-- name: GetAgentByID :one
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 `
@@ -308,6 +320,9 @@ type GetAgentByIDRow struct {
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
 	Builtin                  bool        `json:"builtin"`
+	RetiredAt                *time.Time  `json:"retired_at"`
+	RetiredVisibility        *string     `json:"retired_visibility"`
+	DeletedAt                *time.Time  `json:"deleted_at"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 }
@@ -333,6 +348,9 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 		&i.Modes,
 		&i.PipelineSkip,
 		&i.Builtin,
+		&i.RetiredAt,
+		&i.RetiredVisibility,
+		&i.DeletedAt,
 		&i.Namespace,
 		&i.NamespaceKind,
 	)
@@ -340,16 +358,18 @@ func (q *Queries) GetAgentByID(ctx context.Context, id uuid.UUID) (GetAgentByIDR
 }
 
 const getAgentByPath = `-- name: GetAgentByPath :one
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 JOIN repos r ON r.id = a.repo_id
 WHERE h.handle = $1 AND a.name = $2
+  AND (a.deleted_at IS NULL OR $3::boolean)
 `
 
 type GetAgentByPathParams struct {
-	Handle string `json:"handle"`
-	Name   string `json:"name"`
+	Handle         string `json:"handle"`
+	Name           string `json:"name"`
+	IncludeDeleted bool   `json:"include_deleted"`
 }
 
 type GetAgentByPathRow struct {
@@ -370,14 +390,20 @@ type GetAgentByPathRow struct {
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
 	Builtin                  bool        `json:"builtin"`
+	RetiredAt                *time.Time  `json:"retired_at"`
+	RetiredVisibility        *string     `json:"retired_visibility"`
+	DeletedAt                *time.Time  `json:"deleted_at"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 	DefaultBranch            string      `json:"default_branch"`
 	SizeBytes                int64       `json:"size_bytes"`
 }
 
+// A deleted agent's tombstone (agentry#942) is absent from every read path
+// that asks for it by name; include_deleted is the platform staff's door to
+// it, for the trust & safety actions only.
 func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) (GetAgentByPathRow, error) {
-	row := q.db.QueryRow(ctx, getAgentByPath, arg.Handle, arg.Name)
+	row := q.db.QueryRow(ctx, getAgentByPath, arg.Handle, arg.Name, arg.IncludeDeleted)
 	var i GetAgentByPathRow
 	err := row.Scan(
 		&i.ID,
@@ -397,6 +423,9 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 		&i.Modes,
 		&i.PipelineSkip,
 		&i.Builtin,
+		&i.RetiredAt,
+		&i.RetiredVisibility,
+		&i.DeletedAt,
 		&i.Namespace,
 		&i.NamespaceKind,
 		&i.DefaultBranch,
@@ -406,7 +435,7 @@ func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) 
 }
 
 const getAgentForUpdate = `-- name: GetAgentForUpdate :one
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, h.handle AS namespace, h.kind AS namespace_kind
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, h.handle AS namespace, h.kind AS namespace_kind
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE a.id = $1
 FOR UPDATE OF a
@@ -430,6 +459,9 @@ type GetAgentForUpdateRow struct {
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
 	Builtin                  bool        `json:"builtin"`
+	RetiredAt                *time.Time  `json:"retired_at"`
+	RetiredVisibility        *string     `json:"retired_visibility"`
+	DeletedAt                *time.Time  `json:"deleted_at"`
 	Namespace                string      `json:"namespace"`
 	NamespaceKind            string      `json:"namespace_kind"`
 }
@@ -458,6 +490,9 @@ func (q *Queries) GetAgentForUpdate(ctx context.Context, id uuid.UUID) (GetAgent
 		&i.Modes,
 		&i.PipelineSkip,
 		&i.Builtin,
+		&i.RetiredAt,
+		&i.RetiredVisibility,
+		&i.DeletedAt,
 		&i.Namespace,
 		&i.NamespaceKind,
 	)
@@ -567,18 +602,42 @@ func (q *Queries) ListAgentTeamGrantsForUser(ctx context.Context, arg ListAgentT
 }
 
 const listAgentsByNamespace = `-- name: ListAgentsByNamespace :many
-SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, h.handle AS namespace
+SELECT a.id, a.namespace_id, a.name, a.visibility, a.repo_id, a.summary, a.latest_published_version_id, a.quarantine_state, a.auto_publish_tags, a.search_tsv, a.created_at, a.updated_at, a.readme_text, a.allow_force_push, a.modes, a.pipeline_skip, a.builtin, a.retired_at, a.retired_visibility, a.deleted_at, h.handle AS namespace,
+       coalesce(d.installs, 0)::bigint AS installs,
+       ls.created_at AS last_submitted_at
 FROM agents a JOIN handles h ON h.id = a.namespace_id
 LEFT JOIN orgs o ON o.id = a.namespace_id
+LEFT JOIN (
+  SELECT agent_id, sum(installs) AS installs
+  FROM download_stats WHERE day >= current_date - 30 GROUP BY agent_id
+) d ON d.agent_id = a.id
+LEFT JOIN agent_versions ls ON ls.id = (
+  SELECT av.id FROM agent_versions av
+  WHERE av.agent_id = a.id ORDER BY av.created_at DESC, av.id DESC LIMIT 1
+)
 WHERE h.handle = $1
+  AND a.deleted_at IS NULL
   AND (a.visibility = 'public' OR $2::boolean)
   AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
-ORDER BY a.name
+  AND ($3::text = ''
+       OR ($3::text = 'active' AND a.retired_at IS NULL)
+       OR ($3::text = 'retired' AND a.retired_at IS NOT NULL))
+  AND ($4::text = ''
+       OR a.name::text ILIKE '%' || $4::text || '%'
+       OR a.summary ILIKE '%' || $4::text || '%')
+ORDER BY
+  CASE WHEN $5::text = 'newest' THEN a.created_at END DESC NULLS LAST,
+  CASE WHEN $5::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
+  CASE WHEN $5::text = 'submitted' THEN ls.created_at END DESC NULLS LAST,
+  a.name, a.id
 `
 
 type ListAgentsByNamespaceParams struct {
 	Handle         string `json:"handle"`
 	IncludePrivate bool   `json:"include_private"`
+	State          string `json:"state"`
+	Query          string `json:"query"`
+	Sort           string `json:"sort"`
 }
 
 type ListAgentsByNamespaceRow struct {
@@ -599,14 +658,30 @@ type ListAgentsByNamespaceRow struct {
 	Modes                    []string    `json:"modes"`
 	PipelineSkip             bool        `json:"pipeline_skip"`
 	Builtin                  bool        `json:"builtin"`
+	RetiredAt                *time.Time  `json:"retired_at"`
+	RetiredVisibility        *string     `json:"retired_visibility"`
+	DeletedAt                *time.Time  `json:"deleted_at"`
 	Namespace                string      `json:"namespace"`
+	Installs                 int64       `json:"installs"`
+	LastSubmittedAt          *time.Time  `json:"last_submitted_at"`
 }
 
 // A suspended or erased organization's agents are absent (agentry#363);
 // the handler answers 404 for the namespace before this runs, and the
-// predicate keeps the listing honest on its own.
+// predicate keeps the listing honest on its own. A deleted agent's
+// tombstone is never listed (agentry#942). The publisher's page searches
+// (query: name and summary, case-folded), filters by state (active,
+// retired; empty is both) and sorts (name, newest, installs, submitted —
+// the last submission of any version); the trailing keys keep every
+// ordering total.
 func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNamespaceParams) ([]ListAgentsByNamespaceRow, error) {
-	rows, err := q.db.Query(ctx, listAgentsByNamespace, arg.Handle, arg.IncludePrivate)
+	rows, err := q.db.Query(ctx, listAgentsByNamespace,
+		arg.Handle,
+		arg.IncludePrivate,
+		arg.State,
+		arg.Query,
+		arg.Sort,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -632,7 +707,12 @@ func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNam
 			&i.Modes,
 			&i.PipelineSkip,
 			&i.Builtin,
+			&i.RetiredAt,
+			&i.RetiredVisibility,
+			&i.DeletedAt,
 			&i.Namespace,
+			&i.Installs,
+			&i.LastSubmittedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -735,6 +815,38 @@ SELECT id FROM handles WHERE id = $1 FOR UPDATE
 func (q *Queries) LockNamespace(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockNamespace, id)
 	return err
+}
+
+const restoreAgent = `-- name: RestoreAgent :execrows
+UPDATE agents SET visibility = retired_visibility, retired_at = NULL,
+  retired_visibility = NULL, updated_at = now()
+WHERE id = $1 AND retired_at IS NOT NULL AND deleted_at IS NULL
+`
+
+// Restore (agentry#942): the visibility the agent had when it was retired.
+// The caller has decided, under the row lock, that it may hold it.
+func (q *Queries) RestoreAgent(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, restoreAgent, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const retireAgent = `-- name: RetireAgent :execrows
+UPDATE agents SET retired_at = now(), retired_visibility = visibility,
+  visibility = 'private', updated_at = now()
+WHERE id = $1 AND retired_at IS NULL AND deleted_at IS NULL
+`
+
+// Retire (agentry#942, D2): private, the visibility it had kept for Restore.
+// Already retired, nothing moves.
+func (q *Queries) RetireAgent(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, retireAgent, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const searchAgents = `-- name: SearchAgents :many
@@ -1036,6 +1148,22 @@ type SetAgentReadmeTextParams struct {
 func (q *Queries) SetAgentReadmeText(ctx context.Context, arg SetAgentReadmeTextParams) error {
 	_, err := q.db.Exec(ctx, setAgentReadmeText, arg.ID, arg.ReadmeText)
 	return err
+}
+
+const tombstoneAgent = `-- name: TombstoneAgent :execrows
+UPDATE agents SET deleted_at = now(), visibility = 'private',
+  auto_publish_tags = false, updated_at = now()
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+// Delete of an agent with version history (agentry#942, D3): the row stays
+// as a tombstone, private, taking no tag-push submissions.
+func (q *Queries) TombstoneAgent(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, tombstoneAgent, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateAgentSettings = `-- name: UpdateAgentSettings :exec

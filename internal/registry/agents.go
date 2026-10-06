@@ -173,8 +173,17 @@ var ErrTwoFactorRequired = errors.New("registry: two-factor authentication requi
 type Agent = storegen.GetAgentByPathRow
 
 // Resolve loads an agent by namespace/name path.
+//
+// A deleted agent's tombstone (agentry#942) is not found: every route by
+// name, the git transport, the extensions' read seam and the tag-push
+// submission all resolve through here, so a tombstone answers the 404 a
+// missing name gets on all of them at once.
 func (s *Service) Resolve(ctx context.Context, namespace, name string) (Agent, error) {
-	row, err := s.st.Queries().GetAgentByPath(ctx, storegen.GetAgentByPathParams{Handle: namespace, Name: name})
+	return s.resolve(ctx, namespace, name, false)
+}
+
+func (s *Service) resolve(ctx context.Context, namespace, name string, includeDeleted bool) (Agent, error) {
+	row, err := s.st.Queries().GetAgentByPath(ctx, storegen.GetAgentByPathParams{Handle: namespace, Name: name, IncludeDeleted: includeDeleted})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Agent{}, ErrNotFound

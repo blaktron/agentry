@@ -241,6 +241,13 @@ func problemAgentUnscanned(w http.ResponseWriter, r *http.Request, standing int6
 	writeProblemWith(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public", detail, map[string]any{"unscanned": standing})
 }
 
+// problemAgentRetired refuses a write a retired agent does not take
+// (agentry#942): a submission, or being made public other than by Restore.
+func problemAgentRetired(w http.ResponseWriter, r *http.Request) {
+	writeProblem(w, r, http.StatusConflict, "agent-retired", "This QuickAgent is retired",
+		"A retired QuickAgent takes no new versions and stays private. Restore it first.")
+}
+
 // problemFeatureNotIncluded refuses an act the subscription — the
 // organization's, or a person's own (agentry#820) — does not include at
 // all, distinct from its allowance being reached. detail names whose.

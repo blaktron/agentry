@@ -1887,6 +1887,13 @@ paths:
       operationId: listAgents
       tags: [agents]
       summary: List agents in a namespace (public ones for everyone).
+      description: >-
+        Public agents for everyone; the private ones too for the namespace's
+        owner and the active members of its organization. A deleted agent is
+        never listed. The publisher's page (agentry#942) narrows and orders
+        the list with `q`, `state` and `sort`, and each agent carries
+        `installs30d`, `lastSubmittedAt` and, when it is retired,
+        `retiredAt`.
       security: []
       parameters:
         - name: namespace
@@ -1894,6 +1901,31 @@ paths:
           required: true
           schema:
             type: string
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive substring of the agent's name or summary.
+          schema:
+            type: string
+            maxLength: 200
+        - name: state
+          in: query
+          required: false
+          description: >-
+            `active` lists agents that are not retired, `retired` only the
+            retired ones; absent, both.
+          schema:
+            type: string
+            enum: [active, retired]
+        - name: sort
+          in: query
+          required: false
+          description: >-
+            `name` (the default), `newest` (created), `installs` (the last 30
+            days) or `submitted` (the newest submission of any version).
+          schema:
+            type: string
+            enum: [name, newest, installs, submitted]
       responses:
         "200":
           description: Agents.
@@ -1949,6 +1981,10 @@ paths:
                   type: string
                   maxLength: 140
                 visibility:
+                  description: >-
+                    `public` is refused on a retired agent (`409
+                    agent-retired`): Restore is how a retired agent comes
+                    back.
                   type: string
                   enum: [public, private]
                 autoPublishTags:
@@ -2002,21 +2038,90 @@ paths:
     delete:
       operationId: deleteAgent
       tags: [agents]
-      summary: Delete an agent that was never published (maintain, §9.2).
+      summary: Delete an agent (the namespace's administrators, §9.2, agentry#942).
       description: >
-        Deletes the agent and its hosted repository. Refused (409) once the
-        agent has any version row, because §4.3 forbids deleting version rows:
-        a version past `submitted` is history consumers may depend on, and a
-        version still at `submitted` is mid-pipeline. Published agents are
-        yanked or blocked, never deleted.
+        An agent with no version row is deleted outright, with its hosted
+        repository. An agent with version history is deleted as a tombstone
+        (agentry#942): every published or quarantined version is yanked, the
+        agent becomes private, and every route by name, the git transport and
+        hosted runs answer the 404 a missing name gets, to everyone. Nothing
+        is removed — §4.3 keeps version rows forever, and the archives,
+        receipts and audit trail stay — and the name stays held in its
+        namespace: creating it again answers `409 name-held`. It cannot be
+        undone. A tombstone needs `confirm` set to the agent's name (`422
+        confirm-name` otherwise). Refused with `409` while a version is
+        still in the pipeline or in review, and while the agent carries
+        trust & safety records (advisories, abuse reports, a quarantine or a
+        block), which outlive the publisher's wish to remove it.
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
+        - name: confirm
+          in: query
+          required: false
+          description: The agent's name, required to delete an agent with version history.
+          schema:
+            type: string
       responses:
         "204":
           description: Deleted.
         "409":
-          description: The agent has versions, advisories, or abuse reports.
+          description: >-
+            A version is in flight, or the agent carries trust & safety
+            records.
+        "422":
+          description: >-
+            `confirm-name`: an agent with version history, and `confirm` is
+            missing or not its name.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/retire:
+    post:
+      operationId: retireAgent
+      tags: [agents]
+      summary: Retire an agent (the namespace's administrators, agentry#942).
+      description: >-
+        Makes the agent private and labels it retired, keeping the
+        visibility it had for Restore. A retired agent takes no submission
+        (`409 agent-retired`), is in no public listing, and holds no place
+        under the private-agent cap. Its versions are untouched. Retiring a
+        retired agent changes nothing.
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "200":
+          description: The retired agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/restore:
+    post:
+      operationId: restoreAgent
+      tags: [agents]
+      summary: Restore a retired agent (the namespace's administrators, agentry#942).
+      description: >-
+        Returns a retired agent to the visibility it had. Back to public it
+        meets the rules of any agent becoming public (`409 agent-unscanned`,
+        also when pipeline: skip was set while it was retired); back to
+        private it takes a place under
+        the private-agent cap again (`422 private-agent-cap`). `409
+        agent-not-retired` when it is not retired.
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "200":
+          description: The restored agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -6695,6 +6800,23 @@ components:
         createdAt:
           type: string
           format: date-time
+        retiredAt:
+          type: string
+          format: date-time
+          description: >-
+            When the agent was retired (agentry#942): it is private, takes no
+            submission, and `POST …/restore` returns the visibility it had.
+            Absent on an agent that is not retired.
+        installs30d:
+          type: integer
+          description: Installs over the last 30 days. Present on `GET /agents?namespace=`.
+        lastSubmittedAt:
+          type: string
+          format: date-time
+          description: >-
+            When a version of this agent was last submitted, whatever became
+            of it. Present on `GET /agents?namespace=` for an agent with at
+            least one version.
 
     AgentGrant:
       type: object

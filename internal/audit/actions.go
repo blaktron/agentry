@@ -139,9 +139,12 @@ const (
 	ActionAgentUnstar Action = "agent.unstar"
 	// An account install and its removal (plan web-dashboard-shell §5,
 	// agentry#448): the caller's own record, beside the star.
-	ActionAgentInstall      Action = "agent.install"
-	ActionAgentUninstall    Action = "agent.uninstall"
-	ActionAgentDelete       Action = "agent.delete"
+	ActionAgentInstall   Action = "agent.install"
+	ActionAgentUninstall Action = "agent.uninstall"
+	ActionAgentDelete    Action = "agent.delete"
+	// Retire and Restore of a publisher's own agent (agentry#942).
+	ActionAgentRetire       Action = "agent.retire"
+	ActionAgentRestore      Action = "agent.restore"
 	ActionAgentTransfer     Action = "agent.transfer"
 	ActionWebhookPing       Action = "webhook.ping"
 	ActionAuditPlatformRead Action = "audit.platform_read"
@@ -179,6 +182,7 @@ func init() {
 		ActionWebhookCreate, ActionWebhookUpdate, ActionWebhookDelete,
 		ActionDomainClaim, ActionDomainVerified, ActionAuditExport,
 		ActionAgentStar, ActionAgentUnstar, ActionAgentInstall, ActionAgentUninstall, ActionAgentDelete,
+		ActionAgentRetire, ActionAgentRestore,
 		ActionAgentTransfer, ActionWebhookPing, ActionAuditPlatformRead,
 		ActionAuditPrune, ActionSocialLogin,
 	} {
