@@ -38,6 +38,7 @@
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 echo "== directory terms of service acceptance =="
+source scripts/acceptance/directory-resources.sh
 
 COMPOSE=deploy/compose/docker-compose.yaml
 IMAGE="${AUTHENTIK_IMAGE:-$(awk '/image: ghcr.io\/goauthentik\/server:/{print $2; exit}' "$COMPOSE")}"
@@ -74,10 +75,10 @@ chmod 0644 "$FIXTURE"
 TERMS_PATH=/templates/agentry-terms-fixture.html
 
 PG_PW=$(openssl rand -hex 16)
-docker network create "$NET" >/dev/null
-docker run -d --name "$P-pg" --network "$NET" --network-alias dt-pg \
+docker network create "${DIRECTORY_DOCKER_LABELS[@]}" "$NET" >/dev/null
+docker run -d "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-pg" --network "$NET" --network-alias dt-pg \
   -e POSTGRES_PASSWORD="$PG_PW" -e POSTGRES_USER=authentik -e POSTGRES_DB=authentik "$PG_IMAGE" >/dev/null
-docker run -d --name "$P-redis" --network "$NET" --network-alias dt-redis "$REDIS_IMAGE" >/dev/null
+docker run -d "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-redis" --network "$NET" --network-alias dt-redis "$REDIS_IMAGE" >/dev/null
 AK_ENV=(
   -e AUTHENTIK_SECRET_KEY="$(openssl rand -hex 32)"
   -e AUTHENTIK_POSTGRESQL__HOST=dt-pg -e AUTHENTIK_POSTGRESQL__USER=authentik
@@ -101,7 +102,7 @@ server() {
   [ "$1" = on ] && flag=(-e AGENTRY_DIRECTORY_TERMS_FILE="$TERMS_PATH")
   [ "$1" = off ] && act=()
   docker rm -fv "$AK" >/dev/null 2>&1 || true
-  docker create --name "$AK" --network "$NET" --network-alias dt-ak-server "${AK_ENV[@]}" "${flag[@]}" "${act[@]}" "$IMAGE" server >/dev/null
+  docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$AK" --network "$NET" --network-alias dt-ak-server "${AK_ENV[@]}" "${flag[@]}" "${act[@]}" "$IMAGE" server >/dev/null
   docker cp deploy/compose/authentik/templates/. "$AK:/templates" >/dev/null
   docker cp deploy/compose/authentik/blueprints/. "$AK:/blueprints/custom" >/dev/null
   [ "$1" = on ] && docker cp "$FIXTURE" "$AK:$TERMS_PATH" >/dev/null
@@ -114,14 +115,14 @@ worker() {
   local act=("${ACT[@]}")
   [ "$1" = off ] && act=()
   docker rm -fv "$WORKER" >/dev/null 2>&1 || true
-  docker create --name "$WORKER" --network "$NET" "${AK_ENV[@]}" "${act[@]}" "$IMAGE" worker >/dev/null
+  docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$WORKER" --network "$NET" "${AK_ENV[@]}" "${act[@]}" "$IMAGE" worker >/dev/null
   docker cp deploy/compose/authentik/templates/. "$WORKER:/templates" >/dev/null
   docker cp deploy/compose/authentik/blueprints/. "$WORKER:/blueprints/custom" >/dev/null
   docker start "$WORKER" >/dev/null
 }
 worker on
 
-docker create --name "$DRIVER" --network "$NET" --network-alias dt-driver \
+docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$DRIVER" --network "$NET" --network-alias dt-driver \
   -e AK=http://dt-ak-server:9000 -e TERMS_VERSION="$VERSION" "$PY_IMAGE" sleep 3600 >/dev/null
 docker cp scripts/acceptance/directory-terms.py "$DRIVER:/driver.py" >/dev/null
 docker start "$DRIVER" >/dev/null
