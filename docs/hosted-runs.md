@@ -224,9 +224,9 @@ changes nothing.
 | A session where the deployment does not run them (`AGENTRY_RUNS_SESSIONS` off, or no sandbox hosts), or no sandbox host is taking runs (`hostsOnline` 0) | `409 sessions-unavailable` — a person waits on a session as it starts, so it is refused rather than queued |
 | A session whose payer is on Standard | `403 session-tier`, with `account`, `tier` and `requires: pro` |
 | A session whose payer's balance is short of `AGENTRY_RUNS_SESSION_MIN_CREDITS` | `402 credits-exhausted`, as for a hold |
-| The release, or an MCP server it declares, declares a secret the caller has not set | `409 secret-missing`, with `missing` (the names not set) and `secrets` (every declared name); set them, then create the run again ([below](#a-runs-secrets)) |
-| The release declares a secret and the deployment keeps none, or pushes to no sandbox host | `409 secrets-declared`, with `secrets` — such a release runs on your own machine, where its keys are yours |
-| The release declares more than 32 secrets, where the deployment keeps secrets | `422 validation` |
+| The release, or an MCP server it declares, requires a secret the caller has not set | `409 secret-missing`, with `missing` (the required names not set), `secrets` (every declared name) and, when there are any, `optional`; set them, then create the run again ([below](#a-runs-secrets)) |
+| The release requires a secret and the deployment keeps none, or pushes to no sandbox host | `409 secrets-declared`, with `required` and `secrets` — such a release runs on your own machine, where its keys are yours |
+| The release requires more than 32 secrets, or the run would carry more than 32, where the deployment keeps secrets | `422 validation` |
 | The account already has a run queued, claimed or running | `409 run-active` — one active run per account, held by a partial unique index rather than a read-then-write |
 | The payer's balance is short of the hold | `402 credits-exhausted`, with `account`, `balance`, `hold`, `resetsAt` and `tier` |
 | The payer is an organization whose subscription is not in force | `402 subscription-inactive`, with `account`, `standing` and `tier` |
@@ -403,9 +403,12 @@ A release can declare secrets: its own, in `capabilities.secrets`, and each
 declared MCP server's, in that server's `secrets`. On your own machine the
 CLI resolves them from your profile or the policy's secret source
 ([Running them](runner.md)). A hosted run gets them from the account's
-secrets in the vault, the extension named above. Where no vault is
-configured, such a release is refused with `409 secrets-declared` and runs
-on your own machine.
+secrets in the vault, the extension named above. A declared secret is
+**required** unless the manifest lists it in `capabilities.optionalSecrets`
+([QuickAgents](quickagents.md)), and a run starts without an **optional**
+one it has no value for. Where no vault is configured, a release that
+requires a secret is refused with `409 secrets-declared` and runs on your
+own machine. One whose secrets are all optional runs without them.
 
 ### What the account sets
 
@@ -450,14 +453,16 @@ as the token.
 ### At create
 
 The run's declared names are checked against the caller's secrets. The
-release's names and its MCP servers' are one namespace. A name that is not
-set is `409 secret-missing`, with `missing` naming each and `secrets`
-naming all, and nothing is held or queued. (A manifest may mark declared
-secrets optional, `capabilities.optionalSecrets`; a create that needs only
-the required ones is planned in agentry-enterprise#424, and until then an
-optional name is checked like any other.) More than 32 declared names is
-`422 validation`. With every name set, the run records the names
-(`secrets`, names only) and is queued.
+release's names and its MCP servers' are one namespace. A **required** name
+that is not set is `409 secret-missing`, with `missing` naming each,
+`secrets` naming all and `optional` naming the optional ones, and nothing is
+held or queued. More than 32 required names is `422 validation`. With every
+required name set, the run **carries** every declared name the caller has
+a value for: each required one, and each optional one that is set. It
+records those names (`secrets`, names only) and is queued. An optional name
+that is not set is not carried, and the run starts without it
+(agentry-enterprise#424). A run that would carry more than 32 names is
+`422 validation` too.
 
 A secret that is not kept counts only for the credential that set it: the
 same session, or the same token. To any other caller it is missing, so
@@ -467,12 +472,14 @@ set. It never learns a value.
 
 ### At the hand-off
 
-A run with secrets goes only to a sandbox host Agentry pushes to; the pull
-worker never claims one. The dispatcher, in the worker role, locks the run
-while it is claimed on its host. Then, in one transaction committed just
-before the job is sent, it:
+A run that carries a secret goes only to a sandbox host Agentry pushes to;
+the pull worker never claims one. A run that carries none, such as one of
+a release whose secrets are all optional started with none of them, runs
+wherever a release without secrets does, the pull worker included. The
+dispatcher, in the worker role, locks the run while it is claimed on its
+host. Then, in one transaction committed just before the job is sent, it:
 
-- decrypts each declared name's secret, under the key of the account that
+- decrypts each name the run carries, under the key of the account that
   created the run;
 - sets the secret's last use;
 - writes one `vault.secret_used` audit event per name, with the run and the
@@ -495,9 +502,12 @@ naming the secret alone, when a secret:
 
 The values travel in the job, over the mutual-TLS call to the host, and
 nowhere else. The host writes them to an owner-only `secrets.env` in the
-job's directory. The policy it renders names that file as the CLI's
-`envFile` secret source, so a declared secret never resolves from the
-host's own environment. The CLI then does what it does on your machine
+job's directory, empty for a job that carries none. The policy it renders
+names that file as the CLI's `envFile` secret source, so a declared secret
+never resolves from the host's own environment. The pull worker renders
+the same empty file for every job it runs, so an optional secret named like
+a variable of its own, the platform's model key among them, resolves to
+nothing there. The CLI then does what it does on your machine
 ([What a run enforces](runner.md#what-a-run-enforces)). It gives each value
 to the MCP gateway's container and to the tools container or the declared
 server's container, and never to the agent's. The file is deleted as soon
@@ -518,7 +528,8 @@ their own transaction.
 The receipt's `capabilities_enforced.secrets` names every declared secret by
 name, never a value: the release's own, and each declared MCP server's with
 that server. It says where each goes, and that the MCP gateway's container
-holds every value it injects. A sandbox host whose CLI predates
+holds every value it injects. An optional secret the run went without is
+named again under `secrets.absent` (agentry-cli#651). A sandbox host whose CLI predates
 agentry-cli#376 still writes `none declared` when only a declared server
 declares a secret, although that secret was resolved and injected.
 
@@ -985,9 +996,10 @@ the registry only outbound: it claims every couple of seconds with its worker
 token, stages the run under its own home at `0700`, renders one policy per run
 from the CLI's own defaults — the platform's model with its endpoint as the
 egress proxy's only allowed host and its key named by an environment variable
-and never written, the run's caps as the budgets, `secretSource: env` with no
-names (a sandbox host's runhost names the job's own `secrets.env` as an
-`envFile` source instead, [above](#at-the-hand-off)), and
+and never written, the run's caps as the budgets, an `envFile` secret source
+naming the job's own empty `secrets.env` (agentry-enterprise#424; a sandbox
+host's runhost writes the job's values there instead,
+[above](#at-the-hand-off)), and
 `docker.runtime: runsc` — and runs the installed `agentry` CLI as
 a subprocess with typed arguments and a minimal environment. The worker token
 never reaches the CLI; the CLI gets the worker's own registry token, which
