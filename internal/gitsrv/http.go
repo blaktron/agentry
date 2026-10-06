@@ -252,7 +252,10 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	}
 
 	// Lazy bare-repo init (§13.3: only the git role mounts repo storage).
-	if _, statErr := os.Stat(h.repos.Path(agent.RepoID)); statErr != nil {
+	// Not for a fork still being copied (agentry#943): its repository is
+	// the worker's to make, and is refused below until it has.
+	copying := agent.ForkState != nil && *agent.ForkState == registry.ForkCopying
+	if _, statErr := os.Stat(h.repos.Path(agent.RepoID)); statErr != nil && !copying {
 		if err := h.repos.InitBare(ctx, agent.RepoID, agent.DefaultBranch); err != nil {
 			h.log.ErrorContext(ctx, "lazy repo init", "err", err)
 			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
@@ -277,6 +280,14 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
 		}
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden"}
+	}
+
+	// A fork's repository is the worker's until its copy is done
+	// (agentry#943): a push now would be wiped by the copy, or a tag would
+	// be submitted in place of the origin's content. Said only to a caller
+	// who may read it, so it names no fork to anyone else.
+	if copying {
+		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusConflict, "this fork is still being copied; try again in a minute"}
 	}
 
 	// An unactivated account reads but does not write (agentry#861, plan

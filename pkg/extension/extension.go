@@ -664,6 +664,21 @@ type AgentRef struct {
 	NamespaceID   uuid.UUID
 	NamespaceKind NamespaceKind
 	Public        bool
+	// ForkedFrom is the origin of a fork (agentry#943), nil otherwise: the
+	// agent it was forked from and that agent's namespace, its publisher,
+	// for the earnings a fork's runs owe the origin (plan
+	// forks-and-publisher.md D10). A fork is private, so Public is false
+	// on every agent that has one.
+	ForkedFrom *AgentOrigin
+}
+
+// AgentOrigin is a fork's origin as the seams name it: ids, never a path,
+// and the namespace's kind so an extension can tell a person's from an
+// organization's.
+type AgentOrigin struct {
+	AgentID       uuid.UUID
+	NamespaceID   uuid.UUID
+	NamespaceKind NamespaceKind
 }
 
 // Orgs holds the acts on an organization the core owns and an extension

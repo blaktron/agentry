@@ -203,6 +203,14 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 			if rejected > 0 {
 				p.log.Warn("scan: watchdog rejected git-tag submissions whose archive was never stored", "count", rejected)
 			}
+			// Forks whose copy never finished (agentry#943).
+			failed, err := p.reg.ReconcileStuckForks(ctx)
+			if err != nil {
+				return err
+			}
+			if failed > 0 {
+				p.log.Warn("scan: watchdog marked forks whose copy never finished as failed", "count", failed)
+			}
 		}
 		published, err := p.ReconcileApprovedReviews(ctx)
 		if err != nil {

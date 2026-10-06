@@ -3,6 +3,11 @@
 -- name: CreateRepo :one
 INSERT INTO repos (id) VALUES ($1) RETURNING *;
 
+-- name: CreateRepoWithBranch :one
+-- A fork's repository row (agentry#943), on the origin's default branch so
+-- the copied history keeps its trunk's name.
+INSERT INTO repos (id, default_branch) VALUES ($1, $2) RETURNING *;
+
 -- name: GetRepo :one
 SELECT * FROM repos WHERE id = $1;
 
@@ -14,14 +19,66 @@ INSERT INTO agents (id, namespace_id, name, visibility, repo_id, summary, modes)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
+-- name: CreateForkAgent :one
+-- A fork's row (agentry#943): private, with its origin and the version it
+-- was taken from, copying until a worker has copied the repository and
+-- submitted the first version.
+INSERT INTO agents (id, namespace_id, name, visibility, repo_id, summary, modes,
+                    forked_from_agent_id, forked_from_version_id, forked_by, fork_state)
+VALUES (@id, @namespace_id, @name, 'private', @repo_id, @summary, @modes,
+        @forked_from_agent_id, @forked_from_version_id, @forked_by, 'copying')
+RETURNING *;
+
+-- name: SetForkState :execrows
+-- The copy's outcome, from copying only: a fork that is ready or failed
+-- stays so.
+UPDATE agents SET fork_state = @fork_state, fork_detail = @fork_detail, updated_at = now()
+WHERE id = @id AND fork_state = 'copying';
+
+-- name: MarkForkReady :exec
+-- A fork whose first version is recorded is ready, from copying or from a
+-- failure the watchdog declared while the copy was still running.
+UPDATE agents SET fork_state = 'ready', fork_detail = '', updated_at = now()
+WHERE id = @id AND fork_state IN ('copying', 'failed');
+
+-- name: ListStuckForks :many
+-- Forks whose copy never finished (a job out of retries, a worker without
+-- the git volume), for the watchdog.
+SELECT id FROM agents
+WHERE fork_state = 'copying' AND created_at < @created_before
+ORDER BY created_at LIMIT @row_limit;
+
+-- name: GetForkOrigin :one
+-- What a fork's read says of its origin (agentry#943): the origin's path and
+-- the version the fork was taken from, and whether the origin can still be
+-- read by anyone (public, not deleted and not blocked), which is when a
+-- page may link it.
+SELECT oh.handle AS origin_namespace, oa.name AS origin_name, ov.version AS origin_version,
+       (oa.visibility = 'public' AND oa.deleted_at IS NULL AND oa.quarantine_state <> 'blocked')::boolean AS origin_public
+FROM agents f
+JOIN agents oa ON oa.id = f.forked_from_agent_id
+JOIN handles oh ON oh.id = oa.namespace_id
+JOIN agent_versions ov ON ov.id = f.forked_from_version_id
+WHERE f.id = @id;
+
+-- name: CountForks :one
+-- How many forks an agent has: a count only, never which (agentry#943,
+-- the plan's invariant 5). A fork deleted as a tombstone is not counted.
+SELECT count(*) FROM agents WHERE forked_from_agent_id = sqlc.arg(id)::uuid AND deleted_at IS NULL;
+
 -- name: GetAgentByPath :one
 -- A deleted agent's tombstone (agentry#942) is absent from every read path
 -- that asks for it by name; include_deleted is the platform staff's door to
 -- it, for the trust & safety actions only.
-SELECT a.*, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes
+-- A fork carries its origin's namespace (the origin's publisher) for the
+-- extension seam (agentry#943).
+SELECT a.*, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes,
+       oa.namespace_id AS origin_namespace_id, oh.kind AS origin_namespace_kind
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 JOIN repos r ON r.id = a.repo_id
+LEFT JOIN agents oa ON oa.id = a.forked_from_agent_id
+LEFT JOIN handles oh ON oh.id = oa.namespace_id
 WHERE h.handle = $1 AND a.name = $2
   AND (a.deleted_at IS NULL OR sqlc.arg(include_deleted)::boolean);
 
@@ -62,13 +119,20 @@ WHERE agent_id = $1 AND scan_status = 'skipped'
 -- predicate keeps the listing honest on its own. A deleted agent's
 -- tombstone is never listed (agentry#942). The publisher's page searches
 -- (query: name and summary, case-folded), filters by state (active,
--- retired; empty is both) and sorts (name, newest, installs, submitted —
+-- retired; empty is both) and by origin (forks: only, none; empty is both,
+-- agentry#943) and sorts (name, newest, installs, submitted —
 -- the last submission of any version); the trailing keys keep every
 -- ordering total.
 SELECT a.*, h.handle AS namespace,
        coalesce(d.installs, 0)::bigint AS installs,
-       ls.created_at AS last_submitted_at
+       ls.created_at AS last_submitted_at,
+       oh.handle AS origin_namespace, oa.name AS origin_name, ov.version AS origin_version,
+       (oa.visibility = 'public' AND oa.deleted_at IS NULL AND oa.quarantine_state <> 'blocked') AS origin_public,
+       (SELECT count(*) FROM agents fk WHERE fk.forked_from_agent_id = a.id AND fk.deleted_at IS NULL)::bigint AS fork_count
 FROM agents a JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN agents oa ON oa.id = a.forked_from_agent_id
+LEFT JOIN handles oh ON oh.id = oa.namespace_id
+LEFT JOIN agent_versions ov ON ov.id = a.forked_from_version_id
 LEFT JOIN orgs o ON o.id = a.namespace_id
 LEFT JOIN (
   SELECT agent_id, sum(installs) AS installs
@@ -85,6 +149,9 @@ WHERE h.handle = $1
   AND (sqlc.arg(state)::text = ''
        OR (sqlc.arg(state)::text = 'active' AND a.retired_at IS NULL)
        OR (sqlc.arg(state)::text = 'retired' AND a.retired_at IS NOT NULL))
+  AND (sqlc.arg(forks)::text = ''
+       OR (sqlc.arg(forks)::text = 'only' AND a.forked_from_agent_id IS NOT NULL)
+       OR (sqlc.arg(forks)::text = 'none' AND a.forked_from_agent_id IS NULL))
   AND (sqlc.arg(query)::text = ''
        OR a.name::text ILIKE '%' || sqlc.arg(query)::text || '%'
        OR a.summary ILIKE '%' || sqlc.arg(query)::text || '%')
