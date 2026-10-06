@@ -197,6 +197,7 @@ outcome, and the outcome decides what the hold becomes.
 | `interrupted` | an envelope whose error is `interrupted`, and any run the account cancelled that ran and did not succeed | settled from the tokens when something ran; refunded when the envelope reports no tokens and no turns |
 | `refused` | `verify` (10), `policy` (11), `compile` (12) | refunded in full |
 | `error` | `cli` (1), `usage` (2), `gateway` (13), and any exit class the mapping does not know | refunded in full |
+| `blocked` | `blocked` (18), the agent could not do its task with what the run had | settled from the tokens when the receipt's reason is `agent-blocked` (the agent said so); refunded in full when it is `runner-blocked` (the runner's own tools failed the agent) or names no reason (DEV-216) |
 
 A run cancelled while still queued is `cancelled`, not an outcome, and its
 hold is refunded in full. So is a run nobody claimed within the queue timeout;
@@ -277,7 +278,13 @@ it on its next claim, interrupts the CLI, and the finish settles what ran.
 A finished run carries the runner's envelope minus its result text, kept
 verbatim as `receipt`, beside `usage` (turns, input and output tokens, wall
 milliseconds), `outcome`, `exitClass`, `settledCredits` and the `outputs` by
-name. `GET /api/v1/x/runs/{id}/outputs/{name}` serves one artefact's bytes as
+name. A run pushed to a sandbox host keeps the runner's parts
+of that envelope alone: never its error text, its result or a path. For a
+failed run those parts include `stage`, as one of the CLI's step words, and
+`reason`, held to the CLI's closed list (an unknown code, a free detail or a
+name outside its grammar is dropped) and then, in the registry, to the names
+the run's release declares; a built-in's run keeps the code and the detail
+with no name ([the runner's exit codes, stage and reason](runner.md#exit-codes-stage-and-reason)). `GET /api/v1/x/runs/{id}/outputs/{name}` serves one artefact's bytes as
 the worker uploaded them, with the account's grant. No artefact is served by a
 public URL, and the worker uploads through the registry's object store rather
 than from the sandbox host.
