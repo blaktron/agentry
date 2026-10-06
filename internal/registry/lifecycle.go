@@ -18,12 +18,18 @@ import (
 // agent-retired.
 var ErrRetired = errors.New("registry: this QuickAgent is retired")
 
+// ErrVersionsInFlight reports a delete of an agent a version of which the
+// pipeline or a reviewer has yet to decide: the verdict would otherwise
+// land on a tombstone. The API answers 409.
+var ErrVersionsInFlight = errors.New("registry: a version of this QuickAgent is still in flight")
+
 // ErrNotRetired reports a Restore of an agent that is not retired.
 var ErrNotRetired = errors.New("registry: this QuickAgent is not retired")
 
 // ErrPipelineSkipOnRestore reports a Restore to public of an agent whose
 // pipeline: skip was set while it was retired: a public agent is always
-// scanned (DEV-115).
+// scanned (DEV-115). The API answers it as PATCH answers the same state,
+// 409 agent-unscanned.
 var ErrPipelineSkipOnRestore = errors.New("registry: this QuickAgent is off the pipeline and cannot be made public")
 
 // UnscannedStandingError reports a Restore to public refused because N
@@ -40,7 +46,9 @@ const tombstoneYankReason = "The publisher deleted this QuickAgent."
 
 // ResolveIncludingDeleted is Resolve with a deleted agent's tombstone
 // found, not hidden: the trust & safety actions' door to an agent its
-// publisher deleted. Nothing a publisher or a consumer calls uses it.
+// publisher deleted, and the create's way to tell a held name from a
+// taken one once the namespace has admitted the caller. No read a
+// publisher or a consumer makes goes through it.
 func (s *Service) ResolveIncludingDeleted(ctx context.Context, namespace, name string) (Agent, error) {
 	return s.resolve(ctx, namespace, name, true)
 }
@@ -95,7 +103,7 @@ func (s *Service) Restore(ctx context.Context, a Agent, actorEvent audit.Event) 
 			}
 			n, err := q.CountUnscannedVersionsStanding(ctx, a.ID)
 			if err != nil {
-				return err
+				return fmt.Errorf("registry: unscanned versions: %w", err)
 			}
 			if n > 0 {
 				return &UnscannedStandingError{N: n}
@@ -126,12 +134,22 @@ func (s *Service) Restore(ctx context.Context, a Agent, actorEvent audit.Event) 
 // archives, the receipts and the audit trail all stay, and the row holds
 // the name in its namespace for good (D4). The caller has already refused
 // the cases the tombstone does not take: trust & safety records and
-// versions still in flight. It reports how many versions were yanked.
-func (s *Service) Tombstone(ctx context.Context, a Agent, actorEvent audit.Event) (int, error) {
+// versions still in flight. The audit event says how many were yanked.
+func (s *Service) Tombstone(ctx context.Context, a Agent, actorEvent audit.Event) error {
 	var results []TransitionResult
 	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		if _, err := q.GetAgentForUpdate(ctx, a.ID); err != nil {
 			return fmt.Errorf("registry: lock agent: %w", err)
+		}
+		// Counted again under the lock SubmitVersion's insert takes, so a
+		// submission that raced the handler's check is either seen here or
+		// refused there.
+		blockers, err := q.CountAgentDeleteBlockers(ctx, a.ID)
+		if err != nil {
+			return fmt.Errorf("registry: delete blockers: %w", err)
+		}
+		if blockers.VersionsInFlight > 0 {
+			return ErrVersionsInFlight
 		}
 		versions, err := q.ListVersions(ctx, a.ID)
 		if err != nil {
@@ -174,10 +192,10 @@ func (s *Service) Tombstone(ctx context.Context, a Agent, actorEvent audit.Event
 		return s.aud.Write(ctx, q, e)
 	})
 	if err != nil {
-		return 0, err
+		return err
 	}
 	for _, res := range results {
 		s.EmitTransition(ctx, res)
 	}
-	return len(results), nil
+	return nil
 }

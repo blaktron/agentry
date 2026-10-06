@@ -210,7 +210,10 @@ func TestDeleteAgentWithHistoryLeavesATombstone(t *testing.T) {
 	env.doJSON(sess, http.MethodDelete, path+"?confirm=shipped", nil, nil, http.StatusNoContent)
 
 	for _, c := range []caller{sess, anonymous} {
-		for _, p := range []string{path, path + "/versions", path + "/versions/1.0.0/download", path + "/activity"} {
+		for _, p := range []string{
+			path, path + "/versions", path + "/versions/1.0.0/download", path + "/activity",
+			"/api/v1/resolve?ref=" + owner + "/shipped@1.0.0",
+		} {
 			if code := statusOf(t, env.do(c, http.MethodGet, p, nil)); code != http.StatusNotFound {
 				t.Fatalf("GET %s as %s after delete: got %d want 404", p, c.name, code)
 			}
@@ -332,5 +335,32 @@ func TestNamespaceListSearchesAndSorts(t *testing.T) {
 	}
 	if got := strings.Join(names("&sort=newest"), ","); got != "gamma,beta,alpha" {
 		t.Fatalf("sort=newest: %s, want gamma,beta,alpha", got)
+	}
+}
+
+// TestRestoreToPublicMeetsTheUnscannedRules: an organization's agent
+// retired from public and taken off the pipeline while private comes back
+// public only once the flag is cleared — the same refusal PATCH gives
+// (DEV-115).
+func TestRestoreToPublicMeetsTheUnscannedRules(t *testing.T) {
+	env := newTestEnvWith(t, onTier(unscannedOn(true)))
+	adminH := env.register("rst-admin")
+	env.verifyEmail(adminH)
+	admin := env.login(adminH)
+	orgH := "rstorg" + env.sfx
+	env.createOrg(admin, orgH)
+	path := "/api/v1/agents/" + orgH + "/back"
+	env.doJSON(admin, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": orgH, "name": "back", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
+	env.doJSON(admin, http.MethodPost, path+"/retire", nil, nil, http.StatusOK)
+	env.doJSON(admin, http.MethodPatch, path, map[string]any{"pipelineSkip": true}, nil, http.StatusOK)
+	if code, slug, _ := problemOf(t, env.do(admin, http.MethodPost, path+"/restore", nil)); code != http.StatusConflict || slug != "agent-unscanned" {
+		t.Fatalf("restore to public off the pipeline: %d %s, want 409 agent-unscanned", code, slug)
+	}
+	env.doJSON(admin, http.MethodPatch, path, map[string]any{"pipelineSkip": false}, nil, http.StatusOK)
+	var a lifecycleAgent
+	env.doJSON(admin, http.MethodPost, path+"/restore", nil, &a, http.StatusOK)
+	if a.Visibility != "public" {
+		t.Fatalf("restored: %q, want public", a.Visibility)
 	}
 }

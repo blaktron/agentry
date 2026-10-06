@@ -126,12 +126,23 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 			}
 			return
 		}
+		// A deleted agent's tombstone stays in the erased namespace, holding
+		// its name there: it has no maintainer to gain, and its name must not
+		// collide with a live agent of the organization's (agentry#942).
+		movable := agents[:0:0]
+		for _, a := range agents {
+			if a.DeletedAt == nil {
+				movable = append(movable, a)
+			}
+		}
+		agents = movable
 		// The private-agent cap (agentry#363): the transfer door is one
 		// more way private agents enter a namespace, and it respects the
-		// cap the other two do. Nothing is erased on a refusal.
+		// cap the other two do. A retired agent holds no place under it
+		// (agentry#942, D13). Nothing is erased on a refusal.
 		var private int64
 		for _, a := range agents {
-			if a.Visibility == "private" {
+			if a.Visibility == "private" && a.RetiredAt == nil {
 				private++
 			}
 		}

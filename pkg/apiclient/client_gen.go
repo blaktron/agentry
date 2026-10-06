@@ -4330,7 +4330,7 @@ type ClientInterface interface {
 
 	// RestoreAgent Restore a retired agent (the namespace's administrators, agentry#942).
 	//
-	// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, `409 pipeline-skip-public`); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+	// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 	//
 	// Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
 	RestoreAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6098,7 +6098,7 @@ func (c *Client) GetAgentReadme(ctx context.Context, ns Namespace, name AgentNam
 
 // RestoreAgent Restore a retired agent (the namespace's administrators, agentry#942).
 //
-// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, `409 pipeline-skip-public`); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 //
 // Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
 func (c *Client) RestoreAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -17473,7 +17473,7 @@ type ClientWithResponsesInterface interface {
 
 	// RestoreAgentWithResponse Restore a retired agent (the namespace's administrators, agentry#942).
 	//
-	// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, `409 pipeline-skip-public`); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+	// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -27571,7 +27571,7 @@ func (c *ClientWithResponses) GetAgentReadmeWithResponse(ctx context.Context, ns
 
 // RestoreAgentWithResponse Restore a retired agent (the namespace's administrators, agentry#942).
 //
-// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, `409 pipeline-skip-public`); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 //
 // Returns a wrapper object for the known response body format(s).
 //

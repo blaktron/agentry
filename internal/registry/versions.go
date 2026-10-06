@@ -609,6 +609,20 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 
 	versionID := newUUID()
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		// The agent as it is now, under its row lock: a delete or a retire
+		// that landed after this submission resolved the agent must not
+		// have a version arrive behind it (agentry#942). Tombstone takes
+		// the same lock and counts in-flight versions under it.
+		locked, err := q.GetAgentForUpdate(ctx, a.ID)
+		if err != nil {
+			return fmt.Errorf("registry: lock agent: %w", err)
+		}
+		if locked.DeletedAt != nil {
+			return ErrNotFound
+		}
+		if locked.RetiredAt != nil {
+			return ErrRetired
+		}
 		// The submitting address, keyed and month-rotated (agentry#27):
 		// the middleware resolved it once onto the context, for the API
 		// upload and the git push alike.
