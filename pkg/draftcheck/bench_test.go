@@ -531,6 +531,13 @@ func compareWordings(t *testing.T, c *judge.Client) {
 // needing git, a filesystem-style server over the inputs, a host on a port
 // other than 443, a server needing arguments). The criterion is agentry-notes
 // measurements/draft-check-bench.md's, written before the first full run.
+//
+// It failed (2026-10-06, two passes, DEV-217): it flagged no good draft but
+// only 2 of its 10 targets (the plain-http fetch and the git clone), while
+// it flagged 8 of the 10 undeclared variants, which are not its targets. So
+// it reads a manifest that does not grant what the instruction needs, not a
+// runtime that cannot give it. Nothing ships from here; the texts stay so a
+// rerun reproduces the record.
 const benchIDWontRun = "wont_run"
 
 // benchRuntime states what every run of a QuickAgent gets, from the CLI's
