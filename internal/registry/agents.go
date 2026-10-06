@@ -45,6 +45,9 @@ type Service struct {
 	// credential, so it records the version and a worker stores the
 	// archive (agentry#508, tag_archive.go). nil = write it here.
 	archiveHandOff ArchiveHandOff
+	// forkHandOff enqueues a fork's copy; forkRepos copies it (agentry#943).
+	forkHandOff ForkHandOff
+	forkRepos   ForkRepos
 	// eventSink receives post-commit state transitions for webhook fan-out
 	// (§9.3, M6). Set by the api layer; nil = no fan-out.
 	eventSink EventSink
@@ -275,79 +278,18 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 		return Agent{}, fmt.Errorf("%w: visibility must be public or private", ErrDenied)
 	}
 
-	q := s.st.Queries()
-	ns, err := q.GetHandle(ctx, in.Namespace)
+	t, err := s.createTarget(ctx, p, in.Namespace, in.Visibility)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Agent{}, ErrNotFound
-		}
-		return Agent{}, fmt.Errorf("registry: namespace: %w", err)
+		return Agent{}, err
 	}
-
-	// Namespace authorization + quota (§19).
-	subject := entitlements.ForUser(ns.ID)
-	switch ns.Kind {
-	case "user":
-		if ns.ID != p.UserID {
-			return Agent{}, auth.ErrForbidden
-		}
-	case "org":
-		// Nothing is added to an organization that is suspended or in its
-		// decommission hold (agentry#363) — asked first, so a suspended
-		// organization is as absent to a stranger as to a member.
-		if err := s.OrgGate(ctx, ns.ID, auth.ActAgentCreate); err != nil {
-			return Agent{}, err
-		}
-		// The namespace-derived role is the one rule: whoever may release
-		// an agent here may make one here.
-		derived := auth.NamespaceDerivedAgentRole(p, ns.Kind, ns.ID, p.Role(ns.ID))
-		if derived == auth.AgentRoleNone {
-			return Agent{}, auth.ErrForbidden
-		}
-		// Putting the organization's name on something the world can see
-		// is the same decision as making an existing agent public, and it
-		// belongs to the same people (D19, agentry#362). Enforcing it only
-		// on the transition would leave "create it public" as the way
-		// round: the state is what matters, not how it was reached.
-		if in.Visibility == "public" && derived != auth.AgentRoleAdmin {
-			return Agent{}, fmt.Errorf("%w: creating a public QuickAgent in %s is for the organization's administrators; create it private and ask an admin to publish it", ErrDenied, in.Namespace)
-		}
-		subject = entitlements.ForOrg(ns.ID)
-	}
-	// Publishing requires verified email (§19); creating an agent is the
-	// first step of that path, so gate here where the journey starts.
-	if !p.EmailVerified {
-		return Agent{}, fmt.Errorf("%w: verify this account's email address before creating a QuickAgent", ErrDenied)
-	}
-	lim, err := s.Entitlements().Limits(ctx, subject)
-	if err != nil {
-		// Fail closed: an unresolvable entitlement is not permission.
-		return Agent{}, fmt.Errorf("registry: entitlements: %w", err)
-	}
+	ns := t.ns
 
 	repoID := newUUID()
 	agentID := newUUID()
 
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
-		// The namespace's counts and the insert commit together, under the
-		// namespace's row lock: read on the pool before the transaction,
-		// as they were, N concurrent creates at the quota or the cap each
-		// saw the same count and every one landed (agentry#411; the seat
-		// cap in membership.go has always done it this way).
-		if err := q.LockNamespace(ctx, ns.ID); err != nil {
-			return fmt.Errorf("registry: lock namespace: %w", err)
-		}
-		n, err := q.CountAgentsInNamespace(ctx, ns.ID)
-		if err != nil {
-			return fmt.Errorf("registry: quota count: %w", err)
-		}
-		if n >= lim.AgentsPerNamespace {
-			return fmt.Errorf("%w: namespace agent quota reached", ErrDenied)
-		}
-		if in.Visibility == "private" {
-			if err := s.checkPrivateAgentCapFor(ctx, q, subject, ns.ID, 1); err != nil {
-				return err
-			}
+		if err := s.checkRoomInTx(ctx, q, t, in.Visibility); err != nil {
+			return err
 		}
 		if _, err := q.CreateRepo(ctx, repoID); err != nil {
 			return err
@@ -371,6 +313,96 @@ func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateA
 		return Agent{}, err
 	}
 	return s.Resolve(ctx, in.Namespace, in.Name)
+}
+
+// createTarget is a namespace a principal may create an agent in, with the
+// subject its quotas are counted against.
+type createTarget struct {
+	ns      storegen.Handle
+	subject entitlements.Subject
+	lim     entitlements.Limits
+}
+
+// createTarget authorizes p to create an agent of the given visibility in
+// namespace — the one rule for a create and a fork (agentry#943, the plan's
+// invariant 9): a personal namespace is its owner's; an organization's is
+// any active member's, a public one its administrators' alone; nothing is
+// added to an organization that is suspended or in its decommission hold;
+// the account's address must be verified.
+func (s *Service) createTarget(ctx context.Context, p *auth.Principal, namespace, visibility string) (createTarget, error) {
+	ns, err := s.st.Queries().GetHandle(ctx, namespace)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return createTarget{}, ErrNotFound
+		}
+		return createTarget{}, fmt.Errorf("registry: namespace: %w", err)
+	}
+
+	// Namespace authorization + quota (§19).
+	subject := entitlements.ForUser(ns.ID)
+	switch ns.Kind {
+	case "user":
+		if ns.ID != p.UserID {
+			return createTarget{}, auth.ErrForbidden
+		}
+	case "org":
+		// Nothing is added to an organization that is suspended or in its
+		// decommission hold (agentry#363) — asked first, so a suspended
+		// organization is as absent to a stranger as to a member.
+		if err := s.OrgGate(ctx, ns.ID, auth.ActAgentCreate); err != nil {
+			return createTarget{}, err
+		}
+		// The namespace-derived role is the one rule: whoever may release
+		// an agent here may make one here.
+		derived := auth.NamespaceDerivedAgentRole(p, ns.Kind, ns.ID, p.Role(ns.ID))
+		if derived == auth.AgentRoleNone {
+			return createTarget{}, auth.ErrForbidden
+		}
+		// Putting the organization's name on something the world can see
+		// is the same decision as making an existing agent public, and it
+		// belongs to the same people (D19, agentry#362). Enforcing it only
+		// on the transition would leave "create it public" as the way
+		// round: the state is what matters, not how it was reached.
+		if visibility == "public" && derived != auth.AgentRoleAdmin {
+			return createTarget{}, fmt.Errorf("%w: creating a public QuickAgent in %s is for the organization's administrators; create it private and ask an admin to publish it", ErrDenied, namespace)
+		}
+		subject = entitlements.ForOrg(ns.ID)
+	}
+	// Publishing requires verified email (§19); creating an agent is the
+	// first step of that path, so gate here where the journey starts.
+	if !p.EmailVerified {
+		return createTarget{}, fmt.Errorf("%w: verify this account's email address before creating a QuickAgent", ErrDenied)
+	}
+	lim, err := s.Entitlements().Limits(ctx, subject)
+	if err != nil {
+		// Fail closed: an unresolvable entitlement is not permission.
+		return createTarget{}, fmt.Errorf("registry: entitlements: %w", err)
+	}
+	return createTarget{ns: ns, subject: subject, lim: lim}, nil
+}
+
+// checkRoomInTx is the namespace's agent quota and, for a private agent,
+// its private-agent cap, inside the transaction that inserts the agent.
+// The counts and the insert commit together, under the namespace's row
+// lock: read on the pool before the transaction, as they were, N
+// concurrent creates at the quota or the cap each saw the same count and
+// every one landed (agentry#411; the seat cap in membership.go has always
+// done it this way).
+func (s *Service) checkRoomInTx(ctx context.Context, q *storegen.Queries, t createTarget, visibility string) error {
+	if err := q.LockNamespace(ctx, t.ns.ID); err != nil {
+		return fmt.Errorf("registry: lock namespace: %w", err)
+	}
+	n, err := q.CountAgentsInNamespace(ctx, t.ns.ID)
+	if err != nil {
+		return fmt.Errorf("registry: quota count: %w", err)
+	}
+	if n >= t.lim.AgentsPerNamespace {
+		return fmt.Errorf("%w: namespace agent quota reached", ErrDenied)
+	}
+	if visibility == "private" {
+		return s.checkPrivateAgentCapFor(ctx, q, t.subject, t.ns.ID, 1)
+	}
+	return nil
 }
 
 func newUUID() uuid.UUID {

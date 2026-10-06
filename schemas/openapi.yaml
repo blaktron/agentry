@@ -1891,9 +1891,10 @@ paths:
         Public agents for everyone; the private ones too for the namespace's
         owner and the active members of its organization. A deleted agent is
         never listed. The publisher's page (agentry#942) narrows and orders
-        the list with `q`, `state` and `sort`, and each agent carries
-        `installs30d`, `lastSubmittedAt` and, when it is retired,
-        `retiredAt`.
+        the list with `q`, `state`, `forks` (agentry#943) and `sort`, and
+        each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a
+        public agent, `forkedFrom` and `forkState` on a fork and, when it is
+        retired, `retiredAt`.
       security: []
       parameters:
         - name: namespace
@@ -1917,6 +1918,15 @@ paths:
           schema:
             type: string
             enum: [active, retired]
+        - name: forks
+          in: query
+          required: false
+          description: >-
+            `only` lists the namespace's forks, `none` the agents that are
+            not forks; absent, both (agentry#943).
+          schema:
+            type: string
+            enum: [only, none]
         - name: sort
           in: query
           required: false
@@ -1984,7 +1994,8 @@ paths:
                   description: >-
                     `public` is refused on a retired agent (`409
                     agent-retired`): Restore is how a retired agent comes
-                    back.
+                    back. It is refused on a fork for good (`409
+                    fork-stays-private`, agentry#943).
                   type: string
                   enum: [public, private]
                 autoPublishTags:
@@ -2073,6 +2084,63 @@ paths:
           description: >-
             `confirm-name`: an agent with version history, and `confirm` is
             missing or not its name.
+        default:
+          $ref: "#/components/responses/Problem"
+
+  /agents/{ns}/{name}/fork:
+    post:
+      operationId: forkAgent
+      tags: [agents]
+      summary: Fork a public agent into a namespace the caller may create in (agentry#943).
+      description: >-
+        Makes a private copy of a public agent: a new agent in `namespace`,
+        under the origin's name unless `name` gives another, that records
+        the origin and the published version it was taken from, for good. A
+        fork is never public (`PATCH` to public answers `409
+        fork-stays-private`). The fork is answered `202` with `forkState:
+        copying`: a worker then copies the origin's repository (every
+        branch and tag, objects copied rather than shared), writes one
+        commit, "Fork of ns/name@version", that renames the manifest into
+        the fork's namespace, tags it with the origin's version and submits
+        it through the pipeline like any submission, charged like one.
+        `forkState` is then `ready`, or `failed` with `forkDetail` saying
+        why. The origin must be readable, public, neither quarantined nor
+        blocked, and have a published version; the caller must be able to
+        create a private agent in `namespace` (its owner, or an active member
+        of the organization), within its agent quota and private-agent cap.
+        A name the namespace already has answers `409 name-taken`; one a
+        deleted agent holds, `409 name-held`.
+      parameters:
+        - $ref: "#/components/parameters/Namespace"
+        - $ref: "#/components/parameters/AgentName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [namespace]
+              properties:
+                namespace:
+                  type: string
+                  description: The namespace the fork goes into.
+                name:
+                  type: string
+                  description: The fork's name; the origin's when absent.
+      responses:
+        "202":
+          description: The fork, its copy under way.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "409":
+          description: >-
+            `name-taken`, `name-held`, `fork-source` (the origin is not
+            public, or is quarantined or blocked) or `nothing-to-fork` (it
+            has no published version).
+        "422":
+          description: "`private-agent-cap`, or a name that is not one."
         default:
           $ref: "#/components/responses/Problem"
 
@@ -6817,6 +6885,44 @@ components:
             When a version of this agent was last submitted, whatever became
             of it. Present on `GET /agents?namespace=` for an agent with at
             least one version.
+        forkedFrom:
+          $ref: "#/components/schemas/ForkOrigin"
+        forkState:
+          type: string
+          enum: [copying, ready, failed]
+          description: >-
+            Present on a fork (agentry#943): `copying` until a worker has
+            copied the repository and submitted the first version, `ready`
+            after, `failed` with `forkDetail`.
+        forkDetail:
+          type: string
+          description: Present on a fork whose copy failed, saying why in words.
+        forkCount:
+          type: integer
+          description: >-
+            Present on a public agent: how many forks of it exist. A count
+            only; no read names a fork to the origin's publisher.
+
+    ForkOrigin:
+      type: object
+      description: >-
+        What a fork was taken from (agentry#943). Kept for good: there is no
+        detach.
+      required: [namespace, name, version, available]
+      properties:
+        namespace:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+          description: The origin's published version the fork was taken from.
+        available:
+          type: boolean
+          description: >-
+            Whether the origin is still public, not deleted and not blocked,
+            which is when a client may link it. A quarantined origin is
+            available: its page says it is quarantined.
 
     AgentGrant:
       type: object
