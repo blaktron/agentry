@@ -279,6 +279,9 @@ func TestDraftBench(t *testing.T) {
 	var rows []row
 	tokens, requests := 0, 0
 	for _, v := range readVariants(t) {
+		if v.Class == "wont_run" {
+			continue // TestWontRunBench's targets; leaving them out keeps this bench's record reproducible
+		}
 		p := v.build(t)
 		rd, err := Read(p)
 		if err != nil {
@@ -484,6 +487,9 @@ func compareWordings(t *testing.T, c *judge.Client) {
 	type tally struct{ hit, targeted, goodHit, good int }
 	per := map[string]*tally{}
 	for _, v := range readVariants(t) {
+		if v.Class == "wont_run" {
+			continue
+		}
 		p := v.build(t)
 		rd, err := Read(p)
 		if err != nil {
@@ -610,7 +616,13 @@ func TestWontRunBench(t *testing.T) {
 	w := csv.NewWriter(f)
 	_ = w.Write([]string{"fixture", "class", "sample", "question", "p", "input_tokens"})
 
-	qs := []judge.Question{judge.DraftQuestions()[0], benchWontRun}
+	var qs []judge.Question
+	for _, q := range judge.DraftQuestions() {
+		if q.ID == judge.DraftIDOffTask {
+			qs = append(qs, q, benchWontRun)
+		}
+	}
+	ctx := context.Background()
 	type cell struct {
 		hit, n int
 		lo, hi float64
@@ -626,7 +638,7 @@ func TestWontRunBench(t *testing.T) {
 		state := map[string]string{"description": p.Description, "manifest": string(rd.ManifestJSON), "instruction": rd.Instruction, "runtime": benchRuntime}
 		var runs []map[string]float64
 		for i := 0; i < judge.Samples; i++ {
-			probs, u, err := c.Ask(context.Background(), state, qs)
+			probs, u, err := c.Ask(ctx, state, qs)
 			if err != nil {
 				t.Fatalf("%s/%s sample %d: %v", v.Fixture, v.Class, i+1, err)
 			}
@@ -667,6 +679,7 @@ func TestWontRunBench(t *testing.T) {
 		}
 		t.Logf("%-22s %-10s %s", v.Fixture, v.Class, strings.Join(line, " "))
 	}
+	// benchTargets' keys, in the order the measurements' tables print them.
 	classes := []string{"good", "off_task", "partial", "undeclared", "redundant", "wont_run"}
 	for _, q := range qs {
 		var parts []string
