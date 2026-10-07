@@ -515,6 +515,12 @@ type Deps struct {
 	// anything a caller chooses, because every distinct value is a series
 	// kept for the life of the process.
 	Meter metric.Meter
+	// BaseURL is the deployment's public origin, the address the core's own
+	// links are built on (config baseURL, or AGENTRY_BASE_URL over it),
+	// without a trailing slash (agentry#969): for an extension that must
+	// name an address of its own to a third party, such as an OAuth
+	// callback. Empty when the deployment names none.
+	BaseURL string
 }
 
 // Notifier lets an extension tell a person something by mail without
