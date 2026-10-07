@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -112,6 +114,59 @@ func TestRegisterAuditActionKeepsTheExtensionPrefix(t *testing.T) {
 		}()
 		registerAuditAction("agent", "agent.update")
 	}()
+}
+
+// binder keeps the deps it is bound with and registers nothing else.
+type binder struct {
+	noop
+	deps Deps
+}
+
+func (b *binder) Bind(d Deps) { b.deps = d }
+
+// TestBindHandsTheBaseURL: a bound extension gets the address the core's
+// own links use, whether the deployment names it in the config file (as
+// production's chart does) or in AGENTRY_BASE_URL (as dev's compose does),
+// the variable winning over the file, and nothing when neither names one
+// (agentry#969).
+func TestBindHandsTheBaseURL(t *testing.T) {
+	cases := []struct {
+		name, file, env, want string
+	}{
+		{"the config file", "https://file.example/", "", "https://file.example"},
+		{"the environment", "", "https://env.example", "https://env.example"},
+		{"the environment over the file", "https://file.example", "https://env.example/", "https://env.example"},
+		{"neither", "", "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "agentry.yaml")
+			body := "devMode: true\n"
+			if c.file != "" {
+				body += "baseURL: " + c.file + "\n"
+			}
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			// Set but empty would clear the file's address, so an unset
+			// case is unset (t.Setenv first, to restore it afterwards).
+			t.Setenv("AGENTRY_BASE_URL", c.env)
+			if c.env == "" {
+				if err := os.Unsetenv("AGENTRY_BASE_URL"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cfg, err := config.Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ext := &binder{}
+			applyExtensions(api.New(cfg, nil, slog.New(slog.DiscardHandler)), []Extension{ext})
+			if ext.deps.BaseURL != c.want || ext.deps.BaseURL != strings.TrimRight(cfg.BaseURL, "/") {
+				t.Fatalf("Deps.BaseURL = %q, want %q (config %q)", ext.deps.BaseURL, c.want, cfg.BaseURL)
+			}
+		})
+	}
 }
 
 func (bound) AuditActions() []AuditAction { return []AuditAction{"bound.tier_set"} }
