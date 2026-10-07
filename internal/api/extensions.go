@@ -250,6 +250,10 @@ func (s *Server) ActivateOrg(ctx context.Context, orgID uuid.UUID) (bool, error)
 	return n > 0, nil
 }
 
+// BaseURL is the deployment's public origin without a trailing slash, as
+// the core's own links use it, for pkg/extension.Deps (agentry#969).
+func (s *Server) BaseURL() string { return strings.TrimRight(s.cfg.BaseURL, "/") }
+
 // Blobs is the deployment's object store for pkg/extension.Deps
 // (agentry#348): nil when the server was built without a database, the
 // way ExtensionDeps' pool is.
