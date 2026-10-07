@@ -304,10 +304,10 @@ func (p *connectProxy) tunnels() []string {
 	return append([]string(nil), p.asked...)
 }
 
-// proxied is a TLS server on loopback named vendor as example.com (its
-// certificate's name) through the guard's resolver seam, and a guard whose
-// proxy tunnels to it.
-func proxied(t *testing.T, answer string) (*httptest.Server, *connectProxy, Guard, string) {
+// proxied starts a TLS server on loopback, which the guard's resolver seam
+// names example.com (its certificate's name), and returns a CONNECT proxy
+// that tunnels to it, a guard through that proxy and the server's base.
+func proxied(t *testing.T, answer string) (*connectProxy, Guard, string) {
 	t.Helper()
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/redirect" {
@@ -329,13 +329,13 @@ func proxied(t *testing.T, answer string) (*httptest.Server, *connectProxy, Guar
 			return []netip.Addr{netip.MustParseAddr(answer)}, nil
 		},
 	}
-	return ts, p, g, "https://" + target
+	return p, g, "https://" + target
 }
 
 // TestProxy_TunnelsToTheTarget: with a proxy, the request reaches its
 // target only through the proxy's CONNECT for the target's host:port.
 func TestProxy_TunnelsToTheTarget(t *testing.T) {
-	_, p, g, base := proxied(t, "127.0.0.1")
+	p, g, base := proxied(t, "127.0.0.1")
 	res, err := g.Client().Get(base + "/token")
 	if err != nil {
 		t.Fatalf("through the proxy: %v", err)
@@ -354,7 +354,7 @@ func TestProxy_TunnelsToTheTarget(t *testing.T) {
 // is asked for anything.
 func TestProxy_RefusesANonPublicTargetBeforeAsking(t *testing.T) {
 	for _, answer := range []string{"10.0.0.1", "169.254.169.254", "0.1.2.3", "2002:7f00:1::1"} {
-		_, p, g, base := proxied(t, answer)
+		p, g, base := proxied(t, answer)
 		g.AllowLoopback = false
 		_, err := g.Client().Get(base + "/token")
 		var blocked *BlockedAddressError
@@ -371,7 +371,7 @@ func TestProxy_RefusesANonPublicTargetBeforeAsking(t *testing.T) {
 // refused before anything is dialled, whether or not HTTPSOnly is set, so
 // nothing reaches the proxy as a forwarded request.
 func TestProxy_CarriesHTTPSOnly(t *testing.T) {
-	_, p, g, base := proxied(t, "127.0.0.1")
+	p, g, base := proxied(t, "127.0.0.1")
 	if res, err := g.Client().Get(strings.Replace(base, "https://", "http://", 1)); err == nil {
 		_ = res.Body.Close()
 		t.Fatal("a plain http request went out through the proxy")
@@ -390,7 +390,7 @@ func TestProxy_FollowsNoRedirectAndIgnoresTheEnvironment(t *testing.T) {
 	rogue := newConnectProxy(t, map[string]string{})
 	t.Setenv("HTTPS_PROXY", rogue.URL)
 	t.Setenv("HTTP_PROXY", rogue.URL)
-	_, p, g, base := proxied(t, "127.0.0.1")
+	p, g, base := proxied(t, "127.0.0.1")
 	res, err := g.Client().Get(base + "/redirect")
 	if err != nil {
 		t.Fatal(err)
