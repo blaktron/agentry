@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"time"
 )
 
@@ -48,12 +49,24 @@ func (e *BlockedAddressError) Error() string {
 // Timeout bounds one request (DefaultTimeout when zero). HTTPSOnly refuses a
 // request that is not https before anything is dialled, for a caller whose
 // every destination must be (an OAuth vendor).
+//
+// Proxy, when set, is a fixed CONNECT proxy the operator names
+// (agentry#974): production's worker reaches vendors' token endpoints only
+// through its allowlisting egress proxy. The client then dials that proxy's
+// address and nothing else, asks it for a tunnel to the target, and before
+// asking resolves the target's name and refuses it if any answer is not
+// public unicast; only https is carried, whatever HTTPSOnly says. The proxy
+// resolves the name again when it opens the tunnel, so this check is not
+// pinned the way a direct dial is: the proxy's own exact-host allowlist is
+// what bounds where a tunnel goes. The environment's proxy settings are
+// never read, with or without it.
 type Guard struct {
 	AllowLoopback bool
 	LookupNetIP   func(ctx context.Context, host string) ([]netip.Addr, error)
 	TLS           *tls.Config
 	Timeout       time.Duration
 	HTTPSOnly     bool
+	Proxy         *url.URL
 }
 
 // IsAllowedIP reports whether ip is a public unicast address safe to reach.
@@ -128,17 +141,10 @@ func embeddedIPv4(ip netip.Addr) (netip.Addr, bool) {
 	return netip.Addr{}, false
 }
 
-// DialContext resolves the host, verifies every candidate address, and dials a
-// verified address directly (not the hostname) so a DNS answer cannot change
-// between the check and the connect (TOCTOU / DNS-rebinding defense). Because
-// this runs on every attempt, re-resolution per attempt (§9.3) is inherent.
-// It is exported for a caller that must build its own transport; Client is
-// the usual way in.
-func (g Guard) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
+// checked resolves host, a name or a literal, and returns its addresses if
+// every one is public (fail closed on the first that is not: an attacker who
+// controls DNS could otherwise pad the answer with one public address).
+func (g Guard) checked(ctx context.Context, host string) ([]netip.Addr, error) {
 	var candidates []netip.Addr
 	if ip, err := netip.ParseAddr(host); err == nil {
 		candidates = []netip.Addr{ip}
@@ -152,17 +158,55 @@ func (g Guard) DialContext(ctx context.Context, network, addr string) (net.Conn,
 	if len(candidates) == 0 {
 		return nil, &BlockedAddressError{Host: host, IP: "none"}
 	}
-	var dialer net.Dialer
 	for _, ip := range candidates {
 		if !g.IsAllowedIP(ip) {
-			// Fail closed on the first non-public address: an attacker who
-			// controls DNS could otherwise pad the answer with one public IP.
 			return nil, &BlockedAddressError{Host: host, IP: ip.String()}
 		}
 	}
+	return candidates, nil
+}
+
+// DialContext resolves the host, verifies every candidate address, and dials a
+// verified address directly (not the hostname) so a DNS answer cannot change
+// between the check and the connect (TOCTOU / DNS-rebinding defense). Because
+// this runs on every attempt, re-resolution per attempt (§9.3) is inherent.
+// It is exported for a caller that must build its own transport; Client is
+// the usual way in.
+func (g Guard) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	candidates, err := g.checked(ctx, host)
+	if err != nil {
+		return nil, err
+	}
 	// All candidates cleared; dial the first verified address explicitly.
+	var dialer net.Dialer
 	target := net.JoinHostPort(candidates[0].String(), port)
 	return dialer.DialContext(ctx, network, target)
+}
+
+// proxyAddr is the proxy's host:port, its scheme's port when it names none.
+func (g Guard) proxyAddr() string {
+	port := g.Proxy.Port()
+	if port == "" {
+		port = "80"
+		if g.Proxy.Scheme == "https" {
+			port = "443"
+		}
+	}
+	return net.JoinHostPort(g.Proxy.Hostname(), port)
+}
+
+// dialProxy dials the operator's proxy and refuses any other address: with
+// a proxy, nothing but the proxy is ever dialled.
+func (g Guard) dialProxy(ctx context.Context, network, addr string) (net.Conn, error) {
+	if addr != g.proxyAddr() {
+		return nil, fmt.Errorf("egress: refused to dial %s: only the egress proxy %s is dialled", addr, g.proxyAddr())
+	}
+	var dialer net.Dialer
+	return dialer.DialContext(ctx, network, addr)
 }
 
 func (g Guard) lookup(ctx context.Context, host string) ([]netip.Addr, error) {
@@ -181,7 +225,7 @@ func (g Guard) Client() *http.Client {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	var rt http.RoundTripper = &http.Transport{
+	t := &http.Transport{
 		DialContext:           g.DialContext,
 		TLSClientConfig:       g.TLS,
 		TLSHandshakeTimeout:   timeout,
@@ -189,7 +233,13 @@ func (g Guard) Client() *http.Client {
 		DisableKeepAlives:     true,
 		Proxy:                 nil, // never honor proxy env for egress
 	}
-	if g.HTTPSOnly {
+	var rt http.RoundTripper = t
+	if g.Proxy != nil {
+		t.Proxy = http.ProxyURL(g.Proxy)
+		t.DialContext = g.dialProxy
+		rt = checkedTarget{guard: g, inner: rt}
+	}
+	if g.HTTPSOnly || g.Proxy != nil {
 		rt = httpsOnly{inner: rt}
 	}
 	return &http.Client{
@@ -199,6 +249,20 @@ func (g Guard) Client() *http.Client {
 		},
 		Transport: rt,
 	}
+}
+
+// checkedTarget resolves a proxied request's target and refuses it before
+// the proxy is asked for a tunnel when any of its addresses is not public.
+type checkedTarget struct {
+	guard Guard
+	inner http.RoundTripper
+}
+
+func (t checkedTarget) RoundTrip(r *http.Request) (*http.Response, error) {
+	if _, err := t.guard.checked(r.Context(), r.URL.Hostname()); err != nil {
+		return nil, err
+	}
+	return t.inner.RoundTrip(r)
 }
 
 // httpsOnly refuses any request that is not https before it dials.
