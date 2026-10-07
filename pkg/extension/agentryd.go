@@ -794,7 +794,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
 				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool), Principals: principalsOf(srv, pool),
 				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
-				Voice: voiceOf(srv, pool), Meter: meterOf(srv, pool, e.Name())})
+				Voice: voiceOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL()})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
