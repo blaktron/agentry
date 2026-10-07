@@ -6,9 +6,14 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"net/url"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -243,4 +248,175 @@ func tlsTrusting(ts *httptest.Server) *tls.Config {
 	pool := x509.NewCertPool()
 	pool.AddCert(ts.Certificate())
 	return &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+}
+
+// connectProxy is a CONNECT proxy on loopback that records each tunnel it
+// is asked for and opens it to route[target], standing in for production's
+// allowlisting egress proxy.
+type connectProxy struct {
+	*httptest.Server
+	mu      sync.Mutex
+	asked   []string
+	route   map[string]string
+	refused int // requests that were not CONNECT
+}
+
+func newConnectProxy(t *testing.T, route map[string]string) *connectProxy {
+	t.Helper()
+	p := &connectProxy{route: route}
+	p.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p.mu.Lock()
+		if r.Method != http.MethodConnect {
+			p.refused++
+			p.mu.Unlock()
+			http.Error(w, "CONNECT only", http.StatusMethodNotAllowed)
+			return
+		}
+		p.asked = append(p.asked, r.Host)
+		to, ok := p.route[r.Host]
+		p.mu.Unlock()
+		if !ok {
+			http.Error(w, "not in the allowlist", http.StatusForbidden)
+			return
+		}
+		up, err := net.Dial("tcp", to)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		conn, buf, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			_ = up.Close()
+			return
+		}
+		_, _ = conn.Write([]byte("HTTP/1.1 200 Connection established\r\n\r\n"))
+		go func() { _, _ = io.Copy(up, buf); _ = up.Close() }()
+		_, _ = io.Copy(conn, up)
+		_ = conn.Close()
+	}))
+	t.Cleanup(p.Close)
+	return p
+}
+
+func (p *connectProxy) tunnels() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.asked...)
+}
+
+// proxied is a TLS server on loopback named vendor as example.com (its
+// certificate's name) through the guard's resolver seam, and a guard whose
+// proxy tunnels to it.
+func proxied(t *testing.T, answer string) (*httptest.Server, *connectProxy, Guard, string) {
+	t.Helper()
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/redirect" {
+			http.Redirect(w, r, "https://elsewhere.example/", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(ts.Close)
+	port := netip.MustParseAddrPort(ts.Listener.Addr().String()).Port()
+	target := fmt.Sprintf("example.com:%d", port)
+	p := newConnectProxy(t, map[string]string{target: ts.Listener.Addr().String()})
+	pu, _ := url.Parse(p.URL)
+	g := Guard{
+		AllowLoopback: true,
+		TLS:           tlsTrusting(ts),
+		Proxy:         pu,
+		LookupNetIP: func(context.Context, string) ([]netip.Addr, error) {
+			return []netip.Addr{netip.MustParseAddr(answer)}, nil
+		},
+	}
+	return ts, p, g, "https://" + target
+}
+
+// TestProxy_TunnelsToTheTarget: with a proxy, the request reaches its
+// target only through the proxy's CONNECT for the target's host:port.
+func TestProxy_TunnelsToTheTarget(t *testing.T) {
+	_, p, g, base := proxied(t, "127.0.0.1")
+	res, err := g.Client().Get(base + "/token")
+	if err != nil {
+		t.Fatalf("through the proxy: %v", err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	if got := p.tunnels(); len(got) != 1 || got[0] != strings.TrimPrefix(base, "https://") {
+		t.Fatalf("tunnels asked: %v", got)
+	}
+}
+
+// TestProxy_RefusesANonPublicTargetBeforeAsking: a target whose name
+// resolves to a private or metadata address is refused before the proxy
+// is asked for anything.
+func TestProxy_RefusesANonPublicTargetBeforeAsking(t *testing.T) {
+	for _, answer := range []string{"10.0.0.1", "169.254.169.254", "0.1.2.3", "2002:7f00:1::1"} {
+		_, p, g, base := proxied(t, answer)
+		g.AllowLoopback = false
+		_, err := g.Client().Get(base + "/token")
+		var blocked *BlockedAddressError
+		if !errors.As(err, &blocked) {
+			t.Fatalf("%s: err = %v, want BlockedAddressError", answer, err)
+		}
+		if got := p.tunnels(); len(got) != 0 {
+			t.Fatalf("%s: the proxy was asked for %v", answer, got)
+		}
+	}
+}
+
+// TestProxy_CarriesHTTPSOnly: with a proxy, a plain http request is
+// refused before anything is dialled, whether or not HTTPSOnly is set, so
+// nothing reaches the proxy as a forwarded request.
+func TestProxy_CarriesHTTPSOnly(t *testing.T) {
+	_, p, g, base := proxied(t, "127.0.0.1")
+	if res, err := g.Client().Get(strings.Replace(base, "https://", "http://", 1)); err == nil {
+		_ = res.Body.Close()
+		t.Fatal("a plain http request went out through the proxy")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.refused != 0 || len(p.asked) != 0 {
+		t.Fatalf("the proxy saw %d forwards and %v tunnels", p.refused, p.asked)
+	}
+}
+
+// TestProxy_FollowsNoRedirectAndIgnoresTheEnvironment: a redirect ends the
+// request, and a proxy named in the environment is never asked, with the
+// guard's own proxy set or not.
+func TestProxy_FollowsNoRedirectAndIgnoresTheEnvironment(t *testing.T) {
+	rogue := newConnectProxy(t, map[string]string{})
+	t.Setenv("HTTPS_PROXY", rogue.URL)
+	t.Setenv("HTTP_PROXY", rogue.URL)
+	_, p, g, base := proxied(t, "127.0.0.1")
+	res, err := g.Client().Get(base + "/redirect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusFound {
+		t.Fatalf("status %d: the redirect was followed", res.StatusCode)
+	}
+	if len(p.tunnels()) != 1 || len(rogue.tunnels()) != 0 {
+		t.Fatalf("own proxy %v, environment's %v", p.tunnels(), rogue.tunnels())
+	}
+}
+
+// TestProxy_DialsOnlyTheProxy: the proxied dialler refuses every address
+// but the proxy's own.
+func TestProxy_DialsOnlyTheProxy(t *testing.T) {
+	pu, _ := url.Parse("http://agentry-egress-proxy:3128")
+	g := Guard{Proxy: pu}
+	if _, err := g.dialProxy(context.Background(), "tcp", "93.184.216.34:443"); err == nil || !strings.Contains(err.Error(), "only the egress proxy") {
+		t.Fatalf("dial elsewhere: %v", err)
+	}
+	if got := g.proxyAddr(); got != "agentry-egress-proxy:3128" {
+		t.Fatalf("proxy address %q", got)
+	}
+	pu, _ = url.Parse("http://proxy.internal")
+	if got := (Guard{Proxy: pu}).proxyAddr(); got != "proxy.internal:80" {
+		t.Fatalf("default port: %q", got)
+	}
 }
