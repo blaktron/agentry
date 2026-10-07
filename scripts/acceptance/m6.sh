@@ -54,7 +54,7 @@ gotest "domain verification endpoint w/ fake resolver (§12.4)" -timeout 20m ./i
 
 # Webhooks: SSRF guard (private/link-local/metadata/http/redirect), HMAC format,
 # and a real delivery through the queue (§9.3, T-08).
-gotest "webhook SSRF guard + HMAC signature (§9.3, T-08)" -timeout 20m ./internal/webhook -count=1
+gotest "SSRF egress guard + webhook HMAC signature (§9.3, T-08)" -timeout 20m ./pkg/egressguard ./internal/webhook -count=1
 gotest "webhook delivery via queue + event fan-out (§9.3)" -timeout 20m ./internal/api -run 'TestWebhookDeliveryViaQueue|TestWebhookEventWiring' -count=1
 
 # Audit export: async NDJSON to blob store with a download reference (§12.6).
