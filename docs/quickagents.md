@@ -371,8 +371,8 @@ Closed vocabulary. Omitted or empty means a **pure-text QuickAgent**
 (its run-time tools are `write_report`, the read-only `list_inputs`,
 `read_input` and `search_inputs`, its scratch folder's `scratch_list`,
 `scratch_read` and `scratch_write`, and `export_pdf`, nothing else; the
-last four are the runner's grants to every release, not lines of the
-contract). The registry scans releases
+last four are the runner's grants to every release but a built-in, not
+lines of the contract). The registry scans releases
 against these declarations, an install prompts on them (egress/exec need
 typed consent; a widened contract re-asks on upgrade), and the runner
 turns each line into a concrete control. The same contract covers support

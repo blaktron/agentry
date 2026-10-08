@@ -63,7 +63,7 @@ func (s *Server) UpdateUserReportSettings(w http.ResponseWriter, r *http.Request
 	}
 	if !req.Theme.Valid() {
 		problemValidation(w, r, "Unknown report theme.", FieldError{
-			Field: "theme", Message: "must be one of plain, formal, brief, technical, letter",
+			Field: "theme", Message: "must name a built-in report theme",
 		})
 		return
 	}

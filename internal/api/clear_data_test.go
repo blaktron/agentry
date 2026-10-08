@@ -163,7 +163,7 @@ func TestClearCurrentUserData(t *testing.T) {
 	}
 	var d map[string]any
 	_ = json.Unmarshal(detail, &d)
-	if d["tokens"] != float64(liveTokens) || d["sshKeys"] != float64(1) || d["trustedDevices"] != float64(1) || d["desktopCodes"] != float64(1) || d["otherSessions"] != float64(1) || d["installs"] != float64(1) || d["notificationSettingsReset"] != true {
+	if d["tokens"] != float64(liveTokens) || d["sshKeys"] != float64(1) || d["trustedDevices"] != float64(1) || d["desktopCodes"] != float64(1) || d["otherSessions"] != float64(1) || d["installs"] != float64(1) || d["notificationSettingsReset"] != true || d["reportSettingsReset"] != true {
 		t.Errorf("audit detail = %s", detail)
 	}
 	// No extension erases anything here, so the detail names none
