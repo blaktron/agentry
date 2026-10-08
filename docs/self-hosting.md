@@ -788,7 +788,14 @@ address; direct executor requests cannot skip it by never opening the page.
 The directory's OIDC token exchange and other API routes stay outside that
 visitor budget, because service-to-service traffic shares a server address.
 The git endpoints have their own budget (120/min, burst 60). Over the limit is `429` with
-`Retry-After`. Tune the zones in `edge/nginx.conf`; a site's overlay adds
+`Retry-After: 6`: six seconds is one interval of the slowest headless zone
+(10/min), a conservative pause before another request. Git also permits eight
+active requests per visitor; a concurrency refusal is `429` with
+`Retry-After: 1`, a polling hint while a slot depends on an active request ending.
+Neither delay reserves a slot. Only edge-generated refusals receive these
+headers; upstream `429` responses retain their own retry instructions and
+successful responses receive none. Tune the zones in `edge/nginx.conf`;
+a site's overlay adds
 zones for its own forms; behind Cloudflare, mirror the same paths with a
 rate-limiting rule so the edge is the second line, not the first.
 

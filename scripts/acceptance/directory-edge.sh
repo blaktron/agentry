@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Exercise the headless edge's actual HTTP routing and per-client budgets
-# (agentry#983). The directory is an external HTTP stub: no real account,
+# (agentry#983, #984). The directory is an external HTTP stub: no real account,
 # credential or mail is needed. Token exchange must stay outside this budget.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
@@ -31,14 +31,31 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+released = threading.Event()
+
 
 class Upstream(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
     def do_GET(self):
+        if self.path.endswith("/hold"):
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"{")
+            self.wfile.flush()
+            released.wait(30)
+            self.wfile.write(b"}")
+            return
+        if self.path == "/api/fixture-release":
+            released.set()
         body = json.dumps({"path": self.path, "headers": dict(self.headers)}).encode()
-        self.send_response(200)
+        limited = self.path.endswith("/upstream-429")
+        self.send_response(429 if limited else 200)
+        if limited:
+            self.send_header("Retry-After", "42")
+            self.send_header("X-RateLimit-Remaining", "0")
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -66,4 +83,5 @@ for client in client other; do
 done
 docker exec "$P-client" python /probe.py exhaust
 docker exec "$P-other" python /probe.py fresh
+docker exec "$P-other" python /probe.py concurrency
 echo '== directory edge acceptance PASSED =='
