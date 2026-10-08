@@ -65,6 +65,7 @@ func TestClearCurrentUserData(t *testing.T) {
 		"email": map[string]any{"dependencyAlerts": false, "quarantine": false, "reviewDecisions": false, "advisories": false, "orgInvites": false},
 		"web":   map[string]any{"dependencyAlerts": false},
 	}, nil, http.StatusOK)
+	env.doJSON(sess, http.MethodPut, "/api/v1/user/report-settings", map[string]any{"theme": "letter"}, nil, http.StatusOK)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
 		map[string]any{"namespace": h, "name": "mine", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	env.publishVersions(t, sess, h, "mine", []versionFiles{
@@ -124,6 +125,7 @@ func TestClearCurrentUserData(t *testing.T) {
 		"trusted devices":          count(`SELECT count(*) FROM trusted_devices WHERE user_id = $1`, uid),
 		"account installs":         count(`SELECT count(*) FROM account_installs WHERE user_id = $1`, uid),
 		"notification settings":    count(`SELECT count(*) FROM user_notification_settings WHERE user_id = $1`, uid),
+		"report settings":          count(`SELECT count(*) FROM user_report_settings WHERE user_id = $1`, uid),
 		"unconsumed desktop codes": count(`SELECT count(*) FROM desktop_grants WHERE user_id = $1 AND consumed_at IS NULL`, uid),
 	} {
 		if n != 0 {
