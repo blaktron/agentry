@@ -23,29 +23,28 @@ the scope it is to admit a token by to set and delete the account's secrets
 
 `GET /api/v1/x/runs/status` answers anyone: whether this deployment can take
 runs at all (it needs a database, a credit ledger and an object store), how
-many workers were seen within the stale window, and how many runs are queued.
-It also answers the price list, to anyone, since it is the deployment's
-configuration and not a secret: every tier's caps and hold under `tiers` (each with
-the `build` caps and hold of a [knowledge build](#a-knowledge-build)), and
-`knowledgeBuild` — whether a build can run here, what it holds, and the
-pack scan's credit — and `draft`, the terms of a [hosted
-draft](#a-hosted-draft), and `voiceBuild`, the terms of a [hosted Voice
-Writer run](#a-hosted-voice-writer-run). A signed-in caller also gets `caller` — the tier a
-run of theirs is held at, `account` (whose row it is held on: their own, or
-the organization whose pool pays for their runs), that tier's caps, the
-credits a run holds, the tier's `build` and the `draft` hold,
-and `voice`, whether their payer may start a Voice Writer run now —
-so a client can state the cost, and whose credits it is, before any run
-exists. `sessions` states a [hosted session](#a-hosted-session)'s
-terms to anyone: whether this deployment runs sessions (`enabled`), the
-free minutes, a paid minute's credits, the balance one needs to start, the
-idle close, and per tier whether its payers may start one (`allowed`). A
+many workers were seen within the stale window, and how many runs are
+queued. It also answers the price list, to anyone, since it is the
+deployment's configuration and not a secret: every tier's caps and hold
+under `tiers` (each with the `build` caps and hold of a [knowledge
+build](#a-knowledge-build)), and `knowledgeBuild` — whether a build can run
+here, what it holds, and the pack scan's credit — and `draft`, the terms of
+a [hosted draft](#a-hosted-draft), and `voiceBuild`, the terms of a [hosted
+Voice Writer run](#a-hosted-voice-writer-run). A signed-in caller also gets
+`caller` — the tier a run of theirs is held at, `account` (whose row it is
+held on: their own, or the organization whose pool pays for their runs),
+that tier's caps, the credits a run holds, the tier's `build` and the
+`draft` hold, and `voice`, whether their payer may start a Voice Writer run
+now — so a client can state the cost, and whose credits it is, before any
+run exists. `sessions` states a [hosted session](#a-hosted-session)'s terms
+to anyone: whether this deployment runs sessions (`enabled`), the free
+minutes, a paid minute's credits, the balance one needs to start, the idle
+close, and per tier whether its payers may start one (`allowed`). A
 signed-in caller's `caller.session.allowed` says whether their own payer
 may. `hostsOnline` is how many sandbox hosts are taking runs: seen within
 the stale window, neither retired nor draining, with capacity. A session
-starts only when there is one. Every figure in it is in credits, seconds
-and turns: the two per-credit rates and the token caps are the deployment's
-configuration and are not served
+starts only when there is one. Its prices are in credits and its caps in
+seconds and turns; the per-credit rates and the token caps are not served
 ([in credits, never in tokens](#in-credits-never-in-tokens)).
 
 ## Who may do what
@@ -173,11 +172,11 @@ and the settlement are computed at: 1,000 credits buy about US$5 of
 inference at US$0.10 a million input tokens and US$0.20 a million output.
 They replaced a single tokens-per-credit rate; a deployment that still sets
 `AGENTRY_RUNS_TOKENS_PER_CREDIT` is stopped at start-up with a message naming
-the two (and one that still sets `AGENTRY_RUNS_DRAFT_TOKEN_CREDITS` with one
-naming `AGENTRY_RUNS_DRAFT_CREDITS` and `AGENTRY_RUNS_DRAFT_MAX_TOKENS`), as is one that sets a zero rate, an empty cap or a zero timeout,
-rather than running with a price it did not mean. `GET /api/v1/x/runs/status`
-reports the live seconds, turns and holds; the token caps and the rates are
-not served.
+the two, as is one that sets a zero rate, an empty cap or a zero timeout,
+rather than running with a price it did not mean. One that still sets
+`AGENTRY_RUNS_DRAFT_TOKEN_CREDITS` is stopped too, with a message naming
+`AGENTRY_RUNS_DRAFT_CREDITS` and `AGENTRY_RUNS_DRAFT_MAX_TOKENS`.
+`GET /api/v1/x/runs/status` reports the live seconds, turns and holds.
 
 ## Credits: a hold, then a settlement or a refund
 
@@ -207,18 +206,18 @@ A run cancelled while still queued is `cancelled`, not an outcome, and its
 hold is refunded in full. So is a run nobody claimed within the queue timeout;
 a run whose worker fell silent is closed as `error` and refunded.
 
-A run that **ran** settles `max(1, ceil(input ÷ inputTokensPerCredit + output
-÷ outputTokensPerCredit))`, never more than the hold, with the rest of the
-hold released. `input` and `output` are the receipt's `usage.inputTokens` and
-`usage.outputTokens`; tokens its `usage.totalTokens` counts beyond them —
-all of them, when a harness reported no split — are priced at the output
-rate. Input counts tokens processed, cached prefixes included, so the price
-leans the platform's way rather than the account's. The minimum of one credit
-means a run that started and produced nothing still costs one. The ledger records the
-hold (`run_hold`), then either the whole hold released (`run_release`) and
-the cost charged (`run`), or the whole hold refunded (`run_refund`) — each
-line unique on its reason and the run's id, so a finish reported twice
-changes nothing.
+A run that **ran** settles `max(1, ceil(input ÷ inputTokensPerCredit +
+output ÷ outputTokensPerCredit))`, never more than the hold, with the rest
+of the hold released. `input` and `output` are the stored receipt's
+`usage.inputTokens` and `usage.outputTokens`; tokens its `usage.totalTokens`
+counts beyond them — all of them, when a harness reported no split — are
+priced at the output rate. Input counts tokens processed, cached prefixes
+included, so the price leans the platform's way rather than the account's.
+The minimum of one credit means a run that started and produced nothing
+still costs one. The ledger records the hold (`run_hold`), then either the
+whole hold released (`run_release`) and the cost charged (`run`), or the
+whole hold refunded (`run_refund`) — each line unique on its reason and the
+run's id, so a finish reported twice changes nothing.
 
 ## What a run is refused for
 
@@ -306,45 +305,45 @@ were created with ([the `docker.runtime` knob](runner.md#the-oci-runtime-dockerr
 Summarising them would replace what the run enforced with someone's reading
 of it.
 
-### In credits, never in tokens
-
-A hosted run is reported in credits, turns and time, to everyone who reads
-it: its runner, the admins of the organization that pays for it, and
-platform staff alike (agentry-enterprise#291). No route serves a hosted
-run's token counts, a dollar cost, a token cap or a per-credit rate. Every
-answer of the runs routes and the status route leaves out any member that
-names tokens or a dollar figure, at any depth: the receipt is served without
-its `usage` block, `caps` keep their seconds and turns, and a session's
-`usage` frames are not passed on. The credits named after tokens stay,
-because they are credits: a draft's and a session's `tokenCredits`, a
-session's `tokensUnpaid`. `usage.credits` is what the run's model use came
-to at the rates of its close, before its hold capped it. Beside
-`settledCredits` it says what a run cost, including the run of an unmetered
-organization, which holds and settles nothing. A draft's searches and AI
-Review are in its record's `pricedCredits`, not there.
-
-The run's stored record keeps every count, and the receipt keeps its
-`usage`: the settlement is computed from them and they are its audit. The
-deployment counts them in metrics, the one place they can be read:
-`RunsHostedInputTokens` and `RunsHostedOutputTokens`, by the run's kind
-(`run`, `session`, `knowledge_build`, `draft`, `revision`, `voice_build`)
-and its payer's tier at the close, and `RunsDraftAbsorbedCredits`, what a
-draft's use came to past what it settled. They are scraped from `/metrics`
-beside the core's own series ([metrics](self-hosting.md#metrics)). The pull
-worker's claim alone still carries `caps.maxTokens`, because the worker
-enforces it.
-
-Two places still show tokens. A run on your own machine reports them in its
-receipt and in what the CLI prints, as the [Runner reference](runner.md)
-describes: they are your own model's tokens. And the receipts inside a
-hosted run's downloaded `output.tar` keep their counts for now.
-
 Three surfaces read the same run. The API above is one; the site's run page
 is another, reached from **Run in Agentry** on a QuickAgent's page, with the
 queue, the live log, the credits held and settled, and the outputs to
 download; the desktop app's run panel is the third. The site's
 [Running on Agentry](https://docs.secureagentry.net/agentry/hosted-runs/)
 walks through what a person sees.
+
+### In credits, never in tokens
+
+A hosted run is reported in credits, turns and time, to everyone who reads
+it: its runner, the admins of the organization that pays for it, and
+platform staff alike (agentry-enterprise#291). No answer of the runs routes
+or the status route carries a hosted run's token counts, a dollar cost, a
+token cap or a per-credit rate, except the pull worker's claim (below): each
+leaves out any member that names tokens or a dollar figure, at any depth:
+the receipt is served without its `usage` block, `caps` keep their seconds
+and turns, and a session's `usage` frames are not passed on. The credits
+named after tokens stay, because they are credits: a draft's and a session's
+`tokenCredits`, a session's `tokensUnpaid`. `usage.credits` is what the
+run's model use came to at the rates of its close, before its hold capped
+it. Beside `settledCredits` it says what a run cost, including the run of an
+unmetered organization, which holds and settles nothing. A draft's searches
+and AI Review are in its record's `pricedCredits`, not there.
+
+The run's stored record keeps every count, and the receipt keeps its
+`usage`: the settlement is computed from them and they are its audit. The
+deployment counts them in metrics: `RunsHostedInputTokens` and
+`RunsHostedOutputTokens`, by the run's kind (`run`, `session`,
+`knowledge_build`, `draft`, `revision`, `voice_build`) and its payer's tier
+at the close, and `RunsDraftAbsorbedCredits`, what a draft's use came to
+past what it settled. They are scraped from `/metrics` beside the core's own
+series ([metrics](self-hosting.md#metrics)). The pull worker's claim alone
+still carries `caps.maxTokens`, because the worker enforces it.
+
+Apart from metrics, two places still show tokens. A run on your own machine
+reports them in its receipt and in what the CLI prints, as the [Runner
+reference](runner.md) describes: they are your own model's tokens. And the
+receipts inside a hosted run's downloaded `output.tar` keep their counts for
+now.
 
 ## What actually bounds a run
 
@@ -750,20 +749,21 @@ its own ledger reasons (`knowledge_build_hold`, then `knowledge_build` and
 own: `AGENTRY_RUNS_BUILD_SECONDS_STANDARD` (900 s) and
 `AGENTRY_RUNS_BUILD_SECONDS_{PRO,BUSINESS,ENTERPRISE}` (3,600 s),
 `AGENTRY_RUNS_BUILD_MAX_TURNS` (300), and as tokens what the hold less the
-scan's credit buys at the input rate: 10,000,000 by default. It counts against one active run per account. It runs only on
-sandbox hosts Agentry pushes to: the pack's tree is staged for the host
-beside the documents, the host runs `agentry knowledge add` (or `create`)
-over it and stops the build when its narrated tokens, priced at the two
-rates, pass the hold less one credit. That credit is the pack's scan: when
-the build finishes, the registry opens its output for its runner, puts the
-pack's new tree into the store if the pack still holds the tree the build was
-handed — resealed under the pack's own key, counted against the allocation,
-and scanned as any upload is — and settles the tokens plus 1 credit for the
-scan, never past the hold. The run's `build` record says what happened: the
-pack's digest, pages and bytes when it was `applied`, or a `note` —
-`nothing` (the build made no pack), `changed` (the pack took another tree
-while it ran), `allocation`, or `deleted`, each settling the tokens spent,
-or `invalid` (the output held no valid pack), refunded in full.
+scan's credit buys at the input rate: 10,000,000 by default. It counts
+against one active run per account. It runs only on sandbox hosts Agentry
+pushes to: the pack's tree is staged for the host beside the documents, the
+host runs `agentry knowledge add` (or `create`) over it and stops the build
+when its narrated tokens, priced at the two rates, pass the hold less one
+credit. That credit is the pack's scan: when the build finishes, the
+registry opens its output for its runner, puts the pack's new tree into the
+store if the pack still holds the tree the build was handed — resealed under
+the pack's own key, counted against the allocation, and scanned as any
+upload is — and settles the tokens plus 1 credit for the scan, never past
+the hold. The run's `build` record says what happened: the pack's digest,
+pages and bytes when it was `applied`, or a `note` — `nothing` (the build
+made no pack), `changed` (the pack took another tree while it ran),
+`allocation`, or `deleted`, each settling the tokens spent, or `invalid`
+(the output held no valid pack), refunded in full.
 
 **Search the web.** `web: true` lets the Creator search, `false` forbids it,
 and with no `web` a new pack with no documents searches and anything else
@@ -863,12 +863,13 @@ A draft that ran settles its model use (at most its `tokenCredits`), the
 searches the provider answered at their price, and 1 credit for AI Review,
 however many texts it read, never past the hold. Its record's
 `pricedCredits` is what all of that came to before the hold capped it, so
-`pricedCredits` less `settledCredits` is what the platform absorbed. A draft that did not run is
-refunded in full: one whose description AI Review did not pass (the CLI's
-exit 11 at stage `description`, before anything is searched or read) and
-one the platform failed. The run's `draft` record keeps what the calls
-spent: the searches, the texts scanned and withheld, the judge's requests
-(AI Review is 1 credit however many), and the parts of the settlement. Its output is the sealed `output.tar`, for its runner alone,
+`pricedCredits` less `settledCredits` is what the platform absorbed. A draft
+that did not run is refunded in full: one whose description AI Review did
+not pass (the CLI's exit 11 at stage `description`, before anything is
+searched or read) and one the platform failed. The run's `draft` record
+keeps what the calls spent: the searches, the texts scanned and withheld,
+the judge's requests (AI Review is 1 credit however many), and the parts of
+the settlement. Its output is the sealed `output.tar`, for its runner alone,
 holding `draft.json`, the rendered `package/`, the reports and the receipts.
 
 The Drafter is part of the CLI the host runs, like the Knowledge Creator:
