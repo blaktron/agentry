@@ -983,17 +983,18 @@ already carries, so nothing is installed for them. They read and compare
 text, take checksums and read archives, and none of them runs another
 program: `sh`, `awk`, `sed`, `find`, `xargs` and `env` are left out on
 purpose. A declared command writes only beneath `/tmp`, the scratch folder
-and a granted workspace, so an archive is unpacked there. A run in Agentry provides these
-and no others. `agentry doctor` lists them.
+and a granted workspace, so an archive is unpacked there. A run in Agentry
+provides these and no others. `agentry doctor` lists them.
 
 ## The scratch folder and PDF reports
 
-Every release's run and session, local or hosted, has a **scratch folder**
-and the **`export_pdf`** tool. They are the runner's grants, not lines of
-the contract: no manifest declares them, an install asks no consent for
-them, and the built-in packages have neither. They arrived together in the CLI's `main` after
-v0.6.81 (agentry-cli#729, #730) and reach a hosted run when a sandbox
-host's CLI is updated.
+A CLI that carries them gives every release's run and session a **scratch
+folder** and the **`export_pdf`** tool. They are the runner's grants, not
+lines of the contract: no manifest declares them, an install asks no
+consent for them, and the built-in packages have neither. They landed on
+the CLI's `main` on 2026-10-08 (agentry-cli#729, #730), after v0.6.81, and
+reach a hosted run when a sandbox host's CLI is updated
+(agentry-enterprise#470).
 
 ### What the tools container mounts
 
@@ -1033,8 +1034,9 @@ follow a link a command planted there out of it.
 On Linux the run's docker filter mounts `/scratch` and `/tmp` as tmpfs of
 256 MiB each, counted against the container's memory limit. A write past
 the cap fails with "no space left": the agent sees a tool error, and the
-calls ledger does not record the agent filling its own folder as a fault. The tools server refuses to
-start unless both mounts are tmpfs no larger than that, so a run whose
+calls ledger does not record the agent filling its own folder as a fault.
+The tools server refuses to start unless both mounts are tmpfs no larger
+than that, so a run whose
 filter missed the container stops at the health probe (exit 13). Under
 Docker Desktop (macOS, Windows) the filter does not run: both are folders
 in the container's own layer and are **not bounded**, and the run's
@@ -1113,11 +1115,12 @@ other name is refused (422). An account that never chose reads back `{}`,
 which is not the same as choosing Plain, and a `PUT` with no `theme` clears
 the choice. Clearing an account's data clears it too.
 
-A run takes the first of these that is set: `agentry run --report-theme
-<name>` for that run alone, then the signed-in account's report theme, then
-`report.theme` in the CLI's config, then Plain. The desktop passes the
-profile's theme to a local run, and a hosted run's job carries it. There is
-no theme picker in a run dialog.
+Until those land, every run renders with Plain. Once they do, a run takes
+the first of these that is set: `agentry run --report-theme <name>` for
+that run alone, then the signed-in account's report theme, then
+`report.theme` in the CLI's config, then Plain. The desktop will pass the
+profile's theme to a local run, and a hosted run's job will carry it. There
+is no theme picker in a run dialog.
 
 ### What the receipt records
 
@@ -1135,9 +1138,11 @@ its line:
 }
 ```
 
-A reader opens in place only a PDF the block names with a matching SHA-256;
-any other PDF in the output folder is download-only. A run that exported
-none has no `pdfs` block.
+The block is what a reader is to hold a PDF to before opening it in place:
+the site (agentry-web#1314) and the desktop (agentry-desktop#730) are to
+open only a PDF it names with a matching SHA-256, and offer any other PDF
+in the output folder as a download only. Neither reads it yet. A run that
+exported none has no `pdfs` block.
 
 ## The System Prompt
 
@@ -1202,7 +1207,7 @@ the plan nor its hash. [The Writing Voice](voice.md) has the rest.
 ### The text, for a sample plan
 
 What follows was compiled by the CLI's `main` at **`a7ae9f7`** (built from
-source on 2026-10-08: the first commit with the scratch folder and
+source on 2026-10-08: the first `main` commit with the scratch folder and
 `export_pdf`, which no release carries yet) for a QuickAgent with no
 grants:
 
