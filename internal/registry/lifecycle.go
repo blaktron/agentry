@@ -48,7 +48,10 @@ const tombstoneYankReason = "The publisher deleted this QuickAgent."
 // found, not hidden: the trust & safety actions' door to an agent its
 // publisher deleted, and the create's way to tell a held name from a
 // taken one once the namespace has admitted the caller. No read a
-// publisher or a consumer makes goes through it.
+// publisher or a consumer makes goes through it, save one: the advisories
+// of an agent the caller holds a release of reach its owning
+// organization's gate through it (agentry#949), after the holder is
+// proved.
 func (s *Service) ResolveIncludingDeleted(ctx context.Context, namespace, name string) (Agent, error) {
 	return s.resolve(ctx, namespace, name, true)
 }
