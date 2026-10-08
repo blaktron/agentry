@@ -69,7 +69,8 @@ SELECT count(*) FROM agents WHERE forked_from_agent_id = sqlc.arg(id)::uuid AND 
 -- name: GetAgentByPath :one
 -- A deleted agent's tombstone (agentry#942) is absent from every read path
 -- that asks for it by name; include_deleted is the platform staff's door to
--- it, for the trust & safety actions only.
+-- it, for the trust & safety actions, and the advisories' door for a caller
+-- proved to hold a release of it (agentry#949).
 -- A fork carries its origin's namespace (the origin's publisher) for the
 -- extension seam (agentry#943).
 SELECT a.*, h.handle AS namespace, h.kind AS namespace_kind, r.default_branch, r.size_bytes,

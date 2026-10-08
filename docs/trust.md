@@ -205,6 +205,15 @@ feed at `GET /api/v1/advisories` (keyset-paged) and one advisory at
 `GET /api/v1/advisories/{id}`; `?affecting=namespace/name` narrows the feed
 to one QuickAgent.
 
+The feed and the permalinks name public QuickAgents only. A QuickAgent its
+publisher made private, retired or deleted leaves them, and so does every
+advisory against it, published before or after. The people who installed it
+while it was public still get those advisories through
+`?affecting=namespace/name`: a signed-in account whose install record names
+it, or any client that adds `&digest=sha256:…`, the archive digest of a
+release of it that it holds. Anyone else gets the same "not found" a name
+that never existed gets.
+
 ## Everything here is auditable
 
 The scanners, the rulesets, the gate and the review queue are open source.
