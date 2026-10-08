@@ -898,6 +898,49 @@ paths:
                 $ref: "#/components/schemas/NotificationSettings"
         default:
           $ref: "#/components/responses/Problem"
+  /user/report-settings:
+    get:
+      operationId: getUserReportSettings
+      tags: [users]
+      summary: The theme the caller's PDF reports take (agentry#989).
+      description: >-
+        A profile setting (plan scratch-and-pdf-reports.md D18): the theme
+        `export_pdf` renders with in the caller's runs. The model never
+        chooses it (D19). An account that never chose reads back with no
+        `theme`, which is not the same as Plain: the CLI then falls to its
+        own `report.theme`, else Plain, and `--report-theme` overrides
+        either for one run (D21, D22).
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportSettings"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateUserReportSettings
+      tags: [users]
+      summary: Replace the caller's report settings (agentry#989).
+      description: >-
+        A full replace: a body with no `theme` clears the choice. A name
+        outside the built-in themes is refused (422, `validation`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportSettings"
+      responses:
+        "200":
+          description: The saved settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportSettings"
+        default:
+          $ref: "#/components/responses/Problem"
   /user/activity:
     get:
       operationId: listUserActivity
@@ -6354,6 +6397,21 @@ components:
           $ref: "#/components/schemas/EmailNotificationSettings"
         web:
           $ref: "#/components/schemas/WebNotificationSettings"
+    ReportTheme:
+      type: string
+      description: >-
+        A built-in report theme (plan scratch-and-pdf-reports.md D13), the
+        name of a theme document in the runner image. A later design
+        standard the person authors is one more value here.
+      enum: [plain, formal, brief, technical, letter]
+    ReportSettings:
+      type: object
+      description: >-
+        The caller's report settings, a profile setting (agentry#989). No
+        `theme` means the person never chose one.
+      properties:
+        theme:
+          $ref: "#/components/schemas/ReportTheme"
     DependencyAlert:
       type: object
       description: >-

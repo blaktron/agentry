@@ -76,6 +76,11 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		counts["notificationSettingsReset"] = n > 0
+		// The report theme (agentry#989) goes back to never chosen.
+		if n, err = tq.DeleteUserReportSettings(r.Context(), p.UserID); err != nil {
+			return err
+		}
+		counts["reportSettingsReset"] = n > 0
 		// The account's knowledge packs and what opens them (agentry#593):
 		// the rows here, the key and the sealed trees once this commits.
 		if knowledgeKeys, err = knowledge.EraseOwner(r.Context(), tq, knowledge.User(p.UserID)); err != nil {

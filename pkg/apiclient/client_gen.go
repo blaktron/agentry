@@ -846,6 +846,33 @@ func (e PutVoiceRequestSource) Valid() bool {
 	}
 }
 
+// Defines values for ReportTheme.
+const (
+	Brief     ReportTheme = "brief"
+	Formal    ReportTheme = "formal"
+	Letter    ReportTheme = "letter"
+	Plain     ReportTheme = "plain"
+	Technical ReportTheme = "technical"
+)
+
+// Valid indicates whether the value is a known member of the ReportTheme enum.
+func (e ReportTheme) Valid() bool {
+	switch e {
+	case Brief:
+		return true
+	case Formal:
+		return true
+	case Letter:
+		return true
+	case Plain:
+		return true
+	case Technical:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReportVerdict.
 const (
 	Scanned   ReportVerdict = "scanned"
@@ -2917,6 +2944,15 @@ type RegisterRequest struct {
 	Password    string              `json:"password"`
 }
 
+// ReportSettings The caller's report settings, a profile setting (agentry#989). No `theme` means the person never chose one.
+type ReportSettings struct {
+	// Theme A built-in report theme (plan scratch-and-pdf-reports.md D13), the name of a theme document in the runner image. A later design standard the person authors is one more value here.
+	Theme *ReportTheme `json:"theme,omitempty"`
+}
+
+// ReportTheme A built-in report theme (plan scratch-and-pdf-reports.md D13), the name of a theme document in the runner image. A later design standard the person authors is one more value here.
+type ReportTheme string
+
 // ReportVerdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
 type ReportVerdict string
 
@@ -4191,6 +4227,9 @@ type PutAccountInstallJSONRequestBody = AccountInstallRequest
 
 // UpdateUserNotificationSettingsJSONRequestBody defines body for UpdateUserNotificationSettings for application/json ContentType.
 type UpdateUserNotificationSettingsJSONRequestBody = NotificationSettings
+
+// UpdateUserReportSettingsJSONRequestBody defines body for UpdateUserReportSettings for application/json ContentType.
+type UpdateUserReportSettingsJSONRequestBody = ReportSettings
 
 // AddSshKeyJSONRequestBody defines body for AddSshKey for application/json ContentType.
 type AddSshKeyJSONRequestBody = AddSshKeyRequest
@@ -5687,6 +5726,31 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettings(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUserReportSettings The theme the caller's PDF reports take (agentry#989).
+	//
+	// A profile setting (plan scratch-and-pdf-reports.md D18): the theme `export_pdf` renders with in the caller's runs. The model never chooses it (D19). An account that never chose reads back with no `theme`, which is not the same as Plain: the CLI then falls to its own `report.theme`, else Plain, and `--report-theme` overrides either for one run (D21, D22).
+	//
+	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
+	GetUserReportSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989).
+	//
+	// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
+	UpdateUserReportSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateUserReportSettings Replace the caller's report settings (agentry#989).
+	//
+	// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
+	UpdateUserReportSettings(ctx context.Context, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -9294,6 +9358,61 @@ func (c *Client) UpdateUserNotificationSettingsWithBody(ctx context.Context, con
 // Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 func (c *Client) UpdateUserNotificationSettings(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateUserNotificationSettingsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUserReportSettings The theme the caller's PDF reports take (agentry#989).
+//
+// A profile setting (plan scratch-and-pdf-reports.md D18): the theme `export_pdf` renders with in the caller's runs. The model never chooses it (D19). An account that never chose reads back with no `theme`, which is not the same as Plain: the CLI then falls to its own `report.theme`, else Plain, and `--report-theme` overrides either for one run (D21, D22).
+//
+// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
+func (c *Client) GetUserReportSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserReportSettingsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989).
+//
+// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
+func (c *Client) UpdateUserReportSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserReportSettingsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateUserReportSettings Replace the caller's report settings (agentry#989).
+//
+// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
+func (c *Client) UpdateUserReportSettings(ctx context.Context, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserReportSettingsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -16794,6 +16913,73 @@ func NewUpdateUserNotificationSettingsRequestWithBody(server string, contentType
 	return req, nil
 }
 
+// NewGetUserReportSettingsRequest constructs an http.Request for the GetUserReportSettings method
+func NewGetUserReportSettingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateUserReportSettingsRequest calls the generic UpdateUserReportSettings builder with application/json body
+func NewUpdateUserReportSettingsRequest(server string, body UpdateUserReportSettingsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateUserReportSettingsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewUpdateUserReportSettingsRequestWithBody constructs an http.Request for the UpdateUserReportSettings method, with any body, and a specified content type
+func NewUpdateUserReportSettingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewRevokeOtherUserSessionsRequest constructs an http.Request for the RevokeOtherUserSessions method
 func NewRevokeOtherUserSessionsRequest(server string) (*http.Request, error) {
 	var err error
@@ -19140,6 +19326,33 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettingsWithResponse(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error)
+
+	// GetUserReportSettingsWithResponse The theme the caller's PDF reports take (agentry#989).
+	//
+	// A profile setting (plan scratch-and-pdf-reports.md D18): the theme `export_pdf` renders with in the caller's runs. The model never chooses it (D19). An account that never chose reads back with no `theme`, which is not the same as Plain: the CLI then falls to its own `report.theme`, else Plain, and `--report-theme` overrides either for one run (D21, D22).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
+	GetUserReportSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error)
+
+	// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989).
+	//
+	// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
+	UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
+
+	// UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989).
+	//
+	// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
+	UpdateUserReportSettingsWithResponse(ctx context.Context, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
 
 	// RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -26590,6 +26803,102 @@ func (r UpdateUserNotificationSettingsResponse) ContentType() string {
 	return ""
 }
 
+type GetUserReportSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportSettings
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUserReportSettingsResponse) GetJSON200() *ReportSettings {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetUserReportSettingsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUserReportSettingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUserReportSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUserReportSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUserReportSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateUserReportSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportSettings
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateUserReportSettingsResponse) GetJSON200() *ReportSettings {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UpdateUserReportSettingsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateUserReportSettingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateUserReportSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateUserReportSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateUserReportSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RevokeOtherUserSessionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -30401,6 +30710,51 @@ func (c *ClientWithResponses) UpdateUserNotificationSettingsWithResponse(ctx con
 		return nil, err
 	}
 	return ParseUpdateUserNotificationSettingsResponse(rsp)
+}
+
+// GetUserReportSettingsWithResponse The theme the caller's PDF reports take (agentry#989).
+//
+// A profile setting (plan scratch-and-pdf-reports.md D18): the theme `export_pdf` renders with in the caller's runs. The model never chooses it (D19). An account that never chose reads back with no `theme`, which is not the same as Plain: the CLI then falls to its own `report.theme`, else Plain, and `--report-theme` overrides either for one run (D21, D22).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
+func (c *ClientWithResponses) GetUserReportSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error) {
+	rsp, err := c.GetUserReportSettings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUserReportSettingsResponse(rsp)
+}
+
+// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989).
+//
+// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
+func (c *ClientWithResponses) UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error) {
+	rsp, err := c.UpdateUserReportSettingsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateUserReportSettingsResponse(rsp)
+}
+
+// UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989).
+//
+// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
+func (c *ClientWithResponses) UpdateUserReportSettingsWithResponse(ctx context.Context, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error) {
+	rsp, err := c.UpdateUserReportSettings(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateUserReportSettingsResponse(rsp)
 }
 
 // RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
@@ -35860,6 +36214,72 @@ func ParseUpdateUserNotificationSettingsResponse(rsp *http.Response) (*UpdateUse
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest NotificationSettings
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUserReportSettingsResponse parses an HTTP response from a GetUserReportSettingsWithResponse call
+func ParseGetUserReportSettingsResponse(rsp *http.Response) (*GetUserReportSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUserReportSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportSettings
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateUserReportSettingsResponse parses an HTTP response from a UpdateUserReportSettingsWithResponse call
+func ParseUpdateUserReportSettingsResponse(rsp *http.Response) (*UpdateUserReportSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateUserReportSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportSettings
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

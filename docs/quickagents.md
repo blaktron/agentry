@@ -368,8 +368,11 @@ agentry-desktop#704).
 ### `capabilities`: the security contract
 
 Closed vocabulary. Omitted or empty means a **pure-text QuickAgent**
-(its run-time tools are `write_report` and the read-only `list_inputs` /
-`read_input`, nothing else). The registry scans releases
+(its run-time tools are `write_report`, the read-only `list_inputs`,
+`read_input` and `search_inputs`, its scratch folder's `scratch_list`,
+`scratch_read` and `scratch_write`, and `export_pdf`, nothing else; the
+last four are the runner's grants to every release but a built-in, not
+lines of the contract). The registry scans releases
 against these declarations, an install prompts on them (egress/exec need
 typed consent; a widened contract re-asks on upgrade), and the runner
 turns each line into a concrete control. The same contract covers support
@@ -700,7 +703,9 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 | Manifest declaration | Tool(s) granted |
 |---|---|
 | (always) | `write_report`: write files into the run's output folder |
-| (always) | `list_inputs`, `read_input`: the run's provided input files, read-only |
+| (always) | `list_inputs`, `read_input`, `search_inputs`: the run's provided input files, read-only |
+| (always, but for the built-ins) | `scratch_list`, `scratch_read`, `scratch_write`: the run's [scratch folder](runner.md#the-scratch-folder) at `/scratch`, private to the run and deleted at its end |
+| (always, but for the built-ins) | `export_pdf`: a Markdown report as a PDF in `reports/`, laid out in the person's [report theme](runner.md#the-report-theme) |
 | `filesystem.read` | `fs_read`, `fs_list` |
 | `filesystem.write` | `fs_write` |
 | `network.egress` hosts | `fetch` (with optional declared-secret auth) |
@@ -711,9 +716,11 @@ head says the run is in a locked sandbox, puts attached knowledge first, and
 keeps the model on the instruction's task. Its body is composed from what
 the manifest grants, and never states a grant the manifest does not make.
 It covers the tools (only from the gateway), the network, the workspace at
-`/workspace`, the commands, the secrets by name, and the inputs under
-`/inputs`. It explains how to read an attached knowledge pack, that reports
-go through `write_report`, and that the final message is the run's result.
+`/workspace`, the scratch folder at `/scratch`, the commands, the secrets
+by name, and the inputs under `/inputs`. It explains how to read an
+attached knowledge pack, that reports go through `write_report`, when to
+also export one as a PDF with `export_pdf`, and that the final message is
+the run's result.
 So an instruction need not repeat any of this. The text is in the plan's
 hash, and [the runner reference](runner.md#the-system-prompt) shows it word
 for word for a sample QuickAgent.
