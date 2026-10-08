@@ -791,6 +791,31 @@ func (q *Queries) GetScanRun(ctx context.Context, id uuid.UUID) (ScanRun, error)
 	return i, err
 }
 
+const holdsRelease = `-- name: HoldsRelease :one
+SELECT (EXISTS (SELECT 1 FROM account_installs ai
+                WHERE ai.agent_id = $1::uuid AND ai.user_id = $2::uuid)
+     OR EXISTS (SELECT 1 FROM agent_versions av
+                WHERE av.agent_id = $1::uuid AND av.published_at IS NOT NULL
+                  AND av.archive_digest = $3::text))::boolean AS holds
+`
+
+type HoldsReleaseParams struct {
+	AgentID uuid.UUID  `json:"agent_id"`
+	UserID  *uuid.UUID `json:"user_id"`
+	Digest  *string    `json:"digest"`
+}
+
+// agentry#949: whether the caller holds a release of the agent, whatever
+// its visibility, retired or deleted state now: an account install of
+// theirs names it, or a version of it that was ever published has the
+// archive digest they present.
+func (q *Queries) HoldsRelease(ctx context.Context, arg HoldsReleaseParams) (bool, error) {
+	row := q.db.QueryRow(ctx, holdsRelease, arg.AgentID, arg.UserID, arg.Digest)
+	var holds bool
+	err := row.Scan(&holds)
+	return holds, err
+}
+
 const insertFinding = `-- name: InsertFinding :one
 INSERT INTO findings (id, scan_run_id, scanner, severity, confidence, title, file_path, line_start, line_end, excerpt, detail)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)

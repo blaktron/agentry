@@ -190,6 +190,17 @@ RETURNING *;
 -- name: ListAdvisoriesForAgent :many
 SELECT * FROM advisories WHERE agent_id = $1 ORDER BY published_at DESC;
 
+-- name: HoldsRelease :one
+-- agentry#949: whether the caller holds a release of the agent, whatever
+-- its visibility, retired or deleted state now: an account install of
+-- theirs names it, or a version of it that was ever published has the
+-- archive digest they present.
+SELECT (EXISTS (SELECT 1 FROM account_installs ai
+                WHERE ai.agent_id = sqlc.arg(agent_id)::uuid AND ai.user_id = sqlc.narg(user_id)::uuid)
+     OR EXISTS (SELECT 1 FROM agent_versions av
+                WHERE av.agent_id = sqlc.arg(agent_id)::uuid AND av.published_at IS NOT NULL
+                  AND av.archive_digest = sqlc.narg(digest)::text))::boolean AS holds;
+
 -- name: ListAdvisoriesFeed :many
 -- The global feed (agentry#24): published advisories against PUBLIC agents,
 -- newest first, keyset-paged on (published_at, id) so the cursor is stable
