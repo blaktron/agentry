@@ -315,6 +315,11 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				}
 			},
 		},
+		"getUserReportSettings": {method: "GET", path: sPath("/api/v1/user/report-settings")},
+		"updateUserReportSettings": {
+			method: "PUT", path: sPath("/api/v1/user/report-settings"),
+			body: func(*matrixSeed, string) any { return map[string]any{"theme": "formal"} },
+		},
 		// Public read; the registry has never seen this version, so 404.
 		"getMcpServerScan": {method: "GET", path: sPath("/api/v1/mcp-servers/scan?ecosystem=npm&package=nobody&version=0.0.0")},
 		"deleteUserDirectoryDevice": {
