@@ -142,6 +142,11 @@ jobs:
       # The server's own browser surface, driven with curl (DEV-091).
       - name: acceptance core UI
         run: ./scripts/acceptance/ui.sh
+      - name: directory edge request budgets
+        run: ./scripts/acceptance/directory-edge.sh
+      - name: remove this job's directory resources
+        if: always()
+        run: python3 scripts/acceptance/directory-cleanup.py --job
 
   # The prose gate (plan front-end-voice-and-warmth §7, agentry#258): the
   # honest-posture sentences of §4.6 are still where they belong, and no
