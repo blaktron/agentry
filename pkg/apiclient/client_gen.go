@@ -3623,6 +3623,9 @@ type ListAdvisoriesParams struct {
 	// Affecting ns/name. Omit for the global feed.
 	Affecting *string `form:"affecting,omitempty" json:"affecting,omitempty"`
 
+	// Digest With `affecting`: the `archiveDigest` of a release of that agent the caller holds. It proves the caller held the agent, so its advisories are served even when the agent is now private, retired or deleted (agentry#949). Ignored without `affecting` and when the caller can read the agent anyway.
+	Digest *string `form:"digest,omitempty" json:"digest,omitempty"`
+
 	// Cursor Opaque keyset cursor from the previous page's Link header (feed mode).
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 
@@ -4322,12 +4325,14 @@ type ClientInterface interface {
 
 	// ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
 	//
-	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). The one exception is a holder of one of its releases (agentry#949): a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 	//
 	// Corresponds with GET /advisories (the `ListAdvisories` operationId).
 	ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAdvisory One published advisory (permalink); public agents only.
+	//
+	// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting` (agentry#949).
 	//
 	// Corresponds with GET /advisories/{advisoryId} (the `GetAdvisory` operationId).
 	GetAdvisory(ctx context.Context, advisoryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5933,7 +5938,7 @@ type ClientInterface interface {
 
 // ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
 //
-// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). The one exception is a holder of one of its releases (agentry#949): a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 //
 // Corresponds with GET /advisories (the `ListAdvisories` operationId).
 func (c *Client) ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5949,6 +5954,8 @@ func (c *Client) ListAdvisories(ctx context.Context, params *ListAdvisoriesParam
 }
 
 // GetAdvisory One published advisory (permalink); public agents only.
+//
+// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting` (agentry#949).
 //
 // Corresponds with GET /advisories/{advisoryId} (the `GetAdvisory` operationId).
 func (c *Client) GetAdvisory(ctx context.Context, advisoryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9892,6 +9899,18 @@ func NewListAdvisoriesRequest(server string, params *ListAdvisoriesParams) (*htt
 		if params.Affecting != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "affecting", *params.Affecting, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Digest != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "digest", *params.Digest, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -17714,7 +17733,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
 	//
-	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). The one exception is a holder of one of its releases (agentry#949): a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -17722,6 +17741,8 @@ type ClientWithResponsesInterface interface {
 	ListAdvisoriesWithResponse(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*ListAdvisoriesResponse, error)
 
 	// GetAdvisoryWithResponse One published advisory (permalink); public agents only.
+	//
+	// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting` (agentry#949).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -27881,7 +27902,7 @@ func (r UpdateVoiceSettingsResponse) ContentType() string {
 
 // ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
 //
-// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). The one exception is a holder of one of its releases (agentry#949): a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27895,6 +27916,8 @@ func (c *ClientWithResponses) ListAdvisoriesWithResponse(ctx context.Context, pa
 }
 
 // GetAdvisoryWithResponse One published advisory (permalink); public agents only.
+//
+// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting` (agentry#949).
 //
 // Returns a wrapper object for the known response body format(s).
 //
