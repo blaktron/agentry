@@ -2,11 +2,14 @@
 
 A hosted run is `agentry run` on the platform's machine instead of yours.
 An account asks the registry to run a published release, the registry queues
-it and holds credits for it, a worker on a sandbox host runs the CLI against
-it, and the account watches the log and reads the outcome, the receipt and
-the outputs. The release, the compiled plan, the gateway and the receipts are
-the ones the [Runner reference](runner.md) describes; what differs is who
-owns the docker daemon, what bounds the run, and that it costs credits.
+it and holds credits for it, and Agentry pushes it to a sandbox host, which
+runs the CLI against it and sends back one output encrypted to the person
+who ran it. The account sees that the run was done, whether it passed, the
+credits it used, its receipt and its output; no log is kept
+([the execution plane](#the-execution-plane)). The release, the compiled
+plan, the gateway and the receipts are the ones the
+[Runner reference](runner.md) describes; what differs is who owns the docker
+daemon, what bounds the run, and that it costs credits.
 
 Hosted runs are not part of this repository's server. They are an extension a
 deployment mounts (`internal/runs` in the closed enterprise build): the routes
@@ -77,6 +80,9 @@ run is not.
 | `POST /api/v1/x/runs/{id}/finish` | worker token, the run's holder |
 | `GET`/`POST /api/v1/x/runs/staff/workers` | platform staff, session only |
 | `POST /api/v1/x/runs/staff/workers/{worker}/revoke` | platform staff, session only |
+| `POST /api/v1/x/runs/hosts/enrol` | a sandbox host's one-use enrolment token alone; a session or a PAT is `403` |
+| `GET /api/v1/x/runs/staff/hosts`, `GET`/`POST …/staff/hosts/enrolments`, `POST …/staff/hosts/enrolments/{enrolment}/revoke`, `POST …/staff/hosts/{host}/retire` | platform staff, session only |
+| `POST /api/v1/x/runs/staff/hosts`, `POST …/staff/hosts/{host}/replace`, `GET …/staff/fleet`, `GET`/`PUT …/staff/fleet/scaling` | platform staff, session only, where the deployment runs the fleet |
 
 The **worker token** is the execution plane's credential: `agyw_` and 32
 random bytes, minted by platform staff from a session (a staff PAT is `403`,
@@ -98,6 +104,10 @@ beside it. Revoking a worker stops it at its next claim — the token is
 unknown from then on — and the runs it was holding stop being reported, so
 the sweep closes them as `error` and refunds them once the stale window
 passes.
+
+The worker token and the five worker routes belong to the pull worker, the
+execution plane before the push path ([below](#the-pull-worker)). A sandbox
+host holds no worker token and calls none of these routes: Agentry calls it.
 
 ## Creating a run
 
@@ -278,8 +288,9 @@ not at all when it still counts tokens. A run pushed to a sandbox host writes
 only its `status` rows and a session's `charge` rows.
 
 `POST /api/v1/x/runs/{id}/cancel` cancels a queued run at once and refunds
-its hold. On a claimed or running one it records the request; the worker sees
-it on its next claim, interrupts the CLI, and the finish settles what ran.
+its hold. On a claimed or running one it records the request. The
+dispatcher passes it to the sandbox host on its next pass (a pull worker sees
+it on its next claim), the CLI is interrupted, and the run settles what ran.
 
 ## The receipt, the usage and the outputs
 
@@ -292,10 +303,14 @@ failed run those parts include `stage`, as one of the CLI's step words, and
 `reason`, held to the CLI's closed list (an unknown code, a free detail or a
 name outside its grammar is dropped) and then, in the registry, to the names
 the run's release declares; a built-in's run keeps the code and the detail
-with no name ([the runner's exit codes, stage and reason](runner.md#exit-codes-stage-and-reason)). `GET /api/v1/x/runs/{id}/outputs/{name}` serves one artefact's bytes as
-the worker uploaded them, with the account's grant. No artefact is served by a
-public URL, and the worker uploads through the registry's object store rather
-than from the sandbox host.
+with no name ([the runner's exit codes, stage and reason](runner.md#exit-codes-stage-and-reason)). A run pushed to a sandbox host has one output,
+`output.tar`, and `GET /api/v1/x/runs/{id}/outputs/output.tar` decrypts it
+for the person who ran it as it streams; to anyone else, platform staff
+included, it is `404` ([the output, encrypted to the person who ran
+it](#the-output-encrypted-to-the-person-who-ran-it)). On a pull worker's run
+the same route serves one artefact's bytes as the worker uploaded them,
+through the registry, with the account's grant. No output is served by a
+public URL.
 
 A client showing a run shows the receipt's `capabilities_enforced` as it is —
 item for item, sentence for sentence, never summarised or scored. Those
@@ -307,8 +322,8 @@ of it.
 
 Three surfaces read the same run. The API above is one; the site's run page
 is another, reached from **Run in Agentry** on a QuickAgent's page, with the
-queue, the live log, the credits held and settled, and the outputs to
-download; the desktop app's run panel is the third. The site's
+queue, where the run stands, the credits held and settled, the receipt and
+the output; the desktop app's run panel is the third. The site's
 [Running on Agentry](https://docs.secureagentry.net/agentry/hosted-runs/)
 walks through what a person sees.
 
@@ -362,10 +377,11 @@ crossed it, and it cannot cost more than the hold, because the settlement is
 capped there. `--max-cost` is not derived — an OpenAI-compatible endpoint of
 the deployment's choosing reports no cost.
 
-Two sweeps run every minute. A run nobody claims within the queue timeout
-(`AGENTRY_RUNS_QUEUE_MAX`, 1 h) is cancelled and refunded. A claimed run
-whose worker has been silent past the stale window
-(`AGENTRY_RUNS_STALE`, 10 min) is closed as `error` and refunded.
+Two sweeps run every minute. A run nobody takes within the queue timeout
+(`AGENTRY_RUNS_QUEUE_MAX`, 1 h) is cancelled and refunded. A run whose
+sandbox host (or pull worker) has gone silent past the stale window
+(`AGENTRY_RUNS_STALE`, 10 min), or was retired while it held the run, is
+closed as `error` and refunded.
 
 ## Knowledge attached to a run
 
@@ -1150,23 +1166,68 @@ conversation from Agentry, which can open it as it opens an output.
 
 ## The execution plane
 
-The worker is a puller beside a docker daemon on a sandbox host, and reaches
-the registry only outbound: it claims every couple of seconds with its worker
-token, stages the run under its own home at `0700`, renders one policy per run
-from the CLI's own defaults — the platform's model with its endpoint as the
-egress proxy's only allowed host and its key named by an environment variable
-and never written, the run's caps as the budgets, an `envFile` secret source
-naming the job's own empty `secrets.env` (agentry-enterprise#424; a sandbox
-host's runhost writes the job's values there instead,
-[above](#at-the-hand-off)), and
-`docker.runtime: runsc` — and runs the installed `agentry` CLI as
-a subprocess with typed arguments and a minimal environment. The worker token
-never reaches the CLI; the CLI gets the worker's own registry token, which
-carries `agent:read` and `user:profile` and nothing more.
+Agentry pushes each run to a **sandbox host**: a machine that runs
+`secureagentry-runhost`, a small service beside a docker daemon that takes
+typed jobs over mutually authenticated TLS and runs the installed `agentry`
+CLI for each one, as a subprocess with typed arguments and a minimal
+environment. The registry is the host's only client. The host reaches
+nothing of Agentry's except its public origin, and that only to enrol.
 
-The claim is atomic (`FOR UPDATE SKIP LOCKED` on the oldest queued row within
-the worker's declared capacity), so two workers polling together never both
-take the same run.
+### The push path
+
+The push path runs when the server has both [Agentry's
+CA](#agentrys-ca-and-enrolment) and the runs store, a pair of buckets of its
+own (`AGENTRY_RUNS_STORE_*`). A runs store without the CA stops the server
+at start-up; with no store, nothing is pushed. Every
+`AGENTRY_RUNS_DISPATCH_EVERY` (5 s) the dispatcher, in the worker role:
+
+1. calls each enrolled host that is not retired on its health call, and
+   believes the answer only for that host's name, through the CA's pinned
+   `hosts` intermediate;
+2. renews a host's certificate that ends within
+   `AGENTRY_RUNS_HOST_RENEW_BEFORE` (`240h`), and pushes the hosts'
+   settings to a host that holds other ones (both below);
+3. polls each run in flight, and passes a cancel on;
+4. collects each finished run: it confirms the output from the object's
+   size and header, never its body, keeps the receipt from the host's
+   summary, settles the credits as for any run (never above the hold), and
+   deletes what was staged for the run;
+5. hands the oldest queued run to a host with a free slot.
+
+The hand-off copies the run's task and inputs into the input bucket, under
+the run's id, and the job carries a presigned GET for each, valid for twenty
+minutes, and one presigned POST for the output, whose policy fixes the
+object's key and caps its size and which is valid for the run's time cap
+plus thirty minutes. The job also carries the runner's encryption
+certificate, a private release's grant, and the values of the secrets a run
+declares ([at the hand-off](#at-the-hand-off)). It carries no command, no
+host path and no image. So a host holds no bucket credential: what it may
+fetch, and the one place it may write, are the job's URLs.
+
+A host that is full or failing leaves the run queued, and what was staged
+for it is deleted. A host that refuses the job as malformed closes the run as
+`error`, refunded. A run whose output the platform could not seal, upload or
+confirm closes as `error` with nothing charged, whatever the CLI did.
+
+### On the host
+
+runhost answers on one port (`:8443` by default), over TLS 1.3 only, and
+only to Agentry's control client: a certificate for client authentication
+named `agentry-control` that chains to the root through exactly the `hosts`
+intermediate the host pinned when it enrolled. The server makes that
+certificate in its memory, for thirty days, and never stores it. The calls
+are a job's start, read and cancel; a hosted session's turns and frames; the
+host's health; the two halves of a certificate renewal; and the settings
+push.
+
+A job is staged under the host's home at `0700`, and the host renders one
+policy per job from the CLI's own defaults: the platform's model, with its
+endpoint as the egress proxy's only allowed host and its key named by an
+environment variable and never written; the run's caps as the budgets; an
+`envFile` secret source naming the job's own `secrets.env`, which holds the
+values the job carried and is deleted with the job; and
+`docker.runtime: runsc`. A cancel is SIGINT, then SIGKILL. A host runs
+`AGENTRY_RUNHOST_CAPACITY` jobs at once, one by default.
 
 What this arrangement gives a run is the isolation the
 [Runner reference](runner.md) describes, plus the runtime: its containers are
@@ -1186,13 +1247,173 @@ not a machine per run. A daemon shared with anything else is a kernel shared
 with the run's sandbox, and that is a property of the deployment, not of the
 receipt.
 
+### The host's settings
+
+A host can start with nothing secret but its enrolment token. Until the
+registry pushes its settings it reports itself unconfigured and takes no
+job. The server holds them as `AGENTRY_RUNS_HOST_REGISTRY_TOKEN` (a registry
+token with `agent:read`, which the CLI installs releases with),
+`AGENTRY_RUNS_HOST_MODEL_PROVIDER`, `_MODEL`, `_MODEL_BASE_URL` and
+`_MODEL_API_KEY`, all set or none, and optionally
+`AGENTRY_RUNS_HOST_HYBRID_API_KEY`, the platform's Hybrid Analysis key,
+which is refused when it is set alone. On each pass they go to every host
+whose held settings differ. The host proves the token with an
+`agentry login` before it changes anything, keeps the settings `0600` beside
+its key, and gives them to the next job, never to one in flight. The model
+key reaches the CLI only under the provider's own variable name, and the
+Hybrid Analysis key only as `HYBRID_API_KEY`; both are removed from every
+line that leaves the host. Each push is audited as
+`runs.host_settings_pushed` with a digest of the values, never a value. A key
+changed in the server's environment reaches every host on the next pass,
+with no restart. A host can instead be configured from its own environment
+(`AGENTRY_RUNHOST_REGISTRY_TOKEN`, `_MODEL_*`), and the first push replaces
+that.
+
+### Agentry's CA and enrolment
+
+Agentry runs a certificate authority of its own. Its **root** is offline:
+the operator makes it with `secureagentry-ca init` on a machine of their
+own, keeps its key there with their own backup, and gives it to no server.
+The root signs two intermediates, each valid for five years: **`hosts`**,
+which certifies each sandbox host's 30-day TLS server certificate and
+Agentry's control client, and **`users`**, which certifies each person's
+one-year X25519 encryption certificate (and each organization's, for its
+shared knowledge packs). The server holds both intermediates' keys, and every
+holder's private key, sealed with AES-256-GCM under
+`AGENTRY_RUNS_CA_MASTER_KEY`, a key of the CA's own, beside
+`AGENTRY_RUNS_CA_BUNDLE` (the root's certificate and the sealed
+intermediates). It needs both or neither. A leaked or expiring intermediate
+is signed again from the root with `secureagentry-ca reissue`.
+
+A host enrols itself, once:
+
+1. Platform staff mint a one-use token for the host's name and the address
+   Agentry will reach it at, from a signed-in session: `agye_`, valid for
+   24 hours, stored as its digest, audited as `runs.host_enrolment_minted`.
+2. The host makes its own key, which never leaves it, and posts a
+   certificate request with the token to `POST
+   /api/v1/x/runs/hosts/enrol`. `secureagentry-runhost enrol` reads the
+   token on stdin, never from its command line.
+3. It gets a 30-day server certificate for the token's host name and
+   nothing else, whatever the request asked, with the `hosts` chain and the
+   `users` intermediate. The token is spent in the transaction that records
+   the host (`runs.host_enrolled`). A spent, revoked, expired or unknown
+   token is `401`.
+
+Renewal is pushed. Within the renewal window the dispatcher asks the host
+for a certificate request for a fresh key, and installs the new certificate
+over the same channel (`runs.host_renewed`). A renewal never changes the
+pin: a host refuses a chain through another `hosts` intermediate or another
+root, so re-issuing `hosts` after a leak means enrolling every host again.
+Staff can revoke a token not yet used, and retire a host. From the next pass
+Agentry calls a retired host no more, the stale sweep refunds what it held,
+and its name is never enrolled again, so a rebuilt machine comes back under
+a new name.
+
+### The output, encrypted to the person who ran it
+
+A pushed run has one output, `output.tar`: the tar of the run's
+`result.json`, `reports/`, `receipts/` and `outputs/`, regular files only.
+The host encrypts it before it leaves the host, with HPKE (X25519,
+HKDF-SHA256, AES-256-GCM) to the runner's encryption certificate, once it
+has checked that certificate's chain to the `users` intermediate, and posts
+it through the job's presigned POST. Each 64 KiB frame is bound to the
+header, to its place and to whether it is the last, and the encryption is
+bound to the run, so an object sealed for one run does not open as another
+run's. No plaintext output rests in a bucket. The dispatcher refuses an
+object that is missing, too large, not a sealed output, sealed for another
+run, or sealed to a certificate other than the one it handed out; a refused
+object is deleted, and the run closes as `error`, refunded.
+
+The certificate is the runner's own, even when an organization's pool pays,
+and it is made the first time they start a hosted run. Nobody sees or
+handles it: Agentry keeps its private key sealed and opens it only inside
+the registry, to decrypt that person's own download as it streams. The
+download answers the runner alone; platform staff and every other account
+get `404`. The registry opens two built-ins' outputs on the runner's
+behalf: a knowledge build's, to put the pack back in the knowledge store,
+and a Voice Writer run's, to read its `VOICE.md`.
+
+This is not end-to-end encryption from the person's side, since Agentry
+holds the key. It keeps plaintext from resting in a bucket, an object from
+standing in another run's place, and a download from reaching another
+account.
+
+**What erasure does.** Deleting a sealed key destroys it, and every output
+encrypted to it can no longer be opened. A person's keys are destroyed when
+their account is erased or their data is cleared, and an organization's when
+it is erased. The runs sweep is the backstop for a destruction that did not
+complete. It also removes an expired key last used longer ago than the runs'
+retention, unless a knowledge pack's key is wrapped to it. A finished run of
+an erased account is deleted within a minute ([retention](#retention)).
+
+### No log
+
+A pushed run keeps no log. The host discards the CLI's stderr, and the run's
+events are its status changes (and a hosted session's charges). The host
+reports a summary: the status, the exit class, the usage, the wall time, the
+output's size, and as the receipt the runner's parts of the CLI's envelope,
+never its result, its error text or a path. It keeps that summary for a
+day, in memory. A presigned URL is a credential, and the host never logs
+one. A hosted session's chat frames are sealed one by one to the runner and
+held in the host's memory only until the session's reader has them
+([a hosted session](#a-hosted-session)).
+
+### What the person sees
+
+That the run was done; whether it passed; the credits it held and settled;
+its receipt; and its output, decrypted for them on download (the site reads
+it in their browser). Nothing of the encryption is asked of them or shown to
+them.
+
+### Where it runs
+
+Agentry's own deployment answers the residency question in one line: the
+United States, on Vultr, thirty days, encrypted to the user. The sandbox
+hosts and the runs buckets are in the registry's Vultr region, New Jersey;
+the hosts' model is Vultr Serverless Inference, served from Atlanta; a run
+and its output are deleted thirty days after the run was created; and every
+output is encrypted to the person who ran it. A region per organization is
+not offered.
+
+The hosts sit in a network of their own that shares no route with the
+registry's. A host has no public address: only runhost's port is forwarded
+to it, through that network's gateway, from the registry's egress address
+alone. Outbound, a firewall of the host's own, for the host and every
+container on it, admits DNS to the host's resolvers and TCP 80 and 443 to
+public addresses, and refuses private ranges, link-local addresses and the
+cloud's metadata address. The registry's fleet makes, drains and destroys
+the hosts from the Staff panel (`AGENTRY_RUNS_FLEET_*`); a deployment
+without the fleet makes its hosts by hand. [A sandbox host of your
+own](self-hosting.md#sandbox-hosts-for-hosted-runs) gives the same shape
+without Vultr.
+
+### The pull worker
+
+The execution plane before the push path is still in the enterprise build
+(`secureagentry-runworker`) until agentry-enterprise#86 removes it, and
+neither Agentry's production nor its dev deployment runs one. It is a puller
+beside a docker daemon that reaches the registry only outbound: it claims
+every couple of seconds with its worker token, stages and renders a run as
+runhost does, and runs the CLI with the worker's own registry token (which
+carries `agent:read` and `user:profile` and nothing more); the worker token
+never reaches the CLI. The claim is atomic (`FOR UPDATE SKIP LOCKED` on the
+oldest queued row within the worker's declared capacity), so two workers
+polling together never take the same run. Its runs differ from pushed runs
+in two ways: their log lines are stored and streamed, and their artefacts
+go through the registry unencrypted. A run with secrets, connections,
+attached knowledge or the runner's voice, and a hosted session, go only to
+sandbox hosts.
+
 ## Retention
 
 A run and its artefacts are deleted thirty days after the run was created
 (`AGENTRY_RUNS_RETENTION`, `720h`), and, once the run has finished, within a
 minute of the account being erased (the runs sweep deletes a closed run of an
 erased account). Uploaded inputs that no run claims are swept after a day. Download
-anything you want to keep before then; nothing is archived elsewhere.
+anything you want to keep before then; nothing is archived elsewhere. A
+pushed run's output also stops opening once the key it was encrypted to is
+destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
 
 ## The deployment's configuration
 
@@ -1221,8 +1442,8 @@ anything you want to keep before then; nothing is archived elsewhere.
 | `AGENTRY_RUNS_VOICE_TEXT_BYTES` | `1048576` | the cap on a Voice Writer run's samples' decoded text |
 | `AGENTRY_RUNS_VOICE_SECONDS` | `1800` | a Voice Writer run's wall time, on every tier |
 | `AGENTRY_RUNS_VOICE_MAX_TURNS` | `300` | a Voice Writer run's turn cap |
-| `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a worker before it is cancelled and refunded; at most `12h`, half the day a secret held for one run waits for it |
-| `AGENTRY_RUNS_STALE` | `10m` | how long a claimed run's worker may be silent before the run is closed as `error` and refunded |
+| `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a host before it is cancelled and refunded; at most `12h`, half the day a secret held for one run waits for it |
+| `AGENTRY_RUNS_STALE` | `10m` | how long a run's host or worker may be silent before the run is closed as `error` and refunded |
 | `AGENTRY_RUNS_TASK_MAX_BYTES` | `65536` | the task text's cap |
 | `AGENTRY_RUNS_INPUT_MAX_FILES` | `20` | input files per run |
 | `AGENTRY_RUNS_INPUT_MAX_BYTES` | `10485760` | one input file's cap |
@@ -1230,6 +1451,25 @@ anything you want to keep before then; nothing is archived elsewhere.
 | `AGENTRY_RUNS_UNCLAIMED_INPUTS_MAX` | `100` | the uploads no run has claimed that one account may hold |
 | `AGENTRY_RUNS_UNCLAIMED_INPUT_BYTES_MAX` | `268435456` | the bytes of those uploads; past either, an upload is `413 unclaimed-inputs` |
 | `AGENTRY_RUNS_RETENTION` | `720h` | how long a run and its artefacts are kept |
+| `AGENTRY_RUNS_CA_MASTER_KEY` | none | the 32-byte key the CA's intermediates and every holder's private key are sealed under (`master.key` from `secureagentry-ca init`); with the bundle, both or neither |
+| `AGENTRY_RUNS_CA_BUNDLE` | none | the root's certificate and the two intermediates, their keys sealed (`bundle.b64`) |
+| `AGENTRY_RUNS_STORE_ENDPOINT` | none | the runs store's S3 endpoint; set, the push path runs, and it needs the CA |
+| `AGENTRY_RUNS_STORE_ACCESS_KEY`, `AGENTRY_RUNS_STORE_SECRET_KEY` | none | the runs store's keys, required with an endpoint |
+| `AGENTRY_RUNS_STORE_REGION` | `us-east-1` | its region |
+| `AGENTRY_RUNS_STORE_INPUT_BUCKET` | `runs-input` | where a run's task and inputs are staged at the hand-off |
+| `AGENTRY_RUNS_STORE_OUTPUT_BUCKET` | `runs-output` | where a host posts the sealed output; must differ from the input bucket |
+| `AGENTRY_RUNS_STORE_PATH_STYLE` | `true` | path-style bucket addressing |
+| `AGENTRY_RUNS_STORE_CREATE_BUCKETS` | `false` | make the two buckets at start-up when they are missing, for a development store; production's are made by terraform |
+| `AGENTRY_RUNS_DISPATCH_EVERY` | `5s` | how often the dispatcher calls the hosts, hands out queued runs and collects finished ones |
+| `AGENTRY_RUNS_HOST_RENEW_BEFORE` | `240h` | how long before a host's certificate ends Agentry pushes it a new one |
+| `AGENTRY_RUNS_HOST_REGISTRY_TOKEN`, `AGENTRY_RUNS_HOST_MODEL_PROVIDER`, `AGENTRY_RUNS_HOST_MODEL`, `AGENTRY_RUNS_HOST_MODEL_BASE_URL`, `AGENTRY_RUNS_HOST_MODEL_API_KEY` | none | the settings pushed to every host ([the host's settings](#the-hosts-settings)), all or none; none pushes nothing |
+| `AGENTRY_RUNS_HOST_HYBRID_API_KEY` | none | the platform's Hybrid Analysis key, pushed with those settings and refused without them |
+| `AGENTRY_RUNS_FLEET_PROVIDER` | none | `vultr`; `fake`, for a deployment with no runs network to make hosts in; or unset, for hosts made by hand |
+| `AGENTRY_RUNS_FLEET_CONFIG` | none | the runs network, as JSON, as the runs terraform root outputs it |
+| `AGENTRY_RUNS_FLEET_ORIGIN` | none | Agentry's public `https://` origin, where a new host enrols |
+| `AGENTRY_RUNS_FLEET_HOST_DOMAIN` | none | the DNS suffix of the hosts' names |
+| `AGENTRY_RUNS_FLEET_DEADLINE` | `45m` | how long a new host has from its request to its enrolment before it is destroyed and reported; at least `10m` |
+| `AGENTRY_RUNS_FLEET_VULTR_API_KEY`, `AGENTRY_RUNS_FLEET_RUNHOST_IMAGE`, `AGENTRY_RUNS_FLEET_GHCR_USER`, `AGENTRY_RUNS_FLEET_GHCR_TOKEN` | none | on `vultr`, all or none, and only on the process that makes hosts (the worker role): the fleet's Vultr key, the runhost image a new host runs (by digest), and the credential it pulls that image with, once, at boot |
 | `AGENTRY_RUNS_SESSIONS` | off | whether this deployment runs [hosted sessions](#a-hosted-session); they also need sandbox hosts |
 | `AGENTRY_RUNS_SESSION_FREE_MINUTES` | `10` | a session's free minutes of server time |
 | `AGENTRY_RUNS_SESSION_MINUTE_CREDITS` | `50` | what each minute after the free ones costs; must be positive |
