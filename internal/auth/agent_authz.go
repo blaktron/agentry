@@ -116,6 +116,13 @@ const (
 	// maintain because an organization's members outrank maintain since
 	// agentry#362 and must not inherit these (D19).
 	ActAgentAdminister Action = "agent.administer"
+	// ActAgentManage is the owner actions (agentry#993; plan
+	// forks-and-publisher.md §4.1): making the agent public or private,
+	// retiring, restoring and deleting it. The same rung as
+	// ActAgentAdminister, but a token may take it with agent:manage as
+	// well as org:admin, so the sign-in grant reaches these four and
+	// still none of the agent's settings or grants.
+	ActAgentManage Action = "agent.manage"
 )
 
 // AgentResource describes the agent an action targets, resolved by the
@@ -136,17 +143,20 @@ var minAgentRole = map[Action]AgentRole{
 	ActAgentMaintain:   AgentRoleMaintain,
 	ActAgentPublish:    AgentRolePublish,
 	ActAgentAdminister: AgentRoleAdmin,
+	ActAgentManage:     AgentRoleAdmin,
 }
 
-// agentScopeFor maps agent actions to PAT scopes (§12.3, §6.4).
-var agentScopeFor = map[Action]Scope{
-	ActAgentCreate:     ScopeAgentPublish,
-	ActAgentRead:       ScopeAgentRead,
-	ActAgentRepoRead:   ScopeRepoRead,
-	ActAgentRepoWrite:  ScopeRepoWrite,
-	ActAgentMaintain:   ScopeOrgAdmin,
-	ActAgentPublish:    ScopeAgentPublish,
-	ActAgentAdminister: ScopeOrgAdmin,
+// agentScopeFor maps agent actions to the PAT scopes that admit them
+// (§12.3, §6.4): a token needs any one of an action's scopes.
+var agentScopeFor = map[Action][]Scope{
+	ActAgentCreate:     {ScopeAgentPublish},
+	ActAgentRead:       {ScopeAgentRead},
+	ActAgentRepoRead:   {ScopeRepoRead},
+	ActAgentRepoWrite:  {ScopeRepoWrite},
+	ActAgentMaintain:   {ScopeOrgAdmin},
+	ActAgentPublish:    {ScopeAgentPublish},
+	ActAgentAdminister: {ScopeOrgAdmin},
+	ActAgentManage:     {ScopeAgentManage, ScopeOrgAdmin},
 }
 
 // CheckAgent is the chokepoint for agent-scoped actions. Public agents are
@@ -160,11 +170,8 @@ func CheckAgent(p *Principal, res AgentResource, act Action) error {
 		return ErrUnauthorized
 	}
 	if p.Via == "pat" {
-		sc, ok := agentScopeFor[act]
-		if !ok {
-			return ErrForbidden
-		}
-		if !HasScope(p.Scopes, sc) {
+		scopes, ok := agentScopeFor[act]
+		if !ok || !hasAnyScope(p.Scopes, scopes) {
 			return ErrForbidden
 		}
 	}
@@ -176,4 +183,14 @@ func CheckAgent(p *Principal, res AgentResource, act Action) error {
 		return ErrForbidden
 	}
 	return nil
+}
+
+// hasAnyScope reports whether the scope set includes any of want.
+func hasAnyScope(have []string, want []Scope) bool {
+	for _, s := range want {
+		if HasScope(have, s) {
+			return true
+		}
+	}
+	return false
 }
