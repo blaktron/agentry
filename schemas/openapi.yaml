@@ -4586,7 +4586,14 @@ paths:
         its readers' (the owning user, the owning org's admins,
         and anyone holding a grant on the agent), and anyone else —
         anonymous or signed in — gets the 404 a missing name gets, so the
-        agent's existence is not discoverable here (agentry#313).
+        agent's existence is not discoverable here (agentry#313). The one
+        exception is a holder of one of its releases (agentry#949): a
+        signed-in caller whose account install names the agent, or any
+        caller presenting with `digest` the archive digest of a version of
+        it that was ever published, gets its advisories whatever its
+        visibility, retired or deleted state now, so the people who
+        installed it while it was public still learn of an advisory
+        published after it went private.
         Without it, the global feed: every published advisory against a
         public agent, newest first, keyset-paged with `cursor`/`limit` and a
         `Link: rel="next"` header (§9.1). Each item carries `agent`
@@ -4599,6 +4606,18 @@ paths:
           schema:
             type: string
           description: ns/name. Omit for the global feed.
+        - name: digest
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: "^sha256:[0-9a-f]{64}$"
+          description: >
+            With `affecting`: the `archiveDigest` of a release of that agent
+            the caller holds. It proves the caller held the agent, so its
+            advisories are served even when the agent is now private,
+            retired or deleted (agentry#949). Ignored without `affecting`
+            and when the caller can read the agent anyway.
         - name: cursor
           in: query
           schema:
@@ -4629,6 +4648,11 @@ paths:
       operationId: getAdvisory
       tags: [platform]
       summary: One published advisory (permalink); public agents only.
+      description: >
+        Only an advisory against a public agent resolves; any other id is a
+        404, so a private agent's advisory is not discoverable by id. A
+        holder of the agent's release reads it through `affecting`
+        (agentry#949).
       security: []
       parameters:
         - name: advisoryId
