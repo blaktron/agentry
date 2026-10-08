@@ -1949,6 +1949,78 @@ run a job on a period, and register audit actions under its own name. The core c
 a self-hosted registry has no subscription tiers, caps nothing, and never
 answers `402`.
 
+## Sandbox hosts for hosted runs
+
+A registry built from this repository needs none of this section either. It
+concerns a deployment of the closed enterprise build that runs
+[hosted runs](hosted-runs.md) on the push path, and it is Agentry's own
+shape ([the execution plane](hosted-runs.md#the-execution-plane)) without
+Vultr.
+
+**What the registry needs.** The CA and the runs store, both, or no run is
+pushed:
+
+- Make the CA with `secureagentry-ca init -dir DIR -name NAME` on a
+  machine of your own, not a server. Give the server `DIR/master.key` as
+  `AGENTRY_RUNS_CA_MASTER_KEY` and `DIR/bundle.b64` as
+  `AGENTRY_RUNS_CA_BUNDLE`, from the files into its secret store. Back up
+  `DIR/root.key` yourself and put it nowhere else: without it no
+  intermediate can be signed again. The same CA's root is what the server
+  checks [OpenBao's](#openbao-the-key-service-for-hosted-run-secrets)
+  certificate against.
+- Give the runs store two buckets of its own, separate from the registry's
+  object store (`AGENTRY_RUNS_STORE_*`, in
+  [the hosted runs' configuration](hosted-runs.md#the-deployments-configuration)).
+  The hosts reach them only through presigned URLs, so they must be able to
+  reach the endpoint; the registry needs the keys. Give the input bucket a
+  lifecycle rule of a couple of days and the output bucket one past the
+  runs' retention, as backstops: the registry deletes both itself.
+- Set the hosts' settings on the server (`AGENTRY_RUNS_HOST_*`): the model
+  the hosts call, with its key, and a registry token with `agent:read`.
+
+**A host.** A Linux machine with a docker daemon on which gVisor's `runsc`
+is registered twice: as `runsc`, and as a second registration that runs the
+same binary with the same arguments plus `--host-uds=open` (`runsc-uds`),
+under which the MCP gateway reaches its run's docker filter. runhost refuses
+to start when either is missing, or the second runs anything else. Run
+`secureagentry-runhost` there with `AGENTRY_RUNHOST_NAME` (the host's DNS
+name), `AGENTRY_RUNHOST_TLS_DIR`, `AGENTRY_RUNHOST_HOME` (the same path in a
+container and on the host), `AGENTRY_RUNHOST_REGISTRY` (your registry's
+public origin, which the CLI resolves and verifies releases against),
+`AGENTRY_RUNHOST_API` (the origin it enrols at),
+`AGENTRY_RUNHOST_RUNTIME=runsc`, `AGENTRY_RUNHOST_GATEWAY_RUNTIME=runsc-uds`,
+and `AGENTRY_RUNHOST_RESOLVERS` (the host's own name servers, at most three,
+IPv4). Leave out the settings the registry pushes. Mint its enrolment token
+as platform staff for that name and the address the registry will reach it
+at, and give it to `secureagentry-runhost enrol` on stdin. One job at a time
+is the default (`AGENTRY_RUNHOST_CAPACITY`). Give each host a machine of its
+own: a daemon shared with anything else is a kernel shared with the runs'
+sandbox.
+
+**The network.** This is what keeps a run from reaching your registry:
+
+- Put the hosts on a network that has no route to the registry's, its
+  database or its object store.
+- Inbound, admit runhost's port (`8443`) from the registry's egress address
+  alone, and nothing else.
+- Outbound, from the host and from every container on it, admit DNS to the
+  resolvers you named and TCP 80 and 443 to public addresses, and refuse
+  private ranges, CGNAT, link-local and loopback addresses; refuse the
+  containers the cloud's metadata address too. Put the rules where the
+  container runtime's own firewall rules cannot bypass them.
+- The hosts must reach, on public addresses, your registry's origin, the
+  runs store's endpoint, the model's endpoint and the image registries the
+  runner pulls from. A registry or a store on a private address is refused
+  by the rule above; open exactly that address and port if you must.
+
+**Taking a host out.** Retire it as platform staff, unless it is the last
+host taking runs (`409 last-host`): the registry calls it no more, closes
+and refunds a run it held once the stale window passes, and never enrols its
+name again. Then stop it. A machine rebuilt comes back under a new name. The registry's
+fleet, which makes and destroys hosts itself, speaks Vultr's API alone; with
+`AGENTRY_RUNS_FLEET_PROVIDER` unset, every host is made and taken down this
+way, by hand.
+
 ## OpenBao, the key service for hosted-run secrets
 
 A registry built from this repository needs none of this section. It
