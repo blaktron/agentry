@@ -608,6 +608,12 @@ type UserNotificationSetting struct {
 	EmailBilling          bool      `json:"email_billing"`
 }
 
+type UserReportSetting struct {
+	UserID    uuid.UUID `json:"user_id"`
+	Theme     string    `json:"theme"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type UserSshKey struct {
 	ID          uuid.UUID  `json:"id"`
 	UserID      uuid.UUID  `json:"user_id"`
