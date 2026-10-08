@@ -11,10 +11,17 @@ const (
 	ScopeRepoWrite    Scope = "repo:write"
 	ScopeAgentPublish Scope = "agent:publish"
 	ScopeAgentRead    Scope = "agent:read"
-	ScopeOrgAdmin     Scope = "org:admin"
-	ScopeReviewAct    Scope = "review:act"
-	ScopeAuditRead    Scope = "audit:read"
-	ScopeUserProfile  Scope = "user:profile"
+	// ScopeAgentManage (agentry#993) lets a token take the owner actions on
+	// a QuickAgent it administers: make it public or private, retire,
+	// restore and delete it. It is narrower than org:admin, which also
+	// covers these: it reaches no other setting of the agent, no grant on
+	// it and no organization route. It changes no rung, so the caller must
+	// still be the namespace itself or one of its organization's admins.
+	ScopeAgentManage Scope = "agent:manage"
+	ScopeOrgAdmin    Scope = "org:admin"
+	ScopeReviewAct   Scope = "review:act"
+	ScopeAuditRead   Scope = "audit:read"
+	ScopeUserProfile Scope = "user:profile"
 	// The hosted-run scopes (plans/hosted-runs.md §6, agentry#348): a
 	// token that may start, cancel and feed a hosted run of a QuickAgent
 	// (run:write) or read a run, its log and its artefacts (run:read).
@@ -47,7 +54,7 @@ const (
 func AllScopes() []Scope {
 	return []Scope{
 		ScopeRepoRead, ScopeRepoWrite, ScopeAgentPublish, ScopeAgentRead,
-		ScopeOrgAdmin, ScopeReviewAct, ScopeAuditRead, ScopeUserProfile,
+		ScopeAgentManage, ScopeOrgAdmin, ScopeReviewAct, ScopeAuditRead, ScopeUserProfile,
 		ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead, ScopeKnowledgeWrite,
 		ScopeSecretWrite, ScopeVoiceRead, ScopeVoiceWrite,
 	}
@@ -62,12 +69,16 @@ func AllScopes() []Scope {
 // secrets, set and deleted, never read (secret:write; plan
 // hosted-credentials-vault.md D13, agentry#676), and the account's Writing
 // Voice, read, uploaded and downloaded (voice:read, voice:write; plan
-// writing-voice.md V3, V6). Deliberately no review:act
-// and no org scopes. Fixed server-side so a caller of the grant endpoint
-// cannot widen it, and shown verbatim on the approval page.
+// writing-voice.md V3, V6), and the owner actions on the person's own
+// QuickAgents and their organizations' where they are an admin
+// (agent:manage; plan forks-and-publisher.md M6, agentry#993).
+// Deliberately no review:act and no org scopes. Fixed server-side so a
+// caller of the grant endpoint cannot widen it, and shown verbatim on the
+// approval page.
 func SignInGrantScopes() []string {
 	return []string{
-		string(ScopeAgentRead), string(ScopeAgentPublish), string(ScopeRepoRead), string(ScopeRepoWrite),
+		string(ScopeAgentRead), string(ScopeAgentPublish), string(ScopeAgentManage),
+		string(ScopeRepoRead), string(ScopeRepoWrite),
 		string(ScopeUserProfile), string(ScopeRunRead), string(ScopeRunWrite),
 		string(ScopeKnowledgeRead), string(ScopeKnowledgeWrite), string(ScopeSecretWrite),
 		string(ScopeVoiceRead), string(ScopeVoiceWrite),

@@ -164,7 +164,12 @@ type matrixSeed struct {
 	sessions map[string]caller // by role name
 	patOK    func(scope string) caller
 	patWrong caller
-	orgID    uuid.UUID
+	// patSignIn is the admin's token with the sign-in grant's scopes
+	// (auth.SignInGrantScopes), as the desktop and the CLI mint it: every
+	// route decides it as the chokepoint predicts, so what the grant
+	// reaches is proven route by route (agentry#993).
+	patSignIn caller
+	orgID     uuid.UUID
 }
 
 func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
@@ -218,13 +223,15 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	_, patAll := env.mintPAT(sessions["admin"], "matrix-ok",
 		"org:admin", "audit:read", "user:profile", "agent:read")
 	_, patNone := env.mintPAT(sessions["admin"], "matrix-wrong", "repo:read")
+	_, patGrant := env.mintPAT(sessions["admin"], "matrix-sign-in", auth.SignInGrantScopes()...)
 
 	return &matrixSeed{
 		env: env, orgH: orgH, pawnH: pawnH, sessions: sessions, orgID: org.Id,
 		patOK: func(string) caller {
 			return caller{name: "pat-ok", pat: patAll}
 		},
-		patWrong: caller{name: "pat-wrong", pat: patNone},
+		patWrong:  caller{name: "pat-wrong", pat: patNone},
+		patSignIn: caller{name: "pat-sign-in", pat: patGrant},
 	}
 }
 
@@ -831,6 +838,7 @@ func TestAuthzMatrix(t *testing.T) {
 		cases = append(cases,
 			mcase{seed.patOK(""), patP("org:admin", "audit:read", "user:profile", "agent:read")},
 			mcase{seed.patWrong, patP("repo:read")},
+			mcase{seed.patSignIn, patP(auth.SignInGrantScopes()...)},
 		)
 
 		for _, mc := range cases {
