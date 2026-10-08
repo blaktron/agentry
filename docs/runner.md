@@ -78,6 +78,7 @@ One QuickAgent, one job, one container tree, then gone.
 | `--file PATH` | provide a file or directory to the run, read-only under `/inputs` (repeatable; basename-rooted; duplicate basenames refused) |
 | `--knowledge DIR` | attach a knowledge pack read-only at `/knowledge/<name>`, searched with the knowledge tools (repeatable; [below](#knowledge-packs)) |
 | `--voice` / `--no-voice` | attach the [Writing Voice](#a-writing-voice) kept on this computer to this run, or leave it off; with neither, the voice's own flag decides (`agentry voice attach on\|off`) |
+| `--report-theme NAME` | the [report theme](#the-report-theme) this run's PDFs take, for this run alone: `plain`, `formal`, `brief`, `technical` or `letter` (default: the signed-in account's, else `report.theme` in the CLI's config, else `plain`); any other name refuses the run (exit 2) |
 | `--voice-file FILE` | attach the `VOICE.md` in FILE instead of the one kept here: a regular file, never through a link, at most 32 KiB (for a driver such as a sandbox host) |
 | `--out DIR` | output folder (default `./agentry-out/<ns>-<name>-<runid>/`) |
 | `--output-format text\|json` | stdout carries the result text, or the full envelope |
@@ -988,13 +989,12 @@ provides these and no others. `agentry doctor` lists them.
 
 ## The scratch folder and PDF reports
 
-A CLI that carries them gives every release's run and session a **scratch
-folder** and the **`export_pdf`** tool. They are the runner's grants, not
-lines of the contract: no manifest declares them, an install asks no
-consent for them, and the built-in packages have neither. They landed on
-the CLI's `main` on 2026-10-08 (agentry-cli#729, #730), after v0.6.81, and
-reach a hosted run when a sandbox host's CLI is updated
-(agentry-enterprise#470).
+Since agentry-cli v0.6.82 every release's run and session gets a
+**scratch folder** and the **`export_pdf`** tool, with five report themes
+(agentry-cli#729, #730, #731). They are the runner's grants, not lines of
+the contract: no manifest declares them, an install asks no consent for
+them, and the built-in packages have neither. A hosted run has them once
+its sandbox host runs that release (agentry-enterprise#470).
 
 ### What the tools container mounts
 
@@ -1095,12 +1095,25 @@ How a PDF looks comes from a **theme document** (`"agentryTheme": 1`:
 page, fonts, sizes, colours, header, footer, tables), one template for all
 of them. The model never chooses it: `export_pdf` takes no theme argument,
 and a request for "something formal" changes the words, not the layout.
-There are five: **Plain**, **Formal**, **Brief**, **Technical** and
-**Letter**. The runner ships Plain alone today. The other four, the
-`--report-theme` flag and the CLI's reading of the setting below arrive
-with agentry-cli#731, the desktop's with agentry-desktop#730, the site's
-card with agentry-web#1314 and the hosted job's with
-agentry-enterprise#470.
+There are five, all in the runner image since agentry-cli v0.6.82:
+
+- **Plain**, the default: Noto Sans, page numbers.
+- **Formal**: Noto Serif, a cover page with the title and the date, and
+  "n of N" counting the body's pages. The cover is drawn only for a report
+  whose first heading is its title; a report with no heading starts on its
+  first page.
+- **Brief**: a compact memo, its heading ruled, no cover. Its length is the
+  agent's writing; nothing cuts it to a page or two.
+- **Technical**: dense, with banded tables, a stronger code background and
+  "n of N".
+- **Letter**: Noto Serif, the first heading as a centred, ruled letterhead,
+  and each short line of a paragraph kept as its own line, so an address
+  block or a To, From, Date and Subject block stays one to a line. A line
+  of 60 characters or more is prose wrapped in the source and is joined as
+  usual. A letter with no heading has no letterhead.
+
+No theme carries a logo, a name or an address, and none carries Agentry's
+branding.
 
 The theme is a **profile setting** on the account, the person's
 **report theme**: `GET` and `PUT /api/v1/user/report-settings`, with the
@@ -1115,18 +1128,49 @@ other name is refused (422). An account that never chose reads back `{}`,
 which is not the same as choosing Plain, and a `PUT` with no `theme` clears
 the choice. Clearing an account's data clears it too.
 
-Until those land, every run renders with Plain. Once they do, a run takes
-the first of these that is set: `agentry run --report-theme <name>` for
-that run alone, then the signed-in account's report theme, then
-`report.theme` in the CLI's config, then Plain. The desktop will pass the
-profile's theme to a local run, and a hosted run's job will carry it. There
-is no theme picker in a run dialog.
+A CLI run takes the first of these that is set:
+
+1. `agentry run --report-theme <name>`, for that run alone;
+2. the account's report theme, when the CLI is signed in to its registry
+   (read when the run starts, but not by `--dry-run` or `--prepare`; an
+   account that never chose one is skipped);
+3. `report.theme` in the CLI's config (`~/.config/agentry/config.yaml`):
+
+   ```yaml
+   report:
+     theme: letter
+   ```
+
+4. Plain.
+
+A name typed in the flag or the config that is not a theme's refuses the
+run before anything starts (exit 2). The account's theme is only read: if
+the registry cannot be reached, or names a theme this CLI does not have,
+the run warns on stderr and takes the next choice, since how a PDF looks is
+no reason to stop a run. A run driven by a sandbox host holds a run grant,
+not the person's sign-in, so it never reads the account; the host passes
+the theme with the flag.
+
+Still to come: the site's profile card (agentry-web#1314), the desktop's
+setting and its passing of the theme to a local run (agentry-desktop#730),
+and the hosted job carrying it (agentry-enterprise#470). There is no theme
+picker in a run dialog.
 
 ### What the receipt records
 
 The engine writes the run's theme into its own copy of the tools spec with
 the theme's SHA-256, and the tools server refuses a theme that does not
-match. Each export is one line of `receipts/pdfs.ndjson` (the PDF's path,
+match. Every run that has `export_pdf` names its theme in the envelope's
+`capabilities_enforced`, whether or not it exports a PDF:
+
+```json
+"pdf.theme": "letter 1.0.0 (sha256:…), chosen by the --report-theme flag; the model cannot choose another"
+```
+
+"chosen by" is one of `the --report-theme flag`, `the account's report
+theme`, `report.theme in the CLI's config` and `the default`.
+
+Each export is one line of `receipts/pdfs.ndjson` (the PDF's path,
 SHA-256, pages and size). The envelope in `result.json` gains a `pdfs`
 block naming the theme and each PDF in `reports/` whose bytes still match
 its line:
@@ -1206,10 +1250,9 @@ the plan nor its hash. [The Writing Voice](voice.md) has the rest.
 
 ### The text, for a sample plan
 
-What follows was compiled by the CLI's `main` at **`a7ae9f7`** (built from
-source on 2026-10-08: the first `main` commit with the scratch folder and
-`export_pdf`, which no release carries yet) for a QuickAgent with no
-grants:
+What follows was compiled by agentry-cli **v0.6.82** (built from its tag,
+`909d33d`, on 2026-10-08: the first release with the scratch folder and
+`export_pdf`) for a QuickAgent with no grants:
 
 ```yaml
 # agent.yaml
