@@ -1992,7 +1992,10 @@ paths:
                   maxLength: 140
                 visibility:
                   description: >-
-                    `public` is refused on a retired agent (`409
+                    The namespace's administrators only. A token needs
+                    `org:admin`, or `agent:manage` when the body sets
+                    visibility and nothing else (agentry#993). `public` is
+                    refused on a retired agent (`409
                     agent-retired`): Restore is how a retired agent comes
                     back. It is refused on a fork for good (`409
                     fork-stays-private`, agentry#943).
@@ -2051,6 +2054,7 @@ paths:
       tags: [agents]
       summary: Delete an agent (the namespace's administrators, §9.2, agentry#942).
       description: >
+        A token needs `agent:manage` or `org:admin` (agentry#993).
         An agent with no version row is deleted outright, with its hosted
         repository. An agent with version history is deleted as a tombstone
         (agentry#942): every published or quarantined version is yanked, the
@@ -2151,7 +2155,8 @@ paths:
       summary: Retire an agent (the namespace's administrators, agentry#942).
       description: >-
         Makes the agent private and labels it retired, keeping the
-        visibility it had for Restore. A retired agent takes no submission
+        visibility it had for Restore. A token needs `agent:manage` or
+        `org:admin` (agentry#993). A retired agent takes no submission
         (`409 agent-retired`), is in no public listing, and holds no place
         under the private-agent cap. Its versions are untouched. Retiring a
         retired agent changes nothing.
@@ -2174,7 +2179,8 @@ paths:
       tags: [agents]
       summary: Restore a retired agent (the namespace's administrators, agentry#942).
       description: >-
-        Returns a retired agent to the visibility it had. Back to public it
+        Returns a retired agent to the visibility it had. A token needs
+        `agent:manage` or `org:admin` (agentry#993). Back to public it
         meets the rules of any agent becoming public (`409 agent-unscanned`,
         also when pipeline: skip was set while it was retired); back to
         private it takes a place under
@@ -5260,7 +5266,10 @@ components:
         token start, feed and cancel a hosted run of a QuickAgent and
         `run:read` lets it read a run, its log and its artefacts — both are
         consumed only by a registry that mounts the runs extension, and
-        unlock nothing on one that does not. `knowledge:read` and
+        unlock nothing on one that does not. `agent:manage` takes the owner
+        actions on a QuickAgent the caller administers (make it public or
+        private, retire, restore, delete; agentry#993), which `org:admin`
+        also covers, and reaches none of its other settings. `knowledge:read` and
         `knowledge:write` read and write the account's knowledge packs.
         `secret:write` sets and deletes the account's hosted-run secrets and
         never lists or reads one; it is consumed only by a registry that
@@ -5271,6 +5280,7 @@ components:
         - repo:write
         - agent:publish
         - agent:read
+        - agent:manage
         - org:admin
         - review:act
         - audit:read
@@ -5696,6 +5706,7 @@ components:
         - repo:write
         - agent:publish
         - agent:read
+        - agent:manage
         - org:admin
         - review:act
         - audit:read
