@@ -1985,8 +1985,9 @@ under which the MCP gateway reaches its run's docker filter. runhost refuses
 to start when either is missing, or the second runs anything else. Run
 `secureagentry-runhost` there with `AGENTRY_RUNHOST_NAME` (the host's DNS
 name), `AGENTRY_RUNHOST_TLS_DIR`, `AGENTRY_RUNHOST_HOME` (the same path in a
-container and on the host), `AGENTRY_RUNHOST_REGISTRY` and
-`AGENTRY_RUNHOST_API` (your registry's origin, to enrol),
+container and on the host), `AGENTRY_RUNHOST_REGISTRY` (your registry's
+public origin, which the CLI resolves and verifies releases against),
+`AGENTRY_RUNHOST_API` (the origin it enrols at),
 `AGENTRY_RUNHOST_RUNTIME=runsc`, `AGENTRY_RUNHOST_GATEWAY_RUNTIME=runsc-uds`,
 and `AGENTRY_RUNHOST_RESOLVERS` (the host's own name servers, at most three,
 IPv4). Leave out the settings the registry pushes. Mint its enrolment token
@@ -2004,15 +2005,18 @@ sandbox.
   alone, and nothing else.
 - Outbound, from the host and from every container on it, admit DNS to the
   resolvers you named and TCP 80 and 443 to public addresses, and refuse
-  private ranges, CGNAT, link-local and loopback addresses, and the cloud's
-  metadata address. Put the rules where the container runtime's own
-  firewall rules cannot bypass them.
-- Let the registry reach the hosts' port, and the hosts reach the runs
-  store's endpoint and the model's.
+  private ranges, CGNAT, link-local and loopback addresses; refuse the
+  containers the cloud's metadata address too. Put the rules where the
+  container runtime's own firewall rules cannot bypass them.
+- The hosts must reach, on public addresses, your registry's origin, the
+  runs store's endpoint, the model's endpoint and the image registries the
+  runner pulls from. A registry or a store on a private address is refused
+  by the rule above; open exactly that address and port if you must.
 
-**Taking a host out.** Retire it as platform staff: the registry calls it no
-more and refunds what it held, and its name is never enrolled again. Then
-stop it. A machine rebuilt comes back under a new name. The registry's
+**Taking a host out.** Retire it as platform staff, unless it is the last
+host taking runs (`409 last-host`): the registry calls it no more, closes
+and refunds a run it held once the stale window passes, and never enrols its
+name again. Then stop it. A machine rebuilt comes back under a new name. The registry's
 fleet, which makes and destroys hosts itself, speaks Vultr's API alone; with
 `AGENTRY_RUNS_FLEET_PROVIDER` unset, every host is made and taken down this
 way, by hand.
