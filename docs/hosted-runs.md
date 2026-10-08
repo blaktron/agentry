@@ -227,6 +227,8 @@ changes nothing.
 | The release, or an MCP server it declares, requires a secret the caller has not set | `409 secret-missing`, with `missing` (the required names not set), `secrets` (every declared name) and, when there are any, `optional`; set them, then create the run again ([below](#a-runs-secrets)) |
 | The release requires a secret and the deployment keeps none, or pushes to no sandbox host | `409 secrets-declared`, with `required` and `secrets` — such a release runs on your own machine, where its keys are yours |
 | The release requires more than 32 secrets, or the run would carry more than 32, where the deployment keeps secrets | `422 validation` |
+| An MCP server the release declares signs in by OAuth, and the caller keeps no working connection to it for this version | `409 connection-missing`, with `missing` (the servers to connect) and `connections` (every one that signs in); connect them, then create the run again ([below](#a-runs-connections)) |
+| An MCP server the release declares signs in by OAuth, and the deployment keeps no connections or pushes to no sandbox host | `409 connections-unsupported`, with `connections` — such a release runs on your own machine |
 | The account already has a run queued, claimed or running | `409 run-active` — one active run per account, held by a partial unique index rather than a read-then-write |
 | The payer's balance is short of the hold | `402 credits-exhausted`, with `account`, `balance`, `hold`, `resetsAt` and `tier` |
 | The payer is an organization whose subscription is not in force | `402 subscription-inactive`, with `account`, `standing` and `tier` |
@@ -570,6 +572,109 @@ The key service keeps its own audit, in which every value is a keyed hash.
   another start's queued run waits for, and that run fails, refunded. Every
   write names the token in the audit log, and revoking the token ends all
   of it.
+
+## A run's connections
+
+A declared MCP server can sign in by OAuth: a remote server with
+`auth: oauth`, or a package server with an `oauth` block. On your own
+machine the CLI keeps a **connection** to it for each exact release, in the
+OS keychain ([Connections](runner.md#connections)). A hosted run uses the connection the
+vault keeps for the account and the release, a different connection from
+the local one. Each connection is made once on the vendor's consent screen
+and refreshed by Agentry. A run is given an access token alone, never the
+refresh token or a client secret (blaktron/agentry-enterprise#426,
+DEV-223).
+
+### Making one
+
+The vault's routes under `/api/v1/x/vault/` are a signed-in session's
+alone. No token starts, finishes, lists or removes a connection.
+
+| Route | Does |
+|---|---|
+| `POST /me/connections` | starts a consent from `{"ref", "server", "return"}` and answers the vendor's address to open in the browser |
+| `GET /me/connections/callback` | the vendor's answer; it is taken only into the browser signed in as the account that started the consent, within ten minutes |
+| `GET /me/consents/{id}` | what became of a consent: `started`, `exchanging`, `connected` or `failed` |
+| `GET /me/connections` | the account's connections by release and server, with when each was made, refreshed and last used, and `broken` when its vendor no longer honours it |
+| `DELETE /me/connections/{id}` | Disconnect: the connection goes at once, and its revocation at the vendor is attempted and audited |
+
+A consent at a vendor whose token or revocation endpoint is not on the
+deployment's vendor list (`AGENTRY_VAULT_VENDOR_HOSTS`, when it names one)
+is refused with `409 vendor-not-allowed`, naming the server and the host.
+Such a release runs on your own machine.
+
+### At create
+
+A run of a release whose servers sign in by OAuth is created only when the
+caller keeps a working connection to each one for that release: the same
+ref and archive digest, never another version's or another account's. A
+connection whose vendor refused its last refresh counts as missing. The
+run records the servers' keys (`connections`), never a token. A run with
+connections goes only to a sandbox host Agentry pushes to; the pull worker
+never claims one.
+
+### At the hand-off
+
+The dispatcher, in the worker role, locks the run while it is claimed on
+its host and, in the same transaction, before the run's secrets, does this
+for each connection:
+
+- locks the connection and opens its refresh token, and any client secret,
+  under the account's key;
+- refreshes it at the vendor, through the egress guard (and, in
+  production, through the worker's egress proxy);
+- keeps the new refresh token, sealed, when the vendor rotates it;
+- sets the connection's last refresh and last use;
+- writes one `vault.connection_used` audit event, with the server, the
+  issuer, the run and the host.
+
+Then the access token goes into the job, with its expiry, the issuer and the
+scopes. The host writes it to an owner-only `connections.json` in the job's
+directory and runs the CLI with `--connections-file`. The CLI then hands each
+server its token as it does on your machine, opens no connection store,
+and refreshes nothing. The file is deleted when the CLI exits, and the
+tokens are masked in every line the host keeps, as secrets are.
+
+The run fails before any host sees it, with its hold refunded and its error
+naming the server, when a connection:
+
+- was removed since the create;
+- is refused by its vendor at the refresh, or was made with your own OAuth
+  client and that client was removed or replaced since: the connection is
+  marked broken (`vault.connection_broken`), even though the run fails, and
+  the next run asks you to connect again;
+- has a vendor that could not be reached: the connection is kept as it was;
+- is at a vendor off the deployment's list.
+
+Whatever a hand-off learned is kept even when it fails the run. A refresh
+token a vendor already rotated for another server is not lost.
+
+### During the run, and after
+
+Nothing is refreshed during a run, and the token's life is the vendor's
+to choose. A session that outlives it keeps running, and that server's
+calls fail with a sentence that names the run's connection and says a new
+run is given a fresh token. The receipt's
+`capabilities_enforced.mcpServers.connections` names each server, its
+issuer and its scopes, and says the run was given an access token alone.
+
+The vault deletes a connection no run has used for 90 days and attempts its
+revocation, unless another connection of the account shares the grant. It deletes every connection with the account, and Disconnect
+deletes one at once.
+
+### What this does not protect
+
+- **The access token is plaintext for the run's life.** It is in the job,
+  in the host's file and in the server's container, and a server given it
+  can use it until it expires. A connection's scopes are what the release
+  declared and you approved, not less.
+- **The worker can open any account's connection.** Each is sealed under a
+  key derived for its account, but the worker's role may decrypt under the
+  connections key, so its policy limits the operation, not the account.
+- **Behind the egress proxy, the address check is not pinned.** The worker
+  checks that a vendor's name resolves to public addresses before it asks
+  the proxy, and the proxy resolves the name again. The proxy's exact list
+  of hosts is what bounds where the request goes.
 
 ## A knowledge build
 
