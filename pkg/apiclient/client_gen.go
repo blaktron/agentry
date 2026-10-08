@@ -974,6 +974,7 @@ func (e ScanFindingVerdict) Valid() bool {
 
 // Defines values for Scope.
 const (
+	AgentManage    Scope = "agent:manage"
 	AgentPublish   Scope = "agent:publish"
 	AgentRead      Scope = "agent:read"
 	AuditRead      Scope = "audit:read"
@@ -994,6 +995,8 @@ const (
 // Valid indicates whether the value is a known member of the Scope enum.
 func (e Scope) Valid() bool {
 	switch e {
+	case AgentManage:
+		return true
 	case AgentPublish:
 		return true
 	case AgentRead:
@@ -3089,7 +3092,10 @@ type ScimTokenCreated struct {
 // token start, feed and cancel a hosted run of a QuickAgent and
 // `run:read` lets it read a run, its log and its artefacts — both are
 // consumed only by a registry that mounts the runs extension, and
-// unlock nothing on one that does not. `knowledge:read` and
+// unlock nothing on one that does not. `agent:manage` takes the owner
+// actions on a QuickAgent the caller administers (make it public or
+// private, retire, restore, delete; agentry#993), which `org:admin`
+// also covers, and reaches none of its other settings. `knowledge:read` and
 // `knowledge:write` read and write the account's knowledge packs.
 // `secret:write` sets and deletes the account's hosted-run secrets and
 // never lists or reads one; it is consumed only by a registry that
@@ -3636,7 +3642,7 @@ type UpdateAgentJSONBody struct {
 	PipelineSkip *bool   `json:"pipelineSkip,omitempty"`
 	Summary      *string `json:"summary,omitempty"`
 
-	// Visibility `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back. It is refused on a fork for good (`409 fork-stays-private`, agentry#943).
+	// Visibility The namespace's administrators only. A token needs `org:admin`, or `agent:manage` when the body sets visibility and nothing else (agentry#993). `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back. It is refused on a fork for good (`409 fork-stays-private`, agentry#943).
 	Visibility *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
 }
 
@@ -4314,7 +4320,7 @@ type ClientInterface interface {
 
 	// DeleteAgent Delete an agent (the namespace's administrators, §9.2, agentry#942).
 	//
-	// An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
+	// A token needs `agent:manage` or `org:admin` (agentry#993). An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 	//
 	// Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
 	DeleteAgent(ctx context.Context, ns Namespace, name AgentName, params *DeleteAgentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4431,14 +4437,14 @@ type ClientInterface interface {
 
 	// RestoreAgent Restore a retired agent (the namespace's administrators, agentry#942).
 	//
-	// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+	// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin` (agentry#993). Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 	//
 	// Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
 	RestoreAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RetireAgent Retire an agent (the namespace's administrators, agentry#942).
 	//
-	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin` (agentry#993). A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
 	//
 	// Corresponds with POST /agents/{ns}/{name}/retire (the `RetireAgent` operationId).
 	RetireAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5950,7 +5956,7 @@ func (c *Client) CreateAgent(ctx context.Context, body CreateAgentJSONRequestBod
 
 // DeleteAgent Delete an agent (the namespace's administrators, §9.2, agentry#942).
 //
-// An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
+// A token needs `agent:manage` or `org:admin` (agentry#993). An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 //
 // Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
 func (c *Client) DeleteAgent(ctx context.Context, ns Namespace, name AgentName, params *DeleteAgentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6237,7 +6243,7 @@ func (c *Client) GetAgentReadme(ctx context.Context, ns Namespace, name AgentNam
 
 // RestoreAgent Restore a retired agent (the namespace's administrators, agentry#942).
 //
-// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin` (agentry#993). Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 //
 // Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
 func (c *Client) RestoreAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6254,7 +6260,7 @@ func (c *Client) RestoreAgent(ctx context.Context, ns Namespace, name AgentName,
 
 // RetireAgent Retire an agent (the namespace's administrators, agentry#942).
 //
-// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin` (agentry#993). A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
 //
 // Corresponds with POST /agents/{ns}/{name}/retire (the `RetireAgent` operationId).
 func (c *Client) RetireAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -17565,7 +17571,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteAgentWithResponse Delete an agent (the namespace's administrators, §9.2, agentry#942).
 	//
-	// An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
+	// A token needs `agent:manage` or `org:admin` (agentry#993). An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -17696,7 +17702,7 @@ type ClientWithResponsesInterface interface {
 
 	// RestoreAgentWithResponse Restore a retired agent (the namespace's administrators, agentry#942).
 	//
-	// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+	// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin` (agentry#993). Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -17705,7 +17711,7 @@ type ClientWithResponsesInterface interface {
 
 	// RetireAgentWithResponse Retire an agent (the namespace's administrators, agentry#942).
 	//
-	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin` (agentry#993). A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -27639,7 +27645,7 @@ func (c *ClientWithResponses) CreateAgentWithResponse(ctx context.Context, body 
 
 // DeleteAgentWithResponse Delete an agent (the namespace's administrators, §9.2, agentry#942).
 //
-// An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
+// A token needs `agent:manage` or `org:admin` (agentry#993). An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27872,7 +27878,7 @@ func (c *ClientWithResponses) GetAgentReadmeWithResponse(ctx context.Context, ns
 
 // RestoreAgentWithResponse Restore a retired agent (the namespace's administrators, agentry#942).
 //
-// Returns a retired agent to the visibility it had. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin` (agentry#993). Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27887,7 +27893,7 @@ func (c *ClientWithResponses) RestoreAgentWithResponse(ctx context.Context, ns N
 
 // RetireAgentWithResponse Retire an agent (the namespace's administrators, agentry#942).
 //
-// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin` (agentry#993). A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
 //
 // Returns a wrapper object for the known response body format(s).
 //

@@ -318,7 +318,7 @@ func TestHoldPermits(t *testing.T) {
 		ActOrgDecommission, ActOrgLeave, ActUserSelfRead, ActUserSelfUpdate, ActUserTokensRead,
 		ActUserTokensManage, ActUserSecurityManage, ActUserOrgRequest, ActOrgCreate, ActPublicRead, ActReviewAct,
 		ActAgentCreate, ActAgentRead, ActAgentRepoRead, ActAgentRepoWrite, ActAgentMaintain, ActAgentPublish, ActAgentAdminister,
-		ActKnowledgeRead, ActKnowledgeWrite, ActOrgKnowledgeRead, ActOrgKnowledgeWrite,
+		ActAgentManage, ActKnowledgeRead, ActKnowledgeWrite, ActOrgKnowledgeRead, ActOrgKnowledgeWrite,
 	}
 	for _, act := range all {
 		if got := HoldPermits(act); got != permitted[act] {
@@ -327,5 +327,40 @@ func TestHoldPermits(t *testing.T) {
 		if act != ActOrgLeave && ReadOnly(act) != permitted[act] {
 			t.Errorf("ReadOnly(%s) = %v, want %v", act, ReadOnly(act), permitted[act])
 		}
+	}
+}
+
+// TestAgentManageScope (agentry#993): agent:manage admits the owner
+// actions and nothing else of org:admin's, org:admin still admits them,
+// and neither lowers the administrators' rung.
+func TestAgentManageScope(t *testing.T) {
+	admin := AgentResource{Public: true, EffectiveRole: AgentRoleAdmin}
+	publisher := AgentResource{Public: true, EffectiveRole: AgentRolePublish}
+	pat := func(scopes ...string) *Principal {
+		return &Principal{UserID: uuid.New(), Via: "pat", Scopes: scopes}
+	}
+	signIn := pat(SignInGrantScopes()...)
+	if err := CheckAgent(signIn, admin, ActAgentManage); err != nil {
+		t.Fatalf("the sign-in grant cannot take the owner actions: %v", err)
+	}
+	if err := CheckAgent(pat("org:admin"), admin, ActAgentManage); err != nil {
+		t.Fatalf("org:admin no longer takes the owner actions: %v", err)
+	}
+	for _, act := range []Action{ActAgentMaintain, ActAgentAdminister} {
+		if err := CheckAgent(signIn, admin, act); err == nil {
+			t.Fatalf("the sign-in grant reaches %s", act)
+		}
+	}
+	if err := CheckAgent(pat("agent:read", "agent:publish"), admin, ActAgentManage); err == nil {
+		t.Fatal("a token without agent:manage or org:admin takes the owner actions")
+	}
+	if err := CheckAgent(signIn, publisher, ActAgentManage); err == nil {
+		t.Fatal("agent:manage lowers the rung: a publisher takes the owner actions")
+	}
+	if err := CheckAgent(&Principal{UserID: uuid.New(), Via: "session"}, publisher, ActAgentManage); err == nil {
+		t.Fatal("a publisher's session takes the owner actions")
+	}
+	if !ValidScope(ScopeAgentManage) {
+		t.Fatal("agent:manage is not a valid scope")
 	}
 }

@@ -101,9 +101,18 @@ func (s *Server) agentForAction(ctx context.Context, p *auth.Principal, ns, name
 // caller's role, or the problem written and false.
 func (s *Server) resolveAgentForAction(w http.ResponseWriter, r *http.Request, ns, name string, act auth.Action) (registry.Agent, auth.AgentRole, bool) {
 	a, role, err := s.agentForAction(r.Context(), principalFrom(r.Context()), ns, name, act)
+	if !s.agentAccess(w, r, ns, name, a, err) {
+		return registry.Agent{}, auth.AgentRoleNone, false
+	}
+	return a, role, true
+}
+
+// agentAccess writes the answer for an agentForAction that failed, and
+// reports whether it succeeded.
+func (s *Server) agentAccess(w http.ResponseWriter, r *http.Request, ns, name string, a registry.Agent, err error) bool {
 	switch {
 	case err == nil:
-		return a, role, true
+		return true
 	case errors.Is(err, registry.ErrNotFound):
 		problemNotFound(w, r)
 	case errors.Is(err, auth.ErrUnauthorized):
@@ -116,7 +125,7 @@ func (s *Server) resolveAgentForAction(w http.ResponseWriter, r *http.Request, n
 		s.log.ErrorContext(r.Context(), "agent access", "agent", ns+"/"+name, "err", err)
 		problemInternal(w, r)
 	}
-	return registry.Agent{}, auth.AgentRoleNone, false
+	return false
 }
 
 // CreateAgent implements POST /agents (§9.2).
@@ -319,17 +328,35 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, ns Namespace, 
 	writeJSON(w, http.StatusOK, out)
 }
 
+// visibilityOnly reports whether an update body sets visibility and no
+// other field (agentry#993). It compares the whole body, so a field added
+// to it later counts as a setting, and one that cannot be compared stops
+// the build.
+func visibilityOnly(req UpdateAgentJSONBody) bool {
+	return req.Visibility != nil && req == UpdateAgentJSONBody{Visibility: req.Visibility}
+}
+
 // UpdateAgent implements PATCH /agents/{ns}/{name} (maintain).
 func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName) {
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, role, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentMaintain)
-	if !ok {
-		return
-	}
 	var req UpdateAgentJSONBody
 	if !readJSON(w, r, &req) {
+		return
+	}
+	// The body is the agent's settings, so the route is maintain's. Its
+	// one owner action, visibility, is also open where maintain is not: a
+	// body that sets it alone is decided again as ActAgentManage, the
+	// administrators' rung with a token's agent:manage or org:admin, which
+	// is how the sign-in grant changes it (agentry#993). Every caller
+	// maintain admits is decided as before.
+	p := principalFrom(r.Context())
+	a, role, err := s.agentForAction(r.Context(), p, ns, name, auth.ActAgentMaintain)
+	if errors.Is(err, auth.ErrForbidden) && visibilityOnly(req) {
+		a, role, err = s.agentForAction(r.Context(), p, ns, name, auth.ActAgentManage)
+	}
+	if !s.agentAccess(w, r, ns, name, a, err) {
 		return
 	}
 	// Two fields in this body are not settings. Changing who can see an
@@ -342,12 +369,12 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	// release is neither: it is the publisher's own safety valve, and the
 	// version stays on the record marked yanked.) The rest of this body
 	// is settings, which maintain covers.
-	administers := func() bool {
+	permits := func(act auth.Action) bool {
 		return auth.CheckAgent(principalFrom(r.Context()),
 			auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role},
-			auth.ActAgentAdminister) == nil
+			act) == nil
 	}
-	if req.Visibility != nil && string(*req.Visibility) != a.Visibility && !administers() {
+	if req.Visibility != nil && string(*req.Visibility) != a.Visibility && !permits(auth.ActAgentManage) {
 		problemForbidden(w, r, "Changing this QuickAgent's visibility needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
@@ -364,7 +391,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		problemForkStaysPrivate(w, r)
 		return
 	}
-	if req.AllowForcePush != nil && *req.AllowForcePush != a.AllowForcePush && !administers() {
+	if req.AllowForcePush != nil && *req.AllowForcePush != a.AllowForcePush && !permits(auth.ActAgentAdminister) {
 		problemForbidden(w, r, "Allowing force pushes rewrites history everyone else is working from, so it needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
@@ -372,7 +399,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	// too; whether the agent may be — private, an organization's, the tier
 	// including it — and whether it may become public are decided below,
 	// under the agent's row lock, beside the write.
-	if req.PipelineSkip != nil && *req.PipelineSkip != a.PipelineSkip && !administers() {
+	if req.PipelineSkip != nil && *req.PipelineSkip != a.PipelineSkip && !permits(auth.ActAgentAdminister) {
 		problemForbidden(w, r, "Taking this QuickAgent off the pipeline needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
@@ -455,7 +482,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	// two requests cannot each pass on a stale row; the table's CHECK is
 	// the wall behind the first.
 	var refuse func()
-	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
+	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		locked, err := q.GetAgentForUpdate(r.Context(), a.ID)
 		if err != nil {
 			return err

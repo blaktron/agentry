@@ -58,7 +58,8 @@ var publicTransitionStates = map[string]bool{
 }
 
 // DeleteAgent implements DELETE /agents/{ns}/{name} (§9.2, agentry#942),
-// for the namespace's administrators.
+// for the namespace's administrators (ActAgentManage: a token's
+// agent:manage or org:admin, agentry#993).
 //
 // §4.3 forbids deleting agent_version rows outright — yanked hides, blocked
 // disables, but the row and its digest survive so installed copies keep
@@ -74,7 +75,7 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentManage)
 	if !ok {
 		return
 	}
@@ -159,7 +160,7 @@ func (s *Server) RetireAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentManage)
 	if !ok {
 		return
 	}
@@ -176,7 +177,7 @@ func (s *Server) RestoreAgent(w http.ResponseWriter, r *http.Request, ns Namespa
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentAdminister)
+	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentManage)
 	if !ok {
 		return
 	}
