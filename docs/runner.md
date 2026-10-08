@@ -715,6 +715,7 @@ its digest, so a run record says which file a run obeyed.
 | `docker.runtime` | the daemon-registered OCI runtime the containers holding the QuickAgent's code are created with (unset: the daemon's default) — below |
 | `docker.gatewayRuntime` | the daemon-registered runtime the gateway alone is created with: a second registration of gVisor with `--host-uds=open` (unset: the daemon's default; needs `docker.runtime`) — below |
 | `docker.resolvers` | at most three IPv4 name servers of the host's that the built-in Drafter's web tools, and under `docker.runtime` the llm-proxy, the MCP server install proxy and the relays, resolve through (unset: docker's DNS) — below |
+| `docker.limits.memory` / `docker.limits.cpus` / `docker.limits.pids` | the memory, whole CPUs and processes each of a run's containers may use (defaults `2g`, `1`, `512`) — below |
 
 The policy participates in the plan hash: editing it invalidates cached
 plans, which recompile on next use.
@@ -856,6 +857,57 @@ Hosted runs are why the knob exists: the platform's run worker renders
 `docker.runtime: runsc` into the policy of every run it drives. That side is
 [Hosted runs](hosted-runs.md).
 
+### Container limits (`docker.limits`)
+
+```yaml
+docker:
+  limits:
+    memory: 2g   # docker's notation, in m or g, at least 6m
+    cpus: 1      # whole CPUs, 1 to 64, never more than this host has
+    pids: 512    # processes, 32 to 65536
+```
+
+Every container the runner starts for a run takes the same posture
+(agentry-cli#163, DR-30): all capabilities dropped (`--cap-drop ALL`),
+`--security-opt no-new-privileges`, and the memory, CPUs and processes
+above. That covers the llm proxy, the gateway, the gateway's health probe,
+the agent container (an interactive session's too) and the MCP server
+installer. Each key is optional, and an unset key takes its default, so a
+policy written before the keys existed is bounded all the same. A value
+outside the ranges above is an error when the policy is read. Docker
+itself refuses a `cpus` above the host's count, which is why the default
+is one.
+
+Two containers keep one capability each. The gateway keeps
+`DAC_READ_SEARCH`, because it runs as root in its container and must read
+the run's `secrets.env`, which is `0600` and yours. The session store's
+one-shot keeps `CHOWN`. The proxy's and the probe's root is read-only. The
+agent's root is read-only when its adapter names the paths its harness
+writes, which it then gets as tmpfs: `docker-agent` names `/tmp`, `/work`
+and `/home/docker-agent`. A tmpfs is docker's `noexec,nosuid,nodev`, so a
+harness that writes a helper there and runs it needs its adapter to say
+so. The gateway's root stays writable: it is a vendor image.
+
+The tool and MCP server containers are the gateway's to launch. It passes
+the run's memory and CPUs to them through its `--memory` and `--cpus`
+flags, and gives them no-new-privileges itself. On Linux the run's docker
+filter also holds each of them to the run's memory, CPUs and processes:
+it fills in a bound the gateway left unset and refuses one set higher, and
+it refuses a privileged container and any added capability. Their default
+capabilities and their writable root are left as the gateway leaves them
+(agentry-cli#227).
+
+The limits are read from the policy when the run starts, as the budgets
+are, and are not compiled into the plan. Changing them does not recompile
+a cached plan, so the plan copy in `receipts/` does not show the flags
+passed to the gateway. The receipt's `capabilities_enforced.containers`
+line does: it names each container, the capabilities dropped and kept,
+the memory, CPUs and processes, and which roots are read-only.
+
+The defaults suit the `docker-agent` harness and an npm or PyPI server's
+install. They are not a sizing for several runs on one machine: raise or
+lower them for your own host.
+
 ## What a run enforces
 
 | Contract line | Mechanism |
@@ -868,6 +920,7 @@ Hosted runs are why the knob exists: the platform's run worker renders
 | a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer, or an `auth: oauth` connection's access token, is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file; a connection's refresh token and any client secret stay in the runner's store and never enter the run |
 | a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane, served by always-granted `list_inputs`/`read_input`; job output and receipts live on the separate `/out` volume |
+| every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds, not its capability drop |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
 | a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool — including `run_command`. Worth knowing when writing a QuickAgent whose job is to *find* credentials: a `git log -p` that would print one is refused, and the work has to be done on patterns that are not themselves secret-shaped. |

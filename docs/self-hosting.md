@@ -781,8 +781,13 @@ they were initialised with.
 
 agentryd applies the §19 per-IP limits to the API; the edge adds `limit_req`
 zones (keyed on the resolved visitor address) for the routes that do work for
-strangers: the sign-in page `/ui/login` and `/api/v1/auth/*` (30/min, burst
-30), and the git endpoints (120/min, burst 60). Over the limit is `429` with
+strangers: the sign-in page `/ui/login`, `/api/v1/auth/*`, and the directory's
+flow pages and executor API (`/if/flow` and `/api/v3/flows/executor`, 30/min,
+burst 30). Those directory paths share the authentication budget by visitor
+address; direct executor requests cannot skip it by never opening the page.
+The directory's OIDC token exchange and other API routes stay outside that
+visitor budget, because service-to-service traffic shares a server address.
+The git endpoints have their own budget (120/min, burst 60). Over the limit is `429` with
 `Retry-After`. Tune the zones in `edge/nginx.conf`; a site's overlay adds
 zones for its own forms; behind Cloudflare, mirror the same paths with a
 rate-limiting rule so the edge is the second line, not the first.
