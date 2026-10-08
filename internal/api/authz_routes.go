@@ -71,16 +71,21 @@ var routeAuthz = map[string]RouteDecl{
 	"getAdvisory":   {Action: auth.ActPublicRead, Anonymous: true},
 	// updateAgent stays at maintain: its fields are the agent's settings,
 	// which a publisher may change. The fields that are not are checked in
-	// the handler: visibility, allowForcePush and pipelineSkip against
-	// ActAgentAdminister, the way ssoRequired is inside updateOrg, and
-	// builtin against platform staff (agentry#737, DEV-174).
+	// the handler: visibility against ActAgentManage, allowForcePush and
+	// pipelineSkip against ActAgentAdminister, the way ssoRequired is
+	// inside updateOrg, and builtin against platform staff (agentry#737,
+	// DEV-174). A body that sets visibility alone, sent with a token that
+	// carries agent:manage and not org:admin, is decided as ActAgentManage
+	// (agentry#993).
 	"updateAgent": {Action: auth.ActAgentMaintain, AgentScoped: true},
-	"deleteAgent": {Action: auth.ActAgentAdminister, AgentScoped: true},
-	"retireAgent": {Action: auth.ActAgentAdminister, AgentScoped: true},
+	// The owner actions (agentry#942, agentry#993): the administrators',
+	// and a token's agent:manage or org:admin.
+	"deleteAgent": {Action: auth.ActAgentManage, AgentScoped: true},
+	"retireAgent": {Action: auth.ActAgentManage, AgentScoped: true},
 	// The origin is read by name and the target namespace decided by the
 	// handler, as createAgent's is (agentry#943).
 	"forkAgent":         {Action: auth.ActAgentCreate},
-	"restoreAgent":      {Action: auth.ActAgentAdminister, AgentScoped: true},
+	"restoreAgent":      {Action: auth.ActAgentManage, AgentScoped: true},
 	"listAgentActivity": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"getAgentStats":     {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	// Stars are per-agent reads that mutate the CALLER's list, so they carry

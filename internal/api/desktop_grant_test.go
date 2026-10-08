@@ -54,8 +54,8 @@ func TestDesktopGrantExchange(t *testing.T) {
 		t.Fatal("exchange returned no token")
 	}
 	scopes, _ := pat["scopes"].([]any)
-	if len(scopes) != 12 {
-		t.Fatalf("desktop PAT scopes = %v, want the twelve desktop scopes", scopes)
+	if len(scopes) != 13 {
+		t.Fatalf("desktop PAT scopes = %v, want the thirteen desktop scopes", scopes)
 	}
 	has := map[string]bool{}
 	for _, sc := range scopes {
@@ -86,6 +86,11 @@ func TestDesktopGrantExchange(t *testing.T) {
 	// this computer's voice and downloads the account's (writing-voice D6).
 	if !has["voice:read"] || !has["voice:write"] {
 		t.Fatalf("desktop PAT lacks the voice scopes: %v", scopes)
+	}
+	// And agent:manage (agentry#993): the desktop's Publisher section makes
+	// a QuickAgent private or public, retires, restores and deletes it.
+	if !has["agent:manage"] {
+		t.Fatalf("desktop PAT lacks agent:manage: %v", scopes)
 	}
 	// The PAT authenticates.
 	var me struct {
