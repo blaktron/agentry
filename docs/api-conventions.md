@@ -427,6 +427,7 @@ scopes:
 | --- | --- |
 | `agent:read` | read QuickAgents, versions, reports and search |
 | `agent:publish` | create QuickAgents and submit versions |
+| `agent:manage` | take the owner actions on a QuickAgent the account administers: make it public or private, retire, restore and delete it; nothing else of its settings or grants (`org:admin` covers these too) |
 | `repo:read` | fetch from a QuickAgent's git repository |
 | `repo:write` | push to a QuickAgent's git repository |
 | `user:profile` | read and change the account's own settings, tokens, keys, sessions and account installs |
@@ -449,9 +450,15 @@ route. `secret:write` is likewise consumed only by a registry that mounts
 the vault extension, which is to admit it for setting and deleting a
 secret (agentry-enterprise#251) and keeps the list of them for a
 signed-in session. The desktop app's sign-in grant
-asks for a fixed set (`agent:read`, `agent:publish`, `repo:read`,
-`repo:write`, `user:profile`, `run:read`, `run:write`, `knowledge:read`,
-`knowledge:write`, `secret:write`, `voice:read`, `voice:write`).
+asks for a fixed set (`agent:read`, `agent:publish`, `agent:manage`,
+`repo:read`, `repo:write`, `user:profile`, `run:read`, `run:write`,
+`knowledge:read`, `knowledge:write`, `secret:write`, `voice:read`,
+`voice:write`). `agent:manage` (agentry#993) lets the desktop's Publisher
+section make a QuickAgent public or private, retire, restore and delete
+it; the caller must still be the namespace itself or an admin of its
+organization, and no other setting of the agent, grant or organization
+route is open to it. A token minted before the grant carried it does not
+gain it: sign in again.
 
 ## Native credentials vs an external directory
 
