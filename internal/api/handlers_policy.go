@@ -1,7 +1,10 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/blaktron/agentry/internal/webhook"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"io"
@@ -244,7 +247,8 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ListAdvisories implements GET /advisories?affecting=ns/name (§8.7, public).
+// ListAdvisories implements GET /advisories?affecting=ns/name[&digest=] (§8.7,
+// public; a holder's door to a private agent's, agentry#949).
 func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params ListAdvisoriesParams) {
 	if !s.authorize(w, r, auth.ActPublicRead, uuid.Nil) {
 		return
@@ -262,9 +266,10 @@ func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params L
 		return
 	}
 	// The same read gate as the agent page: a private agent's advisories
-	// are its readers' (agentry#313); anyone else gets a missing name's 404.
-	a, _, ok := s.resolveAgentForAction(w, r, ref.Namespace, ref.Name, auth.ActAgentRead)
-	if !ok {
+	// are its readers' (agentry#313) and its holders' (agentry#949); anyone
+	// else gets a missing name's 404.
+	a, err := s.advisoryAgentFor(r.Context(), principalFrom(r.Context()), ref.Namespace, ref.Name, params.Digest)
+	if !s.agentAccess(w, r, ref.Namespace, ref.Name, a, err) {
 		return
 	}
 	rows, err := s.q().ListAdvisoriesForAgent(r.Context(), a.ID)
@@ -287,6 +292,49 @@ func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params L
 		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// advisoryAgentFor is agentForAction for the advisories of ns/name, with
+// one door more (agentry#949): a caller who cannot read the agent but holds
+// a release of it still gets it, so an advisory published after the agent
+// went private, was retired or was deleted reaches the people who installed
+// it. The owning organization's gate still answers first (agentry#363).
+func (s *Server) advisoryAgentFor(ctx context.Context, p *auth.Principal, ns, name string, digest *string) (registry.Agent, error) {
+	a, _, err := s.agentForAction(ctx, p, ns, name, auth.ActAgentRead)
+	if !errors.Is(err, registry.ErrNotFound) {
+		return a, err
+	}
+	notFound := err
+	held, err := s.reg.ResolveIncludingDeleted(ctx, ns, name)
+	if errors.Is(err, registry.ErrNotFound) {
+		return registry.Agent{}, notFound
+	}
+	if err != nil {
+		return registry.Agent{}, fmt.Errorf("advisory holder: %w", err)
+	}
+	arg := storegen.HoldsReleaseParams{AgentID: held.ID, Digest: digest}
+	// An install counts only for a credential that may read the account's
+	// own records, as GET /user/installs needs.
+	if !p.Anonymous && auth.Check(p, auth.Resource{}, auth.ActUserSelfRead) == nil {
+		arg.UserID = &p.UserID
+	}
+	if arg.UserID == nil && (digest == nil || *digest == "") {
+		return registry.Agent{}, notFound
+	}
+	holds, err := s.q().HoldsRelease(ctx, arg)
+	if err != nil {
+		return registry.Agent{}, fmt.Errorf("advisory holder %s/%s: %w", ns, name, err)
+	}
+	if !holds {
+		return registry.Agent{}, notFound
+	}
+	if err := s.reg.OrgGateFor(ctx, held, auth.ActAgentRead); err != nil {
+		if errors.Is(err, registry.ErrNotFound) {
+			return held, fmt.Errorf("org gate: no organization row for the %s namespace: %v", held.Namespace, err)
+		}
+		return held, err
+	}
+	return held, nil
 }
 
 const (
