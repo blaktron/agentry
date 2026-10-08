@@ -1866,4 +1866,5 @@ page covers authoring and publishing in depth.
 | `agentry verify ns/name@version` | digest and DSSE attestation check against the pinned keys — an exit code for CI |
 | `agentry publish` | submits a workspace and follows the pipeline's event stream to the verdict |
 | `agentry yank ns/name@version` | yanks a published version |
+| `agentry fork ns/name [--into NS] [--name NAME] [--yes] [--wait]` | forks a public QuickAgent into your own namespace, or `--into` an organization you publish for, under its name unless `--name` gives another ([Retire, delete and fork](api-conventions.md#retire-delete-and-fork) has the rules). A fork stays private for good, and its first version is a submission through the pipeline, charged like any. On a terminal the command says so and asks for a typed "yes"; off one it sends nothing without `--yes`. `--wait` follows the copy until the first version is submitted; `--json` prints the fork's record |
 | `agentry install` / `uninstall` / `profiles` / `doctor` / `setup` | above |
