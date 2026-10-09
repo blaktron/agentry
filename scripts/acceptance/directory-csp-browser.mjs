@@ -36,11 +36,11 @@ async function enrollmentTerms() {
 async function signIn(page, user, next = '') {
     await page.goto(origin + '/if/flow/default-authentication-flow/' + (next ? '?next=' + encodeURIComponent(next) : ''));
     await page.getByLabel('Email or Username', {exact: true}).fill(user);
-    await page.getByRole('button', {name: 'Log in', exact: true}).click();
+    await page.locator('ak-stage-identification').getByRole('button', {name: 'Log in', exact: true}).click();
     const password = page.locator('input[name="password"]');
     await password.waitFor({timeout: 15000});
     await password.fill(process.env.CSP_PASSWORD);
-    await page.getByRole('button', {name: 'Log in', exact: true}).click();
+    await page.locator('ak-stage-password').getByRole('button', {name: 'Continue', exact: true}).click();
 }
 
 try {
