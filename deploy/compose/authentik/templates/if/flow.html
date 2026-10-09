@@ -19,15 +19,18 @@
     window.ShadyDOM.force = true
 </script>
 {% endif %}
-{% include "base/header_js.html" %}
+{% include "agentry/directory_config.html" %}
+<script id="agentry-flow-data" type="application/json">
+{
+    "layout": "{{ flow.layout|escapejs }}",
+    "background": "{{ flow.background|escapejs }}",
+    "title": "{{ flow.title|escapejs }}"
+}
+</script>
 <script data-id="flow-config">
     "use strict";
 
-    window.authentik.flow = {
-        "layout": "{{ flow.layout }}",
-        "background": "{{ flow.background }}",
-        "title": "{{ flow.title }}",
-    };
+    window.authentik.flow = JSON.parse(document.getElementById("agentry-flow-data").textContent);
 </script>
 {% endblock %}
 
@@ -69,10 +72,13 @@
 {# agentry:begin remembered-browser (agentry#671, DEV-163) #}
 {% comment %}
     Everything above is authentik's own flows/templates/if/flow.html at the
-    image deploy/compose/docker-compose.yaml pins, byte for byte, and
-    scripts/acceptance/directory-remember.sh fails when it is not. This block
-    is the only addition. It holds two scripts: "Remember this device for 30
-    days", unticked, on the sign-in flow's code page, and (agentry#860,
+    image deploy/compose/docker-compose.yaml pins, except the two bootstraps:
+    their runtime values are escaped JSON and their executable bodies stay
+    static for CSP hashes (agentry#985). The pinned-source acceptance checks
+    those deliberate replacements and every unchanged part. This block
+    holds the remaining customizations: the terms reading courtesy,
+    "Remember this device for 30 days", unticked, on the sign-in flow's
+    code page, and (agentry#860,
     marked signup-link below) the sign-up link on its password page. authentik's code stage takes no extra
     field, so a ticked box travels as a short-lived cookie on this host,
     which the account-flows blueprint's agentry-remember-intent policy reads
@@ -212,5 +218,47 @@
 </script>
 {# agentry:end signup-link #}
 {% endif %}
+{# agentry:begin terms-courtesy (agentry#985, DEV-187) #}
+<script data-id="agentry-terms">
+"use strict";
+(() => {
+    const offer = (root) => {
+        const box = root.querySelector(".agentry-terms");
+        const agree = root.getElementById("attributes_agentry_terms_accepted");
+        const next = root.querySelector('button[name="continue"]');
+        if (!box || !agree || !next || box.dataset.agentryTermsBound) return;
+        box.dataset.agentryTermsBound = "1";
+        const sync = () => {
+            if (box.scrollTop + box.clientHeight >= box.scrollHeight - 8) box.dataset.read = "1";
+            const unread = box.dataset.read !== "1";
+            // This is a reading courtesy. The required checkbox and the
+            // server's validation policy still enforce agreement without it.
+            const checkbox = root.getElementById("attributes_agentry_terms_accepted");
+            const button = root.querySelector('button[name="continue"]');
+            const hint = root.querySelector(".agentry-terms-hint");
+            if (checkbox) checkbox.disabled = unread;
+            if (button) button.disabled = unread;
+            if (hint) hint.textContent = unread ? "Scroll to the end of the terms to continue." : "You have reached the end of the terms.";
+        };
+        const resize = () => {
+            if (box.isConnected) sync();
+            else window.removeEventListener("resize", resize);
+        };
+        box.addEventListener("scroll", sync, {passive: true});
+        window.addEventListener("resize", resize);
+        sync();
+    };
+    const find = (root) => {
+        offer(root);
+        for (const el of root.querySelectorAll("*")) {
+            if (el.shadowRoot) find(el.shadowRoot);
+        }
+    };
+    // The prompt's shadow tree arrives after the flow shell, so wait for
+    // its controls rather than relying on an inline image event handler.
+    setInterval(() => find(document), 250);
+})();
+</script>
+{# agentry:end terms-courtesy #}
 {% endblock %}
 {# agentry:end remembered-browser #}

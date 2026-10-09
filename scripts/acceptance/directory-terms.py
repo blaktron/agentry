@@ -149,8 +149,8 @@ def on():
     shown = (text.get("initial_value") or "") if text else ""
     if f'data-terms-version="{VERSION}"' not in shown or "Fixture clause 40" not in shown:
         fail(f"the terms step does not show the deployment's file: {shown[:300]!r}")
-    if 'class="agentry-terms"' not in shown or "onload=" not in shown:
-        fail("the terms are not in the scrolling box with its gate")
+    if 'class="agentry-terms"' not in shown or "onload=" in shown or "<script" in shown:
+        fail("the terms are not document markup in the scrolling region")
     ok("after the form comes the terms step, with the deployment's file in the scrolling box")
     if agree.get("type") != "checkbox" or not agree.get("required") or agree.get("initial_value"):
         fail(f"the agreement is {agree.get('type')}, required {agree.get('required')}, initial {agree.get('initial_value')!r}")

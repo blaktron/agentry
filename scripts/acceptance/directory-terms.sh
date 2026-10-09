@@ -31,7 +31,8 @@
 #      registry confirms its subject and address, and true for an account
 #      from before (no attribute). Refused/unreachable checks fail closed.
 #
-# The scroll gate is page script and is checked in a browser, not here.
+# A real browser checks the scroll courtesy and remembered-browser choice
+# under a policy that refuses arbitrary inline scripts and event handlers.
 # Needs docker, the pinned images and outbound HTTPS from the directory (the
 # CAPTCHA's siteverify with Cloudflare's test keys), nothing else. Files go
 # in with docker cp, not bind mounts, as in directory-promo.sh.
@@ -53,10 +54,12 @@ AK="$P-ak-server"
 WORKER="$P-ak-worker"
 DRIVER="$P-driver"
 FIXTURE=$(mktemp)
+CSP_TMP=$(mktemp -d)
 cleanup() {
-  docker rm -fv "$P-pg" "$P-redis" "$AK" "$WORKER" "$DRIVER" >/dev/null 2>&1 || true
+  docker rm -fv "$P-pg" "$P-redis" "$AK" "$WORKER" "$DRIVER" "$P-csp-proxy" "$P-browser" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   rm -f "$FIXTURE"
+  rm -rf "$CSP_TMP"
 }
 trap cleanup EXIT
 
@@ -161,6 +164,47 @@ applied 600
 up 120
 echo "ok   the blueprint applied: the terms step is bound at order 15"
 
+# The browser crosses the same pinned-directory interface as the HTTP driver.
+if [ "${DIRECTORY_CSP_BROWSER:-1}" = 1 ]; then
+  CSP_PASSWORD="Correct-Horse-$(openssl rand -hex 16)"
+  seed=$(akshell -e CSP_PASSWORD="$CSP_PASSWORD" <<'PYSEED'
+import os
+from authentik.core.models import Group, User
+from authentik.stages.authenticator_totp.models import TOTPDevice
+for name in ("dc-admin", "dc-mfa"):
+    u, _ = User.objects.get_or_create(username=name, defaults={"email": name + "@example.test", "name": name})
+    u.set_password(os.environ["CSP_PASSWORD"]); u.is_active = True; u.save()
+admin = User.objects.get(username="dc-admin")
+admin.name = "<img src=x onerror=window.agentryNameExecuted=true>"
+admin.save()
+group, _ = Group.objects.get_or_create(name="dc-fixture-admin", defaults={"is_superuser": True})
+admin.groups.add(group)
+u = User.objects.get(username="dc-mfa")
+TOTPDevice.objects.create(user=u, name="dc-mfa", key="3132333435363738393031323334353637383930", confirmed=True, digits=6)
+print("CSP-FIXTURE-USERS")
+PYSEED
+)
+  case "$seed" in *CSP-FIXTURE-USERS*) ;; *) echo "FAIL: CSP fixture users could not be seeded"; exit 1 ;; esac
+  CSP_ORIGIN=https://dt-csp-edge:8443
+  CSP_POLICY=$(python3 scripts/directory-csp.py --origin "$CSP_ORIGIN")
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 -subj /CN=dt-csp-edge \
+    -keyout "$CSP_TMP/fixture.key" -out "$CSP_TMP/fixture.crt" 2>/dev/null
+  docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-csp-proxy" --network "$NET" --network-alias dt-csp-edge \
+    -e AK=http://dt-ak-server:9000 -e DIRECTORY_CSP="$CSP_POLICY" "$PY_IMAGE" python /proxy.py >/dev/null
+  docker cp scripts/acceptance/directory-csp-proxy.py "$P-csp-proxy:/proxy.py" >/dev/null
+  docker cp "$CSP_TMP/fixture.crt" "$P-csp-proxy:/fixture.crt" >/dev/null
+  docker cp "$CSP_TMP/fixture.key" "$P-csp-proxy:/fixture.key" >/dev/null
+  docker start "$P-csp-proxy" >/dev/null
+  # The package matches the official image's browser revision; neither is floating.
+  docker create "${DIRECTORY_DOCKER_LABELS[@]}" --init --shm-size=512m --name "$P-browser" --network "$NET" \
+    --workdir /fixture -e DIRECTORY_CSP_ORIGIN="$CSP_ORIGIN" -e CSP_PASSWORD="$CSP_PASSWORD" \
+    mcr.microsoft.com/playwright:v1.62.1-noble sleep 3600 >/dev/null
+  docker cp scripts/acceptance/directory-csp-browser.mjs "$P-browser:/fixture/browser.mjs" >/dev/null
+  docker start "$P-browser" >/dev/null
+  docker exec "$P-browser" npm install --no-audit --no-fund --no-save playwright@1.62.1 >/dev/null
+  docker exec "$P-browser" node browser.mjs on
+fi
+
 out=$(docker exec "$DRIVER" python /driver.py on) || { echo "$out"; exit 1; }
 echo "$out" | grep -v '^ACCOUNTS '
 accounts=$(echo "$out" | sed -n 's/^ACCOUNTS //p')
@@ -209,9 +253,11 @@ docker exec -i "$AK" ak shell -c \
 printf '\xff\xfe<article data-terms-version="not-utf8">' | docker exec -i -u 0 "$AK" sh -c "cat > $TERMS_PATH"
 out=$(docker exec "$DRIVER" python /driver.py missing) || { echo "FAIL (a terms file that is not UTF-8)"; echo "$out"; exit 1; }
 echo "$out (a file that is not UTF-8)"
+if [ "${DIRECTORY_CSP_BROWSER:-1}" = 1 ]; then docker exec "$P-browser" node browser.mjs missing; fi
 docker exec -u 0 "$AK" rm -f "$TERMS_PATH"
 out=$(docker exec "$DRIVER" python /driver.py missing) || { echo "FAIL (no terms file)"; echo "$out"; exit 1; }
 echo "$out (no file at all)"
+if [ "${DIRECTORY_CSP_BROWSER:-1}" = 1 ]; then docker exec "$P-browser" node browser.mjs missing; fi
 
 echo "recreating the server and the worker without the terms setting and with registry activation off"
 server off
