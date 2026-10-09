@@ -360,6 +360,19 @@ var (
 	ErrVoiceTooLarge     = voice.ErrTooLarge
 )
 
+// ReportSettings is the core's store of a person's report settings as an
+// extension may read them (agentry#1015; plan scratch-and-pdf-reports.md
+// D18, D21; DEV-227): SecureAgentry's hosted runs read the account's report
+// theme and hand it to the sandbox host, whose CLI lays the run's PDFs out
+// in it (--report-theme). Read-only: the person sets it on their profile.
+// Deps.ReportSettings is nil without a database.
+type ReportSettings interface {
+	// Theme is the person's report theme, a built-in theme's name, or ""
+	// when they never chose one, which is not Plain: the reader decides
+	// what nothing means.
+	Theme(ctx context.Context, user uuid.UUID) (string, error)
+}
+
 // Unthrottles is the optional interface for an extension whose receiver of
 // signed callbacks must never be refused by the anonymous rate class (a
 // payment provider's webhook, plan subscription-tiers §5.5). The routes are
@@ -496,6 +509,9 @@ type Deps struct {
 	// the server runs without a database; while the store is off its
 	// calls answer ErrVoiceUnconfigured.
 	Voice Voice
+	// ReportSettings is the core's store of report settings (agentry#1015).
+	// nil when the server runs without a database.
+	ReportSettings ReportSettings
 	// Meter is the server's meter under the extension's own scope
 	// (agentry#777): an instrument created on it is scraped from /metrics
 	// beside the core's, with the same resource labels, and leaves through
