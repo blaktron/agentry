@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -81,4 +82,19 @@ func (s *Server) UpdateUserReportSettings(w http.ResponseWriter, r *http.Request
 func reportSettingsToAPI(row storegen.UserReportSetting) ReportSettings {
 	theme := ReportTheme(row.Theme)
 	return ReportSettings{Theme: &theme}
+}
+
+// ReportTheme is a person's report theme for an extension's read
+// (pkg/extension ReportSettings, agentry#1015): the theme's name, or ""
+// when they never chose one. A hosted run's job carries it to the sandbox
+// host as --report-theme (agentry-enterprise#470).
+func (s *Server) ReportTheme(ctx context.Context, user uuid.UUID) (string, error) {
+	row, err := s.q().GetUserReportSettings(ctx, user)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return row.Theme, nil
 }
