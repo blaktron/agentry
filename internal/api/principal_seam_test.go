@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -212,5 +213,76 @@ func TestPrincipalForUserAnswersTheRoleAsItIsNow(t *testing.T) {
 	}
 	if p.SSOSatisfied(uuid.MustParse(orgID), time.Hour) {
 		t.Error("a principal by id satisfies enforced SSO")
+	}
+}
+
+// The schedule credential (agentry#1002, plan quickagent-scheduling.md
+// §6): what a schedule's fire starts its owner's run with. It is the
+// owner's account as it is now, narrowed to auth.ScheduleScopes — so an
+// organization admin's schedule reads the organization's private agent and
+// cannot maintain or publish it — with no platform-staff standing, no
+// session, no token and no SSO; a suspended owner's schedule has none.
+func TestPrincipalForScheduleIsTheOwnersNarrowCredential(t *testing.T) {
+	var srv *api.Server
+	env := newTestEnvWith(t, func(s *api.Server) { srv = s })
+	ctx := context.Background()
+
+	founder := env.register("sc-founder")
+	env.verifyEmail(founder)
+	env.makePlatformStaff(t, founder)
+	admin := env.login(founder)
+	org := "sc-org" + env.sfx
+	orgID := uuid.MustParse(env.createOrg(admin, org))
+	env.doJSON(admin, http.MethodPost, "/api/v1/agents", map[string]any{"namespace": org, "name": "private", "visibility": "private"}, nil, http.StatusCreated)
+	owner := uuid.MustParse(env.userID(founder))
+	schedule := uuid.New()
+
+	p, ok, err := srv.PrincipalForSchedule(ctx, owner, schedule)
+	if err != nil || !ok {
+		t.Fatalf("the founder's schedule credential: %v, %v", ok, err)
+	}
+	if p.Via != "schedule" || p.ScheduleID != schedule || p.UserID != owner || p.Handle != founder || p.Anonymous ||
+		p.SessionID != uuid.Nil || p.PATID != uuid.Nil || p.PlatformStaff || !p.EmailVerified {
+		t.Errorf("the founder's schedule credential: %+v", p)
+	}
+	if strings.Join(p.Scopes, ",") != strings.Join(auth.ScheduleScopes(), ",") {
+		t.Errorf("its scopes: %v, want %v", p.Scopes, auth.ScheduleScopes())
+	}
+	if p.Role(orgID) != auth.RoleAdmin {
+		t.Errorf("its role in the organization: %q, want the owner's, admin", p.Role(orgID))
+	}
+	if p.SSOSatisfied(orgID, time.Hour) {
+		t.Error("a schedule credential satisfies enforced SSO")
+	}
+
+	// The agent seams answer it as a token with those scopes: read on the
+	// role, nothing the scopes do not carry.
+	if _, ok, err := srv.AgentReadable(ctx, p, org, "private"); err != nil || !ok {
+		t.Errorf("the schedule reads its owner's organization's private agent: %v, %v", ok, err)
+	}
+	if _, ok, err := srv.AgentMaintainable(ctx, p, org, "private"); err != nil || ok {
+		t.Errorf("the schedule maintains the agent: %v, %v; a schedule only starts runs", ok, err)
+	}
+	if _, ok, err := srv.AgentPublishable(ctx, p, org, "private"); err != nil || ok {
+		t.Errorf("the schedule publishes to the agent: %v, %v; a schedule only starts runs", ok, err)
+	}
+	// The owner's principal by id is untouched by the narrowing.
+	if u, ok, err := srv.PrincipalForUser(ctx, owner); err != nil || !ok || u.Via != "user" || u.Scopes != nil || !u.PlatformStaff {
+		t.Errorf("the owner's principal by id after a schedule credential: %+v %v %v", u, ok, err)
+	}
+
+	// A credential that names no schedule is refused; an account that does
+	// not exist, or is not active, has none.
+	if _, _, err := srv.PrincipalForSchedule(ctx, owner, uuid.Nil); err == nil {
+		t.Error("a schedule credential with no schedule id was minted")
+	}
+	if _, ok, err := srv.PrincipalForSchedule(ctx, uuid.New(), schedule); err != nil || ok {
+		t.Errorf("an account that does not exist: %v, %v, want none", ok, err)
+	}
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE users SET state = 'suspended' WHERE id = $1`, owner); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := srv.PrincipalForSchedule(ctx, owner, schedule); err != nil || ok {
+		t.Errorf("a suspended owner's schedule credential: %v, %v, want none", ok, err)
 	}
 }

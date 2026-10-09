@@ -121,9 +121,16 @@ type Principal struct {
 	// credential, for an extension to ask about a user it holds by id
 	// (agentry#838). A "user" principal carries the account's roles and
 	// no scopes; it passes no session-only route and satisfies no
-	// enforced SSO.
+	// enforced SSO. "schedule" is the credential of a run a schedule
+	// starts on its owner's behalf with no live request (agentry#1002,
+	// plan quickagent-scheduling.md §6): the core mints it for an
+	// extension (extension.ScheduleCredentials.ForSchedule), it carries
+	// ScheduleScopes and the schedule's id, every scope gate reads it as
+	// it reads a token's (ScopeBound), and it is never presented over
+	// HTTP.
 	Via string
-	// Scopes holds PAT scopes; nil for sessions.
+	// Scopes holds a PAT's scopes, or a schedule's ScheduleScopes; nil
+	// for sessions.
 	Scopes []string
 	// OrgRoles maps org id → role for the caller's memberships.
 	OrgRoles map[uuid.UUID]OrgRole
@@ -138,16 +145,28 @@ type Principal struct {
 	// self-host: the instance admin). Gates the platform review queue and
 	// quarantine/block actions (§12.2 last row).
 	PlatformStaff bool
-	// SessionID / PATID / SSHKeyID identify the credential for audit.
-	SessionID uuid.UUID
-	PATID     uuid.UUID
-	SSHKeyID  uuid.UUID
+	// SessionID / PATID / SSHKeyID / ScheduleID identify the credential
+	// for audit; ScheduleID is the schedule's id in the extension that
+	// owns schedules, and the core holds no row for it.
+	SessionID  uuid.UUID
+	PATID      uuid.UUID
+	SSHKeyID   uuid.UUID
+	ScheduleID uuid.UUID
 	// SSOFresh maps org id → the moment SSO was last asserted for this
 	// session (§12.4 enforced SSO; from sessions.sso_tags). Sessions only.
 	SSOFresh map[uuid.UUID]time.Time
 	// PATOrgID is the org a PAT is bound to (pats.org_id): a PAT minted under
 	// an SSO-fresh session (§12.4). uuid.Nil for personal PATs and sessions.
 	PATOrgID uuid.UUID
+}
+
+// ScopeBound reports whether the principal acts only within its Scopes:
+// a token, or a schedule's credential (agentry#1002). A session carries the
+// account's full authority instead, and a "user" principal is no caller at
+// all. Every scope gate asks this rather than naming "pat", so a credential
+// minted with a fixed scope set is never read as a session.
+func (p *Principal) ScopeBound() bool {
+	return p != nil && (p.Via == "pat" || p.Via == "schedule")
 }
 
 // SSOSatisfied reports whether the caller meets an org's enforced-SSO
@@ -277,7 +296,8 @@ func Check(p *Principal, res Resource, act Action) error {
 	}
 
 	// PAT scope gate (sessions bypass scopes; CSRF covers them in transport).
-	if p.Via == "pat" {
+	// A schedule's credential is gated the same way (agentry#1002).
+	if p.ScopeBound() {
 		sc, ok := scopeFor[act]
 		if !ok {
 			return ErrForbidden // session-only action

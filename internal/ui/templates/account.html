@@ -52,6 +52,7 @@
   <label class="check"><input type="checkbox" name="email.advisories" value="true"{{if .Email.Advisories}} checked{{end}}> we publish an advisory naming one of my QuickAgents</label>
   <label class="check"><input type="checkbox" name="email.orgInvites" value="true"{{if .Email.OrgInvites}} checked{{end}}> I am added to an organization</label>
   <label class="check"><input type="checkbox" name="email.billing" value="true"{{if .Email.Billing}} checked{{end}}> the subscription that pays for my work changes — a payment goes through or fails, seats run out, or we restrict an organization</label>
+  <label class="check"><input type="checkbox" name="email.schedules" value="true"{{if .Email.Schedules}} checked{{end}}> a scheduled run in Agentry fails, or one of my schedules pauses</label>
   <p class="muted">In the app</p>
   <label class="check"><input type="checkbox" name="web.dependencyAlerts" value="true"{{if .Web.DependencyAlerts}} checked{{end}}> show the dependency-alert banner on every page while an alert is open</label>
   {{end}}
