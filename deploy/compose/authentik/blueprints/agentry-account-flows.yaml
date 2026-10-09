@@ -525,28 +525,14 @@ entries:
         .agentry-terms a { text-decoration: underline; }
         .agentry-terms-hint { margin-top: 0.5rem; font-size: 0.8125rem; }
         </style>"""
-        # One handler, run once the 1-pixel image has loaded (the field's
-        # HTML is inserted after the checkbox and Continue are rendered), and
-        # on every scroll and resize after. Once the end has been reached it
-        # stays reached.
-        gate = (
-            "var root=this.getRootNode(),box=root.querySelector('.agentry-terms'),"
-            "agree=root.getElementById('attributes_agentry_terms_accepted'),"
-            "next=root.querySelector('button[name=continue]'),hint=root.querySelector('.agentry-terms-hint');"
-            "if(!box||!agree)return;"
-            "var sync=function(){"
-            "if(box.scrollTop+box.clientHeight>=box.scrollHeight-8)box.dataset.read='1';"
-            "var unread=box.dataset.read!=='1';agree.disabled=unread;if(next)next.disabled=unread;"
-            "if(hint)hint.textContent=unread?'Scroll to the end of the terms to continue.':'You have reached the end of the terms.';};"
-            "box.addEventListener('scroll',sync,{passive:true});window.addEventListener('resize',sync);sync();"
-        )
-        pixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+        # The flow template supplies the CSP-authorized scroll courtesy.
+        # This field is document markup only; agreement is still validated
+        # by the server when the form is submitted.
         return (
             style
             + '<div class="agentry-terms" role="region" aria-label="Terms of Service" tabindex="0">'
             + terms
             + '</div><p class="agentry-terms-hint" aria-live="polite">Read the terms to the end, then agree to continue.</p>'
-            + '<img alt="" width="1" height="1" style="position:absolute;opacity:0" src="' + pixel + '" onload="' + gate + '">'
         )
       order: 0
   - model: authentik_stages_prompt.prompt
