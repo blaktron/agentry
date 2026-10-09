@@ -993,8 +993,9 @@ Since agentry-cli v0.6.82 every release's run and session gets a
 **scratch folder** and the **`export_pdf`** tool, with five report themes
 (agentry-cli#729, #730, #731). They are the runner's grants, not lines of
 the contract: no manifest declares them, an install asks no consent for
-them, and the built-in packages have neither. A hosted run has them once
-its sandbox host runs that release (agentry-enterprise#470).
+them, and the built-in packages have neither. A hosted run has them on a
+sandbox host whose runhost carries the CLI release (agentry-enterprise#470,
+which moved the runhost to v0.6.83).
 
 ### What the tools container mounts
 
@@ -1147,14 +1148,23 @@ A name typed in the flag or the config that is not a theme's refuses the
 run before anything starts (exit 2). The account's theme is only read: if
 the registry cannot be reached, or names a theme this CLI does not have,
 the run warns on stderr and takes the next choice, since how a PDF looks is
-no reason to stop a run. A run driven by a sandbox host holds a run grant,
-not the person's sign-in, so it never reads the account; the host passes
-the theme with the flag.
+no reason to stop a run.
 
-Still to come: the site's profile card (agentry-web#1314), the desktop's
-setting and its passing of the theme to a local run (agentry-desktop#730),
-and the hosted job carrying it (agentry-enterprise#470). There is no theme
-picker in a run dialog.
+The other places the theme is chosen and used:
+
+- **The site** edits it on Settings → Profile, *Report theme*
+  (agentry-web#1314).
+- **The desktop app** edits it on Settings → Profile and passes the
+  account's theme to every local run and chat (agentry-desktop#730). It has
+  no `report.theme` of its own, so *Not chosen* is Plain there.
+- **A hosted run** holds a run grant, not the person's sign-in, so its CLI
+  never reads the account. Agentry reads the account's theme when it hands
+  the run to a sandbox host and puts it in the job, and the host passes it
+  as `--report-theme` (agentry-enterprise#470). So the receipt says
+  "chosen by the --report-theme flag". A host whose runhost predates this
+  is sent no theme, and its runs use Plain.
+
+There is no theme picker in a run dialog.
 
 ### What the receipt records
 
@@ -1182,11 +1192,19 @@ its line:
 }
 ```
 
-The block is what a reader is to hold a PDF to before opening it in place:
-the site (agentry-web#1314) and the desktop (agentry-desktop#730) are to
-open only a PDF it names with a matching SHA-256, and offer any other PDF
-in the output folder as a download only. Neither reads it yet. A run that
-exported none has no `pdfs` block.
+The block is what a reader holds a PDF to before opening it in place:
+
+- **The site's run page** (agentry-web#1314) reads it from the `result.json`
+  inside `output.tar`, hashes each PDF in the browser, and offers *Open in
+  a new tab* only for a PDF it names with a matching SHA-256.
+- **The desktop's run result** (agentry-desktop#730) checks in the app,
+  `reports/` paths only, and offers its in-app viewer and *Open in system
+  viewer* the same way.
+
+Any other PDF in the output folder is a download only. The receipt the
+registry keeps for a hosted run leaves the block out, so the site reads it
+from the tar, not the kept receipt. A run that exported none has no `pdfs`
+block.
 
 ## The System Prompt
 
