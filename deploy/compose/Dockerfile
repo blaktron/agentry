@@ -15,7 +15,11 @@
 # security updates, and ships git with its helpers intact rather than a binary
 # hand-copied out of a builder and missing half its shared libraries.
 
-FROM golang:1.27 AS build
+# The builder is go.mod's Go, to the patch: a floating golang:1.27 is whatever
+# the host cached, and with the image's GOTOOLCHAIN=local a stale one either
+# refuses a newer go line or builds with the older Go (agentry#1021). CI fails
+# when this tag and go.mod's go line differ, so a bump moves both.
+FROM golang:1.27.2 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
