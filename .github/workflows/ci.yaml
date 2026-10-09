@@ -122,6 +122,17 @@ jobs:
           if git ls-files | grep -E '^(web/|deploy/compose/Dockerfile\.web$|deploy/terraform/|deploy/compose/downloads/|deploy/compose/authentik/branding\.css$|scripts/dev/authentik-brand\.sh$|scripts/release/build-downloads\.sh$|docs/agentry/|docs/index\.md$|docs/extra\.css$|docs/ops/deployment\.md$)'; then
             echo "site files above belong to blaktron/agentry-web"; exit 1
           fi
+      # Every Dockerfile builds with go.mod's Go to the patch, so a go line
+      # bump moves the builder tag with it (agentry#1021): a floating tag is
+      # whatever a host cached, and the Go images' GOTOOLCHAIN=local keeps it.
+      - name: Dockerfiles build with go.mod's Go
+        run: |
+          set -euo pipefail
+          want=$(awk '$1 == "go" {print $2; exit}' go.mod)
+          bad=$(git ls-files -z -- ':(glob)**/Dockerfile*' | xargs -0 grep -nHE '^FROM +golang:' | grep -vE "^[^:]+:[0-9]+:FROM +golang:${want//./\\.}([- ]|$)" || true)
+          if [ -n "$bad" ]; then
+            echo "$bad"; echo "these build with another Go than go.mod's go $want"; exit 1
+          fi
       - name: ruleset copy in sync
         run: make sync-rules-check
       - name: make check
@@ -269,10 +280,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      # --pull: the runner's daemon keeps whatever golang:1.27 it pulled
-      # last, and that image sets GOTOOLCHAIN=local, so a stale one refuses
-      # a go.mod newer than itself and the scan would scan nothing
-      # (agentry#1012, go 1.27.2).
+      # --pull: the builder is pinned to go.mod's Go since agentry#1021, but
+      # the runtime base still floats, and a stale one would be scanned in
+      # place of the current one (agentry#1012).
       - name: build image
         run: docker build --pull -t agentry:ci -f deploy/compose/Dockerfile .
       - name: trivy
