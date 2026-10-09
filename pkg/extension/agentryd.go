@@ -500,6 +500,10 @@ func reportSettingsOf(srv *api.Server, pool *pgxpool.Pool) ReportSettings {
 
 type serverReportSettings struct{ srv *api.Server }
 
+func (r serverReportSettings) Design(ctx context.Context, user uuid.UUID) ([]byte, error) {
+	return r.srv.ReportDesign(ctx, user)
+}
+
 func (r serverReportSettings) Theme(ctx context.Context, user uuid.UUID) (string, error) {
 	return r.srv.ReportTheme(ctx, user)
 }
