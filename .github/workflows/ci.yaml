@@ -269,8 +269,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      # --pull: the runner's daemon keeps whatever golang:1.27 it pulled
+      # last, and that image sets GOTOOLCHAIN=local, so a stale one refuses
+      # a go.mod newer than itself and the scan would scan nothing
+      # (agentry#1012, go 1.27.2).
       - name: build image
-        run: docker build -t agentry:ci -f deploy/compose/Dockerfile .
+        run: docker build --pull -t agentry:ci -f deploy/compose/Dockerfile .
       - name: trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
