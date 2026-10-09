@@ -359,7 +359,9 @@ jobs:
   # terms file, then without it, then without the setting — the step after
   # the form, the refusal without the agreement, the record on the account,
   # the blank name that becomes the username, fail-closed on an unreadable
-  # file, and no step where no terms are named.
+  # file, and no step where no terms are named. A real Chromium also checks
+  # the customizations with arbitrary inline scripts and handlers denied
+  # by CSP (agentry#985); the browser and npm package revisions are pinned.
   directory-terms:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
