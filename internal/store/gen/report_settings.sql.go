@@ -15,8 +15,8 @@ const deleteUserReportSettings = `-- name: DeleteUserReportSettings :execrows
 DELETE FROM user_report_settings WHERE user_id = $1
 `
 
-// A PUT that names no theme, and clear-data (agentry#498): no row reads as
-// never chosen.
+// A PUT that carries no design, and clear-data (agentry#498): no row reads
+// as never chosen.
 func (q *Queries) DeleteUserReportSettings(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteUserReportSettings, userID)
 	if err != nil {
@@ -27,32 +27,33 @@ func (q *Queries) DeleteUserReportSettings(ctx context.Context, userID uuid.UUID
 
 const getUserReportSettings = `-- name: GetUserReportSettings :one
 
-SELECT user_id, theme, updated_at FROM user_report_settings WHERE user_id = $1
+SELECT user_id, updated_at, design FROM user_report_settings WHERE user_id = $1
 `
 
-// The report theme, a profile setting (agentry#989).
+// The report design, a profile setting (agentry#989; since agentry#1024 the
+// whole theme document version 2, validated by pkg/reportdesign first).
 func (q *Queries) GetUserReportSettings(ctx context.Context, userID uuid.UUID) (UserReportSetting, error) {
 	row := q.db.QueryRow(ctx, getUserReportSettings, userID)
 	var i UserReportSetting
-	err := row.Scan(&i.UserID, &i.Theme, &i.UpdatedAt)
+	err := row.Scan(&i.UserID, &i.UpdatedAt, &i.Design)
 	return i, err
 }
 
 const upsertUserReportSettings = `-- name: UpsertUserReportSettings :one
-INSERT INTO user_report_settings (user_id, theme)
+INSERT INTO user_report_settings (user_id, design)
 VALUES ($1, $2)
-ON CONFLICT (user_id) DO UPDATE SET theme = EXCLUDED.theme, updated_at = now()
-RETURNING user_id, theme, updated_at
+ON CONFLICT (user_id) DO UPDATE SET design = EXCLUDED.design, updated_at = now()
+RETURNING user_id, updated_at, design
 `
 
 type UpsertUserReportSettingsParams struct {
 	UserID uuid.UUID `json:"user_id"`
-	Theme  string    `json:"theme"`
+	Design []byte    `json:"design"`
 }
 
 func (q *Queries) UpsertUserReportSettings(ctx context.Context, arg UpsertUserReportSettingsParams) (UserReportSetting, error) {
-	row := q.db.QueryRow(ctx, upsertUserReportSettings, arg.UserID, arg.Theme)
+	row := q.db.QueryRow(ctx, upsertUserReportSettings, arg.UserID, arg.Design)
 	var i UserReportSetting
-	err := row.Scan(&i.UserID, &i.Theme, &i.UpdatedAt)
+	err := row.Scan(&i.UserID, &i.UpdatedAt, &i.Design)
 	return i, err
 }

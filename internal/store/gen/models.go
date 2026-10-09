@@ -610,8 +610,8 @@ type UserNotificationSetting struct {
 
 type UserReportSetting struct {
 	UserID    uuid.UUID `json:"user_id"`
-	Theme     string    `json:"theme"`
 	UpdatedAt time.Time `json:"updated_at"`
+	Design    []byte    `json:"design"`
 }
 
 type UserSshKey struct {

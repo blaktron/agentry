@@ -7,6 +7,7 @@ package api_test
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/gitsrv"
+	"github.com/blaktron/agentry/pkg/reportdesign"
 )
 
 // rateClasses is the set of §19 bucket names the code emits, catalogued in
@@ -318,7 +320,10 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"getUserReportSettings": {method: "GET", path: sPath("/api/v1/user/report-settings")},
 		"updateUserReportSettings": {
 			method: "PUT", path: sPath("/api/v1/user/report-settings"),
-			body: func(*matrixSeed, string) any { return map[string]any{"theme": "formal"} },
+			body: func(*matrixSeed, string) any {
+				doc, _ := reportdesign.BuiltinDocument("classic")
+				return map[string]any{"design": json.RawMessage(doc)}
+			},
 		},
 		// Public read; the registry has never seen this version, so 404.
 		"getMcpServerScan": {method: "GET", path: sPath("/api/v1/mcp-servers/scan?ecosystem=npm&package=nobody&version=0.0.0")},
