@@ -1116,18 +1116,60 @@ There are five, all in the runner image since agentry-cli v0.6.82:
 No theme carries a logo, a name or an address, and none carries Agentry's
 branding.
 
-The theme is a **profile setting** on the account, the person's
-**report theme**: `GET` and `PUT /api/v1/user/report-settings`, with the
-`user:profile` scope that the CLI's and the desktop's sign-in carries.
+The account's setting is a **report design** since agentry#1024 (plan
+`report-designs.md`, M2): the whole theme document version 2, not a
+theme's name. `GET` and `PUT /api/v1/user/report-settings` read and write
+it, with the `user:profile` scope that the CLI's and the desktop's sign-in
+carries:
 
 ```json
-{"theme": "formal"}
+{"design": {
+  "agentryTheme": 2, "name": "Technical", "basedOn": "technical", "version": 1,
+  "paper": "a4",
+  "fonts": {"headings": "IBM Plex Sans", "body": "IBM Plex Sans", "code": "IBM Plex Mono"},
+  "accent": "#0f766e", "titleBlock": "ruled", "headings": "numbered",
+  "tables": {"tinted": true, "banded": true}, "quotes": "callout",
+  "footer": {"pageNumbers": "nOfN", "text": ""}
+}}
 ```
 
-`theme` is one of `plain`, `formal`, `brief`, `technical` and `letter`; any
-other name is refused (422). An account that never chose reads back `{}`,
-which is not the same as choosing Plain, and a `PUT` with no `theme` clears
-the choice. Clearing an account's data clears it too.
+The core's `pkg/reportdesign` is the one definition of a design: the type,
+the closed lists, the five built-in themes (Plain, Classic, Modern,
+Editorial, Technical) as embedded documents, the JSON Schema the openapi's
+`ReportDesign` mirrors, and the validation a `PUT` runs before it stores
+anything:
+
+- every field present and no other key, at most 16 KB as sent;
+- `paper` `a4` or `letter`; `titleBlock` `band`, `bar`, `ruled` or `none`;
+  `headings` `rule`, `bar`, `smallcaps`, `numbered` or `plain`; `quotes`
+  `callout` or `plain`; `footer.pageNumbers` `none`, `n` or `nOfN`;
+- the three faces from the fourteen families in the Typst image: any for
+  headings, a sans or serif that is not a display face (Montserrat,
+  Playfair Display) for the body, a mono for code;
+- `accent` a `#rrggbb` colour in lower case that reaches 4.5:1 on white
+  where it touches text (a `band` title block, `smallcaps` or `numbered`
+  headings) and 3:1 where it colours only rules, bars and tints. A refusal
+  names the nearest shade that passes. The tint is derived (12% of the
+  accent over white), never stored;
+- `name` (60 characters) and `footer.text` (120) one line of plain text, no
+  control or bidirectional formatting characters. The footer is set as
+  text by the template, never evaluated;
+- `agentryTheme` 2. The version-1 documents and the old names (`formal`,
+  `brief`, `letter`) are not read (D16, D20).
+
+A refusal is a 422 whose field is `design.<path>` (`design.fonts.body`).
+The answer, and every later read, is the design's canonical document. An
+account that never chose reads back `{}`, which is not the same as Plain,
+and a `PUT` with no `design` clears the choice. Clearing an account's data
+clears it too. The migration that brought designs in (00054) cleared every
+stored theme name, so each account starts as never chosen.
+
+Until the runner reads designs (agentry-cli#784, M3), a CLI finds no theme
+in the account's answer and takes the next choice below; the site's Profile
+card (agentry-web#1381, M4) and the desktop's (agentry-desktop#759, M5)
+cannot save a theme's name any more. A hosted run's job still carries a
+theme's name until agentry-enterprise#479 (M6): the design's `basedOn`,
+which a sandbox host passes only when its CLI has that name.
 
 A CLI run takes the first of these that is set:
 
@@ -1152,15 +1194,19 @@ no reason to stop a run.
 
 The other places the theme is chosen and used:
 
-- **The site** edits it on Settings → Profile, *Report theme*
-  (agentry-web#1314).
-- **The desktop app** edits it on Settings → Profile and passes the
-  account's theme to every local run and chat (agentry-desktop#730). It has
+- **The site** edited a theme's name on Settings → Profile, *Report theme*
+  (agentry-web#1314); its *Report design* page replaces the card
+  (agentry-web#1381).
+- **The desktop app** edited it on Settings → Profile and passes the
+  account's choice to every local run and chat (agentry-desktop#730); its
+  own *Report design* page replaces the card (agentry-desktop#759). It has
   no `report.theme` of its own, so *Not chosen* is Plain there.
 - **A hosted run** holds a run grant, not the person's sign-in, so its CLI
-  never reads the account. Agentry reads the account's theme when it hands
+  never reads the account. Agentry reads the account's choice when it hands
   the run to a sandbox host and puts it in the job, and the host passes it
-  as `--report-theme` (agentry-enterprise#470). So the receipt says
+  as `--report-theme` (agentry-enterprise#470); since agentry#1024 that is
+  the design's `basedOn`, until the job carries the design itself
+  (agentry-enterprise#479). So the receipt says
   "chosen by the --report-theme flag". A host whose runhost predates this
   is sent no theme, and its runs use Plain.
 
