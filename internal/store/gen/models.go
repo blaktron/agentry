@@ -606,6 +606,7 @@ type UserNotificationSetting struct {
 	WebDependencyAlerts   bool      `json:"web_dependency_alerts"`
 	UpdatedAt             time.Time `json:"updated_at"`
 	EmailBilling          bool      `json:"email_billing"`
+	EmailSchedules        bool      `json:"email_schedules"`
 }
 
 type UserReportSetting struct {

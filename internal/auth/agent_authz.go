@@ -161,7 +161,7 @@ var agentScopeFor = map[Action][]Scope{
 
 // CheckAgent is the chokepoint for agent-scoped actions. Public agents are
 // readable by anyone (including anonymous); everything else needs the role
-// threshold and, for PATs, the matching scope.
+// threshold and, for PATs and schedule credentials, the matching scope.
 func CheckAgent(p *Principal, res AgentResource, act Action) error {
 	if (act == ActAgentRead || act == ActAgentRepoRead) && res.Public {
 		return nil
@@ -169,7 +169,7 @@ func CheckAgent(p *Principal, res AgentResource, act Action) error {
 	if p == nil || p.Anonymous {
 		return ErrUnauthorized
 	}
-	if p.Via == "pat" {
+	if p.ScopeBound() {
 		scopes, ok := agentScopeFor[act]
 		if !ok || !hasAnyScope(p.Scopes, scopes) {
 			return ErrForbidden

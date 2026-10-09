@@ -192,6 +192,33 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 	if code != http.StatusOK || out.Sent || mails.count() != 2 {
 		t.Fatal("the dependency-alert switch off, and a routed alert went anyway")
 	}
+
+	// The schedule kind (agentry#1002, plan quickagent-scheduling D9): a
+	// failed fire or a pause goes under the person's schedules switch —
+	// on (the default, with billing and dependency alerts already off),
+	// it goes as that kind; off, it does not; an unverified address gets
+	// nothing.
+	code, out, _ = send(t, verifiedID, "schedule", "A scheduled run failed", "acme/report at 07:00 UTC: the release is gone.")
+	if code != http.StatusOK || !out.Sent || mails.count() != 3 || mails.last().Kind != notify.KindSchedule {
+		t.Fatalf("a schedule notice to a verified, opted-in person: %d sent=%t, %d messages, last kind %q", code, out.Sent, mails.count(), mails.last().Kind)
+	}
+	code, out, _ = send(t, env.userID(unverifiedH), "schedule", "A scheduled run failed", "x")
+	if code != http.StatusOK || out.Sent || mails.count() != 3 {
+		t.Fatal("an unverified address was sent a schedule notice")
+	}
+	env.doJSON(env.login(verifiedH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
+		"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, "schedules": false},
+		"web":   map[string]any{"dependencyAlerts": true},
+	}, nil, http.StatusOK)
+	code, out, _ = send(t, verifiedID, "schedule", "A schedule paused", "x")
+	if code != http.StatusOK || out.Sent || mails.count() != 3 {
+		t.Fatal("the schedules switch off, and a schedule notice went anyway")
+	}
+	// "schedules" is the switch's name, not a kind an extension sends as.
+	code, _, _ = send(t, verifiedID, "schedules", "A schedule paused", "x")
+	if code != http.StatusUnprocessableEntity || mails.count() != 3 {
+		t.Fatalf("the switch's own name as a kind: %d, want a refusal", code)
+	}
 }
 
 func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
@@ -249,55 +276,63 @@ func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
 	}
 }
 
-// The settings round trip for the new switch, and the hazard it was built
-// to avoid: a client that predates the switch and writes the other
-// settings back leaves billing as it was, rather than turning it off by
-// omission (agentry#344's shape).
-func TestBillingSwitchSurvivesAnOlderClientsWrite(t *testing.T) {
-	env := newTestEnv(t)
-	h := env.register("bs-person")
-	env.verifyEmail(h)
-	sess := env.login(h)
+// The settings round trip for the switches a client may omit, and the
+// hazard they were built to avoid: a client that predates a switch and
+// writes the other settings back leaves it as it was, rather than turning
+// it off by omission (agentry#344's shape). billing (agentry#366) and
+// schedules (agentry#1002) each, and neither write touches the other.
+func TestOptionalSwitchesSurviveAnOlderClientsWrite(t *testing.T) {
+	for _, field := range []string{"billing", "schedules"} {
+		t.Run(field, func(t *testing.T) {
+			env := newTestEnv(t)
+			h := env.register("bs-person")
+			env.verifyEmail(h)
+			sess := env.login(h)
+			other := map[string]string{"billing": "schedules", "schedules": "billing"}[field]
 
-	var got struct {
-		Email struct {
-			Billing *bool `json:"billing"`
-		} `json:"email"`
-	}
-	env.doJSON(sess, http.MethodGet, "/api/v1/user/notifications", nil, &got, http.StatusOK)
-	if got.Email.Billing == nil || !*got.Email.Billing {
-		t.Fatalf("a new account's billing switch = %v, want on by default", got.Email.Billing)
-	}
+			var got struct {
+				Email map[string]*bool `json:"email"`
+			}
+			value := func() *bool { return got.Email[field] }
+			env.doJSON(sess, http.MethodGet, "/api/v1/user/notifications", nil, &got, http.StatusOK)
+			if v := value(); v == nil || !*v {
+				t.Fatalf("a new account's %s switch = %v, want on by default", field, v)
+			}
 
-	// Off, explicitly.
-	env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
-		"email": map[string]any{"dependencyAlerts": true, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, "billing": false},
-		"web":   map[string]any{"dependencyAlerts": true},
-	}, &got, http.StatusOK)
-	if got.Email.Billing == nil || *got.Email.Billing {
-		t.Fatalf("after switching billing off: %v", got.Email.Billing)
-	}
+			// Off, explicitly.
+			env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
+				"email": map[string]any{"dependencyAlerts": true, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, field: false},
+				"web":   map[string]any{"dependencyAlerts": true},
+			}, &got, http.StatusOK)
+			if v := value(); v == nil || *v {
+				t.Fatalf("after switching %s off: %v", field, v)
+			}
+			if v := got.Email[other]; v == nil || !*v {
+				t.Fatalf("switching %s off switched %s off: %v", field, other, v)
+			}
 
-	// An older client writes everything it knows, which does not include
-	// billing: the switch stays off.
-	env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
-		"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true},
-		"web":   map[string]any{"dependencyAlerts": true},
-	}, &got, http.StatusOK)
-	if got.Email.Billing == nil || *got.Email.Billing {
-		t.Fatalf("an older client's write turned billing back on: %v", got.Email.Billing)
-	}
+			// An older client writes everything it knows, which does not
+			// include the switch: it stays off.
+			env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
+				"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true},
+				"web":   map[string]any{"dependencyAlerts": true},
+			}, &got, http.StatusOK)
+			if v := value(); v == nil || *v {
+				t.Fatalf("an older client's write turned %s back on: %v", field, v)
+			}
 
-	// And the other way: on, then an older client's write keeps it on.
-	env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
-		"email": map[string]any{"dependencyAlerts": true, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, "billing": true},
-		"web":   map[string]any{"dependencyAlerts": true},
-	}, &got, http.StatusOK)
-	env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
-		"email": map[string]any{"dependencyAlerts": true, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true},
-		"web":   map[string]any{"dependencyAlerts": true},
-	}, &got, http.StatusOK)
-	if got.Email.Billing == nil || !*got.Email.Billing {
-		t.Fatalf("an older client's write turned billing off: %v", got.Email.Billing)
+			// And the other way: on, then an older client's write keeps it on.
+			env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
+				"email": map[string]any{"dependencyAlerts": true, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, field: true},
+				"web":   map[string]any{"dependencyAlerts": true},
+			}, &got, http.StatusOK)
+			env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
+				"email": map[string]any{"dependencyAlerts": true, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true},
+				"web":   map[string]any{"dependencyAlerts": true},
+			}, &got, http.StatusOK)
+			if v := value(); v == nil || !*v {
+				t.Fatalf("an older client's write turned %s off: %v", field, v)
+			}
+		})
 	}
 }

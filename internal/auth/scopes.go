@@ -50,6 +50,21 @@ const (
 	ScopeVoiceWrite Scope = "voice:write"
 )
 
+// ScheduleScopes are the scopes a schedule's credential carries
+// (agentry#1002, plan quickagent-scheduling.md §6): what one autonomous
+// run of a QuickAgent needs and nothing more — read the agent, start and
+// read the run, and attach the owner's knowledge and Writing Voice the
+// schedule names. No write to knowledge, voice or the vault, no repository
+// access and nothing administrative: a schedule starts a run, it does not
+// change what the run reads. Fresh on every call, so no caller can widen
+// another's set.
+func ScheduleScopes() []string {
+	return []string{
+		string(ScopeAgentRead), string(ScopeRunRead), string(ScopeRunWrite),
+		string(ScopeKnowledgeRead), string(ScopeVoiceRead),
+	}
+}
+
 // AllScopes enumerates every valid scope (validation, docs, UI).
 func AllScopes() []Scope {
 	return []Scope{

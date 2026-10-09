@@ -34,10 +34,11 @@ func (s *Server) GetUserNotificationSettings(w http.ResponseWriter, r *http.Requ
 
 // UpdateUserNotificationSettings implements PUT /user/notifications: a full
 // replace of the switches every client knows, sent back as read and
-// changed — with one exception. billing (agentry#366) may be omitted, and
-// an omitted billing keeps the row's value: every client predates it, and
-// reading its absence as false would switch billing mail off for anyone
-// who saved any other setting, the hazard agentry#344 names. The keep is
+// changed — with two exceptions. billing (agentry#366) and schedules
+// (agentry#1002) may be omitted, and an omitted one keeps the row's
+// value: clients predate them, and reading an absence as false would
+// switch that mail off for anyone who saved any other setting, the hazard
+// agentry#344 names. The keep is
 // the statement's own (COALESCE in the upsert), so two clients writing at
 // once cannot resurrect a value neither sent.
 func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +60,8 @@ func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.R
 		EmailReviewDecisions:  req.Email.ReviewDecisions,
 		EmailAdvisories:       req.Email.Advisories,
 		EmailOrgInvites:       req.Email.OrgInvites,
-		EmailBilling:          req.Email.Billing, // nil keeps the row's value
+		EmailBilling:          req.Email.Billing,   // nil keeps the row's value
+		EmailSchedules:        req.Email.Schedules, // nil keeps the row's value
 		WebDependencyAlerts:   req.Web.DependencyAlerts,
 	})
 	if err != nil {
@@ -75,7 +77,7 @@ func notificationSettingsToAPI(row storegen.UserNotificationSetting) Notificatio
 		Email: EmailNotificationSettings{
 			DependencyAlerts: row.EmailDependencyAlerts, Quarantine: row.EmailQuarantine,
 			ReviewDecisions: row.EmailReviewDecisions, Advisories: row.EmailAdvisories, OrgInvites: row.EmailOrgInvites,
-			Billing: &row.EmailBilling,
+			Billing: &row.EmailBilling, Schedules: &row.EmailSchedules,
 		},
 		Web: WebNotificationSettings{DependencyAlerts: row.WebDependencyAlerts},
 	}
