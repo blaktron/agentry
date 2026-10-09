@@ -1,6 +1,7 @@
 package extension
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io/fs"
@@ -27,6 +28,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/internal/voice"
 	"github.com/blaktron/agentry/pkg/judge"
+	"github.com/blaktron/agentry/pkg/reportdesign"
 )
 
 // A minimal extension compiles against the interface using only the
@@ -634,25 +636,28 @@ func TestBindHandsTheServersMeter(t *testing.T) {
 	}
 }
 
-// themeReader is the shape SecureAgentry's hosted runs take for the report
-// theme (agentry#1015): it is handed the core's report settings.
-type themeReader struct {
+// designReader is the shape SecureAgentry's hosted runs take for the report
+// design (agentry#1015, agentry#1024): it is handed the core's report
+// settings.
+type designReader struct {
 	noop
 	settings ReportSettings
 }
 
-func (r *themeReader) Bind(d Deps) { r.settings = d.ReportSettings }
+func (r *designReader) Bind(d Deps) { r.settings = d.ReportSettings }
 
 // TestBindHandsTheReportSettings: a bound extension reads a person's report
-// theme, "" while they never chose one and again once they clear it, and
-// another person's choice is never theirs (DEV-227: no row is not Plain).
+// design as its canonical document, nil while they never chose one and again
+// once they clear it, and another person's design is never theirs (DEV-227:
+// no row is not Plain). Theme, the transitional read, answers the design's
+// basedOn.
 func TestBindHandsTheReportSettings(t *testing.T) {
 	st := migratedStore(t)
 	cfg := config.Default()
 	cfg.DevMode = true
 	cfg.Scan.OSVURL = "none"
 	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
-	r := &themeReader{}
+	r := &designReader{}
 	applyExtensions(srv, []Extension{r})
 	if r.settings == nil {
 		t.Fatal("a server with a database handed out no report settings")
@@ -669,25 +674,34 @@ func TestBindHandsTheReportSettings(t *testing.T) {
 		return id
 	}
 	user, other := mk("rt-"), mk("ro-")
+	if got, err := r.settings.Design(ctx, user); err != nil || got != nil {
+		t.Fatalf("never chosen: %q, %v", got, err)
+	}
 	if got, err := r.settings.Theme(ctx, user); err != nil || got != "" {
 		t.Fatalf("never chosen: %q, %v", got, err)
 	}
-	if _, err := st.Queries().UpsertUserReportSettings(ctx, storegen.UpsertUserReportSettingsParams{UserID: other, Theme: "letter"}); err != nil {
+	classic, _ := reportdesign.Builtin("classic")
+	technical, _ := reportdesign.Builtin("technical")
+	technical.Name, technical.Accent = "Acme", "#0b5c55"
+	if _, err := st.Queries().UpsertUserReportSettings(ctx, storegen.UpsertUserReportSettingsParams{UserID: other, Design: classic.Canonical()}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.Queries().UpsertUserReportSettings(ctx, storegen.UpsertUserReportSettingsParams{UserID: user, Theme: "formal"}); err != nil {
+	if _, err := st.Queries().UpsertUserReportSettings(ctx, storegen.UpsertUserReportSettingsParams{UserID: user, Design: technical.Canonical()}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := r.settings.Theme(ctx, user); err != nil || got != "formal" {
+	if got, err := r.settings.Design(ctx, user); err != nil || !bytes.Equal(got, technical.Canonical()) {
+		t.Fatalf("chosen: %s, %v", got, err)
+	}
+	if got, err := r.settings.Theme(ctx, user); err != nil || got != "technical" {
 		t.Fatalf("chosen: %q, %v", got, err)
 	}
 	if _, err := st.Queries().DeleteUserReportSettings(ctx, user); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := r.settings.Theme(ctx, user); err != nil || got != "" {
+	if got, err := r.settings.Design(ctx, user); err != nil || got != nil {
 		t.Fatalf("cleared: %q, %v", got, err)
 	}
-	if got, _ := r.settings.Theme(ctx, other); got != "letter" {
-		t.Fatalf("the other person's choice moved: %q", got)
+	if got, _ := r.settings.Design(ctx, other); !bytes.Equal(got, classic.Canonical()) {
+		t.Fatalf("the other person's design moved: %s", got)
 	}
 }

@@ -846,27 +846,264 @@ func (e PutVoiceRequestSource) Valid() bool {
 	}
 }
 
-// Defines values for ReportTheme.
+// Defines values for ReportDesignAgentryTheme.
 const (
-	Brief     ReportTheme = "brief"
-	Formal    ReportTheme = "formal"
-	Letter    ReportTheme = "letter"
-	Plain     ReportTheme = "plain"
-	Technical ReportTheme = "technical"
+	ReportDesignVersion2 ReportDesignAgentryTheme = 2
 )
 
-// Valid indicates whether the value is a known member of the ReportTheme enum.
-func (e ReportTheme) Valid() bool {
+// Valid indicates whether the value is a known member of the ReportDesignAgentryTheme enum.
+func (e ReportDesignAgentryTheme) Valid() bool {
 	switch e {
-	case Brief:
+	case ReportDesignVersion2:
 		return true
-	case Formal:
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignBasedOn.
+const (
+	ReportDesignBasedOnClassic   ReportDesignBasedOn = "classic"
+	ReportDesignBasedOnEditorial ReportDesignBasedOn = "editorial"
+	ReportDesignBasedOnModern    ReportDesignBasedOn = "modern"
+	ReportDesignBasedOnPlain     ReportDesignBasedOn = "plain"
+	ReportDesignBasedOnTechnical ReportDesignBasedOn = "technical"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignBasedOn enum.
+func (e ReportDesignBasedOn) Valid() bool {
+	switch e {
+	case ReportDesignBasedOnClassic:
+		return true
+	case ReportDesignBasedOnEditorial:
+		return true
+	case ReportDesignBasedOnModern:
+		return true
+	case ReportDesignBasedOnPlain:
+		return true
+	case ReportDesignBasedOnTechnical:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignFontsBody.
+const (
+	ReportDesignFontsBodyEBGaramond   ReportDesignFontsBody = "EB Garamond"
+	ReportDesignFontsBodyIBMPlexSans  ReportDesignFontsBody = "IBM Plex Sans"
+	ReportDesignFontsBodyIBMPlexSerif ReportDesignFontsBody = "IBM Plex Serif"
+	ReportDesignFontsBodyInter        ReportDesignFontsBody = "Inter"
+	ReportDesignFontsBodyLora         ReportDesignFontsBody = "Lora"
+	ReportDesignFontsBodyMerriweather ReportDesignFontsBody = "Merriweather"
+	ReportDesignFontsBodySourceSans3  ReportDesignFontsBody = "Source Sans 3"
+	ReportDesignFontsBodySourceSerif4 ReportDesignFontsBody = "Source Serif 4"
+	ReportDesignFontsBodyWorkSans     ReportDesignFontsBody = "Work Sans"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignFontsBody enum.
+func (e ReportDesignFontsBody) Valid() bool {
+	switch e {
+	case ReportDesignFontsBodyEBGaramond:
+		return true
+	case ReportDesignFontsBodyIBMPlexSans:
+		return true
+	case ReportDesignFontsBodyIBMPlexSerif:
+		return true
+	case ReportDesignFontsBodyInter:
+		return true
+	case ReportDesignFontsBodyLora:
+		return true
+	case ReportDesignFontsBodyMerriweather:
+		return true
+	case ReportDesignFontsBodySourceSans3:
+		return true
+	case ReportDesignFontsBodySourceSerif4:
+		return true
+	case ReportDesignFontsBodyWorkSans:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignFontsCode.
+const (
+	ReportDesignFontsCodeIBMPlexMono   ReportDesignFontsCode = "IBM Plex Mono"
+	ReportDesignFontsCodeJetBrainsMono ReportDesignFontsCode = "JetBrains Mono"
+	ReportDesignFontsCodeSourceCodePro ReportDesignFontsCode = "Source Code Pro"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignFontsCode enum.
+func (e ReportDesignFontsCode) Valid() bool {
+	switch e {
+	case ReportDesignFontsCodeIBMPlexMono:
+		return true
+	case ReportDesignFontsCodeJetBrainsMono:
+		return true
+	case ReportDesignFontsCodeSourceCodePro:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignFontsHeadings.
+const (
+	ReportDesignFontsHeadingsEBGaramond      ReportDesignFontsHeadings = "EB Garamond"
+	ReportDesignFontsHeadingsIBMPlexMono     ReportDesignFontsHeadings = "IBM Plex Mono"
+	ReportDesignFontsHeadingsIBMPlexSans     ReportDesignFontsHeadings = "IBM Plex Sans"
+	ReportDesignFontsHeadingsIBMPlexSerif    ReportDesignFontsHeadings = "IBM Plex Serif"
+	ReportDesignFontsHeadingsInter           ReportDesignFontsHeadings = "Inter"
+	ReportDesignFontsHeadingsJetBrainsMono   ReportDesignFontsHeadings = "JetBrains Mono"
+	ReportDesignFontsHeadingsLora            ReportDesignFontsHeadings = "Lora"
+	ReportDesignFontsHeadingsMerriweather    ReportDesignFontsHeadings = "Merriweather"
+	ReportDesignFontsHeadingsMontserrat      ReportDesignFontsHeadings = "Montserrat"
+	ReportDesignFontsHeadingsPlayfairDisplay ReportDesignFontsHeadings = "Playfair Display"
+	ReportDesignFontsHeadingsSourceCodePro   ReportDesignFontsHeadings = "Source Code Pro"
+	ReportDesignFontsHeadingsSourceSans3     ReportDesignFontsHeadings = "Source Sans 3"
+	ReportDesignFontsHeadingsSourceSerif4    ReportDesignFontsHeadings = "Source Serif 4"
+	ReportDesignFontsHeadingsWorkSans        ReportDesignFontsHeadings = "Work Sans"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignFontsHeadings enum.
+func (e ReportDesignFontsHeadings) Valid() bool {
+	switch e {
+	case ReportDesignFontsHeadingsEBGaramond:
+		return true
+	case ReportDesignFontsHeadingsIBMPlexMono:
+		return true
+	case ReportDesignFontsHeadingsIBMPlexSans:
+		return true
+	case ReportDesignFontsHeadingsIBMPlexSerif:
+		return true
+	case ReportDesignFontsHeadingsInter:
+		return true
+	case ReportDesignFontsHeadingsJetBrainsMono:
+		return true
+	case ReportDesignFontsHeadingsLora:
+		return true
+	case ReportDesignFontsHeadingsMerriweather:
+		return true
+	case ReportDesignFontsHeadingsMontserrat:
+		return true
+	case ReportDesignFontsHeadingsPlayfairDisplay:
+		return true
+	case ReportDesignFontsHeadingsSourceCodePro:
+		return true
+	case ReportDesignFontsHeadingsSourceSans3:
+		return true
+	case ReportDesignFontsHeadingsSourceSerif4:
+		return true
+	case ReportDesignFontsHeadingsWorkSans:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignFooterPageNumbers.
+const (
+	ReportDesignFooterPageNumbersN    ReportDesignFooterPageNumbers = "n"
+	ReportDesignFooterPageNumbersNOfN ReportDesignFooterPageNumbers = "nOfN"
+	ReportDesignFooterPageNumbersNone ReportDesignFooterPageNumbers = "none"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignFooterPageNumbers enum.
+func (e ReportDesignFooterPageNumbers) Valid() bool {
+	switch e {
+	case ReportDesignFooterPageNumbersN:
+		return true
+	case ReportDesignFooterPageNumbersNOfN:
+		return true
+	case ReportDesignFooterPageNumbersNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignHeadings.
+const (
+	ReportDesignHeadingsBar       ReportDesignHeadings = "bar"
+	ReportDesignHeadingsNumbered  ReportDesignHeadings = "numbered"
+	ReportDesignHeadingsPlain     ReportDesignHeadings = "plain"
+	ReportDesignHeadingsRule      ReportDesignHeadings = "rule"
+	ReportDesignHeadingsSmallcaps ReportDesignHeadings = "smallcaps"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignHeadings enum.
+func (e ReportDesignHeadings) Valid() bool {
+	switch e {
+	case ReportDesignHeadingsBar:
+		return true
+	case ReportDesignHeadingsNumbered:
+		return true
+	case ReportDesignHeadingsPlain:
+		return true
+	case ReportDesignHeadingsRule:
+		return true
+	case ReportDesignHeadingsSmallcaps:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignPaper.
+const (
+	A4     ReportDesignPaper = "a4"
+	Letter ReportDesignPaper = "letter"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignPaper enum.
+func (e ReportDesignPaper) Valid() bool {
+	switch e {
+	case A4:
 		return true
 	case Letter:
 		return true
-	case Plain:
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignQuotes.
+const (
+	ReportDesignQuotesCallout ReportDesignQuotes = "callout"
+	ReportDesignQuotesPlain   ReportDesignQuotes = "plain"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignQuotes enum.
+func (e ReportDesignQuotes) Valid() bool {
+	switch e {
+	case ReportDesignQuotesCallout:
 		return true
-	case Technical:
+	case ReportDesignQuotesPlain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignTitleBlock.
+const (
+	ReportDesignTitleBlockBand  ReportDesignTitleBlock = "band"
+	ReportDesignTitleBlockBar   ReportDesignTitleBlock = "bar"
+	ReportDesignTitleBlockNone  ReportDesignTitleBlock = "none"
+	ReportDesignTitleBlockRuled ReportDesignTitleBlock = "ruled"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignTitleBlock enum.
+func (e ReportDesignTitleBlock) Valid() bool {
+	switch e {
+	case ReportDesignTitleBlockBand:
+		return true
+	case ReportDesignTitleBlockBar:
+		return true
+	case ReportDesignTitleBlockNone:
+		return true
+	case ReportDesignTitleBlockRuled:
 		return true
 	default:
 		return false
@@ -2944,14 +3181,80 @@ type RegisterRequest struct {
 	Password    string              `json:"password"`
 }
 
-// ReportSettings The caller's report settings, a profile setting (agentry#989). No `theme` means the person never chose one.
-type ReportSettings struct {
-	// Theme A built-in report theme (plan scratch-and-pdf-reports.md D13), the name of a theme document in the runner image. A later design standard the person authors is one more value here.
-	Theme *ReportTheme `json:"theme,omitempty"`
+// ReportDesign A report design, the theme document version 2 (plan report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it.
+type ReportDesign struct {
+	// Accent The one colour, lower-case hex.
+	Accent string `json:"accent"`
+
+	// AgentryTheme The document version, always 2.
+	AgentryTheme ReportDesignAgentryTheme `json:"agentryTheme"`
+
+	// BasedOn The built-in theme the design started from.
+	BasedOn ReportDesignBasedOn `json:"basedOn"`
+	Fonts   struct {
+		Body     ReportDesignFontsBody     `json:"body"`
+		Code     ReportDesignFontsCode     `json:"code"`
+		Headings ReportDesignFontsHeadings `json:"headings"`
+	} `json:"fonts"`
+	Footer struct {
+		PageNumbers ReportDesignFooterPageNumbers `json:"pageNumbers"`
+
+		// Text One line, set as text, never evaluated; empty for none.
+		Text string `json:"text"`
+	} `json:"footer"`
+	Headings ReportDesignHeadings `json:"headings"`
+
+	// Name The design's label, a built-in's own name or the person's.
+	Name string `json:"name"`
+
+	// Paper A4, or US Letter.
+	Paper  ReportDesignPaper  `json:"paper"`
+	Quotes ReportDesignQuotes `json:"quotes"`
+	Tables struct {
+		Banded bool `json:"banded"`
+		Tinted bool `json:"tinted"`
+	} `json:"tables"`
+	TitleBlock ReportDesignTitleBlock `json:"titleBlock"`
+
+	// Version The design's revision.
+	Version int `json:"version"`
 }
 
-// ReportTheme A built-in report theme (plan scratch-and-pdf-reports.md D13), the name of a theme document in the runner image. A later design standard the person authors is one more value here.
-type ReportTheme string
+// ReportDesignAgentryTheme The document version, always 2.
+type ReportDesignAgentryTheme int
+
+// ReportDesignBasedOn The built-in theme the design started from.
+type ReportDesignBasedOn string
+
+// ReportDesignFontsBody defines model for ReportDesign.Fonts.Body.
+type ReportDesignFontsBody string
+
+// ReportDesignFontsCode defines model for ReportDesign.Fonts.Code.
+type ReportDesignFontsCode string
+
+// ReportDesignFontsHeadings defines model for ReportDesign.Fonts.Headings.
+type ReportDesignFontsHeadings string
+
+// ReportDesignFooterPageNumbers defines model for ReportDesign.Footer.PageNumbers.
+type ReportDesignFooterPageNumbers string
+
+// ReportDesignHeadings defines model for ReportDesign.Headings.
+type ReportDesignHeadings string
+
+// ReportDesignPaper A4, or US Letter.
+type ReportDesignPaper string
+
+// ReportDesignQuotes defines model for ReportDesign.Quotes.
+type ReportDesignQuotes string
+
+// ReportDesignTitleBlock defines model for ReportDesign.TitleBlock.
+type ReportDesignTitleBlock string
+
+// ReportSettings The caller's report settings, a profile setting (agentry#989). No `design` means the person never chose one.
+type ReportSettings struct {
+	// Design A report design, the theme document version 2 (plan report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it.
+	Design *ReportDesign `json:"design,omitempty"`
+}
 
 // ReportVerdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
 type ReportVerdict string
@@ -5732,25 +6035,25 @@ type ClientInterface interface {
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettings(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetUserReportSettings The theme the caller's PDF reports take (agentry#989).
+	// GetUserReportSettings The report design the caller's PDF reports take (agentry#989, agentry#1024).
 	//
-	// A profile setting (plan scratch-and-pdf-reports.md D18): the theme `export_pdf` renders with in the caller's runs. The model never chooses it (D19). An account that never chose reads back with no `theme`, which is not the same as Plain: the CLI then falls to its own `report.theme`, else Plain, and `--report-theme` overrides either for one run (D21, D22).
+	// A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
 	//
 	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
 	GetUserReportSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989).
+	// UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989, agentry#1024).
 	//
-	// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
 	UpdateUserReportSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateUserReportSettings Replace the caller's report settings (agentry#989).
+	// UpdateUserReportSettings Replace the caller's report settings (agentry#989, agentry#1024).
 	//
-	// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -9375,9 +9678,9 @@ func (c *Client) UpdateUserNotificationSettings(ctx context.Context, body Update
 	return c.Client.Do(req)
 }
 
-// GetUserReportSettings The theme the caller's PDF reports take (agentry#989).
+// GetUserReportSettings The report design the caller's PDF reports take (agentry#989, agentry#1024).
 //
-// A profile setting (plan scratch-and-pdf-reports.md D18): the theme `export_pdf` renders with in the caller's runs. The model never chooses it (D19). An account that never chose reads back with no `theme`, which is not the same as Plain: the CLI then falls to its own `report.theme`, else Plain, and `--report-theme` overrides either for one run (D21, D22).
+// A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
 //
 // Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
 func (c *Client) GetUserReportSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9392,9 +9695,9 @@ func (c *Client) GetUserReportSettings(ctx context.Context, reqEditors ...Reques
 	return c.Client.Do(req)
 }
 
-// UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989).
+// UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989, agentry#1024).
 //
-// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
 //
 // Takes any type of body and a specified content type.
 //
@@ -9411,9 +9714,9 @@ func (c *Client) UpdateUserReportSettingsWithBody(ctx context.Context, contentTy
 	return c.Client.Do(req)
 }
 
-// UpdateUserReportSettings Replace the caller's report settings (agentry#989).
+// UpdateUserReportSettings Replace the caller's report settings (agentry#989, agentry#1024).
 //
-// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -19348,27 +19651,27 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettingsWithResponse(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error)
 
-	// GetUserReportSettingsWithResponse The theme the caller's PDF reports take (agentry#989).
+	// GetUserReportSettingsWithResponse The report design the caller's PDF reports take (agentry#989, agentry#1024).
 	//
-	// A profile setting (plan scratch-and-pdf-reports.md D18): the theme `export_pdf` renders with in the caller's runs. The model never chooses it (D19). An account that never chose reads back with no `theme`, which is not the same as Plain: the CLI then falls to its own `report.theme`, else Plain, and `--report-theme` overrides either for one run (D21, D22).
+	// A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
 	GetUserReportSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error)
 
-	// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989).
+	// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
 	//
-	// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
 	UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
 
-	// UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989).
+	// UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
 	//
-	// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -30735,9 +31038,9 @@ func (c *ClientWithResponses) UpdateUserNotificationSettingsWithResponse(ctx con
 	return ParseUpdateUserNotificationSettingsResponse(rsp)
 }
 
-// GetUserReportSettingsWithResponse The theme the caller's PDF reports take (agentry#989).
+// GetUserReportSettingsWithResponse The report design the caller's PDF reports take (agentry#989, agentry#1024).
 //
-// A profile setting (plan scratch-and-pdf-reports.md D18): the theme `export_pdf` renders with in the caller's runs. The model never chooses it (D19). An account that never chose reads back with no `theme`, which is not the same as Plain: the CLI then falls to its own `report.theme`, else Plain, and `--report-theme` overrides either for one run (D21, D22).
+// A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30750,9 +31053,9 @@ func (c *ClientWithResponses) GetUserReportSettingsWithResponse(ctx context.Cont
 	return ParseGetUserReportSettingsResponse(rsp)
 }
 
-// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989).
+// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
 //
-// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30765,9 +31068,9 @@ func (c *ClientWithResponses) UpdateUserReportSettingsWithBodyWithResponse(ctx c
 	return ParseUpdateUserReportSettingsResponse(rsp)
 }
 
-// UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989).
+// UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
 //
-// A full replace: a body with no `theme` clears the choice. A name outside the built-in themes is refused (422, `validation`).
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
