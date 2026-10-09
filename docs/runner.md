@@ -695,7 +695,8 @@ its digest, so a run record says which file a run obeyed.
 
 | Key | Meaning |
 |---|---|
-| `images.gateway` / `images.harnessDockerAgent` / `images.goBuilder` | pinned images (digests recommended) |
+| `images.gateway` / `images.harnessDockerAgent` | pinned images (digests recommended) |
+| `images.goBuilder` | the Go image the runner image is compiled in on first use (the default is pinned by digest). Its Go must be at least the CLI's own, to the patch: the build context names that version, and an older builder stops the build with "images.goBuilder … is older than the Go the runner needs" |
 | `images.runner` | override the locally built runner image tag (pin this when the CLI and desktop app share a machine) |
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress |
