@@ -902,14 +902,14 @@ paths:
     get:
       operationId: getUserReportSettings
       tags: [users]
-      summary: The theme the caller's PDF reports take (agentry#989).
+      summary: The report design the caller's PDF reports take (agentry#989, agentry#1024).
       description: >-
-        A profile setting (plan scratch-and-pdf-reports.md D18): the theme
-        `export_pdf` renders with in the caller's runs. The model never
-        chooses it (D19). An account that never chose reads back with no
-        `theme`, which is not the same as Plain: the CLI then falls to its
-        own `report.theme`, else Plain, and `--report-theme` overrides
-        either for one run (D21, D22).
+        A profile setting (plan report-designs.md D11, D12): the whole
+        report design, a theme document version 2, that `export_pdf`
+        renders with in the caller's runs. The model never chooses it. An
+        account that never chose reads back with no `design`, which is not
+        the same as Plain: a signed-in client then falls to its own
+        configuration, else Plain (DEV-227).
       responses:
         "200":
           description: The settings.
@@ -922,10 +922,16 @@ paths:
     put:
       operationId: updateUserReportSettings
       tags: [users]
-      summary: Replace the caller's report settings (agentry#989).
+      summary: Replace the caller's report settings (agentry#989, agentry#1024).
       description: >-
-        A full replace: a body with no `theme` clears the choice. A name
-        outside the built-in themes is refused (422, `validation`).
+        A full replace: a body with no `design` clears the choice. The
+        design is validated by the core's pkg/reportdesign before it is
+        stored: a document that breaks a rule (an unknown key, a name off a
+        closed list, a font in a role it cannot take, a colour that is not
+        `#rrggbb` or whose contrast on white is too low, a text that is not
+        one line, over 16 KB) is refused 422 (`validation`), the field
+        named `design.<path>`. The answer carries the design in its
+        canonical form.
       requestBody:
         required: true
         content:
@@ -6421,21 +6427,100 @@ components:
           $ref: "#/components/schemas/EmailNotificationSettings"
         web:
           $ref: "#/components/schemas/WebNotificationSettings"
-    ReportTheme:
-      type: string
-      description: >-
-        A built-in report theme (plan scratch-and-pdf-reports.md D13), the
-        name of a theme document in the runner image. A later design
-        standard the person authors is one more value here.
-      enum: [plain, formal, brief, technical, letter]
     ReportSettings:
       type: object
       description: >-
         The caller's report settings, a profile setting (agentry#989). No
-        `theme` means the person never chose one.
+        `design` means the person never chose one.
       properties:
-        theme:
-          $ref: "#/components/schemas/ReportTheme"
+        design:
+          $ref: "#/components/schemas/ReportDesign"
+    ReportDesign:
+      type: object
+      description: >-
+        A report design, the theme document version 2 (plan
+        report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by
+        the core's pkg/reportdesign, whose JSON Schema this mirrors (a core
+        test holds them equal). Beyond what the schema says, the accent must
+        reach 4.5:1 contrast on white when it touches text (titleBlock
+        `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and
+        `name` and `footer.text` are one line with no control or
+        bidirectional formatting characters. The tint is derived: 12% of the
+        accent over white. The five built-in themes are each a value of it.
+      additionalProperties: false
+      required: [agentryTheme, name, basedOn, version, paper, fonts, accent, titleBlock, headings, tables, quotes, footer]
+      properties:
+        agentryTheme:
+          type: integer
+          description: The document version, always 2.
+          enum: [2]
+          x-enum-varnames: [ReportDesignVersion2]
+        name:
+          type: string
+          description: The design's label, a built-in's own name or the person's.
+          minLength: 1
+          maxLength: 60
+        basedOn:
+          type: string
+          description: The built-in theme the design started from.
+          enum: [plain, classic, modern, editorial, technical]
+        version:
+          type: integer
+          description: The design's revision.
+          minimum: 1
+          maximum: 1000000
+        paper:
+          type: string
+          description: A4, or US Letter.
+          enum: [a4, letter]
+        fonts:
+          type: object
+          additionalProperties: false
+          required: [headings, body, code]
+          properties:
+            headings:
+              type: string
+              enum: [Inter, IBM Plex Sans, Source Sans 3, Work Sans, Montserrat, Source Serif 4, Lora, Merriweather, IBM Plex Serif, EB Garamond, Playfair Display, IBM Plex Mono, JetBrains Mono, Source Code Pro]
+            body:
+              type: string
+              enum: [Inter, IBM Plex Sans, Source Sans 3, Work Sans, Source Serif 4, Lora, Merriweather, IBM Plex Serif, EB Garamond]
+            code:
+              type: string
+              enum: [IBM Plex Mono, JetBrains Mono, Source Code Pro]
+        accent:
+          type: string
+          description: The one colour, lower-case hex.
+          pattern: "^#[0-9a-f]{6}$"
+        titleBlock:
+          type: string
+          enum: [band, bar, ruled, none]
+        headings:
+          type: string
+          enum: [rule, bar, smallcaps, numbered, plain]
+        tables:
+          type: object
+          additionalProperties: false
+          required: [tinted, banded]
+          properties:
+            tinted:
+              type: boolean
+            banded:
+              type: boolean
+        quotes:
+          type: string
+          enum: [callout, plain]
+        footer:
+          type: object
+          additionalProperties: false
+          required: [pageNumbers, text]
+          properties:
+            pageNumbers:
+              type: string
+              enum: [none, n, nOfN]
+            text:
+              type: string
+              description: One line, set as text, never evaluated; empty for none.
+              maxLength: 120
     DependencyAlert:
       type: object
       description: >-
