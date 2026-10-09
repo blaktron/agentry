@@ -17,6 +17,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/knowledge"
+	"github.com/blaktron/agentry/pkg/reportdesign"
 )
 
 func TestClearCurrentUserData(t *testing.T) {
@@ -65,7 +66,8 @@ func TestClearCurrentUserData(t *testing.T) {
 		"email": map[string]any{"dependencyAlerts": false, "quarantine": false, "reviewDecisions": false, "advisories": false, "orgInvites": false},
 		"web":   map[string]any{"dependencyAlerts": false},
 	}, nil, http.StatusOK)
-	env.doJSON(sess, http.MethodPut, "/api/v1/user/report-settings", map[string]any{"theme": "letter"}, nil, http.StatusOK)
+	classic, _ := reportdesign.BuiltinDocument("classic")
+	env.doJSON(sess, http.MethodPut, "/api/v1/user/report-settings", map[string]any{"design": json.RawMessage(classic)}, nil, http.StatusOK)
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
 		map[string]any{"namespace": h, "name": "mine", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 	env.publishVersions(t, sess, h, "mine", []versionFiles{

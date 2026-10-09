@@ -361,15 +361,21 @@ var (
 )
 
 // ReportSettings is the core's store of a person's report settings as an
-// extension may read them (agentry#1015; plan scratch-and-pdf-reports.md
-// D18, D21; DEV-227): SecureAgentry's hosted runs read the account's report
-// theme and hand it to the sandbox host, whose CLI lays the run's PDFs out
-// in it (--report-theme). Read-only: the person sets it on their profile.
-// Deps.ReportSettings is nil without a database.
+// extension may read them (agentry#1015; plan report-designs.md D11, D12;
+// DEV-227): SecureAgentry's hosted runs read the account's report design and
+// hand it to the sandbox host, whose CLI lays the run's PDFs out in it.
+// Read-only: the person sets it on the Report design page. Deps.ReportSettings
+// is nil without a database.
 type ReportSettings interface {
-	// Theme is the person's report theme, a built-in theme's name, or ""
-	// when they never chose one, which is not Plain: the reader decides
-	// what nothing means.
+	// Design is the person's report design, the canonical theme document
+	// version 2 that pkg/reportdesign validated (Parse it to read it), or
+	// nil when they never chose one, which is not Plain: the reader decides
+	// what nothing means (agentry#1024).
+	Design(ctx context.Context, user uuid.UUID) ([]byte, error)
+	// Theme is the id of the built-in theme the person's design started
+	// from (its basedOn), or "" when they never chose one. Transitional:
+	// the hosted job carries a theme's name until agentry-enterprise#479
+	// moves it to Design, and then this goes.
 	Theme(ctx context.Context, user uuid.UUID) (string, error)
 }
 
