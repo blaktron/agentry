@@ -2623,6 +2623,9 @@ type EmailNotificationSettings struct {
 
 	// ReviewDecisions A reviewer decided one of the person's submissions, or the gate held one for review.
 	ReviewDecisions bool `json:"reviewDecisions"`
+
+	// Schedules A scheduled run in Agentry failed, or one of the person's schedules paused (the hosted product's schedule mail; never a success, and a registry without hosted schedules sends none). Not required on a write: a client that predates the switch leaves it as it was rather than turning it off by omission.
+	Schedules *bool `json:"schedules,omitempty"`
 }
 
 // EmailVerificationSent defines model for EmailVerificationSent.

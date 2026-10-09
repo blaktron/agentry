@@ -39,7 +39,7 @@ var scopedPathPrefixes = []struct {
 // checkPathScope enforces scopedPathPrefixes for PAT principals, writing the
 // problem response and returning false on refusal.
 func (s *Server) checkPathScope(w http.ResponseWriter, r *http.Request, p *auth.Principal) bool {
-	if p == nil || p.Anonymous || p.Via != "pat" {
+	if p == nil || p.Anonymous || !p.ScopeBound() {
 		return true
 	}
 	for _, sp := range scopedPathPrefixes {

@@ -39,13 +39,18 @@ const (
 	// organization covers you". The core sends none itself; the kind is
 	// here so the switch, the default and the rule are the core's.
 	KindBilling Kind = "billing"
+	// KindSchedule is the closed build's schedule mail, sent through the
+	// extension seam (agentry#1002, plan quickagent-scheduling.md D9): a
+	// scheduled run in Agentry failed, or a schedule paused. Never a
+	// success. The core sends none itself, as with billing.
+	KindSchedule Kind = "schedules"
 )
 
 // Defaults is the settings row a user without one is treated as having.
 func Defaults(userID uuid.UUID) storegen.UserNotificationSetting {
 	return storegen.UserNotificationSetting{
 		UserID: userID, EmailDependencyAlerts: true, EmailQuarantine: true, EmailReviewDecisions: true,
-		EmailAdvisories: true, EmailOrgInvites: true, EmailBilling: true, WebDependencyAlerts: true,
+		EmailAdvisories: true, EmailOrgInvites: true, EmailBilling: true, EmailSchedules: true, WebDependencyAlerts: true,
 	}
 }
 
@@ -65,6 +70,8 @@ func EmailAllowed(row storegen.UserNotificationSetting, kind Kind) bool {
 		return row.EmailOrgInvites
 	case KindBilling:
 		return row.EmailBilling
+	case KindSchedule:
+		return row.EmailSchedules
 	}
 	return true
 }
