@@ -6,8 +6,19 @@ import { randomBytes } from 'node:crypto';
 const origin = process.env.DIRECTORY_CSP_ORIGIN;
 const credentials = [process.env.CSP_PASSWORD].filter(Boolean);
 const browser = await chromium.launch({headless: true});
+const challenges = [];
 // Certificate verification is relaxed only for this throwaway fixture's cert.
-const context = () => browser.newContext({ignoreHTTPSErrors: true});
+const context = async () => {
+    const ctx = await browser.newContext({ignoreHTTPSErrors: true});
+    ctx.on('page', page => page.on('response', async response => {
+        if (!new URL(response.url()).pathname.startsWith('/api/v3/flows/executor/')) return;
+        const challenge = await response.json().catch(() => ({}));
+        // Report the stage and error field names, never submitted values.
+        challenges.push({method: response.request().method(), status: response.status(), component: challenge.component,
+            errors: Object.keys(challenge.response_errors ?? {})});
+    }));
+    return ctx;
+};
 
 async function enrollmentTerms() {
     const enrollment = await context();
@@ -37,7 +48,9 @@ async function signIn(page, user, next = '') {
     await page.goto(origin + '/if/flow/default-authentication-flow/' + (next ? '?next=' + encodeURIComponent(next) : ''));
     await page.getByLabel('Email or Username', {exact: true}).fill(user);
     await page.locator('ak-stage-identification').getByRole('button', {name: 'Log in', exact: true}).click();
-    const password = page.locator('input[name="password"]');
+    // Identification also has a password-manager prefill input. Wait for
+    // the password stage rather than filling that preceding stage's input.
+    const password = page.locator('ak-stage-password').locator('input[name="password"]');
     await password.waitFor({timeout: 15000});
     await password.fill(process.env.CSP_PASSWORD);
     await page.locator('ak-stage-password').getByRole('button', {name: 'Continue', exact: true}).click();
@@ -99,7 +112,7 @@ try {
         const remembered = await context();
         const code = await remembered.newPage();
         await signIn(code, 'dc-mfa');
-        await code.locator('input[name="code"]').waitFor({timeout: 15000});
+        await code.locator('ak-stage-authenticator-validate-code').locator('input[name="code"]').waitFor({timeout: 15000});
         const remember = code.getByRole('checkbox', {name: 'Remember this device for 30 days', exact: true});
         await remember.waitFor({timeout: 15000});
         assert.equal(await remember.isChecked(), false);
@@ -148,13 +161,32 @@ try {
         await enrollment.close();
     }
 } catch (error) {
+    const pages = [];
+    for (const ctx of browser.contexts()) {
+        for (const page of ctx.pages()) {
+            const controls = await page.evaluate(() => {
+                const result = {stages: [], inputs: [], buttons: []};
+                const walk = root => {
+                    for (const el of root.querySelectorAll('*')) {
+                        if (el.localName.startsWith('ak-stage-')) result.stages.push(el.localName);
+                        if (el.localName === 'input') result.inputs.push({name: el.name, type: el.type});
+                        if (el.localName === 'button') result.buttons.push(el.textContent.trim());
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(document);
+                return result;
+            }).catch(() => ({}));
+            pages.push({path: new URL(page.url()).pathname, ...controls});
+        }
+    }
     // Fixture credentials do not belong in failure logs either.
     for (const ctx of browser.contexts()) {
         for (const cookie of await ctx.cookies().catch(() => [])) {
             if (cookie.value.length >= 16) credentials.push(cookie.value);
         }
     }
-    let message = error.stack ?? String(error);
+    let message = (error.stack ?? String(error)) + '\n' + JSON.stringify({challenges, pages});
     for (const credential of credentials) message = message.split(credential).join('[fixture credential]');
     console.error(message);
     process.exitCode = 1;
