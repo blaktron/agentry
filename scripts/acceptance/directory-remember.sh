@@ -8,8 +8,9 @@
 # and the flow page's template override. This proves that configuration
 # against the image the compose file pins:
 #
-#   1. The template is authentik's own flows/templates/if/flow.html, byte for
-#      byte, plus one marked block; and the web components and forms the
+#   1. The template is authentik's own flows/templates/if/flow.html except
+#      two reviewed bootstraps that read escaped JSON data, plus one marked
+#      customization block; and the web components and forms the
 #      block's scripts write into (the code page's, and since agentry#860 the
 #      password page's and the first page's) still exist in the image's bundle. An authentik upgrade
 #      that moves either fails here, not silently on the sign-in page.
@@ -61,16 +62,10 @@ trap cleanup EXIT
 # ---------------------------------------------------------------- 1. the template
 probe=$(docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-probe" "$IMAGE")
 docker cp "$probe:/authentik/flows/templates/if/flow.html" "$TMP/flow.orig.html"
+docker cp "$probe:/authentik/core/templates/base/header_js.html" "$TMP/header-js.orig.html"
 docker cp "$probe:/web/dist" "$TMP/dist" >/dev/null
 docker rm -fv "$probe" >/dev/null
-sed '/^{# agentry:begin remembered-browser/,$d' "$TEMPLATE" > "$TMP/flow.ours.html"
-if cmp -s "$TMP/flow.orig.html" "$TMP/flow.ours.html"; then
-  echo "ok   the template is the pinned image's flow.html plus one marked block"
-else
-  echo "FAIL: $TEMPLATE no longer starts with the pinned image's flow.html; re-copy it and keep the block:"
-  diff "$TMP/flow.orig.html" "$TMP/flow.ours.html" | head -20
-  exit 1
-fi
+python3 scripts/acceptance/directory-template-check.py "$TMP/flow.orig.html" "$TMP/header-js.orig.html"
 [ "$(grep -c '^{# agentry:begin remembered-browser' "$TEMPLATE")" -eq 1 ] && [ "$(grep -c '^{# agentry:end remembered-browser' "$TEMPLATE")" -eq 1 ] \
   || { echo "FAIL: the template's block is not marked exactly once"; exit 1; }
 chunk=$(grep -rl 'ak-stage-authenticator-validate-code' "$TMP/dist" --include='*.js' | head -1)

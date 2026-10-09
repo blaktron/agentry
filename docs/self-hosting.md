@@ -1215,10 +1215,11 @@ like anything typed:
   whatever the page does, and refuses every sign-up while the file cannot be
   read or has no version. The account records `agentry_terms_accepted`,
   `agentry_terms_version` (from the text it was shown) and
-  `agentry_terms_accepted_at` in its attributes. The scroll gate is inline
-  script in authentik's page, so a Content-Security-Policy on the
-  directory's pages that forbids inline handlers turns it off (the box and
-  Continue then stay enabled; the agreement is still required). Accounts
+  `agentry_terms_accepted_at` in its attributes. A static flow script supplies
+  the scroll courtesy, with no inline event handler. The policy below allows
+  that script by its hash. Without JavaScript the scroll courtesy is absent;
+  agreement and a readable, versioned file are still required by the server.
+  Accounts
   that existed before you set the variable are not asked.
 - **Password recovery** — identification, an emailed reset link, then a
   new password. The identification stage runs with `pretend_user_exists`,
@@ -1582,9 +1583,13 @@ The directory's half ships with the compose stack (agentry#671):
   authentik's debug HTTP session logs outgoing requests with their headers.
 
 With the secret unset on either side, the code is asked every time. After an
-authentik upgrade, re-copy the new image's `flows/templates/if/flow.html`
-above the marked block: `scripts/acceptance/directory-remember.sh` fails
-until the two match, and it also checks that the code stage the block writes
+authentik upgrade, compare the new image's `flows/templates/if/flow.html`
+and `core/templates/base/header_js.html`. Two reviewed bootstraps now read
+escaped JSON data instead of interpolating runtime values into executable
+scripts. `scripts/acceptance/directory-remember.sh` checks the rest of the
+flow template against the image and pins both upstream bootstrap contracts.
+An upgrade must review those contracts before updating their hashes. It
+also checks that the code stage the block writes
 into still exists, and that the password page and first page the sign-up
 link writes into still have what its script reads. The checkbox is not offered on a passkey sign-in or on
 authentik's simplified flow page for old browsers, which asks for the code
@@ -1592,6 +1597,36 @@ as before. The directory's own remember-this-device behaviour is a
 different thing and is not used: it keeps no server-side record of the
 browsers it remembers, so they could be neither cleared nor individually
 revoked (agentry#460).
+
+**A Content Security Policy for public directory flows** (agentry#985).
+The templates support a policy that rejects arbitrary inline scripts and
+event handlers. Generate it from the same core checkout as the templates:
+
+```bash
+python3 scripts/directory-csp.py --origin https://auth.example.com
+```
+
+Set the emitted value as `Content-Security-Policy` at the reverse proxy on
+HTML responses under `/if/flow/`, including flow error responses. Deploy
+the policy and templates together: the six SHA-256 permissions authorize
+only the static script bodies in that checkout. Dynamic directory config,
+brand and flow values remain escaped JSON data; never generate permissions
+by hashing a rendered response or values supplied by a user. The policy
+permits the directory's own scripts and Cloudflare Turnstile, disables
+script attributes, and permits same-origin WebSockets for flow updates.
+The stylesheet exception `style-src 'self' 'unsafe-inline'` is required by
+the upstream Lit components and their shadow trees; it grants no script
+permission. Same-origin frames support upstream flow embedding.
+
+Keep the upstream policy on `/media/` and other routes. This helper does
+not replace their policies or install a header in the headless edge.
+Operators with additional CAPTCHA or external assets must review their
+origins separately. `scripts/acceptance/directory-terms.sh` uses a real
+browser and a private pinned directory to check the intended scripts,
+terms courtesy and refusal, remembered-browser choice, recovery page and
+text-only display names while arbitrary injected scripts and event
+handlers are denied. The server-side agreement tests also submit directly,
+without the courtesy script. The registry's `/ui/` policy stays separate.
 
 The directory's flows are unbranded here and call the deployment
 `AGENTRY_BRAND_NAME`; a site that fronts the registry applies its own
