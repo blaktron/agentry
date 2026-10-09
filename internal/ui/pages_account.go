@@ -66,7 +66,7 @@ func megabytes(n int64) string {
 	return strconv.FormatFloat(float64(n)/(1<<20), 'f', 1, 64) + " MB"
 }
 
-// notificationSettings is the API's NotificationSettings, the six mail
+// notificationSettings is the API's NotificationSettings, the seven mail
 // switches and the one in-app switch.
 type notificationSettings struct {
 	Email struct {
@@ -80,6 +80,10 @@ type notificationSettings struct {
 		// back, so it names the field; a registry with no billing sends
 		// none of these and the switch simply governs nothing.
 		Billing bool `json:"billing"`
+		// Schedules is the hosted product's schedule mail (agentry#1002):
+		// a scheduled run in Agentry failed, or a schedule paused. Named
+		// here for the same reason as Billing.
+		Schedules bool `json:"schedules"`
 	} `json:"email"`
 	Web struct {
 		DependencyAlerts bool `json:"dependencyAlerts"`
@@ -214,6 +218,7 @@ func (h *handler) notificationsSave(w http.ResponseWriter, r *http.Request) {
 	ns.Email.Advisories = on("email.advisories")
 	ns.Email.OrgInvites = on("email.orgInvites")
 	ns.Email.Billing = on("email.billing")
+	ns.Email.Schedules = on("email.schedules")
 	ns.Web.DependencyAlerts = on("web.dependencyAlerts")
 	res, err := h.call(r).do(http.MethodPut, "/user/notifications", ns)
 	if err != nil || !res.OK() {

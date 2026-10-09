@@ -413,15 +413,16 @@ const (
 // ScopeAllows is how the core reads a scope for a route: an anonymous
 // caller never passes; a session passes, having the account's full
 // authority (the route still checks who the account is); a PAT passes
-// only when it was minted with the scope; a principal from
-// Principals.ForUser, which is no caller, never passes. An extension route
-// calls this with the principal and the scope it requires and refuses on
-// false.
+// only when it was minted with the scope, and a schedule's credential
+// (ScheduleCredentials.ForSchedule) only when the scope is one of
+// auth.ScheduleScopes; a principal from Principals.ForUser, which is no
+// caller, never passes. An extension route calls this with the principal
+// and the scope it requires and refuses on false.
 func ScopeAllows(p *Principal, s Scope) bool {
 	switch {
 	case p == nil || p.Anonymous || p.Via == "user":
 		return false
-	case p.Via == "pat":
+	case p.ScopeBound():
 		return auth.HasScope(p.Scopes, s)
 	default:
 		return true
@@ -499,6 +500,10 @@ type Deps struct {
 	// by a live request (agentry#838). nil when the server runs without a
 	// database.
 	Principals Principals
+	// ScheduleCredentials mints the credential a schedule's fire starts a
+	// run with, its owner's narrow token in all but name (agentry#1002).
+	// nil when the server runs without a database.
+	ScheduleCredentials ScheduleCredentials
 	// Notifier carries a message an extension composed to a person, under
 	// the core's rules and through the core's transport (agentry#366).
 	// nil when the server runs without a database, as DB is.
@@ -575,7 +580,8 @@ type Notifier interface {
 // person turns off. Only the kinds the core lists here may be used: a
 // message about billing is what the person's billing switch governs, and
 // a dependency alert routed to them is what their dependency-alert
-// switch governs, wherever it came from.
+// switch governs, wherever it came from; a notice about one of their
+// schedules is what their schedules switch governs.
 type NotifyKind string
 
 const (
@@ -588,6 +594,11 @@ const (
 	// organization-subscriptions §6 "Alert routing", agentry#430): the
 	// same news the core mails the author, under the same switch.
 	NotifyDependencyAlert NotifyKind = "dependency_alert"
+	// NotifySchedule is the closed build's schedule mail (plan
+	// quickagent-scheduling.md D9, agentry#1002): a scheduled run in
+	// Agentry failed, or the schedule paused (three refusals in a row, an
+	// entitlement that lapsed). Never a success.
+	NotifySchedule NotifyKind = "schedule"
 )
 
 // Webhooks lets an extension deliver an event to one of an organization's
@@ -679,6 +690,36 @@ type Principals interface {
 	// alone, without the scopes of the credential an earlier request
 	// carried: ask it only to re-check what that request already checked.
 	ForUser(ctx context.Context, userID uuid.UUID) (*Principal, bool, error)
+}
+
+// ScheduleCredentials mints the credential of a run a schedule starts on
+// its owner's behalf, with no live request to carry one (agentry#1002,
+// plan quickagent-scheduling.md §6). Every hosted run is created from a
+// principal the runs extension authorizes the way it authorizes a request,
+// and a fire must go through that same create path (the plan's invariant
+// 5), so the fire needs a principal that is a credential: ForUser's is
+// not one, and must not become one. This is a separate seam from
+// Principals, so an extension that only asks about people never holds the
+// means to act for them.
+type ScheduleCredentials interface {
+	// ForSchedule is the credential for one fire of the schedule
+	// scheduleID that userID owns: the account's standing and roles as
+	// they are now, as ForUser loads them, with Via "schedule",
+	// ScheduleID set, and auth.ScheduleScopes as its scopes, so
+	// ScopeAllows, auth.Check and the Agents seam read it as they read a
+	// token minted with exactly those scopes. It carries no session, no
+	// token, no SSO freshness and no platform-staff standing: a schedule
+	// acts as its owner's narrow token would, never as their session. An
+	// account that does not exist or is not active is false with no
+	// error, so a schedule of a suspended account does not fire. A nil
+	// scheduleID is an error: the credential must name what it is.
+	//
+	// What it reaches in the extension that holds it is that extension's
+	// rule; the vault's is that a schedule sets no secret, so a run it
+	// starts resolves kept secrets only (plan D8). Mint one per fire and
+	// keep none: the account's standing is read at the moment of the
+	// fire, as the plan's entitlement re-check (invariant 4) wants.
+	ForSchedule(ctx context.Context, userID, scheduleID uuid.UUID) (*Principal, bool, error)
 }
 
 // AgentRef is what the core says of an agent a principal may read: its

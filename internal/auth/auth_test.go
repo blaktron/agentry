@@ -189,6 +189,51 @@ func TestCheckRefusesAPrincipalWithNoCredential(t *testing.T) {
 	}
 }
 
+// A schedule's credential (agentry#1002) is gated as a token minted with
+// ScheduleScopes, on top of the role: an admin's schedule reads their
+// private agent and does nothing an admin's session could, from managing
+// the organization to minting a token.
+func TestCheckScheduleCredential(t *testing.T) {
+	orgID := uuid.New()
+	sched := &Principal{
+		UserID: uuid.New(), Via: "schedule", ScheduleID: uuid.New(), Scopes: ScheduleScopes(),
+		OrgRoles: map[uuid.UUID]OrgRole{orgID: RoleAdmin},
+	}
+	if !sched.ScopeBound() || (&Principal{Via: "session"}).ScopeBound() || (&Principal{Via: "user"}).ScopeBound() {
+		t.Fatal("ScopeBound must hold for a token and a schedule and for nothing else")
+	}
+	for _, act := range []Action{ActOrgUpdate, ActUserTokensManage, ActUserSelfUpdate, ActAgentCreate} {
+		if err := Check(sched, Resource{OrgID: orgID}, act); !errors.Is(err, ErrForbidden) {
+			t.Errorf("a schedule's credential, %s: %v, want ErrForbidden", act, err)
+		}
+	}
+	res := AgentResource{EffectiveRole: AgentRoleAdmin}
+	if err := CheckAgent(sched, res, ActAgentRead); err != nil {
+		t.Errorf("a schedule's credential reads its owner's private agent: %v", err)
+	}
+	for _, act := range []Action{ActAgentMaintain, ActAgentPublish, ActAgentRepoRead, ActAgentRepoWrite, ActAgentManage} {
+		if err := CheckAgent(sched, res, act); !errors.Is(err, ErrForbidden) {
+			t.Errorf("a schedule's credential, %s on an agent it administers: %v, want ErrForbidden", act, err)
+		}
+	}
+	// Scope cannot exceed role: a schedule of someone who cannot read the
+	// agent does not read it.
+	if err := CheckAgent(sched, AgentResource{}, ActAgentRead); err == nil {
+		t.Error("a schedule's credential read an agent its owner has no role on")
+	}
+	// The set is the closed list's, and each call's is its own.
+	got := ScheduleScopes()
+	for _, s := range got {
+		if !ValidScope(Scope(s)) {
+			t.Errorf("schedule scope %s is not a valid scope", s)
+		}
+	}
+	got[0] = string(ScopeOrgAdmin)
+	if ScheduleScopes()[0] == string(ScopeOrgAdmin) {
+		t.Fatal("ScheduleScopes hands out a shared slice; one caller widened the next")
+	}
+}
+
 // The hosted-run scopes (agentry#348): valid, in the enumeration, flat, and
 // mapped to no core action — a token carrying only them unlocks nothing
 // in the core.

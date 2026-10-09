@@ -373,7 +373,7 @@ func (s *Server) ListKnowledgePackSizes(w http.ResponseWriter, r *http.Request, 
 	if !s.requireStaff(w, r) {
 		return
 	}
-	if p := principalFrom(r.Context()); p.Via == "pat" && !auth.HasScope(p.Scopes, auth.ScopeKnowledgeRead) {
+	if p := principalFrom(r.Context()); p.ScopeBound() && !auth.HasScope(p.Scopes, auth.ScopeKnowledgeRead) {
 		problemForbidden(w, r, "This token does not carry the knowledge:read scope.")
 		return
 	}
