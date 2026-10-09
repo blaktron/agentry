@@ -427,6 +427,21 @@ func (p serverPrincipals) ForUser(ctx context.Context, userID uuid.UUID) (*Princ
 	return p.srv.PrincipalForUser(ctx, userID)
 }
 
+// scheduleCredentialsOf adapts the server's principal loading to
+// ScheduleCredentials: nil without a database, as principalsOf is.
+func scheduleCredentialsOf(srv *api.Server, pool *pgxpool.Pool) ScheduleCredentials {
+	if pool == nil {
+		return nil
+	}
+	return serverScheduleCredentials{srv}
+}
+
+type serverScheduleCredentials struct{ srv *api.Server }
+
+func (c serverScheduleCredentials) ForSchedule(ctx context.Context, userID, scheduleID uuid.UUID) (*Principal, bool, error) {
+	return c.srv.PrincipalForSchedule(ctx, userID, scheduleID)
+}
+
 // notifierOf adapts the server's notifier to Notifier: nil without a
 // database, the way Deps.DB is, since the rule reads the user's row.
 func notifierOf(srv *api.Server, pool *pgxpool.Pool) Notifier {
@@ -812,7 +827,8 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
 				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool), Principals: principalsOf(srv, pool),
-				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
+				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
+				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL()})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
