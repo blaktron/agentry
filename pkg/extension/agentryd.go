@@ -489,6 +489,21 @@ func voiceOf(srv *api.Server, pool *pgxpool.Pool) Voice {
 	return serverVoice{srv.Voice()}
 }
 
+// reportSettingsOf adapts the server's report settings to ReportSettings:
+// nil without a database, the way Deps.DB is.
+func reportSettingsOf(srv *api.Server, pool *pgxpool.Pool) ReportSettings {
+	if pool == nil {
+		return nil
+	}
+	return serverReportSettings{srv}
+}
+
+type serverReportSettings struct{ srv *api.Server }
+
+func (r serverReportSettings) Theme(ctx context.Context, user uuid.UUID) (string, error) {
+	return r.srv.ReportTheme(ctx, user)
+}
+
 // meterOf is the server's meter under the extension's scope (agentry#777),
 // or a no-op one when the server runs without a database, as every other
 // dependency is absent then.
@@ -794,7 +809,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
 				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool), Principals: principalsOf(srv, pool),
 				Notifier: notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
-				Voice: voiceOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL()})
+				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL()})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
