@@ -21,6 +21,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/metrics"
@@ -333,6 +334,23 @@ func TestScopeAllows(t *testing.T) {
 	}
 	if ScopeAllows(&Principal{Via: "user"}, ScopeRunRead) {
 		t.Fatal("a principal from Principals.ForUser passed; it is no caller (agentry#838)")
+	}
+	// A schedule's credential (agentry#1002) is read as a token minted
+	// with auth.ScheduleScopes: it starts and reads a run and attaches
+	// knowledge, and writes nothing else — never as a session.
+	sched := &Principal{Via: "schedule", ScheduleID: uuid.New(), Scopes: auth.ScheduleScopes()}
+	for _, s := range []Scope{ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead} {
+		if !ScopeAllows(sched, s) {
+			t.Errorf("a schedule's credential was refused %s", s)
+		}
+	}
+	for _, s := range []Scope{ScopeKnowledgeWrite, ScopeSecretWrite, auth.ScopeVoiceWrite, auth.ScopeOrgAdmin} {
+		if ScopeAllows(sched, s) {
+			t.Errorf("a schedule's credential passed %s; it carries only its own scopes", s)
+		}
+	}
+	if ScopeAllows(&Principal{Via: "schedule"}, ScopeRunWrite) {
+		t.Fatal("a schedule principal with no scopes passed, as if it were a session")
 	}
 }
 

@@ -337,6 +337,38 @@ func (s *Server) AgentPublishable(ctx context.Context, p *auth.Principal, ns, na
 // a credential: auth.Check refuses Via "user", so it authorizes no route,
 // and it satisfies no organization's enforced SSO.
 func (s *Server) PrincipalForUser(ctx context.Context, userID uuid.UUID) (*auth.Principal, bool, error) {
+	return s.loadPrincipal(ctx, userID)
+}
+
+// PrincipalForSchedule is pkg/extension.Deps.ScheduleCredentials (agentry#1002,
+// plan quickagent-scheduling.md §6): the credential of one fire of a
+// schedule its owner made in the closed build. It is PrincipalForUser's
+// account, standing and roles, loaded now, with Via "schedule", the
+// schedule's id, and auth.ScheduleScopes — every scope gate reads it as a
+// token minted with exactly those (auth.Principal.ScopeBound). The
+// account's platform-staff standing is dropped: a schedule starts its
+// owner's run and nothing that standing would add. An account that does
+// not exist or is not active is false with no error, so a suspended
+// owner's schedule does not fire; a nil schedule id is an error, because a
+// credential that names nothing could not be told from another in audit.
+func (s *Server) PrincipalForSchedule(ctx context.Context, userID, scheduleID uuid.UUID) (*auth.Principal, bool, error) {
+	if scheduleID == uuid.Nil {
+		return nil, false, errors.New("api: a schedule credential needs the schedule's id")
+	}
+	p, ok, err := s.loadPrincipal(ctx, userID)
+	if err != nil || !ok {
+		return nil, ok, err
+	}
+	p.Via = "schedule"
+	p.ScheduleID = scheduleID
+	p.Scopes = auth.ScheduleScopes()
+	p.PlatformStaff = false
+	return p, true, nil
+}
+
+// loadPrincipal is the account as a credential-less principal, Via "user":
+// what PrincipalForUser hands out and PrincipalForSchedule narrows.
+func (s *Server) loadPrincipal(ctx context.Context, userID uuid.UUID) (*auth.Principal, bool, error) {
 	if s.st == nil {
 		return nil, false, errors.New("api: no database to load the user from")
 	}
@@ -456,7 +488,7 @@ func (s *Server) SendToUser(ctx context.Context, userID uuid.UUID, kind, subject
 // extensionMailKinds is every class an extension may send as. It is the
 // trust boundary, which is why the key is a plain string: what arrives
 // here is the extension's word, and the map is the allowlist that turns
-// it into a kind the core recognises — or refuses. Two today; the core's
+// it into a kind the core recognises — or refuses. Three today; the core's
 // own other kinds stay the core's, and a new class is added here with
 // its switch, its default and its column, never by a string an extension
 // chooses.
@@ -468,6 +500,10 @@ var extensionMailKinds = map[string]notify.Kind{
 	// news, and the person's choice about that news holds wherever it
 	// comes from.
 	"dependency_alert": notify.KindDependencyAlert,
+	// A scheduled run in Agentry that failed, or a schedule that paused
+	// (agentry#1002): the schedules extension's mail, under its own
+	// switch, so a person can silence it without losing billing mail.
+	"schedule": notify.KindSchedule,
 }
 
 // OrgAdminIDs is pkg/extension.Deps.Notifier.OrgAdmins: the active
