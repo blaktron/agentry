@@ -123,13 +123,17 @@ jobs:
             echo "site files above belong to blaktron/agentry-web"; exit 1
           fi
       # Every Dockerfile builds with go.mod's Go to the patch, so a go line
-      # bump moves the builder tag with it (agentry#1021): a floating tag is
+      # bump has to move the builder tag with it (agentry#1021): a floating tag is
       # whatever a host cached, and the Go images' GOTOOLCHAIN=local keeps it.
       - name: Dockerfiles build with go.mod's Go
         run: |
           set -euo pipefail
           want=$(awk '$1 == "go" {print $2; exit}' go.mod)
-          bad=$(git ls-files -z -- ':(glob)**/Dockerfile*' | xargs -0 grep -nHE '^FROM +golang:' | grep -vE "^[^:]+:[0-9]+:FROM +golang:${want//./\\.}([- ]|$)" || true)
+          mapfile -d '' files < <(git ls-files -z -- ':(glob)**/Dockerfile*')
+          [ "${#files[@]}" -gt 0 ] || exit 0
+          # Every FROM of a golang image, whatever its registry or flags.
+          from=$(grep -niHE '^\s*FROM\s+(--\S+\s+)*(\S*/)?golang(:|@|\s|$)' "${files[@]}" || [ $? -eq 1 ])
+          bad=$(printf '%s' "$from" | grep -viE "golang:${want//./\\.}([-@[:space:]]|$)" || [ $? -eq 1 ])
           if [ -n "$bad" ]; then
             echo "$bad"; echo "these build with another Go than go.mod's go $want"; exit 1
           fi
