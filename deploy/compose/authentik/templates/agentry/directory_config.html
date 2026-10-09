@@ -1,0 +1,33 @@
+{% load i18n %}
+{% get_current_language as LANGUAGE_CODE %}
+{# Dynamic values are escaped JSON data, never executable code authorized by CSP. #}
+<script id="agentry-authentik-data" type="application/json">
+{
+    "locale": "{{ LANGUAGE_CODE|escapejs }}",
+    "config": "{{ config_json|escapejs }}",
+    "brand": "{{ brand_json|escapejs }}",
+    "versionFamily": "{{ version_family|escapejs }}",
+    "versionSubdomain": "{{ version_subdomain|escapejs }}",
+    "build": "{{ build|escapejs }}",
+    "api": {
+        "base": "{{ base_url|escapejs }}",
+        "relBase": "{{ base_url_rel|escapejs }}"
+    }
+}
+</script>
+<script data-id="authentik-config">
+    "use strict";
+
+    window.authentik = JSON.parse(document.getElementById("agentry-authentik-data").textContent);
+    window.authentik.config = JSON.parse(window.authentik.config || "{}");
+    window.authentik.brand = JSON.parse(window.authentik.brand || "{}");
+</script>
+
+<script data-id="authentik-messages" type="application/json">
+  [{% for message in messages %}
+    {
+        "level": "{{ message.tags|escapejs }}",
+        "message": "{{ message.message|escapejs }}"
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}]
+</script>
