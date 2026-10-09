@@ -633,3 +633,61 @@ func TestBindHandsTheServersMeter(t *testing.T) {
 		t.Fatalf("the extension's series is not the one it recorded, with the resource labels:\n%s", body)
 	}
 }
+
+// themeReader is the shape SecureAgentry's hosted runs take for the report
+// theme (agentry#1015): it is handed the core's report settings.
+type themeReader struct {
+	noop
+	settings ReportSettings
+}
+
+func (r *themeReader) Bind(d Deps) { r.settings = d.ReportSettings }
+
+// TestBindHandsTheReportSettings: a bound extension reads a person's report
+// theme, "" while they never chose one and again once they clear it, and
+// another person's choice is never theirs (DEV-227: no row is not Plain).
+func TestBindHandsTheReportSettings(t *testing.T) {
+	st := migratedStore(t)
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
+	r := &themeReader{}
+	applyExtensions(srv, []Extension{r})
+	if r.settings == nil {
+		t.Fatal("a server with a database handed out no report settings")
+	}
+	ctx := context.Background()
+	mk := func(prefix string) uuid.UUID {
+		id := uuid.New()
+		if err := st.Queries().CreateHandle(ctx, storegen.CreateHandleParams{ID: id, Handle: prefix + id.String()[:8], Kind: "user"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Queries().CreateUser(ctx, storegen.CreateUserParams{ID: id, Email: id.String() + "@example.test"}); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	user, other := mk("rt-"), mk("ro-")
+	if got, err := r.settings.Theme(ctx, user); err != nil || got != "" {
+		t.Fatalf("never chosen: %q, %v", got, err)
+	}
+	if _, err := st.Queries().UpsertUserReportSettings(ctx, storegen.UpsertUserReportSettingsParams{UserID: other, Theme: "letter"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Queries().UpsertUserReportSettings(ctx, storegen.UpsertUserReportSettingsParams{UserID: user, Theme: "formal"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := r.settings.Theme(ctx, user); err != nil || got != "formal" {
+		t.Fatalf("chosen: %q, %v", got, err)
+	}
+	if _, err := st.Queries().DeleteUserReportSettings(ctx, user); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := r.settings.Theme(ctx, user); err != nil || got != "" {
+		t.Fatalf("cleared: %q, %v", got, err)
+	}
+	if got, _ := r.settings.Theme(ctx, other); got != "letter" {
+		t.Fatalf("the other person's choice moved: %q", got)
+	}
+}
