@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestADraftIsAskedTheDraftSetOnceWithItsPartsAsData(t *testing.T) {
@@ -158,5 +159,37 @@ func TestTheRubricStateSaysWhatTheRunnerGrantsEveryRun(t *testing.T) {
 	}
 	if strings.Contains(seen[0], "everything") {
 		t.Fatalf("the version reached the grants: %q", seen[0])
+	}
+}
+
+// Every chunk's state carries what the release says it is for: its name,
+// summary and guide overview (agentry#1044), the purpose C3 weighs a
+// capability against. Nothing else of the manifest reaches it, a manifest
+// that states no purpose says so, and a long overview is cut at the bound
+// on a character boundary.
+func TestTheRubricStateCarriesTheReleasesPurpose(t *testing.T) {
+	manifestJSON := `{"name":"csv-check","summary":"Checks a CSV for missing values.",` +
+		`"guide":{"overview":"Reads the CSV you add and reports problems per column.","task":"e.g. check it"},` +
+		`"capabilities":{"exec":"none"}}`
+	f := &fakeAsker{answer: func(map[string]string, Question, int) (float64, error) { return 0.02, nil }}
+	if _, _, err := NewRubricScanner(f).Scan(context.Background(), []byte(manifestJSON), nil,
+		[]RubricFile{{Path: "AGENT.md", Content: "Read the CSV."}}); err != nil {
+		t.Fatal(err)
+	}
+	want := "name: csv-check\nsummary: Checks a CSV for missing values.\noverview: Reads the CSV you add and reports problems per column."
+	for _, st := range f.asked {
+		if st["purpose"] != want {
+			t.Fatalf("purpose = %q, want %q", st["purpose"], want)
+		}
+	}
+	for _, none := range []string{`{}`, `{"name":"only-a-name"}`, `not json`, `{"summary":"  ","guide":{"overview":""}}`} {
+		if got := Purpose([]byte(none)); got != noPurpose {
+			t.Errorf("Purpose(%s) = %q, want %q", none, got, noPurpose)
+		}
+	}
+	long := `{"summary":"s","guide":{"overview":"` + strings.Repeat("é", PurposeCap) + `"}}`
+	got := Purpose([]byte(long))
+	if !strings.HasSuffix(got, truncatedMark) || len(got) > PurposeCap+len(truncatedMark) || !utf8.ValidString(got) {
+		t.Fatalf("a long purpose was not cut cleanly at the bound: %d bytes, valid=%v", len(got), utf8.ValidString(got))
 	}
 }
