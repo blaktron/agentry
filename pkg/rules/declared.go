@@ -18,9 +18,11 @@ package rules
 // injection techniques and keep the bundle's rating.
 
 import (
+	"net"
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 )
 
 // Declared is what a release's manifest declares, as the rating by
@@ -255,39 +257,78 @@ func splitList(s string) []string {
 // dotted name ending in a label of letters, with no list of top-level
 // domains, so `webhook.site` and `interact.sh` are hosts; a file name such
 // as `report.md` reads as one too, which rates a directive that names it as
-// undeclared, the side this rating fails toward.
+// undeclared, the side this rating fails toward. S9's content diff reads
+// the same grammar through Destinations and filters bare names its own way
+// (agentry#958), so the two cannot drift apart on what a URL reaches.
 var (
-	destinationURLRe   = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.\-]*://[^\s"'<>()\[\]` + "`" + `]+`)
+	destinationURLRe   = regexp.MustCompile(`(?i)[a-z][a-z0-9+.\-]*://[^\s"'<>()\[\]` + "`" + `]+`)
 	destinationEmailRe = regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
 	destinationIPRe    = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	destinationHostRe  = regexp.MustCompile(`(?i)\b(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9\-]{0,61}[a-z0-9]\b`)
 )
 
-// destinations returns the hosts, addresses and email recipients text
-// names, each once, in order, joined by commas.
-func destinations(text string) string {
-	var out []string
-	add := func(s string) {
+// DestinationKind is how a destination was written.
+type DestinationKind string
+
+// The ways a destination is written.
+const (
+	DestinationURL   DestinationKind = "url"
+	DestinationEmail DestinationKind = "email"
+	DestinationIP    DestinationKind = "ip"
+	DestinationHost  DestinationKind = "host"
+)
+
+// Destination is one place text names: a host (a URL's, an IP address, a
+// bare name) or an email address, lower-cased, without a trailing dot.
+type Destination struct {
+	Target string
+	Kind   DestinationKind
+}
+
+// Destinations returns the destinations text names, each once, in the
+// order URLs, email addresses, IPv4 addresses, bare host names. A URL or an
+// address is taken out of the text before the later patterns run, so its
+// parts are not named again (the userinfo of a disguised URL included).
+func Destinations(text string) []Destination {
+	var out []Destination
+	seen := map[string]bool{}
+	add := func(s string, k DestinationKind) {
 		s = strings.ToLower(strings.TrimSuffix(s, "."))
-		if s != "" && !slices.Contains(out, s) {
-			out = append(out, s)
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, Destination{Target: s, Kind: k})
 		}
 	}
 	rest := text
 	for _, u := range destinationURLRe.FindAllString(text, -1) {
-		add(urlHostOf(u))
+		add(urlHostOf(u), DestinationURL)
 		rest = strings.Replace(rest, u, " ", 1)
 	}
 	for _, a := range destinationEmailRe.FindAllString(rest, -1) {
-		add(a)
+		add(a, DestinationEmail)
 		rest = strings.Replace(rest, a, " ", 1)
 	}
 	for _, ip := range destinationIPRe.FindAllString(rest, -1) {
-		add(ip)
 		rest = strings.Replace(rest, ip, " ", 1)
+		if net.ParseIP(ip) != nil { // 999.1.2.3 is no address
+			add(ip, DestinationIP)
+		}
 	}
+	// Emphasis marks are word characters to the pattern's \b, so
+	// _webhook.site_ would name no host; a host name holds neither.
+	rest = strings.NewReplacer("_", " ", "*", " ").Replace(rest)
 	for _, h := range destinationHostRe.FindAllString(rest, -1) {
-		add(h)
+		add(h, DestinationHost)
+	}
+	return out
+}
+
+// destinations returns the targets Destinations finds, joined by commas.
+func destinations(text string) string {
+	ds := Destinations(text)
+	out := make([]string, len(ds))
+	for i, d := range ds {
+		out[i] = d.Target
 	}
 	return strings.Join(out, ",")
 }
@@ -296,7 +337,11 @@ func destinations(text string) string {
 // or a backslash (which browsers read as "/"), any userinfo goes up to its
 // last "@", and any port is cut, so a URL that dresses one host up as
 // another (https://evil.example\@declared.example/) is keyed by the one it
-// reaches.
+// reaches. Characters a host name cannot hold are then trimmed from its
+// ends, so the Markdown or prose around a URL (`**https://h.example**`,
+// "https://h.example, then") is not part of its key (agentry#958). One
+// inside the name is kept: https://declared.example_.evil.example/ reaches
+// evil.example, and cut at the "_" it would read as the declared host.
 func urlHostOf(u string) string {
 	rest := u
 	if i := strings.Index(rest, "://"); i >= 0 {
@@ -311,7 +356,13 @@ func urlHostOf(u string) string {
 	if i := strings.Index(rest, ":"); i >= 0 {
 		rest = rest[:i]
 	}
-	return rest
+	return strings.TrimFunc(rest, notHostRune)
+}
+
+// notHostRune is true for a character no host name holds: anything but a
+// letter (an internationalized name's included), a digit, "." and "-".
+func notHostRune(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '-'
 }
 
 // credentialFileMark prefixes a credential file named in place of a
