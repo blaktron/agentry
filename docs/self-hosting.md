@@ -1617,7 +1617,7 @@ python3 scripts/directory-csp.py --origin https://auth.example.com
 
 Set the emitted value as `Content-Security-Policy` at the reverse proxy on
 HTML responses under `/if/flow/`, including flow error responses. Deploy
-the policy and templates together: the six SHA-256 permissions authorize
+the policy and templates together: the eight SHA-256 permissions authorize
 only the static script bodies in that checkout. Dynamic directory config,
 brand and flow values remain escaped JSON data; never generate permissions
 by hashing a rendered response or values supplied by a user. The policy
@@ -1626,6 +1626,15 @@ script attributes, and permits same-origin WebSockets for flow updates.
 The stylesheet exception `style-src 'self' 'unsafe-inline'` is required by
 the upstream Lit components and their shadow trees; it grants no script
 permission. Same-origin frames support upstream flow embedding.
+
+Interactive Turnstile renders directly in its flow card through a static
+adapter (agentry#1038). It uses the vendor SDK and the existing stage
+callback and server verifier, without a blob document or inline renderer.
+The adapter follows the stage's theme, language, retry and teardown
+lifecycle. The upstream static theme bootstrap is included verbatim so its
+permission can also be derived from reviewed source. The pinned-image
+acceptance checks both that template and the CAPTCHA controller contracts;
+an image upgrade requires reviewing them and running the real widget test.
 
 Keep the upstream policy on `/media/` and other routes. This helper does
 not replace their policies or install a header in the headless edge.
