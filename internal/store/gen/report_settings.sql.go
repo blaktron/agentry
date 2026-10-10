@@ -11,12 +11,26 @@ import (
 	"github.com/google/uuid"
 )
 
+const clearUserReportLogo = `-- name: ClearUserReportLogo :execrows
+UPDATE user_report_settings SET logo = NULL, updated_at = now()
+WHERE user_id = $1 AND logo IS NOT NULL
+`
+
+func (q *Queries) ClearUserReportLogo(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, clearUserReportLogo, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteUserReportSettings = `-- name: DeleteUserReportSettings :execrows
 DELETE FROM user_report_settings WHERE user_id = $1
 `
 
-// A PUT that carries no design, and clear-data (agentry#498): no row reads
-// as never chosen.
+// A PUT that carries no design, clear-data (agentry#498) and the account's
+// erasure (agentry#1025): no row reads as never chosen, and the logo goes
+// with it.
 func (q *Queries) DeleteUserReportSettings(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteUserReportSettings, userID)
 	if err != nil {
@@ -27,15 +41,45 @@ func (q *Queries) DeleteUserReportSettings(ctx context.Context, userID uuid.UUID
 
 const getUserReportSettings = `-- name: GetUserReportSettings :one
 
-SELECT user_id, updated_at, design FROM user_report_settings WHERE user_id = $1
+SELECT user_id, updated_at, design, logo FROM user_report_settings WHERE user_id = $1
 `
 
 // The report design, a profile setting (agentry#989; since agentry#1024 the
-// whole theme document version 2, validated by pkg/reportdesign first).
+// whole theme document version 2, validated by pkg/reportdesign first; since
+// agentry#1025 its logo beside it, a PNG pkg/reportdesign wrote).
 func (q *Queries) GetUserReportSettings(ctx context.Context, userID uuid.UUID) (UserReportSetting, error) {
 	row := q.db.QueryRow(ctx, getUserReportSettings, userID)
 	var i UserReportSetting
-	err := row.Scan(&i.UserID, &i.UpdatedAt, &i.Design)
+	err := row.Scan(
+		&i.UserID,
+		&i.UpdatedAt,
+		&i.Design,
+		&i.Logo,
+	)
+	return i, err
+}
+
+const setUserReportLogo = `-- name: SetUserReportLogo :one
+UPDATE user_report_settings SET logo = $2, updated_at = now()
+WHERE user_id = $1
+RETURNING user_id, updated_at, design, logo
+`
+
+type SetUserReportLogoParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Logo   []byte    `json:"logo"`
+}
+
+// No row (no design saved) is no rows: a logo needs a design to travel with.
+func (q *Queries) SetUserReportLogo(ctx context.Context, arg SetUserReportLogoParams) (UserReportSetting, error) {
+	row := q.db.QueryRow(ctx, setUserReportLogo, arg.UserID, arg.Logo)
+	var i UserReportSetting
+	err := row.Scan(
+		&i.UserID,
+		&i.UpdatedAt,
+		&i.Design,
+		&i.Logo,
+	)
 	return i, err
 }
 
@@ -43,7 +87,7 @@ const upsertUserReportSettings = `-- name: UpsertUserReportSettings :one
 INSERT INTO user_report_settings (user_id, design)
 VALUES ($1, $2)
 ON CONFLICT (user_id) DO UPDATE SET design = EXCLUDED.design, updated_at = now()
-RETURNING user_id, updated_at, design
+RETURNING user_id, updated_at, design, logo
 `
 
 type UpsertUserReportSettingsParams struct {
@@ -51,9 +95,42 @@ type UpsertUserReportSettingsParams struct {
 	Design []byte    `json:"design"`
 }
 
+// The design alone: a logo already stored stays (agentry#1025), so a client
+// that does not know logos cannot drop one by saving.
 func (q *Queries) UpsertUserReportSettings(ctx context.Context, arg UpsertUserReportSettingsParams) (UserReportSetting, error) {
 	row := q.db.QueryRow(ctx, upsertUserReportSettings, arg.UserID, arg.Design)
 	var i UserReportSetting
-	err := row.Scan(&i.UserID, &i.UpdatedAt, &i.Design)
+	err := row.Scan(
+		&i.UserID,
+		&i.UpdatedAt,
+		&i.Design,
+		&i.Logo,
+	)
+	return i, err
+}
+
+const upsertUserReportSettingsWithLogo = `-- name: UpsertUserReportSettingsWithLogo :one
+INSERT INTO user_report_settings (user_id, design, logo)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id) DO UPDATE SET design = EXCLUDED.design, logo = EXCLUDED.logo, updated_at = now()
+RETURNING user_id, updated_at, design, logo
+`
+
+type UpsertUserReportSettingsWithLogoParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Design []byte    `json:"design"`
+	Logo   []byte    `json:"logo"`
+}
+
+// The design and its logo together, from a design that carried one.
+func (q *Queries) UpsertUserReportSettingsWithLogo(ctx context.Context, arg UpsertUserReportSettingsWithLogoParams) (UserReportSetting, error) {
+	row := q.db.QueryRow(ctx, upsertUserReportSettingsWithLogo, arg.UserID, arg.Design, arg.Logo)
+	var i UserReportSetting
+	err := row.Scan(
+		&i.UserID,
+		&i.UpdatedAt,
+		&i.Design,
+		&i.Logo,
+	)
 	return i, err
 }

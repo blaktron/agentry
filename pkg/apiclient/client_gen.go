@@ -2028,6 +2028,36 @@ func (e DeleteUserDirectoryDeviceParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for GetUserReportSettingsParamsInclude.
+const (
+	ReportSettingsIncludeLogo GetUserReportSettingsParamsInclude = "logo"
+)
+
+// Valid indicates whether the value is a known member of the GetUserReportSettingsParamsInclude enum.
+func (e GetUserReportSettingsParamsInclude) Valid() bool {
+	switch e {
+	case ReportSettingsIncludeLogo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateUserReportSettingsParamsInclude.
+const (
+	UpdateReportSettingsIncludeLogo UpdateUserReportSettingsParamsInclude = "logo"
+)
+
+// Valid indicates whether the value is a known member of the UpdateUserReportSettingsParamsInclude enum.
+func (e UpdateUserReportSettingsParamsInclude) Valid() bool {
+	switch e {
+	case UpdateReportSettingsIncludeLogo:
+		return true
+	default:
+		return false
+	}
+}
+
 // AbuseReport defines model for AbuseReport.
 type AbuseReport struct {
 	Agent     string             `json:"agent"`
@@ -3184,7 +3214,7 @@ type RegisterRequest struct {
 	Password    string              `json:"password"`
 }
 
-// ReportDesign A report design, the theme document version 2 (plan report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it.
+// ReportDesign A report design, the theme document version 2 (plan report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB (agentry#1025).
 type ReportDesign struct {
 	// Accent The one colour, lower-case hex.
 	Accent string `json:"accent"`
@@ -3206,6 +3236,12 @@ type ReportDesign struct {
 		Text string `json:"text"`
 	} `json:"footer"`
 	Headings ReportDesignHeadings `json:"headings"`
+
+	// Logo The person's logo, drawn only in the title block; absent for none. Answered only when asked for (`include=logo`).
+	Logo *struct {
+		// Png A PNG in standard base64, at most 512 KB and 1024 pixels each way, as the core encoded it from the person's upload.
+		Png string `json:"png"`
+	} `json:"logo,omitempty"`
 
 	// Name The design's label, a built-in's own name or the person's.
 	Name string `json:"name"`
@@ -3255,7 +3291,7 @@ type ReportDesignTitleBlock string
 
 // ReportSettings The caller's report settings, a profile setting (agentry#989). No `design` means the person never chose one.
 type ReportSettings struct {
-	// Design A report design, the theme document version 2 (plan report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it.
+	// Design A report design, the theme document version 2 (plan report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB (agentry#1025).
 	Design *ReportDesign `json:"design,omitempty"`
 }
 
@@ -4387,6 +4423,29 @@ type DeleteCurrentUserParamsPublishedContent string
 // DeleteUserDirectoryDeviceParamsKind defines parameters for DeleteUserDirectoryDevice.
 type DeleteUserDirectoryDeviceParamsKind string
 
+// GetUserReportSettingsParams defines parameters for GetUserReportSettings.
+type GetUserReportSettingsParams struct {
+	// Include `logo` answers the design with its logo, if the person has one (agentry#1025). Without it the design comes without a `logo` key, so a client built before logos still reads it.
+	Include *GetUserReportSettingsParamsInclude `form:"include,omitempty" json:"include,omitempty"`
+}
+
+// GetUserReportSettingsParamsInclude defines parameters for GetUserReportSettings.
+type GetUserReportSettingsParamsInclude string
+
+// UpdateUserReportSettingsParams defines parameters for UpdateUserReportSettings.
+type UpdateUserReportSettingsParams struct {
+	// Include `logo` answers the design with its logo, as GET does.
+	Include *UpdateUserReportSettingsParamsInclude `form:"include,omitempty" json:"include,omitempty"`
+}
+
+// UpdateUserReportSettingsParamsInclude defines parameters for UpdateUserReportSettings.
+type UpdateUserReportSettingsParamsInclude string
+
+// PutUserReportLogoMultipartBody defines parameters for PutUserReportLogo.
+type PutUserReportLogoMultipartBody struct {
+	File openapi_types.File `json:"file"`
+}
+
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = CreateAgentRequest
 
@@ -4539,6 +4598,9 @@ type UpdateUserNotificationSettingsJSONRequestBody = NotificationSettings
 
 // UpdateUserReportSettingsJSONRequestBody defines body for UpdateUserReportSettings for application/json ContentType.
 type UpdateUserReportSettingsJSONRequestBody = ReportSettings
+
+// PutUserReportLogoMultipartRequestBody defines body for PutUserReportLogo for multipart/form-data ContentType.
+type PutUserReportLogoMultipartRequestBody PutUserReportLogoMultipartBody
 
 // AddSshKeyJSONRequestBody defines body for AddSshKey for application/json ContentType.
 type AddSshKeyJSONRequestBody = AddSshKeyRequest
@@ -6043,25 +6105,41 @@ type ClientInterface interface {
 	// A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
 	//
 	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
-	GetUserReportSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetUserReportSettings(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989, agentry#1024).
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-	UpdateUserReportSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateUserReportSettingsWithBody(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateUserReportSettings Replace the caller's report settings (agentry#989, agentry#1024).
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-	UpdateUserReportSettings(ctx context.Context, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateUserReportSettings(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUserReportLogo Remove the logo from the caller's report design (agentry#1025).
+	//
+	// The design stays. Removing a logo that is not there is not an error.
+	//
+	// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
+	DeleteUserReportLogo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutUserReportLogoWithBody Set the logo of the caller's report design (agentry#1025).
+	//
+	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan report-designs.md D9). The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /user/report-settings/logo (the `PutUserReportLogo` operationId).
+	PutUserReportLogoWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -9686,8 +9764,8 @@ func (c *Client) UpdateUserNotificationSettings(ctx context.Context, body Update
 // A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
 //
 // Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
-func (c *Client) GetUserReportSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetUserReportSettingsRequest(c.Server)
+func (c *Client) GetUserReportSettings(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserReportSettingsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9700,13 +9778,13 @@ func (c *Client) GetUserReportSettings(ctx context.Context, reqEditors ...Reques
 
 // UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989, agentry#1024).
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
 //
 // Takes any type of body and a specified content type.
 //
 // Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-func (c *Client) UpdateUserReportSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateUserReportSettingsRequestWithBody(c.Server, contentType, body)
+func (c *Client) UpdateUserReportSettingsWithBody(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserReportSettingsRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9719,13 +9797,49 @@ func (c *Client) UpdateUserReportSettingsWithBody(ctx context.Context, contentTy
 
 // UpdateUserReportSettings Replace the caller's report settings (agentry#989, agentry#1024).
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-func (c *Client) UpdateUserReportSettings(ctx context.Context, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateUserReportSettingsRequest(c.Server, body)
+func (c *Client) UpdateUserReportSettings(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserReportSettingsRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUserReportLogo Remove the logo from the caller's report design (agentry#1025).
+//
+// The design stays. Removing a logo that is not there is not an error.
+//
+// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
+func (c *Client) DeleteUserReportLogo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUserReportLogoRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutUserReportLogoWithBody Set the logo of the caller's report design (agentry#1025).
+//
+// Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan report-designs.md D9). The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /user/report-settings/logo (the `PutUserReportLogo` operationId).
+func (c *Client) PutUserReportLogoWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserReportLogoRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -17239,7 +17353,7 @@ func NewUpdateUserNotificationSettingsRequestWithBody(server string, contentType
 }
 
 // NewGetUserReportSettingsRequest constructs an http.Request for the GetUserReportSettings method
-func NewGetUserReportSettingsRequest(server string) (*http.Request, error) {
+func NewGetUserReportSettingsRequest(server string, params *GetUserReportSettingsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -17257,6 +17371,33 @@ func NewGetUserReportSettingsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Include != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include", *params.Include, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -17266,18 +17407,18 @@ func NewGetUserReportSettingsRequest(server string) (*http.Request, error) {
 }
 
 // NewUpdateUserReportSettingsRequest calls the generic UpdateUserReportSettings builder with application/json body
-func NewUpdateUserReportSettingsRequest(server string, body UpdateUserReportSettingsJSONRequestBody) (*http.Request, error) {
+func NewUpdateUserReportSettingsRequest(server string, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateUserReportSettingsRequestWithBody(server, "application/json", bodyReader)
+	return NewUpdateUserReportSettingsRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewUpdateUserReportSettingsRequestWithBody constructs an http.Request for the UpdateUserReportSettings method, with any body, and a specified content type
-func NewUpdateUserReportSettingsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateUserReportSettingsRequestWithBody(server string, params *UpdateUserReportSettingsParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -17286,6 +17427,89 @@ func NewUpdateUserReportSettingsRequestWithBody(server string, contentType strin
 	}
 
 	operationPath := fmt.Sprintf("/user/report-settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Include != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include", *params.Include, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteUserReportLogoRequest constructs an http.Request for the DeleteUserReportLogo method
+func NewDeleteUserReportLogoRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-settings/logo")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutUserReportLogoRequestWithBody constructs an http.Request for the PutUserReportLogo method, with any body, and a specified content type
+func NewPutUserReportLogoRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-settings/logo")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -19661,25 +19885,43 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
-	GetUserReportSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error)
+	GetUserReportSettingsWithResponse(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error)
 
 	// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-	UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
+	UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
 
 	// UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-	UpdateUserReportSettingsWithResponse(ctx context.Context, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
+	UpdateUserReportSettingsWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
+
+	// DeleteUserReportLogoWithResponse Remove the logo from the caller's report design (agentry#1025).
+	//
+	// The design stays. Removing a logo that is not there is not an error.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
+	DeleteUserReportLogoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteUserReportLogoResponse, error)
+
+	// PutUserReportLogoWithBodyWithResponse Set the logo of the caller's report design (agentry#1025).
+	//
+	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan report-designs.md D9). The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-settings/logo (the `PutUserReportLogo` operationId).
+	PutUserReportLogoWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportLogoResponse, error)
 
 	// RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -27226,6 +27468,102 @@ func (r UpdateUserReportSettingsResponse) ContentType() string {
 	return ""
 }
 
+type DeleteUserReportLogoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportSettings
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteUserReportLogoResponse) GetJSON200() *ReportSettings {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteUserReportLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteUserReportLogoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteUserReportLogoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteUserReportLogoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteUserReportLogoResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutUserReportLogoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportSettings
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutUserReportLogoResponse) GetJSON200() *ReportSettings {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutUserReportLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutUserReportLogoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutUserReportLogoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutUserReportLogoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutUserReportLogoResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RevokeOtherUserSessionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -31048,8 +31386,8 @@ func (c *ClientWithResponses) UpdateUserNotificationSettingsWithResponse(ctx con
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
-func (c *ClientWithResponses) GetUserReportSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error) {
-	rsp, err := c.GetUserReportSettings(ctx, reqEditors...)
+func (c *ClientWithResponses) GetUserReportSettingsWithResponse(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error) {
+	rsp, err := c.GetUserReportSettings(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -31058,13 +31396,13 @@ func (c *ClientWithResponses) GetUserReportSettingsWithResponse(ctx context.Cont
 
 // UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-func (c *ClientWithResponses) UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error) {
-	rsp, err := c.UpdateUserReportSettingsWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error) {
+	rsp, err := c.UpdateUserReportSettingsWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -31073,17 +31411,47 @@ func (c *ClientWithResponses) UpdateUserReportSettingsWithBodyWithResponse(ctx c
 
 // UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form.
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-func (c *ClientWithResponses) UpdateUserReportSettingsWithResponse(ctx context.Context, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error) {
-	rsp, err := c.UpdateUserReportSettings(ctx, body, reqEditors...)
+func (c *ClientWithResponses) UpdateUserReportSettingsWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error) {
+	rsp, err := c.UpdateUserReportSettings(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateUserReportSettingsResponse(rsp)
+}
+
+// DeleteUserReportLogoWithResponse Remove the logo from the caller's report design (agentry#1025).
+//
+// The design stays. Removing a logo that is not there is not an error.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
+func (c *ClientWithResponses) DeleteUserReportLogoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteUserReportLogoResponse, error) {
+	rsp, err := c.DeleteUserReportLogo(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUserReportLogoResponse(rsp)
+}
+
+// PutUserReportLogoWithBodyWithResponse Set the logo of the caller's report design (agentry#1025).
+//
+// Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan report-designs.md D9). The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-settings/logo (the `PutUserReportLogo` operationId).
+func (c *ClientWithResponses) PutUserReportLogoWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportLogoResponse, error) {
+	rsp, err := c.PutUserReportLogoWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserReportLogoResponse(rsp)
 }
 
 // RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
@@ -36602,6 +36970,72 @@ func ParseUpdateUserReportSettingsResponse(rsp *http.Response) (*UpdateUserRepor
 	}
 
 	response := &UpdateUserReportSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportSettings
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteUserReportLogoResponse parses an HTTP response from a DeleteUserReportLogoWithResponse call
+func ParseDeleteUserReportLogoResponse(rsp *http.Response) (*DeleteUserReportLogoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteUserReportLogoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportSettings
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutUserReportLogoResponse parses an HTTP response from a PutUserReportLogoWithResponse call
+func ParsePutUserReportLogoResponse(rsp *http.Response) (*PutUserReportLogoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutUserReportLogoResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

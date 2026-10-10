@@ -98,7 +98,10 @@ func TestReportSettingsRoundTrip(t *testing.T) {
 			m["footer"].(map[string]any)["text"] = strings.Repeat("x", 121)
 		}, "design.footer.text"},
 		{"two-line footer", func(m map[string]any) { m["footer"].(map[string]any)["text"] = "a\nb" }, "design.footer.text"},
-		{"unknown key", func(m map[string]any) { m["logo"] = "https://x.example/logo.png" }, "design"},
+		{"unknown key", func(m map[string]any) { m["watermark"] = "x.png" }, "design"},
+		// A logo is pixels, never a URL (invariant 12; agentry#1025).
+		{"a logo by URL", func(m map[string]any) { m["logo"] = "https://x.example/logo.png" }, "design.logo"},
+		{"a logo's URL", func(m map[string]any) { m["logo"] = map[string]any{"png": "https://x.example/logo.png"} }, "design.logo.png"},
 		{"missing field", func(m map[string]any) { delete(m, "quotes") }, "design.quotes"},
 		{"theme document 1", func(m map[string]any) { m["agentryTheme"] = 1 }, "design.agentryTheme"},
 		{"old name", func(m map[string]any) { m["basedOn"] = "formal" }, "design.basedOn"},
