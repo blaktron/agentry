@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.4.3"
+version: "0.4.4"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -114,6 +114,17 @@ notes: >
   file-like domain (.md, .zip, .mov, .sh, .py, .pl, .pm, .rs, .so) with
   no path or port after it, and in program source a dotted name outside
   a string, is not a host. The threshold stays medium.
+  0.4.4 changes no signature. It narrows S9's bare names in Markdown's
+  code (agentry#958): 0.4.3's rescan on dev drew new mediums for
+  `window.name`, `request.post`, `application.properties` and
+  `app.zip/src/UserDao.java`, words and files under delegated TLDs. In a
+  code span or a fenced block a bare name now counts when it is quoted,
+  has a path after it, or is under a TLD hosts are usually under (com,
+  net, org, io, dev, ai, co, app, cloud, xyz, edu, gov, a country code
+  that is not also a field name, a special-use name); .java joins the
+  file-like domains, and a port after a file name is no longer evidence
+  of a host (agent.md:12). Prose outside code keeps 0.4.3's rule. The
+  threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
