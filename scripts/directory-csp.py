@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 SCRIPT_IDS = {"shady-dom", "authentik-config", "flow-config", "agentry-remember-device",
-              "agentry-signup-link", "agentry-terms"}
+              "agentry-signup-link", "agentry-terms", "agentry-turnstile", "theme-script"}
 
 
 class Scripts(HTMLParser):
