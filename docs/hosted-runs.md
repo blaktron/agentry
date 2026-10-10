@@ -237,7 +237,7 @@ run's id, so a finish reported twice changes nothing.
 | A session where the deployment does not run them (`AGENTRY_RUNS_SESSIONS` off, or no sandbox hosts), or no sandbox host is taking runs (`hostsOnline` 0) | `409 sessions-unavailable` — a person waits on a session as it starts, so it is refused rather than queued |
 | A session whose payer is on Standard | `403 session-tier`, with `account`, `tier` and `requires: pro` |
 | A session whose payer's balance is short of `AGENTRY_RUNS_SESSION_MIN_CREDITS` | `402 credits-exhausted`, as for a hold |
-| The release, or an MCP server it declares, requires a secret the caller has not set | `409 secret-missing`, with `missing` (the required names not set), `secrets` (every declared name) and, when there are any, `optional`; set them, then create the run again ([below](#a-runs-secrets)) |
+| The release, or an MCP server it declares, requires a secret the caller has not set | `409 secret-missing`, with `missing` (the required names not set), `secrets` (every declared name) and, when there are any, `optional`; set them, then create the run again ([below](#a-runs-secrets)). With `ask_optional_secrets: true`, `missing` also names each optional one not set ([below](#at-create)) |
 | The release requires a secret and the deployment keeps none, or pushes to no sandbox host | `409 secrets-declared`, with `required` and `secrets` — such a release runs on your own machine, where its keys are yours |
 | The release requires more than 32 secrets, or the run would carry more than 32, where the deployment keeps secrets | `422 validation` |
 | An MCP server the release declares signs in by OAuth, and the caller keeps no working connection to it for this version | `409 connection-missing`, with `missing` (the servers to connect) and `connections` (every one that signs in); connect them, then create the run again ([below](#a-runs-connections)) |
@@ -558,11 +558,26 @@ that is not set is not carried, and the run starts without it
 (agentry-enterprise#424). A run that would carry more than 32 names is
 `422 validation` too.
 
+A create may send `ask_optional_secrets: true` (agentry-enterprise#517).
+Then, where the deployment keeps secrets, an optional name the caller has
+not set is refused as a required one is: `409 secret-missing`, with
+`missing` naming every declared name not set, required and optional, and
+`optional` saying which are optional. A client that cannot list the
+caller's secrets, such as one holding a token, learns from it which
+optional keys to ask for. It sets the ones the person gives, then creates
+the run again without the field, so an optional key left empty is gone
+without. Without the field, or where the deployment keeps no secrets, an
+optional name that is not set never refuses a create. A schedule's create
+and edit take the same field for their check alone: the schedule does not
+keep it, and its runs start without an optional secret the account does
+not keep.
+
 A secret that is not kept counts only for the credential that set it: the
 same session, or the same token. To any other caller it is missing, so
 that start asks for it again. Run create takes a PAT with `run:write`, so a
 token holder can learn which of a release's declared names the account has
-set. It never learns a value.
+set, the optional ones too when it sends `ask_optional_secrets`. It never
+learns a value.
 
 ### At the hand-off
 
