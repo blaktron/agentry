@@ -69,13 +69,33 @@ func (p *Pipeline) MCPSweep(ctx context.Context) (sum MCPSweepSummary, err error
 		if len(rows) == 0 {
 			break
 		}
-		pkgs := make([]OSVPackage, 0, len(rows))
-		for _, r := range rows {
-			pkgs = append(pkgs, OSVPackage{Ecosystem: osvEcosystem(r.Ecosystem), Name: r.Package, Version: r.Version})
+		pkgs := make([]OSVPackage, len(rows))
+		var ask []OSVPackage
+		for i, r := range rows {
+			pkgs[i] = OSVPackage{Ecosystem: osvEcosystem(r.Ecosystem), Name: r.Package, Version: r.Version}
+			if r.Status != "not-found" {
+				ask = append(ask, pkgs[i])
+			}
 		}
-		vulns, err := p.osv.Query(ctx, pkgs)
+		var vulns map[string][]OSVVulnerability
+		if len(ask) > 0 {
+			vulns, err = p.osv.Query(ctx, ask)
+		}
 		for i, r := range rows {
 			prev := mcpScanRecordFromRow(r)
+			if prev.Status == "not-found" {
+				// A version its registry does not publish (agentry#1036):
+				// OSV's "no advisories" would turn it back into "safe".
+				// It keeps its status and moves past the cutoff, so the
+				// loop ends; S7 asks the registry again when a release
+				// names it.
+				kept := *prev
+				kept.LastChecked = time.Now()
+				if perr := p.mcpCache.Put(ctx, kept); perr != nil {
+					return sum, fmt.Errorf("mcp sweep: keep %s: %w", pkgs[i].Key(), perr)
+				}
+				continue
+			}
 			sum.Checked++
 			if err != nil {
 				// Keep what we knew, note the failure, and move the row past

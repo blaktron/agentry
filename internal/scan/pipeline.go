@@ -88,6 +88,14 @@ func (p *Pipeline) SetMCPScanning(client OSVClient, cache MCPScanCache) {
 	}
 }
 
+// SetPackageRegistries wires the registries S7 asks whether a declared
+// server's pinned version is published (agentry#1036).
+func (p *Pipeline) SetPackageRegistries(r PackageRegistries) {
+	if p.orch != nil {
+		p.orch.SetPackageRegistries(r)
+	}
+}
+
 // MCPScanningEnabled reports whether the sweep has a vulnerability database
 // to ask — the wiring check agentry#184 exists for.
 func (p *Pipeline) MCPScanningEnabled() bool { return osvEnabled(p.osv) && p.mcpCache != nil }

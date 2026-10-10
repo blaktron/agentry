@@ -7054,7 +7054,12 @@ components:
           type: string
         status:
           type: string
-          enum: [safe, vulnerable, error]
+          description: >-
+            safe: no known advisories when last checked (OSV), which says
+            nothing else about the server. not-found: its package registry
+            does not publish this version, so no run can install it
+            (agentry#1036).
+          enum: [safe, vulnerable, error, not-found]
         maxSeverity:
           type: string
           enum: [info, low, medium, high, critical]
