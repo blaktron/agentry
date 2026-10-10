@@ -202,7 +202,7 @@ func (s *Server) PutOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHandl
 		problemFeatureNotIncluded(w, r, "A logo is not included in this organization's subscription.")
 		return
 	}
-	upload, err := readLogoUpload(w, r)
+	upload, err := readUploadPart(w, r, logoMaxBytes)
 	if err != nil {
 		var mbe *http.MaxBytesError
 		switch {
@@ -315,14 +315,16 @@ func (s *Server) DeleteOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHa
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// readLogoUpload reads the one multipart part a logo upload carries,
-// bounded before a byte of it is decoded. It streams the parts rather
-// than calling ParseMultipartForm, which would spool anything over its
-// memory limit to disk: a logo is small and never touches one. The
-// part's own declared type and file name are not consulted — what the
-// bytes are is decided by the decoder, not by the sender.
-func readLogoUpload(w http.ResponseWriter, r *http.Request) ([]byte, error) {
-	r.Body = http.MaxBytesReader(w, r.Body, logoMaxBytes+logoMultipartSlack)
+// readUploadPart reads the one multipart part named file that a logo
+// upload carries (the organization's, and the report design's since
+// agentry#1025), at most maxBytes, bounded before a byte of it is decoded.
+// It streams the parts rather than calling ParseMultipartForm, which would
+// spool anything over its memory limit to disk: a logo is small and never
+// touches one. The part's own declared type and file name are not
+// consulted — what the bytes are is decided by the decoder, not by the
+// sender. Over maxBytes is errLogoTooLarge.
+func readUploadPart(w http.ResponseWriter, r *http.Request, maxBytes int) ([]byte, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes)+logoMultipartSlack)
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return nil, err
@@ -339,12 +341,12 @@ func readLogoUpload(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 			_ = part.Close()
 			continue
 		}
-		body, err := io.ReadAll(io.LimitReader(part, logoMaxBytes+1))
+		body, err := io.ReadAll(io.LimitReader(part, int64(maxBytes)+1))
 		_ = part.Close()
 		if err != nil {
 			return nil, err
 		}
-		if len(body) > logoMaxBytes {
+		if len(body) > maxBytes {
 			return nil, errLogoTooLarge
 		}
 		if len(body) == 0 {

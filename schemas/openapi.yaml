@@ -910,6 +910,17 @@ paths:
         account that never chose reads back with no `design`, which is not
         the same as Plain: a signed-in client then falls to its own
         configuration, else Plain (DEV-227).
+      parameters:
+        - name: include
+          in: query
+          description: >-
+            `logo` answers the design with its logo, if the person has one
+            (agentry#1025). Without it the design comes without a `logo` key,
+            so a client built before logos still reads it.
+          schema:
+            type: string
+            enum: [logo]
+            x-enum-varnames: [ReportSettingsIncludeLogo]
       responses:
         "200":
           description: The settings.
@@ -931,7 +942,20 @@ paths:
         `#rrggbb` or whose contrast on white is too low, a text that is not
         one line, over 16 KB) is refused 422 (`validation`), the field
         named `design.<path>`. The answer carries the design in its
-        canonical form.
+        canonical form. A design that carries a `logo` replaces the stored
+        logo with the core's own re-encoding of it; one that carries none
+        leaves a stored logo as it is (remove it with DELETE
+        /user/report-settings/logo), so a client that does not know logos
+        never drops one by saving (agentry#1025). A body with no design
+        clears the logo too.
+      parameters:
+        - name: include
+          in: query
+          description: "`logo` answers the design with its logo, as GET does."
+          schema:
+            type: string
+            enum: [logo]
+            x-enum-varnames: [UpdateReportSettingsIncludeLogo]
       requestBody:
         required: true
         content:
@@ -941,6 +965,57 @@ paths:
       responses:
         "200":
           description: The saved settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportSettings"
+        default:
+          $ref: "#/components/responses/Problem"
+  /user/report-settings/logo:
+    put:
+      operationId: putUserReportLogo
+      tags: [users]
+      summary: Set the logo of the caller's report design (agentry#1025).
+      description: >-
+        Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan
+        report-designs.md D9). The core decodes it, scales it down to fit
+        1024 pixels each way and encodes it again as PNG from the pixels, so
+        nothing of the upload but its pixels is kept; the runner draws it
+        only in the title block, and it never comes from the model or a URL.
+        Anything but a PNG or a JPEG (SVG and GIF included) is 415
+        `unsupported-image`; over 512 KB, over 16 million pixels, or over
+        512 KB as a PNG is 413 `upload-too-large`. A logo travels with a
+        design, so with none saved this is 409 `conflict`. Replaces any logo
+        the design had. The answer carries the design with its logo.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: The logo is set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportSettings"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteUserReportLogo
+      tags: [users]
+      summary: Remove the logo from the caller's report design (agentry#1025).
+      description: >-
+        The design stays. Removing a logo that is not there is not an error.
+      responses:
+        "200":
+          description: The settings, now without a logo.
           content:
             application/json:
               schema:
@@ -6455,6 +6530,7 @@ components:
         `name` and `footer.text` are one line with no control or
         bidirectional formatting characters. The tint is derived: 12% of the
         accent over white. The five built-in themes are each a value of it.
+        `logo` is optional and not counted in the 16 KB (agentry#1025).
       additionalProperties: false
       required: [agentryTheme, name, basedOn, version, paper, fonts, accent, titleBlock, headings, tables, quotes, footer]
       properties:
@@ -6529,6 +6605,21 @@ components:
               type: string
               description: One line, set as text, never evaluated; empty for none.
               maxLength: 120
+        logo:
+          type: object
+          description: >-
+            The person's logo, drawn only in the title block; absent for
+            none. Answered only when asked for (`include=logo`).
+          additionalProperties: false
+          required: [png]
+          properties:
+            png:
+              type: string
+              description: >-
+                A PNG in standard base64, at most 512 KB and 1024 pixels each
+                way, as the core encoded it from the person's upload.
+              minLength: 1
+              maxLength: 699052
     DependencyAlert:
       type: object
       description: >-
