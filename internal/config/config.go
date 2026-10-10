@@ -284,12 +284,13 @@ type Auth struct {
 // reads a limit except through that Resolver.
 // Queue selects the async job driver (D-05, DEV-005's swap in agentry#39).
 type Queue struct {
-	// Driver is "river" (the default: River, Postgres-backed, its tables
-	// created by the migrator) or "pg" (the SELECT … FOR UPDATE SKIP LOCKED
-	// implementation on the jobs table that the first releases shipped).
+	// Driver is "river" (the default and the only driver: River,
+	// Postgres-backed, its tables created by the migrator). "pg", the SELECT
+	// … FOR UPDATE SKIP LOCKED driver the first releases shipped, is refused
+	// since agentry#244 removed it and its jobs table.
 	Driver string `yaml:"driver"`
-	// Workers is how many jobs one worker process runs at once per queue
-	// (river only; the pg driver is serial). 1 keeps the serial behaviour.
+	// Workers is how many jobs one worker process runs at once per queue.
+	// 1 keeps the serial behaviour.
 	Workers int `yaml:"workers"`
 }
 
@@ -1105,9 +1106,11 @@ func (c Config) Validate() error {
 		return fmt.Errorf("config: env must be dev|staging|prod, got %q", c.Env)
 	}
 	switch c.Queue.Driver {
-	case "", "river", "pg":
+	case "", "river":
+	case "pg":
+		return fmt.Errorf("config: queue.driver pg was removed with its jobs table (agentry#244); use river, the default")
 	default:
-		return fmt.Errorf("config: queue.driver must be river|pg, got %q", c.Queue.Driver)
+		return fmt.Errorf("config: queue.driver must be river, got %q", c.Queue.Driver)
 	}
 	if c.Queue.Workers < 1 {
 		return fmt.Errorf("config: queue.workers must be at least 1, got %d", c.Queue.Workers)
