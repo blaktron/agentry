@@ -26,6 +26,7 @@ type typesafeCall struct {
 		Content              string `json:"content"`
 		DeclaredCapabilities string `json:"declared_capabilities"`
 		RunnerGrants         string `json:"runner_grants"`
+		Purpose              string `json:"purpose"`
 	}
 	Questions map[string]struct {
 		Type         string `json:"type"`
@@ -537,13 +538,15 @@ func TestS5ReadsEveryTextFile(t *testing.T) {
 // pkg/judge (agentry#608) byte for byte without moving it; it moved when
 // the state began to say what the runner grants every run and C3 to name it
 // (agentry#731, DEV-113's addendum), and when C3 began to ask what the text
-// instructs rather than what it describes (agentry#893, DEV-221). A change to anything
+// instructs rather than what it describes (agentry#893, DEV-221), and when
+// the state began to carry the release's purpose and C3 to hold only a
+// dangerous, undeclared capability out of line with it (agentry#1044). A change to anything
 // that moves a verdict shows here as a changed pin.
 func TestTypeSafeRubricHashPerShape(t *testing.T) {
 	want := map[int]string{
-		1: "sha256:7dcac32cc33c6786c623b6c6141cf0a84ff619bc00783da84b37117d86663f86",
-		2: "sha256:820e6887a159f82d83ebfb5d41f5a9ef0f05451f5079a4de5618a9108f84380e",
-		6: "sha256:1d670d31568c5829901fe2e0d5ecc5de85e5ed4ad9eb526a22369a424e8afc2d",
+		1: "sha256:728496fa6d54ae1a3f244606631adda962c2a8a5bc248e454e73bc213aec7607",
+		2: "sha256:644ce46c2d1afd49bad0713e09ca754240ba0af5fbb26c29534b31dab8a82163",
+		6: "sha256:e3d1fd5195aadceb50ecc51f28ba6c6eda92bf716d1a3e0cd554c1b9dfa6997a",
 	}
 	for _, batch := range []int{1, 2, 6} {
 		j := NewTypeSafeJudge(JudgeConfig{Provider: "typesafe", APIKey: "k"})
