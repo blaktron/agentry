@@ -1235,17 +1235,21 @@ AI Review costs one credit a run however many calls it takes
 
 Two lines of `capabilities_enforced` say what happened to the files. The
 `decode` line names the files image, the readers and their versions, what
-was read, the ClamAV signatures and every outcome. From a hosted run on
-dev, shortened:
+was read, the ClamAV signatures and every outcome. From hosted run
+`01a12288` on dev (2026-10-09), given two documents, one of a type
+Hybrid Analysis is asked about, with the package versions cut:
 
-> the inputs were decoded before the run, in agentry-decode:… (built on
-> ghcr.io/blaktron/agentry-files:…@sha256:…) with no network, every
-> capability dropped and the inputs read-only, by … : 1 decoded, 1 read as
-> text; each file read and each archive unpacked was checked by ClamAV
-> (clamscan, PUA off) before its text was extracted, against the
-> signatures of … : 2 clean; Hybrid Analysis (CrowdStrike), asked by
-> SHA-256 alone and never sent a file, on the files of a type it is asked
-> about: 1 clean
+> the inputs were decoded before the run, in agentry-decode:83ac5a7a15027347
+> (built on ghcr.io/blaktron/agentry-files:2026.10.04.3@sha256:f8da034b…)
+> with no network, every capability dropped and the inputs read-only, by
+> bsdcat, bsdtar, clamscan, file, java, pandoc, pdftotext and tesseract (…)
+> and the runner's own spreadsheet, slide, zip and tar readers: 2 decoded,
+> 0 read as text; each file read and each archive unpacked was checked by
+> ClamAV (clamscan, PUA off) before its text was extracted, against the
+> signatures of 2026-10-09 06:25 UTC (daily 28148, main 63;
+> ghcr.io/blaktron/agentry-clamav-db:latest@sha256:7c3308c1f3f9): 2 clean;
+> Hybrid Analysis (CrowdStrike), asked by SHA-256 alone and never sent a
+> file, on the files of a type it is asked about: 1 clean
 
 It also counts archives unpacked (and how many in part), `.git` files kept
 as they are, files not read (naming the first five), files ClamAV found
@@ -1255,11 +1259,11 @@ checked with the reason. A session that added files has a second clause
 for them. With no signatures it reads "no file was checked for malware:
 …".
 
-A hosted run's `inputReview` line says what AI Review read, for example
-"AI Review (the registry's model-input scan, question set f04db41f43fc,
-jev-1.13.0) was asked about the inputs' text; before the agent started: 1
-text(s), 1 KiB, in 1 call(s) and 1 judge request(s), none flagged", and
-names any file withheld past the cap.
+A hosted run's `inputReview` line says what AI Review read; the same run's
+was "AI Review (the registry's model-input scan, question set
+f04db41f43fc, jev-1.13.0) was asked about the inputs' text; before the
+agent started: 3 text(s), 2 KiB, in 1 call(s) and 1 judge request(s), none
+flagged". It names any file withheld past the cap.
 
 ## The scratch folder and PDF reports
 
