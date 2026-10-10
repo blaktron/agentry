@@ -556,17 +556,34 @@ servers — each with its declared tool filter, its own egress allowlist,
 only its own secret values, and its plain `env` map (manifest v2; see the
 [QuickAgent reference](quickagents.md)) as the environment the server
 starts with — alongside the agentry tools server. A server's declared hosts
-are reached through the gateway's per-host TCP relays on its own relay
-network; nothing else resolves from the server. That network has one fixed
-name for every gateway on the docker host (the pinned docker/mcp-gateway
-offers no other), so the runner refuses to share it: a run whose declared
-servers need relays does not start (exit 13) while another gateway's relay
-sidecars are on it — another run of `agentry`, or the user's own
-`docker mcp gateway` — and the relays its gateway started are removed at
-teardown by the names the gateway's log gave them. The check is made as
-the run starts: a gateway started during the run is not refused. Two
-QuickAgents with declared egress therefore run one at a time on a host. A
-changed `env` value is a
+are reached through the gateway's per-host TCP relays on its relay
+network; nothing else resolves from the server. The pinned
+docker/mcp-gateway gives that network one fixed name, and how the runner
+keeps it a run's own depends on where it runs:
+
+- **Where the run's docker filter runs (Linux)**, the filter translates the
+  gateway's two fixed relay network names to two networks made for the run,
+  `agentry-<run>-relays` and `agentry-<run>-relays-out`, and removes them
+  with the run (agentry-cli#220). Runs with declared egress share the host
+  without seeing each other's relays, and the user's own
+  `docker mcp gateway` and its networks are untouched.
+- **Where the filter does not run (off Linux: Docker Desktop on macOS and
+  Windows, agentry-cli#322)**, the
+  network is the host's one fixed network, so such runs take turns (DR-22).
+  A run whose declared servers need relays holds `relays.lock` under the
+  runner home from its relay listing to the end of its teardown, so a
+  second `agentry` relay run on the host, from the CLI, the desktop or
+  runhost, is refused while it runs (exit 13, naming the lock), not queued
+  (agentry-cli#268). It also does not start (exit 13) while another
+  gateway's relay sidecars are on the network: the user's own
+  `docker mcp gateway`, or a client that passes no runner home and so takes
+  no lock. That check is made as the run starts, so such a gateway started
+  during the run is not refused.
+
+Either way the relays the run's gateway started are removed at teardown
+by the names the gateway's log gave them.
+
+A changed `env` value is a
 change to the server: the install-state diff reports it and asks for
 consent again, and the receipt's server line names the `env` keys, never
 a value. The runner refuses an `env` value the gateway would rewrite (one
@@ -756,6 +773,7 @@ its digest, so a run record says which file a run obeyed.
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
+| `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode (DR-53; [Unsafe Mode](agentry/unsafe-mode.md)) |
 | `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
 | `images.clamavSignatures` | the ClamAV signature bundle, `<registry>/<repository>:<tag>` (default `ghcr.io/blaktron/agentry-clamav-db:latest`); a mirror must carry the publishing workflow's signature |
 | `hybridAnalysis.apiKeyEnv` / `hybridAnalysis.apiKeySource` | your Hybrid Analysis key for the hash lookup: the variable that holds it (default `HYBRID_API_KEY`), which wins when it is set; with `apiKeySource: keyring`, the keychain entry `provider:hybrid-analysis` when it is not; with no key nothing is looked up |
@@ -998,7 +1016,13 @@ serves the tools), built once at install time from a generated Dockerfile
 (`agentry-runner-exec:<version>-<hash>`; the hash covers the commands, the
 packages and the mirror, so a changed catalog entry is a new image).
 `run_command` is still gated by the argv0 allowlist and shim `PATH`; the
-image contains nothing else to run.
+image contains nothing else to run. Under the desktop's
+[Unsafe Mode](agentry/unsafe-mode.md) (DR-53) three things change for a run on
+that computer: the exec catalogue is not consulted (each declared command is
+installed from the `images.unsafe` base, and one that fails to install is left
+absent and named in the receipt), the image is built from that base and not
+minimized, and a declared command gets the image's own `PATH` after its shims.
+Where a command can write does not change ([below](#where-a-declared-command-can-write)).
 
 The catalog is the operator's, not the manifest's — the same stance as
 `mcpRegistries`. Policy `exec.packages` maps a command name to the apk
@@ -1153,9 +1177,9 @@ by its path inside the archive: `bundle.zip/notes/memo.docx` (agentry-cli#562).
 
 | Tool | Answers |
 |---|---|
-| `list_inputs` | one file a line: its path, type, size, whether it was read (`read`, `unread: <reason>`, `unpacked` or `unpacked in part: <reason>` for an archive), the size of its text, and the views it can be read in, the default first |
-| `read_input` | one file in one view, a page at a time (`offset`, `maxBytes`); for a file with no view, the reason |
-| `search_inputs` | the lines that hold a word or phrase, regardless of case, as `path:line: excerpt` (20 by default, 100 at most) |
+| `list_inputs` | one file a line: its path, type, size, whether it was read (`read`, `unread: <reason>`, `unpacked` or `unpacked in part: <reason>` for an archive), the size of its text, and the views it can be read in, the default first; a long listing stops at [one tool result](#one-tool-result-at-a-time-pages) and says the entry `offset` to read on from |
+| `read_input` | one file in one view, a page at a time (`offset`, `maxBytes`), each page within [one tool result](#one-tool-result-at-a-time-pages) and saying where the next begins; for a file with no view, the reason |
+| `search_inputs` | the lines that hold a word or phrase, regardless of case, as `path:line: excerpt` (20 by default, 100 at most, fewer when they would pass one tool result, with a count of those left out) |
 
 Each file can be read in two **views** (agentry-cli#631). `text` is a
 document's text, HTML's Markdown or a text file itself. `original` is the
@@ -1346,10 +1370,15 @@ empty when the run starts, nothing in it is copied to the output folder,
 and it is removed with the container at the end of the run. The agent
 reaches it through three tools:
 
-- `scratch_list` lists a folder in it;
+- `scratch_list` lists a folder in it, from an entry `offset` when a long
+  listing stopped at one tool result;
 - `scratch_read` reads a file as text, a page at a time (`offset`,
-  `maxBytes`);
+  `maxBytes`), each page saying where the next begins;
 - `scratch_write` writes a file, or appends to one with `append`.
+
+`fetch` writes there too: a response body larger than one tool result is
+saved to `/scratch/fetch/<n>-<name>` and read on with `scratch_read`
+([below](#one-tool-result-at-a-time-pages)).
 
 The tools have names of their own, so `fs_list`, `fs_read` and `fs_write`
 keep meaning the workspace the contract grants, and the two never alias. A
@@ -1367,6 +1396,56 @@ filter missed the container stops at the health probe (exit 13). Under
 Docker Desktop (macOS, Windows) the filter does not run: both are folders
 in the container's own layer and are **not bounded**, and the run's
 `capabilities_enforced.scratch` says so.
+
+### One tool result at a time: pages
+
+The harness that receives a tool's result bounds its size too, and cuts or
+sets aside what passes its limit: docker-agent 1.128.0 replaces any result
+over 50 KiB, or over 2,000 lines, with its **last** 50 KiB. So since
+agentry-cli v0.6.95 (agentry-cli#831, the runner register's DR-89) every
+result of the runner's own tools fits a **result budget**, the run's
+harness's measured limit less a margin, which the plan compiles into the
+tools spec:
+
+| Harness (adapter) | One tool result holds at most | The harness's own limit, measured from its pinned release |
+|---|---|---|
+| `docker-agent` | 48 KiB and 1,900 lines | 50 KiB or 2,000 lines, then the last 50 KiB is kept |
+| Claude Code (`claude`, `claude-image`) | 46 KiB and 1,900 lines | 50,000 characters, then the result is saved to a file the agent cannot open |
+| Copilot (`copilot-image`) | 19 KiB and 1,900 lines | 20,480 bytes, then the result is saved to a file and 500 characters shown |
+| Codex (`codex`, `codex-image`) | 5 KiB and 1,900 lines | 12,000 bytes for a model outside Codex's catalog (48,000 inside it), the middle cut out; an input tool's result is sent as escaped JSON, which can double it |
+
+Within it:
+
+- **Files come a page at a time.** `fs_read`, `scratch_read`, `read_input`,
+  `knowledge_read` and `voice_read` return one page from the `offset`
+  asked, cut after a line end or on a character boundary. A page that is
+  not the whole file ends with a line such as
+  `[page: bytes 0–48567 of 409262; continue with offset 48567]`, and the
+  last one with `…; end of file]`. A binary original's base64 page fits
+  too. A 400 KiB file is about nine calls under docker-agent.
+- **Listings and searches stop and say so.** `fs_list`, `scratch_list` and
+  `list_inputs` take an entry `offset` and end a partial listing with
+  `[entries 1–812 of 3000; continue with offset 812]`; `search_inputs`
+  says how many matching lines it left out; `knowledge_list` names the
+  `knowledge_read` call that reads a long index on.
+- **A large `fetch` body is kept, not cut.** A body within the budget is
+  answered as before. A larger one (up to `fetch`'s 512 KiB read cap, said
+  when reached) is saved to `/scratch/fetch/<n>-<name>`, never over a file
+  already there and never executable, and the answer gives the status, the
+  type, the saved path and the first page, naming the `scratch_read` call
+  that reads on. A body that holds the value of one of the run's secrets is
+  refused rather than saved. The egress, redirect and credential rules are
+  the same as for any `fetch`. A built-in, which has no scratch folder, is
+  shown the first page and told the rest was not kept.
+- **Anything else is cut with a notice.** Every other result, errors
+  included, is cut at the budget with a line saying it was and how much.
+
+The System Prompt states the size, and the receipt's
+`capabilities_enforced.toolResults` line names it and the harness. A
+declared MCP server's own results are its own, and settings a person can
+change in a harness (Claude Code's `MAX_MCP_OUTPUT_TOKENS`, Copilot's
+`COPILOT_LARGE_OUTPUT_THRESHOLD_BYTES`) are outside what the budget
+assumes.
 
 ### PDF reports: `export_pdf`
 
@@ -1610,8 +1689,10 @@ block.
 ## The System Prompt
 
 Every run's model reads the **System Prompt** first, and the QuickAgent's
-own instruction after it. The text is the same on every adapter and in a
-hosted run, since a sandbox host runs the same CLI. It replaced the
+own instruction after it. The text is the same on every adapter, but for
+the size of one tool result it states, which is the harness's own
+([pages](#one-tool-result-at-a-time-pages)), and the same in a hosted run,
+since a sandbox host runs the same CLI. It replaced the
 one-paragraph runner contract in agentry-cli v0.6.34 (agentry-cli#520).
 
 It has two parts:
@@ -1629,7 +1710,8 @@ It has two parts:
   knowledge pages treated as data, the voice being the one attached text
   followed, and only for how the run writes. Guardrails are added here.
 - **The body** is composed from the compiled plan. It states the run's
-  actual grants and never one the plan does not make: the network (none,
+  actual grants and never one the plan does not make: the size of one tool
+result, the network (none,
   the declared hosts through `fetch`, or a built-in's web tools), the
   workspace, the scratch folder, the commands, the secrets by name
   (marking the optional ones and naming those this run was not given), the
@@ -1662,8 +1744,9 @@ names the attached packs ("Knowledge is attached to this run: … Start
 here, before your own knowledge or any other tool.").
 
 **So is the Writing Voice** (agentry-cli v0.6.36). A run that attaches the
-person's voice gets one more tool, `voice_read`, which returns the whole
-`VOICE.md` and exists only while a voice is attached; the System Prompt
+person's voice gets one more tool, `voice_read`, which returns `VOICE.md`
+(a page at a time where it is larger than one tool result) and exists only
+while a voice is attached; the System Prompt
 says only "if you have a `voice_read` tool". Attaching one moves neither
 the plan nor its hash. [The Writing Voice](voice.md) has the rest.
 
@@ -2212,8 +2295,8 @@ and the command says so. `voice attach off` turns that off, `run
 when it is off. At run time the engine writes the text into the run's own
 knowledge directory at `.voice/VOICE.md`, mounted read-only on the tools
 container, checks it against the digest it was verified at, and grants one
-tool, `voice_read`, which returns the whole file and exists only in that
-run. The plan and its hash do not change. The receipt's
+tool, `voice_read`, which returns the file (a page at a time where it is
+larger than one tool result) and exists only in that run. The plan and its hash do not change. The receipt's
 `capabilities_enforced.voice` line names it:
 
 ```

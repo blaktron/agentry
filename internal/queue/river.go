@@ -20,24 +20,21 @@ import (
 	"github.com/blaktron/agentry/internal/store"
 )
 
-// Driver names accepted by Open (config queue.driver).
-const (
-	DriverRiver = "river"
-	DriverPG    = "pg"
-)
+// DriverRiver is the driver name Open accepts (config queue.driver).
+const DriverRiver = "river"
 
 // Worker is a Client that also runs jobs: what the worker role and the
-// tests hold. Both drivers implement it.
+// tests hold. RiverClient implements it.
 type Worker interface {
 	Client
 	SetMetrics(m *metrics.Metrics, sampleEvery time.Duration)
 	Drain(ctx context.Context, queues ...string)
 }
 
-// Open returns the driver named by the configuration: River (the default,
-// D-05 as specified, DEV-005's swap) or the SELECT … FOR UPDATE SKIP LOCKED
-// implementation the first releases shipped. maxWorkers is how many jobs
-// one process runs at once per queue; the pg driver is serial and ignores it.
+// Open returns the driver named by the configuration: River (D-05 as
+// specified, DEV-005's swap), the only one since agentry#244 removed the
+// SELECT … FOR UPDATE SKIP LOCKED "pg" driver. maxWorkers is how many jobs
+// one process runs at once per queue.
 func Open(driver string, maxWorkers int, st *store.Store, log *slog.Logger) (Worker, error) {
 	switch driver {
 	case "", DriverRiver:
@@ -46,10 +43,10 @@ func Open(driver string, maxWorkers int, st *store.Store, log *slog.Logger) (Wor
 			c.maxWorkers = maxWorkers
 		}
 		return c, nil
-	case DriverPG:
-		return NewPGClient(st, log), nil
+	case "pg":
+		return nil, fmt.Errorf("queue: the pg driver was removed (agentry#244); use river, the default")
 	}
-	return nil, fmt.Errorf("queue: unknown driver %q (river or pg)", driver)
+	return nil, fmt.Errorf("queue: unknown driver %q (river)", driver)
 }
 
 // RiverClient is the River-backed Client. River owns the job table
