@@ -39,19 +39,10 @@ func bumpSize(prev, cur string) string {
 	return "none"
 }
 
-// How a destination was written in package content.
-const (
-	egressKindURL   = string(rules.DestinationURL)
-	egressKindEmail = string(rules.DestinationEmail)
-	egressKindIP    = string(rules.DestinationIP)
-	egressKindHost  = string(rules.DestinationHost)
-)
-
 // egressTarget is one destination referenced by package content.
 type egressTarget struct {
-	// Kind is how the target was written: egressKindURL, egressKindEmail,
-	// egressKindIP or egressKindHost.
-	Kind string
+	// Kind is how the target was written.
+	Kind rules.DestinationKind
 	// File and Line locate the first occurrence.
 	File string
 	Line int
@@ -66,25 +57,26 @@ type egressTarget struct {
 // check.
 //
 // The grammar is pkg/rules' (rules.Destinations), the one S4's rating by
-// declaration reads, so a URL ends where a browser's authority ends and a
-// Markdown backtick or bracket is never part of a host (agentry#958). A bare
-// name is held to bareDestination as well, because without a scheme a host
-// and a file name or a code identifier look alike.
+// declaration reads, so the two agree on what a URL reaches (agentry#958). A
+// bare name is held to isBareDestination as well, because without a scheme a
+// host, a file name and a code identifier look alike.
 //
 // The map is keyed by the normalized target so a host written as a URL in one
 // release and as a bare string in the next still compares equal.
 func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 	out := map[string]egressTarget{}
-	ownFiles := map[string]bool{}
-	for _, f := range files {
-		ownFiles[strings.ToLower(path.Base(f.Path))] = true
-	}
 	for _, f := range files {
 		if !f.IsText || f.Content == nil {
 			continue
 		}
 		code := isCodePath(f.Path)
+		open := "" // the delimiter of a multi-line string open at a line's start
 		for i, line := range strings.Split(string(f.Content), "\n") {
+			// Inside a multi-line string, or on a line that opens or closes
+			// one, a line of code is text: its bare names count as in prose.
+			next := multilineString(open, line)
+			prose := !code || open != "" || next != open
+			open = next
 			if isCommentLine(f.Path, line) {
 				continue
 			}
@@ -92,10 +84,10 @@ func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 				if out[d.Target].Kind != "" {
 					continue
 				}
-				if d.Kind == rules.DestinationHost && !bareDestination(d.Target, line, code, ownFiles) {
+				if d.Kind == rules.DestinationHost && !isBareDestination(d.Target, strings.ToLower(line), prose) {
 					continue
 				}
-				out[d.Target] = egressTarget{Kind: string(d.Kind), File: f.Path, Line: i + 1, Excerpt: truncateStr(line, 160)}
+				out[d.Target] = egressTarget{Kind: d.Kind, File: f.Path, Line: i + 1, Excerpt: truncateStr(line, 160)}
 			}
 		}
 	}
@@ -103,10 +95,14 @@ func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 }
 
 // fileLikeTLDs are top-level domains that are also the extensions of files
-// a package's prose names all the time (README.md, inputs.zip, demo.mov). A
-// bare two-label name ending in one is read as the file; with a subdomain,
-// a scheme or an "@" it is still a destination.
-var fileLikeTLDs = map[string]bool{"md": true, "zip": true, "mov": true}
+// a package names all the time (README.md, inputs.zip, deploy.sh, main.py).
+// A bare two-label name ending in one is read as that file unless a path or
+// a port follows it; with a subdomain, a scheme or an "@" it is a host. The
+// list is fixed rather than drawn from the package, whose file names its
+// author chooses.
+var fileLikeTLDs = map[string]bool{
+	"md": true, "zip": true, "mov": true, "sh": true, "py": true, "pl": true, "pm": true, "rs": true, "so": true,
+}
 
 // specialUseTLDs are the reserved names (RFC 2606, RFC 6761, RFC 6762) that
 // no public suffix list carries but test fixtures and local services use.
@@ -114,20 +110,20 @@ var specialUseTLDs = map[string]bool{
 	"example": true, "invalid": true, "test": true, "localhost": true, "local": true, "internal": true, "onion": true,
 }
 
-// bareDestination decides whether a bare dotted name (no scheme, no "@") in
-// a line is a host. It replaces a hand-kept list of sixteen top-level domains
-// that left webhook.site, interact.sh and every .me host out (agentry#958):
+// isBareDestination decides whether a bare dotted name (no scheme, no "@")
+// in a lower-cased line is a host:
 //   - its last label must be a top-level domain ICANN delegates, from the
 //     public suffix list, or a special-use name, so config.yaml, main.go and
 //     package.json are file names;
-//   - a two-label name ending in a file-like TLD, or naming one of the
-//     package's own files (deploy.sh, analyze.py beside it), is that file;
-//   - in a code file it must sit inside a string literal: user.email or
-//     self.name outside quotes is a field, not a destination.
+//   - a two-label name under a file-like TLD is that file, unless a path or
+//     a port follows it;
+//   - in program source outside a multi-line string (prose false), it must
+//     sit inside a string literal: user.email is a field, "webhook.site" a
+//     host, and code cannot reach a host it does not quote.
 //
 // URLs, email addresses and IP addresses are destinations without these
-// tests: a scheme or an "@" says what they are.
-func bareDestination(host, line string, code bool, ownFiles map[string]bool) bool {
+// tests: a scheme, an "@" or the digits say what they are.
+func isBareDestination(host, line string, prose bool) bool {
 	labels := strings.Split(host, ".")
 	tld := labels[len(labels)-1]
 	if !specialUseTLDs[tld] {
@@ -135,13 +131,29 @@ func bareDestination(host, line string, code bool, ownFiles map[string]bool) boo
 			return false
 		}
 	}
-	if len(labels) == 2 && (fileLikeTLDs[tld] || ownFiles[host]) {
+	if len(labels) == 2 && fileLikeTLDs[tld] && !followedByPathOrPort(line, host) {
 		return false
 	}
-	if code && !inStringLiteral(strings.ToLower(line), host) {
+	if !prose && !inStringLiteral(line, host) {
 		return false
 	}
 	return true
+}
+
+// followedByPathOrPort reports whether host occurs in line directly before
+// a "/" or a ":" and a digit, as a destination is written and a file is not.
+func followedByPathOrPort(line, host string) bool {
+	for i := 0; ; {
+		j := strings.Index(line[i:], host)
+		if j < 0 {
+			return false
+		}
+		rest := line[i+j+len(host):]
+		if strings.HasPrefix(rest, "/") || (len(rest) > 1 && rest[0] == ':' && rest[1] >= '0' && rest[1] <= '9') {
+			return true
+		}
+		i += j + len(host)
+	}
 }
 
 // stringLiteralRe finds a double-, single- or backtick-quoted literal.
@@ -158,15 +170,49 @@ func inStringLiteral(line, host string) bool {
 	return false
 }
 
-// isCodePath reports whether a file is program source whose bare names are
-// mostly identifiers (obj.field), so a host there must be quoted. Shell is
-// not: a shell line names a host bare (curl webhook.site/x).
-func isCodePath(p string) bool {
-	switch strings.ToLower(filepath.Ext(p)) {
-	case ".go", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".java", ".c", ".h", ".cpp", ".cc", ".rs", ".swift", ".kt", ".cs", ".php", ".scala", ".py", ".rb":
-		return true
+// multiDelims open a string that can span lines: Python's triple quotes, a
+// JavaScript template literal, a Go raw string.
+var multiDelims = []string{`"""`, "'''", "`"}
+
+// multilineString is the delimiter of the multi-line string still open after
+// line, given the one open before it ("" for none). An odd count of the
+// open delimiter closes it; with none open, an odd count of one opens it.
+func multilineString(open, line string) string {
+	if open != "" {
+		if strings.Count(line, open)%2 == 1 {
+			return ""
+		}
+		return open
 	}
-	return false
+	for _, d := range multiDelims {
+		if strings.Count(line, d)%2 == 1 {
+			return d
+		}
+	}
+	return ""
+}
+
+// The extensions whose comment lines start with "//" or "#". A file with
+// neither is prose to isCommentLine, and every line of it is read.
+var (
+	slashCommentExts = map[string]bool{
+		".go": true, ".js": true, ".mjs": true, ".cjs": true, ".ts": true, ".tsx": true, ".jsx": true, ".java": true,
+		".c": true, ".h": true, ".cpp": true, ".cc": true, ".rs": true, ".swift": true, ".kt": true, ".cs": true,
+		".php": true, ".scala": true,
+	}
+	hashCommentExts = map[string]bool{
+		".yaml": true, ".yml": true, ".toml": true, ".ini": true, ".cfg": true, ".conf": true, ".sh": true,
+		".bash": true, ".zsh": true, ".py": true, ".rb": true, ".env": true, ".properties": true, ".dockerfile": true,
+	}
+)
+
+// isCodePath reports whether a file is program source, whose bare dotted
+// names are mostly identifiers (obj.field), so a host there must be quoted.
+// Configuration and shell are not: they name a host bare (host: x.example,
+// curl webhook.site/x).
+func isCodePath(p string) bool {
+	ext := strings.ToLower(filepath.Ext(p))
+	return slashCommentExts[ext] || ext == ".py" || ext == ".rb"
 }
 
 // isCommentLine reports whether a line is a comment in a file the machine
@@ -181,10 +227,11 @@ func isCommentLine(path, line string) bool {
 	if t == "" {
 		return false
 	}
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".sh", ".bash", ".zsh", ".py", ".rb", ".env", ".properties", ".dockerfile":
+	ext := strings.ToLower(filepath.Ext(path))
+	switch {
+	case hashCommentExts[ext]:
 		return strings.HasPrefix(t, "#")
-	case ".go", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".java", ".c", ".h", ".cpp", ".cc", ".rs", ".swift", ".kt", ".cs", ".php", ".scala":
+	case slashCommentExts[ext]:
 		return strings.HasPrefix(t, "//")
 	}
 	return false

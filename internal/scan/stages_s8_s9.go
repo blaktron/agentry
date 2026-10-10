@@ -399,7 +399,7 @@ func s9ContentDiff(bundle *rules.Bundle, in *Input, prevFiles []FileEntry, bump 
 		// and "*" names no host.
 		var sev Severity
 		switch {
-		case t.Kind != egressKindEmail && declared[target]:
+		case t.Kind != rules.DestinationEmail && declared[target]:
 			sev = SevLow
 		case bump == "patch":
 			sev = SevHigh

@@ -18,6 +18,7 @@ package rules
 // injection techniques and keep the bundle's rating.
 
 import (
+	"net"
 	"regexp"
 	"slices"
 	"strings"
@@ -308,9 +309,14 @@ func Destinations(text string) []Destination {
 		rest = strings.Replace(rest, a, " ", 1)
 	}
 	for _, ip := range destinationIPRe.FindAllString(rest, -1) {
-		add(ip, DestinationIP)
 		rest = strings.Replace(rest, ip, " ", 1)
+		if net.ParseIP(ip) != nil { // 999.1.2.3 is no address
+			add(ip, DestinationIP)
+		}
 	}
+	// Emphasis marks are word characters to the pattern's \b, so
+	// _webhook.site_ would name no host; a host name holds neither.
+	rest = strings.NewReplacer("_", " ", "*", " ").Replace(rest)
 	for _, h := range destinationHostRe.FindAllString(rest, -1) {
 		add(h, DestinationHost)
 	}
@@ -331,9 +337,11 @@ func destinations(text string) string {
 // or a backslash (which browsers read as "/"), any userinfo goes up to its
 // last "@", and any port is cut, so a URL that dresses one host up as
 // another (https://evil.example\@declared.example/) is keyed by the one it
-// reaches. The host then ends at the first character a host name cannot
-// hold, so the Markdown or prose around a URL (`**https://h.example**`,
-// "https://h.example, then") is not part of its key (agentry#958).
+// reaches. Characters a host name cannot hold are then trimmed from its
+// ends, so the Markdown or prose around a URL (`**https://h.example**`,
+// "https://h.example, then") is not part of its key (agentry#958). One
+// inside the name is kept: https://declared.example_.evil.example/ reaches
+// evil.example, and cut at the "_" it would read as the declared host.
 func urlHostOf(u string) string {
 	rest := u
 	if i := strings.Index(rest, "://"); i >= 0 {
@@ -348,10 +356,7 @@ func urlHostOf(u string) string {
 	if i := strings.Index(rest, ":"); i >= 0 {
 		rest = rest[:i]
 	}
-	if i := strings.IndexFunc(rest, notHostRune); i >= 0 {
-		rest = rest[:i]
-	}
-	return rest
+	return strings.TrimFunc(rest, notHostRune)
 }
 
 // notHostRune is true for a character no host name holds: anything but a
