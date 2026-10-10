@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.4.2"
+version: "0.4.3"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -100,6 +100,18 @@ notes: >
   drafted codebase scanner on production was held for "the first
   character, `find -exec`, `curl -o`", its list of the option-injection
   sinks it looks for. No other signature and no rating changes. The
+  threshold stays medium.
+  0.4.3 changes no signature. The destinations a hit names, and S9's
+  new destinations in content, are read with one grammar (agentry#958):
+  a URL's host ends at the first character a host name cannot hold, so
+  a declared host in a Markdown code span or bold text is the declared
+  host (a drafted scanner on production was held for `api.osv.dev` keyed
+  with its closing backtick), and a backslash ends S9's authority as it
+  ended S4's. S9 finds bare hosts by any top-level domain ICANN
+  delegates rather than a list of sixteen, and IPv4 addresses, so a
+  patch that starts sending to webhook.site is held; a two-label name
+  ending in .md, .zip or .mov, one naming the package's own file, and in
+  program source one outside a string literal, is not a host. The
   threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own

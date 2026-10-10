@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	"golang.org/x/net/publicsuffix"
 
 	"github.com/blaktron/agentry/pkg/rules"
 )
@@ -38,26 +39,18 @@ func bumpSize(prev, cur string) string {
 	return "none"
 }
 
-// emailRe matches an address well enough to recover its domain. S9 wants
-// recipients, not RFC 5322 conformance: the postmark line that started the
-// incident was a hardcoded BCC address.
-var emailRe = regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
-
-// bareHostRe matches a hostname appearing without a scheme, as it does inside
-// a client constructor or a config string.
-var bareHostRe = regexp.MustCompile(`\b(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.){1,}(?:com|net|org|io|dev|ai|co|app|cloud|xyz|ru|cn|invalid|example|test|local)\b`)
-
 // How a destination was written in package content.
 const (
-	egressKindURL   = "url"
-	egressKindEmail = "email"
-	egressKindHost  = "host"
+	egressKindURL   = string(rules.DestinationURL)
+	egressKindEmail = string(rules.DestinationEmail)
+	egressKindIP    = string(rules.DestinationIP)
+	egressKindHost  = string(rules.DestinationHost)
 )
 
 // egressTarget is one destination referenced by package content.
 type egressTarget struct {
-	// Kind is how the target was written: egressKindURL, egressKindEmail or
-	// egressKindHost.
+	// Kind is how the target was written: egressKindURL, egressKindEmail,
+	// egressKindIP or egressKindHost.
 	Kind string
 	// File and Line locate the first occurrence.
 	File string
@@ -67,41 +60,113 @@ type egressTarget struct {
 }
 
 // extractEgressTargets finds every destination a set of files references:
-// URLs, email recipients, and bare hostnames. It is the content-level twin of
-// the manifest's declared `capabilities.network.egress`, and the input to
-// S9's "newly added egress hosts/URLs anywhere in content" check.
+// URLs, email recipients, IPv4 addresses and bare host names. It is the
+// content-level twin of the manifest's declared `capabilities.network.egress`,
+// and the input to S9's "newly added egress hosts/URLs anywhere in content"
+// check.
+//
+// The grammar is pkg/rules' (rules.Destinations), the one S4's rating by
+// declaration reads, so a URL ends where a browser's authority ends and a
+// Markdown backtick or bracket is never part of a host (agentry#958). A bare
+// name is held to bareDestination as well, because without a scheme a host
+// and a file name or a code identifier look alike.
 //
 // The map is keyed by the normalized target so a host written as a URL in one
 // release and as a bare string in the next still compares equal.
 func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 	out := map[string]egressTarget{}
-	record := func(key, kind, file string, line int, excerpt string) {
-		key = strings.ToLower(strings.TrimSuffix(key, "."))
-		if key == "" || out[key].Kind != "" {
-			return
-		}
-		out[key] = egressTarget{Kind: kind, File: file, Line: line, Excerpt: truncateStr(excerpt, 160)}
+	ownFiles := map[string]bool{}
+	for _, f := range files {
+		ownFiles[strings.ToLower(path.Base(f.Path))] = true
 	}
 	for _, f := range files {
 		if !f.IsText || f.Content == nil {
 			continue
 		}
+		code := isCodePath(f.Path)
 		for i, line := range strings.Split(string(f.Content), "\n") {
 			if isCommentLine(f.Path, line) {
 				continue
 			}
-			for _, u := range urlRe.FindAllString(line, -1) {
-				record(urlHost(u), egressKindURL, f.Path, i+1, line)
-			}
-			for _, a := range emailRe.FindAllString(line, -1) {
-				record(a, egressKindEmail, f.Path, i+1, line)
-			}
-			for _, h := range bareHostRe.FindAllString(strings.ToLower(line), -1) {
-				record(h, egressKindHost, f.Path, i+1, line)
+			for _, d := range rules.Destinations(line) {
+				if out[d.Target].Kind != "" {
+					continue
+				}
+				if d.Kind == rules.DestinationHost && !bareDestination(d.Target, line, code, ownFiles) {
+					continue
+				}
+				out[d.Target] = egressTarget{Kind: string(d.Kind), File: f.Path, Line: i + 1, Excerpt: truncateStr(line, 160)}
 			}
 		}
 	}
 	return out
+}
+
+// fileLikeTLDs are top-level domains that are also the extensions of files
+// a package's prose names all the time (README.md, inputs.zip, demo.mov). A
+// bare two-label name ending in one is read as the file; with a subdomain,
+// a scheme or an "@" it is still a destination.
+var fileLikeTLDs = map[string]bool{"md": true, "zip": true, "mov": true}
+
+// specialUseTLDs are the reserved names (RFC 2606, RFC 6761, RFC 6762) that
+// no public suffix list carries but test fixtures and local services use.
+var specialUseTLDs = map[string]bool{
+	"example": true, "invalid": true, "test": true, "localhost": true, "local": true, "internal": true, "onion": true,
+}
+
+// bareDestination decides whether a bare dotted name (no scheme, no "@") in
+// a line is a host. It replaces a hand-kept list of sixteen top-level domains
+// that left webhook.site, interact.sh and every .me host out (agentry#958):
+//   - its last label must be a top-level domain ICANN delegates, from the
+//     public suffix list, or a special-use name, so config.yaml, main.go and
+//     package.json are file names;
+//   - a two-label name ending in a file-like TLD, or naming one of the
+//     package's own files (deploy.sh, analyze.py beside it), is that file;
+//   - in a code file it must sit inside a string literal: user.email or
+//     self.name outside quotes is a field, not a destination.
+//
+// URLs, email addresses and IP addresses are destinations without these
+// tests: a scheme or an "@" says what they are.
+func bareDestination(host, line string, code bool, ownFiles map[string]bool) bool {
+	labels := strings.Split(host, ".")
+	tld := labels[len(labels)-1]
+	if !specialUseTLDs[tld] {
+		if _, icann := publicsuffix.PublicSuffix(tld); !icann {
+			return false
+		}
+	}
+	if len(labels) == 2 && (fileLikeTLDs[tld] || ownFiles[host]) {
+		return false
+	}
+	if code && !inStringLiteral(strings.ToLower(line), host) {
+		return false
+	}
+	return true
+}
+
+// stringLiteralRe finds a double-, single- or backtick-quoted literal.
+var stringLiteralRe = regexp.MustCompile(`"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|` + "`[^`]*`")
+
+// inStringLiteral reports whether host occurs inside a quoted literal of a
+// (lower-cased) line of code.
+func inStringLiteral(line, host string) bool {
+	for _, lit := range stringLiteralRe.FindAllString(line, -1) {
+		if strings.Contains(lit, host) {
+			return true
+		}
+	}
+	return false
+}
+
+// isCodePath reports whether a file is program source whose bare names are
+// mostly identifiers (obj.field), so a host there must be quoted. Shell is
+// not: a shell line names a host bare (curl webhook.site/x).
+func isCodePath(p string) bool {
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".go", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".java", ".c", ".h", ".cpp", ".cc", ".rs", ".swift", ".kt", ".cs", ".php", ".scala", ".py", ".rb":
+		return true
+	}
+	return false
 }
 
 // isCommentLine reports whether a line is a comment in a file the machine
@@ -123,26 +188,6 @@ func isCommentLine(path, line string) bool {
 		return strings.HasPrefix(t, "//")
 	}
 	return false
-}
-
-// urlHost returns the host component of a URL string: the authority up to
-// the path, query or fragment, after any userinfo (up to its last "@"), before
-// any port. The userinfo goes before the port is cut, so a URL that dresses
-// one host up as another (https://declared.example:@elsewhere.example/) is
-// keyed by the host it reaches; since a declared host's finding is low, that
-// order is what keeps the disguise from passing as declared.
-func urlHost(u string) string {
-	rest := strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://")
-	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
-		rest = rest[:i]
-	}
-	if i := strings.LastIndex(rest, "@"); i >= 0 { // userinfo
-		rest = rest[i+1:]
-	}
-	if i := strings.Index(rest, ":"); i >= 0 { // port
-		rest = rest[:i]
-	}
-	return strings.ToLower(rest)
 }
 
 // findingKey identifies a finding across releases: the detector plus the file
