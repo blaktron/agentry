@@ -1870,7 +1870,7 @@ honest about which half is which.
     meta.json, task.txt  run identity, timing, budgets, the task input
     intake.json          the non-secret intake answers (when the release asks any)
     pdfs.ndjson          each PDF export_pdf wrote: path, SHA-256, pages, size
-    calls.ndjson         a one-shot run's runner-tool calls: a start line, then
+    calls.ndjson         an autonomous run's runner-tool calls: a start line, then
                          each call's tool and whether it answered, never its
                          arguments, and the agent's end_blocked sentence
     transcript.md        the conversation, for an interactive session
@@ -1894,7 +1894,7 @@ envelope's `exitClass` names the code (`ok`, `cli`, `usage`, `verify`,
 `policy`, `compile`, `gateway`, `harness`, `timeout`, `budget`,
 `outputSchema`, `blocked`); a client acts on the name, never on the number.
 
-**18, blocked.** A one-shot run of a release whose agent could not do its
+**18, blocked.** An autonomous run of a release whose agent could not do its
 task ends `blocked`, not `ok` (DR-72). The agent says so with the runner's
 `end_blocked` tool, one sentence that lands in the envelope's `error` and in
 `receipts/calls.ndjson`, masked like every receipt. The runner also ends a
