@@ -613,6 +613,7 @@ type UserReportSetting struct {
 	UserID    uuid.UUID `json:"user_id"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Design    []byte    `json:"design"`
+	Logo      []byte    `json:"logo"`
 }
 
 type UserSshKey struct {

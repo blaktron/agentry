@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"image"
+	"image/png"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -712,6 +714,31 @@ func TestBindHandsTheReportSettings(t *testing.T) {
 	}
 	if got, err := r.settings.Theme(ctx, user); err != nil || got != "technical" {
 		t.Fatalf("chosen: %q, %v", got, err)
+	}
+	if got, err := r.settings.DesignWithLogo(ctx, user); err != nil || !bytes.Equal(got, technical.Canonical()) {
+		t.Fatalf("chosen, no logo: %s, %v", got, err)
+	}
+	// A logo (agentry#1025) comes only with DesignWithLogo: Design stays
+	// what a reader without logos can parse.
+	var pb bytes.Buffer
+	if err := png.Encode(&pb, image.NewNRGBA(image.Rect(0, 0, 8, 4))); err != nil {
+		t.Fatal(err)
+	}
+	logo, err := reportdesign.NormalizeLogo(pb.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := logo.Decode()
+	if _, err := st.Queries().SetUserReportLogo(ctx, storegen.SetUserReportLogoParams{UserID: user, Logo: raw}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := r.settings.Design(ctx, user); err != nil || !bytes.Equal(got, technical.Canonical()) {
+		t.Fatalf("Design with a logo stored: %s, %v", got, err)
+	}
+	withLogo := technical
+	withLogo.Logo = logo
+	if got, err := r.settings.DesignWithLogo(ctx, user); err != nil || !bytes.Equal(got, withLogo.Canonical()) {
+		t.Fatalf("DesignWithLogo: %.200s, %v", got, err)
 	}
 	if _, err := st.Queries().DeleteUserReportSettings(ctx, user); err != nil {
 		t.Fatal(err)

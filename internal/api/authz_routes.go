@@ -272,8 +272,11 @@ var routeAuthz = map[string]RouteDecl{
 	// The report theme (agentry#989), a profile setting like the above:
 	// user:profile, which the sign-in grant carries, so the CLI and the
 	// desktop read it for a local run.
-	"getUserReportSettings":     {Action: auth.ActUserSelfRead},
-	"updateUserReportSettings":  {Action: auth.ActUserSelfUpdate},
+	"getUserReportSettings":    {Action: auth.ActUserSelfRead},
+	"updateUserReportSettings": {Action: auth.ActUserSelfUpdate},
+	// Its logo (agentry#1025), the same setting's image.
+	"putUserReportLogo":         {Action: auth.ActUserSelfUpdate},
+	"deleteUserReportLogo":      {Action: auth.ActUserSelfUpdate},
 	"deleteUserDirectoryDevice": {Action: auth.ActUserSelfUpdate},
 	"revokeUserSession":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"revokeOtherUserSessions":   {Action: auth.ActUserSecurityManage, SessionOnly: true},
