@@ -519,6 +519,10 @@ func (r serverReportSettings) Design(ctx context.Context, user uuid.UUID) ([]byt
 	return r.srv.ReportDesign(ctx, user)
 }
 
+func (r serverReportSettings) DesignWithLogo(ctx context.Context, user uuid.UUID) ([]byte, error) {
+	return r.srv.ReportDesignWithLogo(ctx, user)
+}
+
 func (r serverReportSettings) Theme(ctx context.Context, user uuid.UUID) (string, error) {
 	return r.srv.ReportTheme(ctx, user)
 }

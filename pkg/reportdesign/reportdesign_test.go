@@ -140,7 +140,8 @@ func TestValidationTable(t *testing.T) {
 		{"null field", "footer.text", nil, "footer.text"},
 		{"wrong type", "version", "1", "version"},
 		{"wrong nested type", "tables.tinted", "yes", "tables.tinted"},
-		{"unknown key", "logo", "x.png", ""},
+		{"unknown key", "watermark", "x.png", ""},
+		{"a logo by file name", "logo", "x.png", "logo"},
 		{"unknown nested key", "fonts.math", "Noto Sans Math", ""},
 		{"v1 key", "cover", true, ""},
 	}
@@ -336,7 +337,8 @@ func TestSchemaFileIsCurrent(t *testing.T) {
 	if err := json.Unmarshal(got, &s); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.Required) != len(s.Properties) || len(s.Properties) != 12 {
+	// Every field is required but the logo (agentry#1025).
+	if len(s.Required) != 12 || len(s.Properties) != 13 || slices.Contains(s.Required, "logo") {
 		t.Fatalf("the schema has %d properties, %d required", len(s.Properties), len(s.Required))
 	}
 }
