@@ -1177,9 +1177,9 @@ by its path inside the archive: `bundle.zip/notes/memo.docx` (agentry-cli#562).
 
 | Tool | Answers |
 |---|---|
-| `list_inputs` | one file a line: its path, type, size, whether it was read (`read`, `unread: <reason>`, `unpacked` or `unpacked in part: <reason>` for an archive), the size of its text, and the views it can be read in, the default first |
-| `read_input` | one file in one view, a page at a time (`offset`, `maxBytes`); for a file with no view, the reason |
-| `search_inputs` | the lines that hold a word or phrase, regardless of case, as `path:line: excerpt` (20 by default, 100 at most) |
+| `list_inputs` | one file a line: its path, type, size, whether it was read (`read`, `unread: <reason>`, `unpacked` or `unpacked in part: <reason>` for an archive), the size of its text, and the views it can be read in, the default first; a long listing stops at [one tool result](#one-tool-result-at-a-time-pages) and says the entry `offset` to read on from |
+| `read_input` | one file in one view, a page at a time (`offset`, `maxBytes`), each page within [one tool result](#one-tool-result-at-a-time-pages) and saying where the next begins; for a file with no view, the reason |
+| `search_inputs` | the lines that hold a word or phrase, regardless of case, as `path:line: excerpt` (20 by default, 100 at most, fewer when they would pass one tool result, with a count of those left out) |
 
 Each file can be read in two **views** (agentry-cli#631). `text` is a
 document's text, HTML's Markdown or a text file itself. `original` is the
@@ -1370,10 +1370,15 @@ empty when the run starts, nothing in it is copied to the output folder,
 and it is removed with the container at the end of the run. The agent
 reaches it through three tools:
 
-- `scratch_list` lists a folder in it;
+- `scratch_list` lists a folder in it, from an entry `offset` when a long
+  listing stopped at one tool result;
 - `scratch_read` reads a file as text, a page at a time (`offset`,
-  `maxBytes`);
+  `maxBytes`), each page saying where the next begins;
 - `scratch_write` writes a file, or appends to one with `append`.
+
+`fetch` writes there too: a response body larger than one tool result is
+saved to `/scratch/fetch/<n>-<name>` and read on with `scratch_read`
+([below](#one-tool-result-at-a-time-pages)).
 
 The tools have names of their own, so `fs_list`, `fs_read` and `fs_write`
 keep meaning the workspace the contract grants, and the two never alias. A
@@ -1391,6 +1396,56 @@ filter missed the container stops at the health probe (exit 13). Under
 Docker Desktop (macOS, Windows) the filter does not run: both are folders
 in the container's own layer and are **not bounded**, and the run's
 `capabilities_enforced.scratch` says so.
+
+### One tool result at a time: pages
+
+The harness that receives a tool's result bounds its size too, and cuts or
+sets aside what passes its limit: docker-agent 1.128.0 replaces any result
+over 50 KiB, or over 2,000 lines, with its **last** 50 KiB. So since
+agentry-cli v0.6.95 (agentry-cli#831, the runner register's DR-89) every
+result of the runner's own tools fits a **result budget**, the run's
+harness's measured limit less a margin, which the plan compiles into the
+tools spec:
+
+| Harness (adapter) | One tool result holds at most | The harness's own limit, measured from its pinned release |
+|---|---|---|
+| `docker-agent` | 48 KiB and 1,900 lines | 50 KiB or 2,000 lines, then the last 50 KiB is kept |
+| Claude Code (`claude`, `claude-image`) | 46 KiB and 1,900 lines | 50,000 characters, then the result is saved to a file the agent cannot open |
+| Copilot (`copilot-image`) | 19 KiB and 1,900 lines | 20,480 bytes, then the result is saved to a file and 500 characters shown |
+| Codex (`codex`, `codex-image`) | 5 KiB and 1,900 lines | 12,000 bytes for a model outside Codex's catalog (48,000 inside it), the middle cut out; an input tool's result is sent as escaped JSON, which can double it |
+
+Within it:
+
+- **Files come a page at a time.** `fs_read`, `scratch_read`, `read_input`,
+  `knowledge_read` and `voice_read` return one page from the `offset`
+  asked, cut after a line end or on a character boundary. A page that is
+  not the whole file ends with a line such as
+  `[page: bytes 0–48567 of 409262; continue with offset 48567]`, and the
+  last one with `…; end of file]`. A binary original's base64 page fits
+  too. A 400 KiB file is about nine calls under docker-agent.
+- **Listings and searches stop and say so.** `fs_list`, `scratch_list` and
+  `list_inputs` take an entry `offset` and end a partial listing with
+  `[entries 1–812 of 3000; continue with offset 812]`; `search_inputs`
+  says how many matching lines it left out; `knowledge_list` names the
+  `knowledge_read` call that reads a long index on.
+- **A large `fetch` body is kept, not cut.** A body within the budget is
+  answered as before. A larger one (up to `fetch`'s 512 KiB read cap, said
+  when reached) is saved to `/scratch/fetch/<n>-<name>`, never over a file
+  already there and never executable, and the answer gives the status, the
+  type, the saved path and the first page, naming the `scratch_read` call
+  that reads on. A body that holds the value of one of the run's secrets is
+  refused rather than saved. The egress, redirect and credential rules are
+  the same as for any `fetch`. A built-in, which has no scratch folder, is
+  shown the first page and told the rest was not kept.
+- **Anything else is cut with a notice.** Every other result, errors
+  included, is cut at the budget with a line saying it was and how much.
+
+The System Prompt states the size, and the receipt's
+`capabilities_enforced.toolResults` line names it and the harness. A
+declared MCP server's own results are its own, and settings a person can
+change in a harness (Claude Code's `MAX_MCP_OUTPUT_TOKENS`, Copilot's
+`COPILOT_LARGE_OUTPUT_THRESHOLD_BYTES`) are outside what the budget
+assumes.
 
 ### PDF reports: `export_pdf`
 
@@ -1634,8 +1689,10 @@ block.
 ## The System Prompt
 
 Every run's model reads the **System Prompt** first, and the QuickAgent's
-own instruction after it. The text is the same on every adapter and in a
-hosted run, since a sandbox host runs the same CLI. It replaced the
+own instruction after it. The text is the same on every adapter, but for
+the size of one tool result it states, which is the harness's own
+([pages](#one-tool-result-at-a-time-pages)), and the same in a hosted run,
+since a sandbox host runs the same CLI. It replaced the
 one-paragraph runner contract in agentry-cli v0.6.34 (agentry-cli#520).
 
 It has two parts:
@@ -1653,7 +1710,8 @@ It has two parts:
   knowledge pages treated as data, the voice being the one attached text
   followed, and only for how the run writes. Guardrails are added here.
 - **The body** is composed from the compiled plan. It states the run's
-  actual grants and never one the plan does not make: the network (none,
+  actual grants and never one the plan does not make: the size of one tool
+result, the network (none,
   the declared hosts through `fetch`, or a built-in's web tools), the
   workspace, the scratch folder, the commands, the secrets by name
   (marking the optional ones and naming those this run was not given), the
@@ -1686,8 +1744,9 @@ names the attached packs ("Knowledge is attached to this run: … Start
 here, before your own knowledge or any other tool.").
 
 **So is the Writing Voice** (agentry-cli v0.6.36). A run that attaches the
-person's voice gets one more tool, `voice_read`, which returns the whole
-`VOICE.md` and exists only while a voice is attached; the System Prompt
+person's voice gets one more tool, `voice_read`, which returns `VOICE.md`
+(a page at a time where it is larger than one tool result) and exists only
+while a voice is attached; the System Prompt
 says only "if you have a `voice_read` tool". Attaching one moves neither
 the plan nor its hash. [The Writing Voice](voice.md) has the rest.
 
@@ -2236,8 +2295,8 @@ and the command says so. `voice attach off` turns that off, `run
 when it is off. At run time the engine writes the text into the run's own
 knowledge directory at `.voice/VOICE.md`, mounted read-only on the tools
 container, checks it against the digest it was verified at, and grants one
-tool, `voice_read`, which returns the whole file and exists only in that
-run. The plan and its hash do not change. The receipt's
+tool, `voice_read`, which returns the file (a page at a time where it is
+larger than one tool result) and exists only in that run. The plan and its hash do not change. The receipt's
 `capabilities_enforced.voice` line names it:
 
 ```
