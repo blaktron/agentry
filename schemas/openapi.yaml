@@ -7055,11 +7055,11 @@ components:
         status:
           type: string
           description: >-
-            safe: no known advisories when last checked (OSV), which says
-            nothing else about the server. not-found: its package registry
-            does not publish this version, so no run can install it
-            (agentry#1036).
-          enum: [safe, vulnerable, error, not-found]
+            safe means no known advisories when last checked (OSV), and
+            nothing else about the server. A version its package registry
+            does not publish is served as error, with lastError saying so
+            (agentry#1036), so no client meets a value the contract lacks.
+          enum: [safe, vulnerable, error]
         maxSeverity:
           type: string
           enum: [info, low, medium, high, critical]
