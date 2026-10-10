@@ -208,7 +208,7 @@ outcome, and the outcome decides what the hold becomes.
 | `timeout` | `timeout` (15) | settled from the tokens |
 | `budget` | `budget` (16) | settled from the tokens |
 | `interrupted` | an envelope whose error is `interrupted`, and any run the account cancelled that ran and did not succeed | settled from the tokens when something ran; refunded when the envelope reports no tokens and no turns |
-| `refused` | `verify` (10), `policy` (11), `compile` (12) | refunded in full |
+| `refused` | `verify` (10), `policy` (11), `compile` (12) | refunded in full, except a run AI Review refused for an input it flagged, which settles AI Review's one credit alone ([a run's files](#a-runs-files)) |
 | `error` | `cli` (1), `usage` (2), `gateway` (13), and any exit class the mapping does not know | refunded in full |
 | `blocked` | `blocked` (18), the agent could not do its task with what the run had | settled from the tokens when the receipt's reason is `agent-blocked` (the agent said so); refunded in full when it is `runner-blocked` (the runner's own tools failed the agent) or names no reason (DEV-216) |
 
@@ -270,6 +270,40 @@ signed (see [Trust and security](trust.md)), so a release published before
 the current key verifies for a fresh worker once the sweep has run. What does
 cause it is a worker whose pinned set predates a rotation — its preflight
 login reports the changed key ids; re-pin its home deliberately.
+
+## A run's files
+
+A run's inputs are the files uploaded with it: at most twenty, each at most
+10 MB (above). The sandbox host's CLI reads them as it reads a local run's
+([running with files](runner.md#running-with-files)): before the agent
+starts, every file and every file in an archive is checked by ClamAV and
+turned into text where it can be, in a container with no network, and the
+risky ones are looked up on Hybrid Analysis by their SHA-256 with
+Agentry's key ([the host's settings](#the-hosts-settings)). A file either
+check refuses ends the run `refused` before the agent starts, with the
+receipt's reason `input-refused` and the detail `malware`, and the hold is
+refunded in full.
+
+### AI Review of a run's inputs
+
+Then AI Review reads the inputs' text (agentry-enterprise#333, with
+agentry-cli#321). A run with inputs, or a session, that a host whose health
+says `acceptsInputReview` claims is minted a job credential, as a draft is.
+The host runs the CLI with `--review-inputs <the registry>` and the
+credential in `AGENTRY_JOB_TOKEN`, and the CLI sends every text the agent
+could read to the [model-input scan](model-input.md) as `input_file`. The
+credential admits scans of that source alone, at most 400 a run (past that
+`run-cap-reached`, any other call `run-scan-refused`), and the run's
+`inputReview` record counts them.
+
+AI Review is **one credit a run**, however many calls it takes. A run that
+ran and used tokens settles it inside the hold, beside them. A run AI Review refused
+for an input it flagged (`input-refused` with the detail `ai-review`)
+settles that one credit alone. A run refused because a text could not be
+read (`not-reviewed`), or for malware, settles nothing. AI Review reads at
+most 16 MiB of text a run; a file past that is withheld from the agent and
+named in the receipt, and the run goes on. A host older than the field is
+handed no credential, and its runs' inputs are not reviewed.
 
 ## Watching a run, and cancelling it
 

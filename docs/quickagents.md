@@ -726,11 +726,41 @@ hash, and [the runner reference](runner.md#the-system-prompt) shows it word
 for word for a sample QuickAgent.
 
 **Input files.** Files and artifacts from outside the container reach a
-run through `agentry run --file PATH` (repeatable; files or directories).
-They are copied into a per-run folder mounted **read-only** at `/inputs`
-on the tool plane — a channel like stdin, operator-controlled per run, so
-it needs no manifest capability. Job output and receipts stay on the
-separate `/out` volume.
+run through `agentry run --file PATH` (repeatable; files or directories),
+a `file` intake answer, a file added to a session, or the uploads of a
+hosted run. They are copied into a per-run folder mounted **read-only** at
+`/inputs` on the tool plane — a channel like stdin, operator-controlled per
+run, so it needs no manifest capability. Job output and receipts stay on
+the separate `/out` volume.
+
+Before the agent starts, the runner checks every file for malware and
+turns it into text where it can, in a container with no network
+([running with files](runner.md#running-with-files)). So a QuickAgent that
+takes files can count on these:
+
+- **Common documents work**: PDF, Word (DOCX and DOC), OpenDocument,
+  EPUB, RTF, spreadsheets (XLSX and ODS as Markdown tables, XLS as
+  text), PowerPoint and OpenDocument slides, Outlook and other mail (MSG, EML, mbox),
+  and images, whose text is read by OCR. Code, markup and data (source,
+  HTML, XML, CSV, JSON, YAML, logs) arrive as uploaded.
+- **Archives work**: zip, tar, 7z, rar and gzip, bzip2, xz or zstd
+  streams are unpacked, and each file inside is read by its path,
+  `bundle.zip/folder/file.docx`, up to three archives deep, 2,000 files
+  and 512 MiB unpacked.
+- **Every file is checked**: by ClamAV, and the risky types (executables,
+  scripts, macro and legacy Office, RTF, PDF and a few more) by their
+  SHA-256 on Hybrid Analysis, never by upload. A file either check
+  refuses stops the run before the agent starts (exit 11), naming it; on
+  Agentry that costs nothing. On Agentry, AI Review also reads every
+  input's text, and one it flags refuses the run for one credit.
+- **The agent never needs `exec` to read them**: `list_inputs`,
+  `read_input` and `search_inputs` serve each file's text and its
+  original, and the [`inputs`](#inputs-what-files-it-takes-and-how-it-reads-them)
+  block chooses which view is read by default.
+
+A hosted run takes at most 20 files of at most 10 MB each
+([hosted runs](hosted-runs.md#what-a-run-is-refused-for)). Write `guide.files` to say which
+files the QuickAgent wants, and the run setup shows it.
 
 **Structured output.** Ship an `output.schema.json` at the archive root
 (listed in `publish.include`) and the runner embeds the schema in the
