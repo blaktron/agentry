@@ -680,7 +680,7 @@ func verdictFindings(verdict JudgeVerdict) []Finding {
 	var findings []Finding
 	catTitle := map[JudgeCategory]string{
 		CatInjection: "prompt-injection or instruction override", CatExfiltration: "data exfiltration",
-		CatUndeclaredCap: "capability described but not declared", CatDeception: "end-user deception",
+		CatUndeclaredCap: "dangerous capability not declared and outside the stated purpose", CatDeception: "end-user deception",
 		CatObfuscation: "obfuscation indicators", CatDestructive: "destructive actions without confirmation",
 	}
 	for _, cat := range AllJudgeCategories() {
