@@ -1165,6 +1165,36 @@ and a `PUT` with no `design` clears the choice. Clearing an account's data
 clears it too. The migration that brought designs in (00054) cleared every
 stored theme name, so each account starts as never chosen.
 
+**The logo** (agentry#1025, plan D9). A design may carry the person's own
+logo, which the runner draws only in the title block. It never comes from
+the model or from a URL: the person uploads a file to
+`PUT /api/v1/user/report-settings/logo`, one multipart part named `file`,
+a PNG or a JPEG of at most 512 KB. The core decodes it, scales it down to
+fit 1,024 pixels each way and encodes it again as PNG from the pixels, so
+nothing of the upload but its pixels is kept. SVG, GIF and anything else
+is 415. Over 512 KB, over 16 million pixels, or over 512 KB once encoded
+as PNG is 413. With no design saved it is 409, because a logo travels with
+a design. `DELETE /api/v1/user/report-settings/logo` removes it and keeps
+the design.
+
+In the document the logo is the optional last key, the PNG in standard
+base64. It is not counted in the 16 KB:
+
+```json
+"logo": {"png": "iVBORw0KGgo…"}
+```
+
+`pkg/reportdesign` holds it to a PNG of at most 512 KB and 1,024 pixels
+each way that decodes whole, and its canonical form and SHA-256 cover it. A
+design without a logo has no `logo` key, so the built-ins' documents and
+hashes are unchanged. A `GET` (or the answer to a `PUT`) carries the logo
+only with `?include=logo`, because a client built before logos refuses a
+key it does not know and would run without the design. A `PUT` of a design
+with no `logo` leaves a stored logo as it is, so such a client cannot drop
+one by saving. A `PUT` of a design that carries one replaces it with the
+core's own encoding of it. Clearing the design, clearing the account's
+data and erasing the account delete the logo with it.
+
 Until the runner reads designs (agentry-cli#784, M3), a CLI finds no theme
 in the account's answer and takes the next choice below; the site's Profile
 card (agentry-web#1381, M4) and the desktop's (agentry-desktop#759, M5)

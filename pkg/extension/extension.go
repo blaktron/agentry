@@ -372,6 +372,12 @@ type ReportSettings interface {
 	// nil when they never chose one, which is not Plain: the reader decides
 	// what nothing means (agentry#1024).
 	Design(ctx context.Context, user uuid.UUID) ([]byte, error)
+	// DesignWithLogo is Design with the person's logo in it, when they have
+	// one (agentry#1025): its "logo" key holds the PNG the core encoded
+	// from their upload. Design leaves it out, because a reader whose
+	// pkg/reportdesign predates logos refuses the key and with it the
+	// whole design; hand this one only to a reader that draws logos.
+	DesignWithLogo(ctx context.Context, user uuid.UUID) ([]byte, error)
 	// Theme is the id of the built-in theme the person's design started
 	// from (its basedOn), or "" when they never chose one. Transitional:
 	// the hosted job carries a theme's name until agentry-enterprise#479

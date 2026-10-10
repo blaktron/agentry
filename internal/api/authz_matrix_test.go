@@ -325,6 +325,10 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return map[string]any{"design": json.RawMessage(doc)}
 			},
 		},
+		// A JSON body is not the multipart the route reads: an authorized
+		// caller gets 400, and the matrix judges only who reaches it.
+		"putUserReportLogo":    {method: "PUT", path: sPath("/api/v1/user/report-settings/logo"), body: func(*matrixSeed, string) any { return map[string]any{} }},
+		"deleteUserReportLogo": {method: "DELETE", path: sPath("/api/v1/user/report-settings/logo")},
 		// Public read; the registry has never seen this version, so 404.
 		"getMcpServerScan": {method: "GET", path: sPath("/api/v1/mcp-servers/scan?ecosystem=npm&package=nobody&version=0.0.0")},
 		"deleteUserDirectoryDevice": {
