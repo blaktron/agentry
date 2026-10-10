@@ -124,6 +124,22 @@ func TestValidateGuards(t *testing.T) {
 	}
 }
 
+// The pg queue driver and its jobs table are gone (agentry#244): a
+// configuration that still names it is refused at start with a sentence
+// that says so, not run on a driver that no longer exists.
+func TestValidateRefusesTheRemovedPGQueueDriver(t *testing.T) {
+	cfg := devDefault()
+	cfg.Queue.Driver = "pg"
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "removed") || !strings.Contains(err.Error(), "river") {
+		t.Fatalf("queue.driver pg: %v, want a refusal that says it was removed and names river", err)
+	}
+	cfg.Queue.Driver = "river"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("queue.driver river: %v", err)
+	}
+}
+
 // §12.3/§12.4 give hard ceilings on credential lifetimes. They are product
 // invariants, not tunables: a deployment that raised them would still call
 // itself Agentry while issuing credentials the threat model never priced in.
