@@ -59,9 +59,8 @@ problem, write a new forward migration. Never `goose down` in production.
 
 **Trigger:** page on queue age > 15 minutes, or versions sitting in `scanning`.
 
-The queue is River (`queue.driver: river`, the default) on the `river_job`
-table; the `jobs` table belongs to the legacy `pg` driver and is empty on a
-River deployment.
+The queue is River (`queue.driver: river`, the only driver) on the
+`river_job` table.
 
 1. Depth and age by queue:
    ```sql

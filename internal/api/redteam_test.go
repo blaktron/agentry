@@ -81,13 +81,12 @@ func redTeamWaiting(t *testing.T, st *store.Store) int {
 	return n
 }
 
-// TestRedTeamIsSeededPastARunThePGDriverLeft is agentry#853, dev's state
-// since 2026-09-07: the pg driver's last run had rescheduled itself into the
-// jobs table just before River took over, and the seed counted that row,
-// so River was never seeded and no report was stored again. The seed counts
-// River's own table, every start keeps exactly one run waiting, and a run
-// keeps one successor waiting without stacking another.
-func TestRedTeamIsSeededPastARunThePGDriverLeft(t *testing.T) {
+// TestRedTeamKeepsOneRunWaiting is agentry#853: dev's seed had counted a
+// row the retired pg driver left in its jobs table (dropped since
+// agentry#244), so River was never seeded and no report was stored again.
+// The seed counts River's own table, every start keeps exactly one run
+// waiting, and a run keeps one successor waiting without stacking another.
+func TestRedTeamKeepsOneRunWaiting(t *testing.T) {
 	var srvObj *api.Server
 	env := newTestEnvCfg(t, func(c *config.Config) {
 		c.RedTeam.Interval = time.Hour
@@ -101,11 +100,7 @@ func TestRedTeamIsSeededPastARunThePGDriverLeft(t *testing.T) {
 		}
 	}
 	exec(`DELETE FROM river_job WHERE kind = 'redteam.run'`)
-	exec(`DELETE FROM jobs WHERE kind = 'redteam.run'`)
-	exec(`INSERT INTO jobs (id, kind, queue, state, run_at)
-	      VALUES ($1, 'redteam.run', 'core', 'available', '2026-09-08T07:07:42Z')`, uuid.New())
 	t.Cleanup(func() {
-		_, _ = env.st.Pool().Exec(context.Background(), `DELETE FROM jobs WHERE kind = 'redteam.run'`)
 		_, _ = env.st.Pool().Exec(context.Background(), `DELETE FROM river_job WHERE kind = 'redteam.run'`)
 	})
 

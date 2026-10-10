@@ -352,8 +352,9 @@ func TestOpenSelectsDriver(t *testing.T) {
 	if c := must(Open("river", 3, nil, nil)).(*RiverClient); c.maxWorkers != 3 {
 		t.Errorf("maxWorkers = %d, want 3", c.maxWorkers)
 	}
-	if _, ok := must(Open("pg", 3, nil, nil)).(*PGClient); !ok {
-		t.Error("pg driver should be the SKIP LOCKED client")
+	// The pg driver is gone with its jobs table (agentry#244).
+	if _, err := Open("pg", 3, nil, nil); err == nil || !strings.Contains(err.Error(), "removed") {
+		t.Errorf("pg driver: %v, want a refusal that says it was removed", err)
 	}
 	if _, err := Open("bogus", 1, nil, nil); err == nil {
 		t.Error("unknown driver accepted")
@@ -370,32 +371,21 @@ func must(w Worker, err error) Worker {
 	return w
 }
 
-// TestCountWaitingReadsEachDriversOwnTable is agentry#853: the seeds of the
-// self-rescheduling jobs counted the pg driver's jobs table whatever the
-// driver, so a run the pg driver left waiting there on 2026-09-07 kept River
-// from ever being seeded on dev. Each driver counts its own table: queued,
-// scheduled and retrying jobs of the kind, never running or finished ones.
-func TestCountWaitingReadsEachDriversOwnTable(t *testing.T) {
+// TestCountWaitingCountsJobsThatHaveNotStarted is agentry#853's count: the
+// self-rescheduling jobs' seeds ask the driver how many of a kind wait, in
+// River's own table: queued, scheduled and retrying jobs of the kind, never
+// running or finished ones.
+func TestCountWaitingCountsJobsThatHaveNotStarted(t *testing.T) {
 	c, st := newRiverTestClient(t)
 	ctx := context.Background()
 	qname := testQueueName(t, st)
 	kind := "test.count-waiting-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:8]
-	pg := NewPGClient(st, nil)
 
-	// A row the pg driver left waiting: the pg driver sees it, River does not.
-	if _, err := st.Pool().Exec(ctx,
-		`INSERT INTO jobs (id, kind, queue, state, run_at) VALUES ($1, $2, $3, 'available', now() + interval '1 day')`,
-		uuid.New(), kind, qname); err != nil {
-		t.Fatal(err)
-	}
 	if n, err := c.CountWaiting(ctx, kind); err != nil || n != 0 {
-		t.Fatalf("River counted %d (err %v) with only a jobs row waiting, want 0", n, err)
-	}
-	if n, err := pg.CountWaiting(ctx, kind); err != nil || n != 1 {
-		t.Fatalf("pg driver counted %d (err %v), want its 1 jobs row", n, err)
+		t.Fatalf("River counted %d (err %v) with nothing enqueued, want 0", n, err)
 	}
 
-	// Scheduled for later and due now both wait; the pg driver ignores them.
+	// Scheduled for later and due now both wait.
 	if _, err := c.Enqueue(ctx, kind, qname, struct{}{}, WithDelay(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
@@ -405,17 +395,11 @@ func TestCountWaitingReadsEachDriversOwnTable(t *testing.T) {
 	if n, err := c.CountWaiting(ctx, kind); err != nil || n != 2 {
 		t.Fatalf("River counted %d (err %v), want 2 (one scheduled, one available)", n, err)
 	}
-	if n, err := pg.CountWaiting(ctx, kind); err != nil || n != 1 {
-		t.Fatalf("pg driver counted %d (err %v), want still 1", n, err)
-	}
 
 	// A finished run no longer waits.
 	c.Register(kind, func(context.Context, Job) error { return nil })
 	c.Drain(ctx, qname)
 	if n, err := c.CountWaiting(ctx, kind); err != nil || n != 1 {
 		t.Fatalf("River counted %d (err %v) after the due job ran, want 1 (the scheduled one)", n, err)
-	}
-	if _, err := st.Pool().Exec(ctx, `DELETE FROM jobs WHERE kind = $1`, kind); err != nil {
-		t.Fatal(err)
 	}
 }

@@ -677,9 +677,10 @@ one worker process runs at once per queue: 1 keeps the serial behaviour of
 earlier releases; raise it on a worker with the memory for parallel scans.
 A job that fails retries with exponential backoff up to five attempts, a
 job a crashed worker held is rescued after 30 minutes, and every outcome is
-counted (see Metrics). `queue.driver: pg` selects the earlier `SELECT … FOR
-UPDATE SKIP LOCKED` implementation on the `jobs` table; it stays for one
-release as a fallback and is not for new installs.
+counted (see Metrics). River is the only driver: the earlier `SELECT … FOR
+UPDATE SKIP LOCKED` implementation (`queue.driver: pg`) and its `jobs` table
+were removed after a release on River, so a configuration that still names
+`pg` is refused at start, and the migrator drops the table.
 
 ### Metrics
 

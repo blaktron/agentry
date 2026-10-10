@@ -268,21 +268,6 @@ type Identity struct {
 	DirectoryAccountID *int64     `json:"directory_account_id"`
 }
 
-type Job struct {
-	ID          uuid.UUID  `json:"id"`
-	Kind        string     `json:"kind"`
-	Queue       string     `json:"queue"`
-	Args        []byte     `json:"args"`
-	State       string     `json:"state"`
-	Attempt     int32      `json:"attempt"`
-	MaxAttempts int32      `json:"max_attempts"`
-	LastError   *string    `json:"last_error"`
-	RunAt       time.Time  `json:"run_at"`
-	LockedAt    *time.Time `json:"locked_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-	FinishedAt  *time.Time `json:"finished_at"`
-}
-
 type KnowledgeObject struct {
 	Key       string    `json:"key"`
 	PackID    uuid.UUID `json:"pack_id"`
