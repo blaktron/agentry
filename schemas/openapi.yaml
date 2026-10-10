@@ -7054,6 +7054,11 @@ components:
           type: string
         status:
           type: string
+          description: >-
+            safe means no known advisories when last checked (OSV), and
+            nothing else about the server. A version its package registry
+            does not publish is served as error, with lastError saying so
+            (agentry#1036), so no client meets a value the contract lacks.
           enum: [safe, vulnerable, error]
         maxSeverity:
           type: string
