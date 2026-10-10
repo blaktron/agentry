@@ -135,9 +135,9 @@ rule about honesty, and these are the specific things behind it:
   goes through its gateway; a harness it runs on the host is bounded by its
   configuration and the proxy variables, not by Docker, and another runtime
   may enforce nothing.
-- **A release is scanned at publication, not at push and not at run time.** A
+- **Scanning happens at publication, not at push and not at run time.** A
   private repository's contents are not scanned until a version is submitted.
-  What a run is given is checked when it runs, which is a different thing: a
+  That is a release's scan. What a run is given is checked when it runs: a
   run's files are checked by ClamAV and, for the risky types, looked up on
   Hybrid Analysis by their SHA-256 (never uploaded) before the agent starts,
   locally and on Agentry, and on Agentry AI Review also reads their text
