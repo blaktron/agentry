@@ -283,6 +283,10 @@ func TestDesignLogoRefusals(t *testing.T) {
 		{"empty png", map[string]any{"png": ""}, "logo.png", nil},
 		{"another key", map[string]any{"png": b64(encodePNG(t, solid(2, 2, color.Black))), "url": "https://x.example"}, "", nil},
 		{"not base64", map[string]any{"png": "not base64!"}, "logo.png", ErrLogoFormat},
+		{"base64 in lines", map[string]any{"png": func() string {
+			b := b64(encodePNG(t, solid(2, 2, color.Black)))
+			return b[:8] + "\r\n" + b[8:]
+		}()}, "logo.png", ErrLogoFormat},
 		{"a JPEG", map[string]any{"png": b64(jb.Bytes())}, "logo.png", ErrLogoFormat},
 		{"wider than the bound", map[string]any{"png": b64(wide)}, "logo.png", ErrLogoTooLarge},
 		{"a header that lies", map[string]any{"png": b64(withSize(encodePNG(t, solid(4, 4, color.Black)), 8, 8))}, "logo.png", ErrLogoFormat},

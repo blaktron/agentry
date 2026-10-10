@@ -911,16 +911,7 @@ paths:
         the same as Plain: a signed-in client then falls to its own
         configuration, else Plain (DEV-227).
       parameters:
-        - name: include
-          in: query
-          description: >-
-            `logo` answers the design with its logo, if the person has one
-            (agentry#1025). Without it the design comes without a `logo` key,
-            so a client built before logos still reads it.
-          schema:
-            type: string
-            enum: [logo]
-            x-enum-varnames: [ReportSettingsIncludeLogo]
+        - $ref: "#/components/parameters/ReportSettingsInclude"
       responses:
         "200":
           description: The settings.
@@ -949,13 +940,7 @@ paths:
         never drops one by saving (agentry#1025). A body with no design
         clears the logo too.
       parameters:
-        - name: include
-          in: query
-          description: "`logo` answers the design with its logo, as GET does."
-          schema:
-            type: string
-            enum: [logo]
-            x-enum-varnames: [UpdateReportSettingsIncludeLogo]
+        - $ref: "#/components/parameters/ReportSettingsInclude"
       requestBody:
         required: true
         content:
@@ -4877,6 +4862,15 @@ paths:
 
 components:
   parameters:
+    ReportSettingsInclude:
+      name: include
+      in: query
+      description: >-
+        `logo` answers the design with its logo, if the person has one
+        (agentry#1025). Without it the design comes without a `logo` key, so
+        a client built before logos still reads it.
+      schema:
+        $ref: "#/components/schemas/ReportSettingsInclude"
     VersionString:
       name: version
       in: path
@@ -6518,6 +6512,11 @@ components:
       properties:
         design:
           $ref: "#/components/schemas/ReportDesign"
+    ReportSettingsInclude:
+      type: string
+      description: What a report settings answer carries beyond the design.
+      enum: [logo]
+      x-enum-varnames: [ReportSettingsIncludeLogo]
     ReportDesign:
       type: object
       description: >-

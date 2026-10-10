@@ -1110,6 +1110,21 @@ func (e ReportDesignTitleBlock) Valid() bool {
 	}
 }
 
+// Defines values for ReportSettingsInclude.
+const (
+	ReportSettingsIncludeLogo ReportSettingsInclude = "logo"
+)
+
+// Valid indicates whether the value is a known member of the ReportSettingsInclude enum.
+func (e ReportSettingsInclude) Valid() bool {
+	switch e {
+	case ReportSettingsIncludeLogo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReportVerdict.
 const (
 	Scanned   ReportVerdict = "scanned"
@@ -2022,36 +2037,6 @@ func (e DeleteUserDirectoryDeviceParamsKind) Valid() bool {
 	case Totp:
 		return true
 	case Webauthn:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for GetUserReportSettingsParamsInclude.
-const (
-	ReportSettingsIncludeLogo GetUserReportSettingsParamsInclude = "logo"
-)
-
-// Valid indicates whether the value is a known member of the GetUserReportSettingsParamsInclude enum.
-func (e GetUserReportSettingsParamsInclude) Valid() bool {
-	switch e {
-	case ReportSettingsIncludeLogo:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for UpdateUserReportSettingsParamsInclude.
-const (
-	UpdateReportSettingsIncludeLogo UpdateUserReportSettingsParamsInclude = "logo"
-)
-
-// Valid indicates whether the value is a known member of the UpdateUserReportSettingsParamsInclude enum.
-func (e UpdateUserReportSettingsParamsInclude) Valid() bool {
-	switch e {
-	case UpdateReportSettingsIncludeLogo:
 		return true
 	default:
 		return false
@@ -3295,6 +3280,9 @@ type ReportSettings struct {
 	Design *ReportDesign `json:"design,omitempty"`
 }
 
+// ReportSettingsInclude What a report settings answer carries beyond the design.
+type ReportSettingsInclude string
+
 // ReportVerdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
 type ReportVerdict string
 
@@ -4426,20 +4414,14 @@ type DeleteUserDirectoryDeviceParamsKind string
 // GetUserReportSettingsParams defines parameters for GetUserReportSettings.
 type GetUserReportSettingsParams struct {
 	// Include `logo` answers the design with its logo, if the person has one (agentry#1025). Without it the design comes without a `logo` key, so a client built before logos still reads it.
-	Include *GetUserReportSettingsParamsInclude `form:"include,omitempty" json:"include,omitempty"`
+	Include *ReportSettingsInclude `form:"include,omitempty" json:"include,omitempty"`
 }
-
-// GetUserReportSettingsParamsInclude defines parameters for GetUserReportSettings.
-type GetUserReportSettingsParamsInclude string
 
 // UpdateUserReportSettingsParams defines parameters for UpdateUserReportSettings.
 type UpdateUserReportSettingsParams struct {
-	// Include `logo` answers the design with its logo, as GET does.
-	Include *UpdateUserReportSettingsParamsInclude `form:"include,omitempty" json:"include,omitempty"`
+	// Include `logo` answers the design with its logo, if the person has one (agentry#1025). Without it the design comes without a `logo` key, so a client built before logos still reads it.
+	Include *ReportSettingsInclude `form:"include,omitempty" json:"include,omitempty"`
 }
-
-// UpdateUserReportSettingsParamsInclude defines parameters for UpdateUserReportSettings.
-type UpdateUserReportSettingsParamsInclude string
 
 // PutUserReportLogoMultipartBody defines parameters for PutUserReportLogo.
 type PutUserReportLogoMultipartBody struct {
