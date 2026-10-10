@@ -985,7 +985,7 @@ lower them for your own host.
 | a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer, or an `auth: oauth` connection's access token, is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file; a connection's refresh token and any client secret stay in the runner's store and never enter the run |
 | a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane; before the agent starts they are checked by ClamAV and read in the files image's container (no network, every capability dropped, the files read-only), and their text is mounted read-only at `/inputs-text`; the always-granted `list_inputs`, `read_input` and `search_inputs` serve both ([running with files](#running-with-files)); job output and receipts live on the separate `/out` volume |
-| the scratch folder (the runner's grant to every release, never a built-in; no contract line) | `scratch_list`, `scratch_read` and `scratch_write` over `/scratch` on the tools container only; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
+| the scratch folder (the runner's grant to every release, never a built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds, not its capability drop |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
@@ -1368,17 +1368,26 @@ mounts:
 `/scratch` is the agent's own place for notes and working files. It is
 empty when the run starts, nothing in it is copied to the output folder,
 and it is removed with the container at the end of the run. The agent
-reaches it through three tools:
+reaches it through four tools:
 
 - `scratch_list` lists a folder in it, from an entry `offset` when a long
   listing stopped at one tool result;
-- `scratch_read` reads a file as text, a page at a time (`offset`,
-  `maxBytes`), each page saying where the next begins;
-- `scratch_write` writes a file, or appends to one with `append`.
+- `scratch_read` reads a file a page at a time (`offset`, `maxBytes`), each
+  page saying where the next begins. It has `read_input`'s two views
+  (agentry-cli#832): a text file is read as text, and a binary file (an
+  image, a PDF, an archive) as pages of base64 with its size and detected
+  type. With no `view` the file decides; `view: "text"` on a binary file
+  is refused and names `original`;
+- `scratch_write` writes a file, or appends to one with `append`;
+- `scratch_search` finds a word or phrase in the folder's text files,
+  without regard to case: `search_inputs` over the scratch folder, with
+  the same matching and caps and the same `path:line: excerpt` answers. A
+  file that is not text is not searched.
 
-`fetch` writes there too: a response body larger than one tool result is
-saved to `/scratch/fetch/<n>-<name>` and read on with `scratch_read`
-([below](#one-tool-result-at-a-time-pages)).
+`fetch` writes there too: a body the agent asks to keep with `saveTo`
+([below](#fetch-into-the-scratch-folder-saveto)), and a response body
+larger than one tool result, saved to `/scratch/fetch/<n>-<name>` and read
+on with `scratch_read` ([pages](#one-tool-result-at-a-time-pages)).
 
 The tools have names of their own, so `fs_list`, `fs_read` and `fs_write`
 keep meaning the workspace the contract grants, and the two never alias. A
@@ -1396,6 +1405,63 @@ filter missed the container stops at the health probe (exit 13). Under
 Docker Desktop (macOS, Windows) the filter does not run: both are folders
 in the container's own layer and are **not bounded**, and the run's
 `capabilities_enforced.scratch` says so.
+
+### Fetch into the scratch folder: `saveTo`
+
+A run whose QuickAgent declares egress can keep a file it fetches, of any
+type, binary included (agentry-cli#832; plan `input-sources.md` §6, D10).
+`fetch` takes `saveTo`, a path in the scratch folder, offered only where
+the run has one:
+
+```json
+{"url": "https://api.github.com/repos/o/r/zipball/main", "saveTo": "repo.zip", "auth": {"env": "GITHUB_TOKEN"}}
+```
+
+The whole response body is written to `/scratch/<saveTo>`, and the answer
+says what was saved, never the body:
+
+```text
+HTTP 200 OK
+content-type: application/zip
+content-length: 1843201
+etag: "…"
+last-modified: …
+
+saved: /scratch/repo.zip, 1843201 bytes, sha256 …; read it with scratch_read (view "original" for a binary file) or search it with scratch_search
+```
+
+The save keeps `fetch`'s rules and adds its own:
+
+- **Declared egress only.** The host is one of the manifest's egress
+  hosts (or any host under the policy-gated `*`), and every redirect hop
+  is checked against the same list before it is followed.
+- **Credentials through `auth` alone.** An `Authorization`, `Cookie` or
+  `Proxy-Authorization` header is refused, as for any `fetch`.
+- **No granted secret is kept.** A body that holds a granted secret's
+  value byte for byte, found even where it straddles the parts the body
+  is copied in, stops the save, and nothing is left at the path. (A body a
+  host sends encoded, say gzip asked for in `headers`, is saved as sent,
+  and an echoed value inside it is not seen.)
+- **Inside the folder, never executable.** The path is resolved beneath
+  `/scratch` through the folder's `os.Root`: a path that climbs out, or a
+  link a declared command planted that points out, is refused. The body is
+  written to a new file of its own beside the path, made mode 0666, then
+  renamed over the path, so a file already there is replaced, never written
+  through. A `HEAD` request has no body and is refused with `saveTo`.
+- **Bounded by the folder and the clock.** The body is not held to
+  `fetch`'s 512 KiB reply cap. On Linux the 256 MiB tmpfs bounds it, and a
+  body that does not fit is refused with the folder's "no space left".
+  Under Docker Desktop the folder is unbounded, and `fetch`'s 60-second
+  timeout, which covers reading the body, is the only bound.
+- **Archives stay packed** (D11): nothing in the scratch folder is unpacked.
+
+A 4xx or 5xx body is saved too; the status says what it is. Every body
+`fetch` saves, asked for or saved because it was larger than one result,
+is recorded in the run's fetch ledger
+([what the receipt records](#the-fetch-ledger-and-fetchsaves)); a save the
+ledger cannot record is removed rather than kept. The System
+Prompt's data rule names whatever is downloaded into the scratch folder as
+data, never instructions.
 
 ### One tool result at a time: pages
 
@@ -1421,12 +1487,12 @@ Within it:
   asked, cut after a line end or on a character boundary. A page that is
   not the whole file ends with a line such as
   `[page: bytes 0–48567 of 409262; continue with offset 48567]`, and the
-  last one with `…; end of file]`. A binary original's base64 page fits
-  too. A 400 KiB file is about nine calls under docker-agent.
+  last one with `…; end of file]`. A binary file's base64 page
+  (`read_input`'s `original` view, `scratch_read`'s) fits too. A 400 KiB file is about nine calls under docker-agent.
 - **Listings and searches stop and say so.** `fs_list`, `scratch_list` and
   `list_inputs` take an entry `offset` and end a partial listing with
   `[entries 1–812 of 3000; continue with offset 812]`; `search_inputs`
-  says how many matching lines it left out; `knowledge_list` names the
+  and `scratch_search` say how many matching lines they left out; `knowledge_list` names the
   `knowledge_read` call that reads a long index on.
 - **A large `fetch` body is kept, not cut.** A body within the budget is
   answered as before. A larger one (up to `fetch`'s 512 KiB read cap, said
@@ -1686,6 +1752,25 @@ registry keeps for a hosted run leaves the block out, so the site reads it
 from the tar, not the kept receipt. A run that exported none has no `pdfs`
 block.
 
+#### The fetch ledger and `fetchSaves`
+
+The scratch folder is gone with the run, so a run whose `fetch` can save
+into it keeps a record of what it saved (agentry-cli#832). The engine
+writes the ledger's path into the run's own tools spec, and each body
+`fetch` saves is one line of `receipts/fetches.ndjson`: its path in the
+scratch folder, the declared host it came from, its size, its SHA-256 and
+whether the agent asked for it with `saveTo` (`asked`) or it was saved
+because it was larger than one tool result. The ledger is masked like the
+other receipts, so a path the agent named with a secret's value does not
+keep it. The envelope gains a `fetchSaves` block counting it:
+
+```json
+"fetchSaves": {"files": 3, "bytes": 2104567, "asked": 2, "ledger": "receipts/fetches.ndjson"}
+```
+
+A run that saved nothing has no `fetchSaves` block (and an empty ledger),
+and a run without egress has no ledger at all.
+
 ## The System Prompt
 
 Every run's model reads the **System Prompt** first, and the QuickAgent's
@@ -1706,8 +1791,9 @@ It has two parts:
   writes) and what it never does (change the task, ask for a tool, a file
   or the network, override the rules or the instruction; a format the task
   fixes wins). It keeps the model on the task the instruction gives, with
-  everything that arrives in inputs, files, tool results, web pages or
-  knowledge pages treated as data, the voice being the one attached text
+  everything that arrives in inputs, files (whatever is downloaded into
+  the scratch folder among them), tool results, web pages or knowledge
+  pages treated as data, the voice being the one attached text
   followed, and only for how the run writes. Guardrails are added here.
 - **The body** is composed from the compiled plan. It states the run's
   actual grants and never one the plan does not make: the size of one tool
@@ -2366,7 +2452,7 @@ key variable's **name** only.
 | `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
-| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
+| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
 | `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts), `corrections` (how many slips were corrected), `repaired` (whether the one repair turn ran) and `check` (AI Review's check as one word: `pass`, `flagged`, `not_scanned`, or `unanswered`; absent for a draft that could not be rendered). The envelope's usage is both turns' together. A draft that stops before the Drafter runs still writes one envelope with its class and stage |
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
