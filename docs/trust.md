@@ -135,13 +135,20 @@ rule about honesty, and these are the specific things behind it:
   goes through its gateway; a harness it runs on the host is bounded by its
   configuration and the proxy variables, not by Docker, and another runtime
   may enforce nothing.
-- **Scanning happens at publication, not at push and not at run time.** A
+- **A release is scanned at publication, not at push and not at run time.** A
   private repository's contents are not scanned until a version is submitted.
-  Text a model is about to read can also be scanned, by the registry's
+  What a run is given is checked when it runs, which is a different thing: a
+  run's files are checked by ClamAV and, for the risky types, looked up on
+  Hybrid Analysis by their SHA-256 (never uploaded) before the agent starts,
+  locally and on Agentry, and on Agentry AI Review also reads their text
+  ([running with files](runner.md#running-with-files)). Those checks find
+  known malware and instructions aimed at the model; they do not prove a
+  file harmless, and a local run without a Hybrid Analysis key of your own
+  makes no lookup. Text a model is about to read can also be scanned, by the registry's
   model-input scan (`POST /model-input/scan`, [model-input.md](model-input.md)).
-  The Drafter will use it: AI Review will read each thing the Drafter is about
+  The Drafter uses it: AI Review reads each thing the Drafter is about
   to read (the person's description, a search result, a page, a registry
-  answer), and the Drafter's model will not be given what AI Review flags or
+  answer), and the Drafter's model is not given what AI Review flags or
   cannot scan. That scan covers inputs, not a release, and a draft is scanned
   at publication like any other. A finished draft can also be read the way
   AI Review will read it at publication, before it is submitted

@@ -75,7 +75,7 @@ One QuickAgent, one job, one container tree, then gone.
 | `--mode autonomous\|interactive` | the run mode (default: the release's only mode; asked on a terminal when it declares both, autonomous otherwise) |
 | `--input FILE` | task text (else piped stdin, else an empty task) |
 | `--intake id=value` | answer an intake question non-interactively (repeatable; unanswered questions are asked on a terminal, and a `secret` answer is never recorded) |
-| `--file PATH` | provide a file or directory to the run, read-only under `/inputs` (repeatable; basename-rooted; duplicate basenames refused) |
+| `--file PATH` | provide a file or directory to the run, read-only under `/inputs` (repeatable; basename-rooted; duplicate basenames refused); it is checked for malware and turned into text before the agent starts ([running with files](#running-with-files)) |
 | `--knowledge DIR` | attach a knowledge pack read-only at `/knowledge/<name>`, searched with the knowledge tools (repeatable; [below](#knowledge-packs)) |
 | `--voice` / `--no-voice` | attach the [Writing Voice](#a-writing-voice) kept on this computer to this run, or leave it off; with neither, the voice's own flag decides (`agentry voice attach on\|off`) |
 | `--report-theme NAME` | the [report theme](#the-report-theme) this run's PDFs take, for this run alone: `plain`, `formal`, `brief`, `technical` or `letter` (default: the signed-in account's, else `report.theme` in the CLI's config, else `plain`); any other name refuses the run (exit 2) |
@@ -744,6 +744,9 @@ its digest, so a run record says which file a run obeyed.
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
+| `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
+| `images.clamavSignatures` | the ClamAV signature bundle, `<registry>/<repository>:<tag>` (default `ghcr.io/blaktron/agentry-clamav-db:latest`); a mirror must carry the publishing workflow's signature |
+| `hybridAnalysis.apiKeyEnv` / `hybridAnalysis.apiKeySource` | your Hybrid Analysis key for the hash lookup: the variable that holds it (default `HYBRID_API_KEY`), or `keyring` for the keychain entry `provider:hybrid-analysis`; with no key nothing is looked up |
 | `docker.runtime` | the daemon-registered OCI runtime the containers holding the QuickAgent's code are created with (unset: the daemon's default) — below |
 | `docker.gatewayRuntime` | the daemon-registered runtime the gateway alone is created with: a second registration of gVisor with `--host-uds=open` (unset: the daemon's default; needs `docker.runtime`) — below |
 | `docker.resolvers` | at most three IPv4 name servers of the host's that the built-in Drafter's web tools, and under `docker.runtime` the llm-proxy, the MCP server install proxy and the relays, resolve through (unset: docker's DNS) — below |
@@ -951,13 +954,13 @@ lower them for your own host.
 | `secrets: [names]` | values only in the profile, the per-run secrets file (0600, deleted at teardown), the tools container env (a declared server's own: that server's container env), and the MCP gateway's container, which reads the whole secrets file to inject them — never in plans, receipts, or process listings |
 | a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer, or an `auth: oauth` connection's access token, is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file; a connection's refresh token and any client secret stay in the runner's store and never enter the run |
 | a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
-| run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane, served by always-granted `list_inputs`/`read_input`; job output and receipts live on the separate `/out` volume |
+| run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane; before the agent starts they are checked by ClamAV and read in the files image's container (no network, every capability dropped, the files read-only), and their text is mounted read-only at `/inputs-text`; the always-granted `list_inputs`, `read_input` and `search_inputs` serve both ([running with files](#running-with-files)); job output and receipts live on the separate `/out` volume |
 | the scratch folder (the runner's grant to every release, never a built-in; no contract line) | `scratch_list`, `scratch_read` and `scratch_write` over `/scratch` on the tools container only; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds, not its capability drop |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
-| a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool — including `run_command`. Worth knowing when writing a QuickAgent whose job is to *find* credentials: a `git log -p` that would print one is refused, and the work has to be done on patterns that are not themselves secret-shaped. |
+| a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool's result, `run_command`'s included, and the arguments of every call, a `write_report` that quotes a key included. **The person's own inputs are the exception** (agentry-cli#632): a successful `read_input` or `search_inputs` serves the file unchanged, keys and passwords included, so a QuickAgent whose job is to *find* credentials can read them. An input tool's error, and the input tools under the review grant, are still refused. A `git log -p` through `run_command` that would print a key is refused too, and a finding should name a credential's kind and where it is, never its value, because a report that repeats it is refused. |
 | a **host-run** harness instead (`--adapter claude`) | no agent container: the gateway's catalog is still the whole tool surface, and the proxy variables are still the route to the model, but they are configuration the harness is asked to honour rather than a network it cannot leave. The receipt says so in `capabilities_enforced["harness.isolation"]`, and `receipts/proxy.log` shows every CONNECT it actually made. Beside it, `capabilities_enforced["harness.env"]` names the variables of your own environment the harness is given unchanged, where they are set: the ones its adapter asks for (`HOME` and `PATH` for `claude` and `codex`), and on Windows also `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `PATHEXT`, `ComSpec` and `SystemRoot`. Everything else it has is set by the plan and the run. |
 
 Every claim above appears, mechanism named, in the run's
@@ -1017,6 +1020,246 @@ program: `sh`, `awk`, `sed`, `find`, `xargs` and `env` are left out on
 purpose. A declared command writes only beneath `/tmp`, the scratch folder
 and a granted workspace, so an archive is unpacked there. A run in Agentry
 provides these and no others. `agentry doctor` lists them.
+
+## Running with files
+
+A run's files are the ones you give it: `--file PATH` (files or folders,
+repeatable), the answer to an intake question of `type: file`, a file you
+add to a session (`/add PATH`, or a driver's `add`), and on Agentry the
+inputs uploaded with a hosted run. They are copied read-only to `/inputs`.
+Before the agent starts, the runner opens every one of them in a container
+of its own, checks each for malware and turns what it can into text, and
+the agent then reads them through three tools. A run with no files does
+none of this and pulls nothing (plan `file-handling.md`, agentry-cli#560).
+
+### Before the agent starts
+
+1. **The files image.** The readers run in `ghcr.io/blaktron/agentry-files`,
+   an image built and signed by agentry-dockerimages and pinned by digest in
+   the CLI's policy defaults (`images.files`). The CLI pulls it the first
+   time a run has files and adds the runner binary to it in a local layer
+   that installs nothing (`agentry-decode:<hash>`); nothing is installed
+   from a package mirror during a run (agentry-cli#559).
+   `agentry files ensure` pulls it ahead of time and refreshes the ClamAV
+   signatures (below); a sandbox host runs it at each update
+   (agentry-cli#572). A pull that fails refuses the run with exit 13, the
+   reason `inputs-not-decoded` and the detail `image`.
+2. **One container reads them all.** It has no network, every capability
+   dropped, no new privileges and a read-only root. The files are mounted
+   read-only and it runs as your uid, with a 512 MiB tmpfs for the readers
+   and another for unpacked archives, for at most 30 minutes and 2,000
+   files. In it each file is identified by its content, not its name, so a
+   renamed `.docx` is still read as a document. Each archive is unpacked,
+   every file is checked by ClamAV, and only what ClamAV did not find is
+   turned into text (agentry-cli#561, #562, #563).
+3. **The runner checks what came out.** It reads the container's output
+   only as regular files within their caps, each text at most 10 MiB, and
+   only for the files it staged. It hashes each staged file itself, and it
+   refuses an output that names anything else. A reader's own messages
+   never reach the model: a file that could not be read is given one of
+   the runner's fixed reasons ("pdftotext could not read it", "not text,
+   and no decoder reads this kind of file", …).
+4. **The risky files are looked up on Hybrid Analysis** by their SHA-256,
+   from the CLI process, never from a container ([below](#hybrid-analysis-by-hash)).
+5. **On Agentry, AI Review reads the inputs' text**
+   ([below](#ai-review-of-a-hosted-runs-inputs)).
+
+Only then does the agent start, and its tools read what step 2 wrote,
+mounted read-only at `/inputs-text`, beside the originals at `/inputs`.
+
+### Which files are read, and how
+
+| Kind | Formats | What the agent gets as text |
+|---|---|---|
+| PDF | PDF | its text, by `pdftotext` |
+| documents | DOCX, ODT, EPUB, RTF | GitHub Markdown, by `pandoc` |
+| spreadsheets | XLSX, ODS | one Markdown table a sheet, at most 10,000 rows and 1,024 columns, by the runner's own reader |
+| presentations | PPTX, ODP | one section a slide, by the runner's own reader |
+| images | PNG, JPEG, TIFF and the other image types, SVG excepted | the text in the picture, by `tesseract` (English) |
+| legacy Office and mail | DOC, XLS, PPT, MSG, EML, mbox, and the other formats Apache Tika reads | its text, by Tika |
+| text | any file whose first 64 KiB are UTF-8 with no NUL: source code, scripts, HTML, XML, SVG, CSV, JSON, YAML, TOML, Markdown, logs, plain text | the file as uploaded, byte for byte; HTML and XHTML also have a Markdown version, by `pandoc` |
+| text in another encoding | a Latin-1 CSV, for example | its text, by Tika |
+| archives | zip, tar, 7z, rar; gzip, bzip2, xz and zstd streams | unpacked, and each file in it read by this table ([archives](#archives)) |
+
+Code, markup and data are not converted: the agent reads them as you
+uploaded them (agentry-cli#630). A file nothing reads (an executable, a
+database, a picture with no text) is listed as not read, with the reason,
+and the agent can still read its original. Files inside a repository's
+`.git` folder are listed, checked by ClamAV and never read as text: a
+QuickAgent that wants a repository's history declares `git` in `exec`
+(agentry-cli#642).
+
+### Archives
+
+A zip, tar, 7z or rar, or a gzip, bzip2, xz or zstd stream, is unpacked
+inside the same container, and each file in it is listed, checked and read
+by its path inside the archive: `bundle.zip/notes/memo.docx` (agentry-cli#562).
+
+- At most three archives deep. A fourth level is listed, not unpacked.
+- At most 2,000 files in all, the files you gave and the files inside
+  archives counted together, and 512 MiB unpacked, shared by every archive
+  in the run and checked as each file is unpacked, not after. An archive
+  stopped by a cap is listed as unpacked in part, with the cap it hit.
+- An archive with a member whose path is absolute, climbs out with `..`
+  or is not a plain name is not unpacked at all.
+- Links, devices and FIFOs inside an archive are never unpacked, nor is a
+  path the archive names twice.
+- An encrypted archive or member is listed as not read: nothing could
+  check it.
+
+### How the agent reads them
+
+| Tool | Answers |
+|---|---|
+| `list_inputs` | one file a line: its path, type, size, whether it was read (`read`, `unread: <reason>`, `unpacked` or `unpacked in part: <reason>` for an archive), the size of its text, and the views it can be read in, the default first |
+| `read_input` | one file in one view, a page at a time (`offset`, `maxBytes`); for a file with no view, the reason |
+| `search_inputs` | the lines that hold a word or phrase, regardless of case, as `path:line: excerpt` (20 by default, 100 at most) |
+
+Each file can be read in two **views** (agentry-cli#631). `text` is a
+document's text, HTML's Markdown or a text file itself. `original` is the
+file as uploaded; a binary original comes as pages of base64, headed with
+its size and detected type. A document's default is its text, and
+everything else's is the original. A release can choose the default
+([`inputs`](quickagents.md#inputs-what-files-it-takes-and-how-it-reads-them)),
+and the agent can always ask for the other view. A file decoded out of a
+document inside an archive has only its text, and a file the malware check
+refused, or a `.git` internal, has neither. No QuickAgent needs `exec` to
+read its inputs.
+
+The files reach the agent unchanged, keys and passwords included: an input
+is never masked and never refused for what it holds, so a QuickAgent whose
+job is to find credentials sees them (agentry-cli#632). Its report must not
+repeat them ([what a run enforces](#what-a-run-enforces)).
+
+### The malware checks
+
+#### ClamAV, on every file
+
+Every file and every file in an archive is checked by ClamAV's `clamscan`
+in the same container, before its text is extracted, locally and on
+Agentry (agentry-cli#563). Its arguments are fixed, potentially unwanted
+applications are not flagged, and a file past 256 MB, or an archive's
+contents past that, is not checked and the receipt says so.
+
+- **A finding refuses the run** before the agent starts, with exit 11, the
+  reason `input-refused` and the detail `malware`, naming each file and
+  what was found: "the run was refused before the agent started: ClamAV
+  found malware in eicar.com (Eicar-Test-Signature)". On Agentry it costs
+  nothing. In a session, a file you add that ClamAV finds is refused alone:
+  the agent is not told of it, and the session goes on.
+- **The signatures** are a bundle agentry-dockerimages publishes daily,
+  `ghcr.io/blaktron/agentry-clamav-db` (`images.clamavSignatures` may
+  name a mirror). The CLI keeps a copy under the runner home and refreshes
+  it when it is a day old, about 110 MB the first time and the day's
+  changes after. Before it uses a bundle it verifies the cosign signature
+  of the workflow that publishes it, and refuses a bundle older than the
+  one it holds.
+- **They never stop a run.** A refresh that fails uses the bundle held.
+  With none at all (a first run with no network) the run goes on and the
+  receipt says no file was checked; signatures more than 7 days old are
+  named stale.
+
+#### Hybrid Analysis, by hash
+
+The risky files are also looked up on CrowdStrike's Hybrid Analysis by
+their SHA-256 alone (agentry-cli#564). The CLI process asks, after the
+container has exited and before the agent starts. No file, file name or
+account detail is sent, and nothing is ever submitted: Hybrid Analysis
+receives the hash and the key, and sees the address the request came from.
+
+- **What is risky**, by the type found in the container and by name,
+  archive members included: executables and libraries, installers, `.jar`
+  and `.apk`; scripts (`.js`, `.mjs`, `.cjs`, `.vbs`, `.ps1`, `.bat`,
+  `.cmd`, `.hta`, `.wsf`); shortcuts and disk images; legacy and macro
+  Office; RTF; PDF; CHM. Anything else, a `.txt` or a `.docx`, is not
+  asked about.
+- **The verdict.** `malicious` refuses the run as a ClamAV finding does,
+  with exit 11 and the detail `malware`, naming the file and its threat
+  score: "Hybrid Analysis's verdict on eicar.com is malicious (threat
+  score 100)". `suspicious` is noted in the receipt with its threat score,
+  and the run goes on. Any other verdict, or a hash it has never seen, is
+  clean.
+- **When it cannot answer**, the run goes on and the receipt says why:
+  `not checked: quota` once a minute of rate limits is spent,
+  `unavailable` for an outage or a timeout, `the key was refused`.
+- **The key.** A run on your computer uses your own key, the policy's
+  `hybridAnalysis` block: `$HYBRID_API_KEY` by default, another variable
+  with `apiKeyEnv`, or with `apiKeySource: keyring` the keychain entry
+  `provider:hybrid-analysis`, which the desktop app writes from
+  Settings → Provider settings → Hybrid Analysis key (agentry-desktop#530).
+  A free key from Hybrid Analysis is enough. With no key nothing is asked,
+  nothing warns, and the receipt says `not checked: no key`. A hosted run
+  uses Agentry's key, which the registry pushes to its sandbox hosts
+  ([the host's settings](hosted-runs.md#the-hosts-settings)). The key
+  never enters a container, the receipt, a log or stderr.
+
+### AI Review of a hosted run's inputs
+
+On Agentry, the text of every input is also read by AI Review before the
+agent starts (agentry-cli#321, agentry-enterprise#333). A sandbox host runs
+the CLI with `--review-inputs REGISTRY` and the job's credential in
+`$AGENTRY_JOB_TOKEN`, and the CLI sends every text the agent could read to
+that registry's [model-input scan](model-input.md) as `input_file`: a
+document's text, its original when that is text too, HTML as uploaded and
+as Markdown, and each file in an archive, several small texts to a call.
+A run on your own computer is not reviewed, and nothing about its inputs
+is sent anywhere but the hash lookup above.
+
+- **A flagged input refuses the run** with exit 11, the reason
+  `input-refused` and the detail `ai-review`, naming the file; the run
+  settles AI Review's one credit and nothing else. An input AI Review
+  could not read refuses it with the detail `not-reviewed`, and settles
+  nothing. In a session, a file you add is refused alone.
+- **At most 16 MiB of text a run is read.** A file past that is not
+  refused: it is withheld, listed by `list_inputs` as not read with no
+  view, named in the receipt, and the run goes on with the rest.
+- **Not read:** a binary original, which `read_input` serves as base64,
+  and, for a QuickAgent that declares `exec`, what its commands can read
+  under `/inputs` themselves.
+
+AI Review costs one credit a run however many calls it takes
+([hosted runs](hosted-runs.md#ai-review-of-a-runs-inputs)).
+
+### The caps
+
+| | On your computer | On Agentry |
+|---|---|---|
+| files | 2,000, the files inside archives included | 20 uploads, each at most 10 MB; inside them, the same 2,000 |
+| the text of one file | 10 MiB | 10 MiB |
+| unpacked from archives | 512 MiB, three archives deep | the same |
+| checked by ClamAV | 256 MB a file | the same |
+| reading them all | 30 minutes | the same |
+| read by AI Review | not reviewed | 16 MiB of text a run |
+
+### What the receipt says
+
+Two lines of `capabilities_enforced` say what happened to the files. The
+`decode` line names the files image, the readers and their versions, what
+was read, the ClamAV signatures and every outcome. From a hosted run on
+dev, shortened:
+
+> the inputs were decoded before the run, in agentry-decode:… (built on
+> ghcr.io/blaktron/agentry-files:…@sha256:…) with no network, every
+> capability dropped and the inputs read-only, by … : 1 decoded, 1 read as
+> text; each file read and each archive unpacked was checked by ClamAV
+> (clamscan, PUA off) before its text was extracted, against the
+> signatures of … : 2 clean; Hybrid Analysis (CrowdStrike), asked by
+> SHA-256 alone and never sent a file, on the files of a type it is asked
+> about: 1 clean
+
+It also counts archives unpacked (and how many in part), `.git` files kept
+as they are, files not read (naming the first five), files ClamAV found
+or could not check, stale signatures, and each Hybrid Analysis outcome:
+clean, noted and refused with the file, verdict and threat score, and not
+checked with the reason. A session that added files has a second clause
+for them. With no signatures it reads "no file was checked for malware:
+…".
+
+A hosted run's `inputReview` line says what AI Review read, for example
+"AI Review (the registry's model-input scan, question set f04db41f43fc,
+jev-1.13.0) was asked about the inputs' text; before the agent started: 1
+text(s), 1 KiB, in 1 call(s) and 1 judge request(s), none flagged", and
+names any file withheld past the cap.
 
 ## The scratch folder and PDF reports
 
@@ -1680,8 +1923,8 @@ most eight), and for some codes a `detail` word (DR-68):
 | `mcp-install-failed` | the install | the server | `pin-changed`, `store-changed`, `image`, `install-proxy`, `builder`, `runtime-check`, `record` |
 | `mcp-start-failed` | the gateway's start of a declared server | the server | — |
 | `secret-missing` | resolving the secrets | the secrets | — |
-| `input-refused` | staging or checking the inputs | none | `malware`, `name-clash`, `unreadable` |
-| `inputs-not-decoded` | the decode step | none | `image`, `run` |
+| `input-refused` | staging or checking the inputs ([running with files](#running-with-files)) | none | `malware` (ClamAV found it, or Hybrid Analysis called it malicious), `name-clash`, `unreadable`, `ai-review` (AI Review flagged an input's text; hosted, the run settles AI Review's one credit), `not-reviewed` (AI Review could not read it; nothing is charged) |
+| `inputs-not-decoded` | the decode step | none | `image` (the files image could not be pulled), `run` (its container failed, or its output was refused) |
 | `agent-blocked` | the agent's `end_blocked` | none | — |
 | `runner-blocked` | the runner's evidence | none | `tools-unrecorded`, `inputs-unread`, `report-unwritten` |
 
@@ -1766,10 +2009,14 @@ knowledge. Without them the Creator researches the web and its own
 knowledge, which can be wrong or out of date." `create --dir DIR` makes a plain pack
 directory instead, in the clear, and `add DIR` extends one. The built-in Knowledge Creator does the work. It is a package
 this binary embeds and runs with the attestation state `builtin`, never a
-release anyone installs. The runner first decodes the documents in an
-image that holds only `pdftotext`, `pandoc` and `tesseract`, with no
-network and every capability dropped. Markdown, text, HTML, CSV, JSON,
-YAML and source files pass as they are. Then the Creator compiles their
+release anyone installs. The runner first checks and decodes the
+documents as it does any run's files ([running with files](#running-with-files)):
+ClamAV and the Hybrid Analysis lookup, then the files image's readers,
+with no network and every capability dropped. A document either check
+refuses stops the build with exit 11, naming it. Markdown, text, HTML,
+CSV, JSON, YAML and source files pass as they are; an archive is listed as
+not read, since a pack keeps each document as given (agentry-cli#619).
+Then the Creator compiles their
 text into pages against the model your policy names, and the build applies
 what it wrote. A local build costs no credits and is not scanned; the pack
 records `not scanned`. `--timeout`, `--max-turns` and `--max-cost` bound
@@ -2035,4 +2282,5 @@ page covers authoring and publishing in depth.
 | `agentry publish` | submits a workspace and follows the pipeline's event stream to the verdict |
 | `agentry yank ns/name@version` | yanks a published version |
 | `agentry fork ns/name [--into NS] [--name NAME] [--yes] [--wait]` | forks a public QuickAgent into your own namespace, or `--into` an organization you publish for, under its name unless `--name` gives another ([Retire, delete and fork](api-conventions.md#retire-delete-and-fork) has the rules). A fork stays private for good, and its first version is a submission through the pipeline, charged like any. On a terminal the command says so and asks for a typed "yes"; off one it sends nothing without `--yes`. `--wait` follows the copy until the first version is submitted; `--json` prints the fork's record |
+| `agentry files ensure [--policy FILE]` | pulls the files image the policy names, by digest, and refreshes the ClamAV signatures, so no run has to download either; a sandbox host runs it at each update ([running with files](#running-with-files)) |
 | `agentry install` / `uninstall` / `profiles` / `doctor` / `setup` | above |

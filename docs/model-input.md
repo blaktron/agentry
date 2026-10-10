@@ -2,7 +2,8 @@
 
 Two registry routes serve work that feeds a model text from outside: the
 Drafter (the built-in package that drafts a QuickAgent from a person's
-description) and, later, a hosted run's input files. Both push text to
+description) and, since agentry-cli#321, a hosted run's input files
+([AI Review of a run's inputs](hosted-runs.md#ai-review-of-a-runs-inputs)). Both push text to
 the registry rather than holding a key of their own (agentry#608; plan
 `builder-rework.md` D20–D25):
 
@@ -31,7 +32,8 @@ account's token reaches them, whatever its scopes. Two callers do:
 - **A hosted job**, by the credential an extension minted for that one
   job, in the `X-Agentry-Job-Token` header. The core has no such extension:
   on a core registry the header is answered 401. SecureAgentry's runs
-  extension admits the Drafter's hosted draft kind through the
+  extension admits the Drafter's hosted draft kind, and a hosted run's or
+  session's `input_file` scans (at most 400 a run), through the
   `AdmitsModelInput` seam of `pkg/extension`: it names the job a
   credential acts for, may refuse a call past the job's caps (a draft past
   its searches, say) in its own status and words, and hears what each
