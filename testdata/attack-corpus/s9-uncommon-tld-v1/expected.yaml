@@ -1,0 +1,9 @@
+# Fixture expectation (see README.md).
+technique: "Release-diff pair, v1: a clean baseline that declares no egress (agentry#958)"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"network":{"egress":"none"}}}
+expect: []
+forbid:
+  - S9/new-egress-content
+expectClean: true
