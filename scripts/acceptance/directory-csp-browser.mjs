@@ -7,6 +7,7 @@ const origin = process.env.DIRECTORY_CSP_ORIGIN;
 const credentials = [process.env.CSP_PASSWORD].filter(Boolean);
 const browser = await chromium.launch({headless: true});
 const challenges = [];
+const policyFailures = [];
 // Certificate verification is relaxed only for this throwaway fixture's cert.
 const context = async () => {
     const ctx = await browser.newContext({ignoreHTTPSErrors: true});
@@ -22,25 +23,38 @@ const context = async () => {
 
 async function enrollmentTerms() {
     const enrollment = await context();
-    const endpoint = origin + '/api/v3/flows/executor/agentry-enrollment/';
-    const step = async (payload) => {
-        const response = payload === undefined ? await enrollment.request.get(endpoint) : await enrollment.request.post(endpoint, {data: payload});
-        return response.json();
-    };
-    let challenge = await step();
-    assert.equal(challenge.component, 'ak-stage-captcha');
-    // Published test token on an isolated directory configured with test keys.
-    challenge = await step({component: 'ak-stage-captcha', token: 'XXXX.DUMMY.TOKEN.XXXX'});
-    assert.equal(challenge.component, 'ak-stage-prompt');
+    const page = await enrollment.newPage();
+    let widgetLoaded = false;
+    let blobFrames = 0;
+    page.on('response', response => {
+        const url = new URL(response.url());
+        if (url.origin === 'https://challenges.cloudflare.com' && url.pathname.startsWith('/turnstile/v0/') && url.pathname.endsWith('/api.js') && response.ok()) widgetLoaded = true;
+    });
+    page.on('framenavigated', frame => { if (frame.url().startsWith('blob:' + origin + '/')) blobFrames++; });
+    page.on('console', message => {
+        if (message.type() === 'error' && /Content Security Policy/i.test(message.text())) {
+            // Classify refusals without printing URLs, tokens or whole HTML.
+            policyFailures.push({inline: /inline script/i.test(message.text()), frame: /frame-src/i.test(message.text()), handler: /event handler/i.test(message.text())});
+        }
+    });
+    const response = await page.goto(origin + '/if/flow/agentry-enrollment/');
+    assert.match(response.headers()['content-security-policy'], /script-src-attr 'none'/);
+    // Real published-key widget and ordinary browser form, no API/token advance.
+    await page.locator('ak-stage-prompt input[name="username"]').waitFor({timeout: 90000});
+    assert.ok(widgetLoaded, 'the actual Turnstile frontend did not load');
+    assert.equal(blobFrames, 0, 'interactive Turnstile still relies on a blob document');
+    assert.deepEqual(policyFailures, [], 'interactive Turnstile encountered a CSP refusal');
     const user = 'dc-' + randomBytes(4).toString('hex');
     const password = 'Correct-Horse-' + randomBytes(8).toString('hex');
     credentials.push(password);
-    challenge = await step({component: 'ak-stage-prompt', username: user, email: user + '@example.test', password, password_repeat: password});
-    assert.ok(challenge.fields.some(field => field.field_key === 'attributes_agentry_terms_accepted'));
-    const page = await enrollment.newPage();
-    await page.goto(origin + '/if/flow/agentry-enrollment/');
+    await page.locator('input[name="username"]').fill(user);
+    await page.locator('input[name="email"]').fill(user + '@example.test');
+    await page.locator('input[name="password"]').fill(password);
+    await page.locator('input[name="password_repeat"]').fill(password);
+    await page.locator('button[name="continue"]').click();
     const agree = page.getByRole('checkbox', {name: 'I have read and agree to the Terms of Service', exact: true});
     await agree.waitFor({timeout: 15000});
+    console.log('ok   real Turnstile test widget completes in the browser under strict CSP without a blob wrapper');
     return {enrollment, page, agree};
 }
 
@@ -54,6 +68,52 @@ async function signIn(page, user, next = '') {
     await password.waitFor({timeout: 15000});
     await password.fill(process.env.CSP_PASSWORD);
     await page.locator('ak-stage-password').getByRole('button', {name: 'Continue', exact: true}).click();
+}
+
+async function widgetLifecycle() {
+    const ctx = await context();
+    const page = await ctx.newPage();
+    let requests = 0;
+    const frames = [];
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    // Delay only vendor frame documents, before a test token can be issued.
+    // This lets the pinned public retry interface drive a real SDK reset.
+    await page.route('https://challenges.cloudflare.com/cdn-cgi/challenge-platform/**', async route => {
+        if (route.request().resourceType() === 'document') { requests++; await held; }
+        // Reset cancels the first navigation while its response is held.
+        await route.continue().catch(() => {});
+    });
+    page.on('response', response => {
+        const url = new URL(response.url());
+        if (url.origin === 'https://challenges.cloudflare.com' && url.pathname.startsWith('/cdn-cgi/challenge-platform/') && response.request().resourceType() === 'document') {
+            frames.push({dark: url.pathname.includes('/dark/'), language: url.searchParams.get('lang')});
+        }
+    });
+    try {
+        await page.goto(origin + '/if/flow/agentry-enrollment/?theme=dark&locale=de', {waitUntil: 'domcontentloaded'});
+        const container = page.locator('[data-agentry-turnstile="direct"]');
+        await container.waitFor({state: 'attached', timeout: 30000});
+        const waitFrames = async wanted => {
+            const deadline = Date.now() + 15000;
+            while (requests < wanted) {
+                assert.ok(Date.now() < deadline, 'the real widget did not create its initial/reset frame');
+                await page.waitForTimeout(100);
+            }
+        };
+        await waitFrames(1);
+        assert.equal(await container.evaluate(el => Boolean(el.closest('form'))), true, 'widget left the normal flow card');
+        assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+        // This is the pinned stage's public retry signal, not a fabricated
+        // controller or a token injected to advance the flow.
+        await page.locator('ak-stage-captcha').evaluate(stage => { stage.refreshedAt = new Date(); });
+        await waitFrames(2);
+        release();
+        await page.locator('ak-stage-prompt input[name="username"]').waitFor({timeout: 90000});
+        assert.ok(frames.some(frame => frame.dark && frame.language === 'de-de'), 'the vendor did not receive the selected theme/language');
+        assert.equal(await container.count(), 0, 'the finished stage retained its widget');
+        console.log('ok   real widget reset, selected dark theme/language, normal-card placement and teardown work');
+    } finally { release(); await ctx.close(); }
 }
 
 try {
@@ -84,6 +144,7 @@ try {
     await initial.close();
 
     if (process.argv[2] === 'on') {
+        await widgetLifecycle();
         const {enrollment, page: terms, agree} = await enrollmentTerms();
         const region = terms.getByRole('region', {name: 'Terms of Service', exact: true});
         const waitDisabled = async (wanted) => {
@@ -186,7 +247,7 @@ try {
             if (cookie.value.length >= 16) credentials.push(cookie.value);
         }
     }
-    let message = (error.stack ?? String(error)) + '\n' + JSON.stringify({challenges, pages});
+    let message = (error.stack ?? String(error)) + '\n' + JSON.stringify({challenges, pages, policyFailures});
     for (const credential of credentials) message = message.split(credential).join('[fixture credential]');
     console.error(message);
     process.exitCode = 1;

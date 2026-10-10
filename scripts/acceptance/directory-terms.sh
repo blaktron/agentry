@@ -53,8 +53,9 @@ NET="$P-net"
 AK="$P-ak-server"
 WORKER="$P-ak-worker"
 DRIVER="$P-driver"
-FIXTURE=$(mktemp)
-CSP_TMP=$(mktemp -d)
+mkdir -p "${AGENTRY_SCRATCH_DIR:-$HOME/scratch}"
+FIXTURE=$(mktemp "${AGENTRY_SCRATCH_DIR:-$HOME/scratch}/directory-terms.XXXXXX")
+CSP_TMP=$(mktemp -d "${AGENTRY_SCRATCH_DIR:-$HOME/scratch}/directory-csp.XXXXXX")
 cleanup() {
   docker rm -fv "$P-pg" "$P-redis" "$AK" "$WORKER" "$DRIVER" "$P-csp-proxy" "$P-browser" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
