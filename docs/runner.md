@@ -962,7 +962,7 @@ lower them for your own host.
 | `egress: none` | tools container networking disabled; no `fetch` tool |
 | `egress: [hosts]` | gateway per-server proxies + DNS interception (`--block-network`, always on) pin the tools container to `host:443`; the `fetch` tool re-checks the host per request and per redirect hop |
 | `filesystem.*` | mount table on the tools container (`:ro`/`:rw`, per-path binds) + server-side grant checks; the agent container never mounts the workspace |
-| `exec: {commands}` | `run_command` argv0 allowlist + a shim `PATH` containing only the declared commands |
+| `exec: {commands}` | `run_command` argv0 allowlist + a shim `PATH` containing only the declared commands; each command writes only beneath `/tmp`, `/scratch` and, when `filesystem.write` is granted, the workspace, never the output folder, its reports or its receipts: through the runner binary's `confine` role (Landlock), or, where the kernel or runtime has no Landlock (gVisor, so every hosted run), as uid and gid 65534, where a contract that grants workspace writes runs no declared command (DR-63; [below](#where-a-declared-command-can-write)) |
 | `secrets: [names]` | values only in the profile, the per-run secrets file (0600, deleted at teardown), the tools container env (a declared server's own: that server's container env), and the MCP gateway's container, which reads the whole secrets file to inject them — never in plans, receipts, or process listings |
 | a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer, or an `auth: oauth` connection's access token, is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file; a connection's refresh token and any client secret stay in the runner's store and never enter the run |
 | a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
@@ -1016,6 +1016,35 @@ repository owned by another user as "dubious ownership", and a run's
 workspace and inputs are bind mounts owned by you read by root inside the
 container, an image that carries `git` sets `safe.directory` for the run's
 workspace and inputs mounts — exactly those paths, and the receipt says so.
+
+### Where a declared command can write
+
+The allowlist says which programs run; where they write is held too
+(DR-63). The tools container mounts the run's output folder read-write for
+`write_report` and the receipts' ledgers, so a declared command is kept
+away from it: it can write only beneath `/tmp`, [`/scratch`](#the-scratch-folder)
+and, when the contract grants `filesystem.write`, the workspace (plus
+`/dev/null`). It cannot write the output folder, `reports/` or
+`receipts/`, or plant a link there. Two mechanisms hold that:
+
+- **Landlock**, where the kernel and the container runtime implement it:
+  `run_command` starts each declared command through the runner binary's
+  `confine` role, which refuses every write right the kernel's Landlock ABI
+  handles outside those places, sets no_new_privs and then execs the
+  command. A command that could not be confined is a tool error and never
+  runs.
+- **A user of no account**, where there is no Landlock (gVisor implements
+  none, so every hosted run): the command runs as uid and gid 65534 with no
+  groups, which can write only world-writable places (`/tmp`, and
+  `/scratch`, whose files and folders are world-writable for this reason).
+  A contract that grants workspace writes cannot be held that way, so under
+  gVisor such a QuickAgent runs no declared command; `run_command` says so.
+
+Reading is not restricted by either. As uid 65534 a command reads only
+what has the other-read bit: inputs and decoded texts are staged readable
+for that reason, and a workspace file keeps its archive's mode.
+`run_command`'s description and the tools server's log say which mechanism
+holds in a run.
 
 ### The commands every machine provides
 
