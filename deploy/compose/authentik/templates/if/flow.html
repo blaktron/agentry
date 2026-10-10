@@ -89,6 +89,117 @@
 {% endcomment %}
 {% block scripts %}
 {{ block.super }}
+<script data-id="agentry-turnstile">
+"use strict";
+(() => {
+    // The pinned interactive renderer creates a blob with inline bootstraps.
+    // Render the same vendor widget in its flow card, using SDK callbacks.
+    // The protected render slot/controller contract is pinned by acceptance.
+    const providerURL = value => {
+        try {
+            const url = new URL(value);
+            if (url.origin !== "https://challenges.cloudflare.com" || url.pathname !== "/turnstile/v0/api.js") return null;
+            url.searchParams.set("render", "explicit");
+            url.searchParams.delete("onload");
+            return url;
+        } catch (_) { return null; }
+    };
+    customElements.whenDefined("ak-stage-captcha").then(() => {
+        const Stage = customElements.get("ak-stage-captcha");
+        const Controller = [...Stage.controllers].find(item => item.globalName === "turnstile");
+        const renderBody = Stage.prototype.renderBody;
+        if (!Controller || typeof renderBody !== "function" || Stage.agentryTurnstileInstalled) return;
+
+        class DirectTurnstile extends Controller {
+            constructor(host) {
+                super(host);
+                this.widgetId = null;
+                this.parameters = null;
+                this.generation = 0;
+                const refresh = this.refreshInteractive;
+                this.refreshInteractive = () => {
+                    if (!this.direct()) return refresh();
+                    if (this.widgetId !== null) window.turnstile.reset(this.widgetId);
+                    else this.ensureWidget();
+                };
+                if (this.direct()) {
+                    // Also handle a stage that rendered before this adapter loaded.
+                    host.iframeRef.value?.remove();
+                    host.iframeRef.value = undefined;
+                    host.requestUpdate();
+                    this.ensureWidget();
+                }
+            }
+            direct() {
+                return this.host.challenge?.interactive && providerURL(this.host.challenge.jsUrl);
+            }
+            hostUpdated() {
+                this.ensureWidget();
+            }
+            ensureWidget() {
+                const host = this.host;
+                if (!this.direct() || host.error || !host.isConnected) return;
+                const options = {
+                    sitekey: host.challenge.siteKey,
+                    theme: host.activeTheme,
+                    language: host.activeLanguageTag.toLowerCase(),
+                    size: "flexible",
+                };
+                const parameters = JSON.stringify(options);
+                if (parameters === this.parameters) return;
+                this.parameters = parameters;
+                const generation = ++this.generation;
+                host.updateComplete.then(() => {
+                    if (generation !== this.generation || !host.isConnected || !this.direct()) return;
+                    const container = host.captchaDocumentContainer;
+                    if (!container.isConnected) throw new Error("verification container missing");
+                    if (this.widgetId !== null) window.turnstile.remove(this.widgetId);
+                    this.widgetId = window.turnstile.render(container, {
+                        ...options,
+                        callback: token => {
+                            // Discard late callbacks after a rerender or stage change.
+                            if (generation === this.generation && host.isConnected && this.direct()) host.onTokenChange(token);
+                        },
+                    });
+                    host.onLoad?.();
+                }).catch(() => {
+                    if (generation === this.generation && host.isConnected) {
+                        this.parameters = null;
+                        host.error = "Verification could not start. Reload this page to try again.";
+                    }
+                });
+            }
+            hostDisconnected() {
+                ++this.generation;
+                if (this.widgetId !== null) {
+                    try { window.turnstile.remove(this.widgetId); } catch (_) { /* the stage already removed its DOM */ }
+                    this.widgetId = null;
+                }
+                super.hostDisconnected();
+            }
+        }
+        Stage.prototype.renderBody = function () {
+            if (this.challenge?.interactive && !this.error) {
+                const url = providerURL(this.challenge.jsUrl);
+                if (url) {
+                    this.challenge.jsUrl = url.toString();
+                    const container = this.captchaDocumentContainer;
+                    container.style.width = "100%";
+                    container.dataset.agentryTurnstile = "direct";
+                    // Lit's ordinary node expression keeps this in the same card.
+                    return container;
+                }
+            }
+            return renderBody.call(this);
+        };
+        // Keep the existing discovery order and all unrelated provider classes.
+        const controllers = [...Stage.controllers].map(item => item === Controller ? DirectTurnstile : item);
+        Stage.controllers.clear();
+        for (const item of controllers) Stage.controllers.add(item);
+        Stage.agentryTurnstileInstalled = true;
+    });
+})();
+</script>
 {% if flow.slug == "default-authentication-flow" %}
 <script data-id="agentry-remember-device">
 "use strict";
