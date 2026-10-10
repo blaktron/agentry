@@ -556,17 +556,34 @@ servers — each with its declared tool filter, its own egress allowlist,
 only its own secret values, and its plain `env` map (manifest v2; see the
 [QuickAgent reference](quickagents.md)) as the environment the server
 starts with — alongside the agentry tools server. A server's declared hosts
-are reached through the gateway's per-host TCP relays on its own relay
-network; nothing else resolves from the server. That network has one fixed
-name for every gateway on the docker host (the pinned docker/mcp-gateway
-offers no other), so the runner refuses to share it: a run whose declared
-servers need relays does not start (exit 13) while another gateway's relay
-sidecars are on it — another run of `agentry`, or the user's own
-`docker mcp gateway` — and the relays its gateway started are removed at
-teardown by the names the gateway's log gave them. The check is made as
-the run starts: a gateway started during the run is not refused. Two
-QuickAgents with declared egress therefore run one at a time on a host. A
-changed `env` value is a
+are reached through the gateway's per-host TCP relays on its relay
+network; nothing else resolves from the server. The pinned
+docker/mcp-gateway gives that network one fixed name, and how the runner
+keeps it a run's own depends on where it runs:
+
+- **Where the run's docker filter runs (Linux)**, the filter translates the
+  gateway's two fixed relay network names to two networks made for the run,
+  `agentry-<run>-relays` and `agentry-<run>-relays-out`, and removes them
+  with the run (agentry-cli#220). Runs with declared egress share the host
+  without seeing each other's relays, and the user's own
+  `docker mcp gateway` and its networks are untouched.
+- **Where the filter does not run (off Linux: Docker Desktop on macOS and
+  Windows, agentry-cli#322)**, the
+  network is the host's one fixed network, so such runs take turns (DR-22).
+  A run whose declared servers need relays holds `relays.lock` under the
+  runner home from its relay listing to the end of its teardown, so a
+  second `agentry` relay run on the host, from the CLI, the desktop or
+  runhost, is refused while it runs (exit 13, naming the lock), not queued
+  (agentry-cli#268). It also does not start (exit 13) while another
+  gateway's relay sidecars are on the network: the user's own
+  `docker mcp gateway`, or a client that passes no runner home and so takes
+  no lock. That check is made as the run starts, so such a gateway started
+  during the run is not refused.
+
+Either way the relays the run's gateway started are removed at teardown
+by the names the gateway's log gave them.
+
+A changed `env` value is a
 change to the server: the install-state diff reports it and asks for
 consent again, and the receipt's server line names the `env` keys, never
 a value. The runner refuses an `env` value the gateway would rewrite (one
