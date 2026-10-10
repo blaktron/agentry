@@ -130,12 +130,17 @@ shape the rule must still hold.
 | `S3/zero-width` leaves a joiner inside an emoji sequence and a leading byte-order mark | `s3-zero-width-emoji-benign` | `s3-zero-width-beside-emoji` (a joiner before a letter, a zero-width space between emoji, a byte-order mark mid-file), and `s3-zero-width` |
 | `S9/new-obfuscation` only for a new S3 class rated medium or above | `s9-patch-comment-v2` (a patch adds a plain HTML comment; baseline `s9-patch-comment-v1`) | `s9-patch-hidden-v2` (a patch adds CSS-hidden text) |
 | a host the manifest declares is low (`S9/new-egress`, `S9/new-egress-content`), even when this patch declares it | `s9-declared-host-v2` (a patch declares a host and starts using it; baseline `s9-declared-host-v1`, no egress) | `s9-undeclared-host-v2` (the same, plus a host it does not declare), and `incident-postmark-v2` |
+| a bare name is a destination only under a top-level domain ICANN delegates, and not as a two-label name under a file-like domain (`.md`, `.zip`, `.sh`, `.py` and the like) or a dotted name outside a string in program source (ruleset 0.4.3, agentry#958) | `s9-uncommon-tld-benign` (a patch names `report.md`, `areas.yaml` and `tickets.zip`; baseline `s9-uncommon-tld-v1`) | `s9-uncommon-tld-v2` (a patch starts mirroring to `webhook.site/…`, a TLD the old list did not know) |
 
 ## Rules for extending the corpus
 
 1. Every new S4 rule ships with corpus additions — a match fixture and a
    benign non-match twin (§17.3 CI gate).
-2. Keep fixtures defanged: text patterns only; `*.invalid.example` hosts;
+2. Keep fixtures defanged: text patterns only; `*.invalid.example` hosts
+   (one exception: `s9-uncommon-tld-v2` names `webhook.site`, a public
+   request catcher, bare and with an inert path, because what it tests is a
+   top-level domain no list of common ones holds; a reserved name cannot be
+   that);
    placeholder tokens only (never real credentials); nothing executable. Where
    a fixture carries a script (the `script-*` fixtures S6 reads), it is a
    text pattern that could not do what it describes — the shape is the

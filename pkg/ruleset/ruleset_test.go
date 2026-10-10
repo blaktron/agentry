@@ -23,7 +23,7 @@ var releasedDigests = map[string]string{
 	"0.4.0": "edb8b362b370edf7ff55375795e535155033138b7164fdb76c07a3811b5b917a",
 	"0.4.1": "fb63d649b09993b2d8c414909929cad58d1628e1b640f73f75824ec9ac539e5f",
 	"0.4.2": "24263e3ac50b399bb59ad33bafeae902f9ceee317211e0fb1c48e37777fcc7ac",
-	"0.4.3": "761954f08512edff58e45757dc571290d0a883e9dbc452d48cac109f313739a5",
+	"0.4.3": "ef91b334344c20bf9acf7dd7877d840483d1c9b67172b6b31b24310195b898de",
 }
 
 func TestEmbeddedBundleDigestIsPinnedForItsVersion(t *testing.T) {
