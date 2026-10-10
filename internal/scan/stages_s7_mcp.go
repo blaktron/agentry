@@ -293,7 +293,9 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 			}
 			rec = r
 		}
-		if rec != nil && rec.Status != "error" && now().Sub(rec.LastChecked) < mcpScanTTL && rec.scored() {
+		// A not-found row is no OSV answer: the registry has published the
+		// version since (checkPublished just said so), so OSV is asked.
+		if rec != nil && rec.Status != "error" && rec.Status != "not-found" && now().Sub(rec.LastChecked) < mcpScanTTL && rec.scored() {
 			records[i] = rec
 			continue
 		}
@@ -316,7 +318,7 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 			for _, p := range lookup {
 				i := lookupIdx[p.Key()]
 				d := servers[i]
-				if records[i] == nil || records[i].Status == "error" {
+				if records[i] == nil || records[i].Status == "error" || records[i].Status == "not-found" {
 					ref := d.Ecosystem + ":" + d.Package + "@" + d.Version
 					noData = append(noData, ref)
 					reasons[ref] = noDataLookupFailed
@@ -397,8 +399,12 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 
 // checkPublished asks each declared server's registry whether it publishes
 // the pinned version (agentry#1036), and answers the servers that remain to
-// be looked up in OSV and the findings with S7's own added. A registry row that already says not-found, and is fresh, answers
-// without asking again.
+// be looked up in OSV and the findings with S7's own added. It asks on every
+// submission, one GET a server, and never answers from the not-found row:
+// that row would stand while the sweep refreshed it, so a version published
+// after one refusal, or a future version someone submitted early to poison
+// it, would read as missing for good. The row only keeps OSV and the sweep
+// from calling the version safe.
 func (s S7MCPServers) checkPublished(sc stageContext, servers []declaredServer, now func() time.Time, findings []Finding) (keep []declaredServer, out []Finding) {
 	out = findings
 	if sc.registries == nil {
@@ -420,39 +426,25 @@ func (s S7MCPServers) checkPublished(sc stageContext, servers []declaredServer, 
 	var lastErr error
 	for _, d := range servers {
 		ref := d.Ecosystem + ":" + d.Package + "@" + d.Version
-		published := true
-		known := false
-		if sc.mcpCache != nil {
-			if r, err := sc.mcpCache.Get(ctx, d.Ecosystem, d.Package, d.Version); err == nil && r != nil &&
-				r.Status == "not-found" && now().Sub(r.LastChecked) < mcpScanTTL {
-				published, known = false, true
-			}
-		}
-		if !known {
-			ok, err := sc.registries.Published(ctx, d.Ecosystem, d.Package, d.Version)
-			if err != nil {
-				// No answer: the server goes on to OSV as before, and the
-				// report says its version was not checked.
-				unchecked = append(unchecked, ref)
-				lastErr = err
-				keep = append(keep, d)
-				continue
-			}
-			published = ok
-			if !ok && sc.mcpCache != nil {
-				rec := MCPScanRecord{Ecosystem: d.Ecosystem, Package: d.Package, Version: d.Version,
-					Status: "not-found", LastChecked: now()}
-				if prev, _ := sc.mcpCache.Get(ctx, d.Ecosystem, d.Package, d.Version); prev != nil {
-					rec.FirstSeen = prev.FirstSeen
-				}
-				if err := sc.mcpCache.Put(ctx, rec); err != nil {
-					sc.log.Warn("scan: S7 registry write", "server", ref, "err", err)
-				}
-			}
+		published, err := sc.registries.Published(ctx, d.Ecosystem, d.Package, d.Version)
+		if err != nil {
+			// No answer: the server goes on to OSV as before, and the report
+			// says its version was not checked.
+			unchecked = append(unchecked, ref)
+			lastErr = err
+			keep = append(keep, d)
+			continue
 		}
 		if published {
 			keep = append(keep, d)
 			continue
+		}
+		if sc.mcpCache != nil {
+			rec := MCPScanRecord{Ecosystem: d.Ecosystem, Package: d.Package, Version: d.Version,
+				Status: "not-found", LastChecked: now()}
+			if err := sc.mcpCache.Put(ctx, rec); err != nil {
+				sc.log.Warn("scan: S7 registry write", "server", ref, "err", err)
+			}
 		}
 		out = append(out, Finding{
 			Scanner: scannerVersionNotPublished, Severity: SevCritical, Confidence: ConfHigh,

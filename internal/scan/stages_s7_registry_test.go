@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 // fakeRegistries answers Published from a set of known refs; err makes every
@@ -60,11 +59,11 @@ func TestS7RefusesAVersionItsRegistryDoesNotPublish(t *testing.T) {
 		t.Fatalf("gate: %+v", d)
 	}
 
-	// A second submission within the TTL reads the not-found row and does
-	// not ask the registry about that version again.
+	// A second submission asks the registry again, both servers: the
+	// not-found row never answers for it.
 	before := reg.calls
 	res2 := S7MCPServers{}.Run(s7ctxR(osv, cache, reg), &Input{ManifestJSON: []byte(s7Manifest)})
-	if len(findScanner(res2.Findings, scannerVersionNotPublished)) != 1 || reg.calls != before+1 {
+	if len(findScanner(res2.Findings, scannerVersionNotPublished)) != 1 || reg.calls != before+2 {
 		t.Fatalf("re-run: findings %+v, registry calls %d (was %d)", res2.Findings, reg.calls, before)
 	}
 }
@@ -111,18 +110,21 @@ func TestS7OfflineRegistriesAreNotChecked(t *testing.T) {
 	}
 }
 
-// Once the registry answers 404 the not-found row stands for a day; past
-// the TTL the registry is asked again, and a version published since then
-// goes on to OSV.
-func TestS7AsksTheRegistryAgainPastTheTTL(t *testing.T) {
+// A not-found row never refuses a version its registry has published since:
+// otherwise a pin submitted just before its release landed, or a future
+// version someone submitted early to poison it, would stay refused while the
+// sweep kept the row fresh.
+func TestS7NotFoundRowNeverRefusesAVersionPublishedSince(t *testing.T) {
 	reg := &fakeRegistries{published: map[string]bool{"pypi:mcp-server-fetch@0.6.2": true}}
 	cache := &MemoryMCPScanCache{}
 	_ = S7MCPServers{}.Run(s7ctxR(&fakeOSV{}, cache, reg), &Input{ManifestJSON: []byte(s7Manifest)})
+	if row, _ := cache.Get(context.Background(), "npm", "@modelcontextprotocol/server-github", "2026.1.2"); row == nil || row.Status != "not-found" {
+		t.Fatalf("first submission's row: %+v", row)
+	}
 	reg.published["npm:@modelcontextprotocol/server-github@2026.1.2"] = true
-	later := S7MCPServers{now: func() time.Time { return time.Now().Add(mcpScanTTL + time.Minute) }}
-	res := later.Run(s7ctxR(&fakeOSV{}, cache, reg), &Input{ManifestJSON: []byte(s7Manifest)})
+	res := S7MCPServers{}.Run(s7ctxR(&fakeOSV{}, cache, reg), &Input{ManifestJSON: []byte(s7Manifest)})
 	if len(findScanner(res.Findings, scannerVersionNotPublished)) != 0 {
-		t.Fatalf("still refused past the TTL: %+v", res.Findings)
+		t.Fatalf("refused from the not-found row: %+v", res.Findings)
 	}
 	if row, _ := cache.Get(context.Background(), "npm", "@modelcontextprotocol/server-github", "2026.1.2"); row == nil || row.Status == "not-found" {
 		t.Fatalf("registry row: %+v", row)
@@ -157,6 +159,8 @@ func TestHTTPRegistriesPaths(t *testing.T) {
 		{"pypi", "mcp-server-fetch", "0.6.2", true, false},
 		{"pypi", "mcp-server-fetch", "9.9.9", false, true},
 		{"cargo", "x", "1", false, true},
+		{"npm", "lodash", "..", false, true},
+		{"npm", "..", "1.0.0", false, true},
 	} {
 		ok, err := r.Published(ctx, tc.eco, tc.name, tc.ver)
 		if ok != tc.ok || (err != nil) != tc.err {

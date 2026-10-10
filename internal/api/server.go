@@ -1204,7 +1204,11 @@ func registriesClient(c config.Scan, log *slog.Logger) scan.PackageRegistries {
 		npm = "https://registry.npmjs.org"
 	}
 	pypi := strings.TrimSpace(c.PyPIURL)
-	if pypi == "" {
+	switch strings.ToLower(pypi) {
+	case "none", "off", "false", "disabled":
+		log.Info("scan: MCP server version check disabled (AGENTRY_SCAN_PYPI_URL)")
+		return scan.OfflineRegistries{}
+	case "":
 		pypi = "https://pypi.org"
 	}
 	log.Info("scan: MCP server version check enabled", "npm", npm, "pypi", pypi)

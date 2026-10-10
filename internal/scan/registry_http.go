@@ -64,6 +64,14 @@ func (r *HTTPRegistries) httpClient() *http.Client {
 // Published implements PackageRegistries: a version document that answers
 // 200 is published, 404 is not, anything else is no answer.
 func (r *HTTPRegistries) Published(ctx context.Context, ecosystem, name, version string) (bool, error) {
+	// V5 holds both to a registry's grammar before S7 runs; a dot segment
+	// here would walk the registry's path (npm answers /lodash/.. with the
+	// package), so S7 does not lean on that.
+	for _, seg := range []string{name, version} {
+		if seg == "" || seg == "." || seg == ".." {
+			return false, fmt.Errorf("registries: %q is not a package name or version", seg)
+		}
+	}
 	var u string
 	switch ecosystem {
 	case "npm":
@@ -84,7 +92,7 @@ func (r *HTTPRegistries) Published(ctx context.Context, ecosystem, name, version
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	switch resp.StatusCode {
 	case http.StatusOK:
