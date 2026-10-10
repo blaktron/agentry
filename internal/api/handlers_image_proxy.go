@@ -189,7 +189,10 @@ var (
 // written by this process and never by whoever supplied the upload
 // (§10.3; DEV-049.1). The image proxy and the organization logo
 // (agentry#367) share it: one path, one set of refusals. The format is
-// what the bytes are, not what a header or a file name claimed.
+// what the bytes are, not what a header or a file name claimed. The report
+// design's logo (agentry#1025) has its own, pkg/reportdesign's
+// NormalizeLogo, which the CLI and the desktop import too and which always
+// writes PNG, scaled to fit.
 func reencodeRaster(body []byte, admit rasterFormats) ([]byte, string, error) {
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(body))
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"image/draw"
 	"image/png"
 	"math"
+	"strings"
 
 	// The formats an upload may be in, registered for image.DecodeConfig.
 	_ "image/jpeg"
@@ -55,8 +56,13 @@ type Logo struct {
 	PNG string `json:"png"`
 }
 
-// Decode is the logo's PNG bytes.
+// Decode is the logo's PNG bytes. The base64 must be one unbroken line:
+// the decoder would skip a CR or LF, and the same logo would then have more
+// than one canonical form, and hash.
 func (l Logo) Decode() ([]byte, error) {
+	if strings.ContainsAny(l.PNG, "\r\n") {
+		return nil, errors.New("a line break in the base64")
+	}
 	return base64.StdEncoding.Strict().DecodeString(l.PNG)
 }
 
@@ -89,7 +95,7 @@ func NormalizeLogo(upload []byte) (Logo, error) {
 	if err != nil || (format != "png" && format != "jpeg") {
 		return Logo{}, logoErr(ErrLogoFormat, "logo", "a logo is a PNG or a JPEG")
 	}
-	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > MaxLogoUploadPixels {
+	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > MaxLogoUploadPixels {
 		return Logo{}, logoErr(ErrLogoTooLarge, "logo", "a logo has at most 16 million pixels")
 	}
 	img, _, err := image.Decode(bytes.NewReader(upload))

@@ -28,7 +28,7 @@ func (s *Server) GetUserReportSettings(w http.ResponseWriter, r *http.Request, p
 	if !s.requireDB(w, r) {
 		return
 	}
-	withLogo, ok := includeLogo(w, r, (*string)(params.Include))
+	withLogo, ok := includeLogo(w, r, params.Include)
 	if !ok {
 		return
 	}
@@ -49,16 +49,27 @@ type reportSettingsBody struct {
 	Design json.RawMessage `json:"design,omitempty"`
 }
 
-// includeLogo reads the include parameter: absent, or "logo".
-func includeLogo(w http.ResponseWriter, r *http.Request, include *string) (bool, bool) {
+// includeLogo reads the include parameter, absent or "logo", into whether
+// the answer carries the logo; ok is false once a bad value was answered.
+func includeLogo(w http.ResponseWriter, r *http.Request, include *ReportSettingsInclude) (withLogo, ok bool) {
 	switch {
 	case include == nil:
 		return false, true
-	case *include == string(ReportSettingsIncludeLogo):
+	case *include == ReportSettingsIncludeLogo:
 		return true, true
 	}
 	problemBadRequest(w, r, "include takes only logo.")
 	return false, false
+}
+
+// fieldMessage is a design refusal's message without the field, which the
+// problem names on its own.
+func fieldMessage(err error) string {
+	var fe *reportdesign.FieldError
+	if errors.As(err, &fe) {
+		return fe.Message
+	}
+	return err.Error()
 }
 
 // UpdateUserReportSettings implements PUT /user/report-settings: a full
@@ -78,7 +89,7 @@ func (s *Server) UpdateUserReportSettings(w http.ResponseWriter, r *http.Request
 	if !s.requireDB(w, r) {
 		return
 	}
-	withLogo, ok := includeLogo(w, r, (*string)(params.Include))
+	withLogo, ok := includeLogo(w, r, params.Include)
 	if !ok {
 		return
 	}
@@ -121,12 +132,7 @@ func (s *Server) UpdateUserReportSettings(w http.ResponseWriter, r *http.Request
 		var png []byte
 		png, err = normalizedLogo(logo)
 		if err != nil {
-			msg := err.Error()
-			var fe *reportdesign.FieldError
-			if errors.As(err, &fe) {
-				msg = fe.Message
-			}
-			problemValidation(w, r, "The report design is not valid.", FieldError{Field: "design.logo.png", Message: msg})
+			problemValidation(w, r, "The report design is not valid.", FieldError{Field: "design.logo.png", Message: fieldMessage(err)})
 			return
 		}
 		_, err = s.q().UpsertUserReportSettingsWithLogo(r.Context(), storegen.UpsertUserReportSettingsWithLogoParams{
@@ -192,14 +198,9 @@ func (s *Server) PutUserReportLogo(w http.ResponseWriter, r *http.Request) {
 	}
 	logo, err := reportdesign.NormalizeLogo(upload)
 	if err != nil {
-		var fe *reportdesign.FieldError
-		msg := err.Error()
-		if errors.As(err, &fe) {
-			msg = fe.Message
-		}
 		switch {
 		case errors.Is(err, reportdesign.ErrLogoTooLarge):
-			problemUploadTooLarge(w, r, "This image is too large for a logo: "+msg+".")
+			problemUploadTooLarge(w, r, "This image is too large for a logo: "+fieldMessage(err)+".")
 		default:
 			problemUnsupportedImage(w, r, "A logo is a PNG or a JPEG. SVG is not accepted: the registry has no way to make one safe, so it takes none.")
 		}
