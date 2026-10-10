@@ -36,10 +36,12 @@ type MCPScanRecord struct {
 	Ecosystem string
 	Package   string
 	Version   string
-	// Status is "safe" (no known advisories at LastChecked), "vulnerable"
-	// or "error" (a lookup failed before any answer: no Advisories, and S7
-	// counts it as no answer). A lookup that fails after an answer keeps the
-	// answer's Status and only sets LastError.
+	// Status is "safe" (no known advisories at LastChecked), "vulnerable",
+	// "error" (a lookup failed before any answer: no Advisories, and S7
+	// counts it as no answer) or "not-found" (the server's package registry
+	// does not publish this version, agentry#1036: OSV is not asked, and the
+	// daily sweep leaves the row as it is). A lookup that fails after an
+	// answer keeps the answer's Status and only sets LastError.
 	Status      string
 	MaxSeverity string
 	Advisories  []OSVVulnerability
@@ -124,6 +126,20 @@ const scannerOSVNoData = "S7/osv-no-data"
 // what the pipeline can state about it, and says nothing of the vendor's
 // code (honest posture).
 const scannerRemoteServer = "S7/remote-server"
+
+// scannerVersionNotPublished is the finding for a declared server whose
+// package registry does not publish the pinned version (agentry#1036). No
+// run can install it, so the version is refused: the finding is critical,
+// which the gate rejects (the operator, 2026-10-10). OSV answers "no
+// advisories" for a version that does not exist, which is how such a
+// release used to publish with its server recorded as safe.
+const scannerVersionNotPublished = "S7/version-not-published"
+
+// scannerVersionNotChecked is the finding for declared servers whose
+// registry gave no answer: medium, and it publishes, as S7/osv-no-data does
+// (the operator, 2026-10-10: a registry that cannot be reached is "not
+// checked", never "safe").
+const scannerVersionNotChecked = "S7/version-not-checked"
 
 // The reasons S7/osv-no-data names per server.
 const (
@@ -243,6 +259,13 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 	now := time.Now
 	if s.now != nil {
 		now = s.now
+	}
+	// Each declared version is asked of its own registry first. One it does
+	// not publish is refused and never asked of OSV, whose "no advisories"
+	// would only say nothing about a version that does not exist.
+	servers, res.Findings = s.checkPublished(sc, servers, now, res.Findings)
+	if len(servers) == 0 && len(noData) == 0 {
+		return res
 	}
 	if !osvEnabled(sc.osv) {
 		res.Findings = append(res.Findings, Finding{
@@ -370,6 +393,84 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 		}
 	}
 	return res
+}
+
+// checkPublished asks each declared server's registry whether it publishes
+// the pinned version (agentry#1036), and answers the servers that remain to
+// be looked up in OSV and the findings with S7's own added. A registry row that already says not-found, and is fresh, answers
+// without asking again.
+func (s S7MCPServers) checkPublished(sc stageContext, servers []declaredServer, now func() time.Time, findings []Finding) (keep []declaredServer, out []Finding) {
+	out = findings
+	if sc.registries == nil {
+		return servers, out // not wired (tests, a process with no scan config)
+	}
+	if !registriesEnabled(sc.registries) {
+		if len(servers) > 0 {
+			out = append(out, Finding{
+				Scanner: scannerVersionNotChecked, Severity: SevInfo, Confidence: ConfLow,
+				Title:    fmt.Sprintf("%d declared MCP server version(s); not checked against their package registries", len(servers)),
+				Detail:   map[string]any{"reason": "the version check is off (AGENTRY_SCAN_NPM_REGISTRY=none)"},
+				Taxonomy: []string{"LLM03", "ASI04"},
+			})
+		}
+		return servers, out
+	}
+	ctx := sc.Context()
+	var unchecked []string
+	var lastErr error
+	for _, d := range servers {
+		ref := d.Ecosystem + ":" + d.Package + "@" + d.Version
+		published := true
+		known := false
+		if sc.mcpCache != nil {
+			if r, err := sc.mcpCache.Get(ctx, d.Ecosystem, d.Package, d.Version); err == nil && r != nil &&
+				r.Status == "not-found" && now().Sub(r.LastChecked) < mcpScanTTL {
+				published, known = false, true
+			}
+		}
+		if !known {
+			ok, err := sc.registries.Published(ctx, d.Ecosystem, d.Package, d.Version)
+			if err != nil {
+				// No answer: the server goes on to OSV as before, and the
+				// report says its version was not checked.
+				unchecked = append(unchecked, ref)
+				lastErr = err
+				keep = append(keep, d)
+				continue
+			}
+			published = ok
+			if !ok && sc.mcpCache != nil {
+				rec := MCPScanRecord{Ecosystem: d.Ecosystem, Package: d.Package, Version: d.Version,
+					Status: "not-found", LastChecked: now()}
+				if prev, _ := sc.mcpCache.Get(ctx, d.Ecosystem, d.Package, d.Version); prev != nil {
+					rec.FirstSeen = prev.FirstSeen
+				}
+				if err := sc.mcpCache.Put(ctx, rec); err != nil {
+					sc.log.Warn("scan: S7 registry write", "server", ref, "err", err)
+				}
+			}
+		}
+		if published {
+			keep = append(keep, d)
+			continue
+		}
+		out = append(out, Finding{
+			Scanner: scannerVersionNotPublished, Severity: SevCritical, Confidence: ConfHigh,
+			Title: "Declared MCP server " + ref + " is not published: its package registry does not have this version, so no run could install it",
+			Detail: map[string]any{"ecosystem": d.Ecosystem, "package": d.Package, "version": d.Version,
+				"checkedAt": now().UTC().Format(time.RFC3339)},
+			Taxonomy: []string{"LLM03", "ASI04"},
+		})
+	}
+	if len(unchecked) > 0 {
+		out = append(out, Finding{
+			Scanner: scannerVersionNotChecked, Severity: SevMedium, Confidence: ConfHigh,
+			Title:    "Could not check that declared MCP server version(s) are published",
+			Detail:   map[string]any{"servers": unchecked, "error": lastErr.Error()},
+			Taxonomy: []string{"LLM03", "ASI04"},
+		})
+	}
+	return keep, out
 }
 
 // worstSeverity is the highest severity among advisories.

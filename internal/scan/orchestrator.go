@@ -43,7 +43,14 @@ type Orchestrator struct {
 	// server versions. nil = offline, and S7 says so on the report.
 	osv      OSVClient
 	mcpCache MCPScanCache
+	// registries are the package registries S7 asks whether a declared
+	// server's pinned version exists (agentry#1036); nil = not asked.
+	registries PackageRegistries
 }
+
+// SetPackageRegistries wires the registries S7 asks whether a declared
+// server's pinned version is published (agentry#1036).
+func (o *Orchestrator) SetPackageRegistries(r PackageRegistries) { o.registries = r }
 
 // SetMCPScanning wires S7's vulnerability database and the scanned-server
 // registry. A nil client leaves S7 reporting "not checked".
@@ -184,7 +191,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	ctx, cancel := context.WithTimeout(ctx, o.scanTimeout)
 	defer cancel()
 
-	sc := stageContext{ctx: ctx, bundle: o.bundle, judge: o.judge, log: o.log, osv: o.osv, mcpCache: o.mcpCache}
+	sc := stageContext{ctx: ctx, bundle: o.bundle, judge: o.judge, log: o.log, osv: o.osv, mcpCache: o.mcpCache, registries: o.registries}
 	in := &p.Input
 
 	// Stages already answered (a previous attempt, or the §8.7 cache) come in

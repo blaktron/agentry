@@ -351,6 +351,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		// them for the daily sweep (agentry#177); setting them on the
 		// orchestrator alone left the sweep with no database.
 		srv.pipeline.SetMCPScanning(osvClient(cfg.Scan, log), scan.NewStoreMCPScanCache(st))
+		srv.pipeline.SetPackageRegistries(registriesClient(cfg.Scan, log))
 		srv.reg.SetPipeline(srv.pipeline)
 		// The knowledge store (agentry#593) scans with the same
 		// orchestrator, rules and judge as a version.
@@ -1188,6 +1189,26 @@ func osvClient(c config.Scan, log *slog.Logger) scan.OSVClient {
 	}
 	log.Info("scan: MCP server vulnerability lookup enabled", "osv", u)
 	return &scan.HTTPOSV{BaseURL: u}
+}
+
+// registriesClient builds what S7 asks whether a declared server's pinned
+// version is published (agentry#1036): the public npm registry and PyPI
+// unless the operator points elsewhere, not asked when told so.
+func registriesClient(c config.Scan, log *slog.Logger) scan.PackageRegistries {
+	npm := strings.TrimSpace(c.NPMRegistryURL)
+	switch strings.ToLower(npm) {
+	case "none", "off", "false", "disabled":
+		log.Info("scan: MCP server version check disabled (AGENTRY_SCAN_NPM_REGISTRY)")
+		return scan.OfflineRegistries{}
+	case "":
+		npm = "https://registry.npmjs.org"
+	}
+	pypi := strings.TrimSpace(c.PyPIURL)
+	if pypi == "" {
+		pypi = "https://pypi.org"
+	}
+	log.Info("scan: MCP server version check enabled", "npm", npm, "pypi", pypi)
+	return &scan.HTTPRegistries{NPM: npm, PyPI: pypi}
 }
 
 func externalScanTools(c config.Scan, log *slog.Logger) (scan.ExternalTools, error) {

@@ -615,6 +615,7 @@ func (e McpServerScanMaxSeverity) Valid() bool {
 // Defines values for McpServerScanStatus.
 const (
 	Error      McpServerScanStatus = "error"
+	NotFound   McpServerScanStatus = "not-found"
 	Safe       McpServerScanStatus = "safe"
 	Vulnerable McpServerScanStatus = "vulnerable"
 )
@@ -623,6 +624,8 @@ const (
 func (e McpServerScanStatus) Valid() bool {
 	switch e {
 	case Error:
+		return true
+	case NotFound:
 		return true
 	case Safe:
 		return true
@@ -2901,8 +2904,10 @@ type McpServerScan struct {
 	LastError     *string                   `json:"lastError,omitempty"`
 	MaxSeverity   *McpServerScanMaxSeverity `json:"maxSeverity,omitempty"`
 	Package       string                    `json:"package"`
-	Status        McpServerScanStatus       `json:"status"`
-	Version       string                    `json:"version"`
+
+	// Status safe: no known advisories when last checked (OSV), which says nothing else about the server. not-found: its package registry does not publish this version, so no run can install it (agentry#1036).
+	Status  McpServerScanStatus `json:"status"`
+	Version string              `json:"version"`
 }
 
 // McpServerScanEcosystem defines model for McpServerScan.Ecosystem.
@@ -2911,7 +2916,7 @@ type McpServerScanEcosystem string
 // McpServerScanMaxSeverity defines model for McpServerScan.MaxSeverity.
 type McpServerScanMaxSeverity string
 
-// McpServerScanStatus defines model for McpServerScan.Status.
+// McpServerScanStatus safe: no known advisories when last checked (OSV), which says nothing else about the server. not-found: its package registry does not publish this version, so no run can install it (agentry#1036).
 type McpServerScanStatus string
 
 // Membership defines model for Membership.
