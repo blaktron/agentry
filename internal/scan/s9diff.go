@@ -69,22 +69,32 @@ func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 		if !f.IsText || f.Content == nil {
 			continue
 		}
-		code := isCodePath(f.Path)
-		open := "" // the delimiter of a multi-line string open at a line's start
+		code, markdown := isCodePath(f.Path), isProsePath(f.Path)
+		open := ""     // the delimiter of a multi-line string open at a line's start
+		fence := false // inside a Markdown fenced code block
 		for i, line := range strings.Split(string(f.Content), "\n") {
 			// Inside a multi-line string, or on a line that opens or closes
 			// one, a line of code is text: its bare names count as in prose.
+			// A Markdown fence's lines are code, and so is its fence line.
 			next := multilineString(open, line)
 			prose := !code || open != "" || next != open
 			open = next
+			if markdown && strings.HasPrefix(strings.TrimSpace(line), "```") {
+				fence = !fence
+				prose = false
+			}
+			if fence {
+				prose = false
+			}
 			if isCommentLine(f.Path, line) {
 				continue
 			}
+			lower := strings.ToLower(line)
 			for _, d := range rules.Destinations(line) {
 				if out[d.Target].Kind != "" {
 					continue
 				}
-				if d.Kind == rules.DestinationHost && !isBareDestination(d.Target, strings.ToLower(line), prose) {
+				if d.Kind == rules.DestinationHost && !isBareDestination(d.Target, lower, prose, markdown) {
 					continue
 				}
 				out[d.Target] = egressTarget{Kind: d.Kind, File: f.Path, Line: i + 1, Excerpt: truncateStr(line, 160)}
@@ -94,15 +104,17 @@ func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 	return out
 }
 
-// fileLikeTLDs are top-level domains that are also the extensions of files
-// a package names all the time (README.md, inputs.zip, deploy.sh, main.py).
-// A bare two-label name ending in one is read as that file unless a path or
-// a port follows it; with a subdomain, a scheme or an "@" it is a host. The
-// list is fixed rather than drawn from the package, whose file names its
-// author chooses.
-var fileLikeTLDs = map[string]bool{
-	"md": true, "zip": true, "mov": true, "sh": true, "py": true, "pl": true, "pm": true, "rs": true, "so": true,
-}
+// Top-level domains that are also the extensions of files a package names
+// all the time. A bare two-label name under an archive-like one (README.md, Main.java,
+// app.zip/src/Main.java, demo.mov) is that file; under a script-like one
+// (deploy.sh, main.py) it is a host only when a path follows it
+// (interact.sh/x). With a subdomain, a scheme or an "@" either is a host.
+// The lists are fixed rather than drawn from the package, whose file names
+// its author chooses.
+var (
+	archiveLikeTLDs = map[string]bool{"md": true, "zip": true, "mov": true, "java": true}
+	scriptLikeTLDs  = map[string]bool{"sh": true, "py": true, "pl": true, "pm": true, "rs": true, "so": true}
+)
 
 // specialUseTLDs are the reserved names (RFC 2606, RFC 6761, RFC 6762) that
 // no public suffix list carries but test fixtures and local services use.
@@ -110,20 +122,25 @@ var specialUseTLDs = map[string]bool{
 	"example": true, "invalid": true, "test": true, "localhost": true, "local": true, "internal": true, "onion": true,
 }
 
+// codeSpanRe finds a Markdown inline code span.
+var codeSpanRe = regexp.MustCompile("`[^`]+`")
+
 // isBareDestination decides whether a bare dotted name (no scheme, no "@")
 // in a lower-cased line is a host:
 //   - its last label must be a top-level domain ICANN delegates, from the
 //     public suffix list, or a special-use name, so config.yaml, main.go and
 //     package.json are file names;
-//   - a two-label name under a file-like TLD is that file, unless a path or
-//     a port follows it;
-//   - in program source outside a multi-line string (prose false), it must
-//     sit inside a string literal: user.email is a field, "webhook.site" a
-//     host, and code cannot reach a host it does not quote.
+//   - a two-label name under an archive-like TLD is never a host, and under
+//     a script-like one only with a path after it;
+//   - in code it must sit inside a string literal or have a path after it.
+//     Code is program source outside a multi-line string (prose false), and
+//     in Markdown a fenced block or an inline code span (`window.name`,
+//     `request.post(...)`, `req.query.host`), where many delegated TLDs are
+//     ordinary words (.name, .post, .host, .read, .java, .properties).
 //
 // URLs, email addresses and IP addresses are destinations without these
 // tests: a scheme, an "@" or the digits say what they are.
-func isBareDestination(host, line string, prose bool) bool {
+func isBareDestination(host, line string, prose, markdown bool) bool {
 	labels := strings.Split(host, ".")
 	tld := labels[len(labels)-1]
 	if !specialUseTLDs[tld] {
@@ -131,38 +148,72 @@ func isBareDestination(host, line string, prose bool) bool {
 			return false
 		}
 	}
-	if len(labels) == 2 && fileLikeTLDs[tld] && !followedByPathOrPort(line, host) {
+	path := followedByPath(line, host)
+	if len(labels) == 2 && (archiveLikeTLDs[tld] || scriptLikeTLDs[tld] && !path) {
 		return false
 	}
-	if !prose && !inStringLiteral(line, host) {
-		return false
+	if prose && markdown && !strings.Contains(codeSpanRe.ReplaceAllString(line, " "), host) {
+		prose = false // only inside code spans
 	}
-	return true
+	if prose || path || inStringLiteral(line, host, !markdown) {
+		return true
+	}
+	// Markdown's code is about hosts as often as identifiers (`crates.io`,
+	// `gmail.googleapis.com`): there a name under a TLD hosts are usually
+	// under counts too, and one under a word TLD (.read, .post) does not.
+	return markdown && hostLikeTLD(tld)
 }
 
-// followedByPathOrPort reports whether host occurs in line directly before
-// a "/" or a ":" and a digit, as a destination is written and a file is not.
-func followedByPathOrPort(line, host string) bool {
+// commonHostTLDs are the generic top-level domains most hosts are under.
+var commonHostTLDs = map[string]bool{
+	"com": true, "net": true, "org": true, "io": true, "dev": true, "ai": true, "co": true, "app": true,
+	"cloud": true, "xyz": true, "edu": true, "gov": true,
+}
+
+// identifierCCTLDs are country codes that are also common field names
+// (user.id, path.to, x.is, a.in, it, at, do).
+var identifierCCTLDs = map[string]bool{"id": true, "to": true, "is": true, "in": true, "it": true, "at": true, "do": true}
+
+// hostLikeTLD reports whether tld is one a dotted name in Markdown's code
+// is a host under: a common generic one, a country code that is not also a
+// field name, or a special-use name.
+func hostLikeTLD(tld string) bool {
+	return commonHostTLDs[tld] || specialUseTLDs[tld] || len(tld) == 2 && !identifierCCTLDs[tld]
+}
+
+// followedByPath reports whether host occurs in line directly before a "/",
+// as a destination's path is written and a file name is not. A port is no
+// evidence: "agent.md:12" is a file and a line.
+func followedByPath(line, host string) bool {
 	for i := 0; ; {
 		j := strings.Index(line[i:], host)
 		if j < 0 {
 			return false
 		}
-		rest := line[i+j+len(host):]
-		if strings.HasPrefix(rest, "/") || (len(rest) > 1 && rest[0] == ':' && rest[1] >= '0' && rest[1] <= '9') {
+		if strings.HasPrefix(line[i+j+len(host):], "/") {
 			return true
 		}
 		i += j + len(host)
 	}
 }
 
-// stringLiteralRe finds a double-, single- or backtick-quoted literal.
-var stringLiteralRe = regexp.MustCompile(`"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|` + "`[^`]*`")
+// stringLiteralRe finds a double- or single-quoted literal, and
+// backtickLiteralRe a backtick-quoted one: a string in program source, but
+// in Markdown the code span itself.
+var (
+	stringLiteralRe   = regexp.MustCompile(`"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'`)
+	backtickLiteralRe = regexp.MustCompile("`[^`]*`")
+)
 
 // inStringLiteral reports whether host occurs inside a quoted literal of a
-// (lower-cased) line of code.
-func inStringLiteral(line, host string) bool {
-	for _, lit := range stringLiteralRe.FindAllString(line, -1) {
+// (lower-cased) line; backtick-quoted ones count when backticks quote
+// strings, as in program source and not in Markdown.
+func inStringLiteral(line, host string, backticks bool) bool {
+	lits := stringLiteralRe.FindAllString(line, -1)
+	if backticks {
+		lits = append(lits, backtickLiteralRe.FindAllString(line, -1)...)
+	}
+	for _, lit := range lits {
 		if strings.Contains(lit, host) {
 			return true
 		}
