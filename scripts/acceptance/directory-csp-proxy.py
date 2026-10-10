@@ -22,7 +22,7 @@ class Proxy(http.server.BaseHTTPRequestHandler):
         res = conn.getresponse()
         data = res.read()
         html = self.path.startswith('/if/flow/') and res.getheader('Content-Type', '').startswith('text/html')
-        if html:
+        if html and urlsplit(self.path).path == '/if/flow/default-authentication-flow/':
             data = data.replace(b'</body>', probe + b'</body>')
         self.send_response(res.status)
         for name, value in res.getheaders():

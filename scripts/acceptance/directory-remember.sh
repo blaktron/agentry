@@ -63,9 +63,12 @@ trap cleanup EXIT
 probe=$(docker create "${DIRECTORY_DOCKER_LABELS[@]}" --name "$P-probe" "$IMAGE")
 docker cp "$probe:/authentik/flows/templates/if/flow.html" "$TMP/flow.orig.html"
 docker cp "$probe:/authentik/core/templates/base/header_js.html" "$TMP/header-js.orig.html"
+docker cp "$probe:/authentik/core/templates/base/theme.html" "$TMP/theme.orig.html"
 docker cp "$probe:/web/dist" "$TMP/dist" >/dev/null
 docker rm -fv "$probe" >/dev/null
 python3 scripts/acceptance/directory-template-check.py "$TMP/flow.orig.html" "$TMP/header-js.orig.html"
+python3 scripts/acceptance/directory-captcha-check.py "$TMP/dist"
+cmp "$TMP/theme.orig.html" deploy/compose/authentik/templates/base/theme.html || { echo "FAIL: pinned theme bootstrap changed; review its static CSP permission"; exit 1; }
 [ "$(grep -c '^{# agentry:begin remembered-browser' "$TEMPLATE")" -eq 1 ] && [ "$(grep -c '^{# agentry:end remembered-browser' "$TEMPLATE")" -eq 1 ] \
   || { echo "FAIL: the template's block is not marked exactly once"; exit 1; }
 chunk=$(grep -rl 'ak-stage-authenticator-validate-code' "$TMP/dist" --include='*.js' | head -1)
