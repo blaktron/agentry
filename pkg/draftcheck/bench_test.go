@@ -385,7 +385,7 @@ func TestDraftBench(t *testing.T) {
 		// question the drafts' findings came from.
 		var perFile []string
 		for _, f := range append([]judge.RubricFile{{Path: "agent.yaml(canonical)", Content: string(rd.ManifestJSON)}}, rd.Files...) {
-			probs, _, err := c.Ask(ctx, judge.RubricState(f.Path, f.Content, judge.DeclaredCapabilities(rd.ManifestJSON, rd.Ships)),
+			probs, _, err := c.Ask(ctx, judge.RubricState(f.Path, f.Content, judge.DeclaredCapabilities(rd.ManifestJSON, rd.Ships), judge.Purpose(rd.ManifestJSON)),
 				[]judge.Question{judge.RubricQuestions()[2]})
 			if err != nil {
 				t.Fatal(err)
