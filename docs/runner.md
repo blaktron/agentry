@@ -746,7 +746,7 @@ its digest, so a run record says which file a run obeyed.
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
 | `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
 | `images.clamavSignatures` | the ClamAV signature bundle, `<registry>/<repository>:<tag>` (default `ghcr.io/blaktron/agentry-clamav-db:latest`); a mirror must carry the publishing workflow's signature |
-| `hybridAnalysis.apiKeyEnv` / `hybridAnalysis.apiKeySource` | your Hybrid Analysis key for the hash lookup: the variable that holds it (default `HYBRID_API_KEY`), or `keyring` for the keychain entry `provider:hybrid-analysis`; with no key nothing is looked up |
+| `hybridAnalysis.apiKeyEnv` / `hybridAnalysis.apiKeySource` | your Hybrid Analysis key for the hash lookup: the variable that holds it (default `HYBRID_API_KEY`), which wins when it is set; with `apiKeySource: keyring`, the keychain entry `provider:hybrid-analysis` when it is not; with no key nothing is looked up |
 | `docker.runtime` | the daemon-registered OCI runtime the containers holding the QuickAgent's code are created with (unset: the daemon's default) — below |
 | `docker.gatewayRuntime` | the daemon-registered runtime the gateway alone is created with: a second registration of gVisor with `--host-uds=open` (unset: the daemon's default; needs `docker.runtime`) — below |
 | `docker.resolvers` | at most three IPv4 name servers of the host's that the built-in Drafter's web tools, and under `docker.runtime` the llm-proxy, the MCP server install proxy and the relays, resolve through (unset: docker's DNS) — below |
@@ -1053,9 +1053,9 @@ none of this and pulls nothing (plan `file-handling.md`, agentry-cli#560).
    every file is checked by ClamAV, and only what ClamAV did not find is
    turned into text (agentry-cli#561, #562, #563).
 3. **The runner checks what came out.** It reads the container's output
-   only as regular files within their caps, each text at most 10 MiB, and
-   only for the files it staged. It hashes each staged file itself, and it
-   refuses an output that names anything else. A reader's own messages
+   only as regular files within their caps, each text it made at most
+   10 MiB, and only for the files it staged. It hashes each staged file
+   itself, and it refuses an output that names anything else. A reader's own messages
    never reach the model: a file that could not be read is given one of
    the runner's fixed reasons ("pdftotext could not read it", "not text,
    and no decoder reads this kind of file", …).
@@ -1083,7 +1083,8 @@ mounted read-only at `/inputs-text`, beside the originals at `/inputs`.
 
 Code, markup and data are not converted: the agent reads them as you
 uploaded them (agentry-cli#630). A file nothing reads (an executable, a
-database, a picture with no text) is listed as not read, with the reason,
+database, an image `tesseract` could not read) is listed as not read, with
+the reason,
 and the agent can still read its original. Files inside a repository's
 `.git` folder are listed, checked by ClamAV and never read as text: a
 QuickAgent that wants a repository's history declares `git` in `exec`
@@ -1121,14 +1122,16 @@ file as uploaded; a binary original comes as pages of base64, headed with
 its size and detected type. A document's default is its text, and
 everything else's is the original. A release can choose the default
 ([`inputs`](quickagents.md#inputs-what-files-it-takes-and-how-it-reads-them)),
-and the agent can always ask for the other view. A file decoded out of a
+and the agent can ask for the other view where the file has one. A file decoded out of a
 document inside an archive has only its text, and a file the malware check
 refused, or a `.git` internal, has neither. No QuickAgent needs `exec` to
 read its inputs.
 
 The files reach the agent unchanged, keys and passwords included: an input
-is never masked and never refused for what it holds, so a QuickAgent whose
-job is to find credentials sees them (agentry-cli#632). Its report must not
+is never masked, and the gateway's secret block does not refuse it, so a
+QuickAgent whose job is to find credentials sees them (agentry-cli#632).
+Only the malware checks and, on Agentry, AI Review refuse a file, before
+the agent starts. Its report must not
 repeat them ([what a run enforces](#what-a-run-enforces)).
 
 ### The malware checks
@@ -1138,20 +1141,20 @@ repeat them ([what a run enforces](#what-a-run-enforces)).
 Every file and every file in an archive is checked by ClamAV's `clamscan`
 in the same container, before its text is extracted, locally and on
 Agentry (agentry-cli#563). Its arguments are fixed, potentially unwanted
-applications are not flagged, and a file past 256 MB, or an archive's
+applications are not flagged, and a file past 256 MiB, or an archive's
 contents past that, is not checked and the receipt says so.
 
 - **A finding refuses the run** before the agent starts, with exit 11, the
-  reason `input-refused` and the detail `malware`, naming each file and
-  what was found: "the run was refused before the agent started: ClamAV
+  reason `input-refused` and the detail `malware`, naming the files and
+  what was found (the first five, then how many more): "the run was refused before the agent started: ClamAV
   found malware in eicar.com (Eicar-Test-Signature)". On Agentry it costs
   nothing. In a session, a file you add that ClamAV finds is refused alone:
   the agent is not told of it, and the session goes on.
 - **The signatures** are a bundle agentry-dockerimages publishes daily,
   `ghcr.io/blaktron/agentry-clamav-db` (`images.clamavSignatures` may
   name a mirror). The CLI keeps a copy under the runner home and refreshes
-  it when it is a day old, about 110 MB the first time and the day's
-  changes after. Before it uses a bundle it verifies the cosign signature
+  it once a day has passed since it last asked (an hour after a refresh
+  that failed), about 110 MB the first time and the day's changes after. Before it uses a bundle it verifies the cosign signature
   of the workflow that publishes it, and refuses a bundle older than the
   one it holds.
 - **They never stop a run.** A refresh that fails uses the bundle held.
@@ -1169,9 +1172,10 @@ receives the hash and the key, and sees the address the request came from.
 
 - **What is risky**, by the type found in the container and by name,
   archive members included: executables and libraries, installers, `.jar`
-  and `.apk`; scripts (`.js`, `.mjs`, `.cjs`, `.vbs`, `.ps1`, `.bat`,
-  `.cmd`, `.hta`, `.wsf`); shortcuts and disk images; legacy and macro
-  Office; RTF; PDF; CHM. Anything else, a `.txt` or a `.docx`, is not
+  and `.apk`; scripts (`.js`, `.jse`, `.mjs`, `.cjs`, `.vbs`, `.vbe`,
+  `.ps1`, `.psm1`, `.bat`, `.cmd`, `.hta`, `.wsf`, `.scr`); shortcuts and
+  disk images (`.lnk`, `.iso`, `.img`); legacy and macro Office (`.docm`,
+  `.xlsm`, `.pptm` and their templates); RTF; PDF; CHM. Anything else, a `.txt` or a `.docx`, is not
   asked about.
 - **The verdict.** `malicious` refuses the run as a ClamAV finding does,
   with exit 11 and the detail `malware`, naming the file and its threat
@@ -1183,9 +1187,9 @@ receives the hash and the key, and sees the address the request came from.
   `not checked: quota` once a minute of rate limits is spent,
   `unavailable` for an outage or a timeout, `the key was refused`.
 - **The key.** A run on your computer uses your own key, the policy's
-  `hybridAnalysis` block: `$HYBRID_API_KEY` by default, another variable
-  with `apiKeyEnv`, or with `apiKeySource: keyring` the keychain entry
-  `provider:hybrid-analysis`, which the desktop app writes from
+  `hybridAnalysis` block: `$HYBRID_API_KEY` by default, or another variable
+  named by `apiKeyEnv`; when the variable is not set and `apiKeySource` is
+  `keyring`, the keychain entry `provider:hybrid-analysis`, which the desktop app writes from
   Settings → Provider settings → Hybrid Analysis key (agentry-desktop#530).
   A free key from Hybrid Analysis is enough. With no key nothing is asked,
   nothing warns, and the receipt says `not checked: no key`. A hosted run
@@ -1202,11 +1206,12 @@ the CLI with `--review-inputs REGISTRY` and the job's credential in
 that registry's [model-input scan](model-input.md) as `input_file`: a
 document's text, its original when that is text too, HTML as uploaded and
 as Markdown, and each file in an archive, several small texts to a call.
-A run on your own computer is not reviewed, and nothing about its inputs
-is sent anywhere but the hash lookup above.
+A run on your own computer is not reviewed: AI Review is sent nothing.
+(What the agent reads still goes to its model provider, as on any run.)
 
 - **A flagged input refuses the run** with exit 11, the reason
-  `input-refused` and the detail `ai-review`, naming the file; the run
+  `input-refused` and the detail `ai-review`, naming the file (at most
+  eight, then how many more); the run
   settles AI Review's one credit and nothing else. An input AI Review
   could not read refuses it with the detail `not-reviewed`, and settles
   nothing. In a session, a file you add is refused alone.
@@ -1225,9 +1230,10 @@ AI Review costs one credit a run however many calls it takes
 | | On your computer | On Agentry |
 |---|---|---|
 | files | 2,000, the files inside archives included | 20 uploads, each at most 10 MB; inside them, the same 2,000 |
-| the text of one file | 10 MiB | 10 MiB |
+| the text the readers make of one file (a document's text, an archive member's, HTML's Markdown) | 10 MiB | 10 MiB |
+| a text file read as uploaded | served whole; `search_inputs` searches its first 10 MiB | the same |
 | unpacked from archives | 512 MiB, three archives deep | the same |
-| checked by ClamAV | 256 MB a file | the same |
+| checked by ClamAV | 256 MiB a file | the same |
 | reading them all | 30 minutes | the same |
 | read by AI Review | not reviewed | 16 MiB of text a run |
 
@@ -1928,7 +1934,7 @@ most eight), and for some codes a `detail` word (DR-68):
 | `mcp-start-failed` | the gateway's start of a declared server | the server | — |
 | `secret-missing` | resolving the secrets | the secrets | — |
 | `input-refused` | staging or checking the inputs ([running with files](#running-with-files)) | none | `malware` (ClamAV found it, or Hybrid Analysis called it malicious), `name-clash`, `unreadable`, `ai-review` (AI Review flagged an input's text; hosted, the run settles AI Review's one credit), `not-reviewed` (AI Review could not read it; nothing is charged) |
-| `inputs-not-decoded` | the decode step | none | `image` (the files image could not be pulled), `run` (its container failed, or its output was refused) |
+| `inputs-not-decoded` | the decode step | none | `image` (the files image could not be made ready: its pull, or the local layer built on it), `run` (its container failed, or its output was refused) |
 | `agent-blocked` | the agent's `end_blocked` | none | — |
 | `runner-blocked` | the runner's evidence | none | `tools-unrecorded`, `inputs-unread`, `report-unwritten` |
 
@@ -2015,8 +2021,8 @@ directory instead, in the clear, and `add DIR` extends one. The built-in Knowled
 this binary embeds and runs with the attestation state `builtin`, never a
 release anyone installs. The runner first checks and decodes the
 documents as it does any run's files ([running with files](#running-with-files)):
-ClamAV and the Hybrid Analysis lookup, then the files image's readers,
-with no network and every capability dropped. A document either check
+ClamAV and then the files image's readers, in a container with no network
+and every capability dropped, then the Hybrid Analysis lookup. A document either check
 refuses stops the build with exit 11, naming it. Markdown, text, HTML,
 CSV, JSON, YAML and source files pass as they are; an archive is listed as
 not read, since a pack keeps each document as given (agentry-cli#619).
