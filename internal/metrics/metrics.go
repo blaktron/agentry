@@ -347,6 +347,10 @@ const (
 	FailOpenAuditStreamDrop = "audit_stream_drop"
 	FailOpenOSVNotChecked   = "osv_not_checked"
 	FailOpenOSVError        = "osv_error"
+	// FailOpenVersionNotChecked counts declared MCP server versions S7 did
+	// not check against their package registry (agentry#1036): the check is
+	// off, or the registry gave no answer, and the version publishes.
+	FailOpenVersionNotChecked = "version_not_checked"
 	// FailOpenHistoryNotScanned counts git-tag publishes whose history S2
 	// could not (fully) scan for secrets (agentry#54).
 	FailOpenHistoryNotScanned = "history_not_scanned"

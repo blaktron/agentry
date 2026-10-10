@@ -49,6 +49,9 @@ const (
 	FailOpenOSVNotChecked Event = "failopen.osv_not_checked"
 	// FailOpenOSVError is an OSV lookup that errored (DEV-026.3).
 	FailOpenOSVError Event = "failopen.osv_error"
+	// FailOpenVersionNotChecked is a declared MCP server version S7 did not
+	// check against its package registry (agentry#1036).
+	FailOpenVersionNotChecked Event = "failopen.version_not_checked"
 	// FailOpenDirectoryErasure is an account erasure whose directory half
 	// did not happen after its retries (agentry#499).
 	FailOpenDirectoryErasure Event = "failopen.directory_erasure"
@@ -77,7 +80,7 @@ func Audit(action string) Event { return Event(AuditPrefix + action) }
 var All = []Event{
 	HTTPRequest, HTTPRateLimited, AuthLoginFailed, AuthSocialRejected, SAMLStateUnavailable, TOTPChallengeUnavailable, SSRFRefused,
 	GateVerdict, GateError, ScanStage,
-	FailOpenAuditStreamDrop, FailOpenHistoryNotScanned, FailOpenOSVNotChecked, FailOpenOSVError, FailOpenDirectoryErasure,
+	FailOpenAuditStreamDrop, FailOpenHistoryNotScanned, FailOpenOSVNotChecked, FailOpenOSVError, FailOpenVersionNotChecked, FailOpenDirectoryErasure,
 	GitPushRefused, MailSuppressed, WebhookDelivered, ModelInput,
 }
 

@@ -17,12 +17,14 @@ import (
 // a database that learns about a vulnerability after publication.
 type sweepOSV struct {
 	calls int
+	asked []scan.OSVPackage
 	vulns map[string][]scan.OSVVulnerability
 	err   error // set to stand in for an outage
 }
 
 func (f *sweepOSV) Query(_ context.Context, pkgs []scan.OSVPackage) (map[string][]scan.OSVVulnerability, error) {
 	f.calls++
+	f.asked = append(f.asked, pkgs...)
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -262,5 +264,35 @@ func TestMCPSweepLookupFailureKeepsTheAnswer(t *testing.T) {
 	vuln, _ := cache.Get(ctx, "npm", "sweep-outage-vuln", "1.0.0")
 	if vuln == nil || vuln.Status != "vulnerable" || len(vuln.Advisories) != 1 || vuln.Advisories[0].ID != "GHSA-kept" || vuln.LastError == "" {
 		t.Fatalf("vulnerable row after a failed sweep: %+v", vuln)
+	}
+}
+
+// agentry#1036: a version its registry does not publish keeps "not-found"
+// through the daily sweep. OSV's "no advisories" would otherwise turn it
+// back into "safe", which is the record this issue exists to stop. The row
+// moves past the cutoff, so the sweep's loop ends, and OSV is not asked.
+func TestMCPSweepLeavesANotFoundRow(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	osv := &sweepOSV{vulns: map[string][]scan.OSVVulnerability{}}
+	cache := scan.NewStoreMCPScanCache(e.st)
+	e.pipe.SetMCPScanning(osv, cache)
+	if err := cache.Put(ctx, scan.MCPScanRecord{Ecosystem: "npm", Package: "sweep-not-found", Version: "0.1.23", Status: "not-found", LastChecked: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '48 hours' WHERE package = 'sweep-not-found'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pipe.MCPSweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	row, _ := cache.Get(ctx, "npm", "sweep-not-found", "0.1.23")
+	if row == nil || row.Status != "not-found" || time.Since(row.LastChecked) > time.Hour {
+		t.Fatalf("not-found row after the sweep: %+v", row)
+	}
+	for _, p := range osv.asked {
+		if p.Name == "sweep-not-found" {
+			t.Fatalf("the sweep asked OSV about a version that does not exist")
+		}
 	}
 }

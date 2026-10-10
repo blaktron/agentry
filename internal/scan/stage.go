@@ -20,6 +20,9 @@ type stageContext struct {
 	// scanned MCP server versions (agentry#177); nil = offline.
 	osv      OSVClient
 	mcpCache MCPScanCache
+	// registries answer whether a declared server's version is published
+	// (agentry#1036); nil = not asked.
+	registries PackageRegistries
 }
 
 // Context returns the cancellation context.

@@ -124,6 +124,14 @@ func mcpServerScanToAPI(row storegen.McpServerScan) McpServerScan {
 		out.MaxSeverity = &sev
 	}
 	out.LastError = row.LastError
+	// A version its registry does not publish (agentry#1036) is no answer
+	// about advisories: served as error, with the reason, so the response
+	// keeps its contract and never reads as safe.
+	if row.Status == "not-found" {
+		out.Status = Error
+		why := "the package registry does not publish this version"
+		out.LastError = &why
+	}
 	var advs []scan.OSVVulnerability
 	_ = json.Unmarshal(row.Advisories, &advs)
 	for _, v := range advs {

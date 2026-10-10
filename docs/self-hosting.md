@@ -336,10 +336,19 @@ scan:
   # declares. Default api.osv.dev; point it at a mirror, or set "none" to
   # switch the lookup off (S7 then reports "not checked" and routes nothing).
   # osvUrl: https://api.osv.dev       # AGENTRY_SCAN_OSV_URL
+  # Where S7 first asks whether each declared server's pinned version is
+  # published at all (agentry#1036): a version its registry does not have
+  # rejects the submission. Defaults below; "none" in npmRegistryUrl stops
+  # the check, and S7 then says it did not check.
+  # npmRegistryUrl: https://registry.npmjs.org   # AGENTRY_SCAN_NPM_REGISTRY
+  # pypiUrl: https://pypi.org                    # AGENTRY_SCAN_PYPI_URL
 ```
 
-The scanning role needs egress to that database (one host); a worker that
-cannot reach it leaves an `S7/osv-no-data` finding naming every declared
+The scanning role needs egress to that database and to the two package
+registries (three hosts: `api.osv.dev`, `registry.npmjs.org`, `pypi.org`). A
+worker that cannot reach a registry leaves an `S7/version-not-checked`
+finding, medium, which publishes. A worker that
+cannot reach the database leaves an `S7/osv-no-data` finding naming every declared
 server version the registry holds no answer for, on every submission until
 a lookup succeeds. The finding is medium, so at the baseline the version
 publishes with it on its report (an organization at threshold `low` holds
