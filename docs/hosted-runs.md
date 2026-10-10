@@ -297,7 +297,7 @@ credential admits scans of that source alone, at most 400 a run (past that
 `inputReview` record counts them.
 
 AI Review is **one credit a run**, however many calls it takes. A run that
-ran settles it inside the hold, beside its tokens. A run AI Review refused
+ran and used tokens settles it inside the hold, beside them. A run AI Review refused
 for an input it flagged (`input-refused` with the detail `ai-review`)
 settles that one credit alone. A run refused because a text could not be
 read (`not-reviewed`), or for malware, settles nothing. AI Review reads at
