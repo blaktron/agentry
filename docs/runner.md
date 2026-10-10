@@ -756,6 +756,7 @@ its digest, so a run record says which file a run obeyed.
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
+| `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode (DR-53; [Unsafe Mode](agentry/unsafe-mode.md)) |
 | `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
 | `images.clamavSignatures` | the ClamAV signature bundle, `<registry>/<repository>:<tag>` (default `ghcr.io/blaktron/agentry-clamav-db:latest`); a mirror must carry the publishing workflow's signature |
 | `hybridAnalysis.apiKeyEnv` / `hybridAnalysis.apiKeySource` | your Hybrid Analysis key for the hash lookup: the variable that holds it (default `HYBRID_API_KEY`), which wins when it is set; with `apiKeySource: keyring`, the keychain entry `provider:hybrid-analysis` when it is not; with no key nothing is looked up |
@@ -998,7 +999,13 @@ serves the tools), built once at install time from a generated Dockerfile
 (`agentry-runner-exec:<version>-<hash>`; the hash covers the commands, the
 packages and the mirror, so a changed catalog entry is a new image).
 `run_command` is still gated by the argv0 allowlist and shim `PATH`; the
-image contains nothing else to run.
+image contains nothing else to run. Under the desktop's
+[Unsafe Mode](agentry/unsafe-mode.md) (DR-53) three things change for a run on
+that computer: the exec catalogue is not consulted (each declared command is
+installed from the `images.unsafe` base, and one that fails to install is left
+absent and named in the receipt), the image is built from that base and not
+minimized, and a declared command gets the image's own `PATH` after its shims.
+Where a command can write does not change ([below](#where-a-declared-command-can-write)).
 
 The catalog is the operator's, not the manifest's — the same stance as
 `mcpRegistries`. Policy `exec.packages` maps a command name to the apk
