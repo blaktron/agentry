@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	"golang.org/x/net/publicsuffix"
 
 	"github.com/blaktron/agentry/pkg/rules"
 )
@@ -38,27 +39,10 @@ func bumpSize(prev, cur string) string {
 	return "none"
 }
 
-// emailRe matches an address well enough to recover its domain. S9 wants
-// recipients, not RFC 5322 conformance: the postmark line that started the
-// incident was a hardcoded BCC address.
-var emailRe = regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
-
-// bareHostRe matches a hostname appearing without a scheme, as it does inside
-// a client constructor or a config string.
-var bareHostRe = regexp.MustCompile(`\b(?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.){1,}(?:com|net|org|io|dev|ai|co|app|cloud|xyz|ru|cn|invalid|example|test|local)\b`)
-
-// How a destination was written in package content.
-const (
-	egressKindURL   = "url"
-	egressKindEmail = "email"
-	egressKindHost  = "host"
-)
-
 // egressTarget is one destination referenced by package content.
 type egressTarget struct {
-	// Kind is how the target was written: egressKindURL, egressKindEmail or
-	// egressKindHost.
-	Kind string
+	// Kind is how the target was written.
+	Kind rules.DestinationKind
 	// File and Line locate the first occurrence.
 	File string
 	Line int
@@ -67,41 +51,168 @@ type egressTarget struct {
 }
 
 // extractEgressTargets finds every destination a set of files references:
-// URLs, email recipients, and bare hostnames. It is the content-level twin of
-// the manifest's declared `capabilities.network.egress`, and the input to
-// S9's "newly added egress hosts/URLs anywhere in content" check.
+// URLs, email recipients, IPv4 addresses and bare host names. It is the
+// content-level twin of the manifest's declared `capabilities.network.egress`,
+// and the input to S9's "newly added egress hosts/URLs anywhere in content"
+// check.
+//
+// The grammar is pkg/rules' (rules.Destinations), the one S4's rating by
+// declaration reads, so the two agree on what a URL reaches (agentry#958). A
+// bare name is held to isBareDestination as well, because without a scheme a
+// host, a file name and a code identifier look alike.
 //
 // The map is keyed by the normalized target so a host written as a URL in one
 // release and as a bare string in the next still compares equal.
 func extractEgressTargets(files []FileEntry) map[string]egressTarget {
 	out := map[string]egressTarget{}
-	record := func(key, kind, file string, line int, excerpt string) {
-		key = strings.ToLower(strings.TrimSuffix(key, "."))
-		if key == "" || out[key].Kind != "" {
-			return
-		}
-		out[key] = egressTarget{Kind: kind, File: file, Line: line, Excerpt: truncateStr(excerpt, 160)}
-	}
 	for _, f := range files {
 		if !f.IsText || f.Content == nil {
 			continue
 		}
+		code := isCodePath(f.Path)
+		open := "" // the delimiter of a multi-line string open at a line's start
 		for i, line := range strings.Split(string(f.Content), "\n") {
+			// Inside a multi-line string, or on a line that opens or closes
+			// one, a line of code is text: its bare names count as in prose.
+			next := multilineString(open, line)
+			prose := !code || open != "" || next != open
+			open = next
 			if isCommentLine(f.Path, line) {
 				continue
 			}
-			for _, u := range urlRe.FindAllString(line, -1) {
-				record(urlHost(u), egressKindURL, f.Path, i+1, line)
-			}
-			for _, a := range emailRe.FindAllString(line, -1) {
-				record(a, egressKindEmail, f.Path, i+1, line)
-			}
-			for _, h := range bareHostRe.FindAllString(strings.ToLower(line), -1) {
-				record(h, egressKindHost, f.Path, i+1, line)
+			for _, d := range rules.Destinations(line) {
+				if out[d.Target].Kind != "" {
+					continue
+				}
+				if d.Kind == rules.DestinationHost && !isBareDestination(d.Target, strings.ToLower(line), prose) {
+					continue
+				}
+				out[d.Target] = egressTarget{Kind: d.Kind, File: f.Path, Line: i + 1, Excerpt: truncateStr(line, 160)}
 			}
 		}
 	}
 	return out
+}
+
+// fileLikeTLDs are top-level domains that are also the extensions of files
+// a package names all the time (README.md, inputs.zip, deploy.sh, main.py).
+// A bare two-label name ending in one is read as that file unless a path or
+// a port follows it; with a subdomain, a scheme or an "@" it is a host. The
+// list is fixed rather than drawn from the package, whose file names its
+// author chooses.
+var fileLikeTLDs = map[string]bool{
+	"md": true, "zip": true, "mov": true, "sh": true, "py": true, "pl": true, "pm": true, "rs": true, "so": true,
+}
+
+// specialUseTLDs are the reserved names (RFC 2606, RFC 6761, RFC 6762) that
+// no public suffix list carries but test fixtures and local services use.
+var specialUseTLDs = map[string]bool{
+	"example": true, "invalid": true, "test": true, "localhost": true, "local": true, "internal": true, "onion": true,
+}
+
+// isBareDestination decides whether a bare dotted name (no scheme, no "@")
+// in a lower-cased line is a host:
+//   - its last label must be a top-level domain ICANN delegates, from the
+//     public suffix list, or a special-use name, so config.yaml, main.go and
+//     package.json are file names;
+//   - a two-label name under a file-like TLD is that file, unless a path or
+//     a port follows it;
+//   - in program source outside a multi-line string (prose false), it must
+//     sit inside a string literal: user.email is a field, "webhook.site" a
+//     host, and code cannot reach a host it does not quote.
+//
+// URLs, email addresses and IP addresses are destinations without these
+// tests: a scheme, an "@" or the digits say what they are.
+func isBareDestination(host, line string, prose bool) bool {
+	labels := strings.Split(host, ".")
+	tld := labels[len(labels)-1]
+	if !specialUseTLDs[tld] {
+		if _, icann := publicsuffix.PublicSuffix(tld); !icann {
+			return false
+		}
+	}
+	if len(labels) == 2 && fileLikeTLDs[tld] && !followedByPathOrPort(line, host) {
+		return false
+	}
+	if !prose && !inStringLiteral(line, host) {
+		return false
+	}
+	return true
+}
+
+// followedByPathOrPort reports whether host occurs in line directly before
+// a "/" or a ":" and a digit, as a destination is written and a file is not.
+func followedByPathOrPort(line, host string) bool {
+	for i := 0; ; {
+		j := strings.Index(line[i:], host)
+		if j < 0 {
+			return false
+		}
+		rest := line[i+j+len(host):]
+		if strings.HasPrefix(rest, "/") || (len(rest) > 1 && rest[0] == ':' && rest[1] >= '0' && rest[1] <= '9') {
+			return true
+		}
+		i += j + len(host)
+	}
+}
+
+// stringLiteralRe finds a double-, single- or backtick-quoted literal.
+var stringLiteralRe = regexp.MustCompile(`"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|` + "`[^`]*`")
+
+// inStringLiteral reports whether host occurs inside a quoted literal of a
+// (lower-cased) line of code.
+func inStringLiteral(line, host string) bool {
+	for _, lit := range stringLiteralRe.FindAllString(line, -1) {
+		if strings.Contains(lit, host) {
+			return true
+		}
+	}
+	return false
+}
+
+// multiDelims open a string that can span lines: Python's triple quotes, a
+// JavaScript template literal, a Go raw string.
+var multiDelims = []string{`"""`, "'''", "`"}
+
+// multilineString is the delimiter of the multi-line string still open after
+// line, given the one open before it ("" for none). An odd count of the
+// open delimiter closes it; with none open, an odd count of one opens it.
+func multilineString(open, line string) string {
+	if open != "" {
+		if strings.Count(line, open)%2 == 1 {
+			return ""
+		}
+		return open
+	}
+	for _, d := range multiDelims {
+		if strings.Count(line, d)%2 == 1 {
+			return d
+		}
+	}
+	return ""
+}
+
+// The extensions whose comment lines start with "//" or "#". A file with
+// neither is prose to isCommentLine, and every line of it is read.
+var (
+	slashCommentExts = map[string]bool{
+		".go": true, ".js": true, ".mjs": true, ".cjs": true, ".ts": true, ".tsx": true, ".jsx": true, ".java": true,
+		".c": true, ".h": true, ".cpp": true, ".cc": true, ".rs": true, ".swift": true, ".kt": true, ".cs": true,
+		".php": true, ".scala": true,
+	}
+	hashCommentExts = map[string]bool{
+		".yaml": true, ".yml": true, ".toml": true, ".ini": true, ".cfg": true, ".conf": true, ".sh": true,
+		".bash": true, ".zsh": true, ".py": true, ".rb": true, ".env": true, ".properties": true, ".dockerfile": true,
+	}
+)
+
+// isCodePath reports whether a file is program source, whose bare dotted
+// names are mostly identifiers (obj.field), so a host there must be quoted.
+// Configuration and shell are not: they name a host bare (host: x.example,
+// curl webhook.site/x).
+func isCodePath(p string) bool {
+	ext := strings.ToLower(filepath.Ext(p))
+	return slashCommentExts[ext] || ext == ".py" || ext == ".rb"
 }
 
 // isCommentLine reports whether a line is a comment in a file the machine
@@ -116,33 +227,14 @@ func isCommentLine(path, line string) bool {
 	if t == "" {
 		return false
 	}
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".sh", ".bash", ".zsh", ".py", ".rb", ".env", ".properties", ".dockerfile":
+	ext := strings.ToLower(filepath.Ext(path))
+	switch {
+	case hashCommentExts[ext]:
 		return strings.HasPrefix(t, "#")
-	case ".go", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".java", ".c", ".h", ".cpp", ".cc", ".rs", ".swift", ".kt", ".cs", ".php", ".scala":
+	case slashCommentExts[ext]:
 		return strings.HasPrefix(t, "//")
 	}
 	return false
-}
-
-// urlHost returns the host component of a URL string: the authority up to
-// the path, query or fragment, after any userinfo (up to its last "@"), before
-// any port. The userinfo goes before the port is cut, so a URL that dresses
-// one host up as another (https://declared.example:@elsewhere.example/) is
-// keyed by the host it reaches; since a declared host's finding is low, that
-// order is what keeps the disguise from passing as declared.
-func urlHost(u string) string {
-	rest := strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://")
-	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
-		rest = rest[:i]
-	}
-	if i := strings.LastIndex(rest, "@"); i >= 0 { // userinfo
-		rest = rest[i+1:]
-	}
-	if i := strings.Index(rest, ":"); i >= 0 { // port
-		rest = rest[:i]
-	}
-	return strings.ToLower(rest)
 }
 
 // findingKey identifies a finding across releases: the detector plus the file

@@ -1,0 +1,5 @@
+name: ticket-summarizer
+version: 1.0.0
+capabilities:
+  network:
+    egress: none
