@@ -210,6 +210,36 @@ is copied into the inputs folder like `--file`; a `secret` answer becomes
 a run-scoped secret under its upper-cased id and is never written as
 text or recorded. Non-secret answers appear in the receipts.
 
+### `agentry schedule`
+
+Runs a QuickAgent on this machine later, or on repeat like a calendar
+entry: `add <ref>` with `--once "YYYY-MM-DD HH:MM"`, `--daily HH:MM`,
+`--weekdays HH:MM`, `--weekly tue,thu --at HH:MM` or `--monthly N --at
+HH:MM`, in `--zone` (an IANA name; the machine's by default), ending
+`--until DATE` or after `--times N` runs, with the run's own flags and a
+required `--out DIR` (`--local DIR`, with `--allow-unsigned`, schedules a
+folder held to its digest). `list`, `show`, `edit` (the name, a whole new
+repeat, `--out`, the limits), `pause`, `resume`, `run` (Run now), `remove`
+and `sync` (every entry rewritten from the store, any without a schedule
+removed) manage them. A schedule pins the exact
+version and digest it was made for, takes that version's consent when it is
+made, and always runs `--mode autonomous`. `add` refuses a schedule that
+could not reach what it needs from the system's own scheduler (the model
+key in the keychain, each declared secret in the MCP profile or the
+policy's `envFile`, Docker and the keychain answering a probe run there),
+and `add --check` reports the same gaps and keeps nothing (a version not
+yet installed is checked when `add` installs it). Each schedule is
+kept under `~/.agentry/runner/schedules/<id>/`, with one entry in the
+system's scheduler (a systemd user timer, a LaunchAgent, a Task Scheduler
+task) that runs `agentry schedule fire <id>`; no file and no entry holds a
+credential. On Linux with Docker Engine, `--signed-out` also runs a
+schedule while you are signed out, its keys sealed in an encrypted systemd
+credential (`check-signed-out` says whether this machine can, `reseal`
+seals them again). [Scheduled runs](agentry/scheduling.md) is the guide,
+with the desktop app and schedules In Agentry; the CLI's
+[README](https://github.com/blaktron/agentry-cli#runs-for-later-and-on-repeat-schedule)
+has every flag.
+
 ### `agentry uninstall <ns/name[@version]>`
 
 Removes this machine's runner state for a QuickAgent: the verified
