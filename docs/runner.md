@@ -88,7 +88,7 @@ One QuickAgent, one job, one container tree, then gone.
 | `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`; `claude` and `codex` drive your own installation of those CLIs, see below; goose is a planned slot) |
 | `--local DIR` | run an unpublished QuickAgent tree (unsigned by definition: requires `--allow-unsigned`) |
 | `--allow-unsigned` | run a release the registry has no attestation for; a *mismatched* attestation always refuses |
-| `--allow-vulnerable-mcp` | run even though the registry reports a known high or critical vulnerability for a declared MCP server version (the receipt records the override) |
+| `--allow-vulnerable-mcp` | run even though the registry's gate rates an advisory of a declared MCP server version high or critical (the receipt records the override) |
 | `--pin sha256:…` | require the resolved archive digest to equal this value |
 | `--prepare` | verify, compile, install images, run guided profile setup — then stop |
 | `--dry-run` | print the compiled run plan; touches no docker, never prompts |
@@ -694,15 +694,27 @@ the run checks: the consent screen and the scopes are where you decide it.
 
 **Known vulnerabilities.** Before a declared server is resolved, the runner
 asks the registry what its scan and daily sweep recorded for that exact
-package version (`GET /mcp-servers/scan`). A known **high or critical**
-advisory refuses the run (exit 11, naming the advisories and the versions
-they are fixed in) unless `--allow-vulnerable-mcp` or the policy's
-`mcpServers.allowVulnerable` overrides it; lower severities and a version
-the registry has never seen only print a line. A registry that cannot be
-reached does not stop the run. Whatever happened, the receipt's
-`capabilities_enforced.mcpServers.vulnerabilities` says what was checked,
-against which registry, and why the run went ahead. `agentry doctor`
-reports the same verdict per server, as a failure when a run would refuse.
+package version (`GET /mcp-servers/scan`). The runner weighs each advisory
+at the **gate's rating** of it, the `gateSeverity` the registry serves beside
+the advisory's own `severity` and CVSS base score: an advisory the gate
+rates **high or critical** refuses the run (exit 11, naming the advisories
+and the versions they are fixed in) unless `--allow-vulnerable-mcp` or the
+policy's `mcpServers.allowVulnerable` overrides it. One it rates medium or
+low runs and only prints a line, so a High advisory scoring below CVSS 8.5,
+which the gate rates medium and publishes, runs too. A Critical advisory is
+critical whatever rating is served. A registry that serves no rating (an
+older or a self-hosted one), or a rating word the runner does not know, is
+weighed by the advisory's own severity: high or critical refuses, as before.
+A version the registry has never seen only prints a line, and a registry
+that cannot be reached does not stop the run. Whatever happened, the
+receipt's `capabilities_enforced.mcpServers.vulnerabilities` says what was
+checked, against which registry, and why the run went ahead. It names each
+advisory with its own severity and score and, where the two differ, the
+rating the gate gave it (for example "an advisory the gate rates high
+(GHSA-… [advisory high, CVSS 8.7])"). `agentry doctor` and `run --plan`'s
+`refusals[]` use the same words; `doctor` reports a server a run would
+refuse as a failure. The rule reads advisories only, never a version's other
+findings (DR-60, amending DR-16).
 
 The isolation rules are the profile rules: server configuration and keys
 belong to one signature (ns/name@version + digest). No other QuickAgent
@@ -738,7 +750,7 @@ its digest, so a run record says which file a run obeyed.
 | `dataAccessServers.<category>` | operator-cataloged MCP server-entry files attached when a manifest declares that dataAccess category |
 | `mcpRegistries.npm` / `mcpRegistries.pypi` | where declared `capabilities.mcpServers` resolve (defaults: registry.npmjs.org, pypi.org; point at private mirrors here) |
 | `mcpRegistries.pypiAllowSourceDists` | allow a PyPI MCP server to install from a source distribution (default false: wheels only, see below) |
-| `mcpServers.allowVulnerable` | let runs proceed when the registry reports a high or critical advisory for a declared server version (default false: refused, exit 11) |
+| `mcpServers.allowVulnerable` | let runs proceed when the registry's gate rates an advisory of a declared server version high or critical, or, from a registry that serves no rating, when the advisory's own severity is (default false: refused, exit 11) |
 | `exec.packages` | the exec catalog: command name → apk package (optionally `=version`) the exec image installs for a QuickAgent that declares that command; a declared command with no entry is refused at plan time (exit 11) |
 | `exec.apkMirror` | the Alpine mirror the exec image build installs from (default: the runner image's own repositories) — egress of the image build only, over ordinary docker networking; a run's network posture is unchanged |
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |

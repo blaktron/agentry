@@ -457,9 +457,12 @@ own when the author yanks the version or the advisory is withdrawn.
    remote-code-execution advisory that a QuickAgent runs against its declared
    secrets may deserve quarantine of the affected versions (runbook 4) and an
    advisory; an alert alone is right for the ordinary case. The runner
-   refuses to *run* a QuickAgent whose declared server the registry marks
-   high or critical — the check is `agentry run`'s, before the plan
-   executes, and the receipt's vulnerability line says what it found — unless
+   refuses to *run* a QuickAgent whose declared server has an advisory the
+   registry's gate rates high or critical (its `gateSeverity`, so a High
+   below CVSS 8.5 that the gate rates medium runs; a registry that serves no
+   rating is weighed by the advisory's own severity) — the check is `agentry
+   run`'s, before the plan executes, and the receipt's vulnerability line
+   says what it found — unless
    the person passes `--allow-vulnerable-mcp` or the operator policy sets
    `mcpServers.allowVulnerable`, either of which the receipt names
    (`agentry-cli`: `vulnerabilityVerdict` in `cmd/agentry/cmd_run_mcp.go`,
