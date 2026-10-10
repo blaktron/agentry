@@ -2901,8 +2901,10 @@ type McpServerScan struct {
 	LastError     *string                   `json:"lastError,omitempty"`
 	MaxSeverity   *McpServerScanMaxSeverity `json:"maxSeverity,omitempty"`
 	Package       string                    `json:"package"`
-	Status        McpServerScanStatus       `json:"status"`
-	Version       string                    `json:"version"`
+
+	// Status safe means no known advisories when last checked (OSV), and nothing else about the server. A version its package registry does not publish is served as error, with lastError saying so (agentry#1036), so no client meets a value the contract lacks.
+	Status  McpServerScanStatus `json:"status"`
+	Version string              `json:"version"`
 }
 
 // McpServerScanEcosystem defines model for McpServerScan.Ecosystem.
@@ -2911,7 +2913,7 @@ type McpServerScanEcosystem string
 // McpServerScanMaxSeverity defines model for McpServerScan.MaxSeverity.
 type McpServerScanMaxSeverity string
 
-// McpServerScanStatus defines model for McpServerScan.Status.
+// McpServerScanStatus safe means no known advisories when last checked (OSV), and nothing else about the server. A version its package registry does not publish is served as error, with lastError saying so (agentry#1036), so no client meets a value the contract lacks.
 type McpServerScanStatus string
 
 // Membership defines model for Membership.

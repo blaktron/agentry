@@ -78,7 +78,9 @@ func TestS7DeclaredMCPServerVulnerability(t *testing.T) {
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+author+"/uses-minimist/versions/1.0.0/report", nil, &rep, http.StatusOK)
 	var s7 []string
 	for _, f := range rep.Findings {
-		if strings.HasPrefix(f.Scanner, "S7/") {
+		// The version check (agentry#1036) is off in tests and says so with
+		// an info finding of its own; this test is about the advisory.
+		if strings.HasPrefix(f.Scanner, "S7/") && !strings.HasPrefix(f.Scanner, "S7/version-") {
 			s7 = append(s7, f.Scanner+":"+f.Severity)
 			if f.Scanner == "S7/mcp-vuln-ghsa-xvch-5gv4-984h" {
 				if f.Severity != "high" || !strings.Contains(f.Title, "CVE-2021-44906") || f.Detail["package"] != "minimist" {

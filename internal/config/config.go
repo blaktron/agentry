@@ -586,6 +586,13 @@ type Scan struct {
 	// servers (agentry#177). Empty means https://api.osv.dev; "none"
 	// switches the lookup off (S7 then reports "not checked").
 	OSVURL string `yaml:"osvUrl"`
+	// NPMRegistryURL and PyPIURL are where S7 asks whether a declared
+	// server's pinned version is published (agentry#1036). Empty means
+	// https://registry.npmjs.org and https://pypi.org; "none" in
+	// NPMRegistryURL stops S7 asking either, and the report says it did not
+	// check.
+	NPMRegistryURL string `yaml:"npmRegistryUrl"`
+	PyPIURL        string `yaml:"pypiUrl"`
 }
 
 // Social configures social login for individual accounts (§12.1). A provider
@@ -879,6 +886,8 @@ func applyEnv(c *Config) error {
 	// External scanner tools (§8.3 seams, agentry#40).
 	str("AGENTRY_SCAN_GITLEAKS_BIN", &c.Scan.GitleaksBin)
 	str("AGENTRY_SCAN_OSV_URL", &c.Scan.OSVURL)
+	str("AGENTRY_SCAN_NPM_REGISTRY", &c.Scan.NPMRegistryURL)
+	str("AGENTRY_SCAN_PYPI_URL", &c.Scan.PyPIURL)
 	if v := os.Getenv("AGENTRY_SCAN_TOOL_TIMEOUT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			c.Scan.ToolTimeout = d
