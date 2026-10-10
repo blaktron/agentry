@@ -87,8 +87,8 @@ func (p *Pipeline) MCPSweep(ctx context.Context) (sum MCPSweepSummary, err error
 				// A version its registry does not publish (agentry#1036):
 				// OSV's "no advisories" would turn it back into "safe".
 				// It keeps its status and moves past the cutoff, so the
-				// loop ends; S7 asks the registry again when a release
-				// names it.
+				// loop ends; S7 asks the registry again on every
+				// submission that names it.
 				kept := *prev
 				kept.LastChecked = time.Now()
 				if perr := p.mcpCache.Put(ctx, kept); perr != nil {
