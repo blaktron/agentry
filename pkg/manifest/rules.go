@@ -25,6 +25,7 @@ var rules = []Rule{
 	{ID: "V10", Title: "intake, interactive hints and the guide"},
 	{ID: "V11", Title: "the knowledge block and its shipped packs"},
 	{ID: "V12", Title: "the inputs declaration"},
+	{ID: "V13", Title: "input sources: intake questions of a source kind"},
 }
 
 // Rules returns the rules Validate and ValidateInContext can report, in

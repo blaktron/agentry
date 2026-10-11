@@ -1,6 +1,6 @@
 // Package manifest implements the agent.yaml package manifest defined in
 // PLAN §5: strict parsing (closed schema, rule V1), the validation rules
-// V1–V12 (§5.3), the closed capability vocabulary (§5.4), and the canonical
+// V1–V13 (§5.3), the closed capability vocabulary (§5.4), and the canonical
 // JSON form stored as agent_versions.manifest (§4.2).
 //
 // Two schema majors are read. Major 2 (DEV-088) classifies a QuickAgent by
@@ -308,6 +308,13 @@ const (
 	IntakeChoice IntakeType = "choice"
 	// IntakeFile is a host path the runner stages into the inputs folder.
 	IntakeFile IntakeType = "file"
+	// IntakeRepository asks for an input source of the repository kind: an
+	// https git URL and an optional ref, fetched before the run into
+	// /inputs/<id>/ (V13; sources.go).
+	IntakeRepository IntakeType = "repository"
+	// IntakeURL asks for an input source of the url kind: one https URL,
+	// fetched before the run into /inputs/<id>/ (V13; sources.go).
+	IntakeURL IntakeType = "url"
 )
 
 // IntakeQuestion is one question asked before a run starts (plan §3.5).

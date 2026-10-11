@@ -158,7 +158,7 @@ agent at `/inputs/intake.json`.
 intake:
   - id: dataset            # [a-z0-9_]+, unique
     prompt: "Path to the dataset to analyse"
-    type: file             # text (default) | secret | choice | file
+    type: file             # text (default) | secret | choice | file | repository | url
     required: true
   - id: region
     prompt: "Which region?"
@@ -170,11 +170,63 @@ intake:
 |---|---|
 | `id` | `[a-z0-9_]{1,64}`, unique within the manifest |
 | `prompt` | required |
-| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or the run refuses it; and `required` must agree with that secret: `true` for a required secret, absent or `false` for one under `capabilities.optionalSecrets`, or publishing refuses it, V10), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder) |
+| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or the run refuses it; and `required` must agree with that secret: `true` for a required secret, absent or `false` for one under `capabilities.optionalSecrets`, or publishing refuses it, V10), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder), `repository` and `url` (an input source, below) |
 | `choices` | only with `type: choice` |
 | at most 20 questions | |
 
 Non-secret answers are part of the run's receipts.
+
+#### Input sources: `repository` and `url`
+
+An **input source** is where a run's inputs come from. Every run has one,
+the files a person uploads. Two more kinds are asked for by an intake
+question whose `type` names the kind:
+
+```yaml
+intake:
+  - id: repo
+    prompt: "The repository to audit"
+    type: repository       # an https git URL and an optional ref
+    required: true
+  - id: advisory
+    prompt: "The advisory to check it against"
+    type: url              # one https URL
+```
+
+| Type | The answer | What the agent is to get |
+|---|---|---|
+| `repository` | an https git URL and an optional ref (a branch, a tag or a commit) | the repository's files at that ref under `/inputs/<id>/` |
+| `url` | one https URL | the file at that address under `/inputs/<id>/` |
+
+**What the manifest says today, and what waits on the runner.** The core
+accepts both types and checks them as below. The runner's fetch for each
+kind ships in a CLI release of its own (agentry-cli#833 for `repository`,
+#834 for `url`), and [the runner's documentation](runner.md) describes the
+clone, the download, their caps and the token's path once it does. Until
+then no runner fetches a source, and a CLI or desktop older than the core
+release that added the two types refuses a manifest carrying either as an
+unknown intake type. Publish a source question once your runners support it.
+
+- **The id names the folder.** A runner that supports sources fetches the
+  answer before the run starts into `/inputs/<id>/`, where the input tools
+  read it as they read an upload. V10's id rules (the pattern, which allows
+  no `.` or `/`, and uniqueness) therefore give each source a folder of its
+  own.
+- **The token belongs to the run.** The run setup is to ask for an
+  optional access token beside the answer, for a private repository or
+  file. A release never declares it, and it is used by the fetch step
+  alone.
+- **A source grants nothing.** Giving the source is the grant, as
+  attaching a file is. A source question needs no `capabilities` entry:
+  no egress to the source's host and no secret for its token. Adding or
+  removing one leaves the capability diff unchanged, so a new version that
+  adds one asks for no new consent; the person running it chooses the
+  source. The agent's own `fetch` stays inside the contract as before.
+- **A `repository` question expects code.** When `inputs.kinds` is
+  declared and takes neither `code` nor `any`, validation warns, without
+  failing, that the release does not say it takes code (V13).
+- `choices` are refused on a source question, as on every type but
+  `choice` (V10).
 
 ### `interactive`: session hints
 
