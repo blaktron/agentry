@@ -36,6 +36,15 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
    and name the key `OPENAI_API_KEY`: the provider name and the variable
    name are passed to the harness as given (see the
    [provider table](quickagents.md#machine-setup-agentry-setup)).
+   A provider can also be paid by **your own plan or account** instead of a
+   key: `--api-key-kind chatgpt-plan` (provider `openai`),
+   `--api-key-kind claude-signin` (`anthropic`), `--provider copilot` with
+   `--copilot-plan individual|business|enterprise` and `--oauth-app`, and
+   `--connect` for `openrouter`, `poe` and `huggingface`. An interactive
+   setup asks which way to pay where there is a choice. These are [model
+   sign-ins](#model-sign-ins), which sign in through your browser; they apply
+   to local runs only, and setup then prepares the image of the harness that
+   choice needs instead of docker-agent's.
 2. Stands up the **docker-mcp-gateway plane**: verifies the docker
    engine, pulls the pinned gateway and harness images, and builds the
    local runner image from the CLI's embedded, stdlib-only build context
@@ -84,8 +93,8 @@ One QuickAgent, one job, one container tree, then gone.
 | `--output-format text\|json` | stdout carries the result text, or the full envelope |
 | `--keep-profile true\|false` | this run's MCP-profile completion choice (default: the profile's own setting, else policy) |
 | `--reconfigure-profile` | re-run guided profile setup over an existing profile |
-| `--timeout N` / `--max-turns N` / `--max-cost USD` | override the policy budgets (exit 15 / 16 on breach; cost is the harness's running total, `0` = unlimited) |
-| `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`; `claude` and `codex` drive your own installation of those CLIs, see below; goose is a planned slot) |
+| `--timeout N` / `--max-turns N` / `--max-cost USD` | override the policy budgets (exit 15 / 16 on breach; cost is the harness's running total, `0` = unlimited; `--max-cost` is refused, exit 2, for a run paid by a [model sign-in](#tokens-not-dollars), which records tokens and no dollars) |
+| `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`, or the image adapter a [model sign-in](#model-sign-ins) names: `codex-image`, `claude-image` or `copilot-image`; `claude` and `codex` drive your own installation of those CLIs, see below; goose is a planned slot) |
 | `--local DIR` | run an unpublished QuickAgent tree (unsigned by definition: requires `--allow-unsigned`) |
 | `--allow-unsigned` | run a release the registry has no attestation for; a *mismatched* attestation always refuses |
 | `--allow-vulnerable-mcp` | run even though the registry's gate rates an advisory of a declared MCP server version high or critical (the receipt records the override) |
@@ -762,7 +771,8 @@ its digest, so a run record says which file a run obeyed.
 | `images.goBuilder` | the Go image the runner image is compiled in on first use (the default is pinned by digest). Its Go must be at least the CLI's own, to the patch: the build context names that version, and an older builder stops the build with "images.goBuilder … is older than the Go the runner needs" |
 | `images.runner` | override the locally built runner image tag (pin this when the CLI and desktop app share a machine) |
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
-| `model.proxyAllow` | host:port list — the agent container's **only** egress |
+| `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
+| `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11) |
 | `secretSource.mode` (`env` \| `envFile`) + `secretSource.envFile` | fallback secret resolution behind profiles |
 | `budgets.timeoutSeconds` / `budgets.maxTurns` / `budgets.maxCostUsd` | default hard stops (cost `0` = unlimited) |
@@ -774,6 +784,8 @@ its digest, so a run record says which file a run obeyed.
 | `mcpServers.allowVulnerable` | let runs proceed when the registry's gate rates an advisory of a declared server version high or critical, or, from a registry that serves no rating, when the advisory's own severity is (default false: refused, exit 11) |
 | `exec.packages` | the exec catalog: command name → apk package (optionally `=version`) the exec image installs for a QuickAgent that declares that command; a declared command with no entry is refused at plan time (exit 11) |
 | `exec.apkMirror` | the Alpine mirror the exec image build installs from (default: the runner image's own repositories) — egress of the image build only, over ordinary docker networking; a run's network posture is unchanged |
+| `images.harnessImages.<adapter>` | the harness image of an adapter other than docker-agent, pinned by digest or, for an image your computer builds, by the `artifact` hash it is built from ([model sign-ins](#model-sign-ins)); unset, the CLI's default is used |
+| `harness.<adapter>.signInTokenRoute` | `auth-command` (the default) or `restart`: how a ChatGPT plan's token reaches Codex ([below](#a-chatgpt-plan)) |
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
@@ -2172,16 +2184,24 @@ model key and the gateway token arrive by variable name, telemetry is off,
 and the result envelope has one shape — and a conformance suite holds them
 to it. What differs is where the harness runs.
 
+The three image adapters exist for [model sign-ins](#model-sign-ins): they
+run only when the policy's model is paid by your own plan (`codex-image` may
+also run on an OpenAI key, by choice), and each is the default adapter for its
+plan, so `agentry run` picks it without `--adapter`.
+
 | Adapter | What runs | Modes | Isolation |
 |---|---|---|---|
 | `docker-agent` (default) | the pinned `docker/docker-agent` image | autonomous, interactive (Agent Client Protocol over the container's stdio) | a container on the run's internal network: it has no route out but the proxy |
 | `claude` | **your own installation** of Claude Code, as a process of your user | autonomous, interactive (Claude Code's own bidirectional stream-json) | the harness is outside the run's network boundary — see below |
 | `codex` | **your own installation** of the OpenAI Codex CLI, as a process of your user | autonomous, interactive (codex's own app-server protocol) | as for `claude` — see below |
+| `codex-image` | OpenAI's Codex CLI in agentry-dockerimages' signed `agentry-codex` image, pinned by digest | autonomous, interactive (codex's app-server; an autonomous run is one session turn) | a container on the run's internal network, as for `docker-agent`; the default for a ChatGPT plan |
+| `claude-image` | Claude Code in an image **your computer builds** from pinned npm packages, never published | autonomous, interactive (stream-json) | a container, as above; runs only on a Claude subscription sign-in, and is its default |
+| `copilot-image` | GitHub's Copilot CLI in an image your computer builds from a checksummed release download, never published | autonomous, interactive (Copilot CLI's JSON-RPC server mode, driven by the runner) | a container, as above, with nothing mounted; runs only on a Copilot plan sign-in, and is its default |
 | `goose` | planned (RUNNER M-R4d) | — | — |
 
 ### `claude`
 
-The runner does not package or pin Claude Code: it runs the `claude` you
+The `claude` adapter does not package or pin Claude Code: it runs the `claude` you
 already have (`harness.claude.path` overrides the `PATH` lookup), and
 `agentry doctor --adapter claude` reports which release that is. Each run
 gets a generated MCP config naming the run's gateway and nothing else,
@@ -2192,10 +2212,21 @@ reaches a QuickAgent run, and `CLAUDE_CONFIG_DIR` points inside the run, so
 the run leaves nothing in your own configuration.
 
 Bare mode also reads no login credential of yours, which is deliberate: a
-run spends the **operator's** model access, never your subscription. Give it
-an endpoint that speaks the Anthropic Messages API — Anthropic's own or a
-compatible one — with `harness.claude.baseUrl`, `.model` and `.apiKeyEnv`,
-and put its host in `model.proxyAllow`.
+run on a key spends that key. Give it an endpoint that speaks the Anthropic
+Messages API — Anthropic's own or a compatible one — with
+`harness.claude.baseUrl`, `.model` and `.apiKeyEnv`, and put its host in
+`model.proxyAllow`.
+
+A run that spends your **Claude subscription** is a [model
+sign-in](#a-claude-subscription), not this key path. It drops `--bare` and runs
+Claude Code on its own sign-in, in a config directory of Agentry's, by default in
+the `claude-image` adapter and, when you sign in with `--installed` and choose
+`--adapter claude`, here. (DR-18's rule that a run never spends your
+subscription was reversed by DR-86 for exactly this.) A subscription token you
+pasted (`claude setup-token`, `apiKeyKind: subscription`) is a separate
+route: this adapter passes it as `CLAUDE_CODE_OAUTH_TOKEN` without `--bare`,
+the run is refused when a `CLAUDE.md` sits in an ancestor of its directory, and
+docker-agent refuses such a token at plan time.
 
 ### `codex`
 
@@ -2203,26 +2234,61 @@ The same shape as `claude`, with codex's own mechanisms. The runner runs
 the `codex` you have installed (`harness.codex.path` overrides the `PATH`
 lookup; `agentry doctor --adapter codex` reports the release) from a
 run-scoped `CODEX_HOME`, so none of your own config, rules, skills or
-sessions is read and nothing of the run lands in yours. The generated
-config declares the run's gateway as the only MCP server and switches
-every built-in tool off — the shell, the image viewer, web search, apps,
-the browser, computer use, image generation, sub-agents, hooks, memories —
-leaving the model the gateway's catalog and codex's three MCP resource
-readers, which read from that same gateway. It runs with `--strict-config`
-on purpose: a config key a codex release renames is a loud refusal, not a
-silently re-enabled tool.
+sessions is read and nothing of the run lands in yours. Codex's own bundled
+system skills are switched off as well (`[skills.bundled] enabled = false`,
+`[skills] include_instructions = false`), so none is installed into that home
+and none is listed in the prompt. The generated config declares the run's
+gateway as the only MCP server and switches every built-in tool off — the
+shell, the image viewer, web search, apps, the browser, computer use, image
+generation, sub-agents, hooks, memories, code mode, goals and the question to
+the person (`request_user_input`) — leaving the model the gateway's catalog
+and codex's three MCP resource readers, which read from that same gateway. It
+runs with `--strict-config` on purpose: a config key a codex release renames
+is a loud refusal, not a silently re-enabled tool.
+
+Feature keys are only half of how that holds. Codex decides part of its tool
+list from the **model's catalog entry**: its bundled catalog gives a real
+OpenAI model `apply_patch`, a deferred `tool_search` and, for most, code mode,
+and a release can add a built-in no key switches off (codex-cli 0.162.0 added
+goal tools). So the adapter:
+
+- renders its own one-model catalog (`model_catalog_json`), which replaces
+  codex's bundled one and holds the run's model with every tool field off;
+- never defers the gateway's tools (`omit_tools_from = ["deferred"]`), so none
+  hides behind `tool_search`;
+- switches code mode, goals and `request_user_input` off as well.
+
+What it costs: a real OpenAI model gets the request shape an unknown model
+always got, the API's default reasoning effort rather than codex's own preset
+for it. `--strict-config` does not reach the catalog, so
+`scripts/acceptance/runner-codex-tools.sh` is the check to run on every Codex
+version bump. It replays the rendered config against the installed codex with a
+fake endpoint and a fake gateway, needs no key and no network, and fails unless
+the request's tools are exactly the gateway's and codex's three readers, no
+developer message lists a bundled skill, and no skill is installed in the run's
+`CODEX_HOME`. It drives `codex exec` only; whether the skills listing is also
+absent in an app-server turn is not verified (the install is).
 
 Codex speaks the OpenAI Responses API and, in the release the adapter was
 written against, nothing else. The policy's `model.baseUrl`, `.apiKeyEnv`
 and `.name` are what it is given, as a provider block in that config; an
 OpenAI-compatible endpoint that serves `/responses` works as it stands, and
 `harness.codex.baseUrl` / `.model` / `.apiKeyEnv` override those three when
-the endpoint differs from the default adapter's. An autonomous run is
+the endpoint differs from the default adapter's. On a key, an autonomous run is
 `codex exec` with JSONL events; an interactive session is codex's own
 app-server protocol over stdio, in which the runner is the approval
 authority — each MCP call is put to the runner, which accepts it for a
 gateway tool and declines anything else, and every answer is a transcript
 line.
+
+Codex also spends a **ChatGPT plan** ([a model sign-in](#a-chatgpt-plan)). Then
+the default adapter is `codex-image`, which runs the same config and catalog in
+a container; this adapter is the choice for your installed Codex
+(`--adapter codex`). On a plan both modes are the app-server protocol, and the
+plan's access token is a file the runner keeps fresh in the run's own folder,
+which codex reads with `cat`. A Windows host has no `cat`, so this adapter is
+refused on a plan there (agentry-cli#798); the image is the default on Windows
+anyway.
 
 The trade-off to understand: a harness running as your own process is not
 inside the run's network boundary the way a container is. Its file and
@@ -2231,6 +2297,425 @@ not by Docker. The tools container still enforces every declared capability
 for everything that goes through the gateway, and `receipts/proxy.log`
 records every CONNECT the harness made, so the enforcement record stays
 honest about which half is which.
+
+## Model sign-ins
+
+A **model sign-in** is your own grant that lets the runs on **your computer**
+spend a model vendor's plan instead of an API key: a ChatGPT plan, a Claude
+subscription through Claude Code, or a GitHub Copilot plan. You choose one in
+model setup, machine-wide, beside any number of kept keys; one choice is
+active at a time. A hosted run never spends one: it spends the model access of
+the deployment that runs it, and `agentry run` refuses a model sign-in plan
+for a hosted run (a run grant, a connections file or `--session-protocol`)
+before anything is installed.
+
+A model sign-in is not an MCP [connection](#connections), which is one grant
+to one MCP server for one QuickAgent version. [Connect your
+account](#connect-your-account) (OpenRouter, Poe, Hugging Face) is not a model
+sign-in either: the vendor makes an ordinary key and a run spends it as it
+spends any key.
+
+The runner's rule since DR-18 was that a run spends the operator's model
+access and never your own subscription. The operator reversed that on
+2026-10-08 (DR-86, which amends DR-18 and DR-26): a run may spend a plan you
+hold, by your explicit choice in model setup. A run on a key still spends
+the key.
+
+### The credential kinds
+
+The policy's `model.apiKeyKind` says what pays for the model:
+
+| `apiKeyKind` | Provider | What pays | Adapter a run uses by default |
+|---|---|---|---|
+| `api` (or empty) | any | the API key `apiKeyEnv` names, or the keychain entry | `docker-agent` |
+| `subscription` | `anthropic` | an Anthropic token you pasted (`claude setup-token`); Claude Code only | `docker-agent` refuses it; `--adapter claude` takes it |
+| `chatgpt-plan` | `openai` | your ChatGPT plan, signed in with ChatGPT | `codex-image` |
+| `claude-signin` | `anthropic` | your Claude subscription, signed in by Claude Code itself | `claude-image` |
+| `copilot-signin` | `copilot` | your Copilot plan, signed in with GitHub | `copilot-image` |
+
+A sign-in kind belongs to its provider alone, needs no `apiKeyEnv`, and refuses
+a cost budget (below). Setup writes the rest: the policy names the kind and the
+egress, never a token, an account or a host path. `subscription` is the
+older, separate route of a pasted token; it is unchanged, and it is not the
+Claude sign-in below.
+
+Each kind has one egress allowlist, and the compiler refuses a run whose
+`model.proxyAllow` is anything else, so a run paid by a plan reaches the model
+and nothing else (never the vendor's token endpoint, which only the CLI talks
+to):
+
+| Kind | `model.proxyAllow` |
+|---|---|
+| `chatgpt-plan` | `api.openai.com:443` |
+| `claude-signin` | `api.anthropic.com:443`, `platform.claude.com:443` (where Claude Code refreshes its own sign-in) |
+| `copilot-signin` | `api.github.com:443` and one plan's Copilot API host: `api.individual.githubcopilot.com:443`, `api.business.githubcopilot.com:443` or `api.enterprise.githubcopilot.com:443` |
+
+An adapter declares the kinds it can spend; any other adapter handed a
+sign-in is refused by policy at plan time (exit 11).
+
+### Signing in: `agentry setup` and `agentry model-signins`
+
+Model setup asks how to pay for a provider's models whenever a sign-in or a
+connect is one of the ways. Without the question, a flag says it:
+
+| Provider | Interactive choice | Without the question | What it writes |
+|---|---|---|---|
+| `openai` | `chatgpt \| key` | `--api-key-kind chatgpt-plan` | a ChatGPT plan; you pick from the models your plan lists |
+| `anthropic` | `claude \| key`; the choice reads "Use your Claude subscription (runs Claude Code)" | `--api-key-kind claude-signin` | a Claude subscription; the model is a Claude model id or Claude Code's alias (`sonnet`, `opus`) |
+| `copilot` | none: the sign-in is its only way to pay | `--provider copilot`, with `--copilot-plan individual\|business\|enterprise` (default `individual`: Free, Pro, Pro+ and Max) and `--oauth-app` | a Copilot plan; the model defaults to `auto` |
+| `openrouter`, `poe`, `huggingface` | `connect \| key` | `--connect` | a connected key ([below](#connect-your-account)); you type the model id |
+
+Choosing a sign-in signs in (or offers the one already kept), asks for the
+model, writes the policy above, and prepares the image of the harness that
+choice needs instead of docker-agent's (`--skip-images` skips it). The Copilot
+plan is checked before any sign-in starts.
+
+`agentry model-signins` manages what is kept, apart from `agentry connections`:
+
+| Command | Does |
+|---|---|
+| `agentry model-signins add <vendor>` | signs in or connects: `chatgpt`, `claude`, `copilot`, `openrouter`, `poe`, `huggingface` |
+| `agentry model-signins list` | lists what is kept: vendor, account, kind, state (`signed in`, `connected`, or `broken: …`), when it was last used; never a token (`--json` for machines) |
+| `agentry model-signins remove <vendor>` | removes a sign-in or disconnects an account; what that does at the vendor differs by vendor, below |
+
+`add` takes `--new-account` for `chatgpt` (register again for another ChatGPT
+account), `--installed` for `claude` (sign in the Claude Code installed on
+this computer rather than the image's) and `--oauth-app` for `copilot`.
+`agentry doctor` checks a sign-in in the store.
+
+A sign-in prints its address and opens your browser (`AGENTRY_NO_BROWSER`
+stops it opening one). ChatGPT's sign-in and the connects wait up to ten
+minutes and, when the browser is on another computer, take the address the
+browser ended on, pasted back. The kept records live under `model-signins/` in the
+runner home. A refresh token goes in the OS keychain (account
+`model-signin:<vendor>`) or a 0600 file, and the CLI alone spends it: it
+refreshes under a lock per vendor, so a rotating token is never lost. A run is
+handed an access token and nothing else. The Claude sign-in is the one
+exception below, and it keeps no secret of the CLI's own.
+
+### A ChatGPT plan
+
+**Who signs in.** The CLI, in your browser, through OpenAI's documented
+plan-usage flow: the first sign-in on a computer registers Agentry as a
+client, then a PKCE authorization returns to a `127.0.0.1` callback. The CLI
+keeps the refresh token and renews it. The sign-in needs the grant to include
+`chatgpt.tokens.use.direct` and a refresh token, and an account OpenAI says
+may not use its plan in other apps (`subscription_sharing_user_not_eligible`)
+gets the advice to use an API key and keeps nothing. A grant refused after the
+exchange is revoked at OpenAI before the command returns.
+
+**What the run receives.** The access token, which lasts about an hour, in one
+read-only file (`/run/agentry/model-signin/token`), rewritten by the runner
+before it expires. Codex's provider `auth` command is `cat` on that file, and
+Codex runs it when it needs a token, so a renewal reaches a turn in flight. The
+refresh token never enters the run. `harness.<adapter>.signInTokenRoute:
+restart` selects OpenAI's other documented route: the token is read once at
+start, a session starts the harness again on a renewed token and resumes the
+thread, and an autonomous turn longer than the token's hour fails on a 401.
+`auth-command` is the default; which route OpenAI's service prefers is not
+verified.
+
+**Which harness.** The `codex-image` adapter: OpenAI's Codex, unmodified, in
+the `agentry-codex` image that agentry-dockerimages builds from OpenAI's
+release binary after checking it against OpenAI's signature. The CLI pins the
+image by digest (`ghcr.io/blaktron/agentry-codex:0.162.0-2026.10.09.1@sha256:…`
+is its default for `images.harnessImages.codex-image`), and the CLI's CI
+verifies that digest against the signing workflow's identity on every pull
+request. An `images.harnessImages` entry of your own is yours to verify. `codex-image` may also run on an
+OpenAI key, by choice. Your own installed Codex (`--adapter codex`) spends the
+plan too, reading the same token file with `cat` and mounting nothing; on
+Windows that adapter is refused (agentry-cli#798), where the image is the
+default anyway. Both modes run Codex's app-server on a plan: an autonomous run
+is one session turn.
+
+**Outcomes.** A 429, or Codex's own `usageLimitExceeded`, is the plan's limit,
+reported once. A 403 says ChatGPT refused plan usage for this account,
+workspace or region and an OpenAI API key is the way out. A turn that did not
+complete is never a success. A plan run sets `request_max_retries = 0` in
+Codex's provider block, so Codex does not ask a 429 again, at the price of no
+longer retrying a transient 5xx or network failure.
+
+**Removing it.** `remove chatgpt` revokes the grant at OpenAI's revocation
+endpoint (held to OpenAI's own domain) and forgets it. OpenAI asks that a
+sign-out keep the account-to-client registration and the host id, so those two
+files stay and the next sign-in presents the same registration; a sign-in as a
+different account through it is refused until `add chatgpt --new-account`.
+
+### A Claude subscription
+
+**Who signs in.** Claude Code does. Anthropic's Claude Code legal page lets an
+end user sign in to the unmodified Claude Code and forbids third parties to
+"collect, store, or intermediate Claude.ai credentials or session tokens", so
+Agentry runs Claude Code's own `claude auth login`, unmodified, against a
+config directory of Agentry's own (never `~/.claude`) and keeps only where that
+directory is and which account `claude auth status` names. Only a `claude.ai`
+login counts: a Console or API-key login is refused and nothing is kept. The
+runner never reads what Claude Code keeps in that directory.
+
+**The sign-in is the browser's alone.** `agentry model-signins add claude`
+signs in the Claude Code image, in a container that is the one kind Agentry
+starts with open egress, because Claude Code reaches Anthropic's pages and
+token endpoint itself. Claude Code's callback listens on the container's own
+loopback, which Docker cannot publish. The image therefore carries a stand-in
+browser opener that writes the address Claude Code gives it to the container's
+stderr and opens nothing. The CLI takes that address only when it is an
+Anthropic sign-in page whose redirect is Claude Code's own `localhost`
+callback, opens it in your browser, and relays the browser's connection byte
+for byte into the container's loopback through `docker exec`. Claude Code
+receives the code on its own callback and exchanges it itself, so nobody pastes
+anything (agentry-cli#848). The relay serves at most eight connections and
+closes when the sign-in returns; the whole sign-in is bounded at fifteen
+minutes, and ends with "nothing kept" on a timeout or an interrupt. A person at
+a terminal gets Anthropic's paste-code page as a fallback, with the reason, when
+the port is in use on this computer, the daemon cannot exec, or Claude Code
+gives its opener no address within ten seconds; with nothing to paste into, as
+in the desktop, the sign-in ends instead. A first sign-in that fails deletes
+the volume it made.
+
+`add claude --installed` signs in the Claude Code installed on this computer
+instead, with that Claude Code's own browser, in the directory
+`model-signins/claude-code` under the runner home. Each Claude Code is signed
+in separately, where it runs: the image's directory is the docker volume
+`agentry-claude-signin`, and the record names both.
+
+**What the run receives.** Claude Code's own config directory, read-write, in
+the Claude Code run alone: the volume at `/claude` for the image, the directory's
+path for an installed Claude Code. This is the one place a refresh token
+enters a run, and it is Claude Code's own: Claude Code renews it, and the
+runner never reads it. The run has no key variable and none of yours is passed
+on, so nothing outranks the sign-in.
+
+**Which harness.** The `claude-image` adapter: Claude Code, unmodified, in an
+image your computer builds at first use and nobody publishes, because Claude
+Code's licence grants no redistribution. The image is `agentry-claude-code:2.1.296`,
+built from `@anthropic-ai/claude-code@2.1.296` and its musl native package on
+agentry-dockerimages' `agentry-node-alpine` base. The policy's pin is the npm
+integrity of the first package (the `artifact` of the CLI's default
+`images.harnessImages.claude-image`, `sha512-…`); the CLI also carries the native package's, and holds both
+downloads to them before docker is touched, so a package whose bytes differ
+builds nothing. The native package is about 110 MB. The receipt's
+`harness.imagePin` reads `artifact sha512-…`, and the label is the build's own
+word: anyone with the docker daemon could tag another image that way. An
+image built under an older recipe of the Dockerfile is built again the next time
+it is needed. `--adapter claude` runs your installed Claude Code on the same kind.
+
+A Claude subscription run is Claude Code without `--bare` (bare mode reads no
+login), with `--setting-sources ""`, `ENABLE_CLAUDEAI_MCP_SERVERS=false`, the
+gateway as its one MCP server and its built-in tools off, as the
+[`claude` adapter](#claude) does on a key. A `harness.<adapter>.baseUrl`
+beside the sign-in is refused, since it would hand that endpoint your login.
+The installed Claude Code also meets DR-26's refusal when a `CLAUDE.md` sits in
+an ancestor of the run directory, and its managed settings, which the machine's
+administrator owns, are closed by no flag (agentry-cli#171).
+
+**Outcomes.** A rejected `rate_limit_event`, or `credits_required`, is the
+plan's limit, reported once with Claude Code's own reset time.
+
+**Removing it.** `remove claude` runs Claude Code's own `claude auth logout` in
+the image and in the installed Claude Code, each against its own directory, then
+deletes exactly the volume `agentry-claude-signin` and the directory
+`model-signins/claude-code`, whatever a record says, and forgets the record. A
+logout that cannot run (no image, no installed Claude Code, no network) does not
+keep the sign-in: the directory is deleted anyway, and the command says
+Anthropic's session ends when it expires or when you sign out of your devices
+at claude.ai.
+
+### A Copilot plan
+
+**Who signs in.** The CLI, through GitHub's device flow with Agentry's GitHub
+App, which asks for no scope; `--oauth-app` uses Agentry's OAuth App with scope
+`read:user` instead, as a fallback. The CLI shows the user code with GitHub's
+own page, `https://github.com/login/device`, opens it, and polls while the
+code lasts, fifteen minutes, and any other page the answer names is refused and nothing is
+opened. No client secret is sent anywhere. A grant with no refresh token (an
+OAuth App whose tokens do not expire) is revoked and refused, and so is a grant
+whose account cannot be named; nothing is kept in either case. The CLI keeps the refresh token and renews it; a GitHub
+App user token lasts eight hours.
+
+Agentry's two GitHub apps are registered in agentry-cli#743. Until then the
+build carries no client id: the command says so and keeps nothing, and
+`AGENTRY_GITHUB_APP_CLIENT_ID` or `AGENTRY_GITHUB_OAUTH_APP_CLIENT_ID` names
+one.
+
+**What the run receives.** The access token, over Copilot CLI's own stdio, and
+nothing else: the container mounts nothing at all, not even `/plan`, and no
+variable holds the token or the gateway token. Copilot CLI asks the runner's
+driver for the token when it starts a session (`gitHubToken.getToken`) and
+again when it wants a refresh, and the driver answers with a held token, renewed
+first when Copilot asks or when it has under an hour and five minutes left.
+Every token handed out is masked.
+
+**Which harness.** The `copilot-image` adapter, the only one for this kind: there is
+no installed-CLI adapter. GitHub's Copilot CLI (1.0.95), unmodified, in an
+image your computer builds at first use and nobody publishes (`agentry-copilot:1.0.95`),
+on agentry-dockerimages' `agentry-alpine` base. GitHub signs neither its
+download nor its checksums file, so the policy's pin is the SHA-256 of the
+release's `SHA256SUMS.txt`, and the CLI holds that file to the pin and the
+platform's download to the line the file names, before docker is touched. The
+receipt says so in its own words: `artifact sha256:… (pinned by checksum, not
+signed: GitHub publishes the download's SHA-256 and no signature)`. That is a
+weaker pin than the Codex image's. The runner drives Copilot CLI in its JSON-RPC
+server mode (`--headless --stdio`) with its own client, both modes through one
+driver; the gateway is the session's one MCP server and
+`--available-tools mcp:*` its only tools. The token sits in Copilot CLI's memory
+for the session, so a tool that starts anywhere but the gateway ends the session.
+
+**Outcomes.** A `quota` or `rate_limit` error is the plan's limit, reported once
+with the vendor's words and no reset time. An organization's policy at GitHub
+that refuses the run ends it at exit 11 with reason `org-policy` and a detail:
+`client-disabled` (Copilot CLI is turned off for the account, or the account is
+barred) or `managed-approval` (managed settings require a person to approve
+every tool call, which the driver does not do). GitHub refusing the token says
+to sign in again.
+
+**Removing it.** GitHub's grant revocation needs a client secret that no client
+of Agentry's holds, so `remove copilot` submits the access token and both
+refresh tokens to GitHub's credential revocation. That endpoint answers 202
+before it acts, so the command says the tokens were **submitted**, not revoked,
+and that Agentry's app stays in your authorized apps (`https://github.com/settings/applications`)
+until you remove it there. A token a run was handed earlier lapses by itself
+within its eight hours.
+
+### Connect your account
+
+OpenRouter, Poe and Hugging Face can be paid by a key the vendor makes for
+Agentry in your browser, instead of one you copy. `agentry model-signins add
+openrouter|poe|huggingface`, or the `connect` choice in setup (`--connect`),
+runs it. This is a **key**, not a model sign-in:
+
+| | OpenRouter | Poe | Hugging Face |
+|---|---|---|---|
+| What the vendor makes | an `sk-or-` API key | an API key, with the lifetime you set on Poe's page (or none) | an `inference-api` access token and a refresh token |
+| Host a run reaches | `openrouter.ai:443` | `api.poe.com:443` | `router.huggingface.co:443` |
+| Key variable | `OPENROUTER_API_KEY` | `POE_API_KEY` | `HF_TOKEN` |
+| Disconnect | forgets the key here; it stays valid until you delete it at `openrouter.ai/settings/keys` | forgets the key here; it stays valid until you delete it at `poe.com/api/keys` | forgets the token here; Hugging Face publishes no revocation endpoint, so it is revoked only where a later discovery document names one, else you remove it at `huggingface.co/settings/connected-applications` |
+
+The CLI keeps the key where a pasted key is kept, the keychain entry
+`provider:<provider>`, with the credential kind still `api` and
+`apiKeySource: keyring`; a variable that is set still wins. The store's record
+only marks it connected, names the account, and holds a Poe key's expiry and
+Hugging Face's refresh token. A connect needs the OS keychain: under
+`AGENTRY_NO_KEYRING` it is refused before the browser opens. A key you paste
+for the same provider later replaces the connect and forgets it. At a run's
+start the CLI renews a connected Hugging Face token and refuses a Poe key past
+its expiry; it leaves alone a hosted run, a set variable and a signed-out
+schedule's sealed copy of the key, which is never renewed (agentry-cli#811).
+
+These runs use docker-agent, with the vendor's one host as the allowlist. No
+model list is offered, because the catalogues are huge: you type the model id
+(an OpenRouter id looks like `anthropic/claude-sonnet-4.5`, a Hugging Face one
+may name its provider, `openai/gpt-oss-120b:groq`), and a model without tool
+calling fails. Hugging Face's client is a metadata document the site serves at
+`https://secureagentry.net/oauth/clients/agentry-huggingface.json`; the connect
+checks that it is served before it opens the browser. A vendor's refusal text
+is trimmed and masked, and the key is printed nowhere.
+
+### Outcomes
+
+A run paid by a model sign-in, or any run on a provider that is out of credits,
+can end in four ways that have their own `reason` ([the table](#exit-codes-stage-and-reason)):
+
+| Outcome | Exit | `reason.code` | When |
+|---|---|---|---|
+| plan limit | 16 | `plan-limit` | the plan refused the model's calls for its usage limit: said once in the vendor's words, never retried, never a success even when the harness exits 0. A reset time appears only when the vendor gave one (Claude Code does; the Codex and Copilot adapters do not invent one) |
+| sign-in missing | 11 | `signin-missing` | the run spends a sign-in and was given none it could use, or one of another kind: refused before the daemon, naming the fix, and never on a hosted run |
+| organization policy | 11 | `org-policy` | an organization's or enterprise's policy at the model vendor refused the run; Copilot only so far |
+| out of credits | 16 | `out-of-credits` | the provider answered 402 or said so in words: the account that pays has no credits left; never retried; not specific to a connected key |
+
+A plan limit reuses exit 16 because the exit codes are a contract a driver
+composes on, and the reason is already the closed list it reads. The vendor's own
+words are in the masked error and the receipts, never in the reason.
+
+### Tokens, not dollars
+
+A plan pays, so a run on a sign-in records tokens and no dollars:
+`usage.costUsd` stays 0 whatever the harness reports, and the receipt's
+`model.cost` says tokens, not dollars. `--max-cost` has nothing to measure and
+is refused with a sign-in (exit 2); so is a `budgets.maxCostUsd` above 0 in the
+policy. Bound the run with `--max-turns` and `--timeout`.
+
+### Built-in QuickAgents
+
+The built-ins (the Drafter, AI Review's local half, and the knowledge and voice
+builds) follow the adapter the sign-in names, so on a ChatGPT, Claude or
+Copilot plan they run on the Codex, Claude Code or Copilot CLI image, and are
+handed the sign-in's grant as `agentry run` is (agentry-cli#845). A built-in
+running in a hosted process (`--hosted`, or a run grant or job token in the
+environment) never spends a sign-in.
+
+### What the receipt says
+
+The envelope's `harness.imagePin` names how the harness image is pinned
+(`digest`, or `artifact` for an image built on your computer, with a note
+when the vendor's hash is not a signature) and `harness.credentialKind`
+names the kind that paid, `chatgpt-plan`, `claude-signin` or `copilot-signin`.
+A `model.signIn` line says how the grant reached the run: a file the runner
+rewrites, Claude Code's own directory (written by Claude Code alone and never
+read by the runner), or a callback with no file, variable or mount. The
+receipt never names the account. A session's receipt names the pin and the kind
+as a run's does. Every token handed to a run is masked in every file under
+`receipts/`.
+
+### In the desktop app
+
+The desktop's model setup, in its first-run wizard and in Settings → Model
+provider, offers each provider's ways to pay with a sign-in first: Sign in with
+ChatGPT or an API key, Use your Claude subscription or an API key, Sign in
+with GitHub, and Connect your account or a key for the three connects. Any
+number are kept and one is active; each shows *Signed in as …* or *Connected as
+…* with Remove or Disconnect, and Settings lists everything kept on the
+computer, the CLI's included. Every sign-in runs through the CLI's own
+packages on the store they share, so there is one refresher per machine, and a
+run uses the harness the choice needs, not always docker-agent. Where the Claude
+relay cannot work (its port is in use) the sign-in ends with that reason and
+offers no paste. GitHub's device code is shown, put on the clipboard, and
+GitHub's page opened. For a connect you type the model id. A Claude sign-in
+made only by the installed Claude Code does not count for the desktop, which
+runs the image (D-078).
+
+### Not verified
+
+Everything above is tested against fakes and against the real harnesses'
+images, never against a vendor's service: nothing has been signed in or run with
+a real ChatGPT, Claude, GitHub, OpenRouter, Poe or Hugging Face account. That
+live test is model sign-ins M11 (agentry-cli#744). As of 2026-10-11 these are
+the open questions:
+
+- **ChatGPT.** OpenAI's own answer to the authorize address; plan-usage
+  acceptance, and the words of the limit and eligibility errors; which token
+  route OpenAI's service prefers; whether Codex calls anything at start beyond
+  the model, under the proxy; and whether Codex's own skills listing is also
+  absent in an app-server turn (the script's check drives `codex exec`; the
+  install is measured gone).
+- **Claude.** A real account's sign-in completing in the browser, a run on it,
+  a refresh persisting to the volume, and the limit with a real
+  `rate_limit_event`; the macOS Keychain question for an installed Claude Code;
+  an installed Claude Code's directory under SELinux (the runner does not
+  relabel a directory of yours; the image uses a docker volume); the exec relay
+  on Docker Desktop for macOS and Windows (on a Linux daemon it reached Claude
+  Code with a fake code); `auth login` with no TTY, which only
+  the paste fallback meets; whether `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
+  leaves the in-run refresh alone; and the two built-in plugins Claude Code
+  loads that `--setting-sources ""` does not turn off (they added no tool and no
+  skill in the one live run).
+- **Copilot.** Any real GitHub sign-in; whether Copilot accepts a GitHub App
+  user token that carries no permission, or an OAuth App token of scope
+  `read:user`, which is why `--oauth-app` exists; which Copilot API host each
+  plan uses; the `mcpServerName` Copilot CLI reports on gateway tools, on which
+  the tripwire relies (a release that does not report it fails every run loudly
+  rather than running open); a refresh in the middle of a run; and the words of
+  an organization's policy refusal.
+- **Connect your account.** Poe's acceptance of a `127.0.0.1` redirect on any
+  port; Hugging Face's acceptance of the served client document, whether it
+  issues a refresh token to a metadata-document client, that token's lifetime
+  and the consent wording; the words of a real 402; and a run's egress to each
+  host.
+- **Built-ins and images.** A built-in answering from a real plan (a stand-in
+  record reached Claude Code, which answered "Not logged in"); and the Claude
+  Code and Copilot CLI images on arm64 and on Docker Desktop.
+
+Listing a Copilot plan's models through the harness is not built (agentry-cli#808);
+setup asks the model until it is.
 
 ## The output folder
 
@@ -2271,7 +2756,8 @@ is not recognised.
 Exit codes: `0` ok · `1` other CLI error · `2` usage · `10` verify failed ·
 `11` refused by policy / missing secret · `12` not compilable/runnable ·
 `13` gateway or docker environment · `14` the QuickAgent failed ·
-`15` timeout · `16` budget · `17` output schema · `18` blocked. The
+`15` timeout · `16` budget (a turn or cost limit, your plan's usage limit, or a
+provider out of credits) · `17` output schema · `18` blocked. The
 envelope's `exitClass` names the code (`ok`, `cli`, `usage`, `verify`,
 `policy`, `compile`, `gateway`, `harness`, `timeout`, `budget`,
 `outputSchema`, `blocked`); a client acts on the name, never on the number.
@@ -2313,6 +2799,14 @@ most eight), and for some codes a `detail` word (DR-68):
 | `inputs-not-decoded` | the decode step | none | `image` (the files image could not be made ready: its pull, or the local layer built on it), `run` (its container failed, or its output was refused) |
 | `agent-blocked` | the agent's `end_blocked` | none | — |
 | `runner-blocked` | the runner's evidence | none | `tools-unrecorded`, `inputs-unread`, `report-unwritten` |
+| `signin-missing` | prepare: the run spends a [model sign-in](#model-sign-ins) and was given none it could use (exit 11; never a hosted run) | none | — |
+| `plan-limit` | the agent: your plan refused the model's calls for its usage limit (exit 16; never retried) | none | — |
+| `org-policy` | the agent: an organization's or enterprise's policy at the model vendor refused the run (exit 11; Copilot only so far) | none | `client-disabled`, `managed-approval` |
+| `out-of-credits` | the agent: the model's provider answered 402, or said so: the account that pays has no credits (exit 16; never retried) | none | — |
+
+The four model sign-in codes carry no names; the vendor's own words about a
+plan limit, a policy or a missing credit are in the masked error and the
+receipts, never in the reason ([model sign-ins](#outcomes)).
 
 Other refusals (wildcard egress, the web-tools and review-grant rules, the
 dataAccess files, the adapter, consent, the images steps) carry their class
