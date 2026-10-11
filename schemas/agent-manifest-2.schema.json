@@ -420,7 +420,7 @@
       "properties": {
         "id": { "type": "string", "description": "Answer key; unique within the manifest.", "pattern": "^[a-z0-9_]{1,64}$" },
         "prompt": { "type": "string", "minLength": 1 },
-        "type": { "type": "string", "enum": ["text", "secret", "choice", "file"], "default": "text" },
+        "type": { "type": "string", "enum": ["text", "secret", "choice", "file", "repository", "url"], "default": "text", "description": "The answer's shape. repository and url ask for an input source (V13): fetched before the run into /inputs/<id>/, with an optional access token asked for by the run setup. A source question grants nothing and needs no capabilities entry." },
         "required": { "type": "boolean", "default": false },
         "choices": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
       },
