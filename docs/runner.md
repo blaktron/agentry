@@ -3155,7 +3155,7 @@ page covers authoring and publishing in depth.
 |---|---|
 | `agentry login [--browser \| --paste]` | signs in to a registry: the browser flow hands the CLI a one-time code on a loopback listener and the CLI exchanges it for a scoped token from its own process; `--paste` reads a token from stdin for machines without a browser. Signing in also pins the registry's signing keys (TOFU) |
 | `agentry init [--from PATH]` | scaffolds a workspace, or imports a `SKILL.md` or an MCP registry `server.json` |
-| `agentry validate DIR` | the registry's manifest rules and offline scanners (V1–V13, S1/S3/S4) |
+| `agentry validate DIR` | the registry's manifest rules and offline scanners (V1–V14, S1/S3/S4) |
 | `agentry list` | every install record in `installed.yaml` — the embedded installs and the runner consents — with whether each directory is still present (`--json`) |
 | `agentry info ns/name` / `agentry search` | a QuickAgent's page and capability contract; full-text search with the mode, capability, license and verified-org facets (`--json` on both) |
 | `agentry verify ns/name@version` | digest and DSSE attestation check against the pinned keys — an exit code for CI |
