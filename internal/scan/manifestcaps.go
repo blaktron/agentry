@@ -23,9 +23,10 @@ type manifestCaps struct {
 		Read  json.RawMessage `json:"read"`
 		Write json.RawMessage `json:"write"`
 	} `json:"filesystem"`
-	Exec       json.RawMessage      `json:"exec"`
-	Secrets    []string             `json:"secrets"`
-	MCPServers []manifest.MCPServer `json:"mcpServers"`
+	Exec        json.RawMessage      `json:"exec"`
+	Secrets     []string             `json:"secrets"`
+	MCPServers  []manifest.MCPServer `json:"mcpServers"`
+	TargetHosts []string             `json:"targetHosts"`
 }
 
 // remoteServerHosts are the hosts of the manifest's remote MCP servers
@@ -75,6 +76,12 @@ func declaredCaps(manifestJSON []byte) map[string]bool {
 	}
 	if len(c.Secrets) > 0 {
 		out["env"] = true
+	}
+	// A target host is its own token, never "network": the runner makes
+	// the session, so S6 still reads a script's own ssh as undeclared, and
+	// a policy can name it in requireHumanReview.whenCapabilities.
+	if len(c.TargetHosts) > 0 {
+		out["targetHosts"] = true
 	}
 	return out
 }

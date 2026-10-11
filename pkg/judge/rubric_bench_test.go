@@ -79,7 +79,7 @@ func TestRubricC3Bench(t *testing.T) {
 	}
 	defer func() { _ = f.Close() }()
 	w := csv.NewWriter(f)
-	_ = w.Write([]string{"package", "class", "wording", "c3", "c3_samples", "c3_path", "c3_line", "c1", "c4", "input_tokens", "requests"})
+	_ = w.Write([]string{"package", "class", "wording", "c3", "c3_samples", "c3_path", "c3_line", "c1", "c4", "c2", "c5", "c6", "input_tokens", "requests"})
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -111,6 +111,8 @@ func TestRubricC3Bench(t *testing.T) {
 			c3 := axes[judge.RubricIDUndeclaredCapability]
 			_ = w.Write([]string{name, class, wd.name, fmt.Sprintf("%.2f", c3.Best), fmt.Sprint(c3.Samples), c3.Path, c3.Line,
 				fmt.Sprintf("%.2f", axes[judge.RubricIDInjection].Best), fmt.Sprintf("%.2f", axes[judge.RubricIDDeception].Best),
+				fmt.Sprintf("%.2f", axes[judge.RubricIDExfiltration].Best), fmt.Sprintf("%.2f", axes[judge.RubricIDObfuscation].Best),
+				fmt.Sprintf("%.2f", axes[judge.RubricIDDestructive].Best),
 				fmt.Sprint(usage.InputTokens), fmt.Sprint(usage.Requests)})
 			w.Flush()
 			t.Logf("%-48s %-6s %-6s C3=%.2f %s", name, class, wd.name, c3.Best, c3.Path)
