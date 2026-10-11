@@ -454,6 +454,13 @@ comment is not a finding (see [trust](trust.md), stage S6).
 | `workspace` | the whole task workspace | `read` grants `fs_read` + `fs_list`; `write` grants `fs_write`; the workspace is bind-mounted into the **tools** container `ro`/`rw` accordingly |
 | `{paths: [repo/relative, …]}` | only these paths | per-path bind mounts plus server-side grant checks; a directory entry covers everything under it |
 
+A paths entry the release does not ship is made an empty folder in the
+run's own copy of the workspace before the tools start, so a write grant of
+`out` needs no `out/` in the package. An entry that names a file is made a
+folder too when the file is missing, and a write to that name then fails:
+ship a file you grant by name. An entry inside another write entry shares
+that entry's mount (agentry-cli#855).
+
 The agent container itself never mounts the workspace. File access goes
 through the gateway's tools, which is what makes the contract enforceable.
 
