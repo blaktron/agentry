@@ -1,6 +1,6 @@
 // Package manifest implements the agent.yaml package manifest defined in
 // PLAN §5: strict parsing (closed schema, rule V1), the validation rules
-// V1–V13 (§5.3), the closed capability vocabulary (§5.4), and the canonical
+// V1–V14 (§5.3), the closed capability vocabulary (§5.4), and the canonical
 // JSON form stored as agent_versions.manifest (§4.2).
 //
 // Two schema majors are read. Major 2 (DEV-088) classifies a QuickAgent by
@@ -308,6 +308,11 @@ const (
 	IntakeChoice IntakeType = "choice"
 	// IntakeFile is a host path the runner stages into the inputs folder.
 	IntakeFile IntakeType = "file"
+	// IntakeHost asks for a target host: a machine the person names when
+	// the run starts, as [user@]host[:port], that the runner reaches over
+	// SSH from a container of its own (V14; targethosts.go). Every host
+	// question is listed in capabilities.targetHosts.
+	IntakeHost IntakeType = "host"
 	// IntakeRepository asks for an input source of the repository kind: an
 	// https git URL and an optional ref, fetched before the run into
 	// /inputs/<id>/ (V13; sources.go).
@@ -399,6 +404,13 @@ type Capabilities struct {
 	// agentry-cli#651 and agentry-enterprise#424; until then a run still
 	// requires every declared secret.
 	OptionalSecrets []string `yaml:"optionalSecrets,omitempty" json:"optionalSecrets,omitempty"`
+	// TargetHosts names the intake questions of type host (v2, V14; plan
+	// runtime-hosts.md D2, D17): each is a target host, a machine the
+	// person names when the run starts, that the agent may run commands on
+	// and administer through the runner's host tools. The release never
+	// names the host, its address, user or port; it declares only that it
+	// takes one, so consent, the judge and search can read it.
+	TargetHosts []string `yaml:"targetHosts,omitempty" json:"targetHosts,omitempty"`
 	// DataAccess lists semantic data categories the agent touches.
 	DataAccess []DataAccess `yaml:"dataAccess,omitempty" json:"dataAccess,omitempty"`
 	// MCPServers lists the MCP servers this agent requires at run time

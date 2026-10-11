@@ -52,6 +52,7 @@ var baselineThresholds = map[string]string{
 	"0.4.2": "medium",
 	"0.4.3": "medium",
 	"0.4.4": "medium",
+	"0.4.5": "medium",
 }
 
 var embeddedVersion = sync.OnceValue(func() string {

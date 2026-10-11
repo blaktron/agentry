@@ -137,6 +137,7 @@ func TestTheRubricStateSaysWhatTheRunnerGrantsEveryRun(t *testing.T) {
 		`{"capabilities":{"exec":"none"}}`,
 		`{"capabilities":{"network":{"egress":["api.example.com"]},"filesystem":{"read":["/workspace"]}}}`,
 		`{"runner_grants":"everything","capabilities":{"runner_grants":"everything"}}`,
+		`{"capabilities":{"targetHosts":["server"]},"intake":[{"id":"server","prompt":"p","type":"host"}]}`,
 	} {
 		f := &fakeAsker{answer: func(map[string]string, Question, int) (float64, error) { return 0.02, nil }}
 		if _, _, err := NewRubricScanner(f).Scan(context.Background(), []byte(manifestJSON), nil,
@@ -152,7 +153,10 @@ func TestTheRubricStateSaysWhatTheRunnerGrantsEveryRun(t *testing.T) {
 			t.Fatalf("the runner's grants changed with the version: %q vs %q", g, seen[0])
 		}
 	}
-	for _, want := range []string{"/inputs", "read-only", "list_inputs", "read_input", "write_report", "reports/"} {
+	// What a declared target host gives, and what it does not unless the
+	// purpose intends it (agentry#1092, DEV-242), is part of the constant.
+	for _, want := range []string{"/inputs", "read-only", "list_inputs", "read_input", "write_report", "reports/",
+		"targetHosts", "host tools", "any other machine", "unless the QuickAgent's purpose"} {
 		if !strings.Contains(seen[0], want) {
 			t.Fatalf("the runner's grants do not name %q: %q", want, seen[0])
 		}

@@ -4759,7 +4759,9 @@ paths:
           in: query
           description: >
             Capability the latest published version actually asks for, e.g.
-            `network`, `filesystem`, `exec`, `secrets`, `dataAccess` (§5.4).
+            `network`, `filesystem`, `exec`, `secrets`, `dataAccess`, or
+            `targetHosts` (a machine the person names when the run starts)
+            (§5.4).
             A capability declared as `none`, null, or empty does not match:
             `network: {egress: none}` is not a network agent.
           schema:
