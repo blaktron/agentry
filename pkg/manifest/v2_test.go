@@ -211,6 +211,8 @@ func TestIntakeRules(t *testing.T) {
 		{"choice without choices", []IntakeQuestion{q("a", IntakeChoice)}, "intake[0].choices"},
 		{"choices on text", []IntakeQuestion{q("a", IntakeText, "x")}, "intake[0].choices"},
 		{"choices on secret", []IntakeQuestion{q("a", IntakeSecret, "x")}, "intake[0].choices"},
+		{"choices on repository", []IntakeQuestion{q("a", IntakeRepository, "x")}, "intake[0].choices"},
+		{"choices on url", []IntakeQuestion{q("a", IntakeURL, "x")}, "intake[0].choices"},
 		{"empty choice", []IntakeQuestion{q("a", IntakeChoice, "x", "")}, "intake[0].choices[1]"},
 		{"duplicate choice", []IntakeQuestion{q("a", IntakeChoice, "x", "x")}, "intake[0].choices[1]"},
 		{"unknown type", []IntakeQuestion{q("a", "date")}, "intake[0].type"},
@@ -235,6 +237,7 @@ func TestIntakeRules(t *testing.T) {
 		m.Intake = []IntakeQuestion{
 			q("plain", ""), q("text", IntakeText), q("secret", IntakeSecret),
 			q("file", IntakeFile), q("pick", IntakeChoice, "x", "y"),
+			q("repo", IntakeRepository), q("doc", IntakeURL),
 		}
 		wantClean(t, Validate(m))
 	})
