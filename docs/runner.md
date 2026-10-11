@@ -209,10 +209,10 @@ staged read-only for the agent as `/inputs/intake.json`; a `file` answer
 is copied into the inputs folder like `--file`; a `secret` answer becomes
 a run-scoped secret under its upper-cased id and is never written as
 text or recorded. Non-secret answers appear in the receipts. A
-`repository` answer is an [input source](#input-sources-a-repository),
-fetched before the run into `/inputs/<id>/`; a `url` question is refused
-by this CLI until the url kind lands (agentry-cli#834), and so is any type
-the CLI does not know, rather than taken as text.
+`repository` or `url` answer is an
+[input source](#input-sources-a-repository-or-a-file-at-a-web-address),
+fetched before the run into `/inputs/<id>/`; a type the CLI does not know
+is refused, never taken as text.
 
 ### `agentry schedule`
 
@@ -1209,9 +1209,10 @@ repeat them ([what a run enforces](#what-a-run-enforces)).
 
 Every file and every file in an archive is checked by ClamAV's `clamscan`
 in the same container, before its text is extracted, locally and on
-Agentry (agentry-cli#563). The one exception is an
-[input source](#input-sources-a-repository), where only the executable and
-binary risky files are checked. Its arguments are fixed, potentially unwanted
+Agentry (agentry-cli#563). The one exception is a repository given as an
+[input source](#input-sources-a-repository-or-a-file-at-a-web-address),
+where only the executable and binary risky files are checked; a file at a
+web address is checked as an upload is. Its arguments are fixed, potentially unwanted
 applications are not flagged, and a file past 256 MiB, or an archive's
 contents past that, is not checked and the receipt says so.
 
@@ -1342,17 +1343,17 @@ f04db41f43fc, jev-1.13.0) was asked about the inputs' text; before the
 agent started: 3 text(s), 2 KiB, in 1 call(s) and 1 judge request(s), none
 flagged". It names any file withheld past the cap.
 
-### Input sources: a repository
+### Input sources: a repository or a file at a web address
 
 An **input source** is where a run's inputs come from beyond what you
 upload (plan `input-sources.md` §5; agentry-cli#833). A QuickAgent asks for
 one with an intake question of the source's type, and the run fetches it
 before the agent starts into `/inputs/<question id>/`, where the input
 tools list, search and read it like any input. The kinds sit on one seam
-in the CLI (`pkg/runner/sources`), so a later kind is a new entry with
-nothing else changed. Today there is one: **`repository`**, a git
-repository at one commit. A file at a web address (`url`) is next
-(agentry-cli#834). A hosted run refuses a source until hosted sources land
+in the CLI (`pkg/runner/sources`), so a later kind is a new entry on it.
+There are two: **`repository`**, a git repository at one commit, and
+**`url`**, one file at a web address ([below](#a-file-at-a-web-address-url),
+agentry-cli#834). A hosted run refuses a source until hosted sources land
 (agentry-enterprise#516).
 
 **The answer.** An https address, with the ref after `#` as Docker's
@@ -1452,6 +1453,54 @@ that host alone, where the token came from (never its value), what was left
 out, and the malware check of the source's files. A source that could not
 be fetched fails with exit 1, the reason `input-refused` and the detail
 `source-fetch`, in the host's words.
+
+#### A file at a web address (`url`)
+
+A `url` intake question takes one file's https address (agentry-cli#834):
+
+```bash
+agentry run you/paper-review --intake paper=https://arxiv.org/pdf/1706.03762
+```
+
+The address is held to the repository's rules (https, a plain host, no
+credentials, no port but 443); a query is kept, since a download address
+often needs one, and a fragment (`#page=2`), which is never sent to a host,
+is dropped. The access token is taken in the same order as a repository's
+(`--intake-token`, the key saved for the host, a prompt) and is sent to that
+host alone as a bearer token (`Authorization: Bearer …`).
+
+**The fetch** is the same step behind the same proxy (the host on 443 at
+public addresses alone, the token on stdin): one https GET, asking for the
+file as the host keeps it (`Accept-Encoding: identity`), with a redirect
+followed only on the same host over https, at most five. The body is saved
+as one file under `/inputs/<id>/`, named from the host's
+`Content-Disposition` or else the address's last path segment, rewritten
+to a name every file system takes: its
+last segment only, a control character, a mark that reorders or hides text
+or one of Windows' reserved characters (`:*?"<>|`) as `_`, no trailing dot
+or space, a device name (`CON`, `COM1`) prefixed with `_`, at most 200
+bytes with its extension kept, and `download` when nothing usable is left.
+The host then holds the step to exactly that one file.
+
+**The cap** is the uploads': one file within 256 MiB, the most of one
+document the runner reads back from a decode. A larger body is refused
+before anything is staged, by its declared length or as it streams, with
+exit 11, the reason `input-refused` and the detail `source-cap`.
+
+**The decode** treats it as an upload, not by the repository's rules: every
+file goes to ClamAV and Hybrid Analysis, an image is read with OCR, and an
+archive is unpacked under the same rules as an uploaded one, its members
+counted against the uploads' 2,000. A finding refuses the run.
+
+**What the agent and the receipt see.** `intake.json` gives the source as
+`{"<id>": {"url": {"url", "path", "file", "files", "bytes"}}}`, where `file`
+is the saved file's path, and the System Prompt's inputs section says where
+it is. The receipt's `source.<id>` line gives the address, the file's name
+and size, how long the fetch took, that it went through a proxy to that host
+alone, where the token came from (never its value), and the malware check of
+its files. A query can carry a signed download's credential, so
+`intake.json`, the receipt and errors show it as `?…`; it is passed whole
+only to the fetch step, as its argument.
 
 ## The scratch folder and PDF reports
 
