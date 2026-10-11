@@ -257,6 +257,7 @@ func Validate(m *Manifest) []error {
 	validatePublish(&s, m.Publish)
 	validateIntake(&s, m)
 	validateSources(&s, m)
+	validateTargetHosts(&s, m)
 	validateInteractive(&s, m)
 	validateGuide(&s, m)
 	validateKnowledge(&s, m)
@@ -432,7 +433,7 @@ var intakeIDRE = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
 // intakeTypes is the closed set of intake types, the input source kinds
 // last (sources.go), and intakeTypeList names it for an error.
 var (
-	intakeTypes    = append([]IntakeType{IntakeText, IntakeSecret, IntakeChoice, IntakeFile}, sourceTypes...)
+	intakeTypes    = append([]IntakeType{IntakeText, IntakeSecret, IntakeChoice, IntakeFile, IntakeHost}, sourceTypes...)
 	intakeTypeList = func() string {
 		names := make([]string, len(intakeTypes))
 		for i, t := range intakeTypes {

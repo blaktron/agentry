@@ -133,7 +133,36 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 	}
 	in.Files = inv
 	findings = append(findings, s1Frontmatter(in)...)
+	findings = append(findings, s1ExecRemoteClient(in)...)
 	return StageResult{Scanner: "S1", Findings: findings}
+}
+
+// scannerExecRemoteClient is S1's hint for an exec declaration that names
+// an SSH client (plan runtime-hosts.md §7, D10; agentry#1092).
+const scannerExecRemoteClient = "S1/exec-remote-client"
+
+// s1ExecRemoteClient reports, low, the commands of the manifest's exec
+// declaration that make a remote session themselves (ssh, scp, sftp,
+// rsync; pkg/manifest RemoteShellCommands, V14's hint). A release that
+// works a machine the person names declares a target host instead, so the
+// runner makes the session. It is a pointer for the author and the
+// reviewer, not a hold: low publishes.
+func s1ExecRemoteClient(in *Input) []Finding {
+	var m manifest.Manifest
+	if json.Unmarshal(in.ManifestJSON, &m) != nil {
+		return nil // the registry stored a validated manifest; a hint needs no error of its own
+	}
+	cmds := manifest.RemoteShellCommands(m.Capabilities)
+	if len(cmds) == 0 {
+		return nil
+	}
+	return []Finding{{
+		Scanner: scannerExecRemoteClient, Severity: SevLow, Confidence: ConfHigh,
+		Title:    "exec declares an SSH client (" + strings.Join(cmds, ", ") + "): declare a target host (capabilities.targetHosts) so the runner makes the session",
+		FilePath: "agent.yaml",
+		Detail:   map[string]any{"commands": cmds, "declaredTargetHosts": m.Capabilities.TargetHosts},
+		Taxonomy: []string{"ASI04"},
+	}}
 }
 
 // inventoryDir builds a text-file inventory for a directory without emitting

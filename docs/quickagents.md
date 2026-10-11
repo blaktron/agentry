@@ -158,7 +158,7 @@ agent at `/inputs/intake.json`.
 intake:
   - id: dataset            # [a-z0-9_]+, unique
     prompt: "Path to the dataset to analyse"
-    type: file             # text (default) | secret | choice | file | repository | url
+    type: file             # text (default) | secret | choice | file | host | repository | url
     required: true
   - id: region
     prompt: "Which region?"
@@ -170,7 +170,7 @@ intake:
 |---|---|
 | `id` | `[a-z0-9_]{1,64}`, unique within the manifest |
 | `prompt` | required |
-| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or the run refuses it; and `required` must agree with that secret: `true` for a required secret, absent or `false` for one under `capabilities.optionalSecrets`, or publishing refuses it, V10), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder), `repository` and `url` (an input source, below) |
+| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or the run refuses it; and `required` must agree with that secret: `true` for a required secret, absent or `false` for one under `capabilities.optionalSecrets`, or publishing refuses it, V10), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder), `host` (a target host, below), `repository` and `url` (an input source, below) |
 | `choices` | only with `type: choice` |
 | at most 20 questions | |
 
@@ -228,6 +228,60 @@ unknown intake type. Publish a source question once your runners support it.
   failing, that the release does not say it takes code (V13).
 - `choices` are refused on a source question, as on every type but
   `choice` (V10).
+
+#### Target hosts: `host`
+
+A **target host** is a machine the person names when a run starts, such as
+a Linux server for the QuickAgent to set up or manage. The release says
+that it takes one, never which one, so one QuickAgent serves every server
+its users have. It is declared in two places that name each other: an
+intake question of type `host`, and its id under
+[`capabilities.targetHosts`](#capabilities-the-security-contract).
+
+```yaml
+intake:
+  - id: server
+    prompt: "The server to set up"
+    type: host             # the person answers [user@]host[:port]
+    required: true
+capabilities:
+  targetHosts: [server]
+```
+
+- **The answer belongs to the run.** The person writes `[user@]host[:port]`
+  (an IPv6 address in brackets) when the run starts, and gives its
+  credential then. The user defaults to theirs and the port to 22. The
+  manifest never carries an address, a user, a port or a credential.
+- **The runner makes the connection, not the agent.** A runner that
+  supports target hosts opens the SSH session from a container of its own,
+  and the agent works the machine through the runner's host tools, a
+  command at a time or in a shell. The design is in the plan for target
+  hosts (agentry-cli#865). Target hosts are for local runs: the plan has a
+  hosted run refuse a release that declares one, from the runner release
+  that adds the host link (agentry-cli#861).
+- **A target host is part of the contract.** Unlike a source, it lets the
+  agent act on the machine: run any command the account can run there. So
+  the install consent shows it, a new version that adds one asks for
+  consent again, the registry's AI Review reads it as a declared
+  capability, and `GET /search?capability=targetHosts` finds such releases.
+  It is not network egress. A support script the release ships that runs
+  `ssh` itself is still the release reaching a host on its own, and the
+  scan reports it as it did before (stage S6).
+- **The rules (V14).** Every `host` question is listed in
+  `capabilities.targetHosts`, and every entry there names a `host`
+  question, once. A release declares at most four. `choices` are refused
+  on a `host` question, as on every type but `choice` (V10). An `exec`
+  declaration that names `ssh`, `scp`, `sftp` or `rsync` is warned, without
+  failing, toward `targetHosts`, and the scan reports it low (S1).
+
+**What the manifest says today, and what waits on the runner.** The core
+accepts the type and the line and checks them as above. The runner's host
+link and host tools ship in CLI releases of their own (agentry-cli#861 and
+agentry-cli#862), and [the runner's documentation](runner.md) describes
+them once they do. Until then no runner reaches a target host, and a CLI or
+desktop older than the core release that added the type refuses a manifest
+carrying it as an unknown intake type. Publish a target host once your
+runners support it.
 
 ### `interactive`: session hints
 
@@ -511,6 +565,13 @@ agentry-cli v0.6.66 or later to run. The Builder on the site and in the
 desktop marks each secret Optional or Required, and the Drafter behind
 Describe it marks each secret it declares, from its 1.10.0 (agentry-cli
 v0.6.75).
+
+**`targetHosts`** (v2): the ids of the release's `host` intake questions,
+at most four. Each is a machine the person names when the run starts,
+which the agent may run any command on, as the account the person signs
+in with, through the runner's host tools ([Target hosts](#target-hosts-host)).
+It names no host: the answer does. Adding one is a widening, so an upgrade
+that adds one asks for consent again.
 
 **`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.

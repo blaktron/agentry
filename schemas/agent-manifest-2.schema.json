@@ -227,6 +227,13 @@
           "uniqueItems": true,
           "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
         },
+        "targetHosts": {
+          "type": "array",
+          "description": "The intake questions of type host (V14): each is a target host, a machine the person names when the run starts, that the agent may run commands on and administer through the runner's host tools. Names only; the release never names the host, its address, user or port.",
+          "uniqueItems": true,
+          "maxItems": 4,
+          "items": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" }
+        },
         "dataAccess": {
           "type": "array",
           "items": {
@@ -420,7 +427,7 @@
       "properties": {
         "id": { "type": "string", "description": "Answer key; unique within the manifest.", "pattern": "^[a-z0-9_]{1,64}$" },
         "prompt": { "type": "string", "minLength": 1 },
-        "type": { "type": "string", "enum": ["text", "secret", "choice", "file", "repository", "url"], "default": "text", "description": "The answer's shape. repository and url ask for an input source (V13): fetched before the run into /inputs/<id>/, with an optional access token asked for by the run setup. A source question grants nothing and needs no capabilities entry." },
+        "type": { "type": "string", "enum": ["text", "secret", "choice", "file", "host", "repository", "url"], "default": "text", "description": "The answer's shape. host asks for a target host, [user@]host[:port], that the runner reaches over SSH; its id is listed in capabilities.targetHosts (V14). repository and url ask for an input source (V13): fetched before the run into /inputs/<id>/, with an optional access token asked for by the run setup. A source question grants nothing and needs no capabilities entry." },
         "required": { "type": "boolean", "default": false },
         "choices": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
       },
