@@ -91,6 +91,13 @@ func (m *Manifest) TakesKinds() []InputKind {
 	return slices.Clone(m.Inputs.Kinds)
 }
 
+// TakesKind reports whether the release takes files of kind k: it
+// declares k or any, or declares no kinds at all.
+func (m *Manifest) TakesKind(k InputKind) bool {
+	kinds := m.TakesKinds()
+	return slices.Contains(kinds, k) || slices.Contains(kinds, InputKindAny)
+}
+
 // DefaultInputView returns the view the agent reads an input in by
 // default: the declared view, or InputViewBoth (each file's own default)
 // when the release declares none.

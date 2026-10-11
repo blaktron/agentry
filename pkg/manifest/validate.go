@@ -256,6 +256,7 @@ func Validate(m *Manifest) []error {
 	validateDependencies(&s, m.Dependencies)
 	validatePublish(&s, m.Publish)
 	validateIntake(&s, m)
+	validateSources(&s, m)
 	validateInteractive(&s, m)
 	validateGuide(&s, m)
 	validateKnowledge(&s, m)
@@ -428,6 +429,19 @@ const MaxOpeningChars = 500
 
 var intakeIDRE = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
 
+// intakeTypes is the closed set of intake types, the input source kinds
+// last (sources.go), and intakeTypeList names it for an error.
+var (
+	intakeTypes    = append([]IntakeType{IntakeText, IntakeSecret, IntakeChoice, IntakeFile}, sourceTypes...)
+	intakeTypeList = func() string {
+		names := make([]string, len(intakeTypes))
+		for i, t := range intakeTypes {
+			names[i] = string(t)
+		}
+		return strings.Join(names, " | ")
+	}()
+)
+
 // validateIntake is V10's intake half (plan §3.5): ids unique and
 // answer-key shaped, prompts present, types from the closed set, choices
 // exactly where the type wants them.
@@ -453,12 +467,8 @@ func validateIntake(s *issues, m *Manifest) {
 		if strings.TrimSpace(q.Prompt) == "" {
 			s.errf("V10", p+".prompt", "prompt is required")
 		}
-		switch q.Type {
-		case "", IntakeText, IntakeSecret, IntakeFile:
-			if len(q.Choices) > 0 {
-				s.errf("V10", p+".choices", "choices are only valid for type choice")
-			}
-		case IntakeChoice:
+		switch {
+		case q.Type == IntakeChoice:
 			if len(q.Choices) == 0 {
 				s.errf("V10", p+".choices", "type choice requires at least one choice")
 			}
@@ -472,8 +482,12 @@ func validateIntake(s *issues, m *Manifest) {
 				}
 				dup[c] = true
 			}
+		case q.Type == "" || slices.Contains(intakeTypes, q.Type):
+			if len(q.Choices) > 0 {
+				s.errf("V10", p+".choices", "choices are only valid for type choice")
+			}
 		default:
-			s.errf("V10", p+".type", "unknown intake type %q (text | secret | choice | file)", q.Type)
+			s.errf("V10", p+".type", "unknown intake type %q (%s)", q.Type, intakeTypeList)
 		}
 	}
 }
