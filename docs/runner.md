@@ -1474,7 +1474,8 @@ public addresses alone, the token on stdin): one https GET, asking for the
 file as the host keeps it (`Accept-Encoding: identity`), with a redirect
 followed only on the same host over https, at most five. The body is saved
 as one file under `/inputs/<id>/`, named from the host's
-`Content-Disposition` or else the address's last path segment, made safe: its
+`Content-Disposition` or else the address's last path segment, rewritten
+to a name every file system takes: its
 last segment only, a control character, a mark that reorders or hides text
 or one of Windows' reserved characters (`:*?"<>|`) as `_`, no trailing dot
 or space, a device name (`CON`, `COM1`) prefixed with `_`, at most 200
