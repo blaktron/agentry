@@ -247,8 +247,8 @@ system's scheduler (a systemd user timer, a LaunchAgent, a Task Scheduler
 task) that runs `agentry schedule fire <id>`; no file and no entry holds a
 credential. On Linux with Docker Engine, `--signed-out` also runs a
 schedule while you are signed out, its keys sealed in an encrypted systemd
-credential (`check-signed-out` says whether this machine can, `reseal`
-seals them again). [Scheduled runs](agentry/scheduling.md) is the guide,
+credential (`check-signed-out` says whether this machine can, and whether
+your model setup's key would be refused then; `reseal` seals them again). [Scheduled runs](agentry/scheduling.md) is the guide,
 with the desktop app and schedules In Agentry; the CLI's
 [README](https://github.com/blaktron/agentry-cli#runs-for-later-and-on-repeat-schedule)
 has every flag.
@@ -2598,8 +2598,15 @@ Hugging Face's refresh token. A connect needs the OS keychain: under
 `AGENTRY_NO_KEYRING` it is refused before the browser opens. A key you paste
 for the same provider later replaces the connect and forgets it. At a run's
 start the CLI renews a connected Hugging Face token and refuses a Poe key past
-its expiry; it leaves alone a hosted run, a set variable and a signed-out
-schedule's sealed copy of the key, which is never renewed (agentry-cli#811).
+its expiry; it leaves alone a hosted run and a set variable. A schedule that
+runs while you are signed out reads a sealed copy of the key, which nothing
+renews, and the refresh token stays in the keychain, locked then. So a
+signed-out run on a connected Hugging Face token is refused before anything
+starts, naming the fix (run it while signed in, or paste a Hugging Face token
+that does not expire), and a Poe key past its expiry is refused as above.
+`schedule add` and `edit --signed-out` refuse both up front, a re-seal will not
+seal them, and a connect or disconnect seals every signed-out schedule's keys
+again (CLI v0.6.103, agentry-cli#811).
 
 These runs use docker-agent, with the vendor's one host as the allowlist. No
 model list is offered, because the catalogues are huge: you type the model id
