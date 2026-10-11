@@ -15,6 +15,12 @@ var pathHandles = map[string]bool{
 	// The site's runs, invitations and pricing pages (plan web-dashboard-shell
 	// §4, agentry#448): served before they were reserved.
 	"runs": true, "invitations": true, "pricing": true,
+	// The site's About us page (agentry#1083, plan web-landing-page.md M0), its
+	// account-deleted page (agentry-web#297), its Scheduled pages
+	// (agentry-web#1346) and its OAuth client metadata documents
+	// (agentry-web#1331), the last three agentry#506: each served before it
+	// was reserved, none held by any account on dev or production when added.
+	"aboutus": true, "account-deleted": true, "scheduled": true, "oauth": true,
 }
 
 // firstPartyHandles are the product's own names, reserved so that nobody
