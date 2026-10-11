@@ -201,8 +201,9 @@ intake:
 **What the manifest says today, and what waits on the runner.** The core
 accepts both types and checks them as below. The runner's fetch for each
 kind ships in a CLI release of its own (agentry-cli#833 for `repository`,
-#834 for `url`), and [the runner's documentation](runner.md) describes the
-clone, the download, their caps and the token's path once it does. Until
+agentry-cli#834 for `url`), and [the runner's documentation](runner.md)
+describes the clone, the download, their caps and the token's path once it
+does. Until
 then no runner fetches a source, and a CLI or desktop older than the core
 release that added the two types refuses a manifest carrying either as an
 unknown intake type. Publish a source question once your runners support it.
