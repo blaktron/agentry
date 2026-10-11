@@ -82,6 +82,16 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 		d.Narrowed = append(d.Narrowed, "no longer asks for secret: "+s)
 	}
 
+	// Target hosts (plan runtime-hosts.md §8): one more is one more machine
+	// the agent may run any command on, so it asks again.
+	added, removed = diffSets(old.TargetHosts, next.TargetHosts)
+	for _, h := range added {
+		d.Widened = append(d.Widened, "asks for a target host when it runs, and can run any command on it: "+h)
+	}
+	for _, h := range removed {
+		d.Narrowed = append(d.Narrowed, "no longer asks for a target host: "+h)
+	}
+
 	added, removed = diffSets(dataAccessNames(old.DataAccess), dataAccessNames(next.DataAccess))
 	for _, s := range added {
 		d.Widened = append(d.Widened, "adds data access: "+s)

@@ -22,8 +22,8 @@ func loadShippedBundle(t *testing.T) *Bundle {
 
 func TestBundleLoads(t *testing.T) {
 	b := loadShippedBundle(t)
-	if b.Version() != "0.4.4" {
-		t.Errorf("version = %q, want 0.4.4", b.Version())
+	if b.Version() != "0.4.5" {
+		t.Errorf("version = %q, want 0.4.5", b.Version())
 	}
 	if len(b.Rules()) == 0 {
 		t.Fatal("bundle has no rules")

@@ -471,6 +471,37 @@ func TestSearchFacets(t *testing.T) {
 	if len(caps.Results) != 0 {
 		t.Fatalf("capability=network matched an agent that declares none: %+v", caps.Results)
 	}
+
+	// capability=targetHosts matches only a release that declares a target
+	// host (plan runtime-hosts.md §7; agentry#1092), and a target host is
+	// not network egress.
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "facethost", "modes": []string{"autonomous"}, "visibility": "public",
+		"summary": q,
+	}, nil, http.StatusCreated)
+	files := skillFiles(owner, "facethost", "1.0.0", nil)
+	files["agent.yaml"] += `intake:
+  - id: server
+    prompt: "The server to set up"
+    type: host
+    required: true
+capabilities:
+  targetHosts: [server]
+`
+	status, body = env.uploadVersionCLI(owner, "facethost", pat, files)
+	if status != http.StatusAccepted {
+		t.Fatalf("publish a target host release: %d %s", status, body)
+	}
+	env.waitStatus(owner, "facethost", "1.0.0", "published")
+	var hosts results
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&capability=targetHosts", nil, &hosts, http.StatusOK)
+	if len(hosts.Results) != 1 || hosts.Results[0].Name != "facethost" {
+		t.Fatalf("capability=targetHosts = %+v; want facethost alone", hosts.Results)
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&capability=network", nil, &caps, http.StatusOK)
+	if len(caps.Results) != 0 {
+		t.Fatalf("capability=network matched a target host release: %+v", caps.Results)
+	}
 }
 
 func TestRateLimitHeadersOnEveryResponse(t *testing.T) {
