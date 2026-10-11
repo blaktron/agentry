@@ -540,13 +540,14 @@ func TestS5ReadsEveryTextFile(t *testing.T) {
 // (agentry#731, DEV-113's addendum), and when C3 began to ask what the text
 // instructs rather than what it describes (agentry#893, DEV-221), and when
 // the state began to carry the release's purpose and C3 to hold only a
-// dangerous, undeclared capability out of line with it (agentry#1044). A change to anything
+// dangerous, undeclared capability out of line with it (agentry#1044), and
+// when the grants learnt what a declared target host gives (agentry#1092). A change to anything
 // that moves a verdict shows here as a changed pin.
 func TestTypeSafeRubricHashPerShape(t *testing.T) {
 	want := map[int]string{
-		1: "sha256:728496fa6d54ae1a3f244606631adda962c2a8a5bc248e454e73bc213aec7607",
-		2: "sha256:644ce46c2d1afd49bad0713e09ca754240ba0af5fbb26c29534b31dab8a82163",
-		6: "sha256:e3d1fd5195aadceb50ecc51f28ba6c6eda92bf716d1a3e0cd554c1b9dfa6997a",
+		1: "sha256:82844f1983ce676ce036eb057e6e72bfe5e0d1ac539991cb51be86d89792bdeb",
+		2: "sha256:bb09425ff0f72a14c4fd4b2c6b8500400c08a75e83cc8a6f0365774b139f1814",
+		6: "sha256:64cbc93e5da9d00f97729ed12c1ce54f9b0ed2320a752681418c93697a8b676c",
 	}
 	for _, batch := range []int{1, 2, 6} {
 		j := NewTypeSafeJudge(JudgeConfig{Provider: "typesafe", APIKey: "k"})
