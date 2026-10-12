@@ -40,6 +40,15 @@ scan report. The report says where each finding is (the file, the line,
 the chunk) and never quotes the words there. The owner holds the tree and
 can read the line themselves.
 
+A pack is not stored in the clear on its way to a hosted run either. When
+a run attaches a pack, or a hosted build is given one, the registry opens
+the tree at the hand-off and stages it for the sandbox host sealed again,
+under a fresh key that only the job carries. The host opens it as it streams
+it into the job's own directory, and both copies are deleted with the job
+([a run's data at rest](hosted-runs.md#a-runs-data-at-rest); DEV-245).
+While the run uses the pack, the tree is in the clear on that host, as a
+run's own files are.
+
 ## The key wrapper
 
 The client makes a random 32-byte data key for each pack and seals the
