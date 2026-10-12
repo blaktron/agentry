@@ -1369,7 +1369,7 @@ tools list, search and read it like any input. The kinds sit on one seam
 in the CLI (`pkg/runner/sources`), so a later kind is a new entry on it.
 There are two: **`repository`**, a git repository at one commit, and
 **`url`**, one file at a web address ([below](#a-file-at-a-web-address-url),
-agentry-cli#834). A hosted run refuses a source until hosted sources land
+agentry-cli#834). A run in Agentry fetches them too, on its sandbox host
 (agentry-enterprise#516).
 
 **The answer.** An https address, with the ref after `#` as Docker's
