@@ -2099,11 +2099,14 @@ A release that declares a secret is then refused for a hosted run
 
 | Item | What |
 |---|---|
-| Transit | mounted at `transit/`, with one key, `hosted-vault`, of type `aes256-gcm96` and **derived**, so that each secret, encrypted with `user:<account id>` as the context, is under a key of its account's own |
-| policy `encrypt` | `update` on `transit/encrypt/hosted-vault` and nothing else: the api's |
+| Transit | mounted at `transit/`, with four keys, each of type `aes256-gcm96` and **derived**, so that what is encrypted with an owner as the context (`user:<account id>`, or `org:<organization id>` for `hosted-keys`) is under a key of that owner's own: `hosted-vault` for the secrets; `hosted-connections` for the vault's OAuth connections; `hosted-runs` for the data keys of a hosted run's own data at rest; `hosted-keys` for each account's and organization's private key from the runs CA's `users` intermediate, which opens their knowledge packs, Writing Voice and run outputs |
+| policy `encrypt` | `update` on `transit/encrypt/hosted-vault` and `transit/encrypt/hosted-connections`, nothing else: the api's |
 | policy `decrypt` | `update` on `transit/decrypt/hosted-vault` and nothing else: the worker's |
+| policy `connections` | `update` on encrypt and decrypt under `hosted-connections`: the worker's |
+| policy `runs` | `update` on encrypt and decrypt under `hosted-runs`: both roles' |
+| policy `keys` | `update` on encrypt and decrypt under `hosted-keys`: both roles' |
 | an operator's policy | rotate the key, read its versions, rewrap, and set the version floors, never `exportable` or plaintext backup, which cannot be turned off once set. It never decrypts |
-| two login roles | one bound to `encrypt` and one to `decrypt`, each **without the default policy**, so their tokens cannot renew themselves. The server logs in again at three quarters of the lease and once more on a `403` |
+| two login roles | the api's bound to `encrypt`, `runs` and `keys`, the worker's to `decrypt`, `connections`, `runs` and `keys`, each **without the default policy**, so their tokens cannot renew themselves. The server logs in again at three quarters of the lease and once more on a `403` |
 
 The roles log in by AppRole (`AGENTRY_VAULT_AUTH=approle`) or by the pod's
 ServiceAccount token (`kubernetes`). On Kubernetes, bind the encrypt role to
@@ -2135,9 +2138,19 @@ does not serve correctly shows only at first use: a set is
 | `AGENTRY_VAULT_KUBERNETES_TOKEN_FILE` | the ServiceAccount token, read at every login; the pod's own by default |
 | `AGENTRY_VAULT_TLS_SERVER_NAME` | the name OpenBao's certificate is checked for |
 
-Give the api the encrypt role alone and the worker the decrypt role alone.
-The api then writes rows it cannot read, and the worker opens them only at
-a run's hand-off.
+Give the api the encrypt role and the worker the decrypt role, each with the
+policies above and nothing more. The api then writes secrets it cannot read,
+and the worker opens them only at a run's hand-off. Run data (`hosted-runs`)
+and account keys (`hosted-keys`) are the exceptions: both roles encrypt and
+decrypt under them, because both serve the owner's own reads, and the code's
+owner checks are the guard there.
+
+**Without the vault**, an enterprise build with the runs CA configured
+still issues each holder's encryption key, and seals it under the runs CA's
+master key (`AGENTRY_RUNS_CA_MASTER_KEY`). The master key and the database
+together then open the key that opens every holder's packs, voice and run
+outputs. With the vault configured, new keys are sealed by `hosted-keys`,
+and a seal pass moves the older ones within minutes.
 
 ### Its seal, its storage and its audit
 
