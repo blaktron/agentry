@@ -5,8 +5,9 @@ command, flag, policy key, MCP profiles, and enforcement mechanism — is
 the [Runner reference](runner.md).*
 
 A **QuickAgent** is a single-purpose AI agent packaged for Agentry:
-one manifest declaring what it is and what it may touch, plus the instruction
-content itself. Nothing else. QuickAgents carry **no tool code**. At run
+one manifest declaring what it is and what it may touch, the instruction
+itself, and any support files the manifest lists. QuickAgents carry **no
+tool code**. At run
 time the Agentry runner serves exactly the tools the manifest declares
 through an isolated MCP gateway, and when a QuickAgent is installed into an
 existing coding agent, the host's built-in tools stand in under the same
@@ -15,7 +16,9 @@ declared contract.
 Start from the **[QuickAgent template](https://github.com/blaktron/agentry-template)**
 (`github.com/blaktron/agentry-template`), a runnable package with every
 option below shown in a commented `agent.yaml`. Or scaffold one with
-`agentry init`.
+`agentry init`, have the built-in Drafter write one with `agentry draft
+"<what it should do>"` ([the runner reference](runner.md#agentry-draft-description)),
+or use the [Builder](agentry/builder.md) on the site or in the desktop app.
 
 `agentry init --from PATH` imports an existing source instead of
 scaffolding. From an Agent Skills `SKILL.md` it maps the frontmatter name,
@@ -34,9 +37,13 @@ prints the hints.
 agentry setup                                        # one-time: LLM provider + the docker MCP gateway
 agentry validate .                                   # the manifest rules and the offline scanners (S1/S3/S4)
 agentry run --local . --dry-run --allow-unsigned     # the compiled enforcement plan
-echo "task" | agentry run --local . --allow-unsigned --out ./agentry-out
+echo "task" | agentry run --local . --allow-unsigned --out ./agentry-out --file notes.pdf
+agentry review .                                     # the built-in Examiner, before you submit
 agentry publish                                      # scanned, signed, immutable
 ```
+
+A first `agentry publish` needs the QuickAgent's record, which the CLI does
+not create: make it at `/new` on the site first ([Publishing](#publishing)).
 
 ## Machine setup (`agentry setup`)
 
@@ -53,7 +60,15 @@ never stored; only the environment variable *name* that will hold it.
 | `anthropic` | claude-sonnet-4-5 | `ANTHROPIC_API_KEY` | api.anthropic.com:443 |
 | `openai` | gpt-5.2 | `OPENAI_API_KEY` | api.openai.com:443 |
 | `google` | gemini-3-pro | `GEMINI_API_KEY` | generativelanguage.googleapis.com:443 |
+| `openrouter`, `poe`, `huggingface` | none: you type the model id | `OPENROUTER_API_KEY`, `POE_API_KEY`, `HF_TOKEN` | openrouter.ai, api.poe.com, router.huggingface.co :443 |
+| `copilot` | asked | none: your Copilot plan, signed in with GitHub | the Copilot API host of your plan |
 | `custom` | asked | asked | derived from `--base-url` |
+
+Instead of a key, a local run can be paid by your own ChatGPT, Claude or
+Copilot plan, or by an account you connect at OpenRouter, Poe or Hugging
+Face, signed in through your browser. These are
+[model sign-ins](runner.md#model-sign-ins); setup asks which way to pay
+where there is a choice.
 
 For an **OpenAI-compatible endpoint** (a gateway, a hosted open-weight
 model, a vendor's compatible mode) use `--provider openai --base-url
@@ -98,8 +113,12 @@ my-quickagent/
 ├── AGENT.md                    # the instruction file (entrypoints.instruction)
 ├── README.md                   # rendered on the registry page; required for public publication
 ├── LICENSE                     # required for public publication
-└── output.schema.json          # optional: structured-output contract
+├── output.schema.json          # optional: structured-output contract
+└── knowledge/<name>/           # optional: a knowledge pack the release ships
 ```
+
+Support files (scripts, templates, examples) ship too when
+`publish.include` lists them; the archive holds nothing else.
 
 ## The manifest, option by option
 
@@ -198,15 +217,13 @@ intake:
 | `repository` | an https git URL and an optional ref (a branch, a tag or a commit) | the repository's files at that ref under `/inputs/<id>/` |
 | `url` | one https URL | the file at that address under `/inputs/<id>/` |
 
-**What the manifest says today, and what waits on the runner.** The core
-accepts both types and checks them as below. The runner's fetch for each
-kind ships in a CLI release of its own (agentry-cli#833 for `repository`,
-agentry-cli#834 for `url`), and [the runner's documentation](runner.md)
-describes the clone, the download, their caps and the token's path once it
-does. Until
-then no runner fetches a source, and a CLI or desktop older than the core
-release that added the two types refuses a manifest carrying either as an
-unknown intake type. Publish a source question once your runners support it.
+**Which runners fetch them.** The CLI fetches a `repository` answer since
+v0.6.97 (agentry-cli#833) and a `url` answer since v0.6.98
+(agentry-cli#834); [the runner reference](runner.md#input-sources-a-repository-or-a-file-at-a-web-address)
+describes the clone, the download, their caps and the token's path. A run
+in Agentry fetches them too, on its sandbox host (agentry-enterprise#516).
+A CLI or desktop older than the core release that added the two types
+refuses a manifest carrying either as an unknown intake type.
 
 - **The id names the folder.** A runner that supports sources fetches the
   answer before the run starts into `/inputs/<id>/`, where the input tools
@@ -274,14 +291,13 @@ capabilities:
   declaration that names `ssh`, `scp`, `sftp` or `rsync` is warned, without
   failing, toward `targetHosts`, and the scan reports it low (S1).
 
-**What the manifest says today, and what waits on the runner.** The core
-accepts the type and the line and checks them as above. The runner's host
-link and host tools ship in CLI releases of their own (agentry-cli#861 and
-agentry-cli#862), and [the runner's documentation](runner.md) describes
-them once they do. Until then no runner reaches a target host, and a CLI or
-desktop older than the core release that added the type refuses a manifest
-carrying it as an unknown intake type. Publish a target host once your
-runners support it.
+**Which runners reach them.** The CLI reaches a target host since v0.6.105
+(agentry-cli#861): the host link and its tools (`host_run`, `host_read`,
+`host_write`, `host_put`, `host_get`) are in
+[the runner reference](runner.md#target-hosts-a-server-named-at-run-time).
+An interactive shell on the host is agentry-cli#862. A run in Agentry
+refuses a target host. A CLI or desktop older than the core release that
+added the type refuses a manifest carrying it as an unknown intake type.
 
 ### `interactive`: session hints
 
@@ -342,11 +358,10 @@ tools are current.
 A release may carry its own reference set: one or more
 [knowledge packs](knowledge.md) made with the Knowledge Creator
 (`agentry knowledge create`), each in the archive under
-`knowledge/<name>/` exactly as the CLI keeps it — `manifest.json`, `wiki/`
-with its `index.md` and `log.md`, and `sources/`. The runner is to mount
-each read-only at `/knowledge/<name>`, searched with the three knowledge
-tools (agentry-cli#320; until a CLI release carries it, a shipped pack is
-scanned and signed but not mounted). The block also says what a person
+`knowledge/<name>/` exactly as the CLI keeps it: `manifest.json`, `wiki/`
+with its `index.md` and `log.md`, and `sources/`. The runner mounts each
+read-only at `/knowledge/<name>`, searched with the three knowledge tools
+(since CLI v0.6.11, agentry-cli#320). The block also says what a person
 may attach of their own, which the run setup shows and the agent never
 sees.
 
@@ -459,11 +474,10 @@ release that changes only its inputs asks no one to consent again. Write
 The runner sets the default view from the block since CLI v0.6.73
 (agentry-cli#693): `list_inputs` marks it, and the System Prompt names it.
 The Drafter fills the block since Drafter 1.9.0 (agentry-cli#634), in the
-CLI release after it. A hosted run takes the block with the sandbox hosts'
-next CLI, and until then refuses a manifest carrying one as an unknown
-field, as does a CLI before v0.6.73 or a desktop built on one. The site's
-and the desktop's run setups are to show it (agentry-web#1235,
-agentry-desktop#704).
+CLI release after it. A hosted run takes the block (its sandbox hosts run
+a later CLI); a CLI before v0.6.73, or a desktop built on one, refuses a
+manifest carrying it as an unknown field. The site's and the desktop's run
+setups are to show it (agentry-web#1235, agentry-desktop#704).
 
 ### `runtime`: informational hints
 
@@ -477,8 +491,9 @@ agentry-desktop#704).
 Closed vocabulary. Omitted or empty means a **pure-text QuickAgent**
 (its run-time tools are `write_report`, the read-only `list_inputs`,
 `read_input` and `search_inputs`, its scratch folder's `scratch_list`,
-`scratch_read` and `scratch_write`, and `export_pdf`, nothing else; the
-last four are the runner's grants to every release but a built-in, not
+`scratch_read`, `scratch_write` and `scratch_search`, and `export_pdf`,
+nothing else; the last five are the runner's grants to every release but a
+built-in, not
 lines of the contract). The registry scans releases
 against these declarations, an install prompts on them (egress/exec need
 typed consent; a widened contract re-asks on upgrade), and the runner
@@ -760,9 +775,10 @@ so a server that reads its token from env alone stops working once the
 token expires, about an hour for Google). A file's client id or secret, if
 the server's format has one, is a fixed placeholder the author writes (as
 `agentry` above), never a real value: the runner substitutes nothing but
-the placeholders. Hosted runs follow from agentry-enterprise#425. A CLI or
-desktop older than its core pin refuses such a manifest by its unknown
-field.
+the placeholders. A run in Agentry uses the connection Agentry keeps for
+the account and the release (agentry-enterprise#425;
+[Hosted runs](hosted-runs.md#a-runs-connections)). A CLI or desktop older
+than its core pin refuses such a manifest by its unknown field.
 
 ### `dependencies`
 
@@ -825,8 +841,8 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 |---|---|
 | (always) | `write_report`: write files into the run's output folder |
 | (always) | `list_inputs`, `read_input`, `search_inputs`: the run's provided input files, read-only |
-| (always, but for the built-ins) | `scratch_list`, `scratch_read`, `scratch_write`: the run's [scratch folder](runner.md#the-scratch-folder) at `/scratch`, private to the run and deleted at its end |
-| (always, but for the built-ins) | `export_pdf`: a Markdown report as a PDF in `reports/`, laid out in the person's [report theme](runner.md#the-report-theme) |
+| (always, but for the built-ins) | `scratch_list`, `scratch_read`, `scratch_write`, `scratch_search`: the run's [scratch folder](runner.md#the-scratch-folder) at `/scratch`, private to the run and deleted at its end |
+| (always, but for the built-ins) | `export_pdf`: a Markdown report as a PDF in `reports/`, in the form the agent picks (`report`, the default, `letter` or `memo`) and laid out in the person's [report theme](runner.md#the-report-theme) |
 | `filesystem.read` | `fs_read`, `fs_list` |
 | `filesystem.write` | `fs_write` |
 | `network.egress` hosts | `fetch` (with optional declared-secret auth) |
@@ -944,17 +960,32 @@ Three doors, one pipeline. `agentry publish` submits a workspace from the
 command line; the hosted site's **QuickAgent Builder** (`/build`, on a
 registry with the site in front) authors one in the browser — anyone can
 download the packed archive for local use, and signed-in users can submit
-it; and the **desktop app**'s Build tab does the same from a form. Repos hosted on the registry can also publish by pushing
-a release tag (the agent's auto-publish-tags setting). Whichever door,
-the submission is identical server-side: manifest validation, content
-scanning against the declared capabilities, human review where findings
-demand it, and DSSE signing. A publish to a public namespace needs a
-second factor on the account (a TOTP app, or an identity provider that
-did MFA) when the registry has that on — `/meta` reports it as
-`features.publicPublish2FA`. Published releases are immutable and content-addressed. The
-language rule applies to QuickAgents as it does to everything here: a
-release is *scanned, with N findings, signed*, never "safe". Declare the
-least you need and the whole chain stays reviewable.
+it; and the **desktop app**'s Build tab does the same from a form. Repos
+hosted on the registry can also publish by pushing a release tag (the
+agent's auto-publish-tags setting). Whichever door, the submission is
+identical server-side: manifest validation, content scanning against the
+declared capabilities, human review where findings demand it, and DSSE
+signing. A publish to a public namespace needs a second factor on the
+account (a TOTP app, or an identity provider that did MFA) when the
+registry has that on — `/meta` reports it as `features.publicPublish2FA`.
+Published releases are immutable and content-addressed. The language rule
+applies to QuickAgents as it does to everything here: a release is
+*scanned, with N findings, signed*, never "safe". Declare the least you
+need: the contract is what the scan, the install's consent and the runner
+all work from.
+
+`agentry publish` and a tag push both need the QuickAgent's **record**,
+which the CLI never creates: a first publish of a name with no record is
+answered 404. Create it at `/new` on the site, which asks for the
+namespace, the name, the run modes and the visibility and sets up the git
+repository a tag is pushed to, or with `POST /agents`. The Builder's and
+the desktop's Submit create the record themselves.
+
+Before submitting, `agentry review .` runs the built-in Examiner on your
+own computer: the registry's rules, AI Review's questions and a model's
+reading of the files, with the outcome the gate would be expected to
+reach. It submits nothing, and the registry's scan at submission is the
+one that counts.
 
 Every door checks the same quotas (V8): at most 2,000 files and 10 MiB in
 the archive, 2 MiB per file (5 MiB per image), and 1 MiB of text files in
