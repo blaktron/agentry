@@ -26,7 +26,7 @@ func (q *Queries) DeleteUserNotificationSettings(ctx context.Context, userID uui
 
 const getUserNotificationSettings = `-- name: GetUserNotificationSettings :one
 
-SELECT user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, web_dependency_alerts, updated_at, email_billing, email_schedules FROM user_notification_settings WHERE user_id = $1
+SELECT user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, web_dependency_alerts, updated_at, email_billing, email_schedules, email_bug_reports FROM user_notification_settings WHERE user_id = $1
 `
 
 // Notification settings (agentry#190).
@@ -44,6 +44,7 @@ func (q *Queries) GetUserNotificationSettings(ctx context.Context, userID uuid.U
 		&i.UpdatedAt,
 		&i.EmailBilling,
 		&i.EmailSchedules,
+		&i.EmailBugReports,
 	)
 	return i, err
 }
@@ -82,8 +83,8 @@ func (q *Queries) ListOrgAdminIDs(ctx context.Context, orgID uuid.UUID) ([]uuid.
 }
 
 const upsertUserNotificationSettings = `-- name: UpsertUserNotificationSettings :one
-INSERT INTO user_notification_settings (user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, email_billing, email_schedules, web_dependency_alerts)
-VALUES ($1, $2, $3, $4, $5, $6, COALESCE($8::boolean, true), COALESCE($9::boolean, true), $7)
+INSERT INTO user_notification_settings (user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, email_billing, email_schedules, email_bug_reports, web_dependency_alerts)
+VALUES ($1, $2, $3, $4, $5, $6, COALESCE($8::boolean, true), COALESCE($9::boolean, true), COALESCE($10::boolean, true), $7)
 ON CONFLICT (user_id) DO UPDATE SET
   email_dependency_alerts = EXCLUDED.email_dependency_alerts,
   email_quarantine = EXCLUDED.email_quarantine,
@@ -92,9 +93,10 @@ ON CONFLICT (user_id) DO UPDATE SET
   email_org_invites = EXCLUDED.email_org_invites,
   email_billing = COALESCE($8::boolean, user_notification_settings.email_billing),
   email_schedules = COALESCE($9::boolean, user_notification_settings.email_schedules),
+  email_bug_reports = COALESCE($10::boolean, user_notification_settings.email_bug_reports),
   web_dependency_alerts = EXCLUDED.web_dependency_alerts,
   updated_at = now()
-RETURNING user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, web_dependency_alerts, updated_at, email_billing, email_schedules
+RETURNING user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, web_dependency_alerts, updated_at, email_billing, email_schedules, email_bug_reports
 `
 
 type UpsertUserNotificationSettingsParams struct {
@@ -107,13 +109,14 @@ type UpsertUserNotificationSettingsParams struct {
 	WebDependencyAlerts   bool      `json:"web_dependency_alerts"`
 	EmailBilling          *bool     `json:"email_billing"`
 	EmailSchedules        *bool     `json:"email_schedules"`
+	EmailBugReports       *bool     `json:"email_bug_reports"`
 }
 
-// The billing and schedules switches are nullable on the way in
-// (agentry#366, agentry#1002): a client that predates one omits it, and an
-// omitted switch keeps the row's value — or the default on a first write
-// — in the same statement, so two clients writing at once cannot
-// resurrect a value neither sent.
+// The billing, schedules and bug-report switches are nullable on the way
+// in (agentry#366, agentry#1002, agentry#1113): a client that predates
+// one omits it, and an omitted switch keeps the row's value — or the
+// default on a first write — in the same statement, so two clients
+// writing at once cannot resurrect a value neither sent.
 func (q *Queries) UpsertUserNotificationSettings(ctx context.Context, arg UpsertUserNotificationSettingsParams) (UserNotificationSetting, error) {
 	row := q.db.QueryRow(ctx, upsertUserNotificationSettings,
 		arg.UserID,
@@ -125,6 +128,7 @@ func (q *Queries) UpsertUserNotificationSettings(ctx context.Context, arg Upsert
 		arg.WebDependencyAlerts,
 		arg.EmailBilling,
 		arg.EmailSchedules,
+		arg.EmailBugReports,
 	)
 	var i UserNotificationSetting
 	err := row.Scan(
@@ -138,6 +142,7 @@ func (q *Queries) UpsertUserNotificationSettings(ctx context.Context, arg Upsert
 		&i.UpdatedAt,
 		&i.EmailBilling,
 		&i.EmailSchedules,
+		&i.EmailBugReports,
 	)
 	return i, err
 }
