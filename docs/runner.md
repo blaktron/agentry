@@ -1615,7 +1615,9 @@ with this CLI's runner binary copied in, minimized to `ssh` and `sftp`
   cannot reach is exit 13, `host-unreachable`. Those sign-ins are in the
   host's own log.
 
-**What the agent can do.** Every call is its own SSH session:
+**What the agent can do.** Each call to the first five tools is an SSH
+session of its own; a shell session is one SSH session that lasts from
+`host_shell_open` to `host_shell_close`:
 
 | Tool | Does |
 |---|---|
@@ -1624,6 +1626,10 @@ with this CLI's runner binary copied in, minimized to `ssh` and `sftp`
 | `host_write` | writes a file over SFTP, with a mode (at most 1 MiB a call) |
 | `host_put` | copies a file from `/scratch/hosts` to the host (at most 256 MiB) |
 | `host_get` | copies a file from the host into `/scratch/hosts` (at most 256 MiB) |
+| `host_shell_open` | starts the account's login shell on a pseudo-terminal the host allocates, and returns its session number and what it printed first; at most four sessions a host run at once, and one no call has used for 30 minutes is ended |
+| `host_shell_send` | types into a session: text (at most 64 KiB a call), then keys by name (`enter`, `tab`, `esc`, the arrows, `ctrl-a` … `ctrl-z` and the rest); the key `sudo-password` types your sudo password and a return, and the agent never sees it. It then waits until the output settles (nothing new for a moment) or `wait` seconds pass (5 by default, at most 600), and returns what the session printed since the last read |
+| `host_shell_read` | returns what a session printed since the last read, waiting up to `wait` seconds (none by default, at most 600) when there is nothing new |
+| `host_shell_close` | ends a session, and returns what it printed that was not read |
 
 `/scratch/hosts` is a folder of the run's, shared by the host link and the
 tools server, where the scratch tools read and write; unlike the rest of the
@@ -1631,9 +1637,20 @@ scratch folder it is on disk, not in memory, and it is deleted with the run.
 A result larger than one tool result is paged: `host_run` keeps the last
 sixteen large outputs, and its result says how to read on (`continue` and
 `offset`). With more than one target host each tool takes `host`, the
-question's id. The account is the boundary: there is no approval per
-command, and whatever the account can do on that machine, the agent can. The
-interactive shell tools are agentry-cli#862.
+question's id, but for the three that name a `session`. The account is the boundary: there is no approval per
+command, and whatever the account can do on that machine, the agent can.
+
+**The shell.** A shell session is for what one command line cannot do: a
+sudo prompt, an installer that asks questions, a program answered as it
+runs. Its output reaches the agent as text with the terminal's control
+sequences removed (a line a progress bar redraws reads as it was last
+drawn), or, with `raw: true`, as printed. It is not a screen: a full-screen
+program reads as a stream of its text, and a pager such as `less` waits for
+keys until it is sent `q`. A command can still be running when a send
+returns; `host_shell_read` reads on, and `ctrl-c` stops it. Output larger
+than one tool result is kept for the next read, up to 8 MiB a session
+unread, the oldest dropped first. A session ends when the shell exits, when
+it is closed, after 30 minutes unused, or with the run.
 
 **What the host prints reaches the agent unchanged** (plan D9), keys and
 tokens read there included, past the gateway's secret block and the
@@ -1655,8 +1672,14 @@ kind and where it came from (never its value), the number of calls, and that
 the machine's own network is outside the run. `hostLink.image` names the
 image and its packages, and the `containers` line names the host link.
 `receipts/host-<id>.log` holds one JSON line a call: the tool, the command or
-the paths, sudo, the exit status and the byte counts, masked by the run's
-redactor.
+the paths, sudo, the exit status and the byte counts, and for a shell call
+the `session` and the `keys` sent by name (the text typed is the line's
+command), masked by the run's redactor. Each shell session leaves a
+transcript, `receipts/host-<id>-shell-<n>.log`: when it started and on what,
+each thing typed (the text quoted, the keys by name, the sudo password as
+the key `sudo-password`, never its value), the text the shell printed, and
+how the session ended, masked by the run's redactor, at most 64 MiB. The
+`host.<id>` line counts the sessions and names their transcripts.
 
 #### The hosts lists (`hosts`)
 
