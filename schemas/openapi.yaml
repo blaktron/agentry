@@ -6490,6 +6490,14 @@ components:
             success, and a registry without hosted schedules sends none).
             Not required on a write: a client that predates the switch
             leaves it as it was rather than turning it off by omission.
+        bugReports:
+          type: boolean
+          description: >
+            Platform staff marked a bug report the person filed complete
+            ("Reported bug fixed"; the hosted product's bug-report mail,
+            and a registry without bug reports sends none). Not required
+            on a write: a client that predates the switch leaves it as it
+            was rather than turning it off by omission.
     WebNotificationSettings:
       type: object
       description: In-app alerts.

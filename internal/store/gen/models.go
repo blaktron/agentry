@@ -592,6 +592,7 @@ type UserNotificationSetting struct {
 	UpdatedAt             time.Time `json:"updated_at"`
 	EmailBilling          bool      `json:"email_billing"`
 	EmailSchedules        bool      `json:"email_schedules"`
+	EmailBugReports       bool      `json:"email_bug_reports"`
 }
 
 type UserReportSetting struct {

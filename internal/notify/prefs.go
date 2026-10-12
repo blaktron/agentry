@@ -44,13 +44,19 @@ const (
 	// scheduled run in Agentry failed, or a schedule paused. Never a
 	// success. The core sends none itself, as with billing.
 	KindSchedule Kind = "schedules"
+	// KindBugReport is the closed build's bug-report mail, sent through
+	// the extension seam (agentry#1113, plan report-bug.md D5): platform
+	// staff marked a bug report the person filed complete ("Reported bug
+	// fixed"). The core sends none itself, as with billing.
+	KindBugReport Kind = "bugReports"
 )
 
 // Defaults is the settings row a user without one is treated as having.
 func Defaults(userID uuid.UUID) storegen.UserNotificationSetting {
 	return storegen.UserNotificationSetting{
 		UserID: userID, EmailDependencyAlerts: true, EmailQuarantine: true, EmailReviewDecisions: true,
-		EmailAdvisories: true, EmailOrgInvites: true, EmailBilling: true, EmailSchedules: true, WebDependencyAlerts: true,
+		EmailAdvisories: true, EmailOrgInvites: true, EmailBilling: true, EmailSchedules: true,
+		EmailBugReports: true, WebDependencyAlerts: true,
 	}
 }
 
@@ -72,6 +78,8 @@ func EmailAllowed(row storegen.UserNotificationSetting, kind Kind) bool {
 		return row.EmailBilling
 	case KindSchedule:
 		return row.EmailSchedules
+	case KindBugReport:
+		return row.EmailBugReports
 	}
 	return true
 }
