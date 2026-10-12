@@ -1528,9 +1528,14 @@ question of type `host` and lists that question under
 which machine: the answer is yours, so one QuickAgent serves every server.
 The runner makes the SSH session, from a container of its own, the **host
 link**; the agent works the machine through the host link's tools and never
-holds a connection or a credential. Local runs only: a hosted run refuses a
-target host before anything starts (exit 11, the reason `host-refused`, the
-detail `hosted`).
+holds a connection or a credential. Local runs only. A run the CLI knows is
+hosted (the host passes its run grant, its job credential or
+`AGENTRY_HOSTED`) refuses a target host before anything is installed (exit
+11, the reason `host-refused`, the detail `hosted`). A run with no terminal
+takes the sign-in before anything else, so a hosted run that reaches the CLI
+without that knowledge is refused for want of one (`host-credential`) before
+any name is resolved or any address reached. The registry refusing such a run
+at create is agentry-enterprise#534.
 
 **The answer.** `[user@]host[:port]`, as `ssh` takes it: a name or an
 address, an IPv6 address in brackets. The user defaults to your local user
@@ -1558,10 +1563,10 @@ holds one relay a host.
    to read it, and sends nothing else) and looks it up under the host as you
    named it (`[host]:port` when the port is not 22): in your
    `~/.ssh/known_hosts`, which it reads and never writes, hashed entries
-   included, then in `~/.agentry/runner/known_hosts`. A match is trusted.
+   included, then in `~/.agentry/runner/known_hosts`. A match is accepted.
    A key that differs from the one on file refuses the run, whatever the
    mode, and names both fingerprints (`host-key-changed`). A key on neither
-   file is shown (its type and SHA256 fingerprint) and trusted only if you
+   file is shown (its type and SHA256 fingerprint) and accepted only if you
    say so at a terminal, then kept in the runner's file; with no terminal
    the run refuses it (`host-key-unknown`).
 3. **The sign-in**, taken in order:
@@ -1592,7 +1597,7 @@ with this CLI's runner binary copied in, minimized to `ssh` and `sftp`
   gains no network, and its only route out stays the llm-proxy.
 - It runs as your uid, with a passwd line for it, and holds each host's
   sign-in in files of its own (`key` or `password`, `passphrase`, `sudo`,
-  the one trusted key, 0600 in a 0700 folder) bound read-only into it
+  the one accepted key, 0600 in a 0700 folder) bound read-only into it
   alone. They are in no other container, no argument and no environment,
   and they are deleted at the run's end, `--keep-run-dir` or not.
 - `ssh` runs with no configuration of anyone's (`-F /dev/null`), no agent,
@@ -1643,7 +1648,7 @@ data, never instructions.
 sign-in. The receipt's `capabilities_enforced["host.<id>"]` says the
 account, the host as named and the address your machine resolved it to,
 the port, the host key's fingerprint and where its trust came from (your
-`known_hosts`, Agentry's, or trusted at this run's start), the sign-in's
+`known_hosts`, Agentry's, or accepted at this run's start), the sign-in's
 kind and where it came from (never its value), the number of calls, and that
 the machine's own network is outside the run. `hostLink.image` names the
 image and its packages, and the `containers` line names the host link.
