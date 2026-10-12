@@ -1435,7 +1435,8 @@ environment, `intake.json`, a receipt or `result.json`.
 either is refused before anything is staged, with exit 11, the reason
 `input-refused`, the detail `source-cap` and its count ("the input source
 codebase: the repository holds 25000 files at <commit>, past the 20000-file
-cap"). A source's files, and the members of its archives, count against its
+cap"), which the reason also carries with the source's id
+([a source's count](#a-sources-count)). A source's files, and the members of its archives, count against its
 own cap, apart from the uploads' 2,000.
 
 **The decode** treats a source's files as it treats uploads, with two
@@ -1501,7 +1502,8 @@ The host then holds the step to exactly that one file.
 **The cap** is the uploads': one file within 256 MiB, the most of one
 document the runner reads back from a decode. A larger body is refused
 before anything is staged, by its declared length or as it streams, with
-exit 11, the reason `input-refused` and the detail `source-cap`.
+exit 11, the reason `input-refused`, the detail `source-cap` and the
+source's count in bytes ([a source's count](#a-sources-count)).
 
 **The decode** treats it as an upload, not by the repository's rules: every
 file goes to ClamAV and Hybrid Analysis, an image is read with OCR, and an
@@ -2943,9 +2945,11 @@ from a fixed list in about the order a run meets them: `policy`,
 
 And, when the step that stopped it decided **why**, `reason`: a `code` from
 the closed list below, the release's own declared `names` it concerns
-(commands, servers as `npm:`/`pypi:` ids, or secret names; never a file name,
-a path or any text the run, the model, the author or the person wrote; at
-most eight), and for some codes a `detail` word (DR-68):
+(commands, servers as `npm:`/`pypi:` ids, secret names, or an input
+source's question id; never a file name, a path or any text the run, the
+model, the author or the person wrote; at most eight), for some codes a
+`detail` word (DR-68), and for a refusal over an input source's cap its
+`count` ([below](#a-sources-count)):
 
 | `code` | Decided by | `names` | `detail` |
 |---|---|---|---|
@@ -2956,7 +2960,7 @@ most eight), and for some codes a `detail` word (DR-68):
 | `mcp-install-failed` | the install | the server | `pin-changed`, `store-changed`, `image`, `install-proxy`, `builder`, `runtime-check`, `record` |
 | `mcp-start-failed` | the gateway's start of a declared server | the server | — |
 | `secret-missing` | resolving the secrets | the secrets | — |
-| `input-refused` | staging or checking the inputs ([running with files](#running-with-files)) | none | `malware` (ClamAV found it, or Hybrid Analysis called it malicious), `name-clash`, `unreadable`, `ai-review` (AI Review flagged an input's text; hosted, the run settles AI Review's one credit), `not-reviewed` (AI Review could not read it; nothing is charged), `source-cap` (an input source past its cap), `source-fetch` (an input source could not be fetched) |
+| `input-refused` | staging or checking the inputs ([running with files](#running-with-files)) | the input source's question id, for `source-cap`, `source-fetch` and a source's `not-reviewed`; none otherwise | `malware` (ClamAV found it, or Hybrid Analysis called it malicious), `name-clash`, `unreadable`, `ai-review` (AI Review flagged an input's text; hosted, the run settles AI Review's one credit), `not-reviewed` (AI Review could not read it; nothing is charged), `source-cap` (an input source past its cap), `source-fetch` (an input source could not be fetched) |
 | `inputs-not-decoded` | the decode step | none | `image` (the files image could not be made ready: its pull, or the local layer built on it), `run` (its container failed, or its output was refused) |
 | `agent-blocked` | the agent's `end_blocked` | none | — |
 | `runner-blocked` | the runner's evidence | none | `tools-unrecorded`, `inputs-unread`, `report-unwritten` |
@@ -2973,6 +2977,26 @@ Other refusals (wildcard egress, the web-tools and review-grant rules, the
 dataAccess files, the adapter, consent, the images steps) carry their class
 and stage and no reason yet. A hosted run's record keeps `stage` and
 `reason` under the same rule ([hosted runs](hosted-runs.md#the-receipt-the-usage-and-the-outputs)).
+
+#### A source's count
+
+A run refused over an input source's cap carries the count in typed
+fields as well as in its error, so a driver that keeps no text can say it
+(agentry-cli#884):
+`count` is `{cap, limit, of, count, more}`, on `source-cap`, and on
+`not-reviewed` when a source's Markdown does not fit in what AI Review reads
+of a run.
+
+- `cap` and `limit`: the cap that refused, `files` or `bytes` with its
+  value, or `ai-review` with how many of the source's Markdown files fit.
+- `of` and `count`: what was counted and how many. That is `files`,
+  `bytes` or `markdown-files`; or, for a repository refused before its files
+  are known, `objects` (its pack's), `entries` (files, folders and links),
+  `pack-bytes` or `inflated-bytes`.
+- `more`: the step stopped counting at `count`, and there are more.
+
+For example, `{"cap": "files", "limit": 10000, "of": "entries", "count":
+30000, "more": true}`.
 
 ## The desktop app
 
