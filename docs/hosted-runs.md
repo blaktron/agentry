@@ -1409,12 +1409,24 @@ Agentry's control client and the server certificate of one of Agentry's own
 cluster services, such as OpenBao's (`secureagentry-ca issue-server`), and
 **`users`**, which certifies each person's
 one-year X25519 encryption certificate (and each organization's, for its
-shared knowledge packs). The server holds both intermediates' keys, and every
-holder's private key, sealed with AES-256-GCM under
-`AGENTRY_RUNS_CA_MASTER_KEY`, a key of the CA's own, beside
-`AGENTRY_RUNS_CA_BUNDLE` (the root's certificate and the sealed
-intermediates). It needs both or neither. A leaked or expiring intermediate
-is signed again from the root with `secureagentry-ca reissue`.
+shared knowledge packs). The server holds both intermediates' keys sealed
+with AES-256-GCM under `AGENTRY_RUNS_CA_MASTER_KEY`, a key of the CA's own,
+beside `AGENTRY_RUNS_CA_BUNDLE` (the root's certificate and the sealed
+intermediates). It needs both or neither. A leaked or expiring
+intermediate is signed again from the root with `secureagentry-ca reissue`.
+
+Where the vault is configured, as on Agentry's own deployment, every
+holder's private key is sealed by the vault, not by the CA's master key:
+OpenBao's Transit key `hosted-keys`, derived, with `user:<account id>` or
+`org:<organization id>` as the context and the certificate's serial bound in
+as associated data. Neither the CA's master key nor the database, alone or
+together, opens one, and every open is a Transit decrypt that OpenBao's
+audit records with the role that asked. Both the api and the worker may open
+a key under it ([OpenBao](self-hosting.md#what-openbao-must-carry)). A key
+sealed before the vault did is moved by a seal pass, `userkeys.seal`, which
+runs every minute in the worker until none is left. A deployment without the
+vault seals the keys under the CA's master key instead, and then the master
+key with the database does open them.
 
 A host enrols itself, once:
 
@@ -1462,29 +1474,35 @@ object is deleted, and the run closes as `error`, refunded.
 
 The certificate is the runner's own, even when an organization's pool pays,
 and it is made the first time they start a hosted run. Nobody sees or
-handles it: Agentry keeps its private key sealed and opens it only inside
-the registry, to decrypt that person's own download as it streams. The
-download answers the runner alone; platform staff and every other account
-get `404`. The registry opens two built-ins' outputs on the runner's
+handles it: Agentry keeps its private key sealed by the vault's
+`hosted-keys` and opens it only inside the registry, with a vault call
+recorded in OpenBao's audit, to decrypt that person's own download as it
+streams. The download answers the runner alone; platform staff and every
+other account get `404`. The registry opens two built-ins' outputs on the runner's
 behalf: a knowledge build's, to put the pack back in the knowledge store,
 and a Voice Writer run's, to read its `VOICE.md`.
 
-This is not end-to-end encryption from the person's side, since Agentry
-holds the key. It keeps plaintext from resting in a bucket, an object from
-standing in another run's place, and a download from reaching another
-account.
+The keys that open your knowledge packs, your Writing Voice and your runs'
+results are sealed by a key that never leaves our vault. Each time one is
+opened it is a vault call, recorded in its audit log and allowed only to
+the parts of Agentry that need it. Agentry runs that vault, so this is not
+end-to-end encryption. It keeps plaintext from resting in a bucket, an
+object from standing in another run's place, and a download from reaching
+another account.
 
 **What erasure does.** Deleting a sealed key destroys it, and every output
 encrypted to it can no longer be opened from the live database. The key
 remains in the database's backups until they age out (on Agentry's
 deployment, two days of point-in-time history and thirty nightly copies),
-and a restore of one, with the CA's master key, would open those outputs
-again for as long as the outputs themselves are kept. A person's keys are destroyed when
-their account is erased or their data is cleared, and an organization's when
-it is erased. The runs sweep is the backstop for a destruction that did not
-complete. It also removes an expired key last used longer ago than the runs'
-retention, unless a knowledge pack's key is wrapped to it. A finished run of
-an erased account is deleted within a minute ([retention](#retention)).
+and a restore of one would open those outputs again for as long as the
+outputs themselves are kept: with the vault's key, or, for a backup taken
+before the vault sealed the keys, with the CA's master key. A person's keys
+are destroyed when their account is erased or their data is cleared, and an
+organization's when it is erased. The runs sweep is the backstop for a
+destruction that did not complete. It also removes an expired key last used
+longer ago than the runs' retention, unless a knowledge pack's key is
+wrapped to it. A finished run of an erased account is deleted within a
+minute ([retention](#retention)).
 
 ### No log
 

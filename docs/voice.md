@@ -125,6 +125,18 @@ keep them from the registry's own code: the registry opens every version
 to review it and to answer `GET /voice`, and AI Review sends the whole
 text to the configured judge provider. On a core registry, whoever holds
 both the knowledge sealing key and the database can open every voice.
+On Agentry's own deployment (SecureAgentry with the vault): The keys that
+open your knowledge packs, your Writing Voice and your runs' results are
+sealed by a key that never leaves our vault. Each time one is opened it is
+a vault call, recorded in its audit log and allowed only to the parts of
+Agentry that need it. Agentry runs that vault, so this is not end-to-end
+encryption. The key that opens a voice is the person's own certificate
+key, sealed by the vault's `hosted-keys` as for their packs
+([The key wrapper](knowledge.md#the-key-wrapper)), and each open is a
+Transit decrypt in OpenBao's audit. The parts that may open it are the
+registry's api and worker; what holds them to the voice's owner is the
+code's owner check. A SecureAgentry deployment without the vault seals the
+key under the CA's master key instead.
 
 ## What a deployment needs
 
