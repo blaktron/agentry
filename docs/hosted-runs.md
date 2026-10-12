@@ -67,7 +67,7 @@ run is not.
 | `POST /api/v1/x/runs/` | session or PAT with `run:write` |
 | `GET /api/v1/x/runs/` | session or PAT with `run:read` — the newest fifty |
 | `POST /api/v1/x/runs/inputs?name=` | session or PAT with `run:write` |
-| `GET /api/v1/x/runs/{id}` | session or PAT with `run:read` (platform staff read any) |
+| `GET /api/v1/x/runs/{id}` | session or PAT with `run:read` (platform staff read any, [without its text](#a-runs-data-at-rest)) |
 | `GET /api/v1/x/runs/{id}/events` | session or PAT with `run:read` |
 | `GET /api/v1/x/runs/{id}/outputs/{name}` | session or PAT with `run:read` |
 | `POST /api/v1/x/runs/{id}/cancel` | session or PAT with `run:write` |
@@ -305,6 +305,82 @@ most 16 MiB of text a run; a file past that is withheld from the agent and
 named in the receipt, and the run goes on. A host older than the field is
 handed no credential, and its runs' inputs are not reviewed.
 
+## A run's data at rest
+
+A hosted run's own data rests encrypted in Agentry's cloud
+(agentry-enterprise#547, #548; DEV-245). What is sealed:
+
+- **A run's text:** its task, its intake answers, its receipt and its error,
+  and a draft's hints, instructions and problems.
+- **Its files:** every upload in the core's object store, a pull worker's
+  outputs, and a schedule's task, answers and copies of its files.
+- **What is staged for a sandbox host** in the input bucket (`runs-input`):
+  the task, the inputs, a session's added file, and the pack and Writing
+  Voice trees a run attaches.
+
+**How.** Envelope encryption. Each value and each object has an AES-256-GCM
+data key of its own, used once. The key is wrapped by the vault's OpenBao
+Transit key `hosted-runs`, with the account that owns the run as the
+context, so one account's wrapped keys do not open under another's. Only
+the wrapped key is stored, beside what it seals. A value is bound to its
+row and field, so it does not open when moved to another one. An object is
+sealed in 64 KiB chunks bound to their place, so it cannot be cut short,
+reordered or spliced. A staged object's key is different: it is fresh for
+each object, never wrapped and never stored, and it travels to the host
+only inside the job, over the mutually authenticated TLS of [the push
+path](#the-push-path).
+
+**Who opens it, and when.** Writing never decrypts. A create, a run's
+close, a draft's progress and the sweep only seal, and a create answers
+with the text it was given. Three things open run data:
+
+- **The api, for the run's owner.** It opens the run's text to answer the
+  owner's own reads: the run page, the desktop and the CLI. A page of a list
+  is one Transit call. It also opens what the owner hands on: an upload
+  added to their session, which it stages sealed again for the host, and
+  the brief and inputs of a build they continue. For the [pull
+  worker](#the-pull-worker) that has claimed a run, the claim and the input
+  download open that run's text and inputs.
+- **The worker, to start a run.** It opens a schedule's task, answers and
+  files when the schedule fires, and a run at its hand-off. It then reseals
+  every object it stages under the job's own keys. Nothing staged ever
+  rests in the clear.
+- **The sandbox host, for the job.** It opens each staged object as it
+  streams it into the job's own directory, holds it to its plaintext size,
+  and deletes it with the job. The ClamAV scan and the file checks read the
+  plaintext on the host. A host says `acceptsSealedObjects` in its health
+  answer, and the dispatcher hands a run to no host that does not.
+
+Every open is a Transit decrypt, and OpenBao's audit device records it with
+the role that asked (a batch per request).
+
+**Platform staff** read another account's run **without its text**: the
+answer carries `"withheld": true`, and the task, intake answers, receipt
+and error are empty. A pushed run's output and a pull worker's sealed
+output both answer staff `404`.
+
+**What this does not protect.**
+
+- **OpenBao is run by Agentry.** Both the api and the worker may decrypt
+  under `hosted-runs`. The vault's own keys keep the stricter split, where
+  the api only encrypts. The guard on run data is in the code: a route
+  opens a run's text only for the run's owner, or for the pull worker that
+  holds the run. A compromised api or worker
+  could still ask Transit to open any account's run data. Each such open
+  would be a line in OpenBao's audit. So this keeps run data out of the
+  database, its dumps and the buckets in the clear. It does not mean
+  Agentry cannot read it.
+- **While a run uses its data**, the data is in the clear: in the worker's
+  memory at the hand-off, and on the sandbox host for the run's life.
+- **Not sealed:** artefact names and sizes, the run's event lines, the
+  names of attached packs, and a draft's package list, proof and revision.
+  The last three are file names and digests that the provenance check reads
+  at a publish.
+- **Backups.** Data written before this change is sealed in place by the
+  seal passes (the [retention](#retention) section). Database backups and
+  object versions taken before that pass still hold it in the clear until
+  their own retention ends.
+
 ## Watching a run, and cancelling it
 
 `GET /api/v1/x/runs/{id}/events` is server-sent events over the run's
@@ -433,7 +509,8 @@ Attached knowledge runs only on sandbox hosts Agentry pushes to; the pull
 worker never claims such a run. At the hand-off the dispatcher reads each
 pack's tree through the core's store, which decrypts it there, so the pack's
 data key never leaves the core. It stages the tree for the host beside the
-run's inputs, with the same posture inputs have, and the host passes each
+run's inputs, sealed as the inputs are ([at rest](#a-runs-data-at-rest)),
+and the host opens it as it fetches it and passes each
 pack to the CLI as a `--knowledge` directory. The CLI mounts it read-only at
 `/knowledge/<name>` on the tools container and names it in the receipt by
 digest, as for a local run ([Running them](runner.md#knowledge-packs)). The
@@ -480,7 +557,7 @@ A run in the voice runs only on sandbox hosts Agentry pushes to; the pull worker
 never claims it. At the hand-off the dispatcher reads the runner's live
 version as it stands then, through the core's store (`Deps.Voice.Live`,
 never a pending or flagged version), and stages it for the host with its
-digest. The host holds the file to that digest and passes it to the CLI as
+digest, sealed as a run's inputs are ([at rest](#a-runs-data-at-rest)). The host holds the file to that digest and passes it to the CLI as
 `--voice-file`, so the run reads it through `voice_read`
 ([A Writing Voice](runner.md#a-writing-voice)). The run's `voice.digest`
 and its receipt's `voice` line name the version it was given. A runner
@@ -1127,8 +1204,9 @@ of at most 16 KiB, with no control character but a newline or a tab.
 `POST …/session/files` takes `{"input": …}`, one of the caller's unclaimed
 uploads from `POST /api/v1/x/runs/inputs`, named by one file name; it is held to the
 run's input caps together with the run's other inputs and the files already
-added, handed to the host as a five-minute presigned URL, and deleted from
-the registry once the host has it. The agent finds it under `/inputs`. The
+added, staged sealed under a key the turn carries and handed to the host
+as a five-minute presigned URL ([at rest](#a-runs-data-at-rest)), and
+deleted from the registry once the host has it. The agent finds it under `/inputs`. The
 CLI tells the agent about the file in a notice: a turn of its own when the
 session is idle, or with the next message otherwise. `POST …/session/end`
 takes `{"finish": true}` (ask for the final result, then end) or `false`
@@ -1245,7 +1323,8 @@ at start-up; with no store, nothing is pushed. Every
 5. hands the oldest queued run to a host with a free slot.
 
 The hand-off copies the run's task and inputs into the input bucket, under
-the run's id, and the job carries a presigned GET for each, valid for twenty
+the run's id, each sealed under a fresh key that only the job carries
+([at rest](#a-runs-data-at-rest)), and the job carries a presigned GET for each, valid for twenty
 minutes, and one presigned POST for the output, whose policy fixes the
 object's key and caps its size and which is valid for the run's time cap
 plus thirty minutes. The job also carries the runner's encryption
@@ -1466,7 +1545,9 @@ never reaches the CLI. The claim is atomic (`FOR UPDATE SKIP LOCKED` on the
 oldest queued row within the worker's declared capacity), so two workers
 polling together never take the same run. Its runs differ from pushed runs
 in two ways: their log lines are stored and streamed, and their artefacts
-go through the registry unencrypted. It claims only runs of a release: a
+go through the registry, which seals them at rest
+([at rest](#a-runs-data-at-rest)), rather than being encrypted on the host to
+the runner. It claims only runs of a release: a
 knowledge build, a draft and a Voice Writer run, a run with secrets,
 connections, attached knowledge or the runner's voice, and a hosted session
 go only to sandbox hosts.
@@ -1476,7 +1557,10 @@ go only to sandbox hosts.
 A run and its artefacts are deleted thirty days after the run was created
 (`AGENTRY_RUNS_RETENTION`, `720h`), and, once the run has finished, within a
 minute of the account being erased (the runs sweep deletes a closed run of an
-erased account). Uploaded inputs that no run claims are swept after a day. Download
+erased account). Uploaded inputs that no run claims are swept after a day. Runs, uploads and
+schedules written before their data was sealed at rest are sealed in place
+by the worker's seal passes (`runs.seal`, `schedules.seal`, a batch a
+minute), not left to expire; what a pass replaces is deleted. Download
 anything you want to keep before then; nothing is archived elsewhere. A
 pushed run's output also stops opening once the key it was encrypted to is
 destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
@@ -1522,7 +1606,7 @@ destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
 | `AGENTRY_RUNS_STORE_ENDPOINT` | none | the runs store's S3 endpoint; set, the push path runs, and it needs the CA |
 | `AGENTRY_RUNS_STORE_ACCESS_KEY`, `AGENTRY_RUNS_STORE_SECRET_KEY` | none | the runs store's keys, required with an endpoint |
 | `AGENTRY_RUNS_STORE_REGION` | `us-east-1` | its region |
-| `AGENTRY_RUNS_STORE_INPUT_BUCKET` | `runs-input` | where a run's task and inputs are staged at the hand-off |
+| `AGENTRY_RUNS_STORE_INPUT_BUCKET` | `runs-input` | where a run's task and inputs are staged, sealed, at the hand-off |
 | `AGENTRY_RUNS_STORE_OUTPUT_BUCKET` | `runs-output` | where a host posts the sealed output; must differ from the input bucket |
 | `AGENTRY_RUNS_STORE_PATH_STYLE` | `true` | path-style bucket addressing |
 | `AGENTRY_RUNS_STORE_CREATE_BUCKETS` | `false` | make the two buckets at start-up when they are missing, for a development store; production's are made by terraform |
