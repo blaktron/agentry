@@ -8,7 +8,7 @@ import (
 
 func TestEmailAllowedDefaultsAndKinds(t *testing.T) {
 	row := Defaults(uuid.New())
-	for _, k := range []Kind{KindDependencyAlert, KindQuarantine, KindReviewDecision, KindAdvisory, KindOrgInvite, KindBilling, KindSchedule, Kind("something-new")} {
+	for _, k := range []Kind{KindDependencyAlert, KindQuarantine, KindReviewDecision, KindAdvisory, KindOrgInvite, KindBilling, KindSchedule, KindBugReport, Kind("something-new")} {
 		if !EmailAllowed(row, k) {
 			t.Fatalf("defaults must allow %s", k)
 		}
@@ -25,7 +25,7 @@ func TestEmailAllowedDefaultsAndKinds(t *testing.T) {
 
 func TestEmailPermittedRequiresVerifiedAddress(t *testing.T) {
 	row := Defaults(uuid.New())
-	for _, k := range []Kind{KindDependencyAlert, KindQuarantine, KindReviewDecision, KindAdvisory, KindOrgInvite, KindBilling, KindSchedule, Kind("something-new")} {
+	for _, k := range []Kind{KindDependencyAlert, KindQuarantine, KindReviewDecision, KindAdvisory, KindOrgInvite, KindBilling, KindSchedule, KindBugReport, Kind("something-new")} {
 		if EmailPermitted(false, row, k) {
 			t.Fatalf("an unverified address must get no %s mail, whatever the settings say", k)
 		}
@@ -54,5 +54,26 @@ func TestScheduleSwitchIsItsOwn(t *testing.T) {
 	row.EmailBilling = false
 	if !EmailAllowed(row, KindSchedule) {
 		t.Fatal("billing off switched schedule mail off")
+	}
+}
+
+// The bug-report switch (agentry#1113) governs the "Reported bug fixed"
+// mail and nothing else, and nothing else governs it.
+func TestBugReportSwitchIsItsOwn(t *testing.T) {
+	row := Defaults(uuid.New())
+	if !EmailAllowed(row, KindBugReport) {
+		t.Fatal("bug report mail is off by default; a new class is opt-out")
+	}
+	row.EmailBugReports = false
+	if EmailAllowed(row, KindBugReport) || EmailPermitted(true, row, KindBugReport) {
+		t.Fatal("bug reports switched off, and bug report mail is still allowed")
+	}
+	if !EmailAllowed(row, KindBilling) || !EmailAllowed(row, KindSchedule) {
+		t.Fatal("bug reports off switched another kind off")
+	}
+	row = Defaults(uuid.New())
+	row.EmailBilling, row.EmailSchedules = false, false
+	if !EmailAllowed(row, KindBugReport) {
+		t.Fatal("billing and schedules off switched bug report mail off")
 	}
 }

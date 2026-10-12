@@ -219,6 +219,32 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 	if code != http.StatusUnprocessableEntity || mails.count() != 3 {
 		t.Fatalf("the switch's own name as a kind: %d, want a refusal", code)
 	}
+
+	// The bug-report kind (agentry#1113, plan report-bug.md D5): the
+	// "Reported bug fixed" mail goes under the person's bug-report switch
+	// — on (the default, with schedules already off), it goes as that
+	// kind; off, it does not; an unverified address gets nothing.
+	code, out, _ = send(t, verifiedID, "bug_report", "Reported bug fixed", "The bug you reported on 12 October is fixed.")
+	if code != http.StatusOK || !out.Sent || mails.count() != 4 || mails.last().Kind != notify.KindBugReport {
+		t.Fatalf("a fixed notice to a verified, opted-in person: %d sent=%t, %d messages, last kind %q", code, out.Sent, mails.count(), mails.last().Kind)
+	}
+	code, out, _ = send(t, env.userID(unverifiedH), "bug_report", "Reported bug fixed", "x")
+	if code != http.StatusOK || out.Sent || mails.count() != 4 {
+		t.Fatal("an unverified address was sent a fixed notice")
+	}
+	env.doJSON(env.login(verifiedH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
+		"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, "bugReports": false},
+		"web":   map[string]any{"dependencyAlerts": true},
+	}, nil, http.StatusOK)
+	code, out, _ = send(t, verifiedID, "bug_report", "Reported bug fixed", "x")
+	if code != http.StatusOK || out.Sent || mails.count() != 4 {
+		t.Fatal("the bug-report switch off, and a fixed notice went anyway")
+	}
+	// "bugReports" is the switch's name, not a kind an extension sends as.
+	code, _, _ = send(t, verifiedID, "bugReports", "Reported bug fixed", "x")
+	if code != http.StatusUnprocessableEntity || mails.count() != 4 {
+		t.Fatalf("the switch's own name as a kind: %d, want a refusal", code)
+	}
 }
 
 func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
@@ -279,16 +305,17 @@ func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
 // The settings round trip for the switches a client may omit, and the
 // hazard they were built to avoid: a client that predates a switch and
 // writes the other settings back leaves it as it was, rather than turning
-// it off by omission (agentry#344's shape). billing (agentry#366) and
-// schedules (agentry#1002) each, and neither write touches the other.
+// it off by omission (agentry#344's shape). billing (agentry#366),
+// schedules (agentry#1002) and bugReports (agentry#1113) each, and no
+// write touches another.
 func TestOptionalSwitchesSurviveAnOlderClientsWrite(t *testing.T) {
-	for _, field := range []string{"billing", "schedules"} {
+	optional := []string{"billing", "schedules", "bugReports"}
+	for _, field := range optional {
 		t.Run(field, func(t *testing.T) {
 			env := newTestEnv(t)
 			h := env.register("bs-person")
 			env.verifyEmail(h)
 			sess := env.login(h)
-			other := map[string]string{"billing": "schedules", "schedules": "billing"}[field]
 
 			var got struct {
 				Email map[string]*bool `json:"email"`
@@ -307,8 +334,10 @@ func TestOptionalSwitchesSurviveAnOlderClientsWrite(t *testing.T) {
 			if v := value(); v == nil || *v {
 				t.Fatalf("after switching %s off: %v", field, v)
 			}
-			if v := got.Email[other]; v == nil || !*v {
-				t.Fatalf("switching %s off switched %s off: %v", field, other, v)
+			for _, other := range optional {
+				if v := got.Email[other]; other != field && (v == nil || !*v) {
+					t.Fatalf("switching %s off switched %s off: %v", field, other, v)
+				}
 			}
 
 			// An older client writes everything it knows, which does not
