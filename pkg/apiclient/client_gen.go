@@ -2627,6 +2627,9 @@ type EmailNotificationSettings struct {
 	// Billing The subscription that pays for the person's work: a checkout confirmed, a payment failed, an organization restricted, seats reached, "your organization covers you" (the hosted product's billing mail; a registry with no billing sends none). Not required on a write: a client that predates the switch leaves it as it was rather than turning it off by omission.
 	Billing *bool `json:"billing,omitempty"`
 
+	// BugReports Platform staff marked a bug report the person filed complete ("Reported bug fixed"; the hosted product's bug-report mail, and a registry without bug reports sends none). Not required on a write: a client that predates the switch leaves it as it was rather than turning it off by omission.
+	BugReports *bool `json:"bugReports,omitempty"`
+
 	// DependencyAlerts A published version declares an MCP server with a newly known vulnerability.
 	DependencyAlerts bool `json:"dependencyAlerts"`
 

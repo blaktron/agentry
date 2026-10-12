@@ -587,7 +587,8 @@ type Notifier interface {
 // message about billing is what the person's billing switch governs, and
 // a dependency alert routed to them is what their dependency-alert
 // switch governs, wherever it came from; a notice about one of their
-// schedules is what their schedules switch governs.
+// schedules is what their schedules switch governs; and a notice that a
+// bug report they filed is fixed is what their bug-report switch governs.
 type NotifyKind string
 
 const (
@@ -605,6 +606,12 @@ const (
 	// Agentry failed, or the schedule paused (three refusals in a row, an
 	// entitlement that lapsed). Never a success.
 	NotifySchedule NotifyKind = "schedule"
+	// NotifyBugReport is the closed build's bug-report mail (plan
+	// report-bug.md D4, D5, agentry#1113): platform staff marked a bug
+	// report the person filed complete, "Reported bug fixed", quoting the
+	// report and any note staff added. Never sent for a report closed
+	// without a fix.
+	NotifyBugReport NotifyKind = "bug_report"
 )
 
 // Webhooks lets an extension deliver an event to one of an organization's

@@ -84,6 +84,10 @@ type notificationSettings struct {
 		// a scheduled run in Agentry failed, or a schedule paused. Named
 		// here for the same reason as Billing.
 		Schedules bool `json:"schedules"`
+		// BugReports is the hosted product's bug-report mail
+		// (agentry#1113): a bug report the person filed was marked
+		// complete. Named here for the same reason as Billing.
+		BugReports bool `json:"bugReports"`
 	} `json:"email"`
 	Web struct {
 		DependencyAlerts bool `json:"dependencyAlerts"`
@@ -219,6 +223,7 @@ func (h *handler) notificationsSave(w http.ResponseWriter, r *http.Request) {
 	ns.Email.OrgInvites = on("email.orgInvites")
 	ns.Email.Billing = on("email.billing")
 	ns.Email.Schedules = on("email.schedules")
+	ns.Email.BugReports = on("email.bugReports")
 	ns.Web.DependencyAlerts = on("web.dependencyAlerts")
 	res, err := h.call(r).do(http.MethodPut, "/user/notifications", ns)
 	if err != nil || !res.OK() {
