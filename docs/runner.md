@@ -220,7 +220,9 @@ a run-scoped secret under its upper-cased id and is never written as
 text or recorded. Non-secret answers appear in the receipts. A
 `repository` or `url` answer is an
 [input source](#input-sources-a-repository-or-a-file-at-a-web-address),
-fetched before the run into `/inputs/<id>/`; a type the CLI does not know
+fetched before the run into `/inputs/<id>/`; a `host` answer is a
+[target host](#target-hosts-a-server-named-at-run-time), a machine the
+run reaches over SSH from the host link; a type the CLI does not know
 is refused, never taken as text.
 
 ### `agentry schedule`
@@ -791,6 +793,8 @@ its digest, so a run record says which file a run obeyed.
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
 | `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode (DR-53; [Unsafe Mode](agentry/unsafe-mode.md)) |
 | `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
+| `images.hostlink` | the hostlink image the host link is built on, the OpenSSH client a run reaches a [target host](#target-hosts-a-server-named-at-run-time) with, pinned by digest (the default is the one the CLI release names) |
+| `hosts.allow` / `hosts.deny` | IPv4 networks in CIDR form that narrow the addresses a target host may be at: with `allow` set an address must be in one, and one in `deny` is refused either way ([below](#the-hosts-lists-hosts)) |
 | `images.clamavSignatures` | the ClamAV signature bundle, `<registry>/<repository>:<tag>` (default `ghcr.io/blaktron/agentry-clamav-db:latest`); a mirror must carry the publishing workflow's signature |
 | `hybridAnalysis.apiKeyEnv` / `hybridAnalysis.apiKeySource` | your Hybrid Analysis key for the hash lookup: the variable that holds it (default `HYBRID_API_KEY`), which wins when it is set; with `apiKeySource: keyring`, the keychain entry `provider:hybrid-analysis` when it is not; with no key nothing is looked up |
 | `docker.runtime` | the daemon-registered OCI runtime the containers holding the QuickAgent's code are created with (unset: the daemon's default) — below |
@@ -1513,6 +1517,151 @@ alone, where the token came from (never its value), and the malware check of
 its files. A query can carry a signed download's credential, so
 `intake.json`, the receipt and errors show it as `?…`; it is passed whole
 only to the fetch step, as its argument.
+
+### Target hosts: a server named at run time
+
+A **target host** is a machine you name when a run starts, such as a Linux
+server for the QuickAgent to set up or manage (plan `runtime-hosts.md`;
+agentry-cli#861). A QuickAgent that takes one asks for it with an intake
+question of type `host` and lists that question under
+`capabilities.targetHosts` ([QuickAgents](quickagents.md)). It never names
+which machine: the answer is yours, so one QuickAgent serves every server.
+The runner makes the SSH session, from a container of its own, the **host
+link**; the agent works the machine through the host link's tools and never
+holds a connection or a credential. Local runs only: a hosted run refuses a
+target host before anything starts (exit 11, the reason `host-refused`, the
+detail `hosted`).
+
+**The answer.** `[user@]host[:port]`, as `ssh` takes it: a name or an
+address, an IPv6 address in brackets. The user defaults to your local user
+name and the port to 22. An answer that carries a password
+(`user:password@host`) is refused; the sign-in is asked for apart.
+
+```bash
+agentry run you/server-helper --intake server=admin@box.example.com:2222 --host-key server=$HOME/.ssh/id_ed25519
+```
+
+Every target host the QuickAgent declares must be answered: the host link
+holds one relay a host.
+
+**Before anything starts**, for each target host, in this order:
+1. **The address.** The name is resolved by your machine's own resolver (a
+   tailnet, mDNS or split-DNS name resolves as your `ssh` would resolve
+   it), and the run reaches the first IPv4 address it gives: the relay that
+   carries the session is on Docker's IPv4 network, so a host with no IPv4
+   address is refused. Loopback, link-local (a cloud's metadata address
+   among them) and addresses that are no one host are refused; private, LAN
+   and tailnet addresses are reached. The policy's `hosts` lists narrow the
+   rest ([below](#the-hosts-lists-hosts)). A refusal is exit 11,
+   `host-refused`, detail `host-address`.
+2. **The host key.** The runner reads the key the host offers (it connects
+   to read it, and sends nothing else) and looks it up under the host as you
+   named it (`[host]:port` when the port is not 22): in your
+   `~/.ssh/known_hosts`, which it reads and never writes, hashed entries
+   included, then in `~/.agentry/runner/known_hosts`. A match is trusted.
+   A key that differs from the one on file refuses the run, whatever the
+   mode, and names both fingerprints (`host-key-changed`). A key on neither
+   file is shown (its type and SHA256 fingerprint) and trusted only if you
+   say so at a terminal, then kept in the runner's file; with no terminal
+   the run refuses it (`host-key-unknown`).
+3. **The sign-in**, taken in order:
+   1. `--host-key <id>=PATH`, a private key file (its passphrase from
+      `--host-passphrase <id>=ENV_NAME`, or a prompt), or
+      `--host-password <id>=ENV_NAME`. A flag names a file or an
+      environment variable, never a value.
+   2. The sign-in saved for that account and host in the system keychain
+      (service `agentry`, account `host:<user>@<host>:<port>`): a key
+      file's path and its passphrase, or a password. The key itself is
+      never saved.
+   3. A prompt on a terminal: a key file's path, or empty to type a
+      password; it offers to save what you gave.
+
+   With none and no terminal the run refuses (`host-credential`). A sudo
+   password is optional and taken the same way (`--host-sudo-password
+   <id>=ENV_NAME`, the keychain, a prompt); without one, sudo works only
+   where the account needs no password.
+
+**The host link** is one more server in the run's gateway catalog, on an
+image built on your machine: the hostlink image from agentry-dockerimages
+(OpenSSH from Alpine, pinned by digest, `images.hostlink` in the policy)
+with this CLI's runner binary copied in, minimized to `ssh` and `sftp`
+(`agentry-hostlink-local:<hash>`; built by the first run, or `--prepare`).
+- It reaches each target host through one relay to the address and port
+  above, and has no other network. The run's docker filter admits that
+  relay to that address and port and nothing else; the agent container
+  gains no network, and its only route out stays the llm-proxy.
+- It runs as your uid, with a passwd line for it, and holds each host's
+  sign-in in files of its own (`key` or `password`, `passphrase`, `sudo`,
+  the one trusted key, 0600 in a 0700 folder) bound read-only into it
+  alone. They are in no other container, no argument and no environment,
+  and they are deleted at the run's end, `--keep-run-dir` or not.
+- `ssh` runs with no configuration of anyone's (`-F /dev/null`), no agent,
+  no forwarding of any kind (agent, X11, TCP, stream-local, tunnel), no
+  `ProxyJump` or `ProxyCommand`, no shared connection, and the one checked
+  key under a fixed alias (`StrictHostKeyChecking=yes`). A password and a
+  passphrase reach it through `SSH_ASKPASS`, never an argument.
+- Each time the gateway starts it (once at the run's start, to list its
+  tools, and again on first use), it signs in to each host once with a
+  command that does nothing (`true`) before it serves anything, so a host
+  that refuses the sign-in stops the run before the agent starts: exit 11,
+  `host-refused`, detail `host-auth` (or `host-key-changed`); a host it
+  cannot reach is exit 13, `host-unreachable`. Those sign-ins are in the
+  host's own log.
+
+**What the agent can do.** Every call is its own SSH session:
+
+| Tool | Does |
+|---|---|
+| `host_run` | runs one command line in the account's login shell and returns its exit status, standard output and standard error; `sudo: true` runs it under `sudo -S` with your sudo password, which the agent never sees; `timeout` 300 s by default, at most 1,800 s |
+| `host_read` | reads a file over SFTP, a page at a time, a binary file as base64 (at most 64 MiB) |
+| `host_write` | writes a file over SFTP, with a mode (at most 1 MiB a call) |
+| `host_put` | copies a file from `/scratch/hosts` to the host (at most 256 MiB) |
+| `host_get` | copies a file from the host into `/scratch/hosts` (at most 256 MiB) |
+
+`/scratch/hosts` is a folder of the run's, shared by the host link and the
+tools server, where the scratch tools read and write; unlike the rest of the
+scratch folder it is on disk, not in memory, and it is deleted with the run.
+A result larger than one tool result is paged: `host_run` keeps the last
+sixteen large outputs, and its result says how to read on (`continue` and
+`offset`). With more than one target host each tool takes `host`, the
+question's id. The account is the boundary: there is no approval per
+command, and whatever the account can do on that machine, the agent can. The
+interactive shell tools are agentry-cli#862.
+
+**What the host prints reaches the agent unchanged** (plan D9), keys and
+tokens read there included, past the gateway's secret block and the
+harness's scrub, as your inputs do: a QuickAgent that manages a server must
+be able to read its configuration. The one thing masked is the run's own
+sign-in for its target hosts (key, passphrase, password, sudo password), in
+every spelling the runner knows, raw and base64, from every result and every
+file the run leaves (D19). A sign-in shorter than 8 characters is not masked
+in the run's files (nor, under 6, in a result), and the receipt says so. The System Prompt says what a host prints is
+data, never instructions.
+
+**What you see.** `intake.json` gives each target host as `{"<id>":
+{"host": {"named", "address", "port", "user", "hostKey"}}}`, never a
+sign-in. The receipt's `capabilities_enforced["host.<id>"]` says the
+account, the host as named and the address your machine resolved it to,
+the port, the host key's fingerprint and where its trust came from (your
+`known_hosts`, Agentry's, or trusted at this run's start), the sign-in's
+kind and where it came from (never its value), the number of calls, and that
+the machine's own network is outside the run. `hostLink.image` names the
+image and its packages, and the `containers` line names the host link.
+`receipts/host-<id>.log` holds one JSON line a call: the tool, the command or
+the paths, sudo, the exit status and the byte counts, masked by the run's
+redactor.
+
+#### The hosts lists (`hosts`)
+
+```yaml
+hosts:
+  allow: [192.168.1.0/24, 100.64.0.0/10]
+  deny: [10.0.0.0/8]
+```
+
+IPv4 networks in CIDR form. With `allow` set, a target host's address must
+be in one of them; one in `deny` is refused either way. Neither set, every
+address but the ones above is reached.
 
 ## The scratch folder and PDF reports
 
