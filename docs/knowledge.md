@@ -76,7 +76,14 @@ Wrapping is a seam, `KeyWrapper` on `pkg/extension` (`Wrap`, `Unwrap`,
   including one kept on a laptop.
 - **An extension's wrapper** replaces the core's wrapper and nothing else.
   The store, the routes, the scan and the erasure stay the core's.
-  SecureAgentry wraps each key to the account's own certificate.
+  SecureAgentry wraps each key to the account's own certificate (an
+  organization's own, for its shared packs). The certificate's private key
+  is sealed by the vault: OpenBao's Transit key `hosted-keys`, with the
+  account or the organization as the context and the certificate's serial
+  bound in, so neither the CA's master key nor the database opens it, and
+  every open is a Transit decrypt in OpenBao's audit. A SecureAgentry
+  deployment without the vault seals it under the CA's master key instead
+  ([Agentry's CA](hosted-runs.md#agentrys-ca-and-enrolment)).
 
 Without a knowledge sealing key and without an extension that wraps keys,
 the store is off. Every `/knowledge/…` route answers 503
@@ -331,6 +338,17 @@ not keep them from the registry's own code:
   database can unwrap every data key. Keep the key as you keep the auth
   sealing key: in the environment, never in the database or its backups.
   An extension's wrapper moves that trust to its own keys.
+- On Agentry's own deployment (SecureAgentry with the vault): The keys that
+  open your knowledge packs, your Writing Voice and your runs' results are
+  sealed by a key that never leaves our vault. Each time one is opened it is
+  a vault call, recorded in its audit log and allowed only to the parts of
+  Agentry that need it. Agentry runs that vault, so this is not end-to-end
+  encryption. Both the registry's api and its worker may open a key, since
+  the paths above run in both. What holds them to a pack's owner, or an
+  active member of its organization, is the code's owner check, not the
+  vault's policy. A SecureAgentry deployment without the vault keeps the
+  older arrangement, where the CA's master key with the database opens the
+  keys.
 - AI Review sends the text of each chunk to the judge provider the
   registry is configured with. With a hosted model, that provider reads
   the pack. With `none`, nothing leaves the registry.
@@ -352,3 +370,12 @@ core's salt is already gone), and then the sealed blobs are deleted. A
 step that fails is logged and handed to a `knowledge.erase` job that
 retries it. Until it succeeds, a blob left behind is sealed under a data
 key that no one can unwrap.
+
+On SecureAgentry the wrapper's `Destroy` deletes the sealed private keys the
+erasure, data clear or decommission owes. The vault keeps no copy, so every
+wrap of that holder's data keys, including one kept beside a pack on a
+laptop, no longer opens from the live system. A sealed key remains in the
+database's backups until they age out (on Agentry's deployment, two days of
+point-in-time history and thirty nightly copies). A restore of one would
+open those wraps again with the vault's key, or, for a backup taken before
+the vault sealed the keys, with the CA's master key.
