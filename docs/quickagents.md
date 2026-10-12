@@ -294,8 +294,10 @@ capabilities:
 **Which runners reach them.** The CLI reaches a target host since v0.6.105
 (agentry-cli#861): the host link and its tools (`host_run`, `host_read`,
 `host_write`, `host_put`, `host_get`) are in
-[the runner reference](runner.md#target-hosts-a-server-named-at-run-time).
-An interactive shell on the host is agentry-cli#862. A run in Agentry
+[the runner reference](runner.md#target-hosts-a-server-named-at-run-time),
+and since v0.6.106 (agentry-cli#862) so is an interactive shell on the
+host (`host_shell_open`, `host_shell_send`, `host_shell_read`,
+`host_shell_close`). A run in Agentry
 refuses a target host. A CLI or desktop older than the core release that
 added the type refuses a manifest carrying it as an unknown intake type.
 
