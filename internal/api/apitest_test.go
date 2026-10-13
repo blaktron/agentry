@@ -20,9 +20,13 @@ import (
 	"time"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/store"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/internal/testdb"
+	"github.com/google/uuid"
 )
 
 var (
@@ -31,7 +35,68 @@ var (
 	envErr  error
 )
 
-// testEnv is one API test environment over the shared database.
+func TestMain(m *testing.M) { os.Exit(testdb.Main(m)) }
+
+func TestAPITestsRunInTheirOwnDatabase(t *testing.T) {
+	env := newTestEnv(t)
+	var current string
+	if err := env.st.Pool().QueryRow(context.Background(), "SELECT current_database()").Scan(&current); err != nil {
+		t.Fatal(err)
+	}
+	if testdb.ParentDatabase() == "" || current == testdb.ParentDatabase() {
+		t.Fatal("API tests run on the configured parent instead of their own database")
+	}
+}
+
+// Authorization fixtures need an ordinary active account and session, not
+// another exercise of registration, password hashing and sign-in side effects.
+// The password is still a real hash; lifecycle tests keep register/login.
+var fixturePassword = sync.OnceValues(func() (string, error) {
+	return auth.HashPassword("hunter2hunter2")
+})
+
+func (env *testEnv) seedCaller(handle string) caller {
+	env.t.Helper()
+	h := handle + env.sfx
+	hash, err := fixturePassword()
+	if err != nil {
+		env.t.Fatal(err)
+	}
+	user, err := uuid.NewV7()
+	if err != nil {
+		env.t.Fatal(err)
+	}
+	session, err := auth.NewToken(auth.SessionPrefix)
+	if err != nil {
+		env.t.Fatal(err)
+	}
+	csrf, err := auth.NewToken("csrf_")
+	if err != nil {
+		env.t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := env.st.WithTx(ctx, func(q *storegen.Queries) error {
+		if err := q.CreateHandle(ctx, storegen.CreateHandleParams{ID: user, Handle: h, Kind: "user"}); err != nil {
+			return err
+		}
+		if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: user, Email: h + "@example.test", DisplayName: h, PasswordHash: &hash}); err != nil {
+			return err
+		}
+		if err := q.MarkEmailVerified(ctx, user); err != nil {
+			return err
+		}
+		_, err := q.CreateSession(ctx, storegen.CreateSessionParams{
+			ID: uuid.New(), UserID: user, TokenSha256: auth.HashToken(session),
+			CsrfToken: csrf, ExpiresAt: time.Now().Add(time.Hour),
+		})
+		return err
+	}); err != nil {
+		env.t.Fatal(err)
+	}
+	return caller{name: h, session: session, csrf: csrf}
+}
+
+// testEnv is one API test environment over this binary's private database.
 type testEnv struct {
 	t   *testing.T
 	srv *httptest.Server
@@ -375,7 +440,7 @@ func (env *testEnv) registerEmail(handle, email string) string {
 // verifyOrgDomain records that the organization proved control of a
 // domain, which a DNS-TXT claim does in real life (handlers_domains.go):
 // a verified row in domain_claims (agentry#363). A verified domain belongs
-// to one organization, and the test database persists between runs, so a
+// to one organization, and tests in this binary share their database, so a
 // verified claim another test's organization left on the same domain is
 // released first — that organization is done with it.
 func (env *testEnv) verifyOrgDomain(org, domain string) {
