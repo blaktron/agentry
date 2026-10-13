@@ -104,6 +104,15 @@ func s6DeclaredFromManifest(manifestJSON []byte) s6Declared {
 	return d
 }
 
+// s6ShellPath is a path before a pipe's shell target (| /bin/sh); the
+// target must end the word, so | /opt/sh/tool is not a shell
+// (agentry#1148).
+const (
+	s6ShellPath    = "[^\\s;|&()<>`'\":\\\\]*/"
+	s6ShellTargets = "sh|bash|zsh|python[0-9.]*|node|perl"
+	s6Shell        = "\\|\\s*(?:sudo\\s+)?(?:(?:" + s6ShellTargets + ")\\b|" + s6ShellPath + "(?:" + s6ShellTargets + ")(?:$|[\\s;|&)`<>]))"
+)
+
 var (
 	s6URLHost   = regexp.MustCompile(`(?i)\bhttps?://([a-z0-9.-]+)`)
 	s6BareHost  = regexp.MustCompile(`(?i)\b((?:[a-z0-9-]+\.)+[a-z]{2,})(?::\d+)?\b`)
@@ -118,8 +127,8 @@ var (
 	s6ShellEnv  = regexp.MustCompile(`\$\{?([A-Z][A-Z0-9_]*)\}?`)
 	s6PyEnv     = regexp.MustCompile(`os\.environ(?:\.get)?\s*[\[(]\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]|os\.getenv\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]`)
 	s6JSEnv     = regexp.MustCompile(`process\.env\.([A-Za-z_][A-Za-z0-9_]*)|process\.env\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]\s*\]`)
-	s6RemoteExe = regexp.MustCompile(`\b(?:curl|wget)\b[^|\n]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh|python[0-9.]*|node|perl)\b`)
-	s6Decoded   = regexp.MustCompile(`base64\s+(?:-d|--decode)[^|\n]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh|python[0-9.]*|node)\b|\b(?:sh|bash|zsh)\s+-c\s+["']?\$\(|\b(?:python[0-9.]*\s+-c|node\s+-e)\b[^\n]*(?:base64|\\x[0-9a-fA-F]{2})`)
+	s6RemoteExe = regexp.MustCompile(`\b(?:curl|wget)\b[^|\n]*` + s6Shell)
+	s6Decoded   = regexp.MustCompile(`base64\s+(?:-d|--decode)[^|\n]*` + s6Shell + `|\b(?:sh|bash|zsh)\s+-c\s+["']?\$\(|\b(?:python[0-9.]*\s+-c|node\s+-e)\b[^\n]*(?:base64|\\x[0-9a-fA-F]{2})`)
 	s6Eval      = regexp.MustCompile(`(?:^|[\s;|&(])eval\b|\beval\s*\(|\bexec\s*\(|new\s+Function\s*\(`)
 	s6HexBlob   = regexp.MustCompile(`(?:\\x[0-9a-fA-F]{2}){24,}`)
 )
@@ -200,7 +209,11 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 			if comment {
 				continue
 			}
-			if s6Decoded.MatchString(line) || s6HexBlob.MatchString(line) || (s6Eval.MatchString(line) && class != scriptShell) || (class == scriptShell && s6Eval.MatchString(line)) {
+			var cmdNet, cmdWrite, cmdEval bool
+			if class == scriptShell {
+				cmdNet, cmdWrite, cmdEval = shellCommands(line)
+			}
+			if s6Decoded.MatchString(line) || s6HexBlob.MatchString(line) || (s6Eval.MatchString(line) && class != scriptShell) || (class == scriptShell && (s6Eval.MatchString(line) || cmdEval)) {
 				findings = append(findings, Finding{
 					Scanner: "S6/obfuscated-exec", Severity: SevHigh, Confidence: ConfMedium,
 					Title:    "Script executes decoded or dynamically built code",
@@ -212,8 +225,8 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 			var envNames []string
 			switch class {
 			case scriptShell:
-				net = s6ShellNet.MatchString(line)
-				fsw = s6ShellFSW.MatchString(line)
+				net = s6ShellNet.MatchString(line) || cmdNet
+				fsw = s6ShellFSW.MatchString(line) || cmdWrite
 				for _, m := range s6ShellEnv.FindAllStringSubmatch(line, -1) {
 					if n := m[1]; !s6ShellVars[n] {
 						envNames = append(envNames, n)
@@ -425,19 +438,50 @@ func segmentCommand(seg []shellWord) (string, []shellWord) {
 		if wrapped == "env" && strings.Contains(w.text, "=") {
 			continue
 		}
-		if _, ok := s6CmdWrappers[w.text]; ok && !w.quoted {
-			wrapped = w.text
+		name := w.text[strings.LastIndexByte(w.text, '/')+1:] // /usr/bin/ssh is ssh (agentry#1148)
+		if _, ok := s6CmdWrappers[name]; ok && !w.quoted {
+			wrapped = name
 			continue
 		}
 		if w.quoted {
 			return "", nil
 		}
-		return w.text, seg[i+1:]
+		return name, seg[i+1:]
 	}
 	return "", nil
 }
 
 var s6Duration = regexp.MustCompile(`^[0-9.]+[smhd]?$`)
+
+// s6NetCmds and s6WriteCmds are the shell commands S6 reads as a network
+// call or a filesystem write when a segment runs them (shellCommands).
+var (
+	s6NetCmds   = map[string]bool{"curl": true, "wget": true, "nc": true, "ncat": true, "netcat": true, "ssh": true, "scp": true, "sftp": true, "rsync": true, "telnet": true}
+	s6WriteCmds = map[string]bool{"rm": true, "mv": true, "cp": true, "tee": true, "mkdir": true, "chmod": true, "chown": true, "truncate": true, "dd": true}
+)
+
+// shellCommands reads what a shell line runs: the command word of each
+// segment (shellSegments, segmentCommand), by its base name, so
+// /usr/bin/curl, `rm …` and \curl are curl, rm and curl, and a word that
+// is an argument (cat docs/mv, test -x /usr/bin/ssh) or sits in a string
+// (printf "a\nc") is not a command. The keyword regexes (s6ShellNet,
+// s6ShellFSW, s6Eval) are kept beside it, so it only adds (agentry#1148).
+func shellCommands(line string) (net, write, eval bool) {
+	for _, seg := range shellSegments(line) {
+		cmd, args := segmentCommand(seg)
+		switch {
+		case s6NetCmds[cmd]:
+			net = true
+		case cmd == "openssl" && len(args) > 0 && args[0].text == "s_client":
+			net = true
+		case s6WriteCmds[cmd]:
+			write = true
+		case cmd == "eval":
+			eval = true
+		}
+	}
+	return net, write, eval
+}
 
 // sshArgs reads ssh's or sftp's words up to and including the destination,
 // with the jump hosts its options name.
