@@ -100,3 +100,112 @@ func TestS6NoScriptsNoFindings(t *testing.T) {
 		t.Errorf("findings on a scriptless package: %v", keys(boolSet(got)))
 	}
 }
+
+// An ssh-family destination written user@host is a host the script reaches
+// (agentry#1095). Before it, every user@host was skipped with curl's @file
+// argument, so `ssh admin@prod…` was never undeclared-network whatever the
+// manifest declared.
+func TestS6ReadsAnSSHUserAtHostDestination(t *testing.T) {
+	got := s6Run(t, `{"capabilities":{"exec":{"commands":["ssh"]}}}`, map[string]string{
+		"deploy.sh": "#!/bin/sh\nssh admin@prod.example.test 'uptime'\n",
+	})
+	if f, ok := got["S6/undeclared-network"]; !ok || !strings.Contains(f.Title, "prod.example.test") {
+		t.Errorf("undeclared-network = %+v (found %v)", f, ok)
+	}
+	declared := s6Run(t, `{"capabilities":{"network":{"egress":["prod.example.test"]},"exec":{"commands":["ssh"]}}}`, map[string]string{
+		"deploy.sh": "#!/bin/sh\nssh admin@prod.example.test 'uptime'\n",
+	})
+	if f, ok := declared["S6/undeclared-network"]; ok {
+		t.Errorf("a declared host: %+v", f)
+	}
+}
+
+// What sshDestinations reads from a shell line: every form an ssh, scp,
+// sftp or rsync destination or jump host is written in, and nothing else.
+func TestSSHDestinations(t *testing.T) {
+	for line, want := range map[string]string{
+		"ssh admin@prod.example.test 'uptime'":                           "prod.example.test",
+		"ssh -p 2222 -i ~/.ssh/id_ed25519 admin@prod.example.test":       "prod.example.test",
+		"ssh -o BatchMode=yes deploy@prod.example.test systemctl status": "prod.example.test",
+		"ssh -qp 22 admin@prod.example.test":                             "prod.example.test",
+		"ssh -qo BatchMode=yes admin@prod.example.test":                  "prod.example.test",
+		"ssh -fNL 1:x:2 admin@prod.example.test":                         "prod.example.test",
+		"sudo -u deploy ssh $SSH_USER@prod.example.test":                 "prod.example.test",
+		"env A=1 ssh admin@prod.example.test":                            "prod.example.test",
+		"FOO=1 timeout 10 ssh admin@prod.example.test":                   "prod.example.test",
+		"sshpass -p \"$PW\" ssh admin@prod.example.test":                 "prod.example.test",
+		"sshpass -e ssh admin@prod.example.test":                         "prod.example.test",
+		`ssh "${SSH_USER}@prod.example.test" uptime`:                     "prod.example.test",
+		`ssh admin@prod.example.test""`:                                  "prod.example.test",
+		`ssh -o "SetEnv=A=\"" admin@prod.example.test`:                   "prod.example.test",
+		"ssh admin@prod.example.test.":                                   "prod.example.test",
+		"ssh admin@prod.example.test>/dev/null":                          "prod.example.test",
+		"ssh -- admin@prod.example.test":                                 "prod.example.test",
+		"ssh -J ops@bastion.example.test admin@prod.example.test":        "bastion.example.test prod.example.test",
+		"ssh -Jops@bastion.example.test db.example.test":                 "bastion.example.test",
+		"ssh -o ProxyJump=ops@bastion.example.test db.example.test":      "bastion.example.test",
+		"ssh -oProxyJump=ops@bastion.example.test,ops@b2.example.test h": "bastion.example.test b2.example.test",
+		"scp report.txt admin@prod.example.test:/var/tmp/":               "prod.example.test",
+		`scp f "admin@prod.example.test:/x"`:                             "prod.example.test",
+		"scp -P 2222 admin@prod.example.test:/etc/hosts ./hosts":         "prod.example.test",
+		"scp a@one.example.test:/x b@two.example.test:/y":                "one.example.test two.example.test",
+		"sftp -b batch.txt admin@prod.example.test":                      "prod.example.test",
+		"sftp -s sftp admin@prod.example.test":                           "prod.example.test",
+		"sftp -p admin@prod.example.test":                                "prod.example.test",
+		"rsync -az ./site/ ${DEPLOY_USER}@prod.example.test:/srv/site/":  "prod.example.test",
+		"cd /srv && rsync -a out/ admin@prod.example.test::module":       "prod.example.test",
+		"up=$(ssh admin@prod.example.test uptime)":                       "prod.example.test",
+		"up=`ssh admin@prod.example.test uptime` && curl https://x.test": "prod.example.test",
+		// Not a destination.
+		"curl -s --data-binary @listing.txt https://collector.example.test/upload": "",
+		"ssh admin@prod.example.test uptime # mail ops@alerts.example.org":         "prod.example.test",
+		`ssh admin@prod.example.test "echo done | mail ops@alerts.example.org"`:    "prod.example.test",
+		"ssh admin@prod.example.test mail -s done ops@alerts.example.org":          "prod.example.test",
+		"mail -s rsync ops@alerts.example.org < log":                               "",
+		"logger -t scp ops@alerts.example.org":                                     "",
+		"echo ssh admin@prod.example.test":                                         "",
+		"# ssh admin@prod.example.test":                                            "",
+		"":                                                                         "",
+	} {
+		if got := strings.Join(sshDestinations(line), " "); got != want {
+			t.Errorf("%q: %q, want %q", line, got, want)
+		}
+	}
+}
+
+// The user@host shapes that are not an ssh destination stay unread through
+// the whole stage: curl's @file, and an e-mail address in a comment, a
+// string or the remote command.
+func TestS6UserAtHostThatIsNotADestination(t *testing.T) {
+	declared := `{"capabilities":{"network":{"egress":["prod.example.test","collector.example.test"]},"exec":{"commands":["ssh","curl"]}}}`
+	for _, line := range []string{
+		"curl -s -X POST --data-binary @listing.txt https://collector.example.test/upload",
+		"ssh admin@prod.example.test uptime # mail ops@alerts.example.org if this fails",
+		"ssh admin@prod.example.test \"echo done | mail ops@alerts.example.org\"",
+		"ssh admin@prod.example.test mail -s done ops@alerts.example.org",
+	} {
+		got := s6Run(t, declared, map[string]string{"deploy.sh": "#!/bin/sh\n# owner: ops@alerts.example.org\n" + line + "\n"})
+		if f, ok := got["S6/undeclared-network"]; ok {
+			t.Errorf("%q: unexpected %+v", line, f)
+		}
+	}
+}
+
+func TestShellSegments(t *testing.T) {
+	got := shellSegments(`a 'b c' d\ e; f|g && h>out # i j`)
+	var flat []string
+	for _, seg := range got {
+		var ws []string
+		for _, w := range seg {
+			q := ""
+			if w.quoted {
+				q = "*"
+			}
+			ws = append(ws, w.text+q)
+		}
+		flat = append(flat, strings.Join(ws, ","))
+	}
+	if want := "a,b c*,d e|f|g|h,out"; strings.Join(flat, "|") != want {
+		t.Errorf("segments = %q, want %q", strings.Join(flat, "|"), want)
+	}
+}
