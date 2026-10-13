@@ -250,7 +250,11 @@ task) that runs `agentry schedule fire <id>`; no file and no entry holds a
 credential. On Linux with Docker Engine, `--signed-out` also runs a
 schedule while you are signed out, its keys sealed in an encrypted systemd
 credential (`check-signed-out` says whether this machine can, and whether
-your model setup's key would be refused then; `reseal` seals them again). [Scheduled runs](agentry/scheduling.md) is the guide,
+your model setup's key would be refused then; `reseal` seals them again).
+A release that asks for a server is given it at `add`: `--intake
+id=[user@]host[:port]` and the `--host-*` flags, its host key accepted then
+and its sign-in kept in the keychain
+([below](#in-a-session-a-schedule-and-an-install)). [Scheduled runs](agentry/scheduling.md) is the guide,
 with the desktop app and schedules In Agentry; the CLI's
 [README](https://github.com/blaktron/agentry-cli#runs-for-later-and-on-repeat-schedule)
 has every flag.
@@ -1680,6 +1684,37 @@ each thing typed (the text quoted, the keys by name, the sudo password as
 the key `sudo-password`, never its value), the text the shell printed, and
 how the session ended, masked by the run's redactor, at most 64 MiB. The
 `host.<id>` line counts the sessions and names their transcripts.
+
+#### In a session, a schedule and an install
+
+- **A session** takes its target hosts when it starts, the way a run does:
+  the address, the host key and the sign-in are readied before the sandbox,
+  and nothing adds a host later in the conversation.
+- **A schedule** is given its servers when it is made. `agentry schedule
+  add` takes `--intake id=[user@]host[:port]` for each target host, and
+  `--host-key`, `--host-passphrase`, `--host-password` and
+  `--host-sudo-password` as `agentry run` does. The host key is accepted
+  then, the same way: a match in a known_hosts file, otherwise shown and
+  accepted at a terminal. The sign-in (a flag, the keychain or a prompt) is
+  kept in the system keychain without asking, under the account
+  `host:<user>@<host>:<port>`, because the schedule's runs read nothing
+  else; a key is kept as its file's path, so a key file moved or deleted
+  later refuses the runs as below. The schedule keeps the account and the accepted key's SHA256
+  fingerprint, never a credential, and `agentry schedule show` names both.
+  Each run passes that fingerprint, so a host that offers any other key
+  refuses the run (`host-refused`, exit 11): `host-key-changed` when a
+  known_hosts file holds either key, even one that has since learned the
+  new key, and `host-key-unknown` when none does. A run whose sign-in is no
+  longer where it reads it refuses as `host-credential` (exit 11). `add
+  --check`, `add` (before it keeps the schedule) and `edit --signed-out`
+  report what a run would lack. With `--signed-out`, each
+  host's sign-in is sealed beside the model key in the schedule's encrypted
+  credential.
+- **The install record** keeps the release's `targetHosts`, so an update
+  that adds a target host asks for consent again (`agentry install`, and
+  the consent before a run). A record written by CLI v0.6.110 or older
+  names none, so a release that already declared one is asked about once
+  more.
 
 #### The hosts lists (`hosts`)
 
