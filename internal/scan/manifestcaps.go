@@ -27,6 +27,36 @@ type manifestCaps struct {
 	Secrets     []string             `json:"secrets"`
 	MCPServers  []manifest.MCPServer `json:"mcpServers"`
 	TargetHosts []string             `json:"targetHosts"`
+	// Browser is kept raw and read by browser(), so a value of an odd
+	// shape cannot fail the whole decode and leave every other capability
+	// undeclared (agentry#755).
+	Browser json.RawMessage `json:"browser"`
+}
+
+// browser reads the browser line. declared is false when there is none;
+// ok is false when there is one that does not decode, which the callers
+// read the strict way: a browser, on any public site.
+func (c manifestCaps) browser() (b *manifest.Browser, declared, ok bool) {
+	if len(c.Browser) == 0 || string(c.Browser) == "null" {
+		return nil, false, true
+	}
+	if err := json.Unmarshal(c.Browser, &b); err != nil || b == nil {
+		return nil, true, false
+	}
+	return b, true, true
+}
+
+// unrestrictedNetwork reports whether the manifest asks for the network
+// without naming where: "*" egress, or a browser whose scope is any public
+// site (plan browser-testing.md D1, D12). The gate holds both the same way,
+// under the policy's wildcardEgress.
+func unrestrictedNetwork(manifestJSON []byte) bool {
+	if egressSet(manifestJSON)["*"] {
+		return true
+	}
+	c, _ := readManifestCaps(manifestJSON)
+	b, declared, ok := c.browser()
+	return declared && (!ok || b.IsPublic())
 }
 
 // remoteServerHosts are the hosts of the manifest's remote MCP servers
@@ -82,6 +112,13 @@ func declaredCaps(manifestJSON []byte) map[string]bool {
 	// a policy can name it in requireHumanReview.whenCapabilities.
 	if len(c.TargetHosts) > 0 {
 		out["targetHosts"] = true
+	}
+	// The browser is its own token too (plan browser-testing.md §5): it
+	// reaches sites through the runner's browse proxy, never the tools
+	// container's fetch, so it is not "network" and S6's bar for a
+	// script's own call does not move.
+	if _, declared, _ := c.browser(); declared {
+		out["browser"] = true
 	}
 	return out
 }

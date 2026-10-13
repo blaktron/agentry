@@ -317,7 +317,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		Policy:               p.Policy,
 		JudgeForcesReview:    judgeForcesReview,
 		DeclaredCapabilities: decl,
-		WildcardEgress:       egressSet(in.ManifestJSON)["*"],
+		WildcardEgress:       unrestrictedNetwork(in.ManifestJSON),
 		Public:               p.Public,
 		NamespaceIsOrg:       p.NamespaceIsOrg,
 	})
