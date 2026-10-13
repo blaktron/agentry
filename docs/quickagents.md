@@ -301,6 +301,70 @@ host (`host_shell_open`, `host_shell_send`, `host_shell_read`,
 refuses a target host. A CLI or desktop older than the core release that
 added the type refuses a manifest carrying it as an unknown intake type.
 
+#### The browser's site: a `url` question named in `capabilities.browser`
+
+A QuickAgent that tests websites declares a **browser**: a headless
+Chromium the runner gives the run, driven through the runner's browser
+tools. The site to test is named by the person when the run starts, as the
+answer to a `url` question listed under
+[`capabilities.browser.sites`](#capabilities-the-security-contract):
+
+```yaml
+intake:
+  - id: site
+    prompt: "Which site should I test?"
+    type: url
+    required: true
+capabilities:
+  browser:
+    sites: [site]                       # url questions: the person's answer is the site
+    hosts: [fonts.googleapis.com, "*.stripe.com"]   # fixed hosts its pages need
+    scope: site                         # the default; or public
+    secrets: [SITE_USER, SITE_PASSWORD] # declared secrets it may type into the site's forms
+  secrets: [SITE_USER, SITE_PASSWORD]
+```
+
+- **Where the browser may go.** In `site` scope, the default, the site the
+  person names, its subdomains, and the `hosts` the release lists, each an
+  exact name or a `*.` suffix. In `public` scope, any public site. A
+  runner holds the scope in a proxy of its own, the browser's only route
+  out; private addresses are refused, except in a local run the exact host
+  the person typed. The design is in the plan for browser testing
+  (agentry-cli#918).
+- **Signing in.** `secrets` names declared secrets the browser may type:
+  the agent passes a secret's name and the runner's browser server types
+  its value, which the agent never reads back. A browser that types
+  secrets cannot have `public` scope, so the contract admits a secret only
+  on the person's site, its subdomains and the declared hosts. The secrets are stored and asked
+  for as any declared secret is.
+- **The browser is part of the contract.** The install consent shows the
+  line, a new version that adds a browser, a site, a host or a secret, or
+  moves from `site` to `public`, asks for consent again, the registry's AI
+  Review sees it among the declared capabilities, and
+  `GET /search?capability=browser` finds such releases. It is not network
+  egress: the tools container's `fetch` still follows `network.egress`, and
+  a support script that reaches a host itself is still the release's own
+  network (stage S6). `public` scope is held at publication as `"*"` egress
+  is: under the platform's policy it goes to a reviewer.
+- **The rules (V15).** `schemaVersion: 2`. `sites` names `url` questions,
+  at most four, each once. `hosts` are DNS names of two labels or more, or `*.` suffixes of one, at
+  most 32: no `"*"`, no address, no single-label name such as `localhost`, no
+  port, and no suffix that is itself a public suffix (`*.co.uk`, `*.github.io`),
+  which would admit every site registered under it.
+  `scope` is `site` or `public`. The line names at least one site or host,
+  or `public`. Each name in `secrets` is also in `capabilities.secrets` or
+  `optionalSecrets`, and `secrets` with `public` is refused.
+
+**What the manifest says today, and what waits on the runner.** The core
+accepts the line and checks it as above (agentry#1134). The browser itself,
+its proxy and its tools ship in a CLI release of their own
+(agentry-cli#915), and [the runner's documentation](runner.md) describes
+them once they do. Until then no runner gives a run a browser, and a CLI or
+desktop older than this core release refuses a manifest carrying the line
+as an unknown field. A site question is a `url` question: what a runner
+does with its answer beyond opening it in the browser is that runner
+release's to say.
+
 ### `interactive`: session hints
 
 ```yaml
@@ -590,6 +654,13 @@ which the agent may run any command on, as the account the person signs
 in with, through the runner's host tools ([Target hosts](#target-hosts-host)).
 It names no host: the answer does. Adding one is a widening, so an upgrade
 that adds one asks for consent again.
+
+**`browser`** (v2): a headless web browser for the run, with the sites
+the person names (`url` questions), fixed `hosts`, a `scope` (`site`, the
+default, or `public`) and the declared `secrets` it may type
+([The browser's site](#the-browsers-site-a-url-question-named-in-capabilitiesbrowser)).
+A new browser, site, host or secret, or `site` to `public`, is a widening,
+so an upgrade that does one asks for consent again.
 
 **`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.

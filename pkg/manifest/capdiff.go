@@ -92,6 +92,8 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 		d.Narrowed = append(d.Narrowed, "no longer asks for a target host: "+h)
 	}
 
+	d.appendBrowserDiff(old.Browser, next.Browser)
+
 	added, removed = diffSets(dataAccessNames(old.DataAccess), dataAccessNames(next.DataAccess))
 	for _, s := range added {
 		d.Widened = append(d.Widened, "adds data access: "+s)
@@ -134,6 +136,85 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 	}
 
 	return d
+}
+
+// appendBrowserDiff records the browser line's change (plan
+// browser-testing.md invariant 8): a new line, a new site, a new host, a
+// new secret the browser may type, or site scope to public widens, so an
+// upgrade that does any of them asks again.
+func (d *CapabilityDiff) appendBrowserDiff(old, next *Browser) {
+	switch {
+	case old == nil && next == nil:
+		return
+	case old == nil:
+		d.Widened = append(d.Widened, "adds a web browser ("+describeBrowser(next)+")")
+		for _, sec := range next.Secrets {
+			d.Widened = append(d.Widened, "lets the browser type the secret "+sec+" into the site")
+		}
+		return
+	case next == nil:
+		d.Narrowed = append(d.Narrowed, "drops the web browser")
+		return
+	}
+	if !old.IsPublic() && next.IsPublic() {
+		d.Widened = append(d.Widened, "lets the browser reach ANY public site (was: the named sites and hosts)")
+	}
+	if old.IsPublic() && !next.IsPublic() {
+		d.Narrowed = append(d.Narrowed, "keeps the browser to the named sites and hosts (was: any public site)")
+	}
+	// A site or host is new reach only where the old line was held to its
+	// sites: any public site already covered it.
+	reach := func(line string) {
+		if old.IsPublic() {
+			return
+		}
+		d.Widened = append(d.Widened, line)
+	}
+	added, removed := diffSets(old.Sites, next.Sites)
+	for _, id := range added {
+		reach("asks for a site for the browser when it runs: " + id)
+	}
+	for _, id := range removed {
+		d.Narrowed = append(d.Narrowed, "no longer asks for a site for the browser: "+id)
+	}
+	added, removed = diffSets(lowerAll(old.Hosts), lowerAll(next.Hosts))
+	for _, h := range added {
+		reach("lets the browser reach " + h)
+	}
+	for _, h := range removed {
+		d.Narrowed = append(d.Narrowed, "no longer lets the browser reach "+h)
+	}
+	added, removed = diffSets(old.Secrets, next.Secrets)
+	for _, sec := range added {
+		d.Widened = append(d.Widened, "lets the browser type the secret "+sec+" into the site")
+	}
+	for _, sec := range removed {
+		d.Narrowed = append(d.Narrowed, "no longer lets the browser type the secret "+sec)
+	}
+}
+
+// describeBrowser says where a new browser line may go, for its consent
+// line.
+func describeBrowser(b *Browser) string {
+	if b.IsPublic() {
+		return "any public site"
+	}
+	var parts []string
+	if len(b.Sites) > 0 {
+		parts = append(parts, "the site you name for "+strings.Join(b.Sites, ", "))
+	}
+	if len(b.Hosts) > 0 {
+		parts = append(parts, strings.Join(lowerAll(b.Hosts), ", "))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func lowerAll(in []string) []string {
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = strings.ToLower(s)
+	}
+	return out
 }
 
 // appendFSDiff records one filesystem direction's change.

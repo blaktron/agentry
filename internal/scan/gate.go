@@ -23,7 +23,9 @@ type GateInput struct {
 	// DeclaredCapabilities are the manifest's declared capability tokens
 	// (for policy whenCapabilities and wildcard-egress checks).
 	DeclaredCapabilities map[string]bool
-	// WildcardEgress is true when the manifest declares "*" egress.
+	// WildcardEgress is true when the manifest asks for the network
+	// without naming where: "*" egress, or since agentry#1134 a browser
+	// whose scope is any public site (unrestrictedNetwork).
 	WildcardEgress bool
 	// Public marks a public agent (platform review queue for high, §8.6).
 	Public bool
@@ -93,9 +95,9 @@ func Evaluate(in GateInput) GateDecision {
 		switch in.Policy.WildcardEgress {
 		case "reject":
 			return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst, branch: branchWildcardEgressReject,
-				Reason: "Policy refuses wildcard network egress, so the gate rejected this version."}
+				Reason: "Policy refuses unrestricted network access (\"*\" egress or a browser on any public site), so the gate rejected this version."}
 		case "review", "":
-			return review(in, worst, branchWildcardEgressReview, "This version declares wildcard network egress, so the gate sent it to human review.")
+			return review(in, worst, branchWildcardEgressReview, "This version asks for unrestricted network access (\"*\" egress or a browser on any public site), so the gate sent it to human review.")
 		}
 	}
 

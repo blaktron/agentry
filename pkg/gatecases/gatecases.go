@@ -86,7 +86,8 @@ type Case struct {
 	Findings []Finding `json:"findings,omitempty"`
 	// Policy is the effective policy; nil means the table's Baseline.
 	Policy *Policy `json:"policy,omitempty"`
-	// WildcardEgress: the manifest declares "*" egress.
+	// WildcardEgress: the manifest declares "*" egress, or a browser whose
+	// scope is public.
 	WildcardEgress bool `json:"wildcardEgress,omitempty"`
 	// JudgeForcesReview: the AI Review provider requires a person whatever
 	// its scores, or a stage failed closed.

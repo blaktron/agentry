@@ -258,6 +258,7 @@ func Validate(m *Manifest) []error {
 	validateIntake(&s, m)
 	validateSources(&s, m)
 	validateTargetHosts(&s, m)
+	validateBrowser(&s, m)
 	validateInteractive(&s, m)
 	validateGuide(&s, m)
 	validateKnowledge(&s, m)
