@@ -942,7 +942,7 @@ what the run started. It names what was created under the runtime, what the
 gateway's containers were given through the filter, and each class on the
 daemon's default with its measured reason.
 
-Hosted runs are why the knob exists: the platform's run worker renders
+Hosted runs are why the knob exists: the platform's sandbox host renders
 `docker.runtime: runsc` into the policy of every run it drives. That side is
 [Hosted runs](hosted-runs.md).
 
