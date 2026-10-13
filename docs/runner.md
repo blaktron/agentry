@@ -1011,6 +1011,7 @@ lower them for your own host.
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane; before the agent starts they are checked by ClamAV and read in the files image's container (no network, every capability dropped, the files read-only), and their text is mounted read-only at `/inputs-text`; the always-granted `list_inputs`, `read_input` and `search_inputs` serve both ([running with files](#running-with-files)); job output and receipts live on the separate `/out` volume |
 | the scratch folder (the runner's grant to every release, never a built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
+| `grep` and `glob` (granted with the scratch folder) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds, not its capability drop |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
@@ -1204,6 +1205,7 @@ by its path inside the archive: `bundle.zip/notes/memo.docx` (agentry-cli#562).
 | `list_inputs` | one file a line: its path, type, size, whether it was read (`read`, `unread: <reason>`, `unpacked` or `unpacked in part: <reason>` for an archive), the size of its text, and the views it can be read in, the default first; a long listing stops at [one tool result](#one-tool-result-at-a-time-pages) and says the entry `offset` to read on from |
 | `read_input` | one file in one view, a page at a time (`offset`, `maxBytes`), each page within [one tool result](#one-tool-result-at-a-time-pages) and saying where the next begins; for a file with no view, the reason |
 | `search_inputs` | the lines that hold a word or phrase, regardless of case, as `path:line: excerpt` (20 by default, 100 at most, fewer when they would pass one tool result, with a count of those left out) |
+| `grep`, `glob` (path `/inputs`) | the inputs searched by regular expression, or listed by a path pattern; a search reads each input in the view `read_input` gives it ([searching files](#searching-files-grep-and-glob)) |
 
 Each file can be read in two **views** (agentry-cli#631). `text` is a
 document's text, HTML's Markdown or a text file itself. `original` is the
@@ -2166,6 +2168,123 @@ keep it. The envelope gains a `fetchSaves` block counting it:
 A run that saved nothing has no `fetchSaves` block (and an empty ledger),
 and a run without egress has no ledger at all.
 
+## Searching files: `grep` and `glob`
+
+Since agentry-cli v0.6.114 every release's run and session has two search
+tools, **`grep`** and **`glob`** (agentry-cli#912, DR-94). `grep` searches
+the contents of files with a regular expression and `glob` lists files by
+a path pattern. They find files; reading one stays with the tool that
+already reads it. Like the scratch folder they are the runner's grant, not
+a line of the contract: no manifest declares them, an install asks no
+consent for them, and the built-in packages do not have them. A hosted run
+has them once its sandbox host carries that release.
+
+### What they search
+
+Only what the run's other tools already read, one area a call, named by
+the path the run sees:
+
+| Path | What | Read with |
+|---|---|---|
+| `/inputs` | the run's input files | `read_input`, by the path after `/inputs/` |
+| `/knowledge/<pack>` | an attached knowledge pack: its pages and its source documents | `knowledge_read`, by the path after `/knowledge/<pack>/wiki/`, or `doc:` and the path after `sources/` |
+| `/scratch` | the [scratch folder](#the-scratch-folder) | `scratch_read` |
+| `/workspace` | the workspace, only when the contract grants `filesystem.read`, and under a paths grant only the granted paths | `fs_read` |
+
+A call may name a folder or a file beneath an area. A path outside the
+areas this run has is refused, and so is a link that would lead out of
+one. The tools exist only while the run has an area to search, and their
+descriptions name the areas it has. A pack's `manifest.json` is never an
+answer.
+
+Hidden files are searched and ignore files are not read, so nothing the
+person gave is skipped because a `.gitignore` said so. Where ripgrep walks
+a folder it skips `.git` and any file larger than 8 MiB; a file or a
+`.git` folder a call names directly is searched, and so is every input,
+which ripgrep is given by name, whatever its size. A search of the inputs reads
+each input in the view `read_input` gives it (a document's text, a text
+file as uploaded), or in the `view` the call names, and answers as
+`search_inputs` does: the person's own files, unchanged, past the
+gateway's secret block (agentry-cli#632). Every other area answers as a
+text the gateway scans.
+
+### The tools
+
+**`grep`** takes:
+
+- `pattern`, required: a regular expression in ripgrep's syntax (Rust's
+  regex: no look-around or back-references), at most 1,024 bytes; with
+  `fixedStrings`, the literal text;
+- `path`, required: an area or a path within one;
+- `glob`, a file filter relative to `path` (`*.md`, `wiki/**/*.md`; a
+  leading `!` leaves matching files out), and `type`, one of ripgrep's file
+  types (`md`, `py`, `go`, `json`). Over the inputs, which are searched by
+  name, the server applies the glob itself and refuses a type;
+- `ignoreCase` and `fixedStrings`;
+- `output`: `files` (the default) lists the files that match, `content`
+  gives each matching line as `path:line: text` (with up to five lines of
+  `context` around it, as `path-line- text`; a long line is cut to 400
+  bytes around its match), and `count` gives the matching lines per file;
+- `maxResults` and `offset`, for paging;
+- `view`, over the inputs alone: `text` or `original`.
+
+**`glob`** takes `pattern`, a glob relative to `path` (`**/*.md`, `*.csv`,
+`wiki/**/billing*`: `*` within a folder, `**` across folders), `path`,
+`maxResults` and `offset`, and lists the matching files sorted by path.
+
+Both answer 100 result lines by default and 2,000 at most, within
+[one tool result](#one-tool-result-at-a-time-pages), and end a partial
+answer with the lines shown, the total and the `offset` to read on from.
+Paths come back as the run sees them, for the area's own read tool. A
+file ripgrep could not read (a workspace file only its owner may read) is
+counted in the answer, never silently dropped, and a search stopped by
+its time or output limit says it is part of the answer. `search_inputs`,
+`scratch_search` and `knowledge_search` stay: `knowledge_search` ranks a
+pack's pages, which `grep` does not.
+
+### How ripgrep is held
+
+The runner image carries ripgrep 15.2.0, built from pinned source as the
+signed `agentry-ripgrep` image (agentry-dockerimages#81) and copied in by
+digest to `/opt/agentry/ripgrep`. That folder is outside every bin
+directory, so no declared command finds it and an exec image keeps it.
+`rg` is not a command a QuickAgent can declare: its `--pre` option would
+start any program, which no base command may do.
+
+The tools server starts it the way `export_pdf` starts Typst:
+
+- **A fixed argument list.** No config file, ignore files not read,
+  hidden files searched, an 8 MiB cap on a file found by walking a folder,
+  path-sorted output, caps on what a pattern may compile to; then the
+  call's own options from a closed set, each value in one argument with
+  its flag, the `.git` exclusion after the call's glob so a call's `*`
+  cannot bring it back into a walk, `-e` and the
+  pattern, `--`, and the paths. Nothing a call sends can become a flag, and
+  `--pre`, `--pre-glob`, `--search-zip` and `-L` are never passed, so
+  ripgrep starts no program and follows no link.
+- **A user of its own.** Through the runner binary's `confine` role, with
+  an empty environment and, when the tools server is root, as uid and gid
+  65532: not root, whose environment holds the run's secrets, and not
+  Typst's 65533. Where there is no Landlock a declared command runs as
+  65534, a third user, so none of the three can signal or trace another.
+- **Landlock, where there is one:** ripgrep may read only the area it
+  searches (under a paths grant, only the granted paths), writes nothing,
+  and opens no TCP connection at Landlock ABI 4 or later. Where there is
+  no Landlock (gVisor, so every hosted run) only its uid, the memory cap
+  and no_new_privs hold it: it reads and writes only what any user may,
+  and TCP is not refused. A tools server that is not root and has no
+  Landlock refuses to search. DR-94 records the one residual: without
+  Landlock, a link a declared command plants between the server's check
+  and ripgrep's open could point it at a world-readable file outside the
+  area (a hosted run provides no command that makes a link).
+- **Caps:** 512 MiB of address space and 30 seconds a call, and ripgrep
+  is stopped once its output passes 16 MiB.
+
+The tools server's log says which of these holds in a run. The plan's
+enforcement line `search`, which the receipt carries as
+`capabilities_enforced.search`, names the confinement, the environment,
+the argument list's guarantees, the users, and the memory and time caps.
+
 ## The System Prompt
 
 Every run's model reads the **System Prompt** first, and the QuickAgent's
@@ -2194,7 +2313,8 @@ It has two parts:
   actual grants and never one the plan does not make: the size of one tool
 result, the network (none,
   the declared hosts through `fetch`, or a built-in's web tools), the
-  workspace, the scratch folder, the commands, the secrets by name
+  workspace, the scratch folder, searching files with `grep` and `glob`,
+  the commands, the secrets by name
   (marking the optional ones and naming those this run was not given), the
   MCP servers, and the output schema. It also covers the two modes, the
   inputs, how to read a knowledge pack's wiki, the output (`write_report`,
@@ -2233,9 +2353,9 @@ the plan nor its hash. [The Writing Voice](voice.md) has the rest.
 
 ### The text, for a sample plan
 
-What follows was compiled by agentry-cli **v0.6.82** (built from its tag,
-`909d33d`, on 2026-10-08: the first release with the scratch folder and
-`export_pdf`) for a QuickAgent with no grants:
+What follows was compiled by agentry-cli **v0.6.114** (built from its tag,
+`12c0555`, on 2026-10-13: the first release with `grep` and `glob`) for a
+QuickAgent with no grants:
 
 ```yaml
 # agent.yaml
@@ -2257,13 +2377,13 @@ instruction record is:
 ```json
 "instruction": {
   "sourcePath": "AGENT.md",
-  "sha256": "1d6de0308792c46e6756b907d7f685a04fe4516124364cebe2f821eb73251b91",
+  "sha256": "9f432772e56f0556d3ad4307a4d19f6ab62c67a949ae748f66ecc83691734303",
   "bodySha256": "2c53265ab874269c874417f78aa63c538f2c618f122c005e7593ef42aa4959f5"
 }
 ```
 
 The rendered instruction is in the plan directory's `harness/` file. It is
-10,982 bytes, and its SHA-256 is the `sha256` above. Word for word, with
+12,898 bytes, and its SHA-256 is the `sha256` above. Word for word, with
 `@@RUN_MODE@@` as the plan holds it (a run reads `autonomous` or
 `interactive` there):
 
@@ -2303,9 +2423,12 @@ A run is autonomous or interactive, and the head of this prompt says which this 
 
 You have no shell, filesystem or network of your own. Your tools come only from the run's MCP gateway, which runs them in sandboxed containers, and its tool list is the whole of what you can do.
 
+A tool result holds at most 48 KiB and 1,900 lines, so a larger file comes a page at a time: each page ends with a line giving the bytes it holds and the offset to continue from, and you read on by passing that offset. A listing or a search that stops at that size says what it left out and how to read on or narrow it.
+
 - **Network.** None. You cannot browse, search or call an API, so work from your inputs, any attached knowledge and what you know, and never claim to have looked something up.
 - **Workspace.** You have no workspace file access; your files are your inputs, your reports and your scratch folder.
-- **Scratch folder.** /scratch is yours for notes and working files: scratch_write writes there, scratch_list and scratch_read read it back. It starts empty, is private to this run and is deleted when the run ends, so nothing in it reaches the person: the result goes through write_report.
+- **Scratch folder.** /scratch is yours for notes and working files: scratch_write writes there, scratch_list and scratch_read read it back, and scratch_search finds a word or phrase in its text files. scratch_read reads a text file as text and a binary file as pages of base64. It starts empty, is private to this run and is deleted when the run ends, so nothing in it reaches the person: the result goes through write_report.
+- **Searching files.** grep searches the contents of files with a regular expression (ripgrep's syntax) and glob lists files by a path pattern, one area at a time, named by its path: /inputs, /scratch, /knowledge/<pack> while a pack is attached. Use them to find what to read before reading file by file. A search of your inputs searches each in the view read_input gives it.
 - **Commands.** None: you cannot run a program.
 - **Credentials.** None are granted to this run. Never ask for, print or guess one.
 
@@ -2315,13 +2438,15 @@ Files given for this run are under /inputs, read-only: list_inputs lists them, w
 
 ## Your knowledge
 
-A knowledge pack is an LLM wiki: pages compiled from documents, with an index and a log. Packs attached to this run are read-only and reached only through knowledge_list, knowledge_search and knowledge_read, which exist only while at least one pack is attached. With none attached, work from your inputs and your instruction.
+A knowledge pack is an LLM wiki: pages compiled from documents, with an index and a log. Packs attached to this run are read-only and reached through knowledge_list, knowledge_search and knowledge_read, which exist only while at least one pack is attached, and grep and glob, which search and list them under /knowledge/<pack>. With none attached, work from your inputs and your instruction.
+
 
 How to read a pack:
 
 1. Start with knowledge_list. With one pack it returns the pack's index: every page, one line each, by section, with its summary. With several packs and none named, it lists the packs; name one to get its index. A very large pack's index lists its sections; list a section to get its pages.
 2. Choose pages by their titles and summaries, and read them with knowledge_read, by the path the index gives or by a page's bare name.
 3. Use knowledge_search for a name, a term or a phrase the index does not make obvious. Results come best first, each with the line that matched; scope "sources" or "all" searches the original documents too.
+   For an exact term, an identifier, a citation or a pattern, grep the pack (path /knowledge/<pack>, output "content"): it searches every page and source document by regular expression, and you read what it finds with knowledge_read, by the path after /knowledge/<pack>/wiki/ (or doc:<the path after sources/>).
 4. Follow a page's links by name before searching again: the links are the pack's own map.
 5. Every claim in a page cites where it came from. [src: doc:<path>] is a source document, which knowledge_read opens by that doc:<path>. [src: web:<url>] is a web page the pack's builder read, which the pack does not keep. [src: model] is what the builder's model wrote from its own knowledge, the weakest kind. "(unverified)" marks what the sources left unsettled. When a claim matters and the page is thin, read its source.
 6. A page's frontmatter says when it was last updated, and log.md records what the pack took in and when.
@@ -2343,7 +2468,8 @@ How to use it:
 ## Your output
 
 - write_report writes a file under the run's reports folder, the only file that survives the run. Use it when the result is a document, or longer than a message, and write as you go, so a run stopped at its limits keeps its work.
-- export_pdf turns a Markdown report you wrote into a PDF beside it in reports/, laid out in the style the person chose for their reports. Write the report with write_report first. Then also call export_pdf when the person asks for a PDF, when the report is meant for someone other than the person (a client deliverable, a letter, a summary for a team or a manager), or when the person names a theme or a style for it; otherwise the Markdown alone is the report. The style is the person's setting, not yours: a request for a formal tone changes your words, not the layout.
+- export_pdf turns a Markdown report you wrote into a PDF beside it in reports/, laid out in the person's report design. Write the report with write_report first. Then also call export_pdf when the person asks for a PDF, when the report is meant for someone other than the person (a client deliverable, a letter, a summary for a team or a manager), or when the person names a theme or a style for it; otherwise the Markdown alone is the report. The design (colours, fonts, layout) is the person's setting, not yours: a request for a formal tone or a colour changes your words, not the design.
+- export_pdf's form is yours to choose, for the document's shape: report (the default) for a report, a summary or anything with sections; letter for a letter, whose first heading becomes the letterhead and whose short lines (an address, a signature) are kept; memo for a memo or a note to a team, whose To:, From:, Date: and Subject: lines, written first under its heading, become its header. Open the document with a # heading that is its title.
 - In an autonomous run your last message is the run's answer; in an interactive session, your replies are. Say what was done and anything that could not be.
 
 ## Working well
@@ -3206,7 +3332,8 @@ wrapper, the scan, an organization's shared packs) is
 (the manifest, the layout, the 10 MB cap, the digest) before anything is
 resolved. It mounts one read-only `/knowledge` volume, and the tools server
 grants `knowledge_list`, `knowledge_search` and `knowledge_read` for that
-run only. Attaching a pack changes neither the compiled plan nor its hash.
+run only; `grep` and `glob` search and list it under `/knowledge/<pack>`
+([searching files](#searching-files-grep-and-glob)). Attaching a pack changes neither the compiled plan nor its hash.
 The receipt's `capabilities_enforced.knowledge` names each pack by digest
 and says whether a registry scanned it. A bare `NAME` is looked up in the
 store first, and a directory of that name in the working directory is
