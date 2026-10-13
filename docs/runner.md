@@ -3207,8 +3207,8 @@ same pipeline as `agentry publish`, with a structured editor for
 Drafter, on this computer (the same packages `agentry draft` drives, with
 your own Jev key) or In Agentry (a hosted draft), and reads the draft into
 its form as data; nothing is written into a QuickAgent folder until you save.
-Its Voice panel keeps the two [Writing Voices](#a-writing-voice) a person
-can have: this computer's, through the same local store as `agentry voice`,
+Its Voice page keeps the two [Writing Voices](#a-writing-voice) a person
+can have, as two cards, Local Voice and Cloud Voice: this computer's, through the same local store as `agentry voice`,
 and the account's, through the same client as `voice upload` and
 `download`. It runs the Voice Writer on this computer for no credits or In
 Agentry, and every run setup's Review has **Write in my voice**, ticked from
@@ -3391,8 +3391,9 @@ text a run follows as instructions, bounded by
 keeps the voice it writes on this computer. The samples are decoded as the
 Knowledge Creator's documents are, 10 MB in all, and read where they are;
 nothing keeps them. `improve --file PATH…` runs it again over the voice as
-it stands and more samples, and `edit --note TEXT` changes the voice by a
-note (an AI Edit). `--brief TEXT` says how you want to sound. `set FILE|-`
+it stands and more samples, and `edit --note TEXT [--file PATH…]` changes
+the voice by a note (an AI Edit), with samples that show the change if you
+give them; the note is the change to make. `--brief TEXT` says how you want to sound. `set FILE|-`
 keeps your own text instead. The Voice Writer is a package this binary
 embeds and runs with the attestation state `builtin`, against the model
 your policy names: it costs no credits, and nothing it reads or writes is

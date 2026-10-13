@@ -173,13 +173,28 @@ a computer and the account on its own (plan `writing-voice.md` D6):
   nothing on the computer; `download` keeps the account's live version on
   the computer, held to its digest; `status` shows both; `attach on|off
   --account` is `PUT /voice/settings`.
-- **The desktop** shows both voices in its Voice panel. *Submit to
-  Agentry* is the CLI's upload, and so is a save of the account's voice
-  from its editor; *Use Agentry's voice here* is the CLI's download.
-- **The site** shows the account's voice on the Dashboard's Voice section,
-  with an editor whose Save is `PUT /voice` with the source `edit`, Restore,
-  Discard for a pending version, Delete, and the `alwaysAttach` switch in
-  Settings → Profile.
+- **The desktop** shows the two voices as two cards, **Local Voice** and
+  **Cloud Voice**. The Local Voice page edits this computer's voice, runs
+  **Edit with AI** on this computer for no credits (a note and optional
+  samples; with no voice, **Write with AI** creates one), and moves the
+  voice: **Upload to Cloud** is the CLI's upload and **Download Cloud
+  version** its download. Each says *Already the same* when the digests
+  match and asks before it replaces a voice that looks newer. The Cloud
+  Voice page is the site's Voice settings page: an editor whose Save is
+  `PUT /voice` with the source `edit`, Edit with AI In Agentry, Discard,
+  Restore and Delete, and the `alwaysAttach` switch.
+- **The site** has two cards on the Dashboard's Voice page. **AI Voice
+  Writer** runs the hosted Voice Writer: a new voice from samples, or an
+  Edit with AI, a note saying what should change with optional samples.
+  **Voice settings** holds the account's voice in an editor whose Save is
+  `PUT /voice` with the source `edit`, Discard for a pending version,
+  Restore, Delete, and the `alwaysAttach` switch, which Settings → Profile
+  also shows. The site offers no Improve; the CLI and the API keep it.
+
+Both clients' editors show the voice as formatted text and save Markdown
+(WYSIWYG): raw HTML and images stay text, no link opens from the editor, a
+link's address and title and a code block's info string are shown, and an
+edit leaves every block the person did not change exactly as it was read.
 
 A client reads `features.voice` in `GET /meta` and draws none of this
 where the store is off.
@@ -193,7 +208,8 @@ described with the rest of its runs on [Hosted runs](hosted-runs.md):
   creates, improves or AI-edits the person's voice on a sandbox host and
   proposes what it writes as the pending version
   ([A hosted Voice Writer run](hosted-runs.md#a-hosted-voice-writer-run)).
-  Each costs 20 credits flat, AI Review included, and a person on Standard
+  An AI Edit takes optional samples beside its note, as `agentry voice
+  edit --file` does. Each costs 20 credits flat, AI Review included, and a person on Standard
   starts one a billing cycle, whichever of the three.
 - **A run in the voice**: a hosted run or session created with
   `voice: true` is handed the runner's live version at the hand-off
