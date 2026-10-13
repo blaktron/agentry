@@ -3736,6 +3736,9 @@
             "TestS6ReadsAnSSHUserAtHostDestination",
             "TestSSHDestinations",
             "TestS6UserAtHostThatIsNotADestination",
+            "TestS6ReadsAPathQualifiedOrWrappedCommand",
+            "TestS6CommandNameInsideAWordIsNotACommand",
+            "TestS6ReadsAPathQualifiedWriteAndShell",
             "TestShellSegments"
           ],
           "fuzz": [],
