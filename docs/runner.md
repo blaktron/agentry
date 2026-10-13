@@ -1574,7 +1574,9 @@ holds one relay a host.
    mode, and names both fingerprints (`host-key-changed`). A key on neither
    file is shown (its type and SHA256 fingerprint) and accepted only if you
    say so at a terminal, then kept in the runner's file; with no terminal
-   the run refuses it (`host-key-unknown`).
+   the run refuses it (`host-key-unknown`). A host that does not answer
+   on its port while its key is read refuses the run with exit 11,
+   `host-unreachable`.
 3. **The sign-in**, taken in order:
    1. `--host-key <id>=PATH`, a private key file (its passphrase from
       `--host-passphrase <id>=ENV_NAME`, or a prompt), or
@@ -1616,8 +1618,9 @@ with this CLI's runner binary copied in, minimized to `ssh` and `sftp`
   command that does nothing (`true`) before it serves anything, so a host
   that refuses the sign-in stops the run before the agent starts: exit 11,
   `host-refused`, detail `host-auth` (or `host-key-changed`); a host it
-  cannot reach is exit 13, `host-unreachable`. Those sign-ins are in the
-  host's own log.
+  cannot reach at this point is exit 13 (the gateway's own class),
+  `host-unreachable`, the one `host-refused` that is not exit 11. Those
+  sign-ins are in the host's own log.
 
 **What the agent can do.** Each call to the first five tools is an SSH
 session of its own; a shell session is one SSH session that lasts from
@@ -3026,6 +3029,7 @@ model, the author or the person wrote; at most eight), for some codes a
 | `plan-limit` | the agent: your plan refused the model's calls for its usage limit (exit 16; never retried) | none | — |
 | `org-policy` | the agent: an organization's or enterprise's policy at the model vendor refused the run (exit 11; Copilot only so far) | none | `client-disabled`, `managed-approval` |
 | `out-of-credits` | the agent: the model's provider answered 402, or said so: the account that pays has no credits (exit 16; never retried) | none | — |
+| `host-refused` | readying a [target host](#target-hosts-a-server-named-at-run-time) before anything starts, or the host link's sign-in when the gateway starts it: a host the run will not reach (exit 11, except `host-unreachable` at the host link's start, exit 13) | the target host's question id (never its name or address) | `host-address` (an address a target host never is, one the policy's `hosts` lists exclude, or a name with no IPv4 address), `host-key-unknown` (a key on no file, not accepted at a terminal), `host-key-changed` (a key other than the one on file, or a revoked one), `host-auth` (the host did not accept the sign-in), `host-credential` (no sign-in given, or one that cannot be used; also an unanswered host), `host-unreachable` (the host did not answer on its port), `hosted` (a hosted run never reaches a target host) |
 
 The four model sign-in codes carry no names; the vendor's own words about a
 plan limit, a policy or a missing credit are in the masked error and the
