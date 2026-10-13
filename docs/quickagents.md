@@ -493,9 +493,10 @@ setups are to show it (agentry-web#1235, agentry-desktop#704).
 Closed vocabulary. Omitted or empty means a **pure-text QuickAgent**
 (its run-time tools are `write_report`, the read-only `list_inputs`,
 `read_input` and `search_inputs`, its scratch folder's `scratch_list`,
-`scratch_read`, `scratch_write` and `scratch_search`, and `export_pdf`,
-nothing else; the last five are the runner's grants to every release but a
-built-in, not
+`scratch_read`, `scratch_write` and `scratch_search`, `export_pdf`, and
+`grep` and `glob` over its inputs, its scratch folder and any attached
+knowledge, nothing else; the last seven are the runner's grants to every
+release but a built-in, not
 lines of the contract). The registry scans releases
 against these declarations, an install prompts on them (egress/exec need
 typed consent; a widened contract re-asks on upgrade), and the runner
@@ -845,6 +846,7 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 | (always) | `list_inputs`, `read_input`, `search_inputs`: the run's provided input files, read-only |
 | (always, but for the built-ins) | `scratch_list`, `scratch_read`, `scratch_write`, `scratch_search`: the run's [scratch folder](runner.md#the-scratch-folder) at `/scratch`, private to the run and deleted at its end |
 | (always, but for the built-ins) | `export_pdf`: a Markdown report as a PDF in `reports/`, in the form the agent picks (`report`, the default, `letter` or `memo`) and laid out in the person's [report theme](runner.md#the-report-theme) |
+| (always, but for the built-ins) | `grep`, `glob`: [search file contents](runner.md#searching-files-grep-and-glob) by regular expression and list files by path pattern with ripgrep, one area a call, only what the run's other tools read: `/inputs`, `/knowledge/<pack>`, `/scratch`, and `/workspace` only with `filesystem.read`. ripgrep runs as a user of its own, with an empty environment, a fixed argument list that never starts another program, and caps on memory and time; where the machine has Landlock it also reads only the searched area, writes nothing and opens no TCP connection |
 | `filesystem.read` | `fs_read`, `fs_list` |
 | `filesystem.write` | `fs_write` |
 | `network.egress` hosts | `fetch` (with optional declared-secret auth) |
@@ -855,7 +857,8 @@ head says the run is in a locked sandbox, puts attached knowledge first, and
 keeps the model on the instruction's task. Its body is composed from what
 the manifest grants, and never states a grant the manifest does not make.
 It covers the tools (only from the gateway), the network, the workspace at
-`/workspace`, the scratch folder at `/scratch`, the commands, the secrets
+`/workspace`, the scratch folder at `/scratch`, searching files with
+`grep` and `glob`, the commands, the secrets
 by name, and the inputs under `/inputs`. It explains how to read an
 attached knowledge pack, that reports go through `write_report`, when to
 also export one as a PDF with `export_pdf`, and that the final message is
