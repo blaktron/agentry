@@ -502,6 +502,39 @@ capabilities:
 	if len(caps.Results) != 0 {
 		t.Fatalf("capability=network matched a target host release: %+v", caps.Results)
 	}
+
+	// capability=browser matches only a release that declares a browser
+	// (plan browser-testing.md §5; agentry#1134), and a browser is not
+	// network egress. A site-scoped browser publishes under the baseline.
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "facetbrowser", "modes": []string{"autonomous"}, "visibility": "public",
+		"summary": q,
+	}, nil, http.StatusCreated)
+	files = skillFiles(owner, "facetbrowser", "1.0.0", nil)
+	files["agent.yaml"] += `intake:
+  - id: site
+    prompt: "Which site should I test?"
+    type: url
+    required: true
+capabilities:
+  browser:
+    sites: [site]
+    hosts: [fonts.googleapis.com]
+`
+	status, body = env.uploadVersionCLI(owner, "facetbrowser", pat, files)
+	if status != http.StatusAccepted {
+		t.Fatalf("publish a browser release: %d %s", status, body)
+	}
+	env.waitStatus(owner, "facetbrowser", "1.0.0", "published")
+	var browsers results
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&capability=browser", nil, &browsers, http.StatusOK)
+	if len(browsers.Results) != 1 || browsers.Results[0].Name != "facetbrowser" {
+		t.Fatalf("capability=browser = %+v; want facetbrowser alone", browsers.Results)
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&capability=network", nil, &caps, http.StatusOK)
+	if len(caps.Results) != 0 {
+		t.Fatalf("capability=network matched a browser release: %+v", caps.Results)
+	}
 }
 
 func TestRateLimitHeadersOnEveryResponse(t *testing.T) {
