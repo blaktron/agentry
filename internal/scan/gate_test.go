@@ -5,34 +5,8 @@ import (
 	"testing"
 )
 
-func f(sev Severity, conf Confidence) Finding {
-	return Finding{Scanner: "Sx/test", Severity: sev, Confidence: conf, Title: string(sev)}
-}
-
-func TestGateSeverityTable(t *testing.T) {
-	base := DefaultBaseline()
-	cases := []struct {
-		name string
-		in   GateInput
-		want Outcome
-	}{
-		{"clean", GateInput{Policy: base}, OutcomePublish},
-		{"info", GateInput{Findings: []Finding{f(SevInfo, ConfHigh)}, Policy: base}, OutcomePublish},
-		{"low auto", GateInput{Findings: []Finding{f(SevLow, ConfHigh)}, Policy: base}, OutcomePublish},
-		{"medium auto", GateInput{Findings: []Finding{f(SevMedium, ConfHigh)}, Policy: base}, OutcomePublish},
-		{"high review", GateInput{Findings: []Finding{f(SevHigh, ConfHigh)}, Policy: base}, OutcomeNeedsReview},
-		{"critical reject", GateInput{Findings: []Finding{f(SevCritical, ConfHigh)}, Policy: base}, OutcomeRejected},
-		{"low-confidence high does not gate alone",
-			GateInput{Findings: []Finding{f(SevHigh, ConfLow)}, Policy: base}, OutcomePublish},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := Evaluate(tc.in)
-			if got.Outcome != tc.want {
-				t.Fatalf("got %s want %s (%s)", got.Outcome, tc.want, got.Reason)
-			}
-		})
-	}
+func highConfidenceFinding(sev Severity) Finding {
+	return Finding{Scanner: "Sx/test", Severity: sev, Confidence: ConfHigh, Title: string(sev)}
 }
 
 func TestGateJudgeForcesReview(t *testing.T) {
@@ -46,7 +20,7 @@ func TestGateJudgeForcesReview(t *testing.T) {
 
 func TestGatePlatformQueueForPublicHigh(t *testing.T) {
 	got := Evaluate(GateInput{
-		Findings: []Finding{f(SevHigh, ConfHigh)}, Policy: DefaultBaseline(), Public: true,
+		Findings: []Finding{highConfidenceFinding(SevHigh)}, Policy: DefaultBaseline(), Public: true,
 	})
 	if got.Outcome != OutcomeNeedsReview || got.Queue != "platform" {
 		t.Fatalf("public high must route to platform queue: %+v", got)
@@ -88,7 +62,7 @@ func TestBaselinePublishesOnMedium(t *testing.T) {
 	if got := DefaultBaseline().MaxAutoPublishSeverity; got != "medium" {
 		t.Fatalf("DefaultBaseline threshold = %q, want medium", got)
 	}
-	medium := []Finding{f(SevMedium, ConfHigh)}
+	medium := []Finding{highConfidenceFinding(SevMedium)}
 	// A policy that names no threshold gets the baseline's.
 	if got := Evaluate(GateInput{Findings: medium, Policy: Policy{}}); got.Outcome != OutcomePublish {
 		t.Fatalf("a policy with no threshold held a medium: %s (%s)", got.Outcome, got.Reason)
@@ -117,11 +91,11 @@ func TestAnOrgAtLowStillHoldsMedium(t *testing.T) {
 	if LoosensBaseline(DefaultBaseline(), Policy{MaxAutoPublishSeverity: "low"}) {
 		t.Fatal("an org at low was called a loosening")
 	}
-	medium := []Finding{f(SevMedium, ConfHigh)}
+	medium := []Finding{highConfidenceFinding(SevMedium)}
 	if got := Evaluate(GateInput{Findings: medium, Policy: merged}); got.Outcome != OutcomeNeedsReview {
 		t.Fatalf("the org at low published a medium: %s (%s)", got.Outcome, got.Reason)
 	}
-	low := []Finding{f(SevLow, ConfHigh)}
+	low := []Finding{highConfidenceFinding(SevLow)}
 	if got := Evaluate(GateInput{Findings: low, Policy: merged}); got.Outcome != OutcomePublish {
 		t.Fatalf("the org at low held a low: %s (%s)", got.Outcome, got.Reason)
 	}

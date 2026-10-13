@@ -89,6 +89,40 @@ acceptance filters and the named-evidence catalogue together. Report actual
 executed/skipped counts, setup/invocation counts and comparable timings;
 combining declarations into subtests alone does not reduce execution cost.
 
+### Gate outcome ownership
+
+`TestGateCases` owns the severity/outcome/queue matrix through the literal
+cases in `pkg/gatecases/cases.json`. Its baseline, grid and branch guards
+remain separate. Clients consume the same published inputs and expectations;
+the table is not derived from `Evaluate`.
+
+The standalone `TestGateSeverityTable` repeated seven outcome-only calls to
+`Evaluate`. Their retained equivalents are these `TestGateCases` subcases:
+
+| Former case | Retained published case |
+| --- | --- |
+| `clean` | `baseline: no findings publish` |
+| `info` | `baseline: a info finding publishes` |
+| `low auto` | `baseline: a low finding publishes` |
+| `medium auto` | `baseline: a medium finding publishes` |
+| `high review` | `baseline: a high finding is held for review` |
+| `critical reject` | `baseline: a critical finding is rejected` |
+| `low-confidence high does not gate alone` | `a low-confidence high finding does not gate alone` |
+
+Each uses the same baseline, one finding of the same severity/confidence
+(or no finding), no flags and no declared capabilities. The old `Sx/test`
+and table's `S4/example` are ordinary scanner ids, outside the unread-content
+set; titles differ only in the reason that the old test did not assert.
+`TestGateCasesBaselineIsTheRegistrysBaseline` pins the table's policy to the
+compiled baseline. The retained cases check outcome, queue and deciding
+branch, keeping every removed outcome assertion.
+
+Policy parsing/merge and tighten-only rules, empty-policy fallback, conditional
+review, judge flags, public queue routing, unread content and verdict ratings
+retain their tests. Corpus, pipeline signing/failure and registry state-machine
+tests retain their own boundaries. The pure gate table saves seven evaluations;
+this does not establish an improvement in the full suite's runtime.
+
 The [estate plan](https://github.com/blaktron/agentry-notes/blob/main/plans/test-suite-refactoring.md)
 sets the migration order. GitHub issues and the board track the work; this
 document describes the test contracts.
