@@ -3753,6 +3753,12 @@
             "TestS6ReadsAPathQualifiedOrWrappedCommand",
             "TestS6CommandNameInsideAWordIsNotACommand",
             "TestS6ReadsAPathQualifiedWriteAndShell",
+            "TestS6ReadsTheHostFormsOf1149",
+            "TestS6ReadsAnAddressInPython",
+            "TestS6ReadsAChainedVariable",
+            "TestS6CraftedLinesStayFast",
+            "TestS6ReadsADestinationHeldInAVariable",
+            "TestS6HostFormsThatAreNotHosts",
             "TestShellSegments"
           ],
           "fuzz": [],

@@ -3,7 +3,18 @@ package scan
 import (
 	"strings"
 	"testing"
+	"time"
 )
+
+// s6RunAll is every finding, in the stage's order.
+func s6RunAll(t *testing.T, manifest string, files map[string]string) []Finding {
+	t.Helper()
+	in := &Input{ManifestJSON: []byte(manifest)}
+	for p, c := range files {
+		in.Files = append(in.Files, FileEntry{Path: p, IsText: true, Content: []byte(c)})
+	}
+	return S6Scripts{}.Run(testStageContext(t), in).Findings
+}
 
 func s6Run(t *testing.T, manifest string, files map[string]string) map[string]Finding {
 	t.Helper()
@@ -143,7 +154,10 @@ func TestSSHDestinations(t *testing.T) {
 		"ssh -- admin@prod.example.test":                                 "prod.example.test",
 		"ssh -J ops@bastion.example.test admin@prod.example.test":        "bastion.example.test prod.example.test",
 		"ssh -Jops@bastion.example.test db.example.test":                 "bastion.example.test",
+		"ssh -Jops@bastion.example.test db.example.org":                  "bastion.example.test db.example.org",
 		"ssh -o ProxyJump=ops@bastion.example.test db.example.test":      "bastion.example.test",
+		"ssh -L 8080:10.0.0.5:80 -W [2001:db8::2]:22 b.example.org":      "10.0.0.5 [2001:db8::2] b.example.org",
+		"then ssh admin@prod.example.test":                               "prod.example.test",
 		"ssh -oProxyJump=ops@bastion.example.test,ops@b2.example.test h": "bastion.example.test b2.example.test",
 		"scp report.txt admin@prod.example.test:/var/tmp/":               "prod.example.test",
 		`scp f "admin@prod.example.test:/x"`:                             "prod.example.test",
@@ -282,11 +296,160 @@ func TestS6ReadsAPathQualifiedWriteAndShell(t *testing.T) {
 		"curl -s https://get.example.test/i | /opt/sh/tool": "S6/remote-exec",
 		"curl -s https://get.example.test/i | /usr/lib/python3/dist-packages/x": "S6/remote-exec",
 		"base64 -d f | /opt/node/bin/jq .":                                      "S6/obfuscated-exec",
+		`bash deploy.sh -c "rm -rf build"`:                                      "S6/undeclared-fs-write",
 		"curl -s https://get.example.test/f | /usr/bin/shasum -a 256":           "S6/remote-exec",
 	} {
 		got := s6Run(t, `{"capabilities":{"network":{"egress":["get.example.test"]},"exec":{"commands":["curl","rmtool","rmdir-report","shasum"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
 		if f, ok := got[not]; ok {
 			t.Errorf("%q: unexpected %s %+v", line, not, f)
+		}
+	}
+}
+
+// The host forms S6 did not read before agentry#1149, each to an
+// undeclared host: IP addresses, URI schemes other than http(s) and a URL's
+// userinfo, dynamic users, the other ssh-family commands, a destination held
+// in a variable, and commands inside a quoted string or an sh -c string.
+func TestS6ReadsTheHostFormsOf1149(t *testing.T) {
+	for line, host := range map[string]string{
+		"ssh admin@10.1.2.3 uptime":                                       "10.1.2.3",
+		"ssh 10.1.2.3":                                                    "10.1.2.3",
+		"scp f admin@10.0.0.1:/tmp/":                                      "10.0.0.1",
+		"rsync -a out/ 10.0.0.1:/srv/":                                    "10.0.0.1",
+		"ssh admin@[2001:db8::1]":                                         "2001:db8::1",
+		"nc 10.1.2.3 80":                                                  "10.1.2.3",
+		"curl -s 10.1.2.3:8080/x":                                         "10.1.2.3",
+		"curl -s https://[2001:db8::1]/x":                                 "2001:db8::1",
+		"ssh ssh://admin@prod.example.org:2222":                           "prod.example.org",
+		"sftp sftp://prod.example.org/upload":                             "prod.example.org",
+		"rsync ./x rsync://prod.example.org/module/":                      "prod.example.org",
+		"curl -T f ftp://prod.example.org/in/":                            "prod.example.org",
+		"wget ftp://prod.example.org/f":                                   "prod.example.org",
+		"curl -s https://user:secret@prod.example.org/x":                  "prod.example.org",
+		"ssh $(whoami)@prod.example.org":                                  "prod.example.org",
+		"ssh `whoami`@prod.example.org":                                   "prod.example.org",
+		"ssh ${USER:-root}@prod.example.org":                              "prod.example.org",
+		"ssh $1@prod.example.org":                                         "prod.example.org",
+		"ssh-copy-id -i key.pub admin@prod.example.org":                   "prod.example.org",
+		"autossh -M 0 -N admin@prod.example.org":                          "prod.example.org",
+		"mosh admin@prod.example.org":                                     "prod.example.org",
+		"mosh --ssh='ssh -p 2222' admin@prod.example.org":                 "prod.example.org",
+		"sshfs admin@prod.example.org:/srv /mnt/srv":                      "prod.example.org",
+		"DEST=admin@prod.example.org; ssh $DEST":                          "prod.example.org",
+		"export DEST=admin@prod.example.org && ssh \"$DEST\"":             "prod.example.org",
+		`out="$(ssh admin@prod.example.org uptime)"`:                      "prod.example.org",
+		"bash -c 'ssh admin@prod.example.org uptime'":                     "prod.example.org",
+		`sh -c "curl -s https://prod.example.org/x"`:                      "prod.example.org",
+		"sudo -u ops sh -ec 'rsync -a o/ admin@prod.example.org:/x'":      "prod.example.org",
+		"nc [2001:db8::1] 22":                                             "2001:db8::1",
+		"curl -s http://127.0.0.1.prod.example.org/x":                     "127.0.0.1.prod.example.org",
+		"ssh root@127.0.0.1.prod.example.org":                             "127.0.0.1.prod.example.org",
+		"for h in prod.example.org; do ssh \"$h\" uptime; done":           "prod.example.org",
+		"if ssh -o BatchMode=yes admin@prod.example.org true; then :; fi": "prod.example.org",
+	} {
+		run := func(manifest string) map[string]Finding {
+			return s6Run(t, manifest, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
+		}
+		got := run(`{"capabilities":{"exec":{"commands":["x"]}}}`)
+		if f, ok := got["S6/undeclared-network"]; !ok || f.Detail["host"] != host {
+			t.Errorf("%q: undeclared-network = %+v (found %v), want %s", line, f.Detail, ok, host)
+		}
+		if f, ok := run(`{"capabilities":{"network":{"egress":["` + host + `"]},"exec":{"commands":["x"]}}}`)["S6/undeclared-network"]; ok {
+			t.Errorf("%q with %s declared: %+v", line, host, f.Detail)
+		}
+	}
+}
+
+// An address in Python is a quoted address with its port beside it.
+func TestS6ReadsAnAddressInPython(t *testing.T) {
+	got := s6Run(t, `{"capabilities":{"exec":{"commands":["python3"]}}}`, map[string]string{"c.py": "import socket\ns = socket.create_connection((\"10.0.0.9\", 443))\n"})
+	if f, ok := got["S6/undeclared-network"]; !ok || f.Detail["host"] != "10.0.0.9" {
+		t.Errorf("undeclared-network = %+v (found %v)", f.Detail, ok)
+	}
+	got = s6Run(t, `{"capabilities":{"network":{"egress":["get.example.test"]},"exec":{"commands":["python3"]}}}`, map[string]string{"c.py": "import requests\nrequests.get(\"https://get.example.test/x\", headers={\"X-Version\": \"1.2.3.4\"})\n"})
+	if f, ok := got["S6/undeclared-network"]; ok {
+		t.Errorf("a version string read as a host: %+v", f.Detail)
+	}
+}
+
+// A variable whose value names another, resolved through both.
+func TestS6ReadsAChainedVariable(t *testing.T) {
+	for _, script := range []string{
+		"H=prod.example.org\nR=root@$H\nssh $R uptime\n",
+		"H=prod.example.org\nURL=\"https://$H/x\"\ncurl -s \"$URL\"\n",
+	} {
+		got := s6Run(t, `{"capabilities":{"exec":{"commands":["ssh","curl"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + script})
+		if f, ok := got["S6/undeclared-network"]; !ok || f.Detail["host"] != "prod.example.org" {
+			t.Errorf("%q: undeclared-network = %+v (found %v)", script, f.Detail, ok)
+		}
+	}
+}
+
+// Deep substitutions and thousands of references stay linear: the review
+// of agentry#1149 measured 11 s and 34 s on these shapes before the caps.
+func TestS6CraftedLinesStayFast(t *testing.T) {
+	deep := strings.Repeat("$(echo ", 20000) + "ssh admin@prod.example.org" + strings.Repeat(")", 20000)
+	many := "A=prod.example.org\ncurl -s https://get.example.test/ " + strings.Repeat("$A ", 60000) + "\n"
+	for name, script := range map[string]string{"deep": deep + "\n", "many": many} {
+		start := time.Now()
+		s6Run(t, `{"capabilities":{"exec":{"commands":["x"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + script})
+		if d := time.Since(start); d > 3*time.Second {
+			t.Errorf("%s took %v", name, d)
+		}
+	}
+}
+
+// A variable assigned on one line and used on a network line on another.
+func TestS6ReadsADestinationHeldInAVariable(t *testing.T) {
+	got := s6Run(t, `{"capabilities":{"exec":{"commands":["ssh","curl"]}}}`, map[string]string{"run.sh": "#!/bin/sh\nDEST=deploy@prod.example.org\nH=api.example.org\n\nssh \"$DEST\" uptime\ncurl -s https://$H/v1/x\n"})
+	var hosts []string
+	for _, f := range s6RunAll(t, `{"capabilities":{"exec":{"commands":["ssh","curl"]}}}`, map[string]string{"run.sh": "#!/bin/sh\nDEST=deploy@prod.example.org\nH=api.example.org\n\nssh \"$DEST\" uptime\ncurl -s https://$H/v1/x\n"}) {
+		if f.Scanner == "S6/undeclared-network" {
+			hosts = append(hosts, f.Detail["host"].(string))
+		}
+	}
+	if strings.Join(hosts, " ") != "api.example.org prod.example.org" {
+		t.Errorf("hosts = %v (got %v)", hosts, keys(boolSet(got)))
+	}
+}
+
+// The counterparts: what looks like one of those forms and is not a host
+// the script reaches.
+func TestS6HostFormsThatAreNotHosts(t *testing.T) {
+	for _, script := range []string{
+		"echo version 1.2.3.4\n",
+		"curl -s -o pkg-1.2.3.4.tgz https://get.example.test/pkg\n",
+		"ssh admin@127.0.0.1 uptime\n",
+		"curl -s http://0.0.0.0:8080/health\n",
+		"curl -s http://[::1]:8080/health\n",
+		"EMAIL=ops@prod.example.org\ncurl -s -d \"to=$EMAIL\" https://get.example.test/notify\n",
+		"H=prod.example.org\necho \"deploying to $H\"\ncurl -s https://get.example.test/x\n",
+		"echo \"ssh admin@prod.example.org\"\n",
+		"bash -c 'echo prod.example.org'\n",
+		"ssh-keygen -t ed25519 -C ops@prod.example.org\n",
+		"mosh-server new -p 60001 prod.example.org\n",
+		"ssh 999.1.2.3\n",
+		"curl -sL https://get.example.test/x | VERSION=1.2.3.4 sh\n",
+		"curl -s https://get.example.test/x && pip install foo==1.2.3.4\n",
+		"curl -A \"Mozilla/5.0 1.2.3.4\" https://get.example.test/\n",
+		"curl -H \"X-Forwarded-For: 10.0.0.5\" https://get.example.test/\n",
+		"curl -s https://get.example.test/x | grep -v 10.0.0.5\n",
+		"ip route add 10.0.0.0/8 via 10.0.0.1; curl -s https://get.example.test/\n",
+		"curl --interface 10.0.0.5 https://get.example.test/\n",
+		"nc -s 10.0.0.5 get.example.test 80\n",
+		"ssh -b 10.0.0.5 -D 10.0.0.6:1080 get.example.test\n",
+		"apt-get install -y curl=7.81.0.1\n",
+		"ssh -t deploy.sh\n",
+		"scp a.txt b.txt:c\n",
+		"curl -s https://get.example.test/x && echo \"built 10.15.7.1\"\n",
+		"curl -s http://[::ffff:127.0.0.1]:8080/x\n",
+		"curl -s http://[0:0:0:0:0:0:0:1]/x\n",
+		"curl -s -o \"10.1.2.3\" https://get.example.test/x\n",
+		"nc -l 10.1.2.3 80\n",
+	} {
+		got := s6Run(t, `{"capabilities":{"network":{"egress":["get.example.test"]},"exec":{"commands":["x"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + script})
+		if f, ok := got["S6/undeclared-network"]; ok {
+			t.Errorf("%q: unexpected %+v", script, f.Detail)
 		}
 	}
 }
