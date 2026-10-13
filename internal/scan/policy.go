@@ -32,7 +32,8 @@ type Policy struct {
 	MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity,omitempty"`
 	// RequireEvals: evals/ dir must exist and be non-empty.
 	RequireEvals bool `json:"requireEvals,omitempty"`
-	// WildcardEgress: "review" | "reject" for "*" egress.
+	// WildcardEgress: "review" | "reject" for "*" egress, and since
+	// agentry#1134 for a browser whose scope is public (unrestrictedNetwork).
 	WildcardEgress string `json:"wildcardEgress,omitempty"`
 }
 

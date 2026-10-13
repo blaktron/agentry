@@ -1777,8 +1777,9 @@ when one is in front) once so the mount exists. Versions come from
 The platform baseline lives in the `policies` table (`org_id IS NULL`) and is
 readable at `/api/v1/platform/policy`. With no row, the defaults are the
 ruleset's: findings up to `medium` auto-publish with the findings shown,
-`high` goes to review, `critical` is rejected, wildcard network egress goes
-to review, and content a stage could not read goes to review whatever the
+`high` goes to review, `critical` is rejected, wildcard network egress (and,
+since agentry#1134, a browser whose `scope` is `public`; `wildcardEgress`
+decides both) goes to review, and content a stage could not read goes to review whatever the
 threshold. The threshold is released with the rule bundle's version (`medium`
 since ruleset 0.3.0, `low` before it), so upgrading the server can move it;
 a stored row keeps whatever it says.

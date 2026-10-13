@@ -234,6 +234,35 @@
           "maxItems": 4,
           "items": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" }
         },
+        "browser": {
+          "type": "object",
+          "description": "A headless web browser for the run (V15): the sites the person names when the run starts (url questions), the fixed hosts its pages need, its scope, and the declared secrets it may type into the site's forms. Site scope (the default) admits the sites, their subdomains and the hosts; public admits any public site and is treated as \"*\" egress by publication policy. A browser that types secrets cannot have public scope.",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "sites": {
+              "type": "array",
+              "description": "Ids of intake questions of type url: the person's answer to each is a site the browser may open, with its subdomains.",
+              "uniqueItems": true,
+              "maxItems": 4,
+              "items": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" }
+            },
+            "hosts": {
+              "type": "array",
+              "description": "Fixed hosts the browser may also reach: an exact DNS name or a *. suffix. No address, no port.",
+              "uniqueItems": true,
+              "maxItems": 32,
+              "items": { "type": "string", "pattern": "^(\\*\\.)?[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$" }
+            },
+            "scope": { "type": "string", "enum": ["site", "public"], "default": "site" },
+            "secrets": {
+              "type": "array",
+              "description": "Declared secrets (in capabilities.secrets or optionalSecrets) the browser may type by name; the value never reaches the model.",
+              "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+            }
+          }
+        },
         "dataAccess": {
           "type": "array",
           "items": {
@@ -294,7 +323,7 @@
       "type": "string",
       "description": "Exact DNS host name: dot-separated labels of 1-63 alphanumeric-or-hyphen characters, no leading/trailing hyphen.",
       "maxLength": 253,
-      "pattern": "^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$"
+      "pattern": "^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
     },
     "egressHost": {
       "description": "One egress list element: an exact DNS host or \"*\" (policy-gated). \"none\" is only valid as the entire egress value.",
