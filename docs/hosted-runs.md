@@ -1094,7 +1094,9 @@ to write the caller's [Writing Voice](voice.md). It is created by the same
   files from the input route) and an optional `brief`, how they want to
   sound;
 - `improve`: more samples and an optional `brief`, over the current voice;
-- `edit`, an AI Edit: a `note` saying what should change, and no samples.
+- `edit`, an AI Edit: a `note` saying what should change, required, and
+  optional samples as `inputs` (up to twenty files, under the same caps as
+  a `create`'s) that show the change.
 
 A brief or a note is text of at most 4 KiB. The run takes no `ref`,
 `task`, `intake`, `description`, `hints`, `name`, `pack`, `continue`,
