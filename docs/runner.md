@@ -982,9 +982,20 @@ the run's memory and CPUs to them through its `--memory` and `--cpus`
 flags, and gives them no-new-privileges itself. On Linux the run's docker
 filter also holds each of them to the run's memory, CPUs and processes:
 it fills in a bound the gateway left unset and refuses one set higher, and
-it refuses a privileged container and any added capability. Their default
-capabilities and their writable root are left as the gateway leaves them
-(agentry-cli#227).
+it refuses a privileged container and any added capability the gateway
+asks for. It also drops every capability of each of them and gives back
+only what its kind needs (agentry-cli#227):
+
+| launched by the gateway | capabilities kept |
+| --- | --- |
+| the runner's tools server (and the Drafter's web tools server) | `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `KILL`, `SETGID`, `SETUID`: it runs as root, writes into and hands files to folders you own, and starts Typst and ripgrep as a user of their own |
+| a declared MCP server | `DAC_READ_SEARCH`, to read its installed package from the run's server store, which is yours and `0700`; and `DAC_OVERRIDE` too when it is given a folder to write (a connection's token folder) |
+| a relay | none |
+
+Their root stays writable: a declared server's image is its publisher's,
+and what it writes outside `/tmp` is not known. Docker Desktop on macOS
+and Windows runs no filter (agentry-cli#322), so there these containers
+keep the defaults the gateway leaves them, and the receipt says which.
 
 The limits are read from the policy when the run starts, as the budgets
 are, and are not compiled into the plan. Changing them does not recompile
@@ -1012,7 +1023,7 @@ lower them for your own host.
 | the scratch folder (the runner's grant to every release, never a built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
 | `grep` and `glob` (granted with the scratch folder) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
-| every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds, not its capability drop |
+| every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds and, on Linux through the run's docker filter, every capability dropped but each kind's own ([above](#container-limits-dockerlimits)) |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
 | a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool's result, `run_command`'s included, and the arguments of every call, a `write_report` that quotes a key included. **The person's own inputs are the exception** (agentry-cli#632): a successful `read_input` or `search_inputs` serves the file unchanged, keys and passwords included, so a QuickAgent whose job is to *find* credentials can read them. An input tool's error, and the input tools under the review grant, are still refused. A `git log -p` through `run_command` that would print a key is refused too, and a finding should name a credential's kind and where it is, never its value, because a report that repeats it is refused. |
