@@ -1,0 +1,8 @@
+technique: "Support script reaches hosts the manifest does not declare through a destination held in a variable, an IP address and an sftp:// URI (S6, agentry#1149)"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"filesystem":{"read":"workspace"},"exec":{"commands":["sh","rsync","scp","sftp"]}}}
+expect:
+  - S6/undeclared-network
+forbid: []
+expectClean: false
