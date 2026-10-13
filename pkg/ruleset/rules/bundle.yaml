@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.4.7"
+version: "0.4.8"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -148,6 +148,14 @@ notes: >
   and a pipe into a path-qualified shell (| /bin/sh) as remote execution.
   A word that only contains a command's name (/etc/ssh/sshd_config,
   mycurl) is still not the command. The threshold stays medium.
+  0.4.8 changes no signature and no rating. It names the release whose
+  S6 reads the host forms it did not (agentry#1149): IPv4 and bracketed
+  IPv6 addresses, ftp, sftp, scp, ssh, rsync, telnet and ws URLs and a
+  URL's userinfo, a destination with no user or a dynamic one
+  ($(whoami)@host), ssh-copy-id, autossh, mosh and sshfs, a destination a
+  script assigns to a variable, and commands in a command substitution
+  inside double quotes or in the string sh -c or eval runs. Loopback
+  addresses are not hosts. The threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
