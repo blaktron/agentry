@@ -27,6 +27,9 @@ func TestOrgHandleReserved(t *testing.T) {
 		{"account-deleted", true, true},
 		{"scheduled", true, true},
 		{"oauth", true, true},
+		// The site's Report bug page (agentry-web#1576), agentry#1124.
+		{"report-bug", false, true},
+		{"report-bug", true, true},
 		{"agentry", false, true},
 		{"agentry", true, false},
 		{"secureagentry", true, false},
@@ -37,7 +40,7 @@ func TestOrgHandleReserved(t *testing.T) {
 			t.Errorf("orgHandleReserved(%q, staff=%v) = %v, want %v", tc.handle, tc.staff, got, tc.want)
 		}
 	}
-	for _, h := range []string{"ui", "runs", "invitations", "pricing", "aboutus", "account-deleted", "scheduled", "oauth", "agentry", "secureagentry"} {
+	for _, h := range []string{"ui", "runs", "invitations", "pricing", "aboutus", "account-deleted", "scheduled", "oauth", "report-bug", "agentry", "secureagentry"} {
 		if !handleReserved(h) {
 			t.Errorf("handleReserved(%q) = false; sign-up must refuse it", h)
 		}

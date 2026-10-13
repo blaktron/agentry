@@ -21,6 +21,10 @@ var pathHandles = map[string]bool{
 	// (agentry-web#1331), the last three agentry#506: each served before it
 	// was reserved, none held by any account on dev or production when added.
 	"aboutus": true, "account-deleted": true, "scheduled": true, "oauth": true,
+	// The site's Report bug page (agentry-web#1576, plan report-bug.md §5),
+	// agentry#1124: reserved before it shipped to production, held by no
+	// account on dev or production when added.
+	"report-bug": true,
 }
 
 // firstPartyHandles are the product's own names, reserved so that nobody
