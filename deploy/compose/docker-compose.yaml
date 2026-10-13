@@ -64,6 +64,14 @@ services:
     environment:
       MINIO_ROOT_USER: agentry
       MINIO_ROOT_PASSWORD: ${AGENTRY_MINIO_SECRET:-agentry-dev-secret}
+      # How long a drive operation, and the drive monitor's periodic
+      # write+read, may take before MinIO takes the drive offline (its
+      # default is 30s). With one drive, offline means every write fails
+      # ("Storage resources are insufficient", a 503 SlowDownWrite) until
+      # it comes back; on a VM disk shared with builds a write can stall
+      # past 30s under load, which took dev's drive offline 48 times in a
+      # week (agentry#616). A slow write now waits instead of failing.
+      MINIO_DRIVE_MAX_TIMEOUT: ${AGENTRY_MINIO_DRIVE_TIMEOUT:-3m}
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:9000:9000"
       - "${AGENTRY_BIND:-127.0.0.1}:9001:9001"
