@@ -179,9 +179,7 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	roles := []string{"admin", "security_reviewer", "member", "pending", "outsider"}
 	sessions := map[string]caller{}
 	for _, role := range roles {
-		h := env.register("mx-" + role[:3])
-		env.verifyEmail(h)
-		sessions[role] = env.login(h)
+		sessions[role] = env.seedCaller("mx-" + role[:3])
 	}
 	orgH := "mxorg" + env.sfx
 	var org struct {

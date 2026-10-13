@@ -8,7 +8,7 @@ GO      ?= go
 BIN_DIR := bin
 LDFLAGS := -X github.com/blaktron/agentry/internal/version.Version=$(shell git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo 0.0.0-dev)
 
-.PHONY: all build test lint vuln generate generate-check check prose-check dev db-up db-down clean e2e sync-rules sync-rules-check fuzz deps-audit attest-interop
+.PHONY: all build test lint vuln generate generate-check check prose-check dev db-up db-down clean e2e sync-rules sync-rules-check fuzz deps-audit attest-interop test-inventory-check
 
 all: build
 
@@ -92,7 +92,11 @@ deps-audit:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 ## check: the full local/CI gate
-check: generate-check sync-rules-check lint test build
+check: generate-check sync-rules-check test-inventory-check lint test build
+
+# Named evidence stays recorded when a case moves or a new family is added.
+test-inventory-check:
+	python3 scripts/testing/inventory.py --check
 
 ## prose-check: the §4.6 posture sentences and the §4.4 never list over the
 ## markdown, then the advisory unslop battery (UNSLOP_SKIP=1 skips it,

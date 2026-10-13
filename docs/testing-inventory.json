@@ -1,0 +1,5184 @@
+{
+  "formatVersion": 1,
+  "scope": "Retained named evidence; assertion equivalence is decided in each behavior batch, not inferred from this catalogue.",
+  "families": [
+    {
+      "owner": "internal/api",
+      "behavior": "Account and sign-in lifecycles",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/api/activation_db_test.go",
+          "tests": [
+            "TestDirectoryEmailVerification",
+            "TestUnactivatedAccountUntilActivated",
+            "TestUnactivatedSupersededByVerifiedSignIn",
+            "TestActivationDailyCap"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/activation_test.go",
+          "tests": [
+            "TestDirectoryEmailVerificationGate",
+            "TestDirectoryAccountGone",
+            "TestUnactivated",
+            "TestUnactivatedWritesFollowTheSpec",
+            "TestRefuseUnactivated"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/clear_data_test.go",
+          "tests": [
+            "TestClearCurrentUserData"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/cookie_helpers_test.go",
+          "tests": [],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/desktop_grant_test.go",
+          "tests": [
+            "TestDesktopGrantExchange",
+            "TestErasureConsumesDesktopGrants"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/erasure_seam_test.go",
+          "tests": [
+            "TestAccountEraserCommitsWithTheErasure",
+            "TestAccountEraserFailureRollsBackTheErasure",
+            "TestAccountEraserHearsTheDataClear"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/export_test.go",
+          "tests": [],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/fold_in_test.go",
+          "tests": [
+            "TestFoldInAtSignIn",
+            "TestFoldInSweepAndDecisions",
+            "TestPendingMembersDigestIsBatchedAndVerifiedOnly"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/handles_test.go",
+          "tests": [
+            "TestOrgHandleReserved",
+            "TestHandleSeed",
+            "TestHandleRequestedDetail"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/login_timing_test.go",
+          "tests": [
+            "TestLoginMissCostsAsMuchAsAWrongPassword"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/api/m13_social_login_test.go",
+          "tests": [
+            "TestSocialLoginJITCreatesAccount",
+            "TestSocialLoginAutoLinksVerifiedEmail",
+            "TestSocialLoginRefusesUnverifiedLink",
+            "TestSocialLoginStillRequiresTOTP",
+            "TestSocialLoginBrowserModeRedirectsToNext",
+            "TestSocialLoginCallbackRestartsBrowserWithoutState",
+            "TestSocialLoginUnconfiguredProviderIs404",
+            "TestSocialLoginRejectsStateMismatch",
+            "TestSocialLoginGoogleOIDC",
+            "TestSocialLoginHandleFromPreferredUsername",
+            "TestSocialLoginTakenUsernameFallsBackDeterministically",
+            "TestSocialLoginMicrosoftOIDC",
+            "TestSocialLoginGoogleNonceMismatch"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m17_sessions_test.go",
+          "tests": [
+            "TestListUserSessionsMarksCurrent",
+            "TestListUserSessionsPATIsEmpty",
+            "TestRevokeUserSessionOwnOnly",
+            "TestRevokeOtherUserSessionsSparesCaller",
+            "TestRevokeSessionsRejectsPAT",
+            "TestGetLatestRulesetBundle"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m1_flows_test.go",
+          "tests": [
+            "TestAuthLifecycle",
+            "TestPATLifecycle",
+            "TestAuditCoverage",
+            "TestTOTPFlow"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m6_flows_test.go",
+          "tests": [
+            "TestWebhookDeliveryViaQueue",
+            "TestWebhookEventWiring",
+            "TestAuditExport"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m6_oidc_test.go",
+          "tests": [
+            "TestOIDCEndpointFlow",
+            "TestPutSsoConnectionKeepsSecretWhenOmitted"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m6_saml_test.go",
+          "tests": [
+            "TestSAMLACSEndpoint",
+            "TestSAMLSingleLogout",
+            "TestSAMLReplayIsRefusedAcrossServers"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m8_gdpr_test.go",
+          "tests": [
+            "TestAccountErasureFlow"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m9_gdpr_transfer_test.go",
+          "tests": [
+            "TestErasureRequiresAnExplicitDisposition",
+            "TestErasureWithNothingPublishedNeedsNoChoice",
+            "TestErasureYankPath",
+            "TestErasureTransferPath",
+            "TestErasureTransferTargetIsValidated"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/reserved_handles_test.go",
+          "tests": [
+            "TestReservedHandlesAreRefused",
+            "TestStaffMayCreateFirstPartyOrg"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/totp_challenge_single_use_test.go",
+          "tests": [
+            "TestTOTPChallengeIsRefusedWhenReplayed",
+            "TestTOTPChallengeReplayIsRefusedAtAnotherReplica",
+            "TestTOTPChallengeSingleUseHoldsUnderConcurrentCompletions",
+            "TestTOTPChallengeFailsClosedWhenTheStoreDoesNotAnswer",
+            "TestTOTPChallengeExpiryIsRefusedAndAuditedApartFromAReplay"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "real-time wait"
+          ]
+        },
+        {
+          "path": "internal/api/trusted_devices_test.go",
+          "tests": [
+            "TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor",
+            "TestTrustedDeviceIsNotMintedUnlessAskedFor",
+            "TestTrustedDeviceCookieAuthenticatesNothingOnItsOwn",
+            "TestTrustedDeviceIsBoundToItsOwner",
+            "TestTrustedDeviceRefusesADeadCredential",
+            "TestTrustedDeviceStoreFailureDemandsTheCode",
+            "TestTrustedDeviceExpiryIsAbsoluteNotSliding",
+            "TestTrustedDeviceStoresOnlyTheHash",
+            "TestTrustedDeviceCookieAttributes",
+            "TestSCIMDeactivationRevokesTrustedDevices",
+            "TestErasureDeletesTrustedDevices",
+            "TestTrustedDeviceSweepDeletesOnlyWhatHasExpired",
+            "TestTrustedDeviceSurvivesLogout",
+            "TestTrustedDeviceSurvivesSignOutEverywhereElse"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/api",
+      "behavior": "Authorization and principals",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/api/agent_maintain_seam_test.go",
+          "tests": [
+            "TestAgentMaintainSeamAnswersAsTheCoreDoes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/agent_manage_scope_test.go",
+          "tests": [
+            "TestSignInGrantTakesTheOwnerActions",
+            "TestAgentManageKeepsTheAdministratorsRung"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/agent_publish_seam_test.go",
+          "tests": [
+            "TestAgentPublishSeamAnswersAsTheCoreDoes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/agent_read_seam_test.go",
+          "tests": [
+            "TestAgentReadSeamAnswersAsTheCoreDoes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/authz_matrix_test.go",
+          "tests": [
+            "TestRouteDeclarationsComplete",
+            "TestExtensionMountIsDeclaredByPrefix",
+            "TestAuthzMatrix"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/authz_selfauth_matrix_test.go",
+          "tests": [
+            "TestSelfAuthorizedMatrix"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/keyless_roles_test.go",
+          "tests": [
+            "TestKeylessRoleStartsWithoutTheKeyAndServesWhatTheWorkerSigned",
+            "TestKeylessApprovalIsPublishedAndSignedByTheWorker"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "source/file contract",
+            "real-time wait"
+          ]
+        },
+        {
+          "path": "internal/api/principal_seam_test.go",
+          "tests": [
+            "TestPrincipalForUserAnswersTheRoleAsItIsNow",
+            "TestPrincipalForScheduleIsTheOwnersNarrowCredential"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/private_agent_invisible_test.go",
+          "tests": [
+            "TestPrivateAgentInvisibleToNonReaders",
+            "TestPrivateOrgAgentReaderSetIsEveryActiveMember",
+            "TestMembershipConfersPublishButNotTheAgentItself"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/api",
+      "behavior": "Core UI and browser destinations",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/api/readme_csp_test.go",
+          "tests": [
+            "TestReadmeRouteCarriesACSP"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/ui_mount_test.go",
+          "tests": [
+            "TestUIMountsBesideGitPatterns"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/ui_orgs_test.go",
+          "tests": [
+            "TestCoreUIOrgAdmin"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/ui_pages_test.go",
+          "tests": [
+            "TestCoreUISignInAccountAndDeviceAuthorize"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/webhook_catalog_test.go",
+          "tests": [
+            "TestWebhookCatalogEventsAreEmitted"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "real-time wait"
+          ]
+        },
+        {
+          "path": "internal/api/webhook_seam_test.go",
+          "tests": [
+            "TestWebhookSeamDeliversToTheEndpointNamed",
+            "TestWebhookSeamDeliveryRidesTheCoresTransport"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/webpaths_test.go",
+          "tests": [
+            "TestWebPaths"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/api",
+      "behavior": "Directory and blueprint contracts",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/api/directory_account_id_test.go",
+          "tests": [
+            "TestDirectoryAccountIDIsRecordedAtSignIn"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/directory_device_cookie_blueprint_test.go",
+          "tests": [
+            "TestDirectoryIssuesNoDeviceCookie"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/directory_erasure_retry_test.go",
+          "tests": [
+            "TestDirectoryErasureFailureIsRetried",
+            "TestDirectoryErasureAbandonedAfterItsRetries",
+            "TestDirectoryErasureOutcomeInTheResponse"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/directory_erasure_test.go",
+          "tests": [
+            "TestErasureDeletesDirectoryAccount",
+            "TestErasureWithoutDirectoryIsAudited"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/directory_has_password_blueprint_test.go",
+          "tests": [
+            "TestDirectoryRecordsHasPasswordBlueprint"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/directory_remember_blueprint_test.go",
+          "tests": [
+            "TestDirectoryRememberBlueprint"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/directory_signin_live_test.go",
+          "tests": [
+            "TestDirectorySignInFactsAgainstALiveDirectory"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/api/directory_signin_test.go",
+          "tests": [
+            "TestDirectorySignInFacts"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/directory_test.go",
+          "tests": [
+            "TestDirectoryFindAccount",
+            "TestDirectoryDevicesCarryIDs",
+            "TestDirectoryDeleteDeviceOwnOnly",
+            "TestDirectoryEraseAccount"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/directory_trusted_device_test.go",
+          "tests": [
+            "TestDirectoryIsAskedForTheAgentryScope",
+            "TestDirectoryRemembersOnlyOnItsClaimAndASecondFactor",
+            "TestDirectoryTrustCheck",
+            "TestDirectoryTrustCheckFailsClosed",
+            "TestDirectoryTrustCheckIsAbsentWhenOff",
+            "TestDirectoryRememberCookieCoversTheDirectorysHost",
+            "TestClearTrustedDevices",
+            "TestDirectoryRememberedBrowserSurvivesLogout"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/enrollment_authenticator_blueprint_test.go",
+          "tests": [
+            "TestEnrollmentAuthenticatorSetupIsSkippable"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/enrollment_blueprint_test.go",
+          "tests": [
+            "TestEnrollmentUsernamePolicyMatchesHandleRules"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/enrollment_promo_blueprint_test.go",
+          "tests": [
+            "TestEnrollmentPromoFieldIsOptIn",
+            "TestEnrollmentPromoGrammarMatchesTheCore",
+            "TestAgentryScopeCarriesThePromoCode"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/idp_mfa_test.go",
+          "tests": [
+            "TestSocialLoginRecordsIdPMFA",
+            "TestPublicPublishGateAcceptsIdPMFA"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/idp_staff_group_test.go",
+          "tests": [
+            "TestRetiredDirectoryRulesGrantNothing"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/api/signup_promo_code_test.go",
+          "tests": [
+            "TestPromoClaimOnlyFromDirectoryOnCreate"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/api/staff_mirror_authentik_test.go",
+          "tests": [
+            "TestAuthentikGroupsAgainstALiveDirectory"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/api/staff_mirror_test.go",
+          "tests": [
+            "TestStaffMirrorFollowsTheStaffOrg",
+            "TestStaffMirrorIsNudgedByAStaffChange",
+            "TestStaffMirrorWithoutADirectoryAccount",
+            "TestStaffMirrorUnconfiguredDoesNothing",
+            "TestStaffOrgMembersWhoAreNotStaffAreReported",
+            "TestStaffMirrorAddsOnlyTheLinkedActiveAccount",
+            "TestStaffMirrorKeepsTheAuditOfAHalfFinishedRun"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/user_directory_test.go",
+          "tests": [
+            "TestUserDirectoryLinksAndDevices",
+            "TestUserDirectoryNamesFirstProviderAndPassword"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/api",
+      "behavior": "Knowledge, voice and report settings",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/api/draft_check_test.go",
+          "tests": [
+            "TestTheDraftCheckFlagsOnlyWhatTheGateHolds",
+            "TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet",
+            "TestTheDraftCheckAnswersStaffAndAdmittedJobsOnly",
+            "TestTheDraftCheckIsOffWithoutAJevJudge"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/api/judge_usage_test.go",
+          "tests": [
+            "TestReportShowsJudgeUsageToStaffOnly"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/knowledge_replace_test.go",
+          "tests": [
+            "TestKnowledgeReplaceThroughTheSeam",
+            "TestKnowledgeReplaceKeepsTheAllocation",
+            "TestKnowledgeReplaceRaceLandsOnce"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/knowledge_seam_test.go",
+          "tests": [
+            "TestKnowledgeKeyWrapperSeam",
+            "TestCoreKnowledgeWrapsUnderItsOwnKey"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/knowledge_ships_test.go",
+          "tests": [
+            "TestReleaseShippingAPackIsScannedAndReported",
+            "TestInstallReasksWhenAReleaseShipsOneMorePack",
+            "TestSubmitRefusesAShippedPackThatIsNotTheManifests"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/knowledge_test.go",
+          "tests": [
+            "TestKnowledgePackThroughTheAPI",
+            "TestAPackIsScannedBeforeItIsFinal",
+            "TestDataKeyGoesToTheOwnerAlone",
+            "TestKnowledgeAtRestIsSealed",
+            "TestKnowledgeUploadRefusals",
+            "TestKnowledgeAllocation",
+            "TestKnowledgeAllocationHoldsUnderRace",
+            "TestTheLastScanAttemptSettlesThePack",
+            "TestTheLastScanAttemptSettlesThePackWhenItsTimeRunsOut",
+            "TestKnowledgePoolIsCountedAndLocked"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/model_input_internal_test.go",
+          "tests": [
+            "TestPacedAskerFailsAsATimeoutOrACancellation"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/model_input_test.go",
+          "tests": [
+            "TestModelInputScanVerdicts",
+            "TestModelInputRoutesAreOffWithoutAJevJudge",
+            "TestModelInputSearchReturnsOnlyScannedResults",
+            "TestModelInputSearchFailuresSpendNothing",
+            "TestModelInputCallers",
+            "TestModelInputJobCredentialsNeedAnExtension",
+            "TestModelInputBudgets",
+            "TestModelInputAddressBudget"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/user_report_logo_test.go",
+          "tests": [
+            "TestReportLogo"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/user_report_settings_test.go",
+          "tests": [
+            "TestReportSettingsRoundTrip",
+            "TestOpenAPIReportDesignIsTheCoreSchema"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/voice_test.go",
+          "tests": [
+            "TestAVoiceIsReviewedBeforeItIsLive",
+            "TestOnlyTheNewestPendingVersionIsReviewed",
+            "TestAVoiceIsSealedAtRest",
+            "TestAVoiceIsTheCallersOwnAndTheScopesHold",
+            "TestTheVoiceRoutesRefuseWhatIsNotAVoice",
+            "TestWithNoVoiceJudgeTheStoreIsOff",
+            "TestAVoiceReviewIsAdmittedBeforeAnythingIsStored",
+            "TestClearingDataOrErasingTheAccountTakesTheVoice",
+            "TestAReviewTakenAtOnceFindsItsVersion"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/api",
+      "behavior": "Organization and SSO/SCIM lifecycles",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/api/m16_sso_landing_test.go",
+          "tests": [
+            "TestSSOLandingStartsSPInitiatedSAML",
+            "TestSSOLandingFallsBackToOIDCAndRefusesUnconfigured"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m6_enterprise_test.go",
+          "tests": [
+            "TestEnforcedSSO",
+            "TestDomainVerification"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m6_scim_test.go",
+          "tests": [
+            "TestSCIMProvisionAndDeactivate",
+            "TestSCIMDeleteDeactivates",
+            "TestSCIMUnauthorized"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m9_db_hardening_test.go",
+          "tests": [
+            "TestVersionImmutabilityBlocksStatusRollback",
+            "TestAuditEventsRefuseTruncate",
+            "TestAuditPruneDropsOnlyOldPartitions"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m9_scim_put_test.go",
+          "tests": [
+            "TestSCIMPutDeactivatesOktaShape",
+            "TestSCIMPutUpdatesAndReinstates",
+            "TestSCIMGroupSyncFailurePropagates"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/org_identity_entitlement_test.go",
+          "tests": [
+            "TestIdentityDoorsAreGatedOnTheTier",
+            "TestIdentityDoorsFailClosed",
+            "TestDowngradeNeverLoosensIdentity"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/org_knowledge_test.go",
+          "tests": [
+            "TestSharedKnowledgeThroughTheAPI",
+            "TestARemovedMemberCannotUnwrap",
+            "TestSharedKnowledgeIsHiddenFromOutsiders",
+            "TestSharedKnowledgeDrawsOnTheOrganization",
+            "TestHiddenFromOutsidersIsOnlyOnMemberRoutes",
+            "TestSharedKnowledgeInTheDecommissionHold"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/org_lifecycle_test.go",
+          "tests": [
+            "TestOneOrgPerDomain",
+            "TestCreatingAnOrganizationIsTheThirdDoor",
+            "TestDomainOrgLookupAndRequestAccess",
+            "TestSuspendedOrgIsRefusedEverywhere",
+            "TestOrgDecommissionErasesAfterTheHold",
+            "TestErasureTransferRespectsThePrivateAgentCap"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/org_logo_test.go",
+          "tests": [
+            "TestOrgLogoIsReencodedStoredAndServed",
+            "TestSearchHitCarriesTheOrganizationsLogo",
+            "TestOrgLogoRefusesWhatItCannotMakeSafe",
+            "TestOrgLogoIsGatedOnTheTier"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/org_roles_test.go",
+          "tests": [
+            "TestLastAdminCannotBeRemoved",
+            "TestSecurityReviewerIsFirstPartyOnly",
+            "TestCreateOrgRequiresVerifiedEmail",
+            "TestOnePendingOrgPerAccount",
+            "TestSCIMCannotDeactivateTheLastAdmin",
+            "TestLastAdminGuardHoldsUnderConcurrentDemotions"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/org_seats_test.go",
+          "tests": [
+            "TestEveryMembershipDoorCountsSeats",
+            "TestSeatCapNeverRemovesAMember",
+            "TestSeatDoorsFailClosed",
+            "TestSeatCapIsAbsentWithoutAnExtension",
+            "TestInvitationIsACredential",
+            "TestOneOrgPerPerson",
+            "TestOneOrgPerPersonHoldsUnderConcurrentDoors",
+            "TestSCIMProvisionsPending",
+            "TestAddingByHandleIsRetired",
+            "TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress",
+            "TestPendingMemberHoldsNothing",
+            "TestOrgSSODoesNotLinkAnAccountOutsideTheVerifiedDomain"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/org_sso_browser_test.go",
+          "tests": [
+            "TestOrgOIDCBrowserModeReturnsToNext",
+            "TestOrgOIDCBrowserModeRefusesAnOffsiteNext",
+            "TestOrgOIDCBrowserModeFailsToTheLoginPage",
+            "TestOrgOIDCWithoutNextStillAnswersJSON",
+            "TestSamlAcsBrowserModeUsesRelayState",
+            "TestOrgOIDCBrowserModePinsTheNonce",
+            "TestSsoLandingCarriesNextIntoTheFlow",
+            "TestSsoNextIsBounded"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/org_sso_mfa_test.go",
+          "tests": [
+            "TestOrgSAMLSignInRecordsIdPMFA",
+            "TestOrgOIDCSignInRecordsIdPMFA"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/saml_setters_test.go",
+          "tests": [
+            "TestSAMLSettersReplaceTheSets"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/saml_store_sets_test.go",
+          "tests": [
+            "TestSAMLStoreSetsAreSharedAndExpire",
+            "TestSAMLReplayRefusalHoldsUnderConcurrentPresentations",
+            "TestSAMLLoginStartedOnOneReplicaCompletesOnAnother"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/scim_ratelimit_test.go",
+          "tests": [
+            "TestSCIMBudgetAdmitsASyncAndRefusesTheBurstPerOrganization"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/sso_connection_test_test.go",
+          "tests": [
+            "TestSsoConnectionProbe"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/sso_issuer_guard_test.go",
+          "tests": [
+            "TestOIDCIssuerIsValidatedAtWrite",
+            "TestOIDCIssuerLoopbackAllowanceIsDevModeOnly",
+            "TestOIDCDiscoveryGoesThroughTheEgressGuard",
+            "TestOIDCProbeNeverReflectsTheUpstreamBody"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/staff_org_test.go",
+          "tests": [
+            "TestStaffIsMembershipOfTheStaffOrg",
+            "TestStaffOrgAdmitsOnlyItsDomain",
+            "TestStaffOrgFoundingIsReservedToStaffAtItsDomain",
+            "TestStaffOrgSCIMProvisionsOnlyItsDomain",
+            "TestStaffEndsWithErasure",
+            "TestStaffFollowsSignInAndStartup",
+            "TestStaffUnconfiguredLeavesTheFlag",
+            "TestStaffOrgInvitationAtItsVerifiedDomainVerifiesInTheSameAct"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/api",
+      "behavior": "Other HTTP resource contracts",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/api/account_installs_test.go",
+          "tests": [
+            "TestAccountInstallNeedsTheReleasesAcceptances",
+            "TestAccountInstallUpdateReasksOnlyWhenWidened",
+            "TestAccountInstallUnsignedAndUnscannedConsents",
+            "TestAccountInstallInvisibleToNonReaders",
+            "TestAccountInstallListsABlockedQuickAgentAsBlocked",
+            "TestAccountInstallMovesNoDownloadCounter",
+            "TestAccountInstallOptionalSecretFlipAsksNothing"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/advisory_feed_test.go",
+          "tests": [
+            "TestAdvisoryFeedAndPermalink"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/advisory_holders_test.go",
+          "tests": [
+            "TestAnAdvisoryReachesWhoeverHeldTheAgentAfterItWentPrivate",
+            "TestASuspendedOrganizationsAgentAnswersHoldersAsAbsent"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/apitest_test.go",
+          "tests": [
+            "TestAPITestsRunInTheirOwnDatabase"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": true,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/api/authenticator_copy_test.go",
+          "tests": [
+            "TestEnrolledAuthenticatorProseSaysAuthenticator"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/dependency_alerts_test.go",
+          "tests": [
+            "TestDependencyAlertSurfaces"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/extension_test.go",
+          "tests": [
+            "TestExtensionRoutesMetaAndHooks"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/handle_gloss_internal_test.go",
+          "tests": [
+            "TestHandleGlossMatchesReHandle"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/image_proxy_key_test.go",
+          "tests": [
+            "TestImageProxyKeyIsNeverAConstant",
+            "TestImageProxyRefusesPlainHTTP"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/image_proxy_test.go",
+          "tests": [
+            "TestImageProxy"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/ip_cluster_test.go",
+          "tests": [
+            "TestSubmissionRecordsIPClusterHash"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/logcontract_test.go",
+          "tests": [
+            "TestAccessLineCarriesTheContract",
+            "TestProbesAreNotAccessLogged",
+            "TestInboundRequestIDHonouredOnlyWhenTheHopSetsIt",
+            "TestWrapMiddlewareGivesABareMuxTheContract",
+            "TestRequestIDReachesTheAuditRow",
+            "TestFailedSignInIsNamedAndMirrored",
+            "TestForwardedHeadersCountOnlyFromAListedPeer"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/lookup_db_test.go",
+          "tests": [
+            "TestPublicLookupsAnswer404OnlyForAbsence"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/lookup_test.go",
+          "tests": [
+            "TestLookupFailedDistinguishesAbsenceFromError"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m22_search_ranking_test.go",
+          "tests": [
+            "TestSearchRanksByPopularityWhenRelevanceIsEqual",
+            "TestZeroInstallAgentsAreRankedByRelevanceNotArrivalOrder",
+            "TestPopularityCanOutweighASmallRelevanceGap",
+            "TestSearchMatchesReadmeTerms",
+            "TestSearchMatchesNamespaceHandle",
+            "TestSearchWeightsNameAboveReadme",
+            "TestSearchExplicitSortsOverrideTheScore",
+            "TestEmptyQueryBrowsesWithoutCollapsing",
+            "TestSearchOrderingIsStableAcrossPages",
+            "TestSearchTotalCountsBeforePaging"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "real-time wait"
+          ]
+        },
+        {
+          "path": "internal/api/m33_quota_test.go",
+          "tests": [
+            "TestWebhookDeliveriesAreRateLimitedPerOrg",
+            "TestWebhookRateLimitIsPerOrgNotGlobal"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m8_console_test.go",
+          "tests": [
+            "TestReviewBundleCarriesDetail",
+            "TestReviewFilesEndpointSafety",
+            "TestAbuseTriageFlow"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m9_endpoints_test.go",
+          "tests": [
+            "TestStarsAndStats",
+            "TestStatsAndStarsHidePrivateAgents",
+            "TestDeleteAgentWithoutVersions",
+            "TestAgentActivityPublicVersusFull",
+            "TestTagListing",
+            "TestWebhookPingAndEndpointCap",
+            "TestRulesetReleaseAndPlatformAudit",
+            "TestListParamsAreClampedNotRejected",
+            "TestSearchFacets",
+            "TestRateLimitHeadersOnEveryResponse",
+            "TestIdempotencyKeyReplaysAndConflicts",
+            "TestCursorPagingEmitsLinkHeader",
+            "TestReviewSurfaceRequiresReviewActScope",
+            "TestRulesetReleaseList"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/meta_brand_test.go",
+          "tests": [
+            "TestMetaReportsBrandAndUI"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/meta_external_only_test.go",
+          "tests": [
+            "TestMetaReportsExternalOnly",
+            "TestMetaReportsPublicPublish2FA"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/meta_sign_in_providers_test.go",
+          "tests": [
+            "TestMetaListsTheSignInProvidersStartRedirectsFor",
+            "TestMetaListsEveryConfiguredSignInProvider",
+            "TestMetaListsNoSignInProviderWhenNoneIsConfigured"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/notifier_seam_test.go",
+          "tests": [
+            "TestNotifierSeamSendsUnderTheCoresRule",
+            "TestNotifierSeamNamesActiveAdminsOnly",
+            "TestOptionalSwitchesSurviveAnOlderClientsWrite"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/problem_detail_internal_test.go",
+          "tests": [
+            "TestSentence",
+            "TestSentenceStripsWhateverErrDeniedSays"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/ratelimit_internal_test.go",
+          "tests": [
+            "TestRateLimitHeadersCountDownAndRefuse",
+            "TestClientIPHonorsTrustedProxyDepth",
+            "TestClientIPTrustsForwardedForOnlyFromListedPeers",
+            "TestBucketsCloseIsIdempotent",
+            "TestWriteRateLimitHeaders",
+            "TestClampLimit",
+            "TestClampOffset",
+            "TestCursorRoundTrip"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/redteam_test.go",
+          "tests": [
+            "TestRedTeamJobStoresReportStaffReads",
+            "TestRedTeamKeepsOneRunWaiting",
+            "TestRedTeamRunForAnotherRulesetIsHandedBack",
+            "TestANewRulesetQueuesARedTeamRun"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/api/seams_test.go",
+          "tests": [
+            "TestAdmissionRunsBeforeTheRow",
+            "TestAdmissionVoidedWhenTheRowNeverLands",
+            "TestCoreWithoutAdmitterIsUnchanged",
+            "TestUserRegisteredFiresForDirectoryAccounts",
+            "TestPrivateAgentCapNeverDeletes",
+            "TestPrivateAgentCapHoldsUnderConcurrentCreates",
+            "TestExtensionRouteRateClassOptOut",
+            "TestScanCompletedNamesTheVersionAndOutcome",
+            "TestBoundExtensionWritesItsOwnAuditAction",
+            "TestRunScopesReachAnExtensionRoute",
+            "TestDepsBlobsIsTheDeploymentStore"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/smoke_test.go",
+          "tests": [
+            "TestM0Smoke",
+            "TestHealthEndpoints"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/ssh_keys_test.go",
+          "tests": [
+            "TestSSHKeysLifecycle",
+            "TestSSHKeyAddIsGatedOnTheSubscription"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/user_activity_test.go",
+          "tests": [
+            "TestUserActivityFeed"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/user_notifications_test.go",
+          "tests": [
+            "TestNotificationSettingsRoundTrip"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/api",
+      "behavior": "Publication, review and agent lifecycles",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/api/accepted_risk_test.go",
+          "tests": [
+            "TestAcceptedRiskOnOrgAgentReservedToOrgReviewers"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/agent_fork_test.go",
+          "tests": [
+            "TestForkIsAPrivateCopyWhoseFirstVersionGoesThroughThePipeline",
+            "TestAForkIsNeverPublic",
+            "TestForkRefusesWhatCannotBeForkedAndWhereItCannotGo",
+            "TestAQuarantinedOriginLeavesItsForksAlone",
+            "TestAMemberForksIntoTheOrganizationWithinItsCap",
+            "TestAForkOfATaggedOriginContinuesItsHistory",
+            "TestAForkWhoseCopyNeverRunsIsMarkedFailed",
+            "TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "child process",
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/api/agent_lifecycle_test.go",
+          "tests": [
+            "TestRetireAndRestore",
+            "TestRetireNeedsTheNamespacesAdministrators",
+            "TestRetiredAgentsHoldNoPlaceUnderTheCap",
+            "TestDeleteAgentWithHistoryLeavesATombstone",
+            "TestDeleteWaitsForAVersionInFlight",
+            "TestNamespaceListSearchesAndSorts",
+            "TestRestoreToPublicMeetsTheUnscannedRules"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/builtin_agents_test.go",
+          "tests": [
+            "TestOnlyStaffMarkABuiltInAgentInTheFirstPartyNamespace"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/draft_claim_test.go",
+          "tests": [
+            "TestAnUploadKeepsItsClaimedDraftAsAClaim"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/api/m08_signing_keys_test.go",
+          "tests": [
+            "TestSigningKeysOmitAnUnsetWindow",
+            "TestSigningKeysCarryTheActiveKeyWindow",
+            "TestSigningKeysPublishOverlappingWindowsDuringRotation",
+            "TestSigningKeysReadAKeyFromDisk",
+            "TestSigningKeysSkipAnUnreadableAdditionalKey"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/m4_approval_test.go",
+          "tests": [
+            "TestReviewApprovalFlow"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/m4_helpers_test.go",
+          "tests": [],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "real-time wait"
+          ]
+        },
+        {
+          "path": "internal/api/m4_reviews_test.go",
+          "tests": [
+            "TestReviewQueueAuthz",
+            "TestOrgReviewQueueRequiresReviewer",
+            "TestOrgPolicyTightenOnly",
+            "TestPlatformActionRequiresStaff"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/mcp_env_test.go",
+          "tests": [
+            "TestVersionCapabilitiesCarryMCPServerEnv"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/mcp_scans_not_found_test.go",
+          "tests": [
+            "TestMCPServerScanNotFoundIsServedAsError"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/mcp_sweep_wiring_test.go",
+          "tests": [
+            "TestMCPSweepWiringReachesThePipeline"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/api/pipeline_surface_test.go",
+          "tests": [
+            "TestBlockedAgentDownloadReturns410",
+            "TestUploadRejectsOversizedBodyAndRatioBomb",
+            "TestReportCarriesScanDateAndDismissalRationale"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/publish_gate_internal_test.go",
+          "tests": [
+            "TestPublicPublish2FAEnabled"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/api/rescan_report_test.go",
+          "tests": [
+            "TestRescanInFlightKeepsThePublishedVerdict"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/review_item_queue_test.go",
+          "tests": [
+            "TestReviewItemOfAnUnknownQueueIsRefused"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/review_staff_test.go",
+          "tests": [
+            "TestStaffDecideTheirOwnPlatformItem",
+            "TestStaffReviewAnyOrganizationsQueue",
+            "TestStaffAuthorRejectsTheirOwnOrganizationItem",
+            "TestStaffSetFindingVerdictsOnAnOrganizationItem"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/ruleset_attestation_test.go",
+          "tests": [
+            "TestRulesetAttestationSignsTheServedBundle"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/s7_mcp_servers_test.go",
+          "tests": [
+            "TestS7DeclaredMCPServerVulnerability"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "real-time wait"
+          ]
+        },
+        {
+          "path": "internal/api/scan_handoff_test.go",
+          "tests": [
+            "TestHandedOffPublishIsScannedByTheWorkerNotTheReceivingRole"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/signing_rotation_test.go",
+          "tests": [
+            "TestRotationAdvertisesTheRetiredKeyAndCountersigns"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/api/ui_review_test.go",
+          "tests": [
+            "TestCoreUIReviewAndStaff"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/unscanned_agents_test.go",
+          "tests": [
+            "TestPipelineSkipIsRefusedWhereItMustBe",
+            "TestAnUnscannedSubmissionIsPublishedWithoutTheGate",
+            "TestTheFlagAndPublicNeverMeetInARow"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/version_events_test.go",
+          "tests": [
+            "TestVersionEventsStream"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/version_files_test.go",
+          "tests": [
+            "TestVersionFilesBrowsing"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/versions_idempotency_test.go",
+          "tests": [
+            "TestSubmitVersionIdempotencyReplay"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/audit",
+      "behavior": "Append-only audit writing and asynchronous archive delivery",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/audit/stream_test.go",
+          "tests": [
+            "TestFileStreamWritesNDJSON",
+            "TestFileStreamRotatesDaily",
+            "TestFileStreamDropsWhenBufferFull",
+            "TestNewStreamKinds",
+            "TestWriterStreamDefaultsToNop",
+            "TestLogStreamMirrorsRecordAsLine"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/auth/oidc",
+      "behavior": "OIDC claims, issuer, nonce and second-factor evidence",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/auth/oidc/amr_test.go",
+          "tests": [
+            "TestAMRNamesSecondFactor"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/auth/oidc/oidc_test.go",
+          "tests": [
+            "TestOIDC_ExchangeCreatesClaims",
+            "TestOIDC_IssuerPinning",
+            "TestOIDC_NonceMismatchRejected",
+            "TestOIDC_EmailVerifiedSurfaced",
+            "TestOIDC_PreferredUsernameSurfaced",
+            "TestOIDC_RememberDeviceIsOnlyAJSONTrue",
+            "TestOIDC_AuthTimeSurfaced",
+            "TestPromoCodeClaim"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/auth/saml",
+      "behavior": "Signed SAML, replay, request correlation and logout",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/auth/saml/mfa_test.go",
+          "tests": [
+            "TestResultMFAAsserted"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/auth/saml/replay_test.go",
+          "tests": [
+            "TestSAMLReplayFloorOutlivesTheAcceptanceWindow"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/auth/saml/saml_test.go",
+          "tests": [
+            "TestSAML_AcceptsSignedAssertion",
+            "TestSAML_RejectsBadSignature",
+            "TestSAML_RejectsUnsignedAssertion",
+            "TestSAML_RejectsWrongAudience",
+            "TestSAML_RejectsExpiredNotOnOrAfter",
+            "TestSAML_RejectsReplayedAssertionID"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/auth/saml/slo_test.go",
+          "tests": [
+            "TestSLO_MetadataAdvertisesEndpointAndIdPSupport",
+            "TestSLO_PostBindingAcceptsSignedRefusesTamperedUnsignedForeignReplayed",
+            "TestSLO_RedirectBindingVerifiesQuerySignature"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/auth/saml/spinit_test.go",
+          "tests": [
+            "TestSAML_AuthnRequestIsTracked",
+            "TestSAML_SPInitiatedRoundTrip",
+            "TestSAML_InResponseToMismatchRejected",
+            "TestSAML_IDPInitiatedStillAllowed",
+            "TestSAML_InResponseToRejectedWithoutTracker",
+            "TestSAML_RequestTrackerExpires"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/auth/social",
+      "behavior": "Closed provider catalogue and issuer requirements",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/auth/social/social_test.go",
+          "tests": [
+            "TestProvidersIsAClosedSix",
+            "TestOpenAIAndClaudeRequireAnIssuer"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/auth",
+      "behavior": "Password, credential, scope, seal and authentication rules",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/auth/auth_test.go",
+          "tests": [
+            "TestPasswordHashRoundTrip",
+            "TestTokens",
+            "TestSealerRoundTrip",
+            "TestTOTPRoundTrip",
+            "TestCheckTruthTable",
+            "TestCheckPATScopes",
+            "TestCheckRefusesAPrincipalWithNoCredential",
+            "TestCheckScheduleCredential",
+            "TestRunScopesAreValidFlatAndUnlockNoCoreAction",
+            "TestSecretWriteIsValidFlatAndUnlocksNoCoreAction",
+            "TestNamespaceDerivedAgentRole",
+            "TestAgentRoleLadder",
+            "TestHoldPermits",
+            "TestAgentManageScope"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/auth/decoy_test.go",
+          "tests": [
+            "TestDecoyHashUsesTheRealParameters"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/config",
+      "behavior": "Configuration precedence, validation, defaults and brand",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/config/brand_test.go",
+          "tests": [
+            "TestDisplayName",
+            "TestValidateUIAndWeb"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/config/config_test.go",
+          "tests": [
+            "TestLoadDefaults",
+            "TestLoadFileAndEnvPrecedence",
+            "TestLoadRejectsUnknownKeys",
+            "TestValidateGuards",
+            "TestValidateRefusesTheRemovedPGQueueDriver",
+            "TestValidateCapsCredentialTTLs",
+            "TestTrustedDeviceIsASecondClassNotALongerSession",
+            "TestValidateGuardsTheNewSurfaces",
+            "TestSMTPWithoutAuthNeedsNoTLS",
+            "TestDefaultLimitsMatchSection19",
+            "TestNewEnvOverridesApply",
+            "TestJudgeEnvConfig",
+            "TestWebSearchEnvConfig",
+            "TestSocialProviderEnv",
+            "TestStaffOrgAcceptsAHandleAndABareDomain",
+            "TestStaffMirrorGroupNeedsItsWriterAndItsSource",
+            "TestDirectoryTrustCheckConfiguration",
+            "TestRetiredStaffKeysAreNamed",
+            "TestParseCIDRs",
+            "TestSSHProxyProtocolCIDRsFromEnv",
+            "TestTrustedProxyCIDRsFromEnv",
+            "TestKnowledgeSealingKeyFromEnv"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/dnsx",
+      "behavior": "Domain ownership through DNS TXT answers",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/dnsx/resolver_test.go",
+          "tests": [
+            "TestVerifyTXT"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/entitlements",
+      "behavior": "Core feature and quota resolution, including fail-closed behavior",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/entitlements/entitlements_test.go",
+          "tests": [
+            "TestDefaultResolverReproducesSection19",
+            "TestZeroKindGetsTheStricterNamespaceQuota",
+            "TestLimitsFollowConfig",
+            "TestOSSResolverCapsNothing",
+            "TestConfigResolverKnowledgeCapIsTheSelfHostersToSet"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/gitsrv",
+      "behavior": "Real git transport, push hooks, archives and access controls",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/gitsrv/bookkeeping_test.go",
+          "tests": [
+            "TestPushBookkeepingRidesTheQueue",
+            "TestRepoGCJob"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/gitsrv/concurrency_test.go",
+          "tests": [
+            "TestGitConcurrencyIsBudgetedPerTrustedAddress",
+            "TestGitConcurrencyBudgetIgnoresAnUntrustedForwardedFor"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/gitsrv/conformance_test.go",
+          "tests": [
+            "TestGitConformance",
+            "TestPushRejectionLeavesNoTrace",
+            "TestReleaseArchiveIgnoresExportIgnore",
+            "TestGitEnforcedSSO",
+            "TestPreReceiveHookFailsClosed",
+            "TestPreReceiveHookWarnTier",
+            "TestOrgStateGatesGit",
+            "TestArchiveTagRefusesAnOptionShapedName"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": true,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "child process",
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/export_test.go",
+          "tests": [],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/gitsrv/fork_test.go",
+          "tests": [
+            "TestForkCopiesEveryRefAndWritesOneRenamingCommit",
+            "TestForkFromAnArchiveAndAnOriginNeverPushed",
+            "TestForkRefusesWhatIsNotAnObjectOrARef",
+            "TestForkFromAnArchiveNeverLetsGitReadItAsAWorkTree",
+            "TestForkKeepsTheOriginsLaterWork"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/history_test.go",
+          "tests": [
+            "TestHistoryPatchStreamsAddedLines"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/hooksdir_test.go",
+          "tests": [
+            "TestPushHooks",
+            "TestEachPushOwnsItsHooks",
+            "TestReceivePackRefusedWhenNoHookCanRun",
+            "TestPrepareHooksLeavesNothingBehind",
+            "TestCommandSetsHooksPath"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/internal_test.go",
+          "tests": [
+            "TestRepoSemaphoreIsolatesRepos",
+            "TestRepoSemaphoreHonorsContext",
+            "TestAfterReceiveBookkeeping",
+            "TestAcquireGitOrdersRepoBeforeGlobal",
+            "TestAcquireGitBudgetsEachClientAddress",
+            "TestAcquireGitWithoutAnAddressSkipsTheBudget"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "child process",
+            "real-time wait",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/m33_push_quota_test.go",
+          "tests": [
+            "TestPushQuotaRefusesPastTheHourlyBudget",
+            "TestPushQuotaIsPerRepo",
+            "TestPushQuotaRunsAfterAuthorization",
+            "TestPushQuotaIsNotSpentByAnonymousProbes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/gitsrv/m3_e2e_test.go",
+          "tests": [
+            "TestM3PublishInstallRoundTrip",
+            "TestM3WithdrawnKindIsRefused",
+            "TestM3YankSemantics"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "real-time wait"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/proxyproto_test.go",
+          "tests": [
+            "TestReadProxyHeader",
+            "TestReadProxyHeaderConsumesOnlyTheHeader"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/gitsrv/split_roles_test.go",
+          "tests": [
+            "TestSplitGitRoleLeavesTheTagArchiveToTheWorker",
+            "TestSplitGitRoleStuckSubmissionIsRejected",
+            "TestSplitGitRoleWorkerRefusesADigestItCannotReproduce"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/ssh_offers_test.go",
+          "tests": [
+            "TestSSHKeyOffersAreBudgetedPerSourceBeforeTheLookup"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/ssh_proxy_test.go",
+          "tests": [
+            "TestSSHProxyHeaderFromATrustedPeerNamesTheClient",
+            "TestSSHProxyHeaderFromAnUntrustedPeerIsRefused",
+            "TestSSHProxyHeaderIsIgnoredWhenOff"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/ssh_test.go",
+          "tests": [
+            "TestSSHTransportCloneAndPush",
+            "TestSSHPushBudgetIsTheHTTPBudget"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/unactivated_push_test.go",
+          "tests": [
+            "TestUnactivatedAccountCannotPush"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/knowledge",
+      "behavior": "Pack tree format, owner-bound keys and destruction",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/knowledge/tree_test.go",
+          "tests": [
+            "TestReadTreeIsTheCLIsDigest",
+            "TestReadTreeRefuses"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/knowledge/wrap_test.go",
+          "tests": [
+            "TestDeploymentWrapperOpensForTheOwnerAlone",
+            "TestDeploymentWrapperDestroyKillsEveryCopy",
+            "TestDeploymentWrapperRefusesBadInput"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/logevent",
+      "behavior": "Structured event catalogue and attribute contract",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/logevent/logevent_test.go",
+          "tests": [
+            "TestCatalogIsCompleteAndDocumented",
+            "TestAttr"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/logx",
+      "behavior": "Operational log masking, attributes and request correlation",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/logx/logx_test.go",
+          "tests": [
+            "TestRequestIDStampedFromContext",
+            "TestTokensAreMaskedEverywhere",
+            "TestSecretNamedKeysAreRedacted",
+            "TestLongValuesAreTruncated",
+            "TestParseLevel"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/maildomains",
+      "behavior": "Domain ownership exclusions and canonicalization",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/maildomains/maildomains_test.go",
+          "tests": [
+            "TestSharedNamesNobodyOwns",
+            "TestOfReadsTheDomain"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/metrics",
+      "behavior": "Metric names, labels, values and exposition",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/metrics/metrics_test.go",
+          "tests": [
+            "TestInstrumentNamesMatchTerraform",
+            "TestScanStageErrorsOnlyCountsFailures",
+            "TestHTTPStatusIsBucketedByClass",
+            "TestHistogramIsCumulativeAndSecondsScaled",
+            "TestExpositionCarriesTypeHeadersAndResourceLabels",
+            "TestNilMetricsIsANoOp",
+            "TestHandlerServesExposition",
+            "TestUnknownVerdictIsDropped",
+            "TestLabelValuesAreEscaped",
+            "TestExtensionInstrumentIsScrapedWithTheResourceLabels",
+            "TestExtensionCannotShadowACoreName",
+            "TestExtensionInstrumentLeavesThroughOTLP",
+            "TestNilMetricsHandsANoOpExtensionMeter",
+            "TestExtensionCannotShadowAHistogramSeries",
+            "TestASeriesAttributeNeverOverridesAResourceLabel"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "real-time wait"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/notify",
+      "behavior": "Verified-address mail, preferences, templates and delivery",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/notify/notify_test.go",
+          "tests": [
+            "TestNewSelectsImplementation",
+            "TestNewSMTPValidatesConfig",
+            "TestNoMessageOverclaimsSafety",
+            "TestPublishNoticeSaysScannedNotSafe",
+            "TestYankNoticeSaysExactPinsStillResolve",
+            "TestQuarantineNoticeIsHonestAboutInstalledCopies",
+            "TestReportCardLinkComesFromLinks",
+            "TestVerificationLinkUsesBaseURL",
+            "TestComposeRejectsHeaderInjection",
+            "TestDeliverRejectsMalformedRecipient",
+            "TestBodyIsDotStuffedAndCRLF",
+            "TestComposeSetsTransactionalHeaders",
+            "TestNonASCIISubjectIsEncoded",
+            "TestSendFailureIsReported",
+            "TestLogNotifierNeverFails",
+            "TestVerificationFallsBackToACodeWithoutABaseURL",
+            "TestAdvisoryNamesItsRangeAndTheFooterNamesTheSettingsPage"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/notify/prefs_db_test.go",
+          "tests": [
+            "TestAllowsEmailFailureDirections"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/notify/prefs_test.go",
+          "tests": [
+            "TestEmailAllowedDefaultsAndKinds",
+            "TestEmailPermittedRequiresVerifiedAddress",
+            "TestScheduleSwitchIsItsOwn",
+            "TestBugReportSwitchIsItsOwn"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/queue",
+      "behavior": "Real River scheduling, retry, recovery and failure handling",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/queue/river_test.go",
+          "tests": [
+            "TestRiverRunsJobAndCompletes",
+            "TestRiverRetriesWithBackoffThenFails",
+            "TestRiverRecoversFromHandlerPanic",
+            "TestRiverUnknownKindIsCancelled",
+            "TestRiverDelayedJobWaits",
+            "TestRiverRescuesAJobItsWorkerLeftRunning",
+            "TestRiverJobTimeoutLeavesRoomForTheRescue",
+            "TestOpenSelectsDriver",
+            "TestCountWaitingCountsJobsThatHaveNotStarted"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "real-time wait",
+            "explicit skip"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/ratelimit",
+      "behavior": "Rate accounting, refill, expiry and eviction",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/ratelimit/ratelimit_test.go",
+          "tests": [
+            "TestPerSecondBudgetRefillsOverTime",
+            "TestPerHourBudgetExhaustsAndRecovers",
+            "TestIdleTTLIsNotShorterThanAnEnforcedWindow",
+            "TestEvictionDropsOnlyIdleBuckets",
+            "TestZeroBurstRefusesWithoutPanicking",
+            "TestZeroRateReportsABackoff",
+            "TestClassesAreIndependent",
+            "TestAllowNConsumesMultiple",
+            "TestConcurrentAllowIsRaceFree",
+            "TestConversionHelpers"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/redteam",
+      "behavior": "Corpus mutation and rules evaluation",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/redteam/redteam_test.go",
+          "tests": [
+            "TestMutatorsApply",
+            "TestRunAgainstEmbeddedBundle",
+            "TestFindCorpusRefusesMissing"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/registry",
+      "behavior": "Publication state machine, names and immutable object storage",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/registry/agentname_test.go",
+          "tests": [
+            "TestAgentNameGlossMatchesAgentNameRe"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/registry/blobstore_s3_test.go",
+          "tests": [
+            "TestS3StoreRoundTrip",
+            "TestS3StoreAppliesPrefix",
+            "TestS3StorePutIsWriteOnce",
+            "TestS3StoreFallsBackWhenConditionalWritesAreUnsupported",
+            "TestS3StoreExistsIsFalseNotError",
+            "TestS3StoreGetMissingKeyErrors",
+            "TestS3StoreRefusesOversizedBody",
+            "TestNewS3RequiresBucket",
+            "TestS3ErrorClassification",
+            "TestS3ObjectKeyIgnoresLeadingSlash",
+            "TestS3StoreDeleteIsIdempotent"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/registry/blobstore_test.go",
+          "tests": [
+            "TestLocalFSRoundTripAndDelete"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/registry/ipcluster_test.go",
+          "tests": [
+            "TestIPClusterHash"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/registry/staff_internal_test.go",
+          "tests": [
+            "TestAtStaffDomainComparesAsASCII"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/registry/statemachine_test.go",
+          "tests": [
+            "TestStateMachineEdges",
+            "TestNoPathToPublishedSkipsTheGateForAPublicAgent",
+            "TestStageArchiveDoesNotLeakOnWriteFailure",
+            "TestStageArchiveSucceeds"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "real-time wait"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/render",
+      "behavior": "Untrusted Markdown and HTML sanitization",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/render/fuzz_test.go",
+          "tests": [],
+          "fuzz": [
+            "FuzzSanitize"
+          ],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/render/highlight_test.go",
+          "tests": [
+            "TestFencedCodeIsHighlightedWithClassesOnly"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/render/image_proxy_test.go",
+          "tests": [
+            "TestImagesRouteThroughTheProxy"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/render/render_test.go",
+          "tests": [
+            "TestXSSCorpus",
+            "TestInvisibleCharactersRevealed",
+            "TestRevealInvisibleLeavesTagsIntact",
+            "TestPlainTextStripsEverything",
+            "TestOversizedInputTruncated",
+            "TestAuthorHeadingsAreDemoted",
+            "TestImagesBecomeVisiblePlaceholders",
+            "TestLinksCarryUGCRel"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/scan",
+      "behavior": "Gate and publication policy",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/scan/cvss_test.go",
+          "tests": [
+            "TestCVSSBaseScoreMatchesPublishedScores",
+            "TestCVSSBaseScoreWithoutAUsableScore",
+            "TestAdvisoryGateSeverity"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/declaration_internal_test.go",
+          "tests": [
+            "TestS3S4RatesCapabilityHitsByDeclaration",
+            "TestDeclarationOfReadsTheManifest"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/egress_none_test.go",
+          "tests": [
+            "TestAnEgressNoneManifestStillDeclaresItsOtherCapabilities",
+            "TestS6ReadsAnEgressNoneManifest",
+            "TestS9SeesACapabilityAddedBesideEgressNone",
+            "TestBlockedCapabilitiesReadAnEgressNoneManifest",
+            "TestTheGateReviewsACapabilityBesideEgressNone"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/gate_test.go",
+          "tests": [
+            "TestGateSeverityTable",
+            "TestGateJudgeForcesReview",
+            "TestGatePlatformQueueForPublicHigh",
+            "TestGateWildcardEgress",
+            "TestGatePolicyRequireReviewWhenCapabilities",
+            "TestBaselinePublishesOnMedium",
+            "TestAnOrgAtLowStillHoldsMedium",
+            "TestPolicyTightenOnly",
+            "TestGateHoldsWhatCouldNotBeScanned",
+            "TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/gatecases_test.go",
+          "tests": [
+            "TestGateCases",
+            "TestGateCasesBaselineIsTheRegistrysBaseline",
+            "TestGateCasesCoverEveryBranch",
+            "TestGateCasesCoverTheGrid"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/optional_secrets_test.go",
+          "tests": [
+            "TestOptionalSecretsAreStillDeclared"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/policy_mcp_blocklist_test.go",
+          "tests": [
+            "TestBlockedMcpServersPolicy",
+            "TestBlockedMcpServersPolicyMatchesARemoteServersHost"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/remote_server_caps_test.go",
+          "tests": [
+            "TestARemoteServerIsNetwork",
+            "TestS2ManifestOAuthReadsUnquotedValues"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/scan",
+      "behavior": "Pipeline, review, signing and sweeps",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/scan/lifecycle_test.go",
+          "tests": [
+            "TestBlockWalksVersionsAndReinstateReverses",
+            "TestRescanQuarantineIsReviewableAndClearable",
+            "TestRescanSweepVisitsEveryVersionWhileQuarantining",
+            "TestPersonalNamespaceReviewGoesToPlatformQueue",
+            "TestHeldForReviewAndAdvisoryRangeReachTheAuthor",
+            "TestLateVerdictDoesNotPublishOverAWatchdogHold",
+            "TestWatchdogRoutesStuckScanToReview",
+            "TestQueuePipelineSurfacesEnqueueFailure",
+            "TestUnparseableOrgPolicyFailsClosed",
+            "TestPolicyKnobsRejectSubmissions",
+            "TestPublicPublishRequiresTOTP",
+            "TestRetriedScanResumesInsteadOfDuplicating",
+            "TestRescanUsesResultsCache",
+            "TestJudgePromptHashIsRecorded",
+            "TestReviewDecisionRollsBackOnBadTransition",
+            "TestApprovalRefusesToSignAnEmptyDigest",
+            "TestQuarantineNotifiesAuthorAndEmitsAdvisoryEvent",
+            "TestQuarantineWithholdsMailFromUnverifiedAuthor",
+            "TestStageErrorPersistsPipelineErrorFinding",
+            "TestQuarantineRejectPathIsYank",
+            "TestRulesetRegistrationDistinguishesNewSemver",
+            "TestPipelineErrorFlagsTheTransition"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/scan/mcp_sweep_internal_test.go",
+          "tests": [
+            "TestNewlyAlertable"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/mcp_sweep_test.go",
+          "tests": [
+            "TestMCPSweepOpensAndResolvesAlerts",
+            "TestMCPSweepRespectsEmailPreference",
+            "TestMCPSweepCountsAFailedRunAsAnError",
+            "TestMCPSweepLookupFailureKeepsTheAnswer",
+            "TestMCPSweepLeavesANotFoundRow"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/modes_create_test.go",
+          "tests": [
+            "TestCreateAgentModes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/pipeline_more_test.go",
+          "tests": [
+            "TestPrivateAgentsAreScannedToo",
+            "TestReleaseDiffFlagsCapabilityWidening"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/pipeline_test.go",
+          "tests": [
+            "TestPipelineBenignPublishesAndSigns",
+            "TestPipelineStaffSubmitterSkipsPublisherVelocity",
+            "TestPipelineMaliciousGatesToReview",
+            "TestPipelineRecordsTheJudgesModelID",
+            "TestPipelineSigningFailureLeavesNothingPublished",
+            "TestAttestSweepSignsAPublishedVersionWithoutOne"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/scan/provenance_test.go",
+          "tests": [
+            "TestAClaimedDraftWithoutAMatchingRecordGetsTheFullDiff",
+            "TestAVerifiedRevisionIsScannedAsAFirstRelease",
+            "TestFilesOutsideTheProofGetTheFullDiff",
+            "TestARescanKeepsAProvedRevisionWithoutAskingAgain",
+            "TestTheSourceMovesOnlyOnceAndOnlyWhenProved",
+            "TestTheProvenanceAnswerCarriesNoTier",
+            "TestALaterReleaseDoesNotTakeTheBenefitAway",
+            "TestAClaimIsJudgedOnlyAtItsPublishScan"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/scan/reattest_test.go",
+          "tests": [
+            "TestSignPayloadIsSignOverTheEncodedStatement",
+            "TestRegisterSigningKeyRecordsAndRetires",
+            "TestReattestSweepCountersignsWithTheNewKey",
+            "TestReattestSweepRefusesAStatementThatIsNotTheRows"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/redo_test.go",
+          "tests": [
+            "TestRedoReviewQueuePublishesWhatNowPasses",
+            "TestRedoReviewQueueRefreshesWhatIsStillHeld",
+            "TestRedoReviewQueueNeverPublishesPastAForcedReview",
+            "TestRedoReviewQueueLeavesWhatAPersonDecided",
+            "TestRedoReviewQueueTwiceDoesNothing",
+            "TestRegisteringANewRulesetKeepsEveryEarlierRelease",
+            "TestRedoReviewQueueHoldsWhenAStageFails",
+            "TestRedoReviewQueueNeverResumesAnOlderRulesetsRun",
+            "TestRedoReviewQueueYieldsToAReviewerWhoDecidesMeanwhile",
+            "TestANewRulesetEnqueuesTheSweepAndTheRedo",
+            "TestARulesetJobRunsOnlyUnderItsOwnRuleset",
+            "TestANewRulesetsJobsOutlastARollingDeploy"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/rescan_severity_internal_test.go",
+          "tests": [
+            "TestRescanSeverityKeepsTheOldBarForTheReratedFindings"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/rescan_test.go",
+          "tests": [
+            "TestRescanSweepQuarantinesAndAdvises",
+            "TestRescanSweepLeavesCleanVersionsAlone",
+            "TestRescanSweepLeavesWhatAReviewerApproved",
+            "TestRescanSweepDoesNotRequarantineAClearedVersion",
+            "TestRescanSweepLeavesAnOrgApprovedRerating",
+            "TestRescanSweepDoesNotPullForAReratedReading"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/ruleset_job_internal_test.go",
+          "tests": [
+            "TestRulesetJobActionFor"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/signing_kms_test.go",
+          "tests": [
+            "TestKMSSignerProducesAVerifiableEnvelope",
+            "TestKMSSignerUsesDigestSigningWithP256",
+            "TestKMSSignerCachesThePublicKey",
+            "TestKMSKeyIDMatchesTheFileSignerDerivation",
+            "TestNewKMSSignerRejectsBadKeys",
+            "TestKMSSignerSurfacesSigningFailures",
+            "TestNewSignerDispatch"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/signing_test.go",
+          "tests": [
+            "TestAttestationRoundTrip",
+            "TestNoneProviderForcesReview"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/testdb_test.go",
+          "tests": [
+            "TestScanTestsRunInTheirOwnDatabase"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": true,
+          "dependencyHints": [
+            "database fixture",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/scan/testhelpers_test.go",
+          "tests": [],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/scan",
+      "behavior": "Scanner and judge rules",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/scan/corpus_test.go",
+          "tests": [
+            "TestAttackCorpusGate"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/scan/exectool_test.go",
+          "tests": [
+            "TestResolveExecTool",
+            "TestRunGitleaksMergesReport",
+            "TestRunGitleaksFailureIsAFinding",
+            "TestSanitizeRuleID",
+            "TestRunGitleaksAlwaysPassesTheRegistrysConfig",
+            "TestRunGitleaksIgnoresTheArchivesOwnConfig",
+            "TestRunGitleaksSkipsDocumentedPlaceholders",
+            "TestDocumentedPlaceholder",
+            "TestDocumentedPlaceholderNeedsTheWholeValue"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/scan/hardening_internal_test.go",
+          "tests": [
+            "TestStagePanicKeepsValueAndStack",
+            "TestReportDigestFailsLoudly",
+            "TestUnreadableFileBecomesFinding",
+            "TestResumeNeverSkipsInventory",
+            "TestCacheableStagesMatchSpec",
+            "TestRubricHashChangesWithRubric"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/scan/imagemeta_test.go",
+          "tests": [
+            "TestExtractImageTextPNG",
+            "TestExtractImageTextJPEGEXIF",
+            "TestExtractImageTextRejectsGarbage",
+            "TestImageMetadataInjectionFixture",
+            "TestMarkdownAltTextIsScanned"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/scan/judge_bedrock_test.go",
+          "tests": [
+            "TestBedrockJudgeContract",
+            "TestBedrockJudgeFailsClosed",
+            "TestBedrockJudgeRecordsUsage"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/judge_classifier_test.go",
+          "tests": [
+            "TestClassifierJudgeScoresInjectionAxis",
+            "TestClassifierJudgeThresholdsAndFormats",
+            "TestClassifierJudgeFailsClosed",
+            "TestChunkText"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/scan/judge_http_test.go",
+          "tests": [
+            "TestHTTPJudgeOpenAIProtocol",
+            "TestHTTPJudgeAnthropicProtocol",
+            "TestHTTPJudgeBaseURLWithoutV1",
+            "TestHTTPJudgeFailsClosed",
+            "TestHTTPJudgeManipulatedOutputRoutesToReview",
+            "TestNewJudgeProviderSelection",
+            "TestHTTPJudgeRecordsUsage"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/scan/judge_model_test.go",
+          "tests": [
+            "TestRunRecordsTheModelIDNotTheProviderName"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/scan/judge_test.go",
+          "tests": [
+            "TestStaticJudgeCategories",
+            "TestStaticJudgeDetectsManipulation",
+            "TestRealisticBenignAgentScansClean"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/judge_typesafe_bench_test.go",
+          "tests": [
+            "TestTypeSafeCorpusBench"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/scan/judge_typesafe_test.go",
+          "tests": [
+            "TestTypeSafeJudgeScoresAllSixAxesFromEveryTextFile",
+            "TestTypeSafeJudgeThresholdsAndBorderlineResampling",
+            "TestTypeSafeJudgeBorderlineTakesTheMaxNeverTheMean",
+            "TestTypeSafeJudgeFailsClosed",
+            "TestTypeSafeJudgeRequestShapes",
+            "TestTypeSafeJudgeKeepsTheVersionOutOfTheQuestion",
+            "TestTypeSafeJudgeIsToldTheShippedKnowledge",
+            "TestTypeSafeJudgeNeverPutsTheKeyInAnError",
+            "TestS5PutsTheSamplesOnTheFinding",
+            "TestTypeSafeJudgeHashPinsWhatChangesAVerdict",
+            "TestTypeSafeJudgeIsWiredIntoTheFactory",
+            "TestS5ReadsEveryTextFile",
+            "TestTypeSafeRubricHashPerShape",
+            "TestTypeSafeJudgeWithoutAKeyFailsClosed",
+            "TestTheDraftCheckAsksTheRubricAsS5Does"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/scan/judge_usage_internal_test.go",
+          "tests": [
+            "TestJudgeUsageReachesTheRunAndNotTheReport"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/osv_http_test.go",
+          "tests": [
+            "TestHTTPOSVQuery",
+            "TestHTTPOSVErrors"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/scan/pack_test.go",
+          "tests": [
+            "TestScanPackReadsEverySourceAndPage",
+            "TestScanPackChunksUnderTheJudgeLimit",
+            "TestScanPackWithNoJudgeSaysSo",
+            "TestScanPackRecordsAJudgeFailure",
+            "TestScanPackRecordsAStageFailure"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/readme_test.go",
+          "tests": [
+            "TestExtractREADMEFindsTheRootReadme",
+            "TestExtractREADMETriesAlternateNames",
+            "TestExtractREADMEIgnoresNestedReadmes",
+            "TestExtractREADMEReportsAbsence",
+            "TestExtractREADMEHandlesAMissingStore",
+            "TestReadmeIndexTextIsBounded",
+            "TestReadmeIndexTextTruncatesOnRuneBoundaries",
+            "TestReadmeIndexTextStripsNulBytes",
+            "TestReadmeIndexTextRepairsInvalidUTF8",
+            "TestReadmeIndexTextHandlesEmpty"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/stages_depth_test.go",
+          "tests": [
+            "TestS8IPCluster",
+            "TestS8PublisherVelocity",
+            "TestS8PublisherSignalsSkipStaff",
+            "TestS8NameSimilarity",
+            "TestS8KeywordStuffing",
+            "TestBumpSize",
+            "TestS9EscalationIsScopedToNewFindings",
+            "TestS9ContentDiffIgnoresCommentLines",
+            "TestS9ContentDiffSignals",
+            "TestS9FirstAppearanceOfObfuscation",
+            "TestS9NewObfuscationOnlyForAMediumClass",
+            "TestS9NewEgressContentOnADeclaredHost",
+            "TestURLHost",
+            "TestBareDestinations",
+            "TestS9NewEgressIsLowForAHost",
+            "TestS9InstructionRewriteOnPatchBump",
+            "TestS9FirstPublishSkips"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/scan/stages_knowledge_test.go",
+          "tests": [
+            "TestShippedPackIsScannedWithTheVersion",
+            "TestShippedPackLongSourceIsReadWhole",
+            "TestShippedPackIncompleteScanFailsClosed",
+            "TestShippedPackWithoutAJudgeSaysSo",
+            "TestReleaseWithoutKnowledgeIsUnchanged",
+            "TestShippedPackResumes",
+            "TestNothingInAShippedPackGoesUnread"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/scan/stages_s1_frontmatter_test.go",
+          "tests": [
+            "TestS1FrontmatterFindings"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/scan/stages_s2_history_test.go",
+          "tests": [
+            "TestScanHistoryPatch",
+            "TestScanHistoryPatchCap",
+            "TestS2HistoryOutcomes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/stages_s2_manifest_test.go",
+          "tests": [
+            "TestEnvTokenShaped",
+            "TestEnvSecretNamed",
+            "TestS2ManifestEnv",
+            "TestS2ManifestEnvWithoutFile",
+            "TestS2ManifestOAuthValues"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/stages_s6_test.go",
+          "tests": [
+            "TestS6UndeclaredEverything",
+            "TestS6DeclaredIsClean",
+            "TestS6PythonAndJS",
+            "TestS6NoScriptsNoFindings",
+            "TestS6ReadsAnSSHUserAtHostDestination",
+            "TestSSHDestinations",
+            "TestS6UserAtHostThatIsNotADestination",
+            "TestShellSegments"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/stages_s7_mcp_test.go",
+          "tests": [
+            "TestS7NoServersNoFindings",
+            "TestS7OfflineIsNotChecked",
+            "TestS7LooksUpOnceThenReadsTheRegistry",
+            "TestS7LookupErrorIsNoData",
+            "TestDeclaredMCPServersSorted",
+            "TestS7RatesAdvisoriesForTheGate",
+            "TestS7AsksAgainAboutAnUnscoredRow",
+            "TestS7NoDataForAServerItCannotLookUp",
+            "TestS7ReportsARemoteServerWithoutLookingItUp"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/stages_s7_registry_test.go",
+          "tests": [
+            "TestS7RefusesAVersionItsRegistryDoesNotPublish",
+            "TestS7NotCheckedWhenTheRegistryDoesNotAnswer",
+            "TestS7PublishedVersionsAddNothing",
+            "TestS7OfflineRegistriesAreNotChecked",
+            "TestS7NotFoundRowNeverRefusesAVersionPublishedSince",
+            "TestHTTPRegistriesPaths"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/scan/targethosts_test.go",
+          "tests": [
+            "TestS6StillFlagsAScriptsOwnSSHWithATargetHostDeclared",
+            "TestATargetHostIsItsOwnPolicyTokenNotNetwork",
+            "TestDeclaringATargetHostDoesNotRouteToReview",
+            "TestS1PointsAnSSHClientInExecAtTargetHosts",
+            "TestATargetHostIsAWideningAndAPolicyCanBlockIt"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/truncation_internal_test.go",
+          "tests": [
+            "TestOversizedTextFileIsAFinding",
+            "TestCapSizedTextFileStaysClean",
+            "TestS9BaselineTruncatesWithoutFindings",
+            "TestOversizedTextFileIsHeldAtThresholdMedium"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/store",
+      "behavior": "Real Postgres migrations, concurrency and extension migration isolation",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/store/migrate_extension_test.go",
+          "tests": [
+            "TestMigrateExtension"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/store/modes_migration_test.go",
+          "tests": [
+            "TestAgentModesMigration"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/store/pqarray_test.go",
+          "tests": [],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/store/store_test.go",
+          "tests": [
+            "TestMigrateAndConnect",
+            "TestMigrateConcurrentFreshDatabase"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "explicit skip"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/testdb",
+      "behavior": "Private database creation, connection options and cleanup",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/testdb/database_test.go",
+          "tests": [
+            "TestDatabaseURLPreservesConnectionOptions",
+            "TestDatabasesAreFreshIndependentAndRemoved"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "explicit skip"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/ui",
+      "behavior": "Core pages through the in-process API and browser credentials",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/ui/display_name_test.go",
+          "tests": [
+            "TestAccountHTMLDisplayNameIsText"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/ui/ui_test.go",
+          "tests": [
+            "TestAuthorizeNeedsASession",
+            "TestAuthorizeApproveHandsTheLoopbackACode",
+            "TestLoginMirrorsTheSessionOntoTheBrowser",
+            "TestModeAuthorizeServesOnlyTheAuthorizePage",
+            "TestRefusalsRenderInsideTheLayout",
+            "TestAccountPagesAndTheDirectoryRedirect",
+            "TestSSHKeysPageRendersTheKeyAndItsLimits",
+            "TestReviewQueueNamesAnOrganizationOnlyWhenChosen",
+            "TestReviewPages",
+            "TestStaffEnforcementFlashesNameTheConsequence",
+            "TestOrgAdminPage",
+            "TestAccountPagesTellCouldNotLookFromEmpty",
+            "TestLoginPageIsTheOneThatReadsAnErrorFromTheURL",
+            "TestReviewDecisionFlashNamesTheConsequence",
+            "TestAccountNotificationSettings",
+            "TestOrgsIndexCreateForm",
+            "TestStaffOrgFormSuspendsAndReinstates",
+            "TestLayoutNamesThePendingOrganization",
+            "TestCSPAdmitsTheSignOutOrigin",
+            "TestAccountShowsTheKnowledgeMeter",
+            "TestTokenFormOffersEveryScope",
+            "TestAccountActivationResend"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "internal/voice",
+      "behavior": "Voice review stages, text bounds and question corpus",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/voice/bench_test.go",
+          "tests": [
+            "TestTheVoiceBenchCorpusReads",
+            "TestTheRuleStagesPassGoodVoicesAndFlagHiddenOnes",
+            "TestVoiceBench"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/voice/review_test.go",
+          "tests": [
+            "TestAReviewPassesOnlyWhatEveryStageReadAndNothingFlagged",
+            "TestAReviewReportKeepsNoExcerpt",
+            "TestCheckHoldsTheFormat"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "internal/webhook",
+      "behavior": "Signed webhook delivery and guarded external HTTP",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/webhook/webhook_test.go",
+          "tests": [
+            "TestClient_NoRedirectFollowing",
+            "TestSign_And_Verify"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "pkg/archive",
+      "behavior": "Reproducible packing and hostile archive extraction",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/archive/build_test.go",
+          "tests": [
+            "TestArchiveReproducible",
+            "TestWalkWorkspaceClassifiesText"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/archive/extract_test.go",
+          "tests": [
+            "TestExtractRejectsHostileArchives",
+            "TestExtractEnforcesLimits",
+            "TestExtractAcceptsGoodArchive"
+          ],
+          "fuzz": [
+            "FuzzExtract"
+          ],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "pkg/attest",
+      "behavior": "DSSE envelope signing and verification",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/attest/attest_test.go",
+          "tests": [
+            "TestEnvelopeRoundTrip"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/draftcheck",
+      "behavior": "Draft reading, review stages and benchmark corpora",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/draftcheck/bench_test.go",
+          "tests": [
+            "TestTheDraftBenchCorpusReads",
+            "TestDraftBench",
+            "TestRubricDraftBench",
+            "TestWontRunBench"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "pkg/draftcheck/draftcheck_test.go",
+          "tests": [
+            "TestReadTakesTheManifestTheInstructionAndEveryFileInOrder",
+            "TestReadRefusesWhatIsNotADraftOrPastItsBounds"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/draftproof",
+      "behavior": "Canonical proof of a draft's rendered package",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/draftproof/draftproof_test.go",
+          "tests": [
+            "TestTheBuilderRenderingOfADraftProvesAsTheDraft",
+            "TestTheProofSeesEveryChangeOfMeaning",
+            "TestTheInstructionTextIsReadWithItsLineBreaksAsLF",
+            "TestAPackageTheProofCannotReadIsNoProof"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "pkg/egressguard",
+      "behavior": "Address and redirect guards at the actual HTTP dial boundary",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/egressguard/guard_test.go",
+          "tests": [
+            "TestGuard_IsAllowedIP",
+            "TestGuard_LoopbackSeam",
+            "TestGuard_DialBlocksNonPublic",
+            "TestGuard_DialPinsTheResolvedAddress",
+            "TestClient_NoRedirectFollowing",
+            "TestClient_TakesNoProxy",
+            "TestClient_TheTLSSeam",
+            "TestClient_HTTPSOnly",
+            "TestClient_RefusesNonPublicTargets",
+            "TestClient_DefaultTimeout",
+            "TestProxy_TunnelsToTheTarget",
+            "TestProxy_RefusesANonPublicTargetBeforeAsking",
+            "TestProxy_CarriesHTTPSOnly",
+            "TestProxy_FollowsNoRedirectAndIgnoresTheEnvironment",
+            "TestProxy_DialsOnlyTheProxy"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "pkg/extension",
+      "behavior": "Extension binding, inert core, process roles and event hooks",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/extension/agentref_test.go",
+          "tests": [
+            "TestAgentRefCarriesAForksOrigin"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/extension/agentryd_git_test.go",
+          "tests": [
+            "TestGitRoleServesHealthAndReadiness"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "pkg/extension/agentryd_keyless_test.go",
+          "tests": [
+            "TestOnlyTheKeyHolderNeedsTheSigningKey"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "pkg/extension/extension_test.go",
+          "tests": [
+            "TestRegisterAuditActionKeepsTheExtensionPrefix",
+            "TestBindHandsTheBaseURL",
+            "TestApplyExtensionsBindsAndRegistersActions",
+            "TestPeriodicTickerEnqueuesNowAndOnThePeriod",
+            "TestNoopSatisfiesTheInterface",
+            "TestParseQueues",
+            "TestScopeAllows",
+            "TestApplyExtensionsSetsTheKeyWrapper",
+            "TestApplyExtensionsSetsTheModelInputCallers",
+            "TestBindHandsTheKnowledgeStore",
+            "TestApplyExtensionsRegistersTheAccountEraser",
+            "TestBindHandsTheVoiceStore",
+            "TestBindHandsTheServersMeter",
+            "TestBindHandsTheReportSettings"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "source/file contract",
+            "real-time wait"
+          ]
+        },
+        {
+          "path": "pkg/extension/hook_main_test.go",
+          "tests": [],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": true,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/gatecases",
+      "behavior": "Strict published gate-case format",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/gatecases/gatecases_test.go",
+          "tests": [
+            "TestTheEmbeddedTableLoads",
+            "TestATableThatCannotBeReadIsRefused"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/judge",
+      "behavior": "External judge wire shapes, bounds, retries, ratings and corpora",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/judge/bench_test.go",
+          "tests": [
+            "TestTheModelInputBenchCorpusIsIndexed",
+            "TestModelInputBench"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "pkg/judge/draft_test.go",
+          "tests": [
+            "TestADraftIsAskedTheDraftSetOnceWithItsPartsAsData",
+            "TestADraftQuestionAtTheLineFlagsTheDraft",
+            "TestADraftPastItsBoundsOrAFailedJudgeIsNotScanned",
+            "TestALongDraftedInstructionIsAskedWholeUpToTheBound",
+            "TestTheRubricReadsAPackageChunkByChunkWithItsContract",
+            "TestTheRubricStateSaysWhatTheRunnerGrantsEveryRun",
+            "TestTheRubricStateCarriesTheReleasesPurpose"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/judge/judge_test.go",
+          "tests": [
+            "TestNewRefusesNoKeyAndAMovingModel",
+            "TestAskSendsTheQuestionsAndTheStateAndReadsEveryAnswer",
+            "TestAskFailsOnEveryOutOfShapeAnswer",
+            "TestAskRetriesOnceOn429AndRedactsTheKey",
+            "TestChunkKeepsEveryByteAndNeverSplitsACharacter",
+            "TestScoreFromProbability",
+            "TestTheQuestionSetsAreConstants",
+            "TestEveryQuestionSetHashNamesEachQuestionsWording",
+            "TestChunkEndsAtEverySize",
+            "TestAKeyAcrossTheSnippetCutIsRedacted",
+            "TestAskNeverFollowsARedirect"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "pkg/judge/modelinput_test.go",
+          "tests": [
+            "TestAPassingTextIsAskedTheFourQuestionsAsData",
+            "TestAFlaggedChunkWithholdsTheWholeTextAtTheMaximumScore",
+            "TestAScoreOfOneIsNotWithheld",
+            "TestTheBorderlineBandIsAskedTwiceMoreAndTheMaximumKept",
+            "TestAJudgeErrorIsNotScannedAndAFlagStillWins",
+            "TestATimeoutIsNotScanned",
+            "TestChunksAreAskedInParallelWithinTheBound",
+            "TestEmptyTextPassesWithNothingAsked",
+            "TestAnUnknownSourceIsNotScanned",
+            "TestTheQuestionSetHashNamesWhatChangesAVerdict"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "real-time wait"
+          ]
+        },
+        {
+          "path": "pkg/judge/questions_test.go",
+          "tests": [
+            "TestRubricSeverity"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/judge/rubric_bench_test.go",
+          "tests": [
+            "TestRubricC3Bench"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
+          "path": "pkg/judge/voice_test.go",
+          "tests": [
+            "TestAVoiceIsAskedTheVoiceSetOnceAsData",
+            "TestAVoiceQuestionAtTheLineFlagsTheVoice",
+            "TestAVoiceThatIsNotOneOrAFailedJudgeIsNotScanned"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/manifest",
+      "behavior": "Manifest parsing, rules, canonical form and capability widening",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/manifest/canonical_test.go",
+          "tests": [
+            "TestCanonicalJSONGolden",
+            "TestCanonicalJSONDeterministic",
+            "TestCanonicalJSONPrunesUndeclared",
+            "TestCanonicalJSONRoundTrip",
+            "TestCanonicalJSONNil"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/capdiff_test.go",
+          "tests": [
+            "TestDiffCapabilitiesWidening",
+            "TestDiffCapabilitiesIdentical",
+            "TestDiffCapabilitiesUndeclaredVsExplicitNone"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/frontmatter_test.go",
+          "tests": [
+            "TestParseFrontmatter",
+            "TestV9FrontmatterContradictsManifest"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/fuzz_test.go",
+          "tests": [],
+          "fuzz": [
+            "FuzzParse"
+          ],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/glob_test.go",
+          "tests": [
+            "TestMatchGlob",
+            "TestMatchGlobBadPattern",
+            "TestMatchGlobAdversarial",
+            "TestScanPatternSegmentMatchesPathMatch"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/guide_test.go",
+          "tests": [
+            "TestGuideParsesAndValidates",
+            "TestGuideRefusals",
+            "TestGuideOverviewKeepsNewlinesAndTabs",
+            "TestGuideConnectIsMarkdownOfUpTo2000Characters",
+            "TestGuideConnectTakesAnMCPServersSecret",
+            "TestGuideIsAV2Field",
+            "TestGuideChangesNothingAboutTheContract",
+            "TestGuideDecodingStaysStrict",
+            "TestV2SchemaGuideShape"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/inputs_test.go",
+          "tests": [
+            "TestInputsParsesAndValidates",
+            "TestInputsAbsentKeepsTodaysBehaviour",
+            "TestInputsKindsAreTheCallersOwn",
+            "TestInputsAccepts",
+            "TestInputsRefusals",
+            "TestInputsIsAV2Field",
+            "TestInputsChangesNothingAboutTheContract",
+            "TestInputsDecodingStaysStrict",
+            "TestV2SchemaInputsShape",
+            "TestInputsEmptyKindsInYAMLIsRefused"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/knowledge_test.go",
+          "tests": [
+            "TestKnowledgeBlockParsesAndAShippedPackValidates",
+            "TestKnowledgeBlockRefusals",
+            "TestKnowledgeIsAV2Field",
+            "TestKnowledgeDecodingStaysStrict",
+            "TestShippedPackInTheArchive",
+            "TestShippedPackOutsideTheReleaseQuotas",
+            "TestShippedKnowledgeIsInTheContract",
+            "TestShippedPackFile",
+            "TestV2SchemaKnowledgeShape",
+            "TestKnowledgeTreeDigestIsTheCLIs"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/manifest_test.go",
+          "tests": [
+            "TestParseNormativeExample",
+            "TestParseClosedSchema",
+            "TestParseSchemaVersion",
+            "TestParseUnionShapes",
+            "TestParseRejectsExtraDocumentsAndEmpty"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/mcpremote_test.go",
+          "tests": [
+            "TestRemoteAndOAuthServersValid",
+            "TestRemoteServerRefusals",
+            "TestMCPOAuthRefusals",
+            "TestRemoteAndOAuthAreV2Only",
+            "TestNoRemoteFieldsEncodeAsBefore",
+            "TestExpandOAuthPlaceholders",
+            "TestUnsupportedOAuthPackage",
+            "TestDiffRemoteAndOAuthServers",
+            "TestV2SchemaRemoteServerShape",
+            "TestOAuthFileNames",
+            "TestUnsupportedListIsInTheDocs",
+            "TestDiffRemoteServerToolsAndSecret"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/mcpservers_test.go",
+          "tests": [
+            "TestMCPServersValid",
+            "TestMCPServersRefusals",
+            "TestMCPServersOnWithdrawnKindRefused",
+            "TestMCPServersCapAtMax",
+            "TestMCPServersUnknownKeyRejected",
+            "TestMCPServerEnvValid",
+            "TestMCPServerEnvRefusals",
+            "TestMCPServerEnvLiteralShapes",
+            "TestMCPServerEnvDuplicateKeyRejected",
+            "TestMCPServerEnvIsV2Only"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/optionalsecrets_test.go",
+          "tests": [
+            "TestOptionalSecretsParseAndValidate",
+            "TestOptionalSecretsRefusals",
+            "TestOptionalSecretsAddNothingToTheContract",
+            "TestOptionalSecretsIsAV2Field",
+            "TestNoOptionalSecretsEncodesAsBefore",
+            "TestFlippingOptionalChangesNoCapability",
+            "TestSecretIntakeAgreesWithItsSecret",
+            "TestAnInstalledReleaseKeepsRunning",
+            "TestV2SchemaOptionalSecretsShape"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/rename_test.go",
+          "tests": [
+            "TestRenameSetsTheNamespaceAndNameAndKeepsTheRest",
+            "TestRenameAddsAMissingKeyInOrder",
+            "TestRenameQuotesAValueYAMLWouldReadOtherwise",
+            "TestRenameRefusesWhatIsNotAMapping"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/rules_test.go",
+          "tests": [
+            "TestRulesMatchReportedIDs",
+            "TestRulesIsACopy"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/sources_test.go",
+          "tests": [
+            "TestSourceQuestionsParseAndValidate",
+            "TestSourceQuestionIDsKeepV10",
+            "TestSourceTypesAreTheClosedSet",
+            "TestSourceQuestionGrantsNothing",
+            "TestRepositoryQuestionWarnsWithoutCode",
+            "TestV2SchemaIntakeTypes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/targethosts_test.go",
+          "tests": [
+            "TestATargetHostParsesAndValidates",
+            "TestV14RefusesWhatTheTwoHalvesDoNotAgreeOn",
+            "TestTargetHostsIsAV2Field",
+            "TestV14PointsAnSSHClientInExecAtTargetHosts",
+            "TestTargetHostsIsInTheContract",
+            "TestDiffCapabilitiesTargetHosts",
+            "TestV2SchemaTargetHostsShape"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/v2_test.go",
+          "tests": [
+            "TestV2ExampleParsesAndValidatesClean",
+            "TestV2ClosedSchemaOnNewFields",
+            "TestV2ClassificationRules",
+            "TestV2ClassificationPasses",
+            "TestV1RefusesV2Fields",
+            "TestIntakeRules",
+            "TestInteractiveHints",
+            "TestSupportedModes",
+            "TestInstructionCandidates",
+            "TestV2AgentYAMLInclusionRefused",
+            "TestV2InstructionMustShip",
+            "TestV9OnInstructionFile",
+            "TestCanonicalJSONV2",
+            "TestV2SchemaFileShape",
+            "TestV2SchemaEnvShape",
+            "TestCanonicalJSONV2Env"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/validate_test.go",
+          "tests": [
+            "TestNormativeExampleValidatesClean",
+            "TestV1MCPServerKindIsWithdrawn",
+            "TestValidateStatic",
+            "TestValidateStaticPasses",
+            "TestValidateInContext",
+            "TestValidateInContextPasses",
+            "TestChannelMonotonicity",
+            "TestWarningsAreDistinguishable",
+            "TestAgentYAMLInclusionWarning",
+            "TestValidateNilManifest",
+            "TestValidNameAndNamespace",
+            "TestKnownSPDXID",
+            "TestParseSPDXExpression"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/packseal",
+      "behavior": "Encrypted pack round trip, owner-bound metadata and refusal",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/packseal/packseal_test.go",
+          "tests": [
+            "TestSealOpenRoundTrip",
+            "TestReadHeaderNeedsNoKey",
+            "TestOpenRefuses",
+            "TestSealRefusesABadKeyAndHeader",
+            "TestTwoSealsOfOneTreeDiffer"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/reportdesign",
+      "behavior": "Report design grammar, canonicalization and pixel-only logos",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/reportdesign/logo_test.go",
+          "tests": [
+            "TestNormalizeLogoKeepsOnlyThePixels",
+            "TestNormalizeLogoRefuses",
+            "TestNormalizeLogoScalesDown",
+            "TestDesignWithLogoRoundTrips",
+            "TestDesignLogoRefusals"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/reportdesign/reportdesign_test.go",
+          "tests": [
+            "TestBuiltinsRoundTripByteForByte",
+            "TestPlainIsNearMonochrome",
+            "TestBuiltinsDiffer",
+            "TestValidationTable",
+            "TestTextIsData",
+            "TestContrast",
+            "TestNearestPassing",
+            "TestTint",
+            "TestFamilies",
+            "TestSchemaFileIsCurrent"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "pkg/rules",
+      "behavior": "Rule loading, matching, declaration rating and malicious/benign fixtures",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/rules/bundle_scope_test.go",
+          "tests": [
+            "TestBundleNotPatternsAreParagraphScoped"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/rules/bundle_tar_test.go",
+          "tests": [
+            "TestBundleTarRoundTrip",
+            "TestBundleTarDeterministic",
+            "TestUntarBundleRejectsStructure"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/rules/bundle_test.go",
+          "tests": [
+            "TestBundleLoads",
+            "TestEveryFamilyHasRules",
+            "TestRuleFixtures",
+            "TestDigestReproducible"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/rules/corpus_test.go",
+          "tests": [
+            "TestCorpus"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/rules/declared_test.go",
+          "tests": [
+            "TestRateByDeclaration",
+            "TestCapabilityFamiliesNeedADirective"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/rules/heading_test.go",
+          "tests": [
+            "TestIsATXHeading"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/rules/s3_test.go",
+          "tests": [
+            "TestDetectZeroWidth",
+            "TestZeroWidthLeavesEmojiJoinersAndALeadingBOM",
+            "TestExtendedPictographic",
+            "TestDetectBidiControls",
+            "TestDetectTagBlock",
+            "TestDetectPrivateUse",
+            "TestDetectMixedScript",
+            "TestDetectHTMLComment",
+            "TestDetectCSSHidden",
+            "TestDetectDataURI",
+            "TestDetectEncodedBlob",
+            "TestDetectTrailingWhitespace",
+            "TestDetectNFCDelta",
+            "TestExcerptRendersInvisible",
+            "TestBinaryFilesSkipped",
+            "TestTaxonomyAttached"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/rules/scan_test.go",
+          "tests": [
+            "TestScanGatesS4ToProseFiles",
+            "TestScanEscalatesInjectionBearingComment",
+            "TestScanNilBundleRunsS3Only",
+            "TestScanDeterministicOrder",
+            "TestSuppressionAppliesToMatchedLineOnly",
+            "TestLoadBundleValidation",
+            "TestLoadBundleDuplicateID",
+            "TestDigestChangesWithContent",
+            "TestExcerptCap",
+            "TestBundleAccessors"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/ruleset",
+      "behavior": "Pinned embedded bundle, released thresholds and immutable history",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/ruleset/ruleset_test.go",
+          "tests": [
+            "TestEmbeddedBundleDigestIsPinnedForItsVersion",
+            "TestEveryReleasedVersionNamesItsThreshold",
+            "TestReleasedThresholdsAreHistory"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/websearch",
+      "behavior": "External search requests, result bounds, redirects and key secrecy",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/websearch/brave_test.go",
+          "tests": [
+            "TestBraveAsksOnceWithTheKeyAndReadsOnlyTheGenericResults",
+            "TestBraveRefusalsCarryNoKeyAndNoRedirectIsFollowed",
+            "TestBraveHoldsTheQueryToItsLimits"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "pkg/websearch/providers_test.go",
+          "tests": [
+            "TestPersonalProvidersAskOnceWithTheKeyInTheirHeaderAndReadOnlyTheResults",
+            "TestPersonalProvidersNeverAskForMoreThanTheMostResults",
+            "TestPersonalProvidersRefusalsCarryNoKeyAndNoRedirectIsFollowed"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "pkg/websearch/websearch_test.go",
+          "tests": [
+            "TestCleanQuery",
+            "TestClampCount",
+            "TestCleanBoundsEveryResult",
+            "TestYouComAsksOnceWithTheKeyAndReadsOnlyTheWebResults",
+            "TestYouComFailsWithoutTheKeyInTheError",
+            "TestNewNamesTheProviders",
+            "TestYouComNeverFollowsARedirectAndRedactsAcrossTheCut",
+            "TestOriginAndTheProviderList"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        }
+      ]
+    }
+  ],
+  "acceptanceAndWorkflowEvidence": [
+    {
+      "path": ".github/workflows/ci.yaml",
+      "disposition": "retain",
+      "kind": "workflow",
+      "jobs": [
+        "check",
+        "prose-check",
+        "govulncheck",
+        "deps",
+        "attest-interop",
+        "image-scan",
+        "directory-email",
+        "directory-remember",
+        "directory-promo",
+        "directory-terms",
+        "directory-budget",
+        "helm",
+        "oasdiff",
+        "gitleaks"
+      ]
+    },
+    {
+      "path": ".github/workflows/dev-release.yaml",
+      "disposition": "retain",
+      "kind": "workflow",
+      "jobs": [
+        "tag",
+        "release"
+      ]
+    },
+    {
+      "path": ".github/workflows/image-main.yaml",
+      "disposition": "retain",
+      "kind": "workflow",
+      "jobs": [
+        "image"
+      ]
+    },
+    {
+      "path": ".github/workflows/pins.yaml",
+      "disposition": "retain",
+      "kind": "workflow",
+      "jobs": [
+        "actions-and-tools"
+      ]
+    },
+    {
+      "path": ".github/workflows/post-merge.yaml",
+      "disposition": "retain",
+      "kind": "workflow",
+      "jobs": [
+        "alert"
+      ]
+    },
+    {
+      "path": ".github/workflows/release-please.yaml",
+      "disposition": "retain",
+      "kind": "workflow",
+      "jobs": [
+        "github-release",
+        "release",
+        "release-pr"
+      ]
+    },
+    {
+      "path": ".github/workflows/release.yaml",
+      "disposition": "retain",
+      "kind": "workflow",
+      "jobs": [
+        "guard",
+        "verify",
+        "binaries",
+        "sbom-and-sign",
+        "image",
+        "chart"
+      ]
+    },
+    {
+      "path": ".github/workflows/ruleset-tag.yaml",
+      "disposition": "retain",
+      "kind": "workflow",
+      "jobs": [
+        "tag"
+      ]
+    },
+    {
+      "path": "scripts/acceptance/directory-budget.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-budget.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-captcha-check.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-cleanup-selftest.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-cleanup.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-csp-proxy.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-edge.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-edge.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-email.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-promo.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-promo.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-remember.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-remember.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-resources.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-signout.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-template-check.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-terms.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-terms.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-user-settings.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/directory-verification.py",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/lib-selftest.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/lib.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/m0.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/m1.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/m2.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/m3-cli.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/m3.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/m4.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/m6.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/m7.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/section9-names.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/acceptance/ui.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/conformance/git.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/dev/attest-interop.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/prose/check.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    },
+    {
+      "path": "scripts/release/selftest.sh",
+      "disposition": "retain",
+      "kind": "acceptance or self-test support"
+    }
+  ]
+}

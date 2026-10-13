@@ -18,12 +18,9 @@ import (
 // `?affecting=` path is the same gate; the owner still sees everything.
 func TestPrivateAgentInvisibleToNonReaders(t *testing.T) {
 	env := newTestEnv(t)
-	owner := env.register("priv-owner")
-	env.verifyEmail(owner)
-	ownerSess := env.login(owner)
-	stranger := env.register("priv-stranger")
-	env.verifyEmail(stranger)
-	strangerSess := env.login(stranger)
+	ownerSess := env.seedCaller("priv-owner")
+	owner := ownerSess.name
+	strangerSess := env.seedCaller("priv-stranger")
 	env.doJSON(ownerSess, http.MethodPost, "/api/v1/agents",
 		map[string]any{"namespace": owner, "name": "secret", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
 
@@ -121,9 +118,7 @@ func TestPrivateAgentInvisibleToNonReaders(t *testing.T) {
 // outsider does, and the same one a name that does not exist gets.
 func TestPrivateOrgAgentReaderSetIsEveryActiveMember(t *testing.T) {
 	env := newTestEnv(t)
-	adminH := env.register("pv-admin")
-	env.verifyEmail(adminH)
-	admin := env.login(adminH)
+	admin := env.seedCaller("pv-admin")
 	orgH := "pvorg" + env.sfx
 	env.createOrg(admin, orgH)
 	env.doJSON(admin, http.MethodPost, "/api/v1/agents",
@@ -133,14 +128,11 @@ func TestPrivateOrgAgentReaderSetIsEveryActiveMember(t *testing.T) {
 	env.joinOrg(admin, orgH, memberH)
 	member := env.login(memberH)
 
-	pendingH := env.register("pv-pending")
-	env.verifyEmail(pendingH)
+	pending := env.seedCaller("pv-pending")
+	pendingH := pending.name
 	env.seedMembership(orgH, pendingH, "member", "pending")
-	pending := env.login(pendingH)
 
-	outsiderH := env.register("pv-outsider")
-	env.verifyEmail(outsiderH)
-	outsider := env.login(outsiderH)
+	outsider := env.seedCaller("pv-outsider")
 
 	get := func(c caller, path string) (int, map[string]any) {
 		res := env.do(c, http.MethodGet, path, nil)

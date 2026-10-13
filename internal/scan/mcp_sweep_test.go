@@ -57,8 +57,8 @@ publish:
 }
 
 // The daily sweep (agentry#177 M2): a server version that was clean at
-// publication (a fixture package name of its own: the test database is
-// shared with the API tests, and mcp_server_scans is keyed by version) and now
+// publication (a fixture package name of its own: this binary's pipeline tests
+// share a database, and mcp_server_scans is keyed by version) and now
 // carries a high advisory opens one alert per published
 // version declaring it and tells each author once; a yanked version's alert
 // closes with the transition; a withdrawn advisory closes the rest.
@@ -86,7 +86,7 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 		t.Fatalf("S7 lookups at publish = %d, want 1 (second version served from the registry)", osv.calls)
 	}
 	// Only this test's fixture package goes stale: the database is shared
-	// with every other package's tests, and a server row another test
+	// by this binary's tests, and a server row another test
 	// published at the same time would otherwise be re-checked and counted
 	// here (agentry#245).
 	backdate := func() {

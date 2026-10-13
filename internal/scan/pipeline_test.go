@@ -44,9 +44,6 @@ func newPipeEnv(t *testing.T, opts ...func(*scan.PipelineDeps)) *pipeEnv {
 	t.Helper()
 	url := scanTestDatabaseURL(t)
 	ctx := context.Background()
-	if err := store.Migrate(ctx, url); err != nil {
-		t.Fatal(err)
-	}
 	st, err := store.Connect(ctx, url)
 	if err != nil {
 		t.Fatal(err)
