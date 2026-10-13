@@ -1011,7 +1011,7 @@ lower them for your own host.
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane; before the agent starts they are checked by ClamAV and read in the files image's container (no network, every capability dropped, the files read-only), and their text is mounted read-only at `/inputs-text`; the always-granted `list_inputs`, `read_input` and `search_inputs` serve both ([running with files](#running-with-files)); job output and receipts live on the separate `/out` volume |
 | the scratch folder (the runner's grant to every release, never a built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
-| `grep` and `glob` (granted with the scratch folder) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) its user alone holds it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
+| `grep` and `glob` (granted with the scratch folder) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds, not its capability drop |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
@@ -2195,8 +2195,10 @@ descriptions name the areas it has. A pack's `manifest.json` is never an
 answer.
 
 Hidden files are searched and ignore files are not read, so nothing the
-person gave is skipped because a `.gitignore` said so; `.git` is always
-skipped, and so is a file larger than 8 MiB. A search of the inputs reads
+person gave is skipped because a `.gitignore` said so. Where ripgrep walks
+a folder it skips `.git` and any file larger than 8 MiB; a file or a
+`.git` folder a call names directly is searched, and so is every input,
+which ripgrep is given by name, whatever its size. A search of the inputs reads
 each input in the view `read_input` gives it (a document's text, a text
 file as uploaded), or in the `view` the call names, and answers as
 `search_inputs` does: the person's own files, unchanged, past the
@@ -2249,29 +2251,36 @@ start any program, which no base command may do.
 The tools server starts it the way `export_pdf` starts Typst:
 
 - **A fixed argument list.** No config file, ignore files not read,
-  hidden files searched, an 8 MiB file cap, path-sorted output, caps on
-  what a pattern may compile to; then the call's own options from a closed
-  set, each value in one argument with its flag, the `.git` exclusion
-  after the call's glob so a call's `*` cannot bring it back, `-e` and the
+  hidden files searched, an 8 MiB cap on a file found by walking a folder,
+  path-sorted output, caps on what a pattern may compile to; then the
+  call's own options from a closed set, each value in one argument with
+  its flag, the `.git` exclusion after the call's glob so a call's `*`
+  cannot bring it back into a walk, `-e` and the
   pattern, `--`, and the paths. Nothing a call sends can become a flag, and
   `--pre`, `--pre-glob`, `--search-zip` and `-L` are never passed, so
   ripgrep starts no program and follows no link.
 - **A user of its own.** Through the runner binary's `confine` role, with
-  an empty environment, as uid and gid 65532: neither root, whose
-  environment holds the run's secrets, nor the 65534 a declared command
-  runs as, nor Typst's 65533, so none of them can signal or trace another.
+  an empty environment and, when the tools server is root, as uid and gid
+  65532: not root, whose environment holds the run's secrets, and not
+  Typst's 65533. Where there is no Landlock a declared command runs as
+  65534, a third user, so none of the three can signal or trace another.
 - **Landlock, where there is one:** ripgrep may read only the area it
   searches (under a paths grant, only the granted paths), writes nothing,
   and opens no TCP connection at Landlock ABI 4 or later. Where there is
-  no Landlock (gVisor, so every hosted run) its user is what holds it, and
-  it reads only what anyone may. A tools server that is not root and has
-  no Landlock refuses to search.
+  no Landlock (gVisor, so every hosted run) only its uid, the memory cap
+  and no_new_privs hold it: it reads and writes only what any user may,
+  and TCP is not refused. A tools server that is not root and has no
+  Landlock refuses to search. DR-94 records the one residual: without
+  Landlock, a link a declared command plants between the server's check
+  and ripgrep's open could point it at a world-readable file outside the
+  area (a hosted run provides no command that makes a link).
 - **Caps:** 512 MiB of address space and 30 seconds a call, and ripgrep
   is stopped once its output passes 16 MiB.
 
 The tools server's log says which of these holds in a run. The plan's
 enforcement line `search`, which the receipt carries as
-`capabilities_enforced.search`, names them all.
+`capabilities_enforced.search`, names the confinement, the environment,
+the argument list's guarantees, the users, and the memory and time caps.
 
 ## The System Prompt
 
