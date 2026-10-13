@@ -128,6 +128,11 @@ Match the file you are editing. Beyond that:
 
 ## Tests
 
+The [test coverage guide](docs/testing.md) describes ownership, isolated database
+fixtures, real account lifecycles and the named evidence inventory. Regenerate
+the inventory when test names or files change; each consolidation PR names the
+surviving equivalent evidence for its removals.
+
 New code needs tests at the level where the behaviour lives: table tests for
 pure logic, real-Postgres integration tests for stores and handlers, and an
 acceptance-script assertion for anything a milestone promises. Fixtures for
