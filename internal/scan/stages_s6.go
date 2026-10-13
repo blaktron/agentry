@@ -350,6 +350,232 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 // os.environ) are everywhere else.
 var s6Quoted = regexp.MustCompile("[\"'`]([^\"'`]+)[\"'`]")
 
+// s6UserAtHost is an ssh destination written user@host, with scp's and
+// rsync's :path after it; the user may be a shell variable ($USER,
+// ${SSH_USER}). An e-mail address has the same shape, which is why only
+// an ssh-family command's own destination words are read with it
+// (agentry#1095).
+var s6UserAtHost = regexp.MustCompile(`(?i)^(?:[a-z0-9._-]|\$\{?[a-z_][a-z0-9_]*\}?)+@((?:[a-z0-9-]+\.)+[a-z]{2,})\.?(?::.*)?$`)
+
+// The options that take an argument (the rest of the word, or the next
+// word): ssh's, and sftp's, which differ.
+const (
+	sshOptsWithArg  = "BbcDEeFIiJLlmOoPpQRSWw"
+	sftpOptsWithArg = "BbcDFiJloPRSsX"
+)
+
+// s6CmdWrappers run the command that follows them; their own options are
+// skipped to find it (sudo -u deploy ssh …, sshpass -p pw scp …).
+var s6CmdWrappers = map[string]string{
+	// wrapper: its options that take the next word as their argument
+	"sudo": "CDghpRrTtUu", "doas": "Cu", "env": "CSu", "exec": "a", "command": "", "builtin": "",
+	"nohup": "", "time": "fo", "nice": "n", "timeout": "ks", "stdbuf": "eio", "sshpass": "dfPp",
+}
+
+// sshDestinations reads the hosts a shell line's ssh, scp, sftp and rsync
+// reach when written user@host or user@host:path: bare() skips a host
+// after "@" so that curl's @file argument is not one, and that also
+// skipped the usual way an SSH destination is written (agentry#1095). The
+// command must be its segment's own (after assignments and wrappers such
+// as sudo or sshpass), and nothing after an unquoted '#' is read, so an
+// e-mail address in a comment or another command's arguments is never a
+// host. ssh's and sftp's words stop at the destination, so the remote
+// command's arguments are not read; their jump hosts (-J, ProxyJump) are.
+// scp and rsync read every operand.
+func sshDestinations(line string) []string {
+	var out []string
+	for _, seg := range shellSegments(line) {
+		cmd, args := segmentCommand(seg)
+		switch cmd {
+		case "ssh":
+			out = append(out, sshArgs(args, sshOptsWithArg)...)
+		case "sftp":
+			out = append(out, sshArgs(args, sftpOptsWithArg)...)
+		case "scp", "rsync":
+			for _, a := range args {
+				if strings.HasPrefix(a.text, "-") && !a.quoted {
+					out = append(out, proxyJump(a.text)...)
+					continue
+				}
+				out = append(out, userAtHost(a.text)...)
+			}
+		}
+	}
+	return out
+}
+
+// segmentCommand is a segment's command word and its arguments, past any
+// NAME=value assignments and wrappers (s6CmdWrappers) with their options.
+func segmentCommand(seg []shellWord) (string, []shellWord) {
+	wrapped := ""
+	for i := 0; i < len(seg); i++ {
+		w := seg[i]
+		if !w.quoted && wrapped == "" && strings.Contains(w.text, "=") && !strings.HasPrefix(w.text, "-") {
+			continue // an assignment before the command
+		}
+		if wrapped != "" && !w.quoted && strings.HasPrefix(w.text, "-") {
+			if len(w.text) == 2 && strings.IndexByte(s6CmdWrappers[wrapped], w.text[1]) >= 0 {
+				i++
+			}
+			continue
+		}
+		if wrapped == "timeout" && s6Duration.MatchString(w.text) {
+			continue
+		}
+		if wrapped == "env" && strings.Contains(w.text, "=") {
+			continue
+		}
+		if _, ok := s6CmdWrappers[w.text]; ok && !w.quoted {
+			wrapped = w.text
+			continue
+		}
+		if w.quoted {
+			return "", nil
+		}
+		return w.text, seg[i+1:]
+	}
+	return "", nil
+}
+
+var s6Duration = regexp.MustCompile(`^[0-9.]+[smhd]?$`)
+
+// sshArgs reads ssh's or sftp's words up to and including the destination,
+// with the jump hosts its options name.
+func sshArgs(words []shellWord, optsWithArg string) []string {
+	var out []string
+	for i := 0; i < len(words); i++ {
+		w := words[i]
+		if w.text == "--" && !w.quoted {
+			if i+1 < len(words) {
+				out = append(out, userAtHost(words[i+1].text)...)
+			}
+			return out
+		}
+		if strings.HasPrefix(w.text, "-") && len(w.text) > 1 && !w.quoted {
+			// A cluster of flags; the first that takes an argument takes
+			// the rest of the word, or the next word.
+			for j := 1; j < len(w.text); j++ {
+				opt := w.text[j]
+				if strings.IndexByte(optsWithArg, opt) < 0 {
+					continue
+				}
+				arg := w.text[j+1:]
+				if arg == "" && i+1 < len(words) {
+					i++
+					arg = words[i].text
+				}
+				switch opt {
+				case 'J':
+					out = append(out, jumpHosts(arg)...)
+				case 'o':
+					out = append(out, proxyJump("-o"+arg)...)
+				}
+				break
+			}
+			continue
+		}
+		return append(out, userAtHost(w.text)...) // the destination; what follows is the remote command
+	}
+	return out
+}
+
+// proxyJump reads the hosts of an -oProxyJump=… or -o ProxyJump … option.
+func proxyJump(opt string) []string {
+	v, ok := strings.CutPrefix(opt, "-o")
+	if !ok {
+		return nil
+	}
+	k, val, ok := strings.Cut(strings.TrimSpace(v), "=")
+	if !ok {
+		k, val, ok = strings.Cut(strings.TrimSpace(v), " ")
+	}
+	if !ok || !strings.EqualFold(strings.TrimSpace(k), "ProxyJump") {
+		return nil
+	}
+	return jumpHosts(val)
+}
+
+func jumpHosts(list string) []string {
+	var out []string
+	for _, j := range strings.Split(list, ",") {
+		out = append(out, userAtHost(strings.TrimSpace(j))...)
+	}
+	return out
+}
+
+func userAtHost(word string) []string {
+	if m := s6UserAtHost.FindStringSubmatch(word); m != nil {
+		return []string{m[1]}
+	}
+	return nil
+}
+
+// shellWord is one word of a shell line, and whether any of it was quoted.
+type shellWord struct {
+	text   string
+	quoted bool
+}
+
+// shellSegments splits a shell line into its commands' words: a new
+// segment at an unquoted ;, |, &, (, ) or `, a word break at an unquoted
+// space, tab, < or >, and nothing after an unquoted '#' that starts a
+// word. It is a reader for the scanner, not a shell: no expansion; a
+// backslash escapes the next byte outside quotes and ", \, $ and ` inside
+// double quotes, and nothing inside single quotes.
+func shellSegments(line string) [][]shellWord {
+	var segs [][]shellWord
+	var seg []shellWord
+	var cur strings.Builder
+	inWord, quoted := false, false
+	var quote byte
+	flush := func() {
+		if inWord {
+			seg = append(seg, shellWord{text: cur.String(), quoted: quoted})
+		}
+		cur.Reset()
+		inWord, quoted = false, false
+	}
+	endSeg := func() {
+		flush()
+		if len(seg) > 0 {
+			segs = append(segs, seg)
+		}
+		seg = nil
+	}
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		switch {
+		case quote == '"' && c == '\\' && i+1 < len(line) && strings.IndexByte("\"\\$`", line[i+1]) >= 0:
+			i++
+			cur.WriteByte(line[i])
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			} else {
+				cur.WriteByte(c)
+			}
+		case c == '\\' && i+1 < len(line):
+			i++
+			cur.WriteByte(line[i])
+			inWord = true
+		case c == '\'' || c == '"':
+			quote, quoted, inWord = c, true, true
+		case c == '#' && !inWord:
+			endSeg()
+			return segs
+		case c == ' ' || c == '\t' || c == '\r' || c == '<' || c == '>':
+			flush()
+		case strings.IndexByte(";|&()`", c) >= 0:
+			endSeg()
+		default:
+			cur.WriteByte(c)
+			inWord = true
+		}
+	}
+	endSeg()
+	return segs
+}
+
 func hostsOnLine(line string, class scriptClass) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -380,6 +606,9 @@ func hostsOnLine(line string, class scriptClass) []string {
 	}
 	if class == scriptShell {
 		bare(line)
+		for _, h := range sshDestinations(line) {
+			add(h)
+		}
 	} else {
 		for _, m := range s6Quoted.FindAllStringSubmatch(line, -1) {
 			bare(m[1])
