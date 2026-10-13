@@ -352,7 +352,7 @@ entries:
         from authentik.core.models import User
 
         HANDLE = r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
-        RESERVED = {"about", "aboutus", "account-deleted", "admin", "advisories", "agent-template", "agentry", "api", "auth", "build", "contact", "cookies", "dashboard", "docs", "download", "downloads", "healthz", "img", "invitations", "login", "logout", "metrics", "new", "oauth", "orgs", "pricing", "privacy", "readyz", "review", "runs", "scheduled", "scim", "search", "secureagentry", "settings", "signup", "sso", "staff", "static", "tags", "terms", "trust", "ui"}
+        RESERVED = {"about", "aboutus", "account-deleted", "admin", "advisories", "agent-template", "agentry", "api", "auth", "build", "contact", "cookies", "dashboard", "docs", "download", "downloads", "healthz", "img", "invitations", "login", "logout", "metrics", "new", "oauth", "orgs", "pricing", "privacy", "readyz", "report-bug", "review", "runs", "scheduled", "scim", "search", "secureagentry", "settings", "signup", "sso", "staff", "static", "tags", "terms", "trust", "ui"}
 
         username = str((request.context.get("prompt_data") or {}).get("username") or "").strip().lower()
         if not re.fullmatch(HANDLE, username):
