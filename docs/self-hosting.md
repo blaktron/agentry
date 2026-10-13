@@ -787,6 +787,14 @@ the stored password first (`ALTER USER agentry PASSWORD …` in Postgres,
 `mc admin user` for MinIO) and then `.env`, since the volumes keep what
 they were initialised with.
 
+MinIO runs with one drive, so a drive it takes offline fails every write
+(a 503 `SlowDownWrite`) until it comes back. It takes a drive offline when
+an operation, or its own periodic write-and-read check, takes longer than
+`MINIO_DRIVE_MAX_TIMEOUT`. The compose file sets that to three minutes
+instead of MinIO's thirty seconds (`AGENTRY_MINIO_DRIVE_TIMEOUT` in `.env`
+changes it), because a disk shared with builds can stall a write past
+thirty seconds under load, and a slow write is better than a refused one.
+
 ### Rate limits at the edge
 
 agentryd applies the §19 per-IP limits to the API; the edge adds `limit_req`
