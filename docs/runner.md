@@ -1870,7 +1870,7 @@ tools spec:
 | `docker-agent` | 48 KiB and 1,900 lines | 50 KiB or 2,000 lines, then the last 50 KiB is kept |
 | Claude Code (`claude`, `claude-image`) | 46 KiB and 1,900 lines | 50,000 characters, then the result is saved to a file the agent cannot open |
 | Copilot (`copilot-image`) | 19 KiB and 1,900 lines | 20,480 bytes, then the result is saved to a file and 500 characters shown |
-| Codex (`codex`, `codex-image`) | 5 KiB and 1,900 lines | 12,000 bytes for a model outside Codex's catalog (48,000 inside it), the middle cut out; an input tool's result is sent as escaped JSON, which can double it |
+| Codex (`codex`, `codex-image`) | 20 KiB and 1,900 lines | 48,000 bytes, set by the runner in the model catalog it gives Codex (since agentry-cli#911), the middle cut out; an input tool's result is sent as escaped JSON, which can double it |
 
 Within it:
 
