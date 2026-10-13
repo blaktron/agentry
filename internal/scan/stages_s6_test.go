@@ -156,6 +156,10 @@ func TestSSHDestinations(t *testing.T) {
 		"cd /srv && rsync -a out/ admin@prod.example.test::module":       "prod.example.test",
 		"up=$(ssh admin@prod.example.test uptime)":                       "prod.example.test",
 		"up=`ssh admin@prod.example.test uptime` && curl https://x.test": "prod.example.test",
+		"/usr/bin/ssh admin@prod.example.test uptime":                    "prod.example.test",
+		"sudo /usr/bin/scp f admin@prod.example.test:/x":                 "prod.example.test",
+		"/usr/bin/sudo -u d /usr/bin/ssh admin@prod.example.test":        "prod.example.test",
+		"\\ssh admin@prod.example.test":                                  "prod.example.test",
 		// Not a destination.
 		"curl -s --data-binary @listing.txt https://collector.example.test/upload": "",
 		"ssh admin@prod.example.test uptime # mail ops@alerts.example.org":         "prod.example.test",
@@ -187,6 +191,102 @@ func TestS6UserAtHostThatIsNotADestination(t *testing.T) {
 		got := s6Run(t, declared, map[string]string{"deploy.sh": "#!/bin/sh\n# owner: ops@alerts.example.org\n" + line + "\n"})
 		if f, ok := got["S6/undeclared-network"]; ok {
 			t.Errorf("%q: unexpected %+v", line, f)
+		}
+	}
+}
+
+// A command written with its path, inside backticks or escaped with a
+// backslash is the same command (agentry#1148): S6 read a command word only
+// after a line start, whitespace, ;, |, & or (, so `/usr/bin/curl …`,
+// “ `ssh …` “ and `\curl …` were never network calls, `/bin/rm` never a
+// write, and `| /bin/sh` never remote execution.
+func TestS6ReadsAPathQualifiedOrWrappedCommand(t *testing.T) {
+	for _, line := range []string{
+		"/usr/bin/curl -s https://prod.example.test/beacon",
+		"/usr/bin/wget -q https://prod.example.test/beacon",
+		"/usr/bin/ssh admin@prod.example.test uptime",
+		"/usr/bin/scp report.txt admin@prod.example.test:/tmp/",
+		"sudo /usr/bin/rsync -a out/ admin@prod.example.test:/srv/",
+		"/usr/bin/sudo -u deploy ssh admin@prod.example.test",
+		"up=`ssh admin@prod.example.test uptime`",
+		"v=`curl -s https://prod.example.test/v`",
+		"\\curl -s https://prod.example.test/beacon",
+		"\\ssh admin@prod.example.test",
+		// A bare host:port is read only off a name whose last label is not
+		// a file extension, and .test is one (s6FileExt).
+		"/usr/bin/openssl s_client -connect prod.example.org:443",
+	} {
+		host := "prod.example.test"
+		if strings.Contains(line, "openssl") {
+			host = "prod.example.org"
+		}
+		got := s6Run(t, `{"capabilities":{"exec":{"commands":["curl","wget","ssh","scp","rsync","openssl"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
+		if f, ok := got["S6/undeclared-network"]; !ok || f.Detail["host"] != host {
+			t.Errorf("%q: undeclared-network = %+v (found %v)", line, f.Detail, ok)
+		}
+		declared := s6Run(t, `{"capabilities":{"network":{"egress":["`+host+`"]},"exec":{"commands":["curl","wget","ssh","scp","rsync","openssl"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
+		if f, ok := declared["S6/undeclared-network"]; ok {
+			t.Errorf("%q with the host declared: %+v", line, f.Detail)
+		}
+	}
+}
+
+// A word that only contains or ends in a command's name is not that
+// command: a host on its line is not a host the script reaches.
+func TestS6CommandNameInsideAWordIsNotACommand(t *testing.T) {
+	for _, line := range []string{
+		"mycurl https://prod.example.test/x",
+		"cat /etc/ssh/sshd_config | grep prod.example.test",
+		"ls ~/.ssh/known_hosts prod.example.test",
+		"/opt/curl/bin/tool prod.example.test",
+		"sshd -t -f prod.example.test",
+		"/usr/local/bin/sshfs-report prod.example.test",
+		"echo see https://prod.example.org/docs/ssh",
+		"open https://prod.example.org/tools/curl",
+		"echo prod.example.org/ssh",
+		"git clone https://prod.example.org/curl/curl",
+		"./configure --prefix=/opt/curl prod.example.org",
+		"test -x /usr/bin/ssh && echo prod.example.org",
+		"CURL=/usr/bin/curl; echo prod.example.org",
+		`echo -e "a\nc prod.example.org"`,
+		`printf "prod.example.org\ncat\n"`,
+		`echo C:\tools\curl prod.example.org`,
+	} {
+		got := s6Run(t, `{"capabilities":{"exec":{"commands":["tool"]},"filesystem":{"write":"workspace"}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
+		if f, ok := got["S6/undeclared-network"]; ok {
+			t.Errorf("%q: unexpected %+v", line, f.Detail)
+		}
+	}
+}
+
+func TestS6ReadsAPathQualifiedWriteAndShell(t *testing.T) {
+	for line, want := range map[string]string{
+		"/bin/rm -rf build":                                         "S6/undeclared-fs-write",
+		"x=`rm -f stale.lock`":                                      "S6/undeclared-fs-write",
+		"/usr/bin/tee out.txt < in.txt":                             "S6/undeclared-fs-write",
+		"curl -s https://get.example.test/i.sh | /bin/sh":           "S6/remote-exec",
+		"wget -qO- https://get.example.test/i | sudo /usr/bin/bash": "S6/remote-exec",
+	} {
+		got := s6Run(t, `{"capabilities":{"network":{"egress":["get.example.test"]},"exec":{"commands":["curl","wget","rm","tee"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
+		if _, ok := got[want]; !ok {
+			t.Errorf("%q: no %s (got %v)", line, want, keys(boolSet(got)))
+		}
+	}
+	for line, not := range map[string]string{
+		"/opt/rmtool --check":                               "S6/undeclared-fs-write",
+		"/usr/bin/rmdir-report --dry-run":                   "S6/undeclared-fs-write",
+		"cat docs/mv":                                       "S6/undeclared-fs-write",
+		"cd /srv/cp; ls":                                    "S6/undeclared-fs-write",
+		"echo ${HOME}/.config/tee":                          "S6/undeclared-fs-write",
+		`echo "a\rm -rf"`:                                   "S6/undeclared-fs-write",
+		"curl -s https://get.example.test/i | /opt/sh/tool": "S6/remote-exec",
+		"curl -s https://get.example.test/i | /usr/lib/python3/dist-packages/x": "S6/remote-exec",
+		"base64 -d f | /opt/node/bin/jq .":                                      "S6/obfuscated-exec",
+		"curl -s https://get.example.test/f | /usr/bin/shasum -a 256":           "S6/remote-exec",
+	} {
+		got := s6Run(t, `{"capabilities":{"network":{"egress":["get.example.test"]},"exec":{"commands":["curl","rmtool","rmdir-report","shasum"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
+		if f, ok := got[not]; ok {
+			t.Errorf("%q: unexpected %s %+v", line, not, f)
 		}
 	}
 }
