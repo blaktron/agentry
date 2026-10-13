@@ -25,28 +25,28 @@ the scope it is to admit a token by to set and delete the account's secrets
 [A run's secrets](#a-runs-secrets) says how a run gets them.
 
 `GET /api/v1/x/runs/status` answers anyone: whether this deployment can take
-runs at all (it needs a database, a credit ledger and an object store), how
-many workers were seen within the stale window, and how many runs are
-queued. It also answers the price list, to anyone, since it is the
-deployment's configuration and not a secret: every tier's caps and hold
-under `tiers` (each with the `build` caps and hold of a [knowledge
+runs at all (it needs a database, a credit ledger and an object store) and
+how many runs are queued. It also answers the price list, to anyone, since it
+is the deployment's configuration and not a secret: every tier's caps and
+hold under `tiers` (each with the `build` caps and hold of a [knowledge
 build](#a-knowledge-build)), and `knowledgeBuild` — whether a build can run
-here, what it holds, and the pack scan's credit — and `draft`, the terms of
-a [hosted draft](#a-hosted-draft), and `voiceBuild`, the terms of a [hosted
+here, what it holds, and the pack scan's credit — and `draft`, the terms of a
+[hosted draft](#a-hosted-draft), and `voiceBuild`, the terms of a [hosted
 Voice Writer run](#a-hosted-voice-writer-run). A signed-in caller also gets
 `caller` — the tier a run of theirs is held at, `account` (whose row it is
-held on: their own, or the organization whose pool pays for their runs),
-that tier's caps, the credits a run holds, the tier's `build` and the
-`draft` hold, and `voice`, whether their payer may start a Voice Writer run
-now — so a client can state the cost, and whose credits it is, before any
-run exists. `sessions` states a [hosted session](#a-hosted-session)'s terms
-to anyone: whether this deployment runs sessions (`enabled`), the free
-minutes, a paid minute's credits, the balance one needs to start, the idle
-close, and per tier whether its payers may start one (`allowed`). A
-signed-in caller's `caller.session.allowed` says whether their own payer
-may. `hostsOnline` is how many sandbox hosts are taking runs: seen within
-the stale window, neither retired nor draining, with capacity. A session
-starts only when there is one. Its prices are in credits and its caps in
+held on: their own, or the organization whose pool pays for their runs), that
+tier's caps, the credits a run holds, the tier's `build` and the `draft`
+hold, and `voice`, whether their payer may start a Voice Writer run now — so
+a client can state the cost, and whose credits it is, before any run exists.
+`sessions` states a [hosted session](#a-hosted-session)'s terms to anyone:
+whether this deployment runs sessions (`enabled`), the free minutes, a paid
+minute's credits, the balance one needs to start, the idle close, and per
+tier whether its payers may start one (`allowed`). A signed-in caller's
+`caller.session.allowed` says whether their own payer may. `hostsOnline` is
+how many sandbox hosts are taking runs: seen within the stale window, neither
+retired nor draining, with capacity. A session starts only when there is one.
+`workersOnline` is deprecated and always 0: it stays in the answer so that
+older clients still read a number. Its prices are in credits and its caps in
 seconds and turns; the per-credit rates and the token caps are not served
 ([in credits, never in tokens](#in-credits-never-in-tokens)).
 
@@ -61,6 +61,16 @@ and another account's artefact, is `404` — a fellow member of the
 organization whose pool paid for the run included: the pool is shared, the
 run is not.
 
+**Platform staff** act through a signed-in session. Their read routes (the
+`GET`s on hosts, enrolments, the fleet, its scaling and the hosted model)
+also admit a personal access token carrying `audit:read`
+(agentry-enterprise#169). Every staff change is a session's alone, and a
+token on one is `403`.
+
+A **sandbox host** holds no credential of Agentry's but its one-use enrolment
+token, good for the enrol route alone. After that Agentry calls the host over
+mutual TLS, and the host calls no other route in this table.
+
 | Route | Credential |
 |---|---|
 | `GET /api/v1/x/runs/status` | anyone; `caller` is added for a signed-in one |
@@ -73,41 +83,13 @@ run is not.
 | `POST /api/v1/x/runs/{id}/cancel` | session or PAT with `run:write` |
 | `GET /api/v1/x/runs/{id}/session` | a hosted session's runner alone: session, or PAT with both `run:read` and `run:write` |
 | `POST /api/v1/x/runs/{id}/session/turns`, `/files`, `/end` | a hosted session's runner alone, as above |
-| `POST /api/v1/x/runs/claim` | worker token |
-| `POST /api/v1/x/runs/{id}/events` | worker token, the run's holder |
-| `POST /api/v1/x/runs/{id}/artefacts/{name}` | worker token, the run's holder |
-| `GET /api/v1/x/runs/{id}/inputs/{name}` | worker token, the run's holder |
-| `POST /api/v1/x/runs/{id}/finish` | worker token, the run's holder |
-| `GET`/`POST /api/v1/x/runs/staff/workers` | platform staff, session only |
-| `POST /api/v1/x/runs/staff/workers/{worker}/revoke` | platform staff, session only |
 | `POST /api/v1/x/runs/hosts/enrol` | a sandbox host's one-use enrolment token alone; a session or a PAT is `403` |
-| `GET /api/v1/x/runs/staff/hosts`, `GET`/`POST …/staff/hosts/enrolments`, `POST …/staff/hosts/enrolments/{enrolment}/revoke`, `POST …/staff/hosts/{host}/retire` | platform staff, session only |
-| `POST /api/v1/x/runs/staff/hosts`, `POST …/staff/hosts/{host}/replace`, `GET …/staff/fleet`, `GET`/`PUT …/staff/fleet/scaling` | platform staff, session only, where the deployment runs the fleet |
-
-The **worker token** is the execution plane's credential: `agyw_` and 32
-random bytes, minted by platform staff from a session (a staff PAT is `403`,
-as with the core's own platform actions), stored as a SHA-256 digest, and
-audited as `runs.worker_registered` and `runs.worker_revoked`. It travels in
-its own header, **`X-Agentry-Worker-Token`**, never as an `Authorization`
-bearer — the core's principal middleware refuses any bearer that is not a
-PAT before an extension sees the request, and a worker's credential and a
-person's must not overlap.
-
-What that token can do is the five worker routes above: claim the oldest
-queued run, and — for the runs that worker holds and no others — report event
-batches and the `running` status, upload artefacts, fetch the run's inputs,
-and finish the run with the runner's envelope. It reads nothing of an
-account's — no run it does not hold, no list, no artefact of another run —
-and it is not a principal, so on an account or staff route it is `401`. A
-session or a PAT on a worker route is `403`, with or without a worker token
-beside it. Revoking a worker stops it at its next claim — the token is
-unknown from then on — and the runs it was holding stop being reported, so
-the sweep closes them as `error` and refunds them once the stale window
-passes.
-
-The worker token and the five worker routes belong to the pull worker, the
-execution plane before the push path ([below](#the-pull-worker)). A sandbox
-host holds no worker token and calls none of these routes: Agentry calls it.
+| `GET /api/v1/x/runs/staff/hosts`, `GET …/staff/hosts/enrolments` | platform staff; a session, or a token with `audit:read` |
+| `POST …/staff/hosts/enrolments`, `POST …/staff/hosts/enrolments/{enrolment}/revoke`, `POST …/staff/hosts/{host}/retire` | platform staff, session only |
+| `GET …/staff/fleet`, `GET …/staff/fleet/scaling` | platform staff; a session, or a token with `audit:read`, where the deployment runs the fleet |
+| `POST /api/v1/x/runs/staff/hosts`, `POST …/staff/hosts/{host}/replace`, `PUT …/staff/fleet/scaling` | platform staff, session only, where the deployment runs the fleet |
+| `GET /api/v1/x/runs/staff/model` | platform staff; a session, or a token with `audit:read` |
+| `PUT`/`DELETE /api/v1/x/runs/staff/model` | platform staff, session only |
 
 ## Creating a run
 
@@ -161,8 +143,8 @@ nothing, and write no ledger line.
 
 ## Caps
 
-A run is created with the caps of the payer's tier, and the worker gives
-them to the CLI as its `--timeout` and `--max-turns`.
+A run is created with the caps of the payer's tier, and the sandbox host
+gives them to the CLI as its `--timeout` and `--max-turns`.
 
 | Tier | Wall time | Turns | Tokens | Credits held |
 |---|---|---|---|---|
@@ -198,8 +180,8 @@ Business and Enterprise — in the same transaction as the run's row. A create t
 payer's balance cannot cover is `402 credits-exhausted` carrying `account`,
 `balance`, `hold`, `resetsAt` and `tier`, and no run is written.
 
-When the worker finishes the run, the runner's exit class becomes the
-outcome, and the outcome decides what the hold becomes.
+When a run finishes, the runner's exit class becomes the outcome, and the
+outcome decides what the hold becomes.
 
 | Outcome | The runner's exit class | The hold |
 |---|---|---|
@@ -214,7 +196,7 @@ outcome, and the outcome decides what the hold becomes.
 
 A run cancelled while still queued is `cancelled`, not an outcome, and its
 hold is refunded in full. So is a run nobody claimed within the queue timeout;
-a run whose worker fell silent is closed as `error` and refunded.
+a run whose sandbox host fell silent is closed as `error` and refunded.
 
 A run that **ran** settles `max(1, ceil(input ÷ inputTokensPerCredit +
 output ÷ outputTokensPerCredit))`, never more than the hold, with the rest
@@ -255,21 +237,23 @@ run's id, so a finish reported twice changes nothing.
 | Knowledge attached on a deployment with no sandbox hosts or no knowledge store | `503 knowledge-attach-unavailable` |
 | The deployment has no database, ledger or object store | `503 runs-unavailable` |
 
-The same `413 too-large` guards the worker's side: a run keeps at most 50 MB
-of artefacts, and an output over what is left is reported on the run rather
-than dropped quietly.
+A run's output has a cap too: 50 MB of plain output
+(`AGENTRY_RUNS_OUTPUT_MAX_BYTES`). The job tells the host how large its
+sealed upload may be, and the dispatcher refuses a larger object, so the run
+closes as `error` and is refunded ([the
+output](#the-output-encrypted-to-the-person-who-ran-it)).
 
 One refusal happens after the run is created, because only the CLI can find
-it: a release whose attestation verifies under no key the worker has pinned
+it: a release whose attestation verifies under no key the host has pinned
 is refused at verify (exit 10). The run is created, held, claimed, and comes
 back `refused` with the whole hold refunded, and the receipt's error says no
 pinned key verifies the signature. A key rotation on the registry does not
 leave it that way: the registry advertises its retired keys and, at its next
 start, queues a sweep that countersigns every attestation the new key has not
 signed (see [Trust and security](trust.md)), so a release published before
-the current key verifies for a fresh worker once the sweep has run. What does
-cause it is a worker whose pinned set predates a rotation — its preflight
-login reports the changed key ids; re-pin its home deliberately.
+the current key verifies for a fresh host once the sweep has run. What does
+cause it is a host whose pinned set predates a rotation — its login reports
+the changed key ids; re-pin its home deliberately.
 
 ## A run's files
 
@@ -312,8 +296,8 @@ A hosted run's own data rests encrypted in Agentry's cloud
 
 - **A run's text:** its task, its intake answers, its receipt and its error,
   and a draft's hints, instructions and problems.
-- **Its files:** every upload in the core's object store, a pull worker's
-  outputs, and a schedule's task, answers and copies of its files.
+- **Its files:** every upload in the core's object store, and a schedule's
+  task, answers and copies of its files.
 - **What is staged for a sandbox host** in the input bucket (`runs-input`):
   the task, the inputs, a session's added file, and the pack and Writing
   Voice trees a run attaches.
@@ -338,9 +322,7 @@ with the text it was given. Three things open run data:
   owner's own reads: the run page, the desktop and the CLI. A page of a list
   is one Transit call. It also opens what the owner hands on: an upload
   added to their session, which it stages sealed again for the host, and
-  the brief and inputs of a build they continue. For the [pull
-  worker](#the-pull-worker) that has claimed a run, the claim and the input
-  download open that run's text and inputs.
+  the brief and inputs of a build they continue.
 - **The worker, to start a run.** It opens a schedule's task, answers and
   files when the schedule fires, and a run at its hand-off. It then reseals
   every object it stages under the job's own keys. Nothing staged ever
@@ -356,16 +338,21 @@ the role that asked (a batch per request).
 
 **Platform staff** read another account's run **without its text**: the
 answer carries `"withheld": true`, and the task, intake answers, receipt
-and error are empty. A pushed run's output and a pull worker's sealed
-output both answer staff `404`.
+and error are empty. A pushed run's output answers staff `404`.
+
+**Runs from before the push path.** Until agentry-enterprise#86
+(2026-10-13) a pull worker also ran hosted runs, but production never ran
+one, and dev moved to the push path on 2026-09-24. A run dev ran the older
+way before that date keeps its per-file sealed outputs and its narration
+(event) rows until the 30-day sweep removes them
+([retention](#retention)).
 
 **What this does not protect.**
 
 - **OpenBao is run by Agentry.** Both the api and the worker may decrypt
   under `hosted-runs`. The vault's own keys keep the stricter split, where
   the api only encrypts. The guard on run data is in the code: a route
-  opens a run's text only for the run's owner, or for the pull worker that
-  holds the run. A compromised api or worker
+  opens a run's text only for the run's owner. A compromised api or worker
   could still ask Transit to open any account's run data. Each such open
   would be a line in OpenBao's audit. So this keeps run data out of the
   database, its dumps and the buckets in the clear. It does not mean
@@ -391,16 +378,13 @@ reconnects loses nothing; it ends with the run's terminal `status` row
 followed by `done`, or with `timeout` after ten minutes, from which the
 client reconnects at its last id. No transaction is held open for a reader.
 
-The log lines are the CLI's stderr as the worker batched it. A pull worker
-also reports the CLI's usage narration as `usage` rows: they are stored and
-never sent, and a log line that names the token cap is sent without it, or
-not at all when it still counts tokens. A run pushed to a sandbox host writes
-only its `status` rows and a session's `charge` rows.
+A run pushed to a sandbox host writes only its `status` rows and a session's
+`charge` rows, so its stream carries no log lines ([no log](#no-log)).
 
 `POST /api/v1/x/runs/{id}/cancel` cancels a queued run at once and refunds
-its hold. On a claimed or running one it records the request. The
-dispatcher passes it to the sandbox host on its next pass (a pull worker sees
-it on its next claim), the CLI is interrupted, and the run settles what ran.
+its hold. On a claimed or running one it records the request. The dispatcher
+passes it to the sandbox host on its next pass, the CLI is interrupted, and
+the run settles what ran.
 
 ## The receipt, the usage and the outputs
 
@@ -417,10 +401,8 @@ with no name ([the runner's exit codes, stage and reason](runner.md#exit-codes-s
 `output.tar`, and `GET /api/v1/x/runs/{id}/outputs/output.tar` decrypts it
 for the person who ran it as it streams; to anyone else, platform staff
 included, it is `404` ([the output, encrypted to the person who ran
-it](#the-output-encrypted-to-the-person-who-ran-it)). On a pull worker's run
-the same route serves one artefact's bytes as the worker uploaded them,
-through the registry, with the account's grant. No output is served by a
-public URL.
+it](#the-output-encrypted-to-the-person-who-ran-it)). No output is served by
+a public URL.
 
 A client showing a run shows the receipt's `capabilities_enforced` as it is —
 item for item, sentence for sentence, never summarised or scored. Those
@@ -440,19 +422,19 @@ walks through what a person sees.
 ### In credits, never in tokens
 
 A hosted run is reported in credits, turns and time, to everyone who reads
-it: its runner, the admins of the organization that pays for it, and
-platform staff alike (agentry-enterprise#291). No answer of the runs routes
-or the status route carries a hosted run's token counts, a dollar cost, a
-token cap or a per-credit rate, except the pull worker's claim (below): each
-leaves out any member that names tokens or a dollar figure, at any depth:
-the receipt is served without its `usage` block, `caps` keep their seconds
-and turns, and a session's `usage` frames are not passed on. The credits
-named after tokens stay, because they are credits: a draft's and a session's
-`tokenCredits`, a session's `tokensUnpaid`. `usage.credits` is what the
-run's model use came to at the rates of its close, before its hold capped
-it. Beside `settledCredits` it says what a run cost, including the run of an
-unmetered organization, which holds and settles nothing. A draft's searches
-and AI Review are in its record's `pricedCredits`, not there.
+it: its runner, the admins of the organization that pays for it, and platform
+staff alike (agentry-enterprise#291). No answer of the runs routes or the
+status route carries a hosted run's token counts, a dollar cost, a token cap
+or a per-credit rate: each leaves out any member that names tokens or a
+dollar figure, at any depth: the receipt is served without its `usage` block,
+`caps` keep their seconds and turns, and a session's `usage` frames are not
+passed on. The credits named after tokens stay, because they are credits: a
+draft's and a session's `tokenCredits`, a session's `tokensUnpaid`.
+`usage.credits` is what the run's model use came to at the rates of its
+close, before its hold capped it. Beside `settledCredits` it says what a run
+cost, including the run of an unmetered organization, which holds and settles
+nothing. A draft's searches and AI Review are in its record's
+`pricedCredits`, not there.
 
 The run's stored record keeps every count, and the receipt keeps its
 `usage`: the settlement is computed from them and they are its audit. The
@@ -461,8 +443,7 @@ deployment counts them in metrics: `RunsHostedInputTokens` and
 `knowledge_build`, `draft`, `revision`, `voice_build`) and its payer's tier
 at the close, and `RunsDraftAbsorbedCredits`, what a draft's use came to
 past what it settled. They are scraped from `/metrics` beside the core's own
-series ([metrics](self-hosting.md#metrics)). The pull worker's claim alone
-still carries `caps.maxTokens`, because the worker enforces it.
+series ([metrics](self-hosting.md#metrics)).
 
 Apart from metrics, two places still show tokens. A run on your own machine
 reports them in its receipt and in what the CLI prints, as the [Runner
@@ -489,9 +470,9 @@ the deployment's choosing reports no cost.
 
 Two sweeps run every minute. A run nobody takes within the queue timeout
 (`AGENTRY_RUNS_QUEUE_MAX`, 1 h) is cancelled and refunded. A run whose
-sandbox host (or pull worker) has gone silent past the stale window
-(`AGENTRY_RUNS_STALE`, 10 min), a host retired while it held the run
-included, is closed as `error` and refunded.
+sandbox host has gone silent past the stale window (`AGENTRY_RUNS_STALE`, 10
+min), a host retired while it held the run included, is closed as `error` and
+refunded.
 
 ## Knowledge attached to a run
 
@@ -505,17 +486,15 @@ deployment attaches knowledge at all, as `knowledgeAttach: {enabled,
 maxPacks}`. The run records each pack's `pack` and `name`, and from its
 hand-off the `digest` of the tree it was given.
 
-Attached knowledge runs only on sandbox hosts Agentry pushes to; the pull
-worker never claims such a run. At the hand-off the dispatcher reads each
-pack's tree through the core's store, which decrypts it there, so the pack's
-data key never leaves the core. It stages the tree for the host beside the
-run's inputs, sealed as the inputs are ([at rest](#a-runs-data-at-rest)),
-and the host opens it as it fetches it and passes each
-pack to the CLI as a `--knowledge` directory. The CLI mounts it read-only at
-`/knowledge/<name>` on the tools container and names it in the receipt by
-digest, as for a local run ([Running them](runner.md#knowledge-packs)). The
-staged trees are deleted with the job's inputs on every path: the collect,
-a requeue, a cancel and the sweep.
+At the hand-off the dispatcher reads each pack's tree through the core's
+store, which decrypts it there, so the pack's data key never leaves the core.
+It stages the tree for the host beside the run's inputs, sealed as the inputs
+are ([at rest](#a-runs-data-at-rest)), and the host opens it as it fetches it
+and passes each pack to the CLI as a `--knowledge` directory. The CLI mounts
+it read-only at `/knowledge/<name>` on the tools container and names it in
+the receipt by digest, as for a local run ([Running
+them](runner.md#knowledge-packs)). The staged trees are deleted with the
+job's inputs on every path: the collect, a requeue, a cancel and the sweep.
 
 What happens to a pack between the create and the hand-off:
 
@@ -553,17 +532,17 @@ never writes in the voice: `voice` on a knowledge build, a draft or a Voice
 Writer run is `422`. `GET /api/v1/x/runs/status` says whether a deployment
 attaches voices, as `voiceBuild.attach`.
 
-A run in the voice runs only on sandbox hosts Agentry pushes to; the pull worker
-never claims it. At the hand-off the dispatcher reads the runner's live
-version as it stands then, through the core's store (`Deps.Voice.Live`,
-never a pending or flagged version), and stages it for the host with its
-digest, sealed as a run's inputs are ([at rest](#a-runs-data-at-rest)). The host holds the file to that digest and passes it to the CLI as
-`--voice-file`, so the run reads it through `voice_read`
-([A Writing Voice](runner.md#a-writing-voice)). The run's `voice.digest`
-and its receipt's `voice` line name the version it was given. A runner
-with no live voice by the hand-off (deleted since the create) has the run
-closed and refunded before it starts. Downloading its output
-needs `voice:read` beside `run:read`.
+At the hand-off of a run in the voice, the dispatcher reads the runner's live
+version as it stands then, through the core's store (`Deps.Voice.Live`, never
+a pending or flagged version), and stages it for the host with its digest,
+sealed as a run's inputs are ([at rest](#a-runs-data-at-rest)). The host
+holds the file to that digest and passes it to the CLI as `--voice-file`, so
+the run reads it through `voice_read` ([A Writing
+Voice](runner.md#a-writing-voice)). The run's `voice.digest` and its
+receipt's `voice` line name the version it was given. A runner with no live
+voice by the hand-off (deleted since the create) has the run closed and
+refunded before it starts. Downloading its output needs `voice:read` beside
+`run:read`.
 
 The voice is the runner's own, also when an organization's pool pays for
 the run.
@@ -658,11 +637,7 @@ learns a value.
 
 ### At the hand-off
 
-A run that carries a secret goes only to a sandbox host Agentry pushes to;
-the pull worker never claims one. A run that carries none, such as one of
-a release whose secrets are all optional started with none of them, runs
-wherever a release without secrets does, the pull worker included. The
-dispatcher, in the worker role, locks the run while it is claimed on its
+The dispatcher, in the worker role, locks the run while it is claimed on its
 host. Then, in one transaction committed just before the job is sent, it:
 
 - decrypts each name the run carries, under the key of the account that
@@ -690,14 +665,12 @@ The values travel in the job, over the mutual-TLS call to the host, and
 nowhere else. The host writes them to an owner-only `secrets.env` in the
 job's directory, empty for a job that carries none. The policy it renders
 names that file as the CLI's `envFile` secret source, so a declared secret
-never resolves from the host's own environment. The pull worker renders
-the same empty file for every job it runs, so an optional secret named like
-a variable of its own, the platform's model key among them, resolves to
-nothing there. The CLI then does what it does on your machine
-([What a run enforces](runner.md#what-a-run-enforces)). It gives each value
-to the MCP gateway's container and to the tools container or the declared
-server's container, and never to the agent's. The file is deleted as soon
-as the CLI exits, and so is the gateway's copy if a killed CLI left one.
+never resolves from the host's own environment. The CLI then does what it
+does on your machine ([What a run enforces](runner.md#what-a-run-enforces)).
+It gives each value to the MCP gateway's container and to the tools container
+or the declared server's container, and never to the agent's. The file is
+deleted as soon as the CLI exits, and so is the gateway's copy if a killed
+CLI left one.
 
 ### After the run
 
@@ -793,9 +766,7 @@ A run of a release whose servers sign in by OAuth is created only when the
 caller keeps a working connection to each one for that release: the same
 ref and archive digest, never another version's or another account's. A
 connection whose vendor refused its last refresh counts as missing. The
-run records the servers' keys (`connections`), never a token. A run with
-connections goes only to a sandbox host Agentry pushes to; the pull worker
-never claims one.
+run records the servers' keys (`connections`), never a token.
 
 ### At the hand-off
 
@@ -1174,9 +1145,9 @@ session uses. A script drives it through the routes below.
 **Who may start one.** A payer on Pro, Business or Enterprise; on Standard
 the create is `403 session-tier`. The tier is the payer's, so a Standard
 member of an organization starts one on the organization's tier. A session
-already running is not stopped by a later change of tier. The pull worker
-never takes a session. A session runs only where the deployment pushes
-runs to sandbox hosts, sessions are turned on, and a host is taking runs.
+already running is not stopped by a later change of tier. A session runs only
+where the deployment pushes runs to sandbox hosts, sessions are turned on,
+and a host is taking runs.
 
 **Following it.** `GET /api/v1/x/runs/{id}/session` is server-sent events:
 
@@ -1552,26 +1523,6 @@ without the fleet makes its hosts by hand. [A sandbox host of your
 own](self-hosting.md#sandbox-hosts-for-hosted-runs) gives the same shape
 without Vultr.
 
-### The pull worker
-
-The execution plane before the push path is still in the enterprise build
-(`secureagentry-runworker`) until agentry-enterprise#86 removes it, and
-neither Agentry's production nor its dev deployment runs one. It is a puller
-beside a docker daemon that reaches the registry only outbound: it claims
-every couple of seconds with its worker token, stages and renders a run as
-runhost does, and runs the CLI with the worker's own registry token (which
-carries `agent:read` and `user:profile` and nothing more); the worker token
-never reaches the CLI. The claim is atomic (`FOR UPDATE SKIP LOCKED` on the
-oldest queued row within the worker's declared capacity), so two workers
-polling together never take the same run. Its runs differ from pushed runs
-in two ways: their log lines are stored and streamed, and their artefacts
-go through the registry, which seals them at rest
-([at rest](#a-runs-data-at-rest)), rather than being encrypted on the host to
-the runner. It claims only runs of a release: a
-knowledge build, a draft and a Voice Writer run, a run with secrets,
-connections, attached knowledge or the runner's voice, and a hosted session
-go only to sandbox hosts.
-
 ## Retention
 
 A run and its artefacts are deleted thirty days after the run was created
@@ -1613,7 +1564,7 @@ destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
 | `AGENTRY_RUNS_VOICE_SECONDS` | `1800` | a Voice Writer run's wall time, on every tier |
 | `AGENTRY_RUNS_VOICE_MAX_TURNS` | `300` | a Voice Writer run's turn cap |
 | `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a host before it is cancelled and refunded; at most `12h`, half the day a secret held for one run waits for it |
-| `AGENTRY_RUNS_STALE` | `10m` | how long a run's host or worker may be silent before the run is closed as `error` and refunded |
+| `AGENTRY_RUNS_STALE` | `10m` | how long a run's sandbox host may be silent before the run is closed as `error` and refunded |
 | `AGENTRY_RUNS_TASK_MAX_BYTES` | `65536` | the task text's cap |
 | `AGENTRY_RUNS_INPUT_MAX_FILES` | `20` | input files per run |
 | `AGENTRY_RUNS_INPUT_MAX_BYTES` | `10485760` | one input file's cap |
