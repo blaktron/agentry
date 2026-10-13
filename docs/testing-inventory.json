@@ -3087,7 +3087,6 @@
         {
           "path": "internal/scan/gate_test.go",
           "tests": [
-            "TestGateSeverityTable",
             "TestGateJudgeForcesReview",
             "TestGatePlatformQueueForPublicHigh",
             "TestGateWildcardEgress",
