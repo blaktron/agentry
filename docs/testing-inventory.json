@@ -3156,6 +3156,21 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "internal/scan/browser_test.go",
+          "tests": [
+            "TestABrowserIsItsOwnPolicyTokenNotNetwork",
+            "TestABrowserOfAnOddShapeLeavesTheRestDeclared",
+            "TestS6StillFlagsAScriptsOwnCallWithABrowserDeclared",
+            "TestUnrestrictedNetworkIsWildcardEgressOrAPublicBrowser",
+            "TestAPublicBrowserIsHeldAsWildcardEgress",
+            "TestABrowserIsAWideningAndAPolicyCanBlockIt"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/lifecycle_test.go",
           "tests": [
             "TestBlockWalksVersionsAndReinstateReverses",
@@ -4349,6 +4364,24 @@
       "behavior": "Manifest parsing, rules, canonical form and capability widening",
       "disposition": "retain",
       "files": [
+        {
+          "path": "pkg/manifest/browser_test.go",
+          "tests": [
+            "TestABrowserParsesAndValidates",
+            "TestV15RefusesWhatTheLineCannotMean",
+            "TestV15TakesWhatTheLineMeans",
+            "TestBrowserIsAV2Field",
+            "TestBrowserIsInTheContract",
+            "TestDiffCapabilitiesBrowser",
+            "TestV2SchemaBrowserShape"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
         {
           "path": "pkg/manifest/canonical_test.go",
           "tests": [

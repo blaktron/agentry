@@ -1,6 +1,6 @@
 // Package manifest implements the agent.yaml package manifest defined in
 // PLAN §5: strict parsing (closed schema, rule V1), the validation rules
-// V1–V14 (§5.3), the closed capability vocabulary (§5.4), and the canonical
+// V1–V15 (§5.3), the closed capability vocabulary (§5.4), and the canonical
 // JSON form stored as agent_versions.manifest (§4.2).
 //
 // Two schema majors are read. Major 2 (DEV-088) classifies a QuickAgent by
@@ -411,6 +411,11 @@ type Capabilities struct {
 	// names the host, its address, user or port; it declares only that it
 	// takes one, so consent, the judge and search can read it.
 	TargetHosts []string `yaml:"targetHosts,omitempty" json:"targetHosts,omitempty"`
+	// Browser declares a headless browser for the run (v2, V15; plan
+	// browser-testing.md §5, D6): the sites the person names at run time,
+	// the fixed hosts its pages need, its scope, and the declared secrets it
+	// may type. Absent, a run has no browser (browser.go).
+	Browser *Browser `yaml:"browser,omitempty" json:"browser,omitempty"`
 	// DataAccess lists semantic data categories the agent touches.
 	DataAccess []DataAccess `yaml:"dataAccess,omitempty" json:"dataAccess,omitempty"`
 	// MCPServers lists the MCP servers this agent requires at run time
