@@ -580,14 +580,15 @@ network; nothing else resolves from the server. The pinned
 docker/mcp-gateway gives that network one fixed name, and how the runner
 keeps it a run's own depends on where it runs:
 
-- **Where the run's docker filter runs (Linux)**, the filter translates the
+- **Where the run's docker filter runs (Linux, and Docker Desktop on macOS
+  and Windows, where it is a container of the run's own)**, the filter translates the
   gateway's two fixed relay network names to two networks made for the run,
   `agentry-<run>-relays` and `agentry-<run>-relays-out`, and removes them
   with the run (agentry-cli#220). Runs with declared egress share the host
   without seeing each other's relays, and the user's own
   `docker mcp gateway` and its networks are untouched.
-- **Where the filter does not run (off Linux: Docker Desktop on macOS and
-  Windows, agentry-cli#322)**, the
+- **Where the filter does not run (a platform other than Linux, macOS and
+  Windows; Docker Desktop too before agentry-cli#322)**, the
   network is the host's one fixed network, so such runs take turns (DR-22).
   A run whose declared servers need relays holds `relays.lock` under the
   runner home from its relay listing to the end of its teardown, so a
@@ -844,8 +845,7 @@ Four classes need more than that, measured on a live run rather than assumed
   filter refuses to connect a started container under the runtime to a
   network. Without resolvers the three stay on the daemon's default. So does
   the proxy of a host-run harness, which publishes ports to the host, and so
-  do the relays where the docker filter does not run (Docker Desktop,
-  agentry-cli#322).
+  do the relays where the docker filter does not run.
 - **The gateway** reaches the run's docker filter through a bind-mounted host
   Unix socket, which `runsc` opens only when registered with
   `--host-uds=open`. `docker.gatewayRuntime` names such a registration for
@@ -937,7 +937,7 @@ checks that the registration runs `docker.runtime`'s binary with
 The runtime is part of the compiled plan, so changing it recompiles rather
 than reinterpreting a cached plan. `capabilities_enforced.runtime` in the
 receipt is written at run time, because two of its facts are the run's:
-whether the docker filter runs (not on Docker Desktop, agentry-cli#322) and
+whether the docker filter runs and
 what the run started. It names what was created under the runtime, what the
 gateway's containers were given through the filter, and each class on the
 daemon's default with its measured reason.
@@ -979,8 +979,8 @@ so. The gateway's root stays writable: it is a vendor image.
 
 The tool and MCP server containers are the gateway's to launch. It passes
 the run's memory and CPUs to them through its `--memory` and `--cpus`
-flags, and gives them no-new-privileges itself. On Linux the run's docker
-filter also holds each of them to the run's memory, CPUs and processes:
+flags, and gives them no-new-privileges itself. The run's docker filter
+also holds each of them to the run's memory, CPUs and processes:
 it fills in a bound the gateway left unset and refuses one set higher, and
 it refuses a privileged container and any added capability the gateway
 asks for. It also drops every capability of each of them and gives back
@@ -993,9 +993,9 @@ only what its kind needs (agentry-cli#227):
 | a relay | none |
 
 Their root stays writable: a declared server's image is its publisher's,
-and what it writes outside `/tmp` is not known. Docker Desktop on macOS
-and Windows runs no filter (agentry-cli#322), so there these containers
-keep the defaults the gateway leaves them, and the receipt says which.
+and what it writes outside `/tmp` is not known. Only where no filter runs
+do these containers keep the defaults the gateway leaves them, and the
+receipt says which.
 
 The limits are read from the policy when the run starts, as the budgets
 are, and are not compiled into the plan. Changing them does not recompile
@@ -1024,6 +1024,7 @@ lower them for your own host.
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
 | `grep` and `glob` (granted with the scratch folder) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds and, on Linux through the run's docker filter, every capability dropped but each kind's own ([above](#container-limits-dockerlimits)) |
+| the gateway's reach into the docker daemon | only through the run's docker filter, which admits the run's own containers, networks and volumes and checks every create (DR-36; every decision in `receipts/docker-filter.log`). On Linux the CLI serves it on a socket mounted in place of the daemon's. On Docker Desktop (macOS, Windows) it runs in a container of the run's own, from the runner image, with no network, every capability dropped and a read-only root, and serves its socket in a volume the gateway mounts at `/var/run`; the gateway starts only once it is ready (agentry-cli#322). Elsewhere the gateway holds the daemon's own socket, and the receipt's `daemon` line says so |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
 | a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool's result, `run_command`'s included, and the arguments of every call, a `write_report` that quotes a key included. **The person's own inputs are the exception** (agentry-cli#632): a successful `read_input` or `search_inputs` serves the file unchanged, keys and passwords included, so a QuickAgent whose job is to *find* credentials can read them. An input tool's error, and the input tools under the review grant, are still refused. A `git log -p` through `run_command` that would print a key is refused too, and a finding should name a credential's kind and where it is, never its value, because a report that repeats it is refused. |
@@ -1767,8 +1768,8 @@ mounts:
 | `/inputs-text` | the text the decode step made of them | read-only |
 | `/knowledge` | the attached knowledge packs | read-only, empty when none is attached |
 | `/out` | the output folder: `reports/` and the receipts' ledgers | read-write for the tools server; a declared command cannot write it |
-| `/scratch` | the scratch folder | read-write; on Linux a 256 MiB tmpfs |
-| `/tmp` | the container's temporary files | read-write; on Linux a 256 MiB tmpfs |
+| `/scratch` | the scratch folder | read-write; a 256 MiB tmpfs where the docker filter runs |
+| `/tmp` | the container's temporary files | read-write; a 256 MiB tmpfs where the docker filter runs |
 | `/etc/agentry/toolspec.json` | the run's tools spec | read-only |
 
 ### The scratch folder
@@ -1803,16 +1804,16 @@ declared command may write in `/scratch` as well as `/tmp` (and a granted
 workspace), so the scratch tools work through the folder itself and never
 follow a link a command planted there out of it.
 
-On Linux the run's docker filter mounts `/scratch` and `/tmp` as tmpfs of
+The run's docker filter mounts `/scratch` and `/tmp` as tmpfs of
 256 MiB each, counted against the container's memory limit. A write past
 the cap fails with "no space left": the agent sees a tool error, and the
 calls ledger does not record the agent filling its own folder as a fault.
 The tools server refuses to start unless both mounts are tmpfs no larger
 than that, so a run whose
-filter missed the container stops at the health probe (exit 13). Under
-Docker Desktop (macOS, Windows) the filter does not run: both are folders
-in the container's own layer and are **not bounded**, and the run's
-`capabilities_enforced.scratch` says so.
+filter missed the container stops at the health probe (exit 13). Where no
+filter runs (a platform other than Linux, macOS and Windows) both are
+folders in the container's own layer and are **not bounded**, and the
+run's `capabilities_enforced.scratch` says so.
 
 ### Fetch into the scratch folder: `saveTo`
 
@@ -1857,9 +1858,9 @@ The save keeps `fetch`'s rules and adds its own:
   renamed over the path, so a file already there is replaced, never written
   through. A `HEAD` request has no body and is refused with `saveTo`.
 - **Bounded by the folder and the clock.** The body is not held to
-  `fetch`'s 512 KiB reply cap. On Linux the 256 MiB tmpfs bounds it, and a
-  body that does not fit is refused with the folder's "no space left".
-  Under Docker Desktop the folder is unbounded, and `fetch`'s 60-second
+  `fetch`'s 512 KiB reply cap. The 256 MiB tmpfs bounds it, and a body
+  that does not fit is refused with the folder's "no space left". Where no
+  docker filter runs the folder is unbounded, and `fetch`'s 60-second
   timeout, which covers reading the body, is the only bound.
 - **Archives stay packed** (D11): nothing in the scratch folder is unpacked.
 
