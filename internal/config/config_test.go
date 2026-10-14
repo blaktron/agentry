@@ -86,39 +86,53 @@ func devDefault() Config {
 }
 
 func TestValidateGuards(t *testing.T) {
+	// Configure the other non-dev guards so a missing mode or signing guard
+	// cannot hide behind the refusal from an unrelated invalid setting.
+	nonDev := func(c *Config) {
+		c.DevMode = false
+		c.Signing.Kind = "file"
+		c.Auth.SealingKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+	}
+	valid := devDefault()
+	nonDev(&valid)
+	valid.Env = "prod"
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid production configuration was refused: %v", err)
+	}
 	cases := []struct {
 		name   string
+		want   string
 		mutate func(*Config)
 	}{
-		{"prod devMode", func(c *Config) { c.Env = "prod"; c.DevMode = true }},
-		{"staging devMode", func(c *Config) { c.Env = "staging"; c.DevMode = true }},
-		{"no sealing key outside dev mode", func(c *Config) { c.DevMode = false; c.Auth.SealingKey = "" }},
-		{"prod unsigned", func(c *Config) { c.Env = "prod"; c.DevMode = false; c.Signing.Kind = "none" }},
-		{"bad env", func(c *Config) { c.Env = "yolo" }},
-		{"bad storage", func(c *Config) { c.Storage.Kind = "ftp" }},
-		{"bad judge", func(c *Config) { c.Judge.Provider = "gpt" }},
+		{"prod devMode", "devMode is allowed only with env: dev", func(c *Config) { nonDev(c); c.Env = "prod"; c.DevMode = true }},
+		{"staging devMode", "devMode is allowed only with env: dev", func(c *Config) { nonDev(c); c.Env = "staging"; c.DevMode = true }},
+		{"no sealing key outside dev mode", "auth.sealingKey", func(c *Config) { c.DevMode = false; c.Auth.SealingKey = "" }},
+		{"prod unsigned", "signing.kind none is not allowed in prod", func(c *Config) { nonDev(c); c.Env = "prod"; c.Signing.Kind = "none" }},
+		{"bad env", "env must be", func(c *Config) { c.Env = "yolo" }},
+		{"bad storage", "storage.kind", func(c *Config) { c.Storage.Kind = "ftp" }},
+		{"bad judge", "judge.provider", func(c *Config) { c.Judge.Provider = "gpt" }},
 		// Honouring an inbound request id needs a hop that sets it; the flag
 		// without a hop count is a contradiction, not a default.
-		{"proxyRequestID without a hop", func(c *Config) { c.HTTP.ProxyRequestID = true; c.HTTP.TrustedProxies = 0 }},
-		{"bad audit stream kind", func(c *Config) { c.Audit.StreamKind = "kafka" }},
+		{"proxyRequestID without a hop", "http.proxyRequestID", func(c *Config) { c.HTTP.ProxyRequestID = true; c.HTTP.TrustedProxies = 0 }},
+		{"bad audit stream kind", "audit.streamKind", func(c *Config) { c.Audit.StreamKind = "kafka" }},
 		// A staff domain that could never match an address would switch the
 		// rule off silently (agentry#525, agentry#556).
-		{"staff domain with an at", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "@secureagentry.net" }},
-		{"staff domain with a leading dot", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = ".secureagentry.net" }},
-		{"staff domain in capitals", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "SecureAgentry.net" }},
-		{"staff domain of one label", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "localhost" }},
+		{"staff domain with an at", "auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "@secureagentry.net" }},
+		{"staff domain with a leading dot", "auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = ".secureagentry.net" }},
+		{"staff domain in capitals", "auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "SecureAgentry.net" }},
+		{"staff domain of one label", "auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "localhost" }},
 		// Half a rule is refused: an organization with no domain would admit
 		// anyone, a domain with no organization names nobody (agentry#556).
-		{"staff org without a domain", func(c *Config) { c.Auth.StaffOrg = "agentry" }},
-		{"staff domain without an org", func(c *Config) { c.Auth.StaffDomain = "secureagentry.net" }},
-		{"staff org that is no handle", func(c *Config) { c.Auth.StaffOrg = "Agentry Staff"; c.Auth.StaffDomain = "secureagentry.net" }},
+		{"staff org without a domain", "auth.staffOrg and auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry" }},
+		{"staff domain without an org", "auth.staffOrg and auth.staffDomain", func(c *Config) { c.Auth.StaffDomain = "secureagentry.net" }},
+		{"staff org that is no handle", "auth.staffOrg must be", func(c *Config) { c.Auth.StaffOrg = "Agentry Staff"; c.Auth.StaffDomain = "secureagentry.net" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := devDefault()
 			tc.mutate(&cfg)
-			if err := cfg.Validate(); err == nil {
-				t.Fatalf("expected validation error")
+			if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate() = %v, want a refusal naming %q", err, tc.want)
 			}
 		})
 	}
