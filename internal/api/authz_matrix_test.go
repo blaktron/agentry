@@ -1,8 +1,9 @@
 package api_test
 
 // The §17.4 authorization matrix: every declared route × every role ×
-// own-org/other-org/anonymous/PAT-scope combination, executed as real HTTP
-// requests. This is the tenant-isolation control (D-24, T-11).
+// anonymous/role/PAT-scope combination, executed as real HTTP requests
+// against one organization. Private and foreign-resource evidence stays in
+// the resource tests (docs/testing-authorization.md; D-24, T-11).
 
 import (
 	"crypto/ed25519"
