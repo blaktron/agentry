@@ -38,6 +38,17 @@ type Declared struct {
 	ServerHosts []string
 	// MCPServers reports any declared MCP server, packaged or remote.
 	MCPServers bool
+	// BrowserHosts are the hosts capabilities.browser.hosts names
+	// (DEV-247), lowercased: exact names, or "*." suffixes that admit the
+	// names below one and not the bare name (V15). The browser reaches
+	// them through the runner's browse proxy. The person's site, named at
+	// run time, is not among them: the author does not control it, so a
+	// browser of sites alone is no way out for a text that names no host.
+	BrowserHosts []string
+	// BrowserAny is a browser whose scope is any public site, which names
+	// no host and admits any, addresses included, as EgressAny does (the
+	// browse proxy dials public addresses only).
+	BrowserAny bool
 	// Secrets are the declared secret names.
 	Secrets []string
 	// Exec is the declared commands; nil when exec is none or absent.
@@ -61,8 +72,8 @@ const (
 	// manifest does not declare. High.
 	DeclarationUndeclared = "undeclared"
 	// DeclarationInternet: the text reaches internet hosts the manifest
-	// declares in network.egress, or names none and egress is declared.
-	// Medium.
+	// declares in network.egress or in its browser's hosts, or names none
+	// and egress or a browser host is declared. Medium.
 	DeclarationInternet = "declared-internet"
 	// DeclarationLocalExec: the text names a declared program outside the
 	// base commands, which a hosted run does not provide. Medium.
@@ -182,14 +193,15 @@ func rateSecrets(d Declared, named string) string {
 
 // rateNetwork: an email recipient is never declared (postmark-mcp's BCC
 // line), nor is an address the manifest does not list; a named host is
-// medium when egress declares it and low when only a declared MCP server
-// reaches it. With no destination named, the release must declare some way
-// out.
+// medium when egress or the browser's hosts declare it, and low when only
+// a declared MCP server reaches it. With no destination named, the release
+// must declare some way out the author can reach: egress, a browser host
+// or a public browser (agentry#1198), never the person's own site alone.
 func rateNetwork(d Declared, destinations string) string {
 	named := splitList(destinations)
 	if len(named) == 0 {
 		switch {
-		case len(d.Egress) > 0 || d.EgressAny:
+		case len(d.Egress) > 0 || d.EgressAny || len(d.BrowserHosts) > 0 || d.BrowserAny:
 			return DeclarationInternet
 		case len(d.ServerHosts) > 0 || d.MCPServers:
 			return DeclarationHosted
@@ -201,7 +213,7 @@ func rateNetwork(d Declared, destinations string) string {
 		switch {
 		case strings.Contains(dest, "@"):
 			return DeclarationUndeclared
-		case d.inEgress(dest):
+		case d.inEgress(dest), d.inBrowser(dest):
 			rating = worse(rating, DeclarationInternet)
 		case d.isServerHost(dest):
 		default:
@@ -238,6 +250,36 @@ func rateExec(d Declared, commands string) string {
 // host names (V5 refuses partial wildcards).
 func (d Declared) inEgress(host string) bool {
 	return d.EgressAny || slices.Contains(d.Egress, host)
+}
+
+// inBrowser reports whether the declared browser may open host: a public
+// browser any, otherwise a host its hosts name exactly or, for a "*."
+// entry, a name below it. The browser reaches it through the runner's
+// browse proxy, which the installer is shown and the run is held to, as
+// egress is (agentry#1198).
+func (d Declared) inBrowser(host string) bool {
+	return d.BrowserAny || BrowserHostsAdmit(d.BrowserHosts, host)
+}
+
+// BrowserHostsAdmit reports whether a browser's declared hosts admit host:
+// an exact entry, or a "*." entry that host is a name below (V15's
+// grammar; the runner's browse proxy matches them the same way). A name
+// with an empty label (".cdn.example", "a..cdn.example") is no host and is
+// admitted by none.
+func BrowserHostsAdmit(hosts []string, host string) bool {
+	if host == "" || strings.HasPrefix(host, ".") || strings.Contains(host, "..") {
+		return false
+	}
+	for _, h := range hosts {
+		if suffix, ok := strings.CutPrefix(h, "*."); ok {
+			if strings.HasSuffix(host, "."+suffix) {
+				return true
+			}
+		} else if h == host {
+			return true
+		}
+	}
+	return false
 }
 
 // isServerHost reports whether a declared remote MCP server is at host.
