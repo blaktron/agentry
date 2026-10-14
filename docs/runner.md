@@ -1791,6 +1791,7 @@ named `browser`, on the `agentry-browser` image from agentry-dockerimages
 (`@playwright/mcp` 0.0.83 and Chrome for Testing, pinned by digest,
 `images.browser` in the policy; pulled by its digest when the machine
 lacks it).
+
 - It starts headless, with an isolated profile (nothing is kept between
   runs), Chromium's own sandbox on, a 1280×720 viewport, the `testing` and
   `pdf` capabilities, and the browse proxy as its proxy.
@@ -1830,6 +1831,7 @@ instructions.
 on its relay egress network under a run-unique name, hardened, with a
 read-only root, on the daemon's default runtime (it resolves names through
 Docker's DNS). It admits:
+
 - **the sites you named**, each with its subdomains, on ports 80 and 443,
   and the exact host on the port your answer named, if it named one;
 - **the declared hosts**, each an exact name, or a `*.` suffix that admits
@@ -1881,6 +1883,7 @@ The contract admits browser secrets only in `site` scope (V15), so a
 secret is typed only on your site, its subdomains and the declared hosts.
 
 **What you see.**
+
 - `reports/browser/`: the screenshots, PDFs and other files the server
   wrote, copied from its own output folder as the run ends, whatever the
   run's outcome: regular files only, at most 64 MiB each and 512 MiB in
@@ -1892,15 +1895,16 @@ secret is typed only on your site, its subdomains and the declared hosts.
   screenshot and `export_pdf` can draw one.
 - `receipts/browser-proxy.log`: the browse proxy's log, every refusal with
   its host, port and reason, masked like every receipt.
-- In the receipt's `capabilities_enforced`:
 
-  | Key | Says |
-  |---|---|
-  | `browser` | what the plan gives the browser: the server, its image, the isolation, the scope as the release declares it, and the secrets |
-  | `browser.image` | the image, pulled by digest |
-  | `browser.scope` | the browse proxy's name and what it admitted in this run: your sites, the hosts, or any public site |
-  | `browser.secrets` | the secrets' names and how they were held, never a value (only when the release declares any) |
-  | `browser.proxy` | "N connections refused (M more of Chrome's own services)", from the proxy's log |
+The receipt's `capabilities_enforced` names the browser in five keys:
+
+| Key | Says |
+|---|---|
+| `browser` | what the plan gives the browser: the server, its image, the isolation, the scope as the release declares it, and the secrets |
+| `browser.image` | the image, pulled by digest |
+| `browser.scope` | the browse proxy's name and what it admitted in this run: your sites, the hosts, or any public site |
+| `browser.secrets` | the secrets' names and how they were held, never a value (only when the release declares any) |
+| `browser.proxy` | "N connections refused (M more of Chrome's own services)", from the proxy's log |
 
 **Consent.** The install consent names the browser, its sites, hosts,
 scope and secrets. The install record keeps the line, so an update that
