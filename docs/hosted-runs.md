@@ -216,6 +216,9 @@ run's id, so a finish reported twice changes nothing.
 | What | Answer |
 |---|---|
 | The release does not declare the mode asked for | `409 mode-not-declared` |
+| The release declares a browser whose scope is `public`, and the deployment keeps a run's browser to the sites named (`AGENTRY_RUNS_BROWSER_PUBLIC_WEB` off, the default) | `409 browser-public-web` ([below](#a-run-with-a-browser)) |
+| A browser's site answer that is not an `http` or `https` address | `422 validation` |
+| A browser's site answer no sandbox host can open: an address that is not public, a name only a local network answers (one label, `.localhost`, `.local`, `.internal`, `.home.arpa`), or a port other than 80 and 443 | `409 browser-site`, with `question` |
 | A session where the deployment does not run them (`AGENTRY_RUNS_SESSIONS` off, or no sandbox hosts), or no sandbox host is taking runs (`hostsOnline` 0) | `409 sessions-unavailable` — a person waits on a session as it starts, so it is refused rather than queued |
 | A session whose payer is on Standard | `403 session-tier`, with `account`, `tier` and `requires: pro` |
 | A session whose payer's balance is short of `AGENTRY_RUNS_SESSION_MIN_CREDITS` | `402 credits-exhausted`, as for a hold |
@@ -254,6 +257,39 @@ signed (see [Trust and security](trust.md)), so a release published before
 the current key verifies for a fresh host once the sweep has run. What does
 cause it is a host whose pinned set predates a rotation — its login reports
 the changed key ids; re-pin its home deliberately.
+
+## A run with a browser
+
+A release that declares a browser (`capabilities.browser`,
+[QuickAgents](quickagents.md#the-browsers-site-a-url-question-named-in-capabilitiesbrowser))
+runs here since the enterprise build's v0.6.57 (agentry-enterprise#565,
+DEV-248), its CLI v0.6.118 (agentry-cli#941):
+
+- **Its sites are public.** Each site question's answer is the address the
+  browser opens, sent as a plain intake answer: it is not an input source,
+  takes no access token and is never fetched or reviewed as one. The create
+  refuses a site no sandbox host can open (above), and the CLI on the host
+  resolves a name and refuses one that answers with any non-public address
+  before anything starts. The host lets out TCP 80 and 443 alone.
+- **Public scope only where the deployment allows it.** A release whose
+  browser may open any public site is refused (`409 browser-public-web`)
+  unless `AGENTRY_RUNS_BROWSER_PUBLIC_WEB` is on, which also renders that
+  job's `browser.allowPublicWeb`.
+- **Its secrets come from the vault**, refused, carried or left out exactly
+  as the release's other declared secrets are ([below](#a-runs-secrets)).
+  On the host they reach the browser's container alone.
+- **Two job slots.** A browser run takes two of a sandbox host's slots and
+  is handed only to a host whose health says `acceptsBrowser` (its CLI
+  carries a hosted browser and its capacity holds two). The oldest queued
+  run keeps its place: a host with one slot free hands out nothing until a
+  second frees. Its metering is any run's.
+- **The image is on the host already.** The host's bootstrap and update
+  pull and verify the browser image its CLI pins (`agentry browser
+  ensure`), so a run does not download it.
+
+Screenshots and PDFs arrive in the run's output under `reports/browser/`,
+and the receipt says where the browser was allowed to go and what the
+proxy refused.
 
 ## A run's files
 

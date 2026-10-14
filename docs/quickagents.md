@@ -361,8 +361,11 @@ pinned `agentry-browser` image, whose one route out is a browse proxy of the
 run's own, the site answer opened and never downloaded, the browser secrets
 typed by name, and the screenshots and PDFs in `reports/browser/`
 ([the runner reference](runner.md#the-browser-a-site-to-test-named-at-run-time)).
-A run in Agentry refuses a browser until hosted runs carry one
-(agentry-enterprise#565), and a CLI or desktop older than this core release
+Since agentry-cli v0.6.118 (agentry-cli#941) and the enterprise build's
+v0.6.57 (agentry-enterprise#565) a run in Agentry gets one too, its sites
+public addresses on ports 80 and 443 only
+([hosted runs](hosted-runs.md#a-run-with-a-browser)). A CLI or desktop
+older than this core release
 refuses a manifest carrying the line as an unknown field. `public` scope
 runs only on a machine whose runner policy sets `browser.allowPublicWeb`.
 
