@@ -37,19 +37,18 @@ func TestAgentPublishSeamAnswersAsTheCoreDoes(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	founder := env.register("ps-founder")
-	env.verifyEmail(founder)
+	admin := env.seedCaller("ps-founder")
+	founder := admin.name
 	member := env.register("ps-member")
-	reviewer := env.register("ps-reviewer")
-	outsider := env.register("ps-outsider")
-	reader := env.register("ps-reader")
-	maintainer := env.register("ps-maintainer")
-	publisher := env.register("ps-publisher")
-	admin := env.login(founder)
+	reviewer := env.seedCaller("ps-reviewer")
+	outsider := env.seedCaller("ps-outsider")
+	reader := env.seedCaller("ps-reader")
+	maintainer := env.seedCaller("ps-maintainer")
+	publisher := env.seedCaller("ps-publisher")
 	org := "ps-org" + env.sfx
 	orgID := env.createOrg(admin, org)
 	env.joinOrg(admin, org, member)
-	env.seedMembership(org, reviewer, "security_reviewer", "active")
+	env.seedMembership(org, reviewer.name, "security_reviewer", "active")
 	for _, a := range []struct{ ns, name, visibility string }{
 		{org, "private", "private"}, {org, "public", "public"}, {founder, "own", "private"},
 	} {
@@ -57,9 +56,9 @@ func TestAgentPublishSeamAnswersAsTheCoreDoes(t *testing.T) {
 	}
 	// Grants on the organization's private agent: maintain ranks below
 	// publish, so a maintain grantee may not add a version.
-	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+reader, map[string]any{"role": "read"}, nil, http.StatusNoContent)
-	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+maintainer, map[string]any{"role": "maintain"}, nil, http.StatusNoContent)
-	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+publisher, map[string]any{"role": "publish"}, nil, http.StatusNoContent)
+	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+reader.name, map[string]any{"role": "read"}, nil, http.StatusNoContent)
+	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+maintainer.name, map[string]any{"role": "maintain"}, nil, http.StatusNoContent)
+	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+publisher.name, map[string]any{"role": "publish"}, nil, http.StatusNoContent)
 	// The sign-in grant's own publishing scopes, and a token that may
 	// administer the organization but not publish.
 	_, signInLike := env.mintPAT(admin, "sign-in-like", "agent:read", "agent:publish", "repo:read", "repo:write", "user:profile", "run:read", "run:write")
@@ -67,8 +66,8 @@ func TestAgentPublishSeamAnswersAsTheCoreDoes(t *testing.T) {
 
 	callers := map[string]caller{
 		"anonymous": anonymous, "the founder": admin, "a member": env.login(member),
-		"the security reviewer": env.login(reviewer), "an outsider": env.login(outsider), "a read grantee": env.login(reader),
-		"a maintain grantee": env.login(maintainer), "a publish grantee": env.login(publisher),
+		"the security reviewer": reviewer, "an outsider": outsider, "a read grantee": reader,
+		"a maintain grantee": maintainer, "a publish grantee": publisher,
 		"the founder's sign-in-like token":    {name: "pat-signin", pat: signInLike},
 		"the founder's token without publish": {name: "pat-orgadmin", pat: orgAdminOnly},
 	}
