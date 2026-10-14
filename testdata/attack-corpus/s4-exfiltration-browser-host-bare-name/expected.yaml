@@ -1,0 +1,13 @@
+# Fixture expectation (see README.md).
+# The twin of s4-exfiltration-browser-host: the same browser line and the
+# same directive, to the bare name of its "*." entry, which the browser may
+# not open (V15's "*." admits the names below, never the name itself). The
+# destination is undeclared, so the hit is high and the release is held
+# (agentry#1198).
+technique: "S4 exfiltration directive to the bare name of a browser's \"*.\" host (rated by declaration)"
+manifest: |
+  {"license":"MIT","schemaVersion":"2","intake":[{"id":"site","prompt":"Which site should I test?","type":"url","required":true}],"capabilities":{"browser":{"sites":["site"],"hosts":["*.drop.invalid.example"]}}}
+expect:
+  - S4/exfiltration-001
+forbid: []
+expectClean: false

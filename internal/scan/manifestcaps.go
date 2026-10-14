@@ -72,6 +72,20 @@ func (c manifestCaps) remoteServerHosts() []string {
 	return out
 }
 
+// browserHosts are the hosts the manifest's browser line declares,
+// lowercased, exact or "*.": none for a line that does not read.
+func (c manifestCaps) browserHosts() []string {
+	b, declared, ok := c.browser()
+	if !declared || !ok {
+		return nil
+	}
+	out := make([]string, 0, len(b.Hosts))
+	for _, h := range b.Hosts {
+		out = append(out, strings.ToLower(h))
+	}
+	return out
+}
+
 // readManifestCaps decodes the capabilities block. ok is false when the
 // manifest is not JSON or has no capabilities block; an unreadable
 // manifest reads as nothing declared, as before.
@@ -167,6 +181,13 @@ func declarationOf(manifestJSON []byte) rules.Declared {
 		d.ServerHosts = append(d.ServerHosts, strings.ToLower(h))
 	}
 	d.MCPServers = len(c.MCPServers) > 0
+	// A browser's hosts are hosts the release declares (agentry#1198). A
+	// line that does not read declares none here, the side this rating
+	// fails toward.
+	if b, declared, ok := c.browser(); declared && ok {
+		d.BrowserAny = b.IsPublic()
+		d.BrowserHosts = c.browserHosts()
+	}
 	d.Secrets = append([]string(nil), c.Secrets...)
 	for _, srv := range c.MCPServers {
 		d.Secrets = append(d.Secrets, srv.Secrets...)
