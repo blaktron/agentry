@@ -37,23 +37,22 @@ func TestAgentMaintainSeamAnswersAsTheCoreDoes(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	founder := env.register("ms-founder")
-	env.verifyEmail(founder)
+	admin := env.seedCaller("ms-founder")
+	founder := admin.name
 	member := env.register("ms-member")
-	pending := env.register("ms-pending")
-	reviewer := env.register("ms-reviewer")
-	outsider := env.register("ms-outsider")
-	reader := env.register("ms-reader")
-	maintainer := env.register("ms-maintainer")
+	pending := env.seedCaller("ms-pending")
+	reviewer := env.seedCaller("ms-reviewer")
+	outsider := env.seedCaller("ms-outsider")
+	reader := env.seedCaller("ms-reader")
+	maintainer := env.seedCaller("ms-maintainer")
 	staff := env.register("ms-staff")
 	env.makePlatformStaff(t, staff)
-	admin := env.login(founder)
 	staffSess := env.login(staff)
 	org := "ms-org" + env.sfx
 	orgID := env.createOrg(admin, org)
 	env.joinOrg(admin, org, member)
-	env.seedMembership(org, pending, "member", "pending")
-	env.seedMembership(org, reviewer, "security_reviewer", "active")
+	env.seedMembership(org, pending.name, "member", "pending")
+	env.seedMembership(org, reviewer.name, "security_reviewer", "active")
 	for _, a := range []struct{ ns, name, visibility string }{
 		{org, "private", "private"}, {org, "public", "public"}, {founder, "own", "private"},
 	} {
@@ -61,15 +60,15 @@ func TestAgentMaintainSeamAnswersAsTheCoreDoes(t *testing.T) {
 	}
 	// Explicit grants on the organization's private agent: one to read, one
 	// to maintain.
-	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+reader, map[string]any{"role": "read"}, nil, http.StatusNoContent)
-	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+maintainer, map[string]any{"role": "maintain"}, nil, http.StatusNoContent)
+	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+reader.name, map[string]any{"role": "read"}, nil, http.StatusNoContent)
+	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+maintainer.name, map[string]any{"role": "maintain"}, nil, http.StatusNoContent)
 	_, founderPATRead := env.mintPAT(admin, "read-only", "run:write", "agent:read")
 	_, founderPATAdmin := env.mintPAT(admin, "with-org-admin", "agent:read", "org:admin")
 
 	callers := map[string]caller{
-		"anonymous": anonymous, "the founder": admin, "a member": env.login(member), "a pending member": env.login(pending),
-		"the security reviewer": env.login(reviewer), "an outsider": env.login(outsider), "a read grantee": env.login(reader),
-		"a maintain grantee": env.login(maintainer), "platform staff": staffSess,
+		"anonymous": anonymous, "the founder": admin, "a member": env.login(member), "a pending member": pending,
+		"the security reviewer": reviewer, "an outsider": outsider, "a read grantee": reader,
+		"a maintain grantee": maintainer, "platform staff": staffSess,
 		"the founder's PAT without org:admin": {name: "pat-read", pat: founderPATRead},
 		"the founder's PAT with org:admin":    {name: "pat-admin", pat: founderPATAdmin},
 	}
