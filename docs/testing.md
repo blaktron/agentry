@@ -92,6 +92,27 @@ combining declarations into subtests alone does not reduce execution cost.
 The [authorization evidence map](testing-authorization.md) records the retained
 route, role, principal and signing boundaries and their caller fixtures.
 
+### Configuration guard ownership
+
+`TestValidateGuards` keeps sixteen distinct refusal cases and checks the
+setting each refusal names. The production fixtures configure file signing
+and a sealing key before changing the one setting under test. An accepted
+production configuration checks that fixture first. This exercises `Validate`;
+loading an actual signing key remains separate signing evidence.
+
+| Retained case | Setting under test | Other guards configured |
+| --- | --- | --- |
+| `prod devMode` | Dev mode is refused in production | File signing and a sealing key |
+| `staging devMode` | Dev mode is refused in staging | File signing and a sealing key |
+| `prod unsigned` | Unsigned production is refused | Dev mode off and a sealing key |
+| `no sealing key outside dev mode` | A sealing key is required | Dev environment, dev mode off |
+
+The environment, storage, judge, proxy, audit and staff-rule cases remain
+independent. The named inventory and acceptance filters retain the same test.
+Configuration defaults, entitlement mapping and consumer outage enforcement
+also keep their separate boundaries. These fixture repairs remove no cases
+or validation calls; the accepted production fixture adds one validation call.
+
 ### Gate outcome ownership
 
 `TestGateCases` owns the severity/outcome/queue matrix through the literal
