@@ -89,6 +89,9 @@ acceptance filters and the named-evidence catalogue together. Report actual
 executed/skipped counts, setup/invocation counts and comparable timings;
 combining declarations into subtests alone does not reduce execution cost.
 
+The [authorization evidence map](testing-authorization.md) records the retained
+route, role, principal and signing boundaries and their caller fixtures.
+
 ### Gate outcome ownership
 
 `TestGateCases` owns the severity/outcome/queue matrix through the literal

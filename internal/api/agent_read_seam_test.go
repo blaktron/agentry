@@ -35,22 +35,21 @@ func TestAgentReadSeamAnswersAsTheCoreDoes(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	founder := env.register("rs-founder")
-	env.verifyEmail(founder)
+	admin := env.seedCaller("rs-founder")
+	founder := admin.name
 	member := env.register("rs-member")
-	pending := env.register("rs-pending")
-	reviewer := env.register("rs-reviewer")
-	outsider := env.register("rs-outsider")
-	grantee := env.register("rs-grantee")
+	pending := env.seedCaller("rs-pending")
+	reviewer := env.seedCaller("rs-reviewer")
+	outsider := env.seedCaller("rs-outsider")
+	grantee := env.seedCaller("rs-grantee")
 	staff := env.register("rs-staff")
 	env.makePlatformStaff(t, staff)
-	admin := env.login(founder)
 	staffSess := env.login(staff)
 	org := "rs-org" + env.sfx
 	orgID := env.createOrg(admin, org)
 	env.joinOrg(admin, org, member)
-	env.seedMembership(org, pending, "member", "pending")
-	env.seedMembership(org, reviewer, "security_reviewer", "active")
+	env.seedMembership(org, pending.name, "member", "pending")
+	env.seedMembership(org, reviewer.name, "security_reviewer", "active")
 	for _, a := range []struct{ ns, name, visibility string }{
 		{org, "private", "private"}, {org, "public", "public"}, {founder, "own", "private"},
 	} {
@@ -58,13 +57,14 @@ func TestAgentReadSeamAnswersAsTheCoreDoes(t *testing.T) {
 	}
 	// An explicit read grant on the organization's private agent, through
 	// the door.
-	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+grantee, map[string]any{"role": "read"}, nil, http.StatusNoContent)
-	_, memberPATRunOnly := env.mintPAT(env.login(member), "run-only", "run:write")
-	_, memberPATRead := env.mintPAT(env.login(member), "with-read", "run:write", "agent:read")
+	env.doJSON(admin, http.MethodPut, "/api/v1/agents/"+org+"/private/grants/user/"+grantee.name, map[string]any{"role": "read"}, nil, http.StatusNoContent)
+	memberSess := env.login(member)
+	_, memberPATRunOnly := env.mintPAT(memberSess, "run-only", "run:write")
+	_, memberPATRead := env.mintPAT(memberSess, "with-read", "run:write", "agent:read")
 
 	callers := map[string]caller{
-		"anonymous": anonymous, "the founder": admin, "a member": env.login(member), "a pending member": env.login(pending),
-		"the security reviewer": env.login(reviewer), "an outsider": env.login(outsider), "a grantee": env.login(grantee),
+		"anonymous": anonymous, "the founder": admin, "a member": memberSess, "a pending member": pending,
+		"the security reviewer": reviewer, "an outsider": outsider, "a grantee": grantee,
 		"platform staff": staffSess, "a member's PAT without agent:read": {name: "pat-run", pat: memberPATRunOnly},
 		"a member's PAT with agent:read": {name: "pat-read", pat: memberPATRead},
 	}
