@@ -113,6 +113,22 @@ Configuration defaults, entitlement mapping and consumer outage enforcement
 also keep their separate boundaries. These fixture repairs remove no cases
 or validation calls; the accepted production fixture adds one validation call.
 
+`TestValidateCapsCredentialTTLs` keeps its fifteen named cases. PAT and SSO
+at/over-cap inputs use literal contract values so a changed production ceiling
+cannot move the tested boundary with it:
+
+| Credential | Accepted boundary | Refused input |
+| --- | --- | --- |
+| PAT | 365 days | 365 days plus one hour |
+| Organization-bound PAT | 90 days | 90 days plus one hour |
+| SSO freshness | 24 hours | 25 hours |
+
+The session cases and remembered browser cases stay in the same table, with their
+independent 24-hour and 30-day contract/default checks in
+`TestTrustedDeviceIsASecondClassNotALongerSession`. Zero/negative lifetimes
+and organization-bound narrowing retain their existing assertions. The
+literal-input repair adds or removes no cases or validation calls.
+
 ### Gate outcome ownership
 
 `TestGateCases` owns the severity/outcome/queue matrix through the literal
