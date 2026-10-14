@@ -355,6 +355,31 @@ func s9ManifestDiff(in *Input) []Finding {
 			Taxonomy: []string{"LLM03", "ASI04"},
 		})
 	}
+	// So is a host the browser may open (agentry#1198): one the previous
+	// release did not name is the same low finding, and medium for a "*."
+	// entry, which names every host below it, as "*" egress names any.
+	prevBrowser := map[string]bool{}
+	for _, h := range prevCapsBlock.browserHosts() {
+		prevBrowser[h] = true
+	}
+	newBrowser := map[string]bool{}
+	for _, h := range curCapsBlock.browserHosts() {
+		if !prevBrowser[h] && !prevEgress[h] {
+			newBrowser[h] = true
+		}
+	}
+	for _, host := range sortedSet(newBrowser) {
+		sev := SevLow
+		if strings.HasPrefix(host, "*.") {
+			sev = SevMedium
+		}
+		findings = append(findings, Finding{
+			Scanner: "S9/new-egress", Severity: sev, Confidence: ConfHigh,
+			Title:    "New browser host in this release: " + host,
+			Detail:   map[string]any{"host": host, "browser": true, "pattern": "new destination after clean releases (postmark-mcp)"},
+			Taxonomy: []string{"LLM03", "ASI04"},
+		})
+	}
 	prevCaps := declaredCaps(in.PrevManifestJSON)
 	for _, c := range sortedSet(declaredCaps(in.ManifestJSON)) {
 		if !prevCaps[c] {
@@ -383,7 +408,12 @@ func s9ContentDiff(bundle *rules.Bundle, in *Input, prevFiles []FileEntry, bump 
 	// previous one, anywhere in prose or code.
 	prevTargets := extractEgressTargets(prevFiles)
 	curTargets := extractEgressTargets(in.Files)
-	declared := egressSet(in.ManifestJSON)
+	egress := egressSet(in.ManifestJSON)
+	caps, _ := readManifestCaps(in.ManifestJSON)
+	browserHosts := caps.browserHosts()
+	declared := func(target string) bool {
+		return egress[target] || rules.BrowserHostsAdmit(browserHosts, target)
+	}
 	for _, target := range sortedTargets(curTargets) {
 		if _, existed := prevTargets[target]; existed {
 			continue
@@ -394,12 +424,14 @@ func s9ContentDiff(bundle *rules.Bundle, in *Input, prevFiles []FileEntry, bump 
 		// this release's manifest names in network.egress, whether declared
 		// before or in this release, is low at any bump (ruleset 0.3.2,
 		// agentry#775): the author declared it, the installer is shown it and
-		// the runner holds the run to it. An email recipient is never
-		// declared that way, whatever its domain (postmark-mcp's BCC line),
-		// and "*" names no host.
+		// the runner holds the run to it. So is a host its browser may open,
+		// exact or below a "*." entry (ruleset 0.4.9, agentry#1198). An
+		// email recipient is never declared that way, whatever its domain
+		// (postmark-mcp's BCC line), and neither "*" nor a public browser
+		// names a host.
 		var sev Severity
 		switch {
-		case t.Kind != rules.DestinationEmail && declared[target]:
+		case t.Kind != rules.DestinationEmail && declared(target):
 			sev = SevLow
 		case bump == "patch":
 			sev = SevHigh
@@ -414,7 +446,7 @@ func s9ContentDiff(bundle *rules.Bundle, in *Input, prevFiles []FileEntry, bump 
 			Excerpt: t.Excerpt,
 			Detail: map[string]any{
 				"target": target, "kind": t.Kind, "bump": bump,
-				"declaredInManifest": declared[target],
+				"declaredInManifest": declared(target),
 				"pattern":            "new destination after clean releases (postmark-mcp: 15 clean versions, then one BCC line)",
 			},
 			Taxonomy: []string{"LLM03", "ASI04"},

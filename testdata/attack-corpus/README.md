@@ -131,6 +131,7 @@ shape the rule must still hold.
 | `S9/new-obfuscation` only for a new S3 class rated medium or above | `s9-patch-comment-v2` (a patch adds a plain HTML comment; baseline `s9-patch-comment-v1`) | `s9-patch-hidden-v2` (a patch adds CSS-hidden text) |
 | a host the manifest declares is low (`S9/new-egress`, `S9/new-egress-content`), even when this patch declares it | `s9-declared-host-v2` (a patch declares a host and starts using it; baseline `s9-declared-host-v1`, no egress) | `s9-undeclared-host-v2` (the same, plus a host it does not declare), and `incident-postmark-v2` |
 | a bare name is a destination only under a top-level domain ICANN delegates, and not as a two-label name under a file-like domain (`.md`, `.zip`, `.sh`, `.py` and the like) or a dotted name outside a string in program source (ruleset 0.4.3, agentry#958) | `s9-uncommon-tld-benign` (a patch names `report.md`, `areas.yaml` and `tickets.zip`; baseline `s9-uncommon-tld-v1`) | `s9-uncommon-tld-v2` (a patch starts mirroring to `webhook.site/…`, a TLD the old list did not know) |
+| a host the manifest's browser may open (`capabilities.browser.hosts`, exact or below a `*.` entry) is declared to S4's rating by declaration: medium, not high (ruleset 0.4.9, agentry#1198) | `s4-exfiltration-browser-host` (the directive names a host below the browser's `*.drop.invalid.example`) | `s4-exfiltration-browser-host-bare-name` (the same, to the bare `drop.invalid.example`, which the browser may not open) |
 
 ## Rules for extending the corpus
 
