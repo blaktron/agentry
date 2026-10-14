@@ -158,6 +158,8 @@ func TestValidateRefusesTheRemovedPGQueueDriver(t *testing.T) {
 // invariants, not tunables: a deployment that raised them would still call
 // itself Agentry while issuing credentials the threat model never priced in.
 func TestValidateCapsCredentialTTLs(t *testing.T) {
+	// PAT and SSO boundaries come from the contract, not the production
+	// constants: raising a ceiling must not move these inputs with it.
 	cases := []struct {
 		name    string
 		mutate  func(*Config)
@@ -168,11 +170,11 @@ func TestValidateCapsCredentialTTLs(t *testing.T) {
 		{"session zero", func(c *Config) { c.Auth.SessionTTL = 0 }, true},
 		{"session negative", func(c *Config) { c.Auth.SessionTTL = -time.Hour }, true},
 
-		{"pat at the 1y cap", func(c *Config) { c.Auth.PATMaxTTL = MaxPATTTL }, false},
-		{"pat over the 1y cap", func(c *Config) { c.Auth.PATMaxTTL = MaxPATTTL + time.Hour }, true},
+		{"pat at the 1y cap", func(c *Config) { c.Auth.PATMaxTTL = 365 * 24 * time.Hour }, false},
+		{"pat over the 1y cap", func(c *Config) { c.Auth.PATMaxTTL = 365*24*time.Hour + time.Hour }, true},
 
-		{"org-bound pat at the 90d cap", func(c *Config) { c.Auth.PATOrgBoundMaxTTL = MaxPATOrgBoundTTL }, false},
-		{"org-bound pat over the 90d cap", func(c *Config) { c.Auth.PATOrgBoundMaxTTL = MaxPATOrgBoundTTL + time.Hour }, true},
+		{"org-bound pat at the 90d cap", func(c *Config) { c.Auth.PATOrgBoundMaxTTL = 90 * 24 * time.Hour }, false},
+		{"org-bound pat over the 90d cap", func(c *Config) { c.Auth.PATOrgBoundMaxTTL = 90*24*time.Hour + time.Hour }, true},
 		// An org-bound PAT is a NARROWING of a PAT; letting its ceiling exceed
 		// the general one would make "org-bound" mean "longer-lived".
 		{"org-bound pat above the general pat cap", func(c *Config) {
@@ -180,8 +182,8 @@ func TestValidateCapsCredentialTTLs(t *testing.T) {
 			c.Auth.PATOrgBoundMaxTTL = 48 * time.Hour
 		}, true},
 
-		{"sso max age at the session cap", func(c *Config) { c.Auth.SSOMaxAge = MaxSSOMaxAge }, false},
-		{"sso max age past any session's life", func(c *Config) { c.Auth.SSOMaxAge = MaxSSOMaxAge + time.Hour }, true},
+		{"sso max age at the session cap", func(c *Config) { c.Auth.SSOMaxAge = 24 * time.Hour }, false},
+		{"sso max age past any session's life", func(c *Config) { c.Auth.SSOMaxAge = 24*time.Hour + time.Hour }, true},
 
 		// A trusted device is the second browser credential class (agentry#461,
 		// plan trusted-devices.md D2). It exceeds MaxSessionTTL by design — that
