@@ -29,6 +29,7 @@ var releasedDigests = map[string]string{
 	"0.4.6": "1773b75db22525d0f47f3b56b7718be9e2d6195e2da343fc3376c81075b07c28",
 	"0.4.7": "40def2e2921c99cd8b03648162f537dc77fb7a7e4cbf27f9963f9869095bc532",
 	"0.4.8": "dab795b65e5a03de4afcdd43e7eec66347728d4d6d7b95be3a407055d821bbad",
+	"0.4.9": "90c02e8c272b3f772eabc6d2bae732de7ad5089a45a3c1f7691abacf4deece5b",
 }
 
 func TestEmbeddedBundleDigestIsPinnedForItsVersion(t *testing.T) {
@@ -67,7 +68,7 @@ func TestEveryReleasedVersionNamesItsThreshold(t *testing.T) {
 // The thresholds of released versions are history: 0.3.0 is the first
 // version that publishes on medium (agentry#773).
 func TestReleasedThresholdsAreHistory(t *testing.T) {
-	for v, want := range map[string]string{"0.2.3": "low", "0.3.0": "medium", "0.3.1": "medium", "0.3.2": "medium", "0.3.3": "medium", "0.3.4": "medium", "0.4.0": "medium", "0.4.1": "medium", "0.4.2": "medium", "0.4.3": "medium", "0.4.4": "medium", "0.4.5": "medium", "0.4.6": "medium", "0.4.7": "medium", "0.4.8": "medium", "0.0.0-unknown": "low"} {
+	for v, want := range map[string]string{"0.2.3": "low", "0.3.0": "medium", "0.3.1": "medium", "0.3.2": "medium", "0.3.3": "medium", "0.3.4": "medium", "0.4.0": "medium", "0.4.1": "medium", "0.4.2": "medium", "0.4.3": "medium", "0.4.4": "medium", "0.4.5": "medium", "0.4.6": "medium", "0.4.7": "medium", "0.4.8": "medium", "0.4.9": "medium", "0.0.0-unknown": "low"} {
 		if got := BaselineMaxAutoPublishSeverityFor(v); got != want {
 			t.Errorf("BaselineMaxAutoPublishSeverityFor(%q) = %q, want %q", v, got, want)
 		}

@@ -3155,6 +3155,18 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "internal/scan/browser_hosts_test.go",
+          "tests": [
+            "TestDeclarationOfReadsTheBrowsersHosts",
+            "TestS4RatesABrowserHostAsDeclared",
+            "TestS9ReadsABrowserHostAsDeclared"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/browser_test.go",
           "tests": [
             "TestABrowserIsItsOwnPolicyTokenNotNetwork",
