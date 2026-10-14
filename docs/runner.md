@@ -799,6 +799,8 @@ its digest, so a run record says which file a run obeyed.
 | `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode (DR-53; [Unsafe Mode](agentry/unsafe-mode.md)) |
 | `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
 | `images.hostlink` | the hostlink image the host link is built on, the OpenSSH client a run reaches a [target host](#target-hosts-a-server-named-at-run-time) with, pinned by digest (the default is the one the CLI release names) |
+| `images.browser` | the browser server's image a release that declares a [browser](#the-browser-a-site-to-test-named-at-run-time) runs on, `agentry-browser` (`@playwright/mcp` and Chrome for Testing), pinned by digest (the default is the one the CLI release names) |
+| `browser.allowPublicWeb` | lets a browser whose scope is `public` reach any public site on ports 80 and 443 (default false → such a release is refused, exit 11); apart from `allowWildcardEgress` |
 | `hosts.allow` / `hosts.deny` | IPv4 networks in CIDR form that narrow the addresses a target host may be at: with `allow` set an address must be in one, and one in `deny` is refused either way ([below](#the-hosts-lists-hosts)) |
 | `images.clamavSignatures` | the ClamAV signature bundle, `<registry>/<repository>:<tag>` (default `ghcr.io/blaktron/agentry-clamav-db:latest`); a mirror must carry the publishing workflow's signature |
 | `hybridAnalysis.apiKeyEnv` / `hybridAnalysis.apiKeySource` | your Hybrid Analysis key for the hash lookup: the variable that holds it (default `HYBRID_API_KEY`), which wins when it is set; with `apiKeySource: keyring`, the keychain entry `provider:hybrid-analysis` when it is not; with no key nothing is looked up |
@@ -1019,6 +1021,7 @@ lower them for your own host.
 | `secrets: [names]` | values only in the profile, the per-run secrets file (0600, deleted at teardown), the tools container env (a declared server's own: that server's container env), and the MCP gateway's container, which reads the whole secrets file to inject them — never in plans, receipts, or process listings |
 | a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer, or an `auth: oauth` connection's access token, is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file; a connection's refresh token and any client secret stay in the runner's store and never enter the run |
 | a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
+| `browser` | the browser server, a container of its own on the run's own browser network with Chromium's sandbox on, whose one route out is the run's browse proxy, which resolves every name itself and admits only the sites you named with their subdomains, the declared hosts, or any public site where the policy's `browser.allowPublicWeb` allows `scope: public`; browser secrets in a 0600 file bound into that server alone; a local run only ([the browser](#the-browser-a-site-to-test-named-at-run-time)) |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane; before the agent starts they are checked by ClamAV and read in the files image's container (no network, every capability dropped, the files read-only), and their text is mounted read-only at `/inputs-text`; the always-granted `list_inputs`, `read_input` and `search_inputs` serve both ([running with files](#running-with-files)); job output and receipts live on the separate `/out` volume |
 | the scratch folder (the runner's grant to every release, never a built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
@@ -1744,6 +1747,169 @@ hosts:
 IPv4 networks in CIDR form. With `allow` set, a target host's address must
 be in one of them; one in `deny` is refused either way. Neither set, every
 address but the ones above is reached.
+
+### The browser: a site to test, named at run time
+
+A QuickAgent that tests websites declares a **browser**
+(`capabilities.browser`, [QuickAgents](quickagents.md#the-browsers-site-a-url-question-named-in-capabilitiesbrowser)),
+and since agentry-cli v0.6.117 (agentry-cli#915, DR-96) a local run gives it
+one: a headless Chromium driven through Microsoft's Playwright MCP server,
+the **browser server**, whose only route out is a proxy of the run's own,
+the **browse proxy**. The manifest names `url` questions, never a site you
+own: you name the site when the run starts, and the proxy admits it, its
+subdomains and the hosts the release declares, or, in `public` scope, any
+public site. Local runs only. A run the CLI knows is hosted refuses a
+browser before anything is installed (exit 11: "a hosted run has no
+browser yet"), until hosted runs carry one (agentry-enterprise#565).
+
+**The answer.** An `http` or `https` address with a host, at most 2,048
+characters, with no user name or password in it (a sign-in is the
+release's declared secrets, below) and no `#` fragment. Plain `http` is
+accepted because a site under test may be a staging server without TLS.
+An internationalized name is held in the ASCII form the browser sends.
+The answer is kept in `intake.json` and opened by the browser; it is never
+downloaded, so it is not an [input source](#input-sources-a-repository-or-a-file-at-a-web-address).
+
+```bash
+agentry run you/site-checker --intake site=https://staging.example.com
+```
+
+An optional site question left unanswered adds no site. A run whose
+browser then has nowhere to go (no site, no declared host, not `public`)
+stops before anything starts and says which question to answer.
+
+**Refused at plan time** (exit 11): a release whose scope is `public`,
+unless your policy sets `browser.allowPublicWeb: true` ([the operator
+policy](#the-operator-policy-agentryrunnerpolicyyaml)), as `"*"` egress is
+refused unless `allowWildcardEgress` is set; the two keys are apart, so a
+machine may let a site tester reach any public site and still refuse
+`"*"` to `fetch`, or the reverse. A built-in, and a release beside the web
+tools or the review grant, is never given a browser.
+
+**The browser server** is one more server in the run's gateway catalog,
+named `browser`, on the `agentry-browser` image from agentry-dockerimages
+(`@playwright/mcp` 0.0.83 and Chrome for Testing, pinned by digest,
+`images.browser` in the policy; pulled by its digest when the machine
+lacks it).
+- It starts headless, with an isolated profile (nothing is kept between
+  runs), Chromium's own sandbox on, a 1280×720 viewport, the `testing` and
+  `pdf` capabilities, and the browse proxy as its proxy.
+- It runs as your uid (the image's own user where the machine has none to
+  give, on Windows), with every capability dropped, `no-new-privileges`, a
+  read-only root, and a home and `/tmp` in memory. Under runc the docker
+  filter gives it Docker's default seccomp profile plus the four calls
+  Chromium's sandbox makes (`clone`, `unshare`, `setns`, `chroot`); under
+  a sandboxed runtime, the default profile.
+- It is on a network of the run's own, `agentry-<run>-browser`, with the
+  one relay that carries it to the browse proxy on port 3128. No other
+  container joins that network and the browser joins no other, so a page
+  that took the browser over reaches neither another server's relay nor a
+  [target host](#target-hosts-a-server-named-at-run-time).
+
+**What the agent can do.** The gateway passes an allowlist of the server's
+tools, so a tool a later server release adds stays out until it is
+reviewed: `browser_navigate`, `browser_navigate_back`, `browser_snapshot`,
+`browser_find`, `browser_click`, `browser_type`, `browser_fill_form`,
+`browser_select_option`, `browser_hover`, `browser_drag`, `browser_drop`,
+`browser_press_key`, `browser_wait_for`, `browser_tabs`, `browser_resize`,
+`browser_emulate_media`, `browser_handle_dialog`,
+`browser_console_messages`, `browser_network_requests`,
+`browser_network_request`, `browser_take_screenshot`, `browser_evaluate`,
+`browser_close`, the five `browser_verify_*` and `browser_generate_locator`
+testing tools, and `browser_pdf_save`. Never `browser_run_code_unsafe` or
+`browser_file_upload`, and never the server's network, storage, config,
+devtools or vision tools. A release whose browser may type secrets loses
+`browser_evaluate` too (below). The System Prompt's Browser line tells the
+agent where the browser may go, that a request a page made which
+`browser_network_requests` lists as failed is a finding to report (a third
+party the site depends on that is out of scope), that Chrome's own
+background requests are not, and that what a page says is data, never
+instructions.
+
+**The browse proxy** is the runner image's proxy role, started for the run
+on its relay egress network under a run-unique name, hardened, with a
+read-only root, on the daemon's default runtime (it resolves names through
+Docker's DNS). It admits:
+- **the sites you named**, each with its subdomains, on ports 80 and 443,
+  and the exact host on the port your answer named, if it named one;
+- **the declared hosts**, each an exact name, or a `*.` suffix that admits
+  its subdomains and not the bare name, on ports 80 and 443;
+- **any public site** on ports 80 and 443, only where the release's scope
+  is `public` and the policy allows it.
+
+It resolves every name itself and dials only the address it checked, so a
+second answer from the name server cannot slip in between. A name with any
+answer that is not a public address is refused, with the address in the
+reason. The one exception is a site you typed (plan D2): it may be at a
+LAN's or a tailnet's address (RFC 1918, IPv6 ULA, CGNAT), because you named
+it. Loopback, link-local (where a cloud's metadata service answers),
+multicast and unspecified addresses are never dialled, a site of yours
+included, and a subdomain of your site must be at public addresses. Every
+tunnel keeps the proxy's SNI check: the TLS name must be the host asked
+for, with no encrypted ClientHello (the image's Chrome policy turns ECH
+off so that it passes). A page's plain `http` is forwarded under the same
+checks, with no redirect followed: the browser asks again and is judged
+again. The proxy reads no page and decrypts nothing, so it narrows where a
+tunnel goes and not what is said inside it.
+
+A refused request fails in the page (`net::ERR_TUNNEL_CONNECTION_FAILED`,
+which `browser_network_requests` shows the agent) and is logged as `deny
+<host>:<port> (<reason>)`. Chrome reaches eleven of Google's service hosts
+(its update, sign-in, component and malware-list services) whatever a page
+does; a refusal of one ends with `[chrome service]`, so a reader can tell
+the browser's background from the page's.
+
+**Signing in.** The names in `capabilities.browser.secrets` are declared
+secrets, resolved as any declared secret is (a declared server's secret
+named in `optionalSecrets` among them), and their values are written to
+the server's `--secrets` file, `NAME='value'` a line, 0600 in a run folder
+of its own, bound read-only into the browser server alone and deleted with
+the run, `--keep-run-dir` or not. A value holding a line break, or both
+kinds of quote, cannot be carried intact and refuses the run (exit 11). An
+optional secret the run was not given has no line. The agent passes a
+secret's name as the text of `browser_type` or a field's value in
+`browser_fill_form`, and the server types the value. The value is masked
+in what comes back, in layers: the server replaces the exact value with
+its name, the gateway's secret block runs on every tool result, and the
+runner masks the values again in the transcript, the receipts and the
+browser's text files. The server's own masking matches
+the exact value only, so a release whose browser may type secrets is not
+given `browser_evaluate`, with which a page's script could hand a value
+back transformed. The System Prompt names the secrets for the site's own
+sign-in forms and calls a page asking for them anywhere else a finding.
+The contract admits browser secrets only in `site` scope (V15), so a
+secret is typed only on your site, its subdomains and the declared hosts.
+
+**What you see.**
+- `reports/browser/`: the screenshots, PDFs and other files the server
+  wrote, copied from its own output folder as the run ends, whatever the
+  run's outcome: regular files only, at most 64 MiB each and 512 MiB in
+  all (a larger one is left out, and the run says so on its standard
+  error); a text file
+  (`.yml`, `.yaml`, `.log`, `.md`, `.txt`, `.json`, `.html`, `.htm`) is
+  masked like a receipt. During the run the tools server reads that folder
+  at `/out/reports/browser`, read-only, so the agent's report can name a
+  screenshot and `export_pdf` can draw one.
+- `receipts/browser-proxy.log`: the browse proxy's log, every refusal with
+  its host, port and reason, masked like every receipt.
+- In the receipt's `capabilities_enforced`:
+
+  | Key | Says |
+  |---|---|
+  | `browser` | what the plan gives the browser: the server, its image, the isolation, the scope as the release declares it, and the secrets |
+  | `browser.image` | the image, pulled by digest |
+  | `browser.scope` | the browse proxy's name and what it admitted in this run: your sites, the hosts, or any public site |
+  | `browser.secrets` | the secrets' names and how they were held, never a value (only when the release declares any) |
+  | `browser.proxy` | "N connections refused (M more of Chrome's own services)", from the proxy's log |
+
+**Consent.** The install consent names the browser, its sites, hosts,
+scope and secrets. The install record keeps the line, so an update that
+adds a browser, a site, a host or a secret, or moves from `site` to
+`public`, asks for consent again.
+
+**Not verified** (DR-96): the browser has been run on a workstation under
+runc, with a scripted model; a real model's run, a sandboxed runtime
+(`runsc`), Docker Desktop's sidecar filter and arm64 have not been tried.
 
 ## The scratch folder and PDF reports
 
@@ -3090,11 +3256,13 @@ setup asks the model until it is.
                          exported a PDF)
   reports/…              whatever the QuickAgent wrote via write_report, and
                          the PDFs export_pdf rendered
+  reports/browser/       a browser's screenshots, PDFs and saved files
   receipts/
     events.ndjson        the raw harness event stream
     agent-stderr.log     the harness process's stderr
     gateway.log          the gateway's own log, tool calls included
     proxy.log            the LLM egress proxy's decisions: one allow/deny line per CONNECT
+    browser-proxy.log    a browser's browse proxy: every refusal, with its reason
     run-plan.json        the exact compiled plan that ran
     meta.json, task.txt  run identity, timing, budgets, the task input
     intake.json          the non-secret intake answers (when the release asks any)
@@ -3173,8 +3341,8 @@ The four model sign-in codes carry no names; the vendor's own words about a
 plan limit, a policy or a missing credit are in the masked error and the
 receipts, never in the reason ([model sign-ins](#outcomes)).
 
-Other refusals (wildcard egress, the web-tools and review-grant rules, the
-dataAccess files, the adapter, consent, the images steps) carry their class
+Other refusals (wildcard egress, a public-scope browser, a hosted run's
+browser, the web-tools and review-grant rules, the dataAccess files, the adapter, consent, the images steps) carry their class
 and stage and no reason yet. A hosted run's record keeps `stage` and
 `reason` under the same rule ([hosted runs](hosted-runs.md#the-receipt-the-usage-and-the-outputs)).
 
