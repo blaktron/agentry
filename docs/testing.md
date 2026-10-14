@@ -123,7 +123,7 @@ cannot move the tested boundary with it:
 | Organization-bound PAT | 90 days | 90 days plus one hour |
 | SSO freshness | 24 hours | 25 hours |
 
-The session and trusted-device cases stay in the same table, with their
+The session cases and remembered browser cases stay in the same table, with their
 independent 24-hour and 30-day contract/default checks in
 `TestTrustedDeviceIsASecondClassNotALongerSession`. Zero/negative lifetimes
 and organization-bound narrowing retain their existing assertions. The
