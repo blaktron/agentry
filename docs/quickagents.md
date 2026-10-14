@@ -326,11 +326,10 @@ capabilities:
 
 - **Where the browser may go.** In `site` scope, the default, the site the
   person names, its subdomains, and the `hosts` the release lists, each an
-  exact name or a `*.` suffix. In `public` scope, any public site. A
+  exact name or a `*.` suffix. In `public` scope, any public site. The
   runner holds the scope in a proxy of its own, the browser's only route
-  out; private addresses are refused, except in a local run the exact host
-  the person typed. The design is in the plan for browser testing
-  (agentry-cli#918).
+  out; private addresses are refused, except in a local run the site the
+  person typed, which may be on a LAN or a tailnet.
 - **Signing in.** `secrets` names declared secrets the browser may type:
   the agent passes a secret's name and the runner's browser server types
   its value, which the agent never reads back. A browser that types
@@ -355,15 +354,17 @@ capabilities:
   or `public`. Each name in `secrets` is also in `capabilities.secrets` or
   `optionalSecrets`, and `secrets` with `public` is refused.
 
-**What the manifest says today, and what waits on the runner.** The core
-accepts the line and checks it as above (agentry#1134). The browser itself,
-its proxy and its tools ship in a CLI release of their own
-(agentry-cli#915), and [the runner's documentation](runner.md) describes
-them once they do. Until then no runner gives a run a browser, and a CLI or
-desktop older than this core release refuses a manifest carrying the line
-as an unknown field. A site question is a `url` question: what a runner
-does with its answer beyond opening it in the browser is that runner
-release's to say.
+**What a runner does with it.** The core accepts the line and checks it as
+above (agentry#1134). Since agentry-cli v0.6.117 (agentry-cli#915) a local
+run gives the release its browser: Microsoft's Playwright MCP server on the
+pinned `agentry-browser` image, whose one route out is a browse proxy of the
+run's own, the site answer opened and never downloaded, the browser secrets
+typed by name, and the screenshots and PDFs in `reports/browser/`
+([the runner reference](runner.md#the-browser-a-site-to-test-named-at-run-time)).
+A run in Agentry refuses a browser until hosted runs carry one
+(agentry-enterprise#565), and a CLI or desktop older than this core release
+refuses a manifest carrying the line as an unknown field. `public` scope
+runs only on a machine whose runner policy sets `browser.allowPublicWeb`.
 
 ### `interactive`: session hints
 
