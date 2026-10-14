@@ -1021,7 +1021,7 @@ lower them for your own host.
 | `secrets: [names]` | values only in the profile, the per-run secrets file (0600, deleted at teardown), the tools container env (a declared server's own: that server's container env), and the MCP gateway's container, which reads the whole secrets file to inject them — never in plans, receipts, or process listings |
 | a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer, or an `auth: oauth` connection's access token, is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file; a connection's refresh token and any client secret stay in the runner's store and never enter the run |
 | a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
-| `browser` | the browser server, a container of its own on the run's own browser network with Chromium's sandbox on, whose one route out is the run's browse proxy, which resolves every name itself and admits only the sites you named with their subdomains, the declared hosts, or any public site where the policy's `browser.allowPublicWeb` allows `scope: public`; browser secrets in a 0600 file bound into that server alone; a local run only ([the browser](#the-browser-a-site-to-test-named-at-run-time)) |
+| `browser` | the browser server, a container of its own on the run's own browser network with Chromium's sandbox on, whose one route out is the run's browse proxy, which resolves every name itself and admits only the sites you named with their subdomains, the declared hosts, or any public site where the policy's `browser.allowPublicWeb` allows `scope: public`; browser secrets in a 0600 file bound into that server alone; in a hosted run public sites only ([the browser](#the-browser-a-site-to-test-named-at-run-time)) |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane; before the agent starts they are checked by ClamAV and read in the files image's container (no network, every capability dropped, the files read-only), and their text is mounted read-only at `/inputs-text`; the always-granted `list_inputs`, `read_input` and `search_inputs` serve both ([running with files](#running-with-files)); job output and receipts live on the separate `/out` volume |
 | the scratch folder (the runner's grant to every release, never a built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
@@ -1758,9 +1758,15 @@ the **browser server**, whose only route out is a proxy of the run's own,
 the **browse proxy**. The manifest names `url` questions, never a site you
 own: you name the site when the run starts, and the proxy admits it, its
 subdomains and the hosts the release declares, or, in `public` scope, any
-public site. Local runs only. A run the CLI knows is hosted refuses a
-browser before anything is installed (exit 11: "a hosted run has no
-browser yet"), until hosted runs carry one (agentry-enterprise#565).
+public site. Since agentry-cli v0.6.118 (agentry-cli#941, DR-96's
+addendum) a hosted run gets one too, its sites public only: before
+anything starts it refuses (exit 11, naming the question) a site on a port
+other than 80 and 443, an address that is not public, and a name that
+does not resolve or resolves to any address that is not public, and its
+browse proxy is given no private site. A run on your own machine may open
+a site on your network (below). On a sandbox host the registry checks the
+same at create, and a browser run takes two of the host's job slots
+([hosted runs](hosted-runs.md#a-run-with-a-browser)).
 
 **The answer.** An `http` or `https` address with a host, at most 2,048
 characters, with no user name or password in it (a sign-in is the
@@ -3346,7 +3352,7 @@ plan limit, a policy or a missing credit are in the masked error and the
 receipts, never in the reason ([model sign-ins](#outcomes)).
 
 Other refusals (wildcard egress, a public-scope browser, a hosted run's
-browser, the web-tools and review-grant rules, the dataAccess files, the adapter, consent, the images steps) carry their class
+site that is not a public one on 80 or 443, the web-tools and review-grant rules, the dataAccess files, the adapter, consent, the images steps) carry their class
 and stage and no reason yet. A hosted run's record keeps `stage` and
 `reason` under the same rule ([hosted runs](hosted-runs.md#the-receipt-the-usage-and-the-outputs)).
 
