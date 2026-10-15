@@ -4471,7 +4471,8 @@
           "path": "pkg/manifest/capdiff_server_test.go",
           "tests": [
             "TestDiffCapabilitiesComparesAPackageServersOwnCapabilities",
-            "TestAServerSecretsOptionalMarkingIsNotADiff"
+            "TestAServerSecretsOptionalMarkingIsNotADiff",
+            "TestANewPackageServersLineNamesItsOwnGrants"
           ],
           "fuzz": [],
           "benchmarks": [],

@@ -87,3 +87,47 @@ func TestAServerSecretsOptionalMarkingIsNotADiff(t *testing.T) {
 		t.Fatalf("an optional marking changed the diff: %+v", d)
 	}
 }
+
+// TestANewPackageServersLineNamesItsOwnGrants: a server new to the
+// contract, or the same package at a new pin, is asked about with what its
+// own container is given, so the person is told a new server may reach
+// any host before they agree to it.
+func TestANewPackageServersLineNamesItsOwnGrants(t *testing.T) {
+	srv := func(version string, egress, secrets, tools []string) Capabilities {
+		return Capabilities{MCPServers: []MCPServer{{NPM: "@acme/osv-mcp", Version: version, Egress: egress, Secrets: secrets, Tools: tools}}}
+	}
+	tests := []struct {
+		name     string
+		old, new Capabilities
+		widened  []string
+	}{
+		{
+			name:    "a new server with hosts, secrets and an allowlist",
+			new:     srv("1.2.3", []string{"b.example", "a.example"}, []string{"OSV_TOKEN"}, []string{"query", "list"}),
+			widened: []string{"adds MCP server: npm:@acme/osv-mcp@1.2.3 (network egress to a.example, b.example; secrets OSV_TOKEN; tools list, query)"},
+		},
+		{
+			name:    "a new server that may reach any host and every tool",
+			new:     srv("1.2.3", []string{"api.osv.dev", "*"}, nil, nil),
+			widened: []string{"adds MCP server: npm:@acme/osv-mcp@1.2.3 (UNRESTRICTED network egress (any host); every tool it serves)"},
+		},
+		{
+			name:    "a new server that declares no egress and no secret",
+			new:     srv("1.2.3", nil, nil, []string{"query"}),
+			widened: []string{"adds MCP server: npm:@acme/osv-mcp@1.2.3 (tools query)"},
+		},
+		{
+			name:    "the same package at a new pin",
+			old:     srv("1.2.3", []string{"api.osv.dev"}, []string{"OSV_TOKEN"}, []string{"query"}),
+			new:     srv("1.2.4", []string{"api.osv.dev", "*"}, []string{"OSV_TOKEN"}, nil),
+			widened: []string{"adds MCP server: npm:@acme/osv-mcp@1.2.4 (UNRESTRICTED network egress (any host); secrets OSV_TOKEN; every tool it serves)"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if d := DiffCapabilities(tt.old, tt.new); !slices.Equal(d.Widened, tt.widened) {
+				t.Fatalf("widened %q, want %q", d.Widened, tt.widened)
+			}
+		})
+	}
+}
