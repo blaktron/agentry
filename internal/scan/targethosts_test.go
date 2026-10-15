@@ -9,7 +9,7 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 )
 
-// Target hosts in the pipeline (plan runtime-hosts.md §7, D10; agentry#1092).
+// Target hosts in the pipeline.
 // A declared target host is not a finding and does not route a release to
 // review; the scanners' bar for SSH the release makes itself does not move;
 // and an exec declaration naming an SSH client is pointed at targetHosts,
@@ -25,7 +25,7 @@ func targetHostManifest(exec string) string {
 
 // TestS6StillFlagsAScriptsOwnSSHWithATargetHostDeclared: a support script
 // that runs ssh, scp or sftp is the release making its own connection, so
-// a declared target host changes nothing S6 reports (invariant 9).
+// a declared target host changes nothing S6 reports.
 func TestS6StillFlagsAScriptsOwnSSHWithATargetHostDeclared(t *testing.T) {
 	files := map[string]string{
 		"AGENT.md":  "# Server helper\n\nRun deploy.sh to push the config.\n",

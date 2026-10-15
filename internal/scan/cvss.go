@@ -12,7 +12,7 @@ import (
 // cvssBaseScore is the CVSS base score an OSV severity entry's "score"
 // carries: a CVSS v3.0, v3.1 or v4.0 vector, computed by go-cvss (v4.0's
 // score comes from the specification's macrovector lookup table, which is
-// why this is a library and not the formula by hand; agentry#774), or a
+// why this is a library and not the formula by hand), or a
 // plain number, which some databases put there instead. Anything else,
 // CVSS v2 included, is -1: no usable score.
 func cvssBaseScore(score string) float64 {
@@ -47,12 +47,11 @@ func cvssBaseScore(score string) float64 {
 }
 
 // advisoryHighFrom is the CVSS base score from which a High advisory is a
-// high finding; below it, a medium one (the tweaks plan's D2: "8.5 and
-// above").
+// high finding; below it, a medium one (8.5 and above).
 const advisoryHighFrom = 8.5
 
 // AdvisoryGateSeverity is the severity the gate gives the finding an
-// advisory makes (agentry#774; the tweaks plan's D1 and D2). A Critical
+// advisory makes. A Critical
 // advisory is critical and rejects the version. A High one is high from a
 // CVSS base score of 8.5, medium below it, and high when it carries no
 // usable score. Every other severity is the advisory's own.

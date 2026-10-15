@@ -97,7 +97,7 @@ func TestSanitizeRuleID(t *testing.T) {
 // .gitleaks.toml from the scanned source when no --config is given, so a
 // submission could ship one with no rules and scan clean. Every invocation
 // carries --config: the embedded default-rules file, or the operator's
-// Rules path (security review 2026-09-20 §5.7).
+// Rules path.
 func TestRunGitleaksAlwaysPassesTheRegistrysConfig(t *testing.T) {
 	argsFile := filepath.Join(t.TempDir(), "args")
 	bin := fakeTool(t, `printf '%s\n' "$@" > `+argsFile+`
@@ -169,8 +169,8 @@ func mustRead(t *testing.T, p string) string {
 	return string(b)
 }
 
-// A documented placeholder is not a secret (ruleset 0.4.0, agentry#893):
-// the proof-of-concept line that held blaktron/sast-scan on dev, and the
+// A documented placeholder is not a secret:
+// a security QuickAgent's proof-of-concept command line, and the
 // template markers documentation uses, are dropped; a value with no marker
 // is still reported, whatever host sits beside it on the line.
 func TestRunGitleaksSkipsDocumentedPlaceholders(t *testing.T) {
@@ -219,8 +219,8 @@ func TestDocumentedPlaceholder(t *testing.T) {
 	}
 }
 
-// A placeholder beside a real value does not hide it (the invariants review
-// of agentry#893): gitleaks' curl-auth-user Secret is "user:pass".
+// A placeholder beside a real value does not hide it:
+// gitleaks' curl-auth-user Secret is "user:pass".
 func TestDocumentedPlaceholderNeedsTheWholeValue(t *testing.T) {
 	// Credential-shaped values are built at run time, so the repository's
 	// own gitleaks job does not read the test as a leak.

@@ -12,7 +12,7 @@ import (
 // ${NAME}, {{name}}, %NAME%, $NAME, [name]), or a word that says it is not
 // real. A security QuickAgent's proof-of-concept command (`sqlmap -u
 // "https://app.example.com/search?q=test"`, `curl -u <user>:<pass>`)
-// carries one (ruleset 0.4.0, agentry#893).
+// carries one.
 var placeholderRe = regexp.MustCompile(`(?i)` +
 	`(?:[a-z0-9-]+\.)*example\.(?:com|net|org)\b|(?:[a-z0-9-]+\.)*[a-z0-9-]+\.(?:example|invalid|test|localhost)\b|\blocalhost\b|` +
 	`<[^<>\s]+>|\$\{[^}]+\}|\{\{[^}]+\}\}|(?-i:%[A-Z_]+%|\$[A-Z][A-Z_]{2,}\b)|\[[^\]]+\]|` +

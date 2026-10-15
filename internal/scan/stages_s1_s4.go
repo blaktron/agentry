@@ -14,7 +14,7 @@ import (
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
-// S1 — Inventory & hygiene (§8.3). Unpacks were done by the orchestrator;
+// S1 — Inventory & hygiene. Unpacks were done by the orchestrator;
 // S1 builds the file inventory (content-sniffed types), flags binaries and
 // executables (blocked for all kinds in v1), nested archives, and non-UTF-8
 // text. It populates Input.Files for the downstream stages.
@@ -30,7 +30,7 @@ const (
 func (S1Inventory) ID() string { return "S1" }
 
 // Content classification (magic tables, text heuristic, image extensions)
-// lives in pkg/archive so the CLI's `agentry validate` shares it (D-12).
+// lives in pkg/archive so the CLI's `agentry validate` shares it.
 
 func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 	var findings []Finding
@@ -53,7 +53,7 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 			// A file we cannot read is a file no scanner examines. Silently
 			// treating it as empty means S3/S4/S5/S6 all pass over content
 			// that will still ship — so it becomes a finding and the version
-			// routes to a human instead (§7 fail toward review).
+			// routes to a human instead (fail toward review).
 			findings = append(findings, Finding{
 				Scanner: scannerUnreadableFile, Severity: SevMedium, Confidence: ConfHigh,
 				Title: "File in package could not be read for scanning", FilePath: rel,
@@ -99,11 +99,11 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 			if int64(len(data)) <= textScanCap {
 				entry.Content = data
 			} else {
-				// DEV-036 closure: bytes past the cap are NOT read by
-				// S3/S4/S5, which without a finding was a silent evasion
+				// Bytes past the cap are NOT read by
+				// S3/S4/S5, so without a finding this would be a silent evasion
 				// window — a payload appended after byte 1,048,576 of a
-				// large text file reached publication with no detector and
-				// no reviewer ever seeing it, and the report did not say
+				// large text file would reach publication with no detector and
+				// no reviewer ever seeing it, and the report would not say
 				// content was skipped. Medium severity routes the version
 				// to human review, where the file viewer shows the whole
 				// file. (inventoryDir below truncates the S9 BASELINE the
@@ -138,7 +138,7 @@ func (S1Inventory) Run(sc stageContext, in *Input) StageResult {
 }
 
 // scannerExecRemoteClient is S1's hint for an exec declaration that names
-// an SSH client (plan runtime-hosts.md §7, D10; agentry#1092).
+// an SSH client.
 const scannerExecRemoteClient = "S1/exec-remote-client"
 
 // s1ExecRemoteClient reports, low, the commands of the manifest's exec
@@ -226,10 +226,10 @@ func readArchiveFile(dir, rel string) ([]byte, error) {
 }
 
 // S3S4Content wraps the pkg/rules S3 hidden-content detectors and S4
-// signature engine (§8.3). It runs on the inventoried text files, and on the
+// signature engine. It runs on the inventoried text files, and on the
 // text recovered from image metadata. The capability families' hits are
-// rated by what the manifest declares (ruleset 0.4.0, agentry#893): they
-// hold only for a capability it does not declare.
+// rated by what the manifest declares:
+// they hold only for a capability it does not declare.
 type S3S4Content struct{}
 
 func (S3S4Content) ID() string { return "S3S4" }
@@ -245,8 +245,8 @@ func (S3S4Content) Run(sc stageContext, in *Input) StageResult {
 }
 
 // imageMetadataFindings runs the S3/S4 detectors over strings recovered from
-// image metadata (§8.3 S3: "image alt-text/EXIF text extraction for
-// instruction-bearing strings").
+// image metadata (image alt-text/EXIF text extraction for
+// instruction-bearing strings).
 //
 // Markdown alt-text needs no special handling — it is literal text in the .md
 // file and the rules above already read it. EXIF and PNG text chunks do: they
@@ -304,12 +304,12 @@ func imageMetadataFindings(sc stageContext, in *Input) []Finding {
 	return out
 }
 
-// s1Frontmatter is the scan-side half of agentry#47 (DEV-044): the skill
-// entrypoint's YAML frontmatter is what the installed skill shows the
-// consuming runtime, so a `name`/`description` that contradicts the signed
+// s1Frontmatter checks the skill
+// entrypoint's YAML frontmatter, which is what the installed skill shows the
+// consuming runtime: a `name`/`description` that contradicts the signed
 // manifest is a hygiene finding on the report. V9 rejects a contradicting
-// name at submission; this catches every path (rescans, uploads that
-// predate V9) and records the description divergence for the reviewer.
+// name at submission; this catches every path (rescans, older
+// uploads) and records the description divergence for the reviewer.
 func s1Frontmatter(in *Input) []Finding {
 	var m struct {
 		SchemaVersion string `json:"schemaVersion"`
@@ -324,7 +324,7 @@ func s1Frontmatter(in *Input) []Finding {
 		return nil
 	}
 	// v2 names one instruction file (AGENT.md when unnamed); v1 checks the
-	// skill entrypoint only, as it always has.
+	// skill entrypoint only.
 	entry := m.Entrypoints.Skill
 	if strings.HasPrefix(m.SchemaVersion, "2") {
 		entry = m.Entrypoints.Instruction

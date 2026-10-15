@@ -12,12 +12,12 @@ import (
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
-// The §17.3 pipeline golden-corpus gate, run through the ORCHESTRATOR (not
+// The pipeline golden-corpus gate, run through the ORCHESTRATOR (not
 // just pkg/rules): every attack fixture must surface its expected finding
 // (100% recall) and gate unless it is named with the reason it publishes;
 // every benign lookalike must be clean of the forbidden family (precision)
-// and must not be rejected. This is the
-// crown-jewel gate — a precision regression fails the build.
+// and must not be rejected. This is the crown-jewel gate: a precision
+// regression fails the build.
 //
 // Fixtures may carry pipeline context beyond their files: an agent kind, a
 // manifest, a version, publisher-behaviour signals, and — for the release-diff
@@ -33,12 +33,12 @@ type corpusExpectation struct {
 	ExpectClean bool     `yaml:"expectClean"`
 	// ExpectOutcome, when set, is the gate's exact outcome at the baseline.
 	// It pins a loosening: a fixture a ruleset used to hold that now
-	// publishes (agentry#775), with any findings on the page. Such a fixture
+	// publishes, with any findings on the page. Such a fixture
 	// is counted and judged as a loosening, not as an attack or a benign
 	// twin, even when it is also expectClean.
 	ExpectOutcome Outcome `yaml:"expectOutcome"`
 
-	// Incident names the Appendix A entry this fixture reproduces, when it
+	// Incident names the real incident this fixture reproduces, when it
 	// reproduces one. Documentation only; the corpus README carries the table.
 	Incident string `yaml:"incident"`
 	// Manifest is the exact manifest JSON to scan with. Defaults to an empty
@@ -152,11 +152,10 @@ func TestAttackCorpusGate(t *testing.T) {
 				return
 			}
 			// An attack fixture must gate (needs_review or rejected), by
-			// outcome, at the baseline (threshold medium since ruleset
-			// 0.3.0) and at threshold low (an organization that holds
-			// medium), unless it is named below with the reason it
-			// publishes with its findings on the page. The lists are exact
-			// both ways, so a fixture that changes outcome changes this file.
+			// outcome, at the baseline (threshold medium) and at threshold low
+			// (an organization that holds medium), unless it is named below with
+			// the reason it publishes with its findings on the page. The lists are
+			// exact both ways, so a fixture that changes outcome changes this file.
 			for _, th := range []struct {
 				name      string
 				result    RunResult
@@ -180,29 +179,26 @@ func TestAttackCorpusGate(t *testing.T) {
 		t.Fatalf("corpus too small: %d attack, %d benign", attackCount, benignCount)
 	}
 	if pairCount == 0 {
-		t.Fatal("corpus has no release-diff pair: the postmark-mcp shape is unexercised (§17.3)")
+		t.Fatal("corpus has no release-diff pair: the postmark-mcp shape is unexercised")
 	}
 	if loosenedCount == 0 {
-		t.Fatal("corpus has no loosening fixture: what a loosened rule now publishes is unpinned (agentry#775)")
+		t.Fatal("corpus has no loosening fixture: what a loosened rule now publishes is unpinned")
 	}
 	t.Logf("attack-corpus gate: %d attack + %d benign + %d loosened fixtures (%d release-diff pairs) through the orchestrator",
 		attackCount, benignCount, loosenedCount, pairCount)
 }
 
 // corpusPublishesAtLow are the attack fixtures threshold low publishes (an
-// organization that holds medium; the baseline before ruleset 0.3.0), each
-// with its findings on the page (§8.5).
+// organization that holds medium), each with its findings on the page.
 var corpusPublishesAtLow = map[string]string{
 	"s3-html-comment":        "a bare HTML comment is low by design",
 	"s3-nfc-delta":           "an NFC normalization delta is info",
 	"s3-trailing-whitespace": "trailing whitespace is low, at low confidence",
 }
 
-// corpusPublishesAtMedium adds what threshold medium, the baseline since
-// ruleset 0.3.0 (agentry#773), publishes: the medium
-// findings outside undeclared capabilities and attempted injections, which
-// the operator chose to publish with their findings shown "for now" (D6 of
-// plan scan-and-run-tweaks, agentry#771).
+// corpusPublishesAtMedium adds what threshold medium, the baseline,
+// publishes: the medium findings outside undeclared capabilities and
+// attempted injections, which are published with their findings shown.
 var corpusPublishesAtMedium = func() map[string]string {
 	m := map[string]string{
 		"incident-clawhavoc":           "S8's publisher velocity is a medium campaign signal",

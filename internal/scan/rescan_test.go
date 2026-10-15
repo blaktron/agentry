@@ -1,6 +1,6 @@
 package scan_test
 
-// §8.7 rescan sweep: detection improves after publication, so already-published
+// Rescan sweep: detection improves after publication, so already-published
 // versions are re-scanned when a new ruleset ships. A version that newly trips
 // a high finding is quarantined and gets an advisory — that is the mechanism
 // protecting consumers of an agent that was clean when they installed it.
@@ -73,14 +73,14 @@ func TestRescanSweepQuarantinesAndAdvises(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(advisories) == 0 {
-		t.Fatal("rescan quarantine did not raise an advisory (§8.7)")
+		t.Fatal("rescan quarantine did not raise an advisory")
 	}
 	if advisories[0].Severity != "high" {
 		t.Fatalf("advisory severity = %s, want high", advisories[0].Severity)
 	}
 
 	// The archive is untouched: a quarantined version still verifies for
-	// anyone who already installed it (§5.5 yank/quarantine semantics).
+	// anyone who already installed it (yank/quarantine semantics).
 	if after.ArchiveDigest == nil || *after.ArchiveDigest == "" {
 		t.Fatal("quarantine cleared the archive digest — installed copies would stop verifying")
 	}
@@ -164,8 +164,7 @@ func approve(t *testing.T, e *pipeEnv, versionID uuid.UUID) {
 }
 
 // holdMedium gives an organization the policy that holds medium findings
-// for a person, threshold low: tighter than the baseline's medium since
-// ruleset 0.3.0 (agentry#773).
+// for a person, threshold low: tighter than the baseline's medium.
 func holdMedium(t *testing.T, e *pipeEnv, org testOrg) {
 	t.Helper()
 	if err := e.st.Queries().UpsertOrgPolicy(context.Background(), storegen.UpsertOrgPolicyParams{
@@ -184,7 +183,7 @@ func statusOf(t *testing.T, e *pipeEnv, versionID uuid.UUID) string {
 	return v.Status
 }
 
-// TestRescanSweepLeavesWhatAReviewerApproved pins agentry#781: the sweep
+// TestRescanSweepLeavesWhatAReviewerApproved: the sweep
 // runs on every new ruleset, and a finding a person already decided on must
 // not quarantine the version again, whether it was high when they saw it or
 // a new ruleset re-rated it to high since. A finding the person never saw
@@ -205,9 +204,9 @@ func TestRescanSweepLeavesWhatAReviewerApproved(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newPipeEnv(t)
-			// Since ruleset 0.3.0 a medium publishes at the baseline, so a
+			// A medium publishes at the baseline, so a
 			// person approves one only where a policy holds medium: an
-			// organization at threshold low (agentry#773).
+			// organization at threshold low.
 			org := e.seedOrg("reviewed" + suffix())
 			holdMedium(t, e, org)
 			scores := tc.before
@@ -232,7 +231,7 @@ func TestRescanSweepLeavesWhatAReviewerApproved(t *testing.T) {
 
 // TestRescanSweepDoesNotRequarantineAClearedVersion: a reviewer who clears
 // a quarantine has decided on its finding; the next ruleset's sweep leaves
-// the version published (agentry#781).
+// the version published.
 func TestRescanSweepDoesNotRequarantineAClearedVersion(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
@@ -259,11 +258,11 @@ func TestRescanSweepDoesNotRequarantineAClearedVersion(t *testing.T) {
 	}
 }
 
-// TestRescanSweepLeavesAnOrgApprovedRerating pins the operator's decision of
-// 2026-09-30 (agentry#781): a public agent an organization's reviewer
-// approved with a medium finding stays published when a new ruleset rates
-// that finding high, although a high on a public agent would go to the
-// platform queue at submission. A re-rating never pulls an approved version.
+// TestRescanSweepLeavesAnOrgApprovedRerating pins that a public agent an
+// organization's reviewer approved with a medium finding stays published when a
+// new ruleset rates that finding high, although a high on a public agent would
+// go to the platform queue at submission. A re-rating never pulls an approved
+// version.
 func TestRescanSweepLeavesAnOrgApprovedRerating(t *testing.T) {
 	e := newPipeEnv(t)
 	org := e.seedOrg("rerate" + suffix())
@@ -289,8 +288,7 @@ func TestRescanSweepLeavesAnOrgApprovedRerating(t *testing.T) {
 	}
 }
 
-// TestRescanSweepDoesNotPullForAReratedReading reproduces what the 0.2.2
-// sweep did on dev (agentry#771): a version published clean, whose rescan
+// TestRescanSweepDoesNotPullForAReratedReading: a version published clean, whose rescan
 // reads AI Review's undeclared capability at score 2, stays published. The
 // same reading at score 3 still quarantines.
 func TestRescanSweepDoesNotPullForAReratedReading(t *testing.T) {

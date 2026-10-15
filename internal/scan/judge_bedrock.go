@@ -13,8 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 )
 
-// BedrockJudge adjudicates through Amazon Bedrock's Converse API (D-13's
-// SaaS provider; DEV-007/DEV-054 left it as a stub, agentry#41). Same judge
+// BedrockJudge adjudicates through Amazon Bedrock's Converse API (the
+// SaaS provider). Same judge
 // contract as HTTPJudge: no tools, temperature 0, bounded output, content
 // presented as data under the shared rubric template, fail closed toward
 // review on any error. Credentials come from the task role / default chain

@@ -31,8 +31,8 @@ const egressNoneExecWrite = "  network:\n    egress: none\n  filesystem:\n    re
 	"  exec:\n    commands: [sh, curl]\n  secrets: [API_TOKEN]\n"
 
 // A manifest whose egress is "none" still declares its other capabilities
-// to every stage that reads them (agentry#755): the scalar once made the
-// whole decode fail, and every capability read as undeclared.
+// to every stage that reads them: the scalar must not make the whole
+// decode fail, which would read every capability as undeclared.
 func TestAnEgressNoneManifestStillDeclaresItsOtherCapabilities(t *testing.T) {
 	b := canonicalManifest(t, egressNoneExecWrite)
 	if !strings.Contains(string(b), `"egress":"none"`) {

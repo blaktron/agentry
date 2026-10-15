@@ -17,7 +17,7 @@ import (
 
 // fakeKMS signs locally with a generated P-256 key, reproducing the two
 // behaviours that matter: a DER SPKI public key, and a DER ASN.1 signature
-// over a caller-supplied digest. Live AWS is untested here (DEV-029).
+// over a caller-supplied digest. Live AWS is untested here.
 type fakeKMS struct {
 	priv     *ecdsa.PrivateKey
 	keySpec  kmstypes.KeySpec
@@ -102,7 +102,7 @@ func TestKMSSignerProducesAVerifiableEnvelope(t *testing.T) {
 	}
 }
 
-// §8.8 fixes ECDSA P-256/SHA-256, and the digest must be sent as a digest —
+// ECDSA P-256/SHA-256 is fixed, and the digest must be sent as a digest —
 // not as a raw message, which would put the payload in CloudTrail and break
 // past KMS's 4 KB raw limit.
 func TestKMSSignerUsesDigestSigningWithP256(t *testing.T) {
@@ -129,7 +129,7 @@ func TestKMSSignerUsesDigestSigningWithP256(t *testing.T) {
 }
 
 // The public key is fetched once, so scraping signing-keys.json cannot be
-// turned into KMS request volume (and cannot muddy the T-09 signal).
+// turned into KMS request volume (and cannot muddy the KMS Sign signal).
 func TestKMSSignerCachesThePublicKey(t *testing.T) {
 	f := newFakeKMS(t)
 	s, err := NewKMSSignerWithAPI(t.Context(), f, "key-arn")
@@ -224,7 +224,6 @@ func TestNewSignerDispatch(t *testing.T) {
 		if err == nil {
 			t.Fatal("kms signer built with no key ARN")
 		}
-		// The old placeholder said "not yet wired"; it is wired now.
 		if strings.Contains(err.Error(), "not yet wired") {
 			t.Errorf("kms is still stubbed out: %v", err)
 		}

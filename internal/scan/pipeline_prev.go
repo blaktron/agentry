@@ -7,13 +7,12 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Baseline materialization for S9's content diff (§8.3 S9).
+// Baseline materialization for S9's content diff.
 //
-// S9 has always been described as reading "the previous published version's
-// archive", but the pipeline only ever handed it the previous MANIFEST — so
-// the stage compared declarations while the documented attack (postmark-mcp)
-// changed only code and prose. This is the missing half: the previous
-// version's bytes, unpacked beside the current ones.
+// S9 reads the previous published version's archive, not only its
+// manifest: the documented attack (postmark-mcp) changed only code and
+// prose, so a comparison of declarations alone would miss it. This
+// unpacks the previous version's bytes beside the current ones.
 
 // popularAgentSampleSize bounds the anti-typosquat comparison set S8 gets.
 // Large enough that the names worth impersonating are all in it, small enough
@@ -28,7 +27,7 @@ const popularAgentSampleSize = 500
 // version is already published, its own scan already passed, and refusing to
 // scan this version because an old blob is unavailable would fail a publish
 // for a reason the publisher cannot act on. S9 degrades to the manifest diff
-// and says so, which is exactly what it did before this existed.
+// and says so.
 func (p *Pipeline) materializePrevArchive(ctx context.Context, workDir string, prev storegen.AgentVersion) string {
 	if prev.ArchiveKey == nil {
 		return ""
