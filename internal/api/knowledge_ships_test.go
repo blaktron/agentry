@@ -10,9 +10,8 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// A release that ships a knowledge pack (plan knowledge.md §4.6;
-// agentry#594), through the registry: submitted with its pack under
-// knowledge/<name>/, refused when the pack is not the one its manifest
+// A release that ships a knowledge pack, through the registry: submitted
+// with its pack under knowledge/<name>/, refused when the pack is not the one its manifest
 // names, scanned with the version, the report naming what the scan read,
 // the pack's name in the version's contract, and an install re-asked when
 // a later release ships one more.

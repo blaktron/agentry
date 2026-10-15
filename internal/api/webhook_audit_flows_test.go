@@ -25,7 +25,7 @@ func tlsTrusting(ts *httptest.Server) *tls.Config {
 	return &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
 }
 
-// TestWebhookDeliveryViaQueue covers §9.3: a webhook created through the API is
+// TestWebhookDeliveryViaQueue: a webhook created through the API is
 // delivered by the queue worker to an https endpoint with a valid HMAC
 // signature.
 func TestWebhookDeliveryViaQueue(t *testing.T) {
@@ -98,8 +98,8 @@ func TestWebhookDeliveryViaQueue(t *testing.T) {
 	}
 }
 
-// TestWebhookEventWiring covers that a state change that already happens
-// (member.added) records a delivery for a subscribed endpoint (§9.3).
+// TestWebhookEventWiring: a state change that already happens
+// (member.added) records a delivery for a subscribed endpoint.
 func TestWebhookEventWiring(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("we-owner")
@@ -116,8 +116,8 @@ func TestWebhookEventWiring(t *testing.T) {
 		map[string]any{"url": "https://example.invalid/hook", "events": []string{"member.added"}}, &created, http.StatusCreated)
 
 	// A membership becoming active fires member.added → a delivery row is
-	// recorded. Since agentry#361 that happens when the invitation is
-	// accepted, which is what joinOrg drives.
+	// recorded. That happens when the invitation is accepted,
+	// which is what joinOrg drives.
 	env.joinOrg(sess, orgH, member)
 
 	var deliveries []struct {
@@ -135,7 +135,7 @@ func TestWebhookEventWiring(t *testing.T) {
 	}
 }
 
-// TestAuditExport covers §12.6: an async export writes NDJSON to the blob store
+// TestAuditExport: an async export writes NDJSON to the blob store
 // and reports completion with a download reference.
 func TestAuditExport(t *testing.T) {
 	var srvRef *api.Server

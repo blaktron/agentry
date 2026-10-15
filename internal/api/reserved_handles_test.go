@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-// Root paths of the server and the site are not handles (DEV-091): `ui` is
+// Root paths of the server and the site are not handles: `ui` is
 // the server's own surface, and a person named `settings` would shadow a
 // page. The product's own names are reserved too, so nobody can pass
-// content off as first-party (agentry#285).
+// content off as first-party.
 func TestReservedHandlesAreRefused(t *testing.T) {
 	env := newTestEnv(t)
 	for _, h := range []string{"ui", "settings", "api", "agentry", "secureagentry"} {

@@ -29,7 +29,7 @@ type oidcEndpointIdP struct {
 	clientID      string
 	email         string
 	emailVerified bool
-	// amr, when set, is the ID token's `amr` claim (agentry#705).
+	// amr, when set, is the ID token's `amr` claim.
 	amr    []string
 	mu     sync.Mutex
 	nonces map[string]string
@@ -95,9 +95,9 @@ func newOIDCEndpointIdP(t *testing.T) *oidcEndpointIdP {
 	return idp
 }
 
-// TestOIDCEndpointFlow covers §12.4 end-to-end: start → IdP authorize → callback
+// TestOIDCEndpointFlow covers the flow end to end: start → IdP authorize → callback
 // signs an active member in and establishes a session; email_verified=false
-// is rejected. It no longer creates anyone: see resolveSSOUser.
+// is rejected. It creates no one: see resolveSSOUser.
 func TestOIDCEndpointFlow(t *testing.T) {
 	idp := newOIDCEndpointIdP(t)
 	env := newTestEnvWith(t, func(s *api.Server) {
@@ -110,11 +110,10 @@ func TestOIDCEndpointFlow(t *testing.T) {
 	orgH := "oidcorg" + env.sfx
 	env.createOrg(sess, orgH)
 	// The person the IdP will assert is already an active member: the
-	// organization's SSO recognises members and provisions nobody
-	// (agentry#361, D7, D11).
+	// organization's SSO recognises members and provisions nobody.
 	// The organization has proved it controls the domain the IdP asserts:
 	// linking an identity to an existing member's account for the first
-	// time needs that proof as well as the membership (T-12, agentry#361).
+	// time needs that proof as well as the membership.
 	env.verifyOrgDomain(orgH, "acme.example")
 	env.seedMembership(orgH, env.registerEmail("oidc-person", idp.email), "member", "active")
 
@@ -191,8 +190,8 @@ func TestOIDCEndpointFlow(t *testing.T) {
 }
 
 // A save that omits clientSecret keeps the sealed one; a save that carries a
-// new one replaces it (agentry#272). Before this the upsert replaced the whole
-// config, so an edit to any other field dropped the secret.
+// new one replaces it. An edit to any other field does not drop the
+// secret.
 func TestPutSsoConnectionKeepsSecretWhenOmitted(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("sso-keep-owner")

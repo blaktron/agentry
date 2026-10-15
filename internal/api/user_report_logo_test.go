@@ -58,8 +58,7 @@ func logoPNG(t *testing.T, w, h int, c color.Color) []byte {
 	return b.Bytes()
 }
 
-// The report design's logo (agentry#1025; plan report-designs.md D9,
-// invariant 12): uploaded as a file, kept only as the core's own PNG of its
+// The report design's logo: uploaded as a file, kept only as the core's own PNG of its
 // pixels, answered only to a client that asks for it, kept when a client
 // that does not know logos saves the design, and gone with the design.
 func TestReportLogo(t *testing.T) {

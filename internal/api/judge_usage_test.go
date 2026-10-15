@@ -7,7 +7,7 @@ import (
 )
 
 // TestReportShowsJudgeUsageToStaffOnly pins where the judge's token use
-// surfaces (plan subscription-tiers §10): the scan run records it, the
+// surfaces: the scan run records it, the
 // report carries it for platform staff, and the public report is the same
 // report as before — what a review cost is the platform's measurement, not
 // part of the verdict anyone else reads.

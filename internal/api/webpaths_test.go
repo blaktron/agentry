@@ -6,7 +6,7 @@ import (
 	"github.com/blaktron/agentry/internal/config"
 )
 
-// The one table every browser destination goes through (DEV-091): with a
+// The one table every browser destination goes through: with a
 // site in front the destinations are the site's pages; without one they
 // are the server's own /ui/ pages, relative for redirects and absolute
 // from baseURL for links that leave the browser.

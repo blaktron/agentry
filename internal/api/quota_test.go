@@ -1,9 +1,10 @@
 package api_test
 
-// §19 delivery quota: 5 webhook deliveries/s per org.
+// The webhook delivery quota: 5 deliveries/s per org.
 //
-// The dispatcher had no rate limit at all, so an org whose agents produced a
-// burst of transitions would fan the whole burst at its endpoints at once.
+// The dispatcher rate-limits per org, so an org whose agents produce a
+// burst of transitions does not fan the whole burst at its endpoints at
+// once.
 
 import (
 	"context"
@@ -68,7 +69,7 @@ func TestWebhookDeliveriesAreRateLimitedPerOrg(t *testing.T) {
 		Store: env.st, Sealer: sealer, Queue: q,
 		Client: webhook.NewHTTPClient(webhook.Guard{AllowLoopback: true}, tlsTrusting(ts)),
 		// 1/s with the shipped burst of 1: the first delivery goes, the rest
-		// are deferred. Using the §19 value of 5 would need a full second of
+		// are deferred. Using the value of 5 would need a full second of
 		// wall clock to distinguish "throttled" from "slow".
 		DeliveriesPerSecond: 1,
 	})
@@ -90,7 +91,7 @@ func TestWebhookDeliveriesAreRateLimitedPerOrg(t *testing.T) {
 	if got := delivered(); got == 0 {
 		t.Fatal("nothing was delivered at all")
 	} else if got >= emitted {
-		t.Errorf("%d of %d deliveries went out in one drain; the §19 per-org "+
+		t.Errorf("%d of %d deliveries went out in one drain; the per-org "+
 			"rate limit is not throttling", got, emitted)
 	}
 

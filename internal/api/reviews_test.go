@@ -1,8 +1,8 @@
 package api_test
 
-// M4 review/policy/platform handler tests: the bespoke authorization the
+// Review/policy/platform handler tests: the bespoke authorization the
 // generic matrix can't express — platform-staff gating, org-reviewer gating,
-// author-cannot-self-approve (§12.2), and tighten-only policy (§8.6).
+// author-cannot-self-approve, and tighten-only policy.
 
 import (
 	"context"
@@ -68,7 +68,7 @@ func TestOrgReviewQueueRequiresReviewer(t *testing.T) {
 	}
 
 	// An admin can: in an ordinary organization the admins are its
-	// reviewers (agentry#360).
+	// reviewers.
 	env.doJSON(ownerSess, http.MethodPut, "/api/v1/orgs/"+org+"/members/"+member, map[string]any{"role": "admin"}, nil, http.StatusOK)
 	adminSess := env.login(member)
 	res = env.do(adminSess, http.MethodGet, "/api/v1/review-queue?queue=org&org="+org, nil)
@@ -105,7 +105,7 @@ func TestOrgPolicyTightenOnly(t *testing.T) {
 	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+org+"/policy",
 		map[string]any{"maxAutoPublishSeverity": "info", "requireHumanReview": "always"}, nil, http.StatusOK)
 
-	// Loosening is rejected (§8.6).
+	// Loosening is rejected.
 	res := env.do(sess, http.MethodPut, "/api/v1/orgs/"+org+"/policy",
 		map[string]any{"maxAutoPublishSeverity": "high"})
 	_ = res.Body.Close()

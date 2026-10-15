@@ -1,7 +1,7 @@
 package api
 
-// sentence() is the seam where a Go error's text becomes a problem detail
-// (agentry#260, agentry#278). It is in-package because the register it
+// sentence() is the seam where a Go error's text becomes a problem detail.
+// It is in-package because the style it
 // enforces — capitalised, punctuated, no internal sentinel prefix — is the
 // wire contract of every detail built from an error, and the handlers that
 // call it are Postgres-gated.

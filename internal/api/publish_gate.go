@@ -2,13 +2,13 @@ package api
 
 import "github.com/blaktron/agentry/internal/config"
 
-// publicPublish2FAEnabled decides whether the registry enforces the §12.1/§19
-// rule "two-factor authentication before publishing to a public namespace"
+// publicPublish2FAEnabled decides whether the registry enforces the rule
+// "two-factor authentication before publishing to a public namespace"
 // with its own TOTP flag.
 //
-// Off in dev mode (DEV-016: a dev instance has no enrollment flow behind the
+// Off in dev mode (a dev instance has no enrollment flow behind the
 // gate). Off as well when credentials live in an external directory
-// (auth.externalOnly, DEV-057): the native TOTP endpoints answer 410 Gone, so
+// (auth.externalOnly): the native TOTP endpoints answer 410 Gone, so
 // no account can ever set users.totp_enabled, and the gate would hold every
 // publisher to human review with an instruction — "enable two-factor
 // authentication" — that the product cannot honour. Under externalOnly the
@@ -19,7 +19,7 @@ import "github.com/blaktron/agentry/internal/config"
 //
 // With auth.requireIdpMFA the gate is on under externalOnly too, satisfied by
 // evidence: users.idp_mfa_at, stamped when a sign-in's ID token carried an
-// `amr` naming a second factor (agentry#23).
+// `amr` naming a second factor.
 func publicPublish2FAEnabled(cfg config.Config) bool {
 	if cfg.DevMode {
 		return false

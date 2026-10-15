@@ -1,7 +1,6 @@
 package api_test
 
-// The organization's logo (agentry#367, M17; plan
-// organization-subscriptions.md §5.9, D17): uploaded by an admin behind
+// The organization's logo: uploaded by an admin behind
 // Features.Branding, decoded and encoded again through the image proxy's
 // path so the upload's bytes are never served, stored under the
 // organization, served with a pinned type and a content-versioned URL.
