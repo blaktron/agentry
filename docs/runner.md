@@ -774,7 +774,7 @@ its digest, so a run record says which file a run obeyed.
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
 | `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
-| `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11) |
+| `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
 | `secretSource.mode` (`env` \| `envFile`) + `secretSource.envFile` | fallback secret resolution behind profiles |
 | `budgets.timeoutSeconds` / `budgets.maxTurns` / `budgets.maxCostUsd` | default hard stops (cost `0` = unlimited) |
 | `sessions.idleTimeoutSeconds` / `sessions.maxWallSeconds` / `sessions.maxUserTurns` | interactive-session caps (shipped 900 s idle, 7200 s wall, 200 user turns); a manifest can only tighten the idle timeout |
@@ -880,7 +880,12 @@ docker:
 ```
 
 The built-in Drafter's web tools reach past the host by name, on a network
-of the run's own. Under a sandboxed runtime their container cannot reach
+of the run's own. So does the tools server of a QuickAgent whose manifest
+declares `egress: "*"`, which `allowWildcardEgress` permits (CLI v0.6.122 or
+later): where the docker filter runs, it is on a network of the run's own that
+only it joins, and its declared commands run there with the same reach. Where
+the filter does not run, it reaches out from the daemon's default network.
+Under a sandboxed runtime that container cannot reach
 docker's embedded DNS there. `--dns` only sets that server's upstream on a
 user-defined network. gVisor's `--reproduce-nat`, which would copy docker's
 DNS rule into the sandbox, does not start a container on a host whose docker
@@ -888,7 +893,8 @@ writes its rules through nftables.
 
 So the runner writes the policy's `docker.resolvers` into a `resolv.conf` of
 the run's own, and the docker filter binds it read-only at `/etc/resolv.conf`
-in the web tools' server and, under the runtime, in each relay. The runner
+in the web tools' server or the `"*"` tools server and, under the runtime,
+in each relay. The runner
 binds it into the llm-proxy too, and the install proxy gets one of its own.
 That server takes no DNS setting, hosts
 entry, volume or tmpfs of the gateway's, and nothing under `/etc` but its
@@ -899,10 +905,11 @@ network has none of IPv6), never a loopback stub such as systemd-resolved's
 `127.0.0.53`, which is the container's own loopback inside it. The same
 servers answer every class that reads them. The address
 rule of `web_read` still holds on every address a name resolves to, at every
-connection.
+connection; `"*"` egress has no such rule, which is why the policy gates it.
 
 Under a runtime with no resolvers, `agentry draft` is refused at compile
-(exit 11) rather than left to read nothing, and `agentry doctor` warns about
+(exit 11) rather than left to read nothing, and so is the run of a QuickAgent
+that declares `"*"` egress (CLI v0.6.122 or later); `agentry doctor` warns about
 it as `docker:resolvers`. On the daemon's default runtime nothing needs
 setting. The resolvers are part of the compiled plan, and the receipt's
 runtime line and its `web.resolvers` line name them. A sandbox host's runhost
@@ -1019,7 +1026,7 @@ lower them for your own host.
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
 | `grep` and `glob` (granted with the scratch folder) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds and, on Linux through the run's docker filter, every capability dropped but each kind's own ([above](#container-limits-dockerlimits)) |
-| the gateway's reach into the docker daemon | only through the run's docker filter, which admits the run's own containers, networks and volumes and checks every create (every decision in `receipts/docker-filter.log`). On Linux the CLI serves it on a socket mounted in place of the daemon's. On Docker Desktop (macOS, Windows) it runs in a container of the run's own, from the runner image, with no network, every capability dropped and a read-only root, and serves its socket in a volume the gateway mounts at `/var/run`; the gateway starts only once it is ready. Elsewhere the gateway holds the daemon's own socket, and the receipt's `daemon` line says so |
+| the gateway's reach into the docker daemon | only through the run's docker filter, which admits the run's own containers, networks and volumes and checks every create (every decision in `receipts/docker-filter.log`). It never gives a container the daemon's default bridge (CLI v0.6.122 or later): a container that names no network gets none, or the one run network it names as an endpoint, and one that names several endpoints with no primary network, or an endpoint named `default` or `bridge`, is refused. On Linux the CLI serves it on a socket mounted in place of the daemon's. On Docker Desktop (macOS, Windows) it runs in a container of the run's own, from the runner image, with no network, every capability dropped and a read-only root, and serves its socket in a volume the gateway mounts at `/var/run`; the gateway starts only once it is ready. Elsewhere the gateway holds the daemon's own socket, and the receipt's `daemon` line says so |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
 | a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool's result, `run_command`'s included, and the arguments of every call, a `write_report` that quotes a key included. **The person's own inputs are the exception**: a successful `read_input` or `search_inputs` serves the file unchanged, keys and passwords included, so a QuickAgent whose job is to *find* credentials can read them. An input tool's error, and the input tools under the review grant, are still refused. A `git log -p` through `run_command` that would print a key is refused too, and a finding should name a credential's kind and where it is, never its value, because a report that repeats it is refused. |
