@@ -298,7 +298,10 @@ const (
 // reviewed under another question set. AI Review is 1 credit an
 // operation; the core charges nothing. A refusal is answered in its own
 // status and words before anything is stored, and a ticket is voided
-// when nothing was. A Voice Writer run In Agentry puts its output
+// when nothing was. A ticket whose version the core stored is recorded in
+// the core's admitted_stores table (kind "voice") in the transaction that
+// stores it, so a ticket with no row stored nothing even where its void
+// failed or never ran. A Voice Writer run In Agentry puts its output
 // through Voice.Propose, whose review is inside the build's price and
 // is not admitted here.
 type AdmitsVoice interface {
@@ -318,7 +321,10 @@ type (
 // asked after the core has read the tree and checked it against the
 // owner's allocation, and before anything is stored; a
 // refusal is answered in its own status and words, and a ticket is voided
-// when the core then stores nothing. An upload of the tree the pack
+// when the core then stores nothing. A ticket whose tree the core stored is
+// recorded in the core's admitted_stores table (kind "knowledge") in the
+// transaction that stores it, so a ticket with no row stored nothing even
+// where its void failed or never ran. An upload of the tree the pack
 // already holds queues no scan and is never asked about, nor is a pack an
 // extension builds and stores through Knowledge.
 type AdmitsKnowledge interface {

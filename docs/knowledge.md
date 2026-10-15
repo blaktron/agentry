@@ -166,7 +166,10 @@ arrives, so an account that is both past its allocation and out of
 credits is told 413 `knowledge-allocation`, the refusal that would still
 stand once it paid. One that fits then, but that the allocation refuses
 under its lock because another upload filled it first, is admitted and
-voided. An upload of the tree the
+voided. A ticket whose tree was stored is recorded in the
+`admitted_stores` table (kind `knowledge`) in the transaction that stores
+the tree, so a ticket with no row stored nothing, even when its void
+failed or the process stopped before the store. An upload of the tree the
 pack already holds stores nothing and queues no scan, so it is never
 admitted; a pack whose tree could not be read to scan (`failed`) is
 scanned again on the same tree without being admitted. A pack an

@@ -404,11 +404,13 @@ type UploadAdmission struct {
 }
 
 // Admit admits an upload that will queue a scan. It is asked once, after
-// the tree is read and before anything is stored; an error refuses the
-// upload with nothing stored. release is called once with whether the
-// tree was stored, so a ticket for an upload the core then refused (the
-// allocation cap, a lost race) can be voided.
-type Admit func(ctx context.Context, a UploadAdmission) (release func(stored bool), err error)
+// the tree is read and checked against the allocation, and before anything
+// is stored; an error refuses the upload with nothing stored. ticket, when
+// not empty, is recorded as stored (admitted_stores, kind "knowledge") in
+// the transaction that stores the tree. release is called once with
+// whether that transaction committed, so a ticket for an upload the core
+// then refused (the allocation cap, a lost race, a panic) can be voided.
+type Admit func(ctx context.Context, a UploadAdmission) (ticket string, release func(stored bool), err error)
 
 // UploadAdmitted is Upload with admit asked first. An upload of the tree
 // the pack already holds, scanned or being scanned, stores nothing and
@@ -422,7 +424,7 @@ func (s *Service) UploadAdmitted(ctx context.Context, owner Owner, id uuid.UUID,
 // through an extension's Replace alike; check, when given, is asked about
 // the pack as it stands under its row lock, and its error refuses the
 // upload with nothing stored.
-func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed []byte, check func(storegen.KnowledgePack) error, admit Admit) (_ storegen.KnowledgePack, err error) {
+func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed []byte, check func(storegen.KnowledgePack) error, admit Admit) (storegen.KnowledgePack, error) {
 	p, err := s.Get(ctx, owner, id)
 	if err != nil {
 		return p, err
@@ -431,6 +433,14 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 	if err != nil {
 		return p, err
 	}
+	// ticket is the admission this upload stores under, recorded with the
+	// tree; stored turns true only once the tree's transaction committed,
+	// so a refusal, an error and a panic alike release the admission as
+	// not stored.
+	var (
+		ticket string
+		stored bool
+	)
 	if admit != nil {
 		held := p.ObjectKey != "" && p.Digest == tree.Digest
 		switch {
@@ -446,12 +456,12 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 			if err := s.precheckAllocation(ctx, owner, p, tree.Bytes); err != nil {
 				return p, err
 			}
-			release, aerr := admit(ctx, UploadAdmission{Owner: owner, Pack: id, Bytes: tree.Bytes, Files: len(tree.Files)})
+			t, release, aerr := admit(ctx, UploadAdmission{Owner: owner, Pack: id, Bytes: tree.Bytes, Files: len(tree.Files)})
 			if aerr != nil {
 				return p, aerr
 			}
-			// err is the result this upload returns: stored only when nil.
-			defer func() { release(err == nil) }()
+			ticket = t
+			defer func() { release(stored) }()
 		}
 	}
 	key := objectKey(owner, id)
@@ -509,6 +519,11 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 		if err != nil {
 			return fmt.Errorf("knowledge: set the tree: %w", err)
 		}
+		if ticket != "" {
+			if err := q.RecordAdmittedStore(ctx, storegen.RecordAdmittedStoreParams{Ticket: ticket, Kind: admittedKind}); err != nil {
+				return fmt.Errorf("knowledge: record the admission: %w", err)
+			}
+		}
 		if s.jobs == nil {
 			return errors.New("knowledge: no queue to scan the pack on")
 		}
@@ -521,9 +536,13 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 		s.deleteBlobs(ctx, key)
 		return p, err
 	}
+	stored = true
 	s.deleteBlobs(ctx, replaced...)
 	return p, nil
 }
+
+// admittedKind is a knowledge upload's kind in admitted_stores.
+const admittedKind = "knowledge"
 
 // precheckAllocation is the allocation rule on the pool as it stands,
 // read without its lock: the pack p's tree of next bytes would replace the
