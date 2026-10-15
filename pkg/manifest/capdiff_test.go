@@ -70,7 +70,7 @@ func TestDiffCapabilitiesWidening(t *testing.T) {
 			old:      Capabilities{},
 			new:      Capabilities{MCPServers: []MCPServer{{NPM: "@scope/x", Version: "1.2.3", Env: map[string]string{"MODE": "ro"}}}},
 			widened:  true,
-			contains: "adds MCP server: npm:@scope/x@1.2.3 (env MODE=ro)",
+			contains: "adds MCP server: npm:@scope/x@1.2.3 (env MODE=ro; every tool it serves)",
 		},
 		{
 			name:     "the same server at a new pin",
