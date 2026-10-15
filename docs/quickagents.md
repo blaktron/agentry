@@ -574,7 +574,7 @@ comment is not a finding (see [trust](trust.md), stage S6).
 |---|---|---|
 | `none` / omitted | no outbound network | tools container runs with networking disabled; no `fetch` tool |
 | `[exact.dns.host, …]` | outbound only to these hosts | `fetch` granted, restricted to the listed hostnames (checked per request and per redirect hop); the gateway pins the tools container to `host:443` with per-server proxies and DNS interception |
-| `"*"` | unrestricted egress | refused at run time unless the operator's policy sets `allowWildcardEgress: true`; the receipt then discloses it |
+| `"*"` | unrestricted egress | refused at run time unless the operator's policy sets `allowWildcardEgress: true`; the receipt then discloses it. Where the run's docker filter runs, the tools container reaches out from a network of the run's own that only it joins, and its declared commands run there too; elsewhere, from Docker's default network. Under a sandboxed `docker.runtime` the policy must also name [`docker.resolvers`](runner.md#the-hosts-name-servers-dockerresolvers), or the run is refused at plan time (exit 11). CLI v0.6.122 or later |
 
 **`filesystem.read` / `filesystem.write`**
 
