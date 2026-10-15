@@ -301,7 +301,7 @@ WHERE a.visibility = 'public'
     -- The namespace handle is not in search_tsv (§10.4 weights cover
     -- name/summary/readme), but "search for acme" finding acme's agents is
     -- table-stakes for a registry — the pre-FTS CLI stopgap behaved that
-    -- way, and m3-cli.sh publishes into a random namespace and then looks
+    -- way, and cli.sh publishes into a random namespace and then looks
     -- itself up by handle.
     OR h.handle = lower(sqlc.arg(query)::text)::citext
     OR h.handle::text % sqlc.arg(query)::text
@@ -361,7 +361,7 @@ WHERE a.visibility = 'public'
     -- The namespace handle is not in search_tsv (§10.4 weights cover
     -- name/summary/readme), but "search for acme" finding acme's agents is
     -- table-stakes for a registry — the pre-FTS CLI stopgap behaved that
-    -- way, and m3-cli.sh publishes into a random namespace and then looks
+    -- way, and cli.sh publishes into a random namespace and then looks
     -- itself up by handle.
     OR h.handle = lower(sqlc.arg(query)::text)::citext
     OR h.handle::text % sqlc.arg(query)::text

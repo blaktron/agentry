@@ -44,7 +44,7 @@ AGENTRY="$TMP/agentry"
 echo "== boot agentryd all on $BASE =="
 mkdir -p "$TMP/storage" "$TMP/git"
 # Acceptance traffic is a tight scripted loop from one IP; the real §19
-# limits are exercised by m1.sh, not here.
+# limits are exercised by auth.sh, not here.
 AGENTRY_LIMITS_AUTHED_BURST_PER_MIN="100000" \
 AGENTRY_LIMITS_AUTHED_PER_HOUR="1000000" \
 AGENTRY_LIMITS_ANONYMOUS_PER_MIN="100000" \

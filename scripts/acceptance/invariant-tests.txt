@@ -1,9 +1,9 @@
 # The tests ARCHITECTURE.md §9 (agentry-notes) names as evidence for the
-# core's rows, one per line. scripts/acceptance/section9-names.sh fails when
+# core's rows, one per line. scripts/acceptance/invariant-test-names.sh fails when
 # one is not a top-level test of this module under exactly this name
 # (agentry#420). The notes repository is not available to CI, so the list is
 # embedded; when a §9 row changes, run
-#   scripts/acceptance/section9-names.sh --from <path to ARCHITECTURE.md>
+#   scripts/acceptance/invariant-test-names.sh --from <path to ARCHITECTURE.md>
 # and bring this file in line with what it reports.
 TestAcceptedRiskOnOrgAgentReservedToOrgReviewers
 TestAccessLineCarriesTheContract

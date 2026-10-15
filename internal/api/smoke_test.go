@@ -10,9 +10,9 @@ import (
 	"github.com/blaktron/agentry/pkg/apiclient"
 )
 
-// TestM0Smoke exercises the M0 acceptance path: the generated Go client
+// TestSmoke exercises the M0 acceptance path: the generated Go client
 // talking to the assembled handler (spec-first contract round-trip).
-func TestM0Smoke(t *testing.T) {
+func TestSmoke(t *testing.T) {
 	cfg := config.Default()
 	cfg.DevMode = true
 	srv := httptest.NewServer(api.NewHandler(api.New(cfg, nil, nil)))
