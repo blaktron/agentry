@@ -15,19 +15,19 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Trusted devices (plan trusted-devices.md, agentry#461).
+// Trusted devices.
 //
 // A trusted device is a credential of its own class: a browser that answered
 // the second factor once may be remembered, so a later password sign-in from
 // it skips the code. It is not a session, does not extend one, and grants
 // nothing beyond that skip — a session still has to be earned by password on
-// every sign-in, and the §12.4 24h absolute cap on sessions is untouched.
+// every sign-in, and the 24h absolute cap on sessions is untouched.
 //
-// Two rules shape everything below. The token is the whole decision (D5): the
+// Two rules shape everything below. The token is the whole decision: the
 // issuing address and user agent are recorded so the account page can describe
 // the browser to its owner, and neither is consulted here, so nothing the
 // client can choose influences trust. And the lifetime is absolute, not
-// sliding (D9): use refreshes last_seen_at and never moves expires_at, so a
+// sliding: use refreshes last_seen_at and never moves expires_at, so a
 // stolen cookie does not become immortal by being used.
 
 // trustedDeviceSkip reports whether this request carries a trusted-device
@@ -36,9 +36,9 @@ import (
 // It fails closed. An absent, empty, malformed, expired or revoked cookie, one
 // belonging to somebody else, and — the case that matters most — a store that
 // cannot be read, all answer false, and the caller demands the second factor.
-// An outage must never be the way past a factor (the rule DEV-119 states for
-// the SAML state sets, and the reason the record lives in the database rather
-// than in a signed cookie nobody can revoke).
+// An outage must never be the way past a factor (the rule the SAML
+// state sets follow too, and the reason the record lives in the database
+// rather than in a signed cookie nobody can revoke).
 //
 // The caller has already verified the password by the time this runs: the
 // cookie skips the second factor and is never itself an authentication.
@@ -85,7 +85,7 @@ func (s *Server) trustedDeviceSkip(ctx context.Context, r *http.Request, userID 
 //
 // detail rides the user.trusted_device_add row: the directory path marks its
 // records {"via": "directory"}, so an investigator can tell which sign-in
-// earned one (agentry#670).
+// earned one.
 func (s *Server) createTrustedDevice(ctx context.Context, q *storegen.Queries, r *http.Request, userID uuid.UUID, detail map[string]any) (string, error) {
 	token, err := auth.NewToken(auth.TrustedDevicePrefix)
 	if err != nil {
@@ -116,9 +116,8 @@ func (s *Server) createTrustedDevice(ctx context.Context, q *storegen.Queries, r
 // server sets, and a Max-Age equal to the record's lifetime so the browser
 // drops it when the trust expires rather than presenting a dead token.
 //
-// clearCookie expires it with the same attributes, which is the rule
-// agentry#413 established: a clear written bare carries nothing today and a
-// value the day someone edits it.
+// clearCookie expires it with the same attributes: a clear written bare
+// carries nothing today and a value the day someone edits it.
 func setTrustedDeviceCookie(w http.ResponseWriter, token string, ttl time.Duration, secure bool) {
 	setTrustedDeviceCookieAt(w, token, ttl, secure, "/", "")
 }
@@ -139,9 +138,9 @@ func setTrustedDeviceCookieAt(w http.ResponseWriter, token string, ttl time.Dura
 	})
 }
 
-// The directory path (agentry#670, DEV-163). Dev and production sign in
-// through the directory, which shows the "Remember this device for 30 days"
-// box on its own code page and passes the choice on as the ID-token claim
+// The directory path. A deployment with a directory signs in through it,
+// and the directory shows the "Remember this device for 30 days" box on its
+// own code page and passes the choice on as the ID-token claim
 // agentry_remember_device. The registry mints the same record as above on the
 // OIDC callback, and the directory asks the registry about it (the check
 // route, directory_trust.go) before asking for the code.
@@ -170,7 +169,7 @@ const directoryRememberWindow = 5 * time.Minute
 //     with no code asked. Only auth_time, which is that event's time, says
 //     the sign-in is old. Without this, each registry sign-in against one
 //     directory session would mint a fresh 30 days and trust would renew
-//     itself, which D9 forbids.
+//     itself, which the absolute lifetime forbids.
 //
 // A sign-in the directory let skip the factor carries no `mfa`, so a skip
 // can never mint either: trust stays absolute.
@@ -191,13 +190,13 @@ func (s *Server) directoryRemembers(provider string, id *social.Identity) bool {
 // DirectoryTrustCookieDomain; "" is host-only). That domain also covers the
 // registry's other subdomains, so on a deployment whose dev or staging host
 // sits under the production registry's name, the token reaches their flow
-// executors too; DEV-163 accepts this for the estate, where every such host is
-// its own.
+// executors too; that is accepted where every such host is the operator's
+// own.
 func setDirectoryTrustedDeviceCookie(w http.ResponseWriter, token string, ttl time.Duration, secure bool, domain string) {
 	setTrustedDeviceCookieAt(w, token, ttl, secure, directoryFlowExecutorPath, domain)
 }
 
-// The account's control over remembered browsers (agentry#672, DEV-163): one
+// The account's control over remembered browsers: one
 // count and one clear, on the session routes' rule. A remembered browser is a
 // credential that can still act for its owner, so only a session may clear
 // them, and a token sees a count of 0 rather than an inventory of someone's
@@ -229,7 +228,7 @@ func (s *Server) CountTrustedDevices(w http.ResponseWriter, r *http.Request) {
 // remembered browser of the caller's account is revoked, this one included,
 // so each is asked for the second factor at its next sign-in. Sessions and
 // authenticators are untouched. Revoked rather than deleted: the rows keep
-// what an investigator may need until the sweep (agentry#464) removes them.
+// what an investigator may need until the sweep removes them.
 // One audit row carries the count; a clear that found nothing writes none,
 // since nothing was revoked.
 func (s *Server) ClearTrustedDevices(w http.ResponseWriter, r *http.Request) {
@@ -269,8 +268,8 @@ func (s *Server) ClearTrustedDevices(w http.ResponseWriter, r *http.Request) {
 }
 
 // clearTrustedDeviceCookies expires this browser's remembered-browser cookie
-// wherever this server may have set it, with the attributes it was set with
-// (agentry#413): the native path's, host-wide, and the directory path's,
+// wherever this server may have set it, with the attributes it was set with:
+// the native path's, host-wide, and the directory path's,
 // scoped to the directory's flow executor. A clear that named another path
 // or domain would be a different cookie to the browser.
 func (s *Server) clearTrustedDeviceCookies(w http.ResponseWriter) {

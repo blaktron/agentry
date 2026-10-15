@@ -11,7 +11,7 @@ import (
 	"github.com/blaktron/agentry/internal/config"
 )
 
-// A handle lookup that fails is not a handle that is absent (agentry#261):
+// A handle lookup that fails is not a handle that is absent:
 // the site takes 404 as "nobody holds this handle", so a query error must
 // answer 500 and only a missing row 404.
 func TestLookupFailedDistinguishesAbsenceFromError(t *testing.T) {

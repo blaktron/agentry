@@ -1,8 +1,7 @@
 package rules
 
 // declared.go rates the S4 hits of the capability families by what the
-// release's manifest declares (ruleset 0.4.0; plan quickagents-that-run.md
-// M8, D7 as answered by the operator on 2026-10-05; agentry#893, DEV-221).
+// release's manifest declares (ruleset 0.4.0).
 //
 // The rule by declaration: text holds a release from publishing (high) only
 // when it instructs the use of a capability the manifest does not declare,
@@ -34,16 +33,17 @@ type Declared struct {
 	EgressAny bool
 	// ServerHosts are the hosts of the remote MCP servers the manifest
 	// declares, lowercased: what the release reaches through a declared
-	// server, which is low, as every declared server is (D7).
+	// server, which is low, as every declared server is.
 	ServerHosts []string
 	// MCPServers reports any declared MCP server, packaged or remote.
 	MCPServers bool
-	// BrowserHosts are the hosts capabilities.browser.hosts names
-	// (DEV-247), lowercased: exact names, or "*." suffixes that admit the
-	// names below one and not the bare name (V15). The browser reaches
-	// them through the runner's browse proxy. The person's site, named at
+	// BrowserHosts are the hosts capabilities.browser.hosts names,
+	// lowercased: exact names, or "*." suffixes that admit the names
+	// below one and not the bare name (V15). The browser reaches them
+	// through the runner's browse proxy. The person's site, named at
 	// run time, is not among them: the author does not control it, so a
-	// browser of sites alone is no way out for a text that names no host.
+	// browser of sites alone is no way out for a text that names no
+	// host.
 	BrowserHosts []string
 	// BrowserAny is a browser whose scope is any public site, which names
 	// no host and admits any, addresses included, as EgressAny does (the
@@ -55,9 +55,9 @@ type Declared struct {
 	Exec []string
 	// FileWrite reports a filesystem.write that declares more than none.
 	FileWrite bool
-	// BaseCommands are the commands a hosted run provides to every release
-	// (manifest.BaseExecCommands, DR-64). A declared command outside them is
-	// one only a run on the person's own computer can provide.
+	// BaseCommands are the commands a hosted run provides to every
+	// release (manifest.BaseExecCommands). A declared command outside
+	// them is one only a run on the person's own computer can provide.
 	BaseCommands []string
 }
 
@@ -99,8 +99,8 @@ const (
 )
 
 // capabilityOf maps the capability families to what their hits use. The
-// mapping lives in Go, not in the bundle's YAML: installed CLIs decode the
-// bundle strictly and would refuse every bundle with a new key (DEV-186).
+// mapping lives in Go, not in the bundle's YAML: installed CLIs decode
+// the bundle strictly and would refuse every bundle with a new key.
 var capabilityOf = map[string]capability{
 	"credential-harvest": capSecrets,
 	"exfiltration":       capNetwork,
@@ -193,10 +193,10 @@ func rateSecrets(d Declared, named string) string {
 
 // rateNetwork: an email recipient is never declared (postmark-mcp's BCC
 // line), nor is an address the manifest does not list; a named host is
-// medium when egress or the browser's hosts declare it, and low when only
-// a declared MCP server reaches it. With no destination named, the release
-// must declare some way out the author can reach: egress, a browser host
-// or a public browser (agentry#1198), never the person's own site alone.
+// medium when egress or the browser's hosts declare it, and low when
+// only a declared MCP server reaches it. With no destination named, the
+// release must declare some way out the author can reach: egress, a
+// browser host or a public browser, never the person's own site alone.
 func rateNetwork(d Declared, destinations string) string {
 	named := splitList(destinations)
 	if len(named) == 0 {
@@ -252,11 +252,11 @@ func (d Declared) inEgress(host string) bool {
 	return d.EgressAny || slices.Contains(d.Egress, host)
 }
 
-// inBrowser reports whether the declared browser may open host: a public
-// browser any, otherwise a host its hosts name exactly or, for a "*."
-// entry, a name below it. The browser reaches it through the runner's
-// browse proxy, which the installer is shown and the run is held to, as
-// egress is (agentry#1198).
+// inBrowser reports whether the declared browser may open host: a
+// public browser any, otherwise a host its hosts name exactly or, for a
+// "*." entry, a name below it. The browser reaches it through the
+// runner's browse proxy, which the installer is shown and the run is
+// held to, as egress is.
 func (d Declared) inBrowser(host string) bool {
 	return d.BrowserAny || BrowserHostsAdmit(d.BrowserHosts, host)
 }
@@ -294,14 +294,15 @@ func splitList(s string) []string {
 	return strings.Split(s, ",")
 }
 
-// The destinations a hit's lines name: a URL's host (any scheme), an email
-// recipient, an IPv4 address, a bare host name. The host pattern takes any
-// dotted name ending in a label of letters, with no list of top-level
-// domains, so `webhook.site` and `interact.sh` are hosts; a file name such
-// as `report.md` reads as one too, which rates a directive that names it as
-// undeclared, the side this rating fails toward. S9's content diff reads
-// the same grammar through Destinations and filters bare names its own way
-// (agentry#958), so the two cannot drift apart on what a URL reaches.
+// The destinations a hit's lines name: a URL's host (any scheme), an
+// email recipient, an IPv4 address, a bare host name. The host pattern
+// takes any dotted name ending in a label of letters, with no list of
+// top-level domains, so `webhook.site` and `interact.sh` are hosts; a
+// file name such as `report.md` reads as one too, which rates a
+// directive that names it as undeclared, the side this rating fails
+// toward. S9's content diff reads the same grammar through Destinations
+// and filters bare names its own way, so the two cannot drift apart on
+// what a URL reaches.
 var (
 	destinationURLRe   = regexp.MustCompile(`(?i)[a-z][a-z0-9+.\-]*://[^\s"'<>()\[\]` + "`" + `]+`)
 	destinationEmailRe = regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
@@ -375,15 +376,16 @@ func destinations(text string) string {
 	return strings.Join(out, ",")
 }
 
-// urlHostOf is the host a URL reaches: its authority ends at "/", "?", "#"
-// or a backslash (which browsers read as "/"), any userinfo goes up to its
-// last "@", and any port is cut, so a URL that dresses one host up as
-// another (https://evil.example\@declared.example/) is keyed by the one it
-// reaches. Characters a host name cannot hold are then trimmed from its
-// ends, so the Markdown or prose around a URL (`**https://h.example**`,
-// "https://h.example, then") is not part of its key (agentry#958). One
-// inside the name is kept: https://declared.example_.evil.example/ reaches
-// evil.example, and cut at the "_" it would read as the declared host.
+// urlHostOf is the host a URL reaches: its authority ends at "/", "?",
+// "#" or a backslash (which browsers read as "/"), any userinfo goes up
+// to its last "@", and any port is cut, so a URL that dresses one host
+// up as another (https://evil.example\@declared.example/) is keyed by
+// the one it reaches. Characters a host name cannot hold are then
+// trimmed from its ends, so the Markdown or prose around a URL
+// (`**https://h.example**`, "https://h.example, then") is not part of
+// its key. One inside the name is kept:
+// https://declared.example_.evil.example/ reaches evil.example, and cut
+// at the "_" it would read as the declared host.
 func urlHostOf(u string) string {
 	rest := u
 	if i := strings.Index(rest, "://"); i >= 0 {

@@ -60,8 +60,8 @@ type userInfo struct {
 	PlatformStaff bool      `json:"platformStaff"`
 	Orgs          []userOrg `json:"orgs"`
 	// PendingOrg is the organization the person is waiting to be
-	// approved by (agentry#364): the layout says so on every page until
-	// an admin approves or declines them.
+	// approved by: the layout says so on every page until an admin
+	// approves or declines them.
 	PendingOrg *pendingOrg `json:"pendingOrg"`
 }
 

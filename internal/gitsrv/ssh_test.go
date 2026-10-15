@@ -71,11 +71,11 @@ func (e *gitEnv) seedSSHKey(userID uuid.UUID, c *sshClient) {
 	}
 }
 
-// TestSSHTransportCloneAndPush (§6.1 Q7, agentry#70): a registered key
-// clones and pushes over SSH through the same hooks as HTTPS; an
-// unregistered key is refused at authentication; a key revoked mid-way is
-// refused at the next command; a read-only member cannot push; the server
-// answers nothing but the two git services.
+// TestSSHTransportCloneAndPush: a registered key clones and pushes over
+// SSH through the same hooks as HTTPS; an unregistered key is refused at
+// authentication; a key revoked mid-way is refused at the next command; a
+// read-only member cannot push; the server answers nothing but the two git
+// services.
 func TestSSHTransportCloneAndPush(t *testing.T) {
 	env := newGitEnv(t)
 	sshSrv := env.startSSH(t)
@@ -191,10 +191,10 @@ func (e *gitEnv) startSSH(t *testing.T) *gitsrv.SSHServer {
 
 func sshPort(s *gitsrv.SSHServer) int { return s.Addr().(*net.TCPAddr).Port }
 
-// TestSSHPushBudgetIsTheHTTPBudget (§19, agentry#410): the per-repository
-// push budget is one number on both transports. A budget spent over HTTPS
-// refuses the next push over SSH with the same words, and a push over SSH
-// spends the budget HTTPS then finds empty.
+// TestSSHPushBudgetIsTheHTTPBudget: the per-repository push budget is one
+// number on both transports. A budget spent over HTTPS refuses the next
+// push over SSH with the same words, and a push over SSH spends the budget
+// HTTPS then finds empty.
 func TestSSHPushBudgetIsTheHTTPBudget(t *testing.T) {
 	env := newGitEnvCfg(t, func(c *config.Config) { c.Limits.GitPushesPerHour = 1 })
 	port := sshPort(env.startSSH(t))

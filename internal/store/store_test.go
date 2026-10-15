@@ -12,8 +12,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// testDatabaseURL returns the integration-test DSN or skips. Real-Postgres
-// tests per §17.1 (DSN-driven; see DEVIATIONS.md DEV-001 for the mechanism).
+// testDatabaseURL returns the integration-test DSN
+// (AGENTRY_TEST_DATABASE_URL) or skips. The tests run against a real
+// Postgres.
 func testDatabaseURL(t *testing.T) string {
 	t.Helper()
 	url := os.Getenv("AGENTRY_TEST_DATABASE_URL")
@@ -28,7 +29,7 @@ func TestMigrateAndConnect(t *testing.T) {
 	// Two minutes, not thirty seconds: the shared test database's advisory
 	// lock is held by whichever package migrates first, and with three core
 	// CI jobs on one host a full migration under load can take longer than
-	// this test's own budget (agentry#137).
+	// this test's own budget.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -52,7 +53,7 @@ func TestMigrateAndConnect(t *testing.T) {
 		t.Fatalf("Ping: %v", err)
 	}
 
-	// citext must be available after 00001 (needed by M1 schema).
+	// citext must be available after 00001 (the schema uses it).
 	var n int
 	if err := st.Pool().QueryRow(ctx, `SELECT count(*) FROM pg_extension WHERE extname IN ('citext','pg_trgm')`).Scan(&n); err != nil {
 		t.Fatalf("extension query: %v", err)
@@ -63,12 +64,11 @@ func TestMigrateAndConnect(t *testing.T) {
 }
 
 // TestMigrateConcurrentFreshDatabase pins Migrate's doc promise: N migrators
-// racing at a database that has never been migrated must all succeed. Before
-// the advisory lock (DEV-052) the run raced through goose's version-table
-// bootstrap and all but one failed inside the first migrations with
-// duplicate pg_type rows — which is exactly what every multi-replica first
-// boot does when migrateOnStart is set, and what `go test ./...` does to a
-// fresh shared test database.
+// racing at a database that has never been migrated must all succeed. Without
+// the advisory lock the run races through goose's version-table bootstrap
+// and all but one fail inside the first migrations with duplicate pg_type
+// rows. That is what every multi-replica first boot does when migrateOnStart
+// is set, and what `go test ./...` does to a fresh shared test database.
 func TestMigrateConcurrentFreshDatabase(t *testing.T) {
 	baseURL := testDatabaseURL(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

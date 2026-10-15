@@ -1,7 +1,7 @@
 package registry
 
 // CreateAgent's refusal states the whole rule AgentNameRe enforces rather
-// than "invalid agent name" (agentry#260), and the API renders that tail as
+// than "invalid agent name", and the API renders that tail as
 // the 422's detail. This test is what stops the sentence drifting from the
 // pattern: widen or narrow AgentNameRe and the bound asserted here fails.
 

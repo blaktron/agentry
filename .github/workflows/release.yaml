@@ -1,8 +1,8 @@
-# Release: build, sign, and publish artifacts with provenance (§18.2 M8 OSS
-# hygiene). We hold ourselves to the standard we ask of publishers — signed
-# artifacts, an SBOM, and a scanned dependency tree.
+# Release: build, sign, and publish artifacts with provenance. We hold
+# ourselves to the standard we ask of publishers — signed artifacts, an SBOM,
+# and a scanned dependency tree.
 #
-# Two channels, one pipeline (DEV-148, agentry#597):
+# Two channels, one pipeline:
 #   - vX.Y.Z on main: release-please.yaml calls this when its release PR
 #     merges. release-please has created the tag and a draft release with the
 #     changelog as its body.
@@ -25,8 +25,8 @@
 # not from the tag) refuses a tag of the wrong shape, one whose commit is not
 # on its channel's branch, a run on the other channel's branch (the signing
 # certificate names the branch, see below), and any 1.x or later unless the
-# operator has set the repository variable AGENTRY_ALLOW_V1=true (agentry#522
-# is the 1.0 step). It also refuses to run for any repository but this one,
+# maintainers have set the repository variable AGENTRY_ALLOW_V1=true (the
+# 1.0 step). It also refuses to run for any repository but this one,
 # so a workflow elsewhere that calls this file gets no release out of it.
 #
 # Signing is keyless: the certificate's identity is
@@ -98,7 +98,7 @@ jobs:
           POSTGRES_USER: agentry
           POSTGRES_PASSWORD: agentry
           POSTGRES_DB: agentry_test
-        ports: ["5432"]  # ephemeral host port: several runners per host (agentry#125)
+        ports: ["5432"]  # ephemeral host port: several runners per host
         options: >-
           --health-cmd "pg_isready -U agentry" --health-interval 5s
           --health-timeout 3s --health-retries 10
@@ -112,10 +112,10 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-          # The runners share one persistent host module cache (agentry#225).
+          # The runners share one persistent host module cache.
           cache: false
       # The tool versions live in one place, ci.yaml's workflow env block
-      # (agentry#419): the release installs what CI installed, never "latest".
+      # the release installs what CI installed, never "latest".
       - name: Tool versions from ci.yaml
         run: |
           set -euo pipefail
@@ -179,7 +179,7 @@ jobs:
           LDFLAGS="-s -w -X github.com/blaktron/agentry/internal/version.Version=${VERSION}"
           mkdir -p dist
           EXT=""; [ "$GOOS" = "windows" ] && EXT=".exe"
-          # The CLI ships from github.com/blaktron/agentry-cli (DEV-050);
+          # The CLI ships from its own repository (github.com/blaktron/agentry-cli);
           # this job builds the server binary only.
           go build -trimpath -ldflags "$LDFLAGS" -o "dist/agentryd-${GOOS}-${GOARCH}${EXT}" ./cmd/agentryd
 
@@ -209,15 +209,14 @@ jobs:
           persist-credentials: false
       # The binaries' artifacts only: this job also waits on the image job,
       # whose build-push-action uploads a .dockerbuild build record to the
-      # same run, and that is not a release asset (it failed to download on
-      # the first rebuild, agentry#597).
+      # same run, and that is not a release asset (downloading it fails).
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: binaries-*
           path: dist-all
       - run: mkdir -p dist && find dist-all -type f -exec mv {} dist/ \;
 
-      # syft at the version ci.yaml's env block pins (agentry#419): this job
+      # syft at the version ci.yaml's env block pins: this job
       # holds id-token: write, and the action would otherwise fetch the
       # newest syft at run time.
       - name: syft version from ci.yaml
@@ -227,7 +226,7 @@ jobs:
           [ -n "$v" ] || { echo "SYFT_VERSION is not set in ci.yaml's env block"; exit 1; }
           echo "SYFT_VERSION=$v" >> "$GITHUB_ENV"
 
-      - name: SBOM (syft, Apache-2.0 toolchain per §14.4)
+      - name: SBOM (syft, Apache-2.0 toolchain)
         uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           path: .
@@ -289,9 +288,9 @@ jobs:
           LATEST: ${{ needs.guard.outputs.latest }}
         run: ./scripts/release/publish.sh "$TAG" dist "$RUNNER_TEMP/verification.md"
 
-  # One image per release: agentryd (every role, git included). The site's
-  # image is built and released from its own repository (DEV-091); the
-  # chart references only this one.
+  # One image per release: agentryd (every role, git included). The hosted
+  # site's image is built and released from its own repository; the chart
+  # references only this one.
   image:
     needs: [guard, verify]
     runs-on: [self-hosted, linux, x64]
@@ -368,7 +367,7 @@ jobs:
           fi
           docker buildx imagetools create --tag "$REPO:latest" "$REPO@$DIGEST"
 
-  # The chart beside the image (agentry#450), its own job so a second image
+  # The chart beside the image, its own job so a second image
   # in the matrix above never publishes it twice: version = the tag without
   # its v, appVersion = the tag, which is the image tag, so the released
   # chart runs the released image by default. The moving per-branch versions
@@ -388,8 +387,7 @@ jobs:
           persist-credentials: false
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
       # cosign reads the Docker credentials, not helm's registry login: without
-      # this, the chart is pushed and then fails to be signed (the first
-      # release, v0.6.0-dev.1, agentry#597).
+      # this, the chart is pushed and then fails to be signed.
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io

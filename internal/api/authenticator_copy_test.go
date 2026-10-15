@@ -11,11 +11,11 @@ import (
 
 // What the directory enrols (a TOTP app, a security key) is an
 // *authenticator*; a *device* in this estate is a remembered browser, the
-// credential that skips the second factor (DEV-123, DEV-163). The words were
-// split so the settings page no longer shows "devices" twice with two
-// meanings (agentry#466). The routes, the `devices` fields and the operation
-// id keep their names, since clients depend on them; only the prose moved.
-// This keeps the prose from drifting back.
+// credential that skips the second factor. The settings page must not
+// show "devices" twice with two meanings. The routes, the `devices`
+// fields and the operation id keep their names, since clients depend on
+// them; only the prose uses the distinction. This keeps the prose from
+// drifting back.
 
 var (
 	deviceWordRe       = regexp.MustCompile(`(?i)\bdevices?\b`)

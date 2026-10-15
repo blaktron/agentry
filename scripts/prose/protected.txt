@@ -1,7 +1,5 @@
 # The posture sentences of the core's markdown, its own pages and its
-# notifier, byte for byte (plan front-end-voice-and-warmth §4.6, from a grep
-# of this repository on 2026-09-09; the pages and the notifier added
-# 2026-09-10 with the M8 copy pass).
+# notifier, byte for byte.
 #
 # Each line is `<file>[, <file>…] :: <sentence>`: the sentence must appear in
 # every file named, with whitespace normalised and entities resolved, because
@@ -16,12 +14,12 @@
 # form "Static analysis does not claim an agent is safe.", and only a
 # byte-for-byte comparison catches it. The sentences here are claim fragments,
 # not whole paragraphs. A rewrite may change the sentences around them; it may
-# not soften, reorder or drop these. Adding one is a change to the plan's §4.6
-# list and belongs in a PR that says so. Removing one needs the operator.
+# not soften, reorder or drop these. Adding one belongs in a PR that says so;
+# removing one needs the maintainers' agreement.
 #
-# The site's own wordings of the same claims ("cannot prove a QuickAgent
-# safe", "No flag, plan, or role skips the gate") live in blaktron/agentry-web
-# and are gated by that repository's prose-check, not here.
+# The hosted site's own wordings of the same claims ("cannot prove a
+# QuickAgent safe", "No flag, plan, or role skips the gate") are gated by
+# the site's own prose check, not here.
 
 # 1. Scanning does not prove safe, and the product says so in its own voice.
 README.md, CONTRIBUTING.md, docs/trust.md :: Static analysis cannot prove an agent safe
@@ -38,8 +36,8 @@ docs/api-conventions.md :: means "no known advisories at `lastCheckedAt`", never
 README.md :: fails **toward** review — never through.
 docs/trust.md :: A scanner that errors or times out fails toward review, never through.
 docs/self-hosting.md :: fail toward review, never toward skip
-# A failed advisory lookup no longer holds the version (D3 of plan
-# scan-and-run-tweaks, ruleset 0.3.0, agentry#773); unread content still does.
+# A failed advisory lookup does not hold the version (ruleset 0.3.0);
+# unread content still does.
 docs/self-hosting.md :: content a stage could not read goes to review whatever the threshold
 
 # 3. Nothing skips the gate, and the claim is a test rather than a promise.
@@ -55,7 +53,7 @@ docs/trust.md :: What this does not guarantee
 docs/trust.md :: it cannot enforce anything once the agent is running on your machine.
 SECURITY.md :: Declared capabilities are not runtime-enforced.
 docs/trust.md :: Scanning happens at publication, not at push and not at run time.
-docs/trust.md :: The shipped scanners are good, not identical to the tools PLAN §8.3 names.
+docs/trust.md :: The shipped scanners are good, not identical to the established tools they stand in for.
 docs/trust.md :: Review is human, and humans are the ones deciding.
 
 # 6. The pages and the mails that carry the same posture. Read by the reader,

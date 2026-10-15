@@ -10,10 +10,9 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Pool is the allocation an owner's knowledge packs draw on (agentry#612):
-// the owner alone in the core, or, where an extension pools owners, a paid
-// organization's seats shared by its packs and its members' (plan
-// knowledge.md §4.4, D5).
+// Pool is the allocation an owner's knowledge packs draw on: the owner
+// alone in the core, or, where an extension pools owners, a paid
+// organization's seats shared by its packs and its members'.
 type Pool struct {
 	// Key names the pool: every upload into it is reserved under one
 	// transaction-scoped lock on the key, so two owners who share it
@@ -22,7 +21,7 @@ type Pool struct {
 	// Owners are every owner whose packs count against the pool, the one
 	// asking included.
 	Owners []Owner
-	// Cap is the pool's allocation; a cap never deletes (D25).
+	// Cap is the pool's allocation; a cap never deletes.
 	Cap entitlements.Cap
 }
 

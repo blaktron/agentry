@@ -1,4 +1,4 @@
-// Package audit provides the append-only audit log (§12.6): a code-registered
+// Package audit provides the append-only audit log: a code-registered
 // action catalog (so docs and events cannot drift) and a writer that lands
 // every event in the partitioned audit_events table.
 package audit
@@ -6,7 +6,7 @@ package audit
 import "sync"
 
 // Action identifies an auditable action. Every mutating API call, auth event,
-// and state-machine transition writes exactly one (§12.6).
+// and state-machine transition writes exactly one.
 type Action string
 
 // The v1 action catalog. Append-only: never rename or reuse an id.
@@ -19,15 +19,14 @@ const (
 	ActionUserEmailVerified Action = "user.email_verified"
 	ActionUserUpdate        Action = "user.update"
 	ActionUserTOTPEnabled   Action = "user.totp_enabled"
-	// Trusted devices (plan trusted-devices.md, agentry#461): a browser
-	// remembered after it answered the second factor, and the removal of one.
-	// A second credential class gets its own audit trail, because "signed in"
-	// and "signed in without being asked for the second factor" are different
-	// facts and an investigator needs to tell them apart. The sign-in row
-	// itself carries the skip in its detail.
+	// Trusted devices: a browser remembered after it answered the second
+	// factor, and the removal of one. A second credential class gets its own
+	// audit trail, because "signed in" and "signed in without being asked for
+	// the second factor" are different facts and an investigator needs to
+	// tell them apart. The sign-in row itself carries the skip in its detail.
 	ActionTrustedDeviceAdd    Action = "user.trusted_device_add"
 	ActionTrustedDeviceRevoke Action = "user.trusted_device_revoke"
-	// ActionTrustedDeviceUse is the directory path's skip (agentry#670): the
+	// ActionTrustedDeviceUse is the directory path's skip: the
 	// directory asked whether a browser was remembered and was told yes, so
 	// its code page was not shown. The native path records its skip on the
 	// user.login row instead; the directory's sign-in reaches the registry
@@ -35,20 +34,20 @@ const (
 	ActionTrustedDeviceUse Action = "user.trusted_device_use"
 	ActionPATCreate        Action = "pat.create"
 	ActionPATRevoke        Action = "pat.revoke"
-	// SSH keys for the git transport (agentry#70).
+	// SSH keys for the git transport.
 	ActionSSHKeyAdd          Action = "ssh_key.add"
 	ActionSSHKeyRemove       Action = "ssh_key.remove"
 	ActionUserDirectoryErase Action = "user.directory_erase"
 	// ActionUserStaffSync records a platform_staff change: the staff
-	// organization's rule (agentry#556), with the reason it ran.
+	// organization's rule, with the reason it ran.
 	ActionUserStaffSync Action = "user.staff_sync"
 	// ActionDirectoryStaffMirror records one change the registry made to
-	// the directory's mirror of platform staff (agentry#598): an account
+	// the directory's mirror of platform staff: an account
 	// added to or removed from auth.idpStaffMirrorGroup.
 	ActionDirectoryStaffMirror Action = "directory.staff_mirror"
 	ActionUserDelete           Action = "user.delete"
 	// ActionUserDataClear records a user clearing their credentials,
-	// installs and settings while keeping the account (agentry#498).
+	// installs and settings while keeping the account.
 	ActionUserDataClear Action = "user.data_clear"
 
 	// Orgs & teams.
@@ -56,17 +55,17 @@ const (
 	ActionOrgUpdate       Action = "org.update"
 	ActionOrgMemberSet    Action = "org.member_set"
 	ActionOrgMemberRemove Action = "org.member_remove"
-	// Invitations and approvals (agentry#361): the only doors into an
+	// Invitations and approvals: the only doors into an
 	// organization, each audited where it is decided.
 	ActionOrgInviteCreate  Action = "org.invite_create"
 	ActionOrgInviteRevoke  Action = "org.invite_revoke"
 	ActionOrgInviteAccept  Action = "org.invite_accept"
 	ActionOrgMemberDecline Action = "org.member_decline"
-	// The logo set or removed (agentry#367); the detail carries the object
+	// The logo set or removed; the detail carries the object
 	// key served, never the bytes.
 	ActionOrgLogoSet     Action = "org.logo_set"
 	ActionOrgLogoRemoved Action = "org.logo_removed"
-	// An organization's shared knowledge (agentry#646): a pack created or
+	// An organization's shared knowledge: a pack created or
 	// deleted by an admin, marked exportable or not (detail: exportable),
 	// and exported unencrypted (by an admin, or a member of a pack marked
 	// exportable). The detail names the pack, never a byte of it.
@@ -74,10 +73,10 @@ const (
 	ActionOrgKnowledgeUpdate Action = "org.knowledge_update"
 	ActionOrgKnowledgeDelete Action = "org.knowledge_delete"
 	ActionOrgKnowledgeExport Action = "org.knowledge_export"
-	// The fold-in (agentry#364): an existing account at the organization's
+	// The fold-in: an existing account at the organization's
 	// domain became a pending member, at its sign-in or by the sweep.
 	ActionOrgMemberPending Action = "org.member_pending"
-	// The organization's lifecycle and its domain (agentry#363): a
+	// The organization's lifecycle and its domain: a
 	// decommission decided, the erasure that ends its hold, platform
 	// staff's suspension and reinstatement, and a person's request to
 	// join the organization at their email domain.
@@ -91,19 +90,19 @@ const (
 	ActionTeamMemberAdd    Action = "team.member_add"
 	ActionTeamMemberRemove Action = "team.member_remove"
 
-	// Agents & repos (M2).
+	// Agents & repos.
 	ActionAgentCreate      Action = "agent.create"
 	ActionAgentUpdate      Action = "agent.update"
 	ActionAgentGrantSet    Action = "agent.grant_set"
 	ActionAgentGrantRemove Action = "agent.grant_remove"
 	ActionRepoPush         Action = "repo.push"
 
-	// Versions & publication (M3).
+	// Versions & publication.
 	ActionVersionSubmit     Action = "version.submit"
 	ActionVersionTransition Action = "version.transition"
 	ActionVersionYank       Action = "version.yank"
 
-	// Security pipeline (M4).
+	// Security pipeline.
 	ActionReviewDecision  Action = "review.decision"
 	ActionFindingVerdict  Action = "finding.verdict"
 	ActionPolicyUpdate    Action = "policy.update"
@@ -112,13 +111,13 @@ const (
 	ActionAgentReinstate  Action = "agent.reinstate"
 	ActionAdvisoryPublish Action = "advisory.publish"
 	// ActionAgentDependencyAlert records the daily MCP sweep opening a
-	// dependency alert on a published version (agentry#177).
+	// dependency alert on a published version.
 	ActionAgentDependencyAlert Action = "agent.dependency_alert"
 	ActionRulesetRelease       Action = "ruleset.release"
 	ActionAbuseReport          Action = "abuse.report"
 	ActionAbuseTriage          Action = "abuse.triage"
 
-	// Enterprise (M6): SSO, SCIM, webhooks, domain verification, audit export.
+	// Enterprise: SSO, SCIM, webhooks, domain verification, audit export.
 	ActionSSOConnectionSet    Action = "sso.connection_set"
 	ActionSSOConnectionDelete Action = "sso.connection_delete"
 	ActionSSOLogin            Action = "sso.login"
@@ -137,15 +136,15 @@ const (
 	// Stars, agent lifecycle, and platform operations.
 	ActionAgentStar   Action = "agent.star"
 	ActionAgentUnstar Action = "agent.unstar"
-	// An account install and its removal (plan web-dashboard-shell §5,
-	// agentry#448): the caller's own record, beside the star.
+	// An account install and its removal: the caller's own record,
+	// beside the star.
 	ActionAgentInstall   Action = "agent.install"
 	ActionAgentUninstall Action = "agent.uninstall"
 	ActionAgentDelete    Action = "agent.delete"
-	// Retire and Restore of a publisher's own agent (agentry#942).
+	// Retire and Restore of a publisher's own agent.
 	ActionAgentRetire  Action = "agent.retire"
 	ActionAgentRestore Action = "agent.restore"
-	// A fork recorded in its own namespace (agentry#943).
+	// A fork recorded in its own namespace.
 	ActionAgentFork         Action = "agent.fork"
 	ActionAgentTransfer     Action = "agent.transfer"
 	ActionWebhookPing       Action = "webhook.ping"

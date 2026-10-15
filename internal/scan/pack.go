@@ -10,7 +10,7 @@ import (
 	"github.com/blaktron/agentry/pkg/archive"
 )
 
-// The knowledge pack scan (plan knowledge.md §4.4, D19, D27; agentry#593).
+// The knowledge pack scan.
 // A pack is not a version: it has no manifest, no code and no listing, so
 // it is read by the stages that read prose — S2's secrets, S3's hidden
 // content, S4's signatures and S8's URL reputation — over every text file
@@ -18,7 +18,7 @@ import (
 // from (sources/), then over the wiki that was compiled from them (wiki/),
 // each in chunks no larger than the judge provider declares it reads. The
 // report is a record, never a gate: a pack is ready after its scan with
-// its findings shown (D27).
+// its findings shown.
 
 // PackFile is one file of a pack's tree, by its slash path in the pack
 // ("sources/report.pdf.txt", "wiki/topics/figures.md").
@@ -155,7 +155,7 @@ func (h packHit) packFinding() PackFinding {
 
 // ScanProse reads text files with the rule stages a pack's scan runs (S2,
 // S3, S4, S8) and no AI Review: a Writing Voice's review asks a question
-// set of its own (agentry#809), since the release rubric reads a voice's
+// set of its own, since the release rubric reads a voice's
 // instructions about writing as instructions to the reader. Its findings
 // carry no excerpt, as a pack's do.
 func (o *Orchestrator) ScanProse(ctx context.Context, files []PackFile) PackReport {
@@ -178,7 +178,7 @@ func (o *Orchestrator) scanPack(ctx context.Context, files []PackFile, manifestJ
 // without findings or review, the findings, the files read and the half
 // each is in.
 // manifestJSON is the shipping release's manifest, which S4's rating by
-// declaration reads (agentry#893); nil for a pack or a voice on its own,
+// declaration reads; nil for a pack or a voice on its own,
 // which declares nothing.
 func (o *Orchestrator) scanPackRules(ctx context.Context, files []PackFile, manifestJSON []byte) (PackReport, []packHit, []FileEntry, map[string]PackPart) {
 	r := PackReport{Schema: PackReportSchema, Stages: append([]PackStage(nil), packRuleStages...), Findings: []PackFinding{}}
@@ -262,7 +262,7 @@ func (o *Orchestrator) reviewPack(ctx context.Context, r *PackReport, files []Fi
 			r.Review.WikiChunks = len(chunks)
 		}
 		for i, chunk := range chunks {
-			// Content is data (§8.4.1): a pack declares no capabilities.
+			// Content is data: a pack declares no capabilities.
 			verdict, err := j.Judge(ctx, JudgeContent{ManifestJSON: []byte(`{}`), Files: chunk.files})
 			if err != nil {
 				// The report says where; the provider's own words stay in

@@ -16,7 +16,7 @@ import (
 	"github.com/blaktron/agentry/internal/webhook"
 )
 
-// The daily MCP server vulnerability sweep (agentry#177 M2, plan §5). Every
+// The daily MCP server vulnerability sweep. Every
 // row of the scanned-server registry older than mcpSweepRecheckAfter is
 // asked about again. A server version that newly carries a high or critical
 // advisory opens a dependency alert on every published version that
@@ -84,7 +84,7 @@ func (p *Pipeline) MCPSweep(ctx context.Context) (sum MCPSweepSummary, err error
 		for i, r := range rows {
 			prev := mcpScanRecordFromRow(r)
 			if prev.Status == "not-found" {
-				// A version its registry does not publish (agentry#1036):
+				// A version its registry does not publish:
 				// OSV's "no advisories" would turn it back into "safe".
 				// It keeps its status and moves past the cutoff, so the
 				// loop ends; S7 asks the registry again on every
@@ -228,7 +228,7 @@ func fixedVersions(rec MCPScanRecord, advisoryIDs []string) []string {
 	return fixed
 }
 
-// notifyMCPAlert delivers the three §8.7-style notifications for one alert.
+// notifyMCPAlert delivers the three notifications for one alert.
 func (p *Pipeline) notifyMCPAlert(ctx context.Context, v storegen.AgentVersion, rec MCPScanRecord, alert storegen.McpDependencyAlert, advisoryIDs []string) {
 	q := p.st.Queries()
 	agent, err := q.GetAgentByID(ctx, v.AgentID)

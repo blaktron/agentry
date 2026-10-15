@@ -17,7 +17,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// jobAuditExport is the queue kind for an async audit export (§12.6).
+// jobAuditExport is the queue kind for an async audit export.
 const jobAuditExport = "audit.export"
 
 const auditExportBatch = 1000
@@ -40,7 +40,7 @@ func auditExportToAPI(row storegen.AuditExport) AuditExport {
 	return out
 }
 
-// CreateAuditExport implements POST /orgs/{org}/audit/exports (admin+, §12.6):
+// CreateAuditExport implements POST /orgs/{org}/audit/exports (admin+):
 // it records an export job and enqueues it, returning 202 with the job id.
 func (s *Server) CreateAuditExport(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
@@ -89,7 +89,7 @@ func (s *Server) CreateAuditExport(w http.ResponseWriter, r *http.Request, org O
 	writeJSON(w, http.StatusAccepted, auditExportToAPI(created))
 }
 
-// GetAuditExport implements GET /orgs/{org}/audit/exports/{id} (admin+, §12.6).
+// GetAuditExport implements GET /orgs/{org}/audit/exports/{id} (admin+).
 func (s *Server) GetAuditExport(w http.ResponseWriter, r *http.Request, org OrgHandle, id openapi_types.UUID) {
 	if !s.requireDB(w, r) {
 		return
@@ -110,7 +110,7 @@ func (s *Server) GetAuditExport(w http.ResponseWriter, r *http.Request, org OrgH
 }
 
 // runAuditExport is the queue handler: it streams the org's audit slice to the
-// blob store as NDJSON and records the object key (§12.6). Idempotent enough
+// blob store as NDJSON and records the object key. Idempotent enough
 // for at-least-once delivery — a re-run overwrites the same content-keyed path.
 func (s *Server) runAuditExport(ctx context.Context, job queue.Job) error {
 	var args auditExportArgs
@@ -175,7 +175,7 @@ func (s *Server) runAuditExport(ctx context.Context, job queue.Job) error {
 	return nil
 }
 
-// auditEventNDJSON is the per-line export shape (§12.6 NDJSON stream).
+// auditEventNDJSON is the per-line export shape (NDJSON stream).
 func auditEventNDJSON(ev storegen.AuditEvent) map[string]any {
 	m := map[string]any{
 		"id":          ev.ID.String(),

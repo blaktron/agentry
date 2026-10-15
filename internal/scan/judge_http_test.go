@@ -163,7 +163,7 @@ func TestHTTPJudgeFailsClosed(t *testing.T) {
 }
 
 func TestHTTPJudgeManipulatedOutputRoutesToReview(t *testing.T) {
-	// The manipulation symptom (§8.4.3) appearing anywhere in the judge's
+	// The manipulation symptom appearing anywhere in the judge's
 	// output flags the verdict even when every score is zero. The symptom
 	// rides inside the JSON here, which is the realistic shape: a captured
 	// judge parrots the injected framing in one of its fields.
@@ -231,7 +231,7 @@ func TestNewJudgeProviderSelection(t *testing.T) {
 	}
 }
 
-// The judge's token use is what a review costs (plan subscription-tiers §10):
+// The judge's token use is what a review costs:
 // each wire protocol reports it in its own envelope, and a response without
 // it leaves Usage nil rather than zero, so "unknown" and "free" never blur.
 func TestHTTPJudgeRecordsUsage(t *testing.T) {

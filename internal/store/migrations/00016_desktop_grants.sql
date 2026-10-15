@@ -1,11 +1,10 @@
 -- +goose Up
--- One-time grants behind the desktop app's browser sign-in (agentry#19,
--- DEV-058 hardening). The web tier's authorize form no longer mints a PAT
--- and puts it in the loopback redirect's query string (browser history);
--- it records a grant here and hands the app a short-lived code. The app
--- exchanges the code from its own process and the PAT is minted at that
--- moment — nothing token-shaped is stored, and a code read from history
--- later is already consumed or expired.
+-- One-time grants behind the desktop app's browser sign-in. The web tier's
+-- authorize form does not mint a PAT and put it in the loopback redirect's
+-- query string (browser history); it records a grant here and hands the app a
+-- short-lived code. The app exchanges the code from its own process and the
+-- PAT is minted at that moment — nothing token-shaped is stored, and a code
+-- read from history later is already consumed or expired.
 CREATE TABLE desktop_grants (
   id          uuid PRIMARY KEY,
   user_id     uuid NOT NULL REFERENCES users(id),

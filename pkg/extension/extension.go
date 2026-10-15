@@ -1,9 +1,8 @@
-// Package extension is the seam a closed build uses to add to the open
-// server without forking it (DEV-091, plan core-web-split §6): routes under
-// /api/v1/x/<name>/, migrations in the extension's own schema, an
-// entitlements resolver, hooks on the events the core commits, and worker
-// jobs. cmd/agentryd is Main with no extensions; a closed build's main is
-// Main with its own.
+// Package extension is the seam an extended build uses to add to the
+// server without forking it: routes under /api/v1/x/<name>/, migrations
+// in the extension's own schema, an entitlements resolver, hooks on the
+// events the core commits, and worker jobs. cmd/agentryd is Main with
+// no extensions; an extended build's main is Main with its own.
 //
 // The types an extension speaks are aliases of the core's, so a module
 // outside this one can implement the interface without importing internal
@@ -36,9 +35,9 @@ import (
 	"github.com/blaktron/agentry/internal/webhook"
 )
 
-// Extension is what a closed build adds. Every method may return the zero
-// value: an extension that only has routes returns nil migrations, a nil
-// resolver, empty hooks and no jobs.
+// Extension is what an extended build adds. Every method may return the
+// zero value: an extension that only has routes returns nil migrations,
+// a nil resolver, empty hooks and no jobs.
 type Extension interface {
 	// Name is the extension's short id (lower-case letters, digits, dashes):
 	// its routes live under /api/v1/x/<name>/, its migrations in the schema
@@ -73,11 +72,10 @@ type (
 	Cap           = entitlements.Cap
 )
 
-// Allowance is the old name of Cap (agentry#360): kept so an extension
-// built against it still compiles until it adopts Cap.
+// Allowance is the old name of Cap: kept so an extension built against
+// it still compiles until it adopts Cap.
 //
-// Deprecated: use Cap. agentry-enterprise#29 has adopted Cap and nothing in
-// the estate uses this name; it goes with the next breaking change to this
+// Deprecated: use Cap. It goes with the next breaking change to this
 // package.
 type Allowance = entitlements.Cap
 
@@ -87,10 +85,10 @@ const (
 	NamespaceOrg  = entitlements.NamespaceOrg
 )
 
-// The admission seam (plan subscription-tiers §5.1): an extension that
-// implements Admits is asked once per submission, after every core gate and
-// before anything is stored, and may refuse it. Optional — an extension
-// without it admits everything, and the core build has none.
+// The admission seam: an extension that implements Admits is asked once
+// per submission, after every core gate and before anything is stored,
+// and may refuse it. Optional: an extension without it admits
+// everything, and the core build has none.
 type Admits interface {
 	Admitter() Admitter
 }
@@ -103,29 +101,29 @@ type (
 	Refusal   = registry.Refusal
 )
 
-// WrapsKeys is the optional interface for an extension that wraps the data
-// keys of knowledge packs itself (plan knowledge.md §4.3, §4.4; agentry#593):
-// SecureAgentry's wrapper seals each key to its owner's own certificate. The
-// core's wrapper, the deployment's knowledge sealing key, is replaced and
-// nothing else changes: the store, the routes, the scan and the erasure
-// stay the core's. A nil KeyWrapper leaves the core's in place.
+// WrapsKeys is the optional interface for an extension that wraps the
+// data keys of knowledge packs itself: the hosted build's wrapper seals
+// each key to its owner's own certificate. The core's wrapper, the
+// deployment's knowledge sealing key, is replaced and nothing else
+// changes: the store, the routes, the scan and the erasure stay the
+// core's. A nil KeyWrapper leaves the core's in place.
 type WrapsKeys interface {
 	KeyWrapper() KeyWrapper
 }
 
 // ErasesAccounts is the optional interface for an extension that keeps
-// rows about a person which must go with the person's account
-// (agentry#638): the core calls EraseAccount inside the transaction of
-// POST /user/delete (kind AccountErased) and of POST /user/clear-data
-// (kind AccountDataCleared), after its own steps and before its audit
-// event, so the extension's delete commits or rolls back with the core's.
-// tx carries statements only: the core ends the transaction. The extension
-// writes only its own schema through it, and is quick: the request waits
-// on it. The count it returns is recorded in the user.delete or
+// rows about a person which must go with the person's account: the core
+// calls EraseAccount inside the transaction of POST /user/delete (kind
+// AccountErased) and of POST /user/clear-data (kind
+// AccountDataCleared), after its own steps and before its audit event,
+// so the extension's delete commits or rolls back with the core's. tx
+// carries statements only: the core ends the transaction. The extension
+// writes only its own schema through it, and is quick: the request
+// waits on it. The count it returns is recorded in the user.delete or
 // user.data_clear event's detail under the extension's name. An error
-// fails the erasure or the clear — the account is not erased, the caller
-// gets a 500 — so the extension's rows never outlive an erased account
-// through a failed delete of its own.
+// fails the erasure or the clear — the account is not erased, the
+// caller gets a 500 — so the extension's rows never outlive an erased
+// account through a failed delete of its own.
 //
 // Hooks.Event hears user.data_cleared after the commit, best-effort; this
 // is for what may not wait or fail on its own.
@@ -160,12 +158,12 @@ const (
 	KeyOwnerOrg  = knowledge.OwnerOrg
 )
 
-// PoolsKnowledge is the knowledge store's allocation seam (agentry#612):
-// an extension's resolver that also implements it names the KnowledgePool
+// PoolsKnowledge is the knowledge store's allocation seam: an
+// extension's resolver that also implements it names the KnowledgePool
 // an owner's packs draw on — the lock every upload into it is reserved
-// under, the owners it counts, and its cap — as a paid organization pools
-// its seats across its members. Every owner a pool lists must be answered
-// with that same pool.
+// under, the owners it counts, and its cap — as a paid organization
+// pools its seats across its members. Every owner a pool lists must be
+// answered with that same pool.
 type (
 	PoolsKnowledge = knowledge.Pools
 	KnowledgePool  = knowledge.Pool
@@ -176,16 +174,16 @@ type (
 // a key that is not there.
 var ErrKeyNotOwner = knowledge.ErrNotOwner
 
-// Knowledge is the core's knowledge store as an extension may act on it
-// (agentry#624; plan knowledge.md §4.5, M6): SecureAgentry's hosted build
-// of the built-in Creator makes a pack, stages its tree for the sandbox
-// host, and puts back the tree the build made. The data key stays in the
-// core: an extension hands over plaintext files and reads metadata, and a
-// tree it puts back is sealed under the pack's own key and stored through
-// the same path as an upload through the routes — opened and checked,
-// counted against its pool under the pool's lock, the tree it replaces
-// deleted, its scan queued. Every call answers ErrKnowledgeUnconfigured
-// while the store is off. Deps.Knowledge is nil without a database.
+// Knowledge is the core's knowledge store as an extension may act on
+// it: the hosted build of the built-in Creator makes a pack, stages its
+// tree for the sandbox host, and puts back the tree the build made. The
+// data key stays in the core: an extension hands over plaintext files
+// and reads metadata, and a tree it puts back is sealed under the
+// pack's own key and stored through the same path as an upload through
+// the routes: opened and checked, counted against its pool under the
+// pool's lock, the tree it replaces deleted, its scan queued. Every
+// call answers ErrKnowledgeUnconfigured while the store is off.
+// Deps.Knowledge is nil without a database.
 type Knowledge interface {
 	// Create makes an empty pack named name for owner, under a data key
 	// the core makes and wraps for owner. ErrKnowledgeName for a name
@@ -244,13 +242,13 @@ var (
 )
 
 // ProvesDrafts is the optional interface for an extension that records
-// hosted drafts and can answer whether a version is one of them (plan
-// drafter-revisions.md §6, R5; agentry#794). An upload may claim the draft
-// it was published from; the scan computes the proof of the submitted files
-// (pkg/draftproof) and asks DraftProvenance whether the submitter ran that
-// draft against the agent's S9 baseline and recorded that proof. A yes
-// makes the version a drafter-revision, which S9 reads with the benefit of
-// the doubt; the client is never believed. Without it no version is one.
+// hosted drafts and can answer whether a version is one of them. An
+// upload may claim the draft it was published from; the scan computes
+// the proof of the submitted files (pkg/draftproof) and asks
+// DraftProvenance whether the submitter ran that draft against the
+// agent's S9 baseline and recorded that proof. A yes makes the version
+// a drafter-revision, which S9 reads with the benefit of the doubt; the
+// client is never believed. Without it no version is one.
 type ProvesDrafts interface {
 	DraftProvenance() DraftProvenance
 }
@@ -263,16 +261,16 @@ type (
 	DraftClaim      = scan.DraftClaim
 )
 
-// AdmitsModelInput is the optional interface for an extension that admits
-// hosted jobs to the model-input routes (agentry#608; plan builder-rework.md
-// D20, D21): AI Review of text a model is about to read, and web search
-// brokered by the registry. A sandbox host presents the credential the
-// extension minted for one job in X-Agentry-Job-Token; the core asks
-// AdmitModelInput which job it names, and whether the call fits the job
-// (a draft past its searches is refused), then records what the call spent
-// with RecordModelInput. The use is a count for the record, never a price:
-// AI Review is 1 credit an operation, however many scans it makes
-// (DEV-150). Without it only platform staff reach the routes.
+// AdmitsModelInput is the optional interface for an extension that
+// admits hosted jobs to the model-input routes: AI Review of text a
+// model is about to read, and web search brokered by the registry. A
+// sandbox host presents the credential the extension minted for one job
+// in X-Agentry-Job-Token; the core asks AdmitModelInput which job it
+// names, and whether the call fits the job (a draft past its searches
+// is refused), then records what the call spent with RecordModelInput.
+// The use is a count for the record, never a price: AI Review is 1
+// credit an operation, however many scans it makes. Without it only
+// platform staff reach the routes.
 type AdmitsModelInput interface {
 	ModelInputCallers() ModelInputCallers
 }
@@ -286,23 +284,23 @@ type (
 	ModelInputOp      = api.ModelInputOp
 )
 
-// The model-input operations a call can be: a scan, a search, and since
-// agentry#708 the check of a finished draft.
+// The model-input operations a call can be: a scan, a search, and the
+// check of a finished draft.
 const (
 	ModelInputOpScan   = api.ModelInputOpScan
 	ModelInputOpSearch = api.ModelInputOpSearch
 	ModelInputOpCheck  = api.ModelInputOpCheck
 )
 
-// AdmitsVoice is the optional interface for an extension that admits, and
-// may charge for, the review of a Writing Voice a route asks for (plan
-// writing-voice.md D8, agentry#809): an edit saved on the web, a client's
-// upload, a Restore of a version reviewed under another question set. AI
-// Review is 1 credit an operation (DEV-150); the core charges nothing. A
-// refusal is answered in its own status and words before anything is
-// stored, and a ticket is voided when nothing was. A Voice Writer run In
-// Agentry puts its output through Voice.Propose, whose review is inside
-// the build's price and is not admitted here.
+// AdmitsVoice is the optional interface for an extension that admits,
+// and may charge for, the review of a Writing Voice a route asks for:
+// an edit saved on the web, a client's upload, a Restore of a version
+// reviewed under another question set. AI Review is 1 credit an
+// operation; the core charges nothing. A refusal is answered in its own
+// status and words before anything is stored, and a ticket is voided
+// when nothing was. A Voice Writer run In Agentry puts its output
+// through Voice.Propose, whose review is inside the build's price and
+// is not admitted here.
 type AdmitsVoice interface {
 	VoiceAdmitter() VoiceAdmitter
 }
@@ -313,17 +311,16 @@ type (
 	VoiceAdmission = api.VoiceAdmission
 )
 
-// Voice is the core's store of Writing Voices as an extension may act on
-// it (agentry#809; plan writing-voice.md §4, §6): SecureAgentry's hosted
-// Voice Writer reads the live voice it improves or edits and puts back
-// the voice it wrote, and a hosted run reads the live voice it attaches.
-// The data key stays in the core: an extension reads and hands over text.
-// Every call answers ErrVoiceUnconfigured while the store is off.
-// Deps.Voice is nil without a database.
+// Voice is the core's store of Writing Voices as an extension may act
+// on it: the hosted Voice Writer reads the live voice it improves or
+// edits and puts back the voice it wrote, and a hosted run reads the
+// live voice it attaches. The data key stays in the core: an extension
+// reads and hands over text. Every call answers ErrVoiceUnconfigured
+// while the store is off. Deps.Voice is nil without a database.
 type Voice interface {
 	// Live is a person's live version, the one a run attaches, its text
-	// opened; ErrVoiceNotFound when they have none. A pending or flagged
-	// version is never answered here (plan §3, invariant 4).
+	// opened; ErrVoiceNotFound when they have none. A pending or
+	// flagged version is never answered here.
 	Live(ctx context.Context, user uuid.UUID) (*VoiceVersion, error)
 	// State is a person's voice: the always-attach flag and every
 	// version, texts opened, a pending or flagged one included, for a
@@ -360,36 +357,36 @@ var (
 	ErrVoiceTooLarge     = voice.ErrTooLarge
 )
 
-// ReportSettings is the core's store of a person's report settings as an
-// extension may read them (agentry#1015; plan report-designs.md D11, D12;
-// DEV-227): SecureAgentry's hosted runs read the account's report design and
-// hand it to the sandbox host, whose CLI lays the run's PDFs out in it.
-// Read-only: the person sets it on the Report design page. Deps.ReportSettings
-// is nil without a database.
+// ReportSettings is the core's store of a person's report settings as
+// an extension may read them: the hosted runs read the account's report
+// design and hand it to the sandbox host, whose CLI lays the run's PDFs
+// out in it. Read-only: the person sets it on the Report design page.
+// Deps.ReportSettings is nil without a database.
 type ReportSettings interface {
-	// Design is the person's report design, the canonical theme document
-	// version 2 that pkg/reportdesign validated (Parse it to read it), or
-	// nil when they never chose one, which is not Plain: the reader decides
-	// what nothing means (agentry#1024).
+	// Design is the person's report design, the canonical theme
+	// document version 2 that pkg/reportdesign validated (Parse it to
+	// read it), or nil when they never chose one, which is not Plain:
+	// the reader decides what nothing means.
 	Design(ctx context.Context, user uuid.UUID) ([]byte, error)
-	// DesignWithLogo is Design with the person's logo in it, when they have
-	// one (agentry#1025): its "logo" key holds the PNG the core encoded
-	// from their upload. Design leaves it out, because a reader whose
+	// DesignWithLogo is Design with the person's logo in it, when they
+	// have one: its "logo" key holds the PNG the core encoded from
+	// their upload. Design leaves it out, because a reader whose
 	// pkg/reportdesign predates logos refuses the key and with it the
 	// whole design; hand this one only to a reader that draws logos.
 	DesignWithLogo(ctx context.Context, user uuid.UUID) ([]byte, error)
 	// Theme is the id of the built-in theme the person's design started
-	// from (its basedOn), or "" when they never chose one. Transitional:
-	// the hosted job carries a theme's name until agentry-enterprise#479
-	// moves it to Design, and then this goes.
+	// from (its basedOn), or "" when they never chose one.
+	// Transitional: the hosted job carries a theme's name rather than
+	// the design itself, and this field goes once the job carries the
+	// design.
 	Theme(ctx context.Context, user uuid.UUID) (string, error)
 }
 
-// Unthrottles is the optional interface for an extension whose receiver of
-// signed callbacks must never be refused by the anonymous rate class (a
-// payment provider's webhook, plan subscription-tiers §5.5). The routes are
-// "METHOD /path" relative to the mount, exact; each still passes the
-// principal middleware and authorizes on its own signature.
+// Unthrottles is the optional interface for an extension whose receiver
+// of signed callbacks must never be refused by the anonymous rate class
+// (a payment provider's webhook). The routes are "METHOD /path"
+// relative to the mount, exact; each still passes the principal
+// middleware and authorizes on its own signature.
 type Unthrottles interface {
 	UnthrottledRoutes() []string
 }
@@ -398,11 +395,11 @@ type Unthrottles interface {
 type Principal = auth.Principal
 
 // Scope is a PAT scope as the core spells it; those an extension may
-// require are the hosted-run scopes (agentry#348), the knowledge scopes,
-// for a route that writes into a person's knowledge through the Knowledge
-// seam (agentry#624), and the vault's secret:write (agentry#676). A
-// session carries no scopes and the account's full authority; a PAT
-// carries what it was minted with, flat — no scope implies another.
+// require are the hosted-run scopes, the knowledge scopes, for a route
+// that writes into a person's knowledge through the Knowledge seam, and
+// the vault's secret:write. A session carries no scopes and the
+// account's full authority; a PAT carries what it was minted with,
+// flat: no scope implies another.
 type Scope = auth.Scope
 
 // The scopes an extension route may require.
@@ -411,8 +408,8 @@ const (
 	ScopeRunWrite       = auth.ScopeRunWrite
 	ScopeKnowledgeRead  = auth.ScopeKnowledgeRead
 	ScopeKnowledgeWrite = auth.ScopeKnowledgeWrite
-	// ScopeSecretWrite lets a token set and delete the caller's hosted-run
-	// secrets (agentry#676); the vault extension requires it.
+	// ScopeSecretWrite lets a token set and delete the caller's
+	// hosted-run secrets; the vault extension requires it.
 	ScopeSecretWrite = auth.ScopeSecretWrite
 )
 
@@ -439,14 +436,14 @@ func ScopeAllows(p *Principal, s Scope) bool {
 // Anonymous when none.
 func PrincipalFromContext(ctx context.Context) *Principal { return api.PrincipalFrom(ctx) }
 
-// Event is one committed event the core fans out (api.Event): the webhook
-// kinds (version.published, agent.quarantined, org.member_added, …) with
-// the owning org, plus user.registered, user.email_verified (agentry#861:
-// the account's address was confirmed, once, by its activation link or an
-// invitation at an organization's domain; an account created verified
-// hears only user.registered, with emailVerified true), user.data_cleared
-// (agentry#498: clear what the extension holds for that user) and
-// org.created.
+// Event is one committed event the core fans out (api.Event): the
+// webhook kinds (version.published, agent.quarantined,
+// org.member_added, …) with the owning org, plus user.registered,
+// user.email_verified (the account's address was confirmed, once, by
+// its activation link or an invitation at an organization's domain; an
+// account created verified hears only user.registered, with
+// emailVerified true), user.data_cleared (clear what the extension
+// holds for that user) and org.created.
 type Event = api.Event
 
 // Hooks are called after the core has committed the change; they are
@@ -456,13 +453,13 @@ type Hooks struct {
 	Event func(ctx context.Context, ev Event)
 }
 
-// Job is a queue handler the worker registers under Kind. Queue names the
-// queue it is claimed from ("core" unless the work is untrusted content).
-// A positive Every makes the worker enqueue Kind on that period, and once
-// at start-up, the way the core's own watchdog and sweep run (agentry#324).
-// Every worker replica enqueues on its own clock and the queue's claim
-// runs each row once, so the handler must be idempotent — a cycle closer
-// that finds nothing to close does nothing.
+// Job is a queue handler the worker registers under Kind. Queue names
+// the queue it is claimed from ("core" unless the work is untrusted
+// content). A positive Every makes the worker enqueue Kind on that
+// period, and once at start-up, the way the core's own watchdog and
+// sweep run. Every worker replica enqueues on its own clock and the
+// queue's claim runs each row once, so the handler must be idempotent —
+// a cycle closer that finds nothing to close does nothing.
 type Job struct {
 	Kind    string
 	Queue   string
@@ -470,70 +467,71 @@ type Job struct {
 	Every   time.Duration
 }
 
-// Deps is what the core hands an extension at start-up (agentry#324), once
-// per process, before its routes mount and its jobs register. DB is the
-// pool the core uses, under the core's own database role: the convention
-// — not yet enforced by a role or a grant — is that an extension writes
-// only its own schema (ent_<name>) and reads core tables, never alters
-// them; the seam test of the closed build is where that is proven. Log is
-// tagged with the extension's name. Audit writes the extension's events
-// through the core's writer (the month partition, the archive stream, the
-// refusal of an unregistered action); the event's actor kind, IP and user
-// agent are the extension's to fill, since no request built it. DB is nil
-// when the server runs without a database (limited dev mode).
+// Deps is what the core hands an extension at start-up, once per
+// process, before its routes mount and its jobs register. DB is the
+// pool the core uses, under the core's own database role: the
+// convention — not yet enforced by a role or a grant — is that an
+// extension writes only its own schema (ent_<name>) and reads core
+// tables, never alters them; the extension's own seam test is where
+// that is proven. Log is tagged with the extension's name. Audit writes
+// the extension's events through the core's writer (the month
+// partition, the archive stream, the refusal of an unregistered
+// action); the event's actor kind, IP and user agent are the
+// extension's to fill, since no request built it. DB is nil when the
+// server runs without a database (limited dev mode).
 type Deps struct {
 	DB    *pgxpool.Pool
 	Log   *slog.Logger
 	Audit AuditWriter
 	// Blobs is the deployment's object storage — the archive store the
 	// core runs on (a local directory or S3) — for an extension to keep
-	// its own objects under its own key prefix (agentry#348: a hosted
-	// run's inputs, outputs and receipts). nil when the server runs
-	// without a database, as DB is.
+	// its own objects under its own key prefix (a hosted run's inputs,
+	// outputs and receipts). nil when the server runs without a
+	// database, as DB is.
 	Blobs BlobStore
 	// Entitlements is the resolver the server uses with no extension —
-	// the deployment's configured limits — for an extension's own resolver
-	// to embed and answer Features over (agentry#326).
+	// the deployment's configured limits — for an extension's own
+	// resolver to embed and answer Features over.
 	Entitlements Resolver
-	// Orgs is the core's organization store as an extension may act on it
-	// (agentry#360). nil when the server runs without a database.
+	// Orgs is the core's organization store as an extension may act on
+	// it. nil when the server runs without a database.
 	Orgs Orgs
-	// Agents is the core's read of an agent as an extension may ask it
-	// (agentry#381). nil when the server runs without a database.
+	// Agents is the core's read of an agent as an extension may ask it.
+	// nil when the server runs without a database.
 	Agents Agents
-	// Principals loads the principal the core would hold for a user, for
-	// asking Agents about someone the extension holds by id rather than
-	// by a live request (agentry#838). nil when the server runs without a
+	// Principals loads the principal the core would hold for a user,
+	// for asking Agents about someone the extension holds by id rather
+	// than by a live request. nil when the server runs without a
 	// database.
 	Principals Principals
-	// ScheduleCredentials mints the credential a schedule's fire starts a
-	// run with, its owner's narrow token in all but name (agentry#1002).
-	// nil when the server runs without a database.
+	// ScheduleCredentials mints the credential a schedule's fire starts
+	// a run with, its owner's narrow token in all but name. nil when
+	// the server runs without a database.
 	ScheduleCredentials ScheduleCredentials
-	// Notifier carries a message an extension composed to a person, under
-	// the core's rules and through the core's transport (agentry#366).
-	// nil when the server runs without a database, as DB is.
+	// Notifier carries a message an extension composed to a person,
+	// under the core's rules and through the core's transport. nil when
+	// the server runs without a database, as DB is.
 	Notifier Notifier
 	// Webhooks delivers an event to one of an organization's webhook
-	// endpoints through the core's transport (agentry#430). nil when the
-	// server runs without a database, as DB is.
+	// endpoints through the core's transport. nil when the server runs
+	// without a database, as DB is.
 	Webhooks Webhooks
-	// Knowledge is the core's knowledge store (agentry#624). nil when the
-	// server runs without a database, as DB is; while the store is off
-	// (no key wrapper yet) its calls answer ErrKnowledgeUnconfigured.
+	// Knowledge is the core's knowledge store. nil when the server runs
+	// without a database, as DB is; while the store is off (no key
+	// wrapper yet) its calls answer ErrKnowledgeUnconfigured.
 	Knowledge Knowledge
-	// Voice is the core's store of Writing Voices (agentry#809). nil when
-	// the server runs without a database; while the store is off its
-	// calls answer ErrVoiceUnconfigured.
+	// Voice is the core's store of Writing Voices. nil when the server
+	// runs without a database; while the store is off its calls answer
+	// ErrVoiceUnconfigured.
 	Voice Voice
-	// ReportSettings is the core's store of report settings (agentry#1015).
-	// nil when the server runs without a database.
+	// ReportSettings is the core's store of report settings. nil when
+	// the server runs without a database.
 	ReportSettings ReportSettings
-	// Meter is the server's meter under the extension's own scope
-	// (agentry#777): an instrument created on it is scraped from /metrics
-	// beside the core's, with the same resource labels, and leaves through
-	// OTLP when that is configured. Never nil: a no-op meter when the
-	// server runs without metrics or without a database.
+	// Meter is the server's meter under the extension's own scope: an
+	// instrument created on it is scraped from /metrics beside the
+	// core's, with the same resource labels, and leaves through OTLP
+	// when that is configured. Never nil: a no-op meter when the server
+	// runs without metrics or without a database.
 	//
 	// Name an instrument the way the core does (a CloudWatch-style
 	// PascalCase name such as RunsHostedTokens, not a dotted one), and
@@ -548,24 +546,23 @@ type Deps struct {
 	// anything a caller chooses, because every distinct value is a series
 	// kept for the life of the process.
 	Meter metric.Meter
-	// BaseURL is the deployment's public origin, the address the core's own
-	// links are built on (config baseURL, or AGENTRY_BASE_URL over it),
-	// without a trailing slash (agentry#969): for an extension that must
-	// name an address of its own to a third party, such as an OAuth
-	// callback. Empty when the deployment names none.
+	// BaseURL is the deployment's public origin, the address the core's
+	// own links are built on (config baseURL, or AGENTRY_BASE_URL over
+	// it), without a trailing slash: for an extension that must name an
+	// address of its own to a third party, such as an OAuth callback.
+	// Empty when the deployment names none.
 	BaseURL string
 }
 
 // Notifier lets an extension tell a person something by mail without
 // owning a transport, an address book or the rule about who may be
-// written to. The core keeps all three (plan organization-subscriptions
-// §5.8, D17): the address must be verified — nothing is ever sent to an
-// unverified one, DEV-099's rule — and the person's preference for the
-// message's kind must be on. An extension composes the words; the core
-// decides whether they go and frames them with the registry's name and
-// the settings link. The closed product's copy therefore stays out of the
-// open repository, and the open repository's rule about addresses cannot
-// be bypassed by an extension that holds one.
+// written to. The core keeps all three: the address must be verified
+// (nothing is ever sent to an unverified one) and the person's
+// preference for the message's kind must be on. An extension composes
+// the words; the core decides whether they go and frames them with the
+// registry's name and the settings link. An extension's own copy
+// therefore stays outside this repository, and this repository's rule
+// about addresses cannot be bypassed by an extension that holds one.
 type Notifier interface {
 	// Send delivers subject and text to the person, if the core's rules
 	// allow it. It reports whether the message went: false with no error
@@ -592,25 +589,22 @@ type Notifier interface {
 type NotifyKind string
 
 const (
-	// NotifyBilling is the closed build's billing mail (plan §5.8): a
-	// checkout confirmed, a payment failed, an organization restricted,
-	// seats reached, "your organization covers you".
+	// NotifyBilling is the hosted build's billing mail: a checkout
+	// confirmed, a payment failed, an organization restricted, seats
+	// reached, "your organization covers you".
 	NotifyBilling NotifyKind = "billing"
-	// NotifyDependencyAlert is a dependency alert an extension routes to
-	// the person an organization chose for it (plan
-	// organization-subscriptions §6 "Alert routing", agentry#430): the
-	// same news the core mails the author, under the same switch.
+	// NotifyDependencyAlert is a dependency alert an extension routes
+	// to the person an organization chose for it: the same news the
+	// core mails the author, under the same switch.
 	NotifyDependencyAlert NotifyKind = "dependency_alert"
-	// NotifySchedule is the closed build's schedule mail (plan
-	// quickagent-scheduling.md D9, agentry#1002): a scheduled run in
-	// Agentry failed, or the schedule paused (three refusals in a row, an
-	// entitlement that lapsed). Never a success.
+	// NotifySchedule is the hosted build's schedule mail: a scheduled
+	// run in Agentry failed, or the schedule paused (three refusals in
+	// a row, an entitlement that lapsed). Never a success.
 	NotifySchedule NotifyKind = "schedule"
-	// NotifyBugReport is the closed build's bug-report mail (plan
-	// report-bug.md D4, D5, agentry#1113): platform staff marked a bug
-	// report the person filed complete, "Reported bug fixed", quoting the
-	// report and any note staff added. Never sent for a report closed
-	// without a fix.
+	// NotifyBugReport is the hosted build's bug-report mail: platform
+	// staff marked a bug report the person filed complete, "Reported
+	// bug fixed", quoting the report and any note staff added. Never
+	// sent for a report closed without a fix.
 	NotifyBugReport NotifyKind = "bug_report"
 )
 
@@ -641,7 +635,7 @@ type Webhooks interface {
 type WebhookEndpointRef = api.WebhookEndpointRef
 
 // EventAgentDependencyAlert is the catalog event a dependency alert is
-// fanned out as (DEV-090): what the hook hears as Event.Kind, and what an
+// fanned out as. It is what the hook hears as Event.Kind, and what an
 // extension routing the alert delivers it as, so the destination it
 // names reads the same event a subscription would have given it.
 const EventAgentDependencyAlert = webhook.EventAgentDependencyAlert
@@ -662,30 +656,29 @@ type Agents interface {
 	// namespace/name as the core's own routes decide it: the maintain
 	// role over the namespace or a grant, a personal access token's
 	// org:admin, and the owning organization's gate for a write (an
-	// organization in its decommission hold reads and is not maintained).
-	// An agent that does not exist, one p may not read, one p reads and
-	// may not maintain, and one the gate holds are the same false with no
-	// error (agentry#833).
+	// organization in its decommission hold reads and is not
+	// maintained). An agent that does not exist, one p may not read,
+	// one p reads and may not maintain, and one the gate holds are the
+	// same false with no error.
 	Maintainable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
 	// Publishable reports whether p may add a version to the agent at
-	// namespace/name as the core's own routes decide it: the publish role
-	// over the namespace or a grant, a personal access token's
-	// agent:publish, and the owning organization's gate for a write. The
-	// publish role ranks above maintain, so a session caller who may
-	// publish also maintains; a token may publish without org:admin, as
-	// the desktop's and the CLI's sign-in grant does. Absent, unreadable,
-	// not publishable and held by the gate are one false with no error, as
-	// Maintainable's are (agentry#875).
+	// namespace/name as the core's own routes decide it: the publish
+	// role over the namespace or a grant, a personal access token's
+	// agent:publish, and the owning organization's gate for a write.
+	// The publish role ranks above maintain, so a session caller who
+	// may publish also maintains; a token may publish without
+	// org:admin, as the desktop's and the CLI's sign-in grant does.
+	// Absent, unreadable, not publishable and held by the gate are one
+	// false with no error, as Maintainable's are.
 	Publishable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
 }
 
 // Principals answers who a user is now, as the core would resolve them,
 // for an extension that must re-ask a role later than the request that
-// gave it one — a hosted revision's release fetch asks again whether the
-// run's owner may still maintain or publish to the QuickAgent
-// (agentry#838; plan drafter-revisions §3). The extension rebuilds none of
-// the rule (memberships, roles, the account's standing): the core loads
-// them.
+// gave it one: a hosted revision's release fetch asks again whether the
+// run's owner may still maintain or publish to the QuickAgent. The
+// extension rebuilds none of the rule (memberships, roles, the
+// account's standing): the core loads them.
 type Principals interface {
 	// ForUser is the principal for userID with no credential: the
 	// account's standing and its organization roles as they are now, as
@@ -705,15 +698,14 @@ type Principals interface {
 	ForUser(ctx context.Context, userID uuid.UUID) (*Principal, bool, error)
 }
 
-// ScheduleCredentials mints the credential of a run a schedule starts on
-// its owner's behalf, with no live request to carry one (agentry#1002,
-// plan quickagent-scheduling.md §6). Every hosted run is created from a
-// principal the runs extension authorizes the way it authorizes a request,
-// and a fire must go through that same create path (the plan's invariant
-// 5), so the fire needs a principal that is a credential: ForUser's is
-// not one, and must not become one. This is a separate seam from
-// Principals, so an extension that only asks about people never holds the
-// means to act for them.
+// ScheduleCredentials mints the credential of a run a schedule starts
+// on its owner's behalf, with no live request to carry one. Every
+// hosted run is created from a principal the runs extension authorizes
+// the way it authorizes a request, and a fire must go through that same
+// create path, so the fire needs a principal that is a credential:
+// ForUser's is not one, and must not become one. This is a separate
+// seam from Principals, so an extension that only asks about people
+// never holds the means to act for them.
 type ScheduleCredentials interface {
 	// ForSchedule is the credential for one fire of the schedule
 	// scheduleID that userID owns: the account's standing and roles as
@@ -727,11 +719,11 @@ type ScheduleCredentials interface {
 	// error, so a schedule of a suspended account does not fire. A nil
 	// scheduleID is an error: the credential must name what it is.
 	//
-	// What it reaches in the extension that holds it is that extension's
-	// rule; the vault's is that a schedule sets no secret, so a run it
-	// starts resolves kept secrets only (plan D8). Mint one per fire and
-	// keep none: the account's standing is read at the moment of the
-	// fire, as the plan's entitlement re-check (invariant 4) wants.
+	// What it reaches in the extension that holds it is that
+	// extension's rule; the vault's is that a schedule sets no secret,
+	// so a run it starts resolves kept secrets only. Mint one per fire
+	// and keep none: the account's standing is read at the moment of
+	// the fire, so an entitlement that lapsed is seen.
 	ForSchedule(ctx context.Context, userID, scheduleID uuid.UUID) (*Principal, bool, error)
 }
 
@@ -746,11 +738,10 @@ type AgentRef struct {
 	NamespaceID   uuid.UUID
 	NamespaceKind NamespaceKind
 	Public        bool
-	// ForkedFrom is the origin of a fork (agentry#943), nil otherwise: the
-	// agent it was forked from and that agent's namespace, its publisher,
-	// for the earnings a fork's runs owe the origin (plan
-	// forks-and-publisher.md D10). A fork is private, so Public is false
-	// on every agent that has one.
+	// ForkedFrom is the origin of a fork, nil otherwise: the agent it
+	// was forked from and that agent's namespace, its publisher, for
+	// the earnings a fork's runs owe the origin. A fork is private, so
+	// Public is false on every agent that has one.
 	ForkedFrom *AgentOrigin
 }
 
@@ -764,17 +755,17 @@ type AgentOrigin struct {
 }
 
 // Orgs holds the acts on an organization the core owns and an extension
-// triggers. Where an admission extension runs, an organization is created
-// awaiting activation and its creator may not create another until it is
-// activated; the extension that owns the org's standing activates it when
-// the subscription starts (plan organization-subscriptions §4, D5).
+// triggers. Where an admission extension runs, an organization is
+// created awaiting activation and its creator may not create another
+// until it is activated; the extension that owns the org's standing
+// activates it when the subscription starts.
 type Orgs interface {
 	// Activate marks the organization activated. Idempotent: it reports
 	// whether this call did it, and an unknown org is false with no error.
 	Activate(ctx context.Context, orgID uuid.UUID) (bool, error)
-	// Decommission starts the organization's decommission hold the way an
-	// admin's request does (agentry#363): read-only for the configured
-	// hold, then erased, its handle and domain released; the core fires
+	// Decommission starts the organization's decommission hold the way
+	// an admin's request does: read-only for the configured hold, then
+	// erased, its handle and domain released; the core fires
 	// org.decommissioning now and org.decommissioned after the erasure.
 	// The hosted product's pending-payment sweep calls it for an
 	// organization nobody paid for. Idempotent: it reports whether this

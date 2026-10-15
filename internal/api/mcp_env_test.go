@@ -9,7 +9,7 @@ import (
 	"github.com/blaktron/agentry/internal/scan"
 )
 
-// TestVersionCapabilitiesCarryMCPServerEnv (agentry#286): a declared
+// TestVersionCapabilitiesCarryMCPServerEnv: a declared
 // server's plain env map is stored with the version's capability block and
 // served unchanged, keys sorted by the canonical form, so every consumer of
 // the API reads the configuration the server will receive.

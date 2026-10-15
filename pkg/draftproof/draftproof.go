@@ -1,14 +1,13 @@
 // Package draftproof is the proof that a published version is the one a
-// hosted draft wrote (plan drafter-revisions.md §6; agentry#794, the
-// operator's choice of 2026-10-02 on agentry#794 and agentry-enterprise#298).
+// hosted draft wrote.
 //
 // A revision is published through the Builder's form, not as the draft's
-// package/ (DEV-188's R4 addendum): the Builder sets the QuickAgent's own
-// name, namespace, version and licence, writes its own README and LICENSE,
-// drops the fields it cannot hold, renders agent.yaml with its own writer,
-// and a browser posts the instruction file with CRLF line breaks. So no
-// file of the draft is a file of the version byte for byte, and the proof
-// is two digests of what the Builder keeps:
+// package/: the Builder sets the QuickAgent's own name, namespace, version
+// and licence, writes its own README and LICENSE, drops the fields it
+// cannot hold, renders agent.yaml with its own writer, and a browser posts
+// the instruction file with CRLF line breaks. So no file of the draft is a
+// file of the version byte for byte, and the proof is two digests of what
+// the Builder keeps:
 //
 //   - the manifest, parsed and canonicalised, without what the Builder sets
 //     or cannot hold (Manifest);
@@ -18,9 +17,8 @@
 // The sandbox host computes the proof over the draft's package/ before it
 // seals the output; the registry computes it over the submitted files.
 // One function on both sides, and only digests cross: the registry never
-// reads a draft's body (ARCHITECTURE.md §9, DEV-130). README.md, LICENSE
-// and every other file are outside the proof and are scanned as for any
-// version.
+// reads a draft's body. README.md, LICENSE and every other file are
+// outside the proof and are scanned as for any version.
 package draftproof
 
 import (
@@ -96,24 +94,23 @@ func OfDir(dir string) (Proof, string, error) {
 }
 
 // Canonical is the manifest as the proof reads it: what the Builder keeps,
-// in the manifest's canonical JSON (sorted keys, empty values pruned), with
-// the differences that are only how the Builder writes a value taken out.
+// in the manifest's canonical JSON (sorted keys, empty values pruned),
+// with the differences that are only how the Builder writes a value taken
+// out.
 //
 // Left out, because the Builder sets them: schemaVersion, kind, name,
 // namespace, version, license, the instruction entrypoint's path (the
 // instruction file is proved by its text) and publish. Left out, because
-// the Builder cannot hold them and drops them without a word (D6; the
-// site's lib/draft-import.ts NOT_HELD): homepage, authors, the skill and MCP
-// entrypoints, interactive.idleTimeoutSeconds, knowledge.ships, runtime and
-// dependencies.
+// the Builder cannot hold them and drops them without a word: homepage,
+// authors, the skill and MCP entrypoints, interactive.idleTimeoutSeconds,
+// knowledge.ships, runtime and dependencies.
 //
-// Read as the same, because the Builder only writes them differently
-// (measured on 42 drafts and their Builder renderings, agentry#794): a
-// capability declared none and one not declared; egress that lists "*"
-// and egress "*"; every text with CRLF line breaks and with the spaces at
-// its ends; an empty text or list item and none; an intake question of
-// type text and one with no type; modes and data categories in any order
-// or repeated. Anything else the Builder changes (a multi-word choice
+// Read as the same, because the Builder only writes them differently: a
+// capability declared none and one not declared; egress that lists "*" and
+// egress "*"; every text with CRLF line breaks and with the spaces at its
+// ends; an empty text or list item and none; an intake question of type
+// text and one with no type; modes and data categories in any order or
+// repeated. Anything else the Builder changes (a multi-word choice
 // hyphenated, a value with a space dropped) changes what the version
 // declares, and the proof does not hold.
 func Canonical(m *manifest.Manifest) ([]byte, error) {

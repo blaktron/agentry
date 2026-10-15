@@ -47,11 +47,10 @@ func (h *handler) loginPage(w http.ResponseWriter, r *http.Request) {
 	// with a message: on a headless deployment the API's social-login
 	// callback sends a failed sign-in here as ?error= (internal/api
 	// webPaths.login), as the site's /login reads it. Honoured on this
-	// page alone, as text; every other notice rides the flash cookie
-	// (agentry#271).
+	// page alone, as text; every other notice rides the flash cookie.
 	pg := page{Title: "Sign in", Data: d, Error: r.URL.Query().Get("error")}
 	// One directory and nothing else: the directory IS the way in, so go
-	// there directly unless the page has something to show (agentry#164):
+	// there directly unless the page has something to show:
 	// that message, or a notice a redirect left for this render.
 	_, hasFlash := r.Cookie(flashCookie)
 	if h.opt.ExternalOnly && len(h.opt.Providers) == 1 && pg.Error == "" && hasFlash != nil {
@@ -63,7 +62,7 @@ func (h *handler) loginPage(w http.ResponseWriter, r *http.Request) {
 
 // loginSubmit posts the native credentials to POST /auth/login in-process
 // and mirrors the session it issued onto the browser, with the CSRF cookie
-// the form posts need (agentry#77).
+// the form posts need.
 func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		h.refuseCrossOrigin(w, r)
@@ -110,7 +109,7 @@ func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
 
 // logout revokes the session through POST /auth/logout and clears both
 // cookies whatever the API said; a directory-owned account is sent through
-// the directory's end-session flow so the next sign-in asks again (DEV-057).
+// the directory's end-session flow so the next sign-in asks again.
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 	if !h.acceptForm(w, r) {
 		return
@@ -158,7 +157,7 @@ func (h *handler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// The device authorize flow (DEV-058, D-015, DR-17, D-018): the CLI or the
+// The device authorize flow: the CLI or the
 // desktop app starts a one-shot listener on 127.0.0.1:<port>, opens this
 // page with its state nonce, and waits. The page asks one question; the
 // approval records a single-use grant through POST /user/tokens/desktop-grant

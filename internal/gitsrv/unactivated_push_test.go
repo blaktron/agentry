@@ -1,9 +1,9 @@
 package gitsrv_test
 
-// An unactivated account (agentry#861, plan unactivated-accounts.md D2) is
-// read-only where the directory owns credentials: the API's gate does not
-// see git, so git refuses its pushes itself, on both transports (they share
-// authorizeGit), and still lets it read.
+// An unactivated account is read-only where the directory owns
+// credentials: the API's gate does not see git, so git refuses its pushes
+// itself, on both transports (they share authorizeGit), and still lets it
+// read.
 
 import (
 	"context"

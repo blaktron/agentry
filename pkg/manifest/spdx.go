@@ -7,14 +7,13 @@ import (
 	"strings"
 )
 
-// The full SPDX license and exception lists, embedded (agentry#28; DEV-042
-// recorded the earlier 60-id allowlist). Refreshed with
-// scripts/dev/spdx-sync.sh from spdx/license-list-data (CC0). V7 accepts
-// exactly these identifiers, combined as SPDX expressions — `MIT`,
-// `MIT OR Apache-2.0`, `(MIT AND CC0-1.0)`, `GPL-2.0-or-later WITH
-// Classpath-exception-2.0`, `GPL-2.0+` — and nothing else: no LicenseRef-
-// custom identifiers on a public publish, because the point of V7 is a
-// license a consumer can look up.
+// The full SPDX license and exception lists, embedded. Refreshed with
+// scripts/dev/spdx-sync.sh from spdx/license-list-data (CC0). V7
+// accepts exactly these identifiers, combined as SPDX expressions —
+// `MIT`, `MIT OR Apache-2.0`, `(MIT AND CC0-1.0)`, `GPL-2.0-or-later
+// WITH Classpath-exception-2.0`, `GPL-2.0+` — and nothing else: no
+// LicenseRef- custom identifiers on a public publish, because the point
+// of V7 is a license a consumer can look up.
 //
 //go:embed spdx/licenses.txt spdx/exceptions.txt
 var spdxFS embed.FS

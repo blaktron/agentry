@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Third-party verification of this registry's attestations (agentry#26,
-# DEV-035): generate a fixture with our own signer, then verify both
+# Third-party verification of this registry's attestations: generate a fixture with our own signer, then verify both
 # envelopes with cosign — a verifier that shares no code with pkg/attest.
 # Fails when cosign disagrees with us about DSSE or in-toto. Needs cosign
 # on PATH (CI: sigstore/cosign-installer; locally:
@@ -13,10 +12,9 @@ trap 'rm -rf "$out"' EXIT
 go run ./scripts/dev/attest-fixture "$out"
 for kind in publish ruleset; do
   type=$(cat "$out/predicate-$kind.txt")
-  # --insecure-ignore-tlog: these envelopes are never in Rekor (D-16 defers
-  # transparency logs); --check-claims (the default) makes cosign hash the
-  # blob and require it as the statement subject, which is the binding
-  # that matters.
+  # --insecure-ignore-tlog: these envelopes are never in Rekor;
+  # --check-claims (the default) makes cosign hash the blob and require it
+  # as the statement subject, which is the binding that matters.
   cosign verify-blob-attestation \
     --key "$out/public.pem" \
     --signature "$out/$kind.dsse.json" \

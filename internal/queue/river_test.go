@@ -188,9 +188,8 @@ func TestRiverRetriesWithBackoffThenFails(t *testing.T) {
 	// Measure the backoff River recorded, not the distance from now: the
 	// attempt's error is stamped with its start time and NextRetry adds 2^1 s
 	// after the handler returns, so the gap is 2 s plus the handler's own
-	// (instant) run however late this read lands on a loaded runner
-	// (agentry#394). The millisecond of slack covers scheduled_at's
-	// microsecond storage.
+	// (instant) run however late this read lands on a loaded runner. The
+	// millisecond of slack covers scheduled_at's microsecond storage.
 	if backoff := r.ScheduledAt.Sub(r.LastErrorAt); backoff < 2*time.Second-time.Millisecond || backoff > 3*time.Second {
 		t.Fatalf("retry backoff %v (scheduled %v, attempt started %v), want 2s", backoff, r.ScheduledAt, r.LastErrorAt)
 	}
@@ -257,7 +256,7 @@ func TestRiverDelayedJobWaits(t *testing.T) {
 }
 
 // TestRiverRescuesAJobItsWorkerLeftRunning pins crash recovery under River,
-// production's driver (agentry#750): a job left running by a worker that died
+// production's driver: a job left running by a worker that died
 // (an evicted pod, a node gone) is rescued once it has been running longer
 // than the reclaim cutoff, and runs again on a live worker, while a job a
 // healthy worker holds right now is left alone. It is the River half of
@@ -330,7 +329,7 @@ func TestRiverRescuesAJobItsWorkerLeftRunning(t *testing.T) {
 }
 
 // TestRiverJobTimeoutLeavesRoomForTheRescue guards the configuration the
-// rescue depends on (agentry#750). River refuses a timeout past the rescue
+// rescue depends on. River refuses a timeout past the rescue
 // cutoff but accepts the two that break it: -1, with which no job is ever
 // rescued, and a timeout equal to the cutoff, which would rescue a job its
 // worker still runs. TestRiverRescuesAJobItsWorkerLeftRunning pins that the
@@ -352,7 +351,7 @@ func TestOpenSelectsDriver(t *testing.T) {
 	if c := must(Open("river", 3, nil, nil)).(*RiverClient); c.maxWorkers != 3 {
 		t.Errorf("maxWorkers = %d, want 3", c.maxWorkers)
 	}
-	// The pg driver is gone with its jobs table (agentry#244).
+	// The pg driver name is refused.
 	if _, err := Open("pg", 3, nil, nil); err == nil || !strings.Contains(err.Error(), "removed") {
 		t.Errorf("pg driver: %v, want a refusal that says it was removed", err)
 	}
@@ -371,7 +370,7 @@ func must(w Worker, err error) Worker {
 	return w
 }
 
-// TestCountWaitingCountsJobsThatHaveNotStarted is agentry#853's count: the
+// TestCountWaitingCountsJobsThatHaveNotStarted: the
 // self-rescheduling jobs' seeds ask the driver how many of a kind wait, in
 // River's own table: queued, scheduled and retrying jobs of the kind, never
 // running or finished ones.

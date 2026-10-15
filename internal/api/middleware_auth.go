@@ -14,18 +14,18 @@ import (
 
 const (
 	sessionCookieName = "agentry_session"
-	// csrfCookieName is the CSRF cookie the site (agentry-web, lib/session.ts)
-	// CSRF_COOKIE); the API sets it only in browser-mode sign-in, where no
-	// JSON body carries the token (agentry#77).
+	// csrfCookieName is the CSRF cookie the site's double-submit check
+	// reads; the API sets it only in browser-mode sign-in, where no JSON
+	// body carries the token.
 	csrfCookieName = "agentry_csrf"
 	csrfHeader     = "X-Agentry-CSRF"
 	// trustedDeviceCookieName carries the credential a browser earns by
-	// answering the second factor (agentry#461). It is not the session
+	// answering the second factor. It is not the session
 	// cookie and never stands in for one: it skips the second factor on a
 	// password sign-in and grants nothing else. The name says "trusted
-	// device" rather than "device" because in this estate a *device* is an
-	// authenticator enrolled in the external directory (DEV-089), and the
-	// two are being separated (agentry#466).
+	// device" rather than "device" because a *device* elsewhere is an
+	// authenticator enrolled in the external directory, and the two are
+	// kept apart.
 	trustedDeviceCookieName = "agentry_trusted_device"
 )
 
@@ -44,7 +44,7 @@ func principalFrom(ctx context.Context) *auth.Principal {
 
 // principalMiddleware resolves the caller: PAT bearer token, else session
 // cookie (with CSRF enforcement on mutations), else anonymous. It also
-// applies the per-class rate limits (§19) so every /api/v1 route is covered.
+// applies the per-class rate limits so every /api/v1 route is covered.
 func (s *Server) principalMiddleware(next http.Handler) http.Handler {
 	return s.principalMiddlewareOpts(next, principalOpts{})
 }
@@ -54,7 +54,7 @@ type principalOpts struct {
 	// unthrottled is a set of "METHOD /full/path" keys the anonymous rate
 	// class does not apply to (an extension's webhook receiver, whose only
 	// credential is a signature and whose sender must never be throttled
-	// into a lost event — plan subscription-tiers §5.5). The authed class
+	// into a lost event). The authed class
 	// and everything else still apply.
 	unthrottled map[string]bool
 }
@@ -63,7 +63,7 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := &auth.Principal{Anonymous: true}
 
-		// PATs: Authorization: Bearer agy_… (§9.1). Sessions are never
+		// PATs: Authorization: Bearer agy_…. Sessions are never
 		// accepted from Authorization; PATs are never read from cookies.
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 			tok := strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
@@ -81,8 +81,8 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 		} else if c, err := r.Cookie(sessionCookieName); err == nil && c.Value != "" {
 			pp, csrf, err := s.resolveSession(r, c.Value)
 			if err == nil {
-				// CSRF: cookie-authenticated mutations must echo the token
-				// (§9.1). GET/HEAD/OPTIONS are exempt.
+				// CSRF: cookie-authenticated mutations must echo the token.
+				// GET/HEAD/OPTIONS are exempt.
 				switch r.Method {
 				case http.MethodGet, http.MethodHead, http.MethodOptions:
 					p = pp
@@ -99,7 +99,7 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 			// on public pages must not 401).
 		}
 
-		// Rate limiting by class. The §9.1 RateLimit-* headers are written on
+		// Rate limiting by class. The RateLimit-* headers are written on
 		// every response, not only refusals, so a client can pace itself
 		// before it is throttled.
 		var res limitResult
@@ -110,7 +110,7 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 			// A hosted job's credential on a model-input route: every
 			// sandbox host behind one NAT shares an address, so the route
 			// draws the call from its job's budget and the address's larger
-			// one instead (handlers_model_input.go, agentry#608).
+			// one instead (handlers_model_input.go).
 			res = limitResult{OK: true}
 		case p.Anonymous:
 			res = s.limits.Allow("anon", clientIP(r), s.classes.anon, s.classes.anonBurst)
@@ -132,17 +132,17 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 		}
 
 		// PAT scope gate for route families the generic chokepoint cannot
-		// express (§12.3 review:act, see authz_scope_routes.go).
+		// express (review:act, see authz_scope_routes.go).
 		if !s.checkPathScope(w, r, p) {
 			return
 		}
 
-		// An unactivated account reads but does not write (agentry#861).
+		// An unactivated account reads but does not write.
 		if s.unactivatedReadOnly && refuseUnactivated(w, r, p) {
 			return
 		}
 
-		// The access log names the actor (§16.2 allows ids, never secrets);
+		// The access log names the actor (ids, never secrets);
 		// the log line is emitted by the outer middleware, which sees only
 		// the pre-auth request, so hand the identity back through the holder.
 		recordActor(r.Context(), p)
@@ -193,7 +193,7 @@ func (s *Server) resolveSession(r *http.Request, token string) (*auth.Principal,
 }
 
 // parseSSOTags decodes sessions.sso_tags ({"<org_id>":"<RFC3339 refreshed_at>"})
-// into the per-org freshness map used by enforced SSO (§12.4).
+// into the per-org freshness map used by enforced SSO.
 func parseSSOTags(raw []byte) map[uuid.UUID]time.Time {
 	if len(raw) == 0 {
 		return nil
@@ -229,10 +229,10 @@ func (s *Server) loadOrgRoles(ctx context.Context, userID uuid.UUID) (map[uuid.U
 	return roles, nil
 }
 
-// authorize runs the §12.2 chokepoint for the request and writes the problem
+// authorize runs the chokepoint for the request and writes the problem
 // response on denial. orgID is uuid.Nil for self/public actions. For
 // org-scoped actions it additionally enforces SSO freshness / org-bound PATs
-// when the org has sso_required set (§12.4) — a second gate layered on top of
+// when the org has sso_required set — a second gate layered on top of
 // RBAC, applied uniformly to every org route through this one chokepoint.
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request, act auth.Action, orgID uuid.UUID) bool {
 	p := principalFrom(r.Context())
@@ -252,7 +252,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, act auth.Acti
 			"SSO required", "This organization requires a fresh SSO session or an org-bound token. Sign in through SSO again.")
 		return false
 	}
-	// The organization's state (agentry#363): a suspended organization
+	// The organization's state: a suspended organization
 	// answers as absent, one in its decommission hold takes reads only.
 	// The same gate guards agent routes, the git door and the membership
 	// chokepoint; this is where every org-scoped route meets it.
@@ -280,7 +280,7 @@ func (s *Server) orgHandleOf(ctx context.Context, orgID uuid.UUID) string {
 }
 
 // enforceSSO returns true when the caller may act on orgID's resources under
-// the org's enforced-SSO policy (§12.4). Non-enforcing orgs always pass. The
+// the org's enforced-SSO policy. Non-enforcing orgs always pass. The
 // gate is skipped without a database (dev-only) since it cannot be evaluated.
 func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.UUID) bool {
 	if s.st == nil {
@@ -296,7 +296,7 @@ func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.U
 	// A tier that does not include SSO cannot enforce it: the organization
 	// would have no door to satisfy the demand through, so every member
 	// would be locked out of the organization's own resources by a
-	// subscription change (D11). The flag stays in the row untouched —
+	// subscription change. The flag stays in the row untouched —
 	// billing never writes it — and enforcement resumes the moment the
 	// subscription includes SSO again.
 	//
@@ -304,7 +304,7 @@ func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.U
 	// that fails that way round: everywhere else "unknown" refuses an act,
 	// but here refusing means *not* applying the organization's own
 	// sign-in policy, and an entitlement outage must never be what lets
-	// someone past it (DEV-114).
+	// someone past it.
 	if f, err := s.orgFeatures(ctx, orgID); err == nil && !f.SSO {
 		return true
 	}

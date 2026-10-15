@@ -1,7 +1,7 @@
 package api
 
-// The directory half of account erasure (§12.7, agentry#20), finished rather
-// than left behind (agentry#499). The request makes the first attempt after
+// The directory half of account erasure, finished rather
+// than left behind. The request makes the first attempt after
 // the registry's erasure commits; a failure is handed to a job that retries
 // with the queue's backoff until the directory deletes the account or finds
 // it gone. Every attempt is a user.directory_erase audit row. An erasure
@@ -34,7 +34,7 @@ const (
 	// dirEraseUnresolved is a lookup that could not tell the person's
 	// account apart (a shared address, an id holding another account now,
 	// a superuser): nothing it could not tell apart is deleted, and the
-	// operator is alerted to finish it by hand (agentry#727).
+	// operator is alerted to finish it by hand.
 	dirEraseUnresolved    = "unresolved"
 	dirEraseNotConfigured = "not-configured"
 	dirEraseFailed        = "failed"
@@ -196,7 +196,7 @@ func (s *Server) runDirectoryErase(ctx context.Context, job queue.Job) error {
 
 // alertDirectoryErasure raises an erasure whose directory half did not
 // happen: an ERROR line under a catalogued fail-open name, which a log
-// monitor keys on, and the fail-open count the §16.3 ticket alarm reads.
+// monitor keys on, and the fail-open count the ticket alarm reads.
 func (s *Server) alertDirectoryErasure(ctx context.Context, userID uuid.UUID, attempts int, err error) {
 	s.log.ErrorContext(ctx, "gdpr: directory erasure did not complete — delete the sign-in account by hand",
 		logevent.FailOpenDirectoryErasure.Attr(), "user", userID, "attempts", attempts, "err", err)

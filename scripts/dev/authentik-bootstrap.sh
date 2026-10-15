@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bootstrap the directory service (DEV-057): create/refresh the OAuth2
+# Bootstrap the directory service: create/refresh the OAuth2
 # provider and application that let the registry consume Authentik as its
 # `authentik` social provider. Idempotent — safe to re-run.
 #
@@ -8,11 +8,11 @@
 #   AUTHENTIK_BOOTSTRAP_TOKEN        the API token first boot created
 #   AGENTRY_AUTHENTIK_CLIENT_SECRET  OAuth client secret to (re)set
 #   AGENTRY_REDIRECT_URI             e.g. https://<host>/api/v1/auth/oidc/authentik/callback
-#   AGENTRY_PUBLIC_WEB_URL           e.g. https://<host> — where sign-in lands and sign-out returns (agentry#164)
+#   AGENTRY_PUBLIC_WEB_URL           e.g. https://<host> — where sign-in lands and sign-out returns
 # Optional:
 #   AGENTRY_CLIENT_ID   (default agentry-registry)
 #   CURL_FLAGS          e.g. -k while the edge still runs a self-signed cert
-# Optional, the log stack's Dashboards (agentry#598; skipped unless the URL is set):
+# Optional, the log stack's Dashboards (skipped unless the URL is set):
 #   AGENTRY_DASHBOARDS_URL             e.g. https://dash.<host> — Dashboards' public URL
 #   AGENTRY_IDP_STAFF_MIRROR_GROUP     the group the registry keeps equal to its
 #                                      platform staff (default agentry-staff); give the
@@ -44,7 +44,7 @@ echo "ready"
 echo "== resolve flows + signing key =="
 AUTHZ_FLOW=$(curlx "$API/flows/instances/?slug=default-provider-authorization-implicit-consent" | jget "d['results'][0]['pk']")
 # Sign-out returns to the site through the blueprint's agentry-invalidation
-# flow (agentry#164); the shipped provider flow is the fallback on a
+# flow; the shipped provider flow is the fallback on a
 # directory whose blueprints have not applied yet.
 INVAL_FLOW=$(curlx "$API/flows/instances/?slug=agentry-invalidation" | jget "(d['results'][0]['pk'] if d['results'] else '')" 2>/dev/null || echo "")
 [ -n "$INVAL_FLOW" ] || INVAL_FLOW=$(curlx "$API/flows/instances/?slug=default-provider-invalidation-flow" | jget "d['results'][0]['pk']" 2>/dev/null || echo "")
@@ -63,18 +63,17 @@ print(json.dumps(pks))')
 EMAIL_MANAGED_PK=$(curlx "$API/propertymappings/provider/scope/?managed=goauthentik.io/providers/oauth2/scope-email" | jget "d['results'][0]['pk']")
 export SCOPE_MAPPINGS EMAIL_MANAGED_PK
 # authentik's managed `email` mapping hard-codes email_verified=False
-# (2026.8), which the registry's T-12 auto-link rule (verified IdP email ↔
+# (2026.8), which the registry's auto-link rule (verified IdP email ↔
 # verified account email) treats as unlinkable. The account-flows blueprint
 # carries the replacement, agentry-verified-email, which asserts what the
 # directory recorded: false for a self-enrolled account until the registry's
-# activation link confirms it (agentry#861). Until agentry#861 this script
-# made its own mapping that said true for everyone; a re-run replaces it on
-# the provider (the old mapping is left in place, unused).
+# activation link confirms it. A re-run replaces any older mapping this
+# script made on the provider (the old mapping is left in place, unused).
 VERIFIED_PK=$(curlx -G --data-urlencode "name=agentry-verified-email" "$API/propertymappings/provider/scope/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
 [ -n "$VERIFIED_PK" ] || { echo "error: the blueprint's agentry-verified-email scope mapping is not there yet; re-run once authentik has applied agentry-account-flows.yaml" >&2; exit 1; }
 export VERIFIED_PK
 # The account-flows blueprint's `agentry` scope mapping carries whether the
-# sign-in asked to remember the browser (agentry#671, DEV-163). The registry
+# sign-in asked to remember the browser. The registry
 # asks for the scope; without the mapping on the provider authentik drops
 # it, and then no browser is remembered and the code is asked every time.
 AGENTRY_SCOPE_PK=$(curlx -G --data-urlencode "name=agentry-remember-device" "$API/propertymappings/provider/scope/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
@@ -114,7 +113,7 @@ p = {
     # older release got every grant, password and client_credentials
     # included, which let anything holding the client secret get tokens
     # without the browser flow. Sent on create and on refresh, so a re-run
-    # narrows an existing provider (agentry#494).
+    # narrows an existing provider.
     "grant_types": ["authorization_code"],
 }
 if os.environ.get("INVAL_FLOW"):
@@ -122,7 +121,7 @@ if os.environ.get("INVAL_FLOW"):
 uri = os.environ["REDIRECT_URI"]
 web = os.environ["WEB_URL"]
 # The logout-typed entry lets an RP-initiated sign-out name the site as its
-# post_logout_redirect_uri (agentry#164).
+# post_logout_redirect_uri.
 p["redirect_uris"] = ([{"matching_mode": "strict", "url": uri, "redirect_uri_type": "authorization"},
                        {"matching_mode": "strict", "url": web + "/", "redirect_uri_type": "logout"}]
                       if structured else uri)
@@ -148,7 +147,7 @@ echo "== application =="
 APP=$(curlx "$API/core/applications/?slug=agentry" | jget "d['pagination']['count']")
 # The launch URL is the registry's own sign-in start: a directory session
 # that ends without a return (enrollment, recovery, a flow opened by hand)
-# lands in the app signed in, never in the directory's panel (agentry#164).
+# lands in the app signed in, never in the directory's panel.
 BODY=$(PK="$PK" WEB_URL="$WEB_URL" python3 -c "import json,os;print(json.dumps({'name':'Agentry','slug':'agentry','provider':int(os.environ['PK']),'meta_launch_url':os.environ['WEB_URL']+'/api/v1/auth/oidc/authentik/start?next=%2Fdashboard','open_in_new_tab':False}))")
 if [ "$APP" = "0" ]; then
   curlx -X POST "$API/core/applications/" -d "$BODY" -o /dev/null
@@ -165,7 +164,7 @@ curlx -X PATCH "$API/core/brands/$BRAND_PK/" -d "$(APP_PK="$APP_PK" python3 -c "
 echo "brand $BRAND_PK: default_application=$APP_PK, flow_user_settings=null"
 
 if [ -n "${AGENTRY_DASHBOARDS_URL:-}" ]; then
-  # The log stack's Dashboards signs in here too (agentry#598). Its tokens
+  # The log stack's Dashboards signs in here too. Its tokens
   # carry `roles`: ["agentry-reader"] for a member of the staff mirror group,
   # which the registry keeps equal to its platform staff, and nothing else;
   # the application is bound to the group, so nobody else is even given a
@@ -195,7 +194,7 @@ g = os.environ["MIRROR_GROUP"]
 print(json.dumps({
   "name": os.environ["ROLES_NAME"], "scope_name": "roles",
   "description": "Dashboards reader role for platform staff",
-  "expression": "# The registry keeps this group equal to its platform staff (agentry#598).\n"
+  "expression": "# The registry keeps this group equal to its platform staff.\n"
                 "return {\"roles\": [\"agentry-reader\"] if ak_is_group_member(request.user, name=%r) else []}" % g,
 }))')
   ROLES_PK=$(curlx -G --data-urlencode "name=$ROLES_NAME" "$API/propertymappings/provider/scope/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
@@ -232,7 +231,7 @@ p = {
   "client_secret": os.environ["DASH_SECRET"], "signing_key": os.environ["CERT"],
   "sub_mode": "hashed_user_id", "include_claims_in_id_token": True,
   "property_mappings": mappings,
-  # Authorization code only, as the registry'"'"'s provider (agentry#494).
+  # Authorization code only, as the registry'"'"'s provider.
   "grant_types": ["authorization_code"],
   # OpenSearch Dashboards returns to <base_redirect_url>/auth/openid/login
   # and, signed out, to its base URL.
@@ -269,7 +268,7 @@ print(json.dumps(p))')
   # bindings with the group, which would leave the application open to every
   # directory account; the expression fails closed when the group is gone.
   POLICY_NAME="agentry-dashboards-staff-mirror"; export POLICY_NAME
-  POLICY_BODY=$(python3 -c 'import json,os;print(json.dumps({"name":os.environ["POLICY_NAME"],"expression":"# The registry keeps this group equal to its platform staff (agentry#598).\nreturn ak_is_group_member(request.user, name=%r)" % os.environ["MIRROR_GROUP"]}))')
+  POLICY_BODY=$(python3 -c 'import json,os;print(json.dumps({"name":os.environ["POLICY_NAME"],"expression":"# The registry keeps this group equal to its platform staff.\nreturn ak_is_group_member(request.user, name=%r)" % os.environ["MIRROR_GROUP"]}))')
   POLICY_PK=$(curlx -G --data-urlencode "name=$POLICY_NAME" "$API/policies/expression/" | jget "(d['results'][0]['pk'] if d['results'] else '')")
   if [ -z "$POLICY_PK" ]; then
     POLICY_PK=$(curlx -X POST "$API/policies/expression/" -d "$POLICY_BODY" | jget "d['pk']")
@@ -293,7 +292,7 @@ echo "== issuer (AGENTRY_SOCIAL_AUTHENTIK_ISSUER) =="
 echo "$AUTHENTIK_URL/application/o/agentry/"
 # The cancel view drops a flow plan the session may still hold before the
 # provider's end-session runs; without it that plan turns sign-out into an
-# empty page (agentry#441).
+# empty page.
 echo "== sign-out URL (AGENTRY_IDP_LOGOUT_URL) =="
 echo "$AUTHENTIK_URL/flows/-/cancel/?next=/application/o/agentry/end-session/"
 echo "BOOTSTRAP OK"

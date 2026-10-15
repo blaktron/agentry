@@ -60,8 +60,8 @@ func TestHTTPOSVQuery(t *testing.T) {
 			})
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/vulns/PYSEC-2026-1":
 			// No word of the database's own: the vector's band is the
-			// advisory's severity (9.8, critical). Before agentry#774 a
-			// vector was not read at all and this was medium.
+			// advisory's severity (9.8, critical). A vector
+			// is read, so this is not medium.
 			vulnCalls++
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id": "PYSEC-2026-1", "summary": "vector only",
@@ -99,7 +99,7 @@ func TestHTTPOSVQuery(t *testing.T) {
 		t.Fatalf("minimist: %+v", mi)
 	}
 	// The stored severity is the database's word; the score sits beside it,
-	// and only the gate's rating moves (invariant 5 of the tweaks plan).
+	// and only the gate's rating moves.
 	tr := res["PyPI/trestle@1.0.0"]
 	if len(tr) != 2 {
 		t.Fatalf("trestle: %+v", tr)

@@ -17,9 +17,9 @@ import (
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
-// Orchestrator runs the scanner DAG (§8.2): S1 first (builds the inventory),
+// Orchestrator runs the scanner DAG: S1 first (builds the inventory),
 // then S2–S9 in parallel, then S10 assembles the report and computes the
-// gate. Each stage has a timeout and fails closed (§7 timeout rule): a stage
+// gate. Each stage has a timeout and fails closed: a stage
 // error becomes an S0/pipeline-error finding that forces review, never a
 // silent pass.
 type Orchestrator struct {
@@ -31,25 +31,25 @@ type Orchestrator struct {
 	scanTimeout  time.Duration
 	// knowledgeTimeout bounds SK, the scan of the packs a release ships.
 	knowledgeTimeout time.Duration
-	// mx records §16.2 per-stage durations and the ScanStageRuns/
-	// ScanStageErrors pair the §16.3 error-rate page alarm divides. nil is a
+	// mx records per-stage durations and the ScanStageRuns/
+	// ScanStageErrors pair the error-rate page alarm divides. nil is a
 	// working no-op.
 	mx *metrics.Metrics
-	// tools are the optional external scanners behind the §8.3 seams
-	// (agentry#40). Zero value = native scanners only.
+	// tools are the optional external scanners behind the S2 seam.
+	// Zero value = native scanners only.
 	tools ExternalTools
 	// osv and mcpCache drive S7, the declared-MCP-server vulnerability
-	// check (agentry#177): the database client and the registry of scanned
+	// check: the database client and the registry of scanned
 	// server versions. nil = offline, and S7 says so on the report.
 	osv      OSVClient
 	mcpCache MCPScanCache
 	// registries are the package registries S7 asks whether a declared
-	// server's pinned version exists (agentry#1036); nil = not asked.
+	// server's pinned version exists; nil = not asked.
 	registries PackageRegistries
 }
 
 // SetPackageRegistries wires the registries S7 asks whether a declared
-// server's pinned version is published (agentry#1036).
+// server's pinned version is published.
 func (o *Orchestrator) SetPackageRegistries(r PackageRegistries) { o.registries = r }
 
 // SetMCPScanning wires S7's vulnerability database and the scanned-server
@@ -59,12 +59,12 @@ func (o *Orchestrator) SetMCPScanning(client OSVClient, cache MCPScanCache) {
 	o.mcpCache = cache
 }
 
-// SetMetrics wires the §16.2 instrument set.
+// SetMetrics wires the instrument set.
 func (o *Orchestrator) SetMetrics(m *metrics.Metrics) { o.mx = m }
 
-// ExternalTools are the production upgrades DEV-006 left behind interfaces:
-// gitleaks for S2. Opengrep (S6) went with the code kinds (DEV-088); the
-// OSV client came back for declared MCP servers (SetMCPScanning).
+// ExternalTools are the external scanners behind interfaces:
+// gitleaks for S2 and the OSV client for declared MCP servers
+// (SetMCPScanning).
 type ExternalTools struct {
 	Gitleaks *ExecTool
 }
@@ -84,9 +84,9 @@ func NewOrchestrator(bundle *rules.Bundle, judge JudgeProvider, log *slog.Logger
 		bundle: bundle, judge: judge, log: log,
 		stageTimeout: 5 * time.Minute,
 		// A shipped pack is read by AI Review in chunks, up to 10 MB of it
-		// a pack (plan knowledge.md §4.6), which is many judge calls.
+		// a pack, which is many judge calls.
 		knowledgeTimeout: 20 * time.Minute,
-		scanTimeout:      30 * time.Minute, // §7: scanning > 30 min ⇒ error → review
+		scanTimeout:      30 * time.Minute, // scanning > 30 min ⇒ error → review
 	}
 }
 
@@ -95,17 +95,17 @@ type RunParams struct {
 	Input  Input
 	Policy Policy
 	Public bool
-	// NamespaceIsOrg routes review to the org queue (§8.6). Personal-namespace
-	// agents have no org, so their reviews belong to the platform queue —
-	// routing them to "org" produced an item with a NULL org_id that appeared
-	// in neither queue listing and that nobody could decide.
+	// NamespaceIsOrg routes review to the org queue. Personal-namespace
+	// agents have no org, so their reviews belong to the platform queue:
+	// routing them to "org" would produce an item with a NULL org_id that
+	// appears in neither queue listing and that nobody could decide.
 	NamespaceIsOrg bool
 	// PopularAgentNames + AgentName feed S8.
 	PopularAgentNames []string
 	AgentName         string
 	// Resume carries stage results already known for this run: stages a
-	// previous attempt completed (§8.2 idempotency, keyed by scan run and
-	// scanner) or answered from the §8.7 results cache. Their findings are
+	// previous attempt completed (keyed by scan run and
+	// scanner) or answered from the results cache. Their findings are
 	// folded in as though the stages had just run, so the report and the gate
 	// see the complete set.
 	Resume Resume
@@ -135,12 +135,12 @@ func (r Resume) skips(id string) bool {
 }
 
 // CacheableStages are the deterministic scanners a rescan may answer from the
-// results cache keyed (digest, scanner, ruleset) — §8.7. S1 always runs (it
+// results cache keyed (digest, scanner, ruleset). S1 always runs (it
 // is the inventory), S5 is the judge (re-adjudicated only on major bumps),
 // S9 depends on the previous published version rather than on these bytes.
 func CacheableStages() []string { return []string{"S2", "S3S4", "S8"} }
 
-// Report is the S10 canonical report (§8.3 S10). Field order is fixed and
+// Report is the S10 canonical report. Field order is fixed and
 // slices are sorted so ReportDigest is reproducible.
 type Report struct {
 	SchemaVersion string    `json:"schemaVersion"`
@@ -163,7 +163,7 @@ type RunResult struct {
 	Decision     GateDecision
 	JudgeModel   string
 	// JudgePromptHash identifies the rubric/prompt version S5 adjudicated
-	// with (§8.4.4: recorded per run for reproducibility and appeals).
+	// with (recorded per run for reproducibility and appeals).
 	JudgePromptHash string
 	// JudgeUsage is the token use S5's provider reported, nil when unknown;
 	// see JudgeUsage for why it is on the run and not in Report.
@@ -176,14 +176,14 @@ type RunResult struct {
 	// Ran lists the stages that actually executed (skipped ones excluded).
 	Ran []StageResult
 	// Skipped names the stages whose results came from Resume rather than
-	// from running them: §8.7 results-cache hits, or stages a previous
+	// from running them: results-cache hits, or stages a previous
 	// attempt at this run had already completed.
 	Skipped []string
 	// Knowledge is the report's shipped-pack section (Report.Knowledge).
 	Knowledge []ShippedPackScan
 }
 
-// Run executes the full pipeline synchronously (§8.2). The worker calls this
+// Run executes the full pipeline synchronously. The worker calls this
 // from a queue handler; tests call it directly. Idempotency at the DB layer
 // is handled by the caller (scan_stage_results keys); Run itself is pure
 // over its Input.
@@ -194,7 +194,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	sc := stageContext{ctx: ctx, bundle: o.bundle, judge: o.judge, log: o.log, osv: o.osv, mcpCache: o.mcpCache, registries: o.registries}
 	in := &p.Input
 
-	// Stages already answered (a previous attempt, or the §8.7 cache) come in
+	// Stages already answered (a previous attempt, or the cache) come in
 	// first so the report, S9's escalation input and the gate all see the
 	// complete finding set — a resumed run must decide exactly as a fresh one.
 	allFindings := append([]Finding{}, p.Resume.Findings...)
@@ -222,7 +222,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 	}
 
 	// The release's own stages read the release's own files; the trees of
-	// the packs it ships are SK's (plan knowledge.md §4.6).
+	// the packs it ships are SK's.
 	release := in
 	if len(ships) > 0 {
 		cp := *in
@@ -245,8 +245,8 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 
 	// S2–S8 in parallel (S9 needs the others' findings; run it after).
 	// S6 is the support-script check — shell, Python and JS in the package
-	// against the manifest's egress, writes, secrets and exec (DEV-094) —
-	// and S7 the declared-MCP-server vulnerability check (agentry#177).
+	// against the manifest's egress, writes, secrets and exec —
+	// and S7 the declared-MCP-server vulnerability check.
 	parallel := []Stage{
 		S2Secrets{Gitleaks: o.tools.Gitleaks},
 		S3S4Content{},
@@ -299,7 +299,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		stageErrs = append(stageErrs, "S9: "+s9.Err.Error())
 	}
 
-	// Any stage error ⇒ fail closed with a pipeline-error finding (§7).
+	// Any stage error ⇒ fail closed with a pipeline-error finding.
 	if len(stageErrs) > 0 {
 		allFindings = append(allFindings, Finding{
 			Scanner: "S0/pipeline-error", Severity: SevMedium, Confidence: ConfHigh,
@@ -338,7 +338,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		Knowledge: knowledge,
 	}
 	if digestErr != nil {
-		// The digest is the subject of the DSSE attestation (§8.8). An empty
+		// The digest is the subject of the DSSE attestation. An empty
 		// one must never reach a signature, so this ends the run rather than
 		// degrading it: the caller fails the version toward review.
 		o.log.Error("scan: report digest", "err", digestErr)
@@ -359,7 +359,7 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 	inner := sc
 	inner.ctx = stageCtx
 
-	// §16.2 stage telemetry. Deferred on the named return so the timeout path
+	// Stage telemetry. Deferred on the named return so the timeout path
 	// below is measured too — a stage that hangs is exactly the one the
 	// error-rate alarm needs to hear about.
 	start := time.Now()
@@ -377,8 +377,8 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 			stageAttrs = append(stageAttrs, "err", res.Err)
 		}
 		o.log.InfoContext(sc.ctx, "scan: stage finished", stageAttrs...)
-		// S7's "we did not check" outcomes are fail-open by design
-		// (DEV-026.3); count them where a dashboard can see them (agentry#33)
+		// S7's "we did not check" outcomes are fail-open by design;
+		// count them where a dashboard can see them
 		// and name them in a line an alert can key on.
 		for _, f := range res.Findings {
 			var path string
@@ -395,10 +395,10 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 				path, ev = metrics.FailOpenOSVError, logevent.FailOpenOSVError
 			case scannerVersionNotChecked:
 				// The check is off, or a registry gave no answer: the
-				// version publishes without it (agentry#1036).
+				// version publishes without it.
 				path, ev = metrics.FailOpenVersionNotChecked, logevent.FailOpenVersionNotChecked
 			// S2/history-error is not one: it holds the version (the gate
-			// forces review on it, agentry#771).
+			// forces review on it).
 			case "S2/history-not-scanned", "S2/history-truncated":
 				path, ev = metrics.FailOpenHistoryNotScanned, logevent.FailOpenHistoryNotScanned
 			default:
@@ -444,8 +444,8 @@ func sortFindings(f []Finding) {
 	})
 }
 
-// reportDigest computes the sha256 over canonical report JSON (§8.3 S10;
-// goes into the attestation, §8.8). A marshal failure is returned, never
+// reportDigest computes the sha256 over canonical report JSON (S10;
+// goes into the attestation). A marshal failure is returned, never
 // swallowed into an empty digest: the digest is what the signature commits
 // to, so "" would attest to nothing at all.
 func reportDigest(r Report) (string, error) {
@@ -458,8 +458,8 @@ func reportDigest(r Report) (string, error) {
 }
 
 // panicError carries what a recovered stage panic actually said, plus the
-// stack. Discarding the value left "panic in stage" as the sole evidence of
-// a crash reachable from untrusted package content.
+// stack. Discarding the value would leave "panic in stage" as the sole
+// evidence of a crash reachable from untrusted package content.
 type panicError struct {
 	stage string
 	value any

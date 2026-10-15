@@ -9,8 +9,8 @@ import (
 )
 
 // A fork's reference carries its origin, the agent and its publisher's
-// namespace, for the earnings a fork's runs owe the origin (agentry#943);
-// an agent that is no fork carries none.
+// namespace, for the earnings a fork's runs owe the origin; an agent
+// that is no fork carries none.
 func TestAgentRefCarriesAForksOrigin(t *testing.T) {
 	origin, originNS, ns := uuid.New(), uuid.New(), uuid.New()
 	kind := "org"

@@ -15,11 +15,11 @@ import (
 	"github.com/blaktron/agentry/pkg/reportdesign"
 )
 
-// GetUserReportSettings implements GET /user/report-settings (agentry#989,
-// agentry#1024): the report design the caller's PDF reports take, a profile
-// setting (plan report-designs.md D11). No row reads back with no design,
-// which a client tells apart from Plain (DEV-227). The logo comes only with
-// include=logo (agentry#1025): a client built before logos refuses a design
+// GetUserReportSettings implements GET /user/report-settings: the report
+// design the caller's PDF reports take, a profile
+// setting. No row reads back with no design,
+// which a client tells apart from Plain. The logo comes only with
+// include=logo: a client built before logos refuses a design
 // with a key it does not know, and would then run without the design at all.
 func (s *Server) GetUserReportSettings(w http.ResponseWriter, r *http.Request, params GetUserReportSettingsParams) {
 	if !s.authorize(w, r, auth.ActUserSelfRead, uuid.Nil) {
@@ -76,9 +76,9 @@ func fieldMessage(err error) string {
 // replace, so a body with no design (or a null one) clears the choice. The
 // design is parsed by pkg/reportdesign, which refuses an unknown key, a
 // missing field, a name off a closed list, a colour that fails the contrast
-// rule and an over-size document (plan invariants 2, 3, 7); the field it
+// rule and an over-size document; the field it
 // names comes back as design.<path>. The canonical document is what is
-// stored and answered. The logo is stored beside the design (agentry#1025):
+// stored and answered. The logo is stored beside the design:
 // a design that carries one replaces the stored logo with NormalizeLogo's
 // encoding of it, and a design that carries none leaves a stored logo as it
 // is, so a client that does not know logos cannot drop one by saving.
@@ -172,8 +172,8 @@ func (s *Server) answerReportSettings(w http.ResponseWriter, r *http.Request, us
 	writeJSON(w, http.StatusOK, reportSettingsBody{Design: design})
 }
 
-// PutUserReportLogo implements PUT /user/report-settings/logo (agentry#1025;
-// plan report-designs.md D9): one multipart part named file, PNG or JPEG, at
+// PutUserReportLogo implements PUT /user/report-settings/logo: one
+// multipart part named file, PNG or JPEG, at
 // most 512 KB, decoded, scaled down and encoded again as PNG by
 // pkg/reportdesign, so only its pixels are kept. A logo travels with a
 // design, so with no design saved it is 409. Read the same way as the
@@ -225,8 +225,8 @@ func (s *Server) PutUserReportLogo(w http.ResponseWriter, r *http.Request) {
 	s.answerReportSettings(w, r, p.UserID, true)
 }
 
-// DeleteUserReportLogo implements DELETE /user/report-settings/logo
-// (agentry#1025): the design stays; removing no logo is done.
+// DeleteUserReportLogo implements DELETE /user/report-settings/logo:
+// the design stays; removing no logo is done.
 func (s *Server) DeleteUserReportLogo(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActUserSelfUpdate, uuid.Nil) {
 		return
@@ -245,16 +245,16 @@ func (s *Server) DeleteUserReportLogo(w http.ResponseWriter, r *http.Request) {
 
 // ReportDesign is a person's report design as its canonical document,
 // without its logo, or nil when they never chose one, which is not Plain:
-// the reader decides what nothing means (DEV-227). It is the read behind GET
+// the reader decides what nothing means. It is the read behind GET
 // /user/report-settings and the extension seam (pkg/extension
-// ReportSettings, agentry#1015). A stored design that no longer validates (a
+// ReportSettings). A stored design that no longer validates (a
 // rule tightened since it was saved) reads as never chosen, and is logged.
 func (s *Server) ReportDesign(ctx context.Context, user uuid.UUID) ([]byte, error) {
 	return s.reportDesign(ctx, user, false)
 }
 
 // ReportDesignWithLogo is ReportDesign with the person's logo in it, when
-// they have one (agentry#1025), for a reader that draws it.
+// they have one, for a reader that draws it.
 func (s *Server) ReportDesignWithLogo(ctx context.Context, user uuid.UUID) ([]byte, error) {
 	return s.reportDesign(ctx, user, true)
 }
@@ -288,11 +288,9 @@ func (s *Server) reportDesign(ctx context.Context, user uuid.UUID, withLogo bool
 }
 
 // ReportTheme is the built-in theme a person's design started from (its
-// basedOn), or "" when they never chose one. It is transitional: the hosted
-// job still carries a theme's name to a sandbox host whose CLI knows the
-// names of the plan this one replaced (agentry-enterprise#470), and drops a
-// name it does not have. agentry-enterprise#479 (M6) moves the job to the
-// design and removes this read.
+// basedOn), or "" when they never chose one. The hosted job carries a
+// theme's name to a sandbox host whose CLI knows theme names, and drops a
+// name it does not have.
 func (s *Server) ReportTheme(ctx context.Context, user uuid.UUID) (string, error) {
 	design, err := s.ReportDesign(ctx, user)
 	if err != nil || design == nil {

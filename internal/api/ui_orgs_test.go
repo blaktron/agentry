@@ -49,7 +49,7 @@ func TestCoreUIOrgAdmin(t *testing.T) {
 	if code, body := getPage("/ui/orgs"); code != http.StatusOK || !strings.Contains(body, org) {
 		t.Fatalf("orgs index: %d %s", code, body)
 	}
-	// A second person creates an organization through the form (agentry#363):
+	// A second person creates an organization through the form:
 	// the page posts in-process, lands on the new organization, and a
 	// refusal — here the handle just taken — renders as the page's notice.
 	maker := env.register("uiorg-mk")

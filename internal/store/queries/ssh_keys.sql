@@ -1,4 +1,4 @@
--- SSH keys (§6.1 Q7, agentry#70).
+-- SSH keys.
 
 -- name: CreateSSHKey :one
 INSERT INTO user_ssh_keys (id, user_id, title, key_type, public_key, fingerprint)
@@ -18,5 +18,5 @@ UPDATE user_ssh_keys SET last_used_at = now() WHERE id = $1;
 UPDATE user_ssh_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL;
 
 -- name: RevokeAllSSHKeysForUser :execrows
--- Clear-data (agentry#498).
+-- Clear-data.
 UPDATE user_ssh_keys SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL;

@@ -7,8 +7,8 @@ import (
 )
 
 // The token-shaped values below are assembled at run time so the source
-// carries no token-shaped literal (the repository's gitleaks scan is part
-// of its open-source posture, agentry#209); the corpus fixtures, which
+// carries no token-shaped literal (the repository's gitleaks scan covers
+// the source); the corpus fixtures, which
 // are allowlisted, carry the literal ones.
 func fakeProjectKey() string { return "sk-pr" + "oj-72s8FYVEEdGBOTbDNWDl7EkFSZu8LWWhZ6xuiz9Mxl6EEQA1" }
 func fakeHexToken() string   { return "f7ef114b9c1a75ec" + "175c9ed6bfb65ecb227fc477" }
@@ -17,7 +17,7 @@ func fakePrefixedPAT() string {
 }
 
 // TestEnvTokenShaped pins the token shape against the configuration
-// values a declared server plausibly carries (agentry#288): the shape must
+// values a declared server plausibly carries: the shape must
 // see a bare credential and stay quiet on paths, URLs, names and ids.
 func TestEnvTokenShaped(t *testing.T) {
 	cases := map[string]bool{
@@ -170,7 +170,7 @@ func TestS2ManifestEnvWithoutFile(t *testing.T) {
 // a credential written into it (a real client secret in a template, a
 // token in an env value) is the same finding as one in env; the
 // placeholders themselves, a path in the token folder and dummy client
-// values are not (agentry#910).
+// values are not.
 func TestS2ManifestOAuthValues(t *testing.T) {
 	in := &Input{ManifestJSON: []byte(`{"capabilities":{"mcpServers":[{"npm":"@cocal/google-calendar-mcp","version":"2.7.0","oauth":{` +
 		`"issuer":"https://accounts.google.com",` +

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# §17.6 baseline: 50 concurrent git clones.
+# Baseline: 50 concurrent git clones.
 #
 # k6 speaks HTTP, and smart-HTTP v2 clone is a multi-request negotiation with
 # packfile streaming — driving it from k6 would measure a reimplementation of
@@ -12,9 +12,9 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
-CONCURRENCY="${CONCURRENCY:-50}"     # §17.6 target
+CONCURRENCY="${CONCURRENCY:-50}"     # target
 ITERATIONS="${ITERATIONS:-4}"        # waves of CONCURRENCY clones
-P95_BUDGET_MS="${P95_BUDGET_MS:-2000}" # §18.2 M2: clone p95 < 2s on seed repos
+P95_BUDGET_MS="${P95_BUDGET_MS:-2000}" # clone p95 < 2s on seed repos
 REPOS="${REPOS:-}"                   # newline- or space-separated ns/name list
 
 if [ -z "${AGENTRY_PAT:-}" ]; then
@@ -95,7 +95,7 @@ if [ "$failures" -gt 0 ]; then
   status=1
 fi
 if [ "$p95" -gt "$P95_BUDGET_MS" ]; then
-  echo "FAIL: p95 ${p95} ms exceeds the ${P95_BUDGET_MS} ms budget (§18.2 M2)" >&2
+  echo "FAIL: p95 ${p95} ms exceeds the ${P95_BUDGET_MS} ms budget" >&2
   status=1
 fi
 [ "$status" -eq 0 ] && echo "PASS"

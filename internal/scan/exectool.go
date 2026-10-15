@@ -15,10 +15,10 @@ import (
 	"time"
 )
 
-// External scanner tools (§8.3: gitleaks for S2). DEV-006
-// shipped the native detectors with these as the production upgrade; the
-// adapters here exec the real binary against the extracted archive and fold
-// its report into the stage's findings (agentry#40). Rules of the road:
+// External scanner tools (gitleaks for S2). The native detectors run
+// without them; the adapters here exec the real binary against the
+// extracted archive and fold its report into the stage's findings.
+// Rules of the road:
 //
 //   - The tool is optional. A nil adapter means "native only"; a configured
 //     adapter whose binary is missing is a startup error, not a silent skip.
@@ -240,8 +240,7 @@ func runGitleaks(ctx context.Context, t *ExecTool, dir string, seen map[string]b
 	// `detect --no-git` reads the tree as files (the archive is not a repo);
 	// --exit-code 0 keeps "leaks found" from reading as a crash; --config
 	// is always given, so a .gitleaks.toml in the archive is scanned as a
-	// file and never read as configuration (security review 2026-09-20
-	// §5.7).
+	// file and never read as configuration.
 	_, err = t.run(ctx, dir, "detect", "--no-git", "--source", ".", "--no-banner",
 		"--config", cfg,
 		"--exit-code", "0", "--report-format", "json", "--report-path", report.Name())
@@ -299,7 +298,7 @@ func runGitleaks(ctx context.Context, t *ExecTool, dir string, seen map[string]b
 }
 
 // sanitizeRuleID keeps finding ids to the [a-z0-9-] vocabulary the report
-// consumers and the §8.6 policy matcher expect.
+// consumers and the policy matcher expect.
 func sanitizeRuleID(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {

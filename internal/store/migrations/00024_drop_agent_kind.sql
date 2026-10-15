@@ -1,7 +1,7 @@
 -- +goose Up
--- The v1 kind column goes: the API speaks modes from 0.3.0 (DEV-088,
--- agentry#145) and nothing reads kind any more. Modes were backfilled from
--- it in 00023, so no information a client can ask for is lost.
+-- The v1 kind column goes: the API speaks modes and nothing reads kind any
+-- more. Modes were backfilled from it in 00023, so no information a client
+-- can ask for is lost.
 ALTER TABLE agents DROP COLUMN kind;
 
 -- +goose Down

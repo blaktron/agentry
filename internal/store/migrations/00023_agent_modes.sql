@@ -1,9 +1,8 @@
 -- +goose Up
--- QuickAgent run modes (DEV-088; agentry-notes/plans/briefagent-modes.md
--- §4.1). A release supports autonomous, interactive, or both. The kind
--- column stays until the API moves to modes (agentry#145); every row that
--- can still be created is an instruction package, so the default is
--- autonomous and only the withdrawn kind ends up with no modes at all.
+-- QuickAgent run modes. A release supports autonomous, interactive, or both.
+-- The kind column is kept here (00024 drops it); every row that can still be
+-- created is an instruction package, so the default is autonomous and only
+-- the withdrawn kind ends up with no modes at all.
 ALTER TABLE agents ADD COLUMN modes text[] NOT NULL DEFAULT '{autonomous}';
 ALTER TABLE agents ADD CONSTRAINT agents_modes_valid
   CHECK (modes <@ ARRAY['autonomous','interactive']::text[]);
@@ -15,7 +14,7 @@ UPDATE agents SET modes = '{}', quarantine_state = 'blocked', updated_at = now()
 INSERT INTO advisories (id, agent_id, affected_versions, severity, summary, detail, published_at)
 SELECT gen_random_uuid(), id, '*', 'medium',
        'Package kind withdrawn: MCP server codebases are no longer QuickAgents',
-       'The mcp-server package kind was withdrawn on 2026-09-05 (DEV-088). This agent is blocked. An agent that needs MCP servers declares them under capabilities.mcpServers in its own manifest.',
+       'The mcp-server package kind was withdrawn on 2026-09-05. This agent is blocked. An agent that needs MCP servers declares them under capabilities.mcpServers in its own manifest.',
        now()
   FROM agents WHERE kind = 'mcp-server';
 

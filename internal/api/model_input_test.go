@@ -18,7 +18,7 @@ import (
 	"github.com/blaktron/agentry/pkg/websearch"
 )
 
-// The model-input routes (agentry#608): AI Review of text a model is about
+// The model-input routes: AI Review of text a model is about
 // to read, and web search brokered by the registry. The scanner here is the
 // real pkg/judge scanner over a fake judge that flags, errors and times out,
 // so the route is tested with the question set, the chunking and the

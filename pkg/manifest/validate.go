@@ -14,8 +14,8 @@ import (
 	"github.com/Masterminds/semver/v3"
 )
 
-// Fixed spec limits from PLAN §5.2/§19 that are part of the manifest
-// grammar itself (not raisable per-org entitlements).
+// Fixed limits that are part of the manifest grammar itself (not
+// raisable per-org entitlements).
 const (
 	// MaxSummaryChars caps summary length in Unicode code points (V8).
 	MaxSummaryChars = 140
@@ -46,7 +46,7 @@ func (s Severity) String() string {
 // Issue is one validation finding. All errors returned by Validate and
 // ValidateInContext are *Issue values.
 type Issue struct {
-	// Rule is the §5.3 rule id, one of Rules().
+	// Rule is the rule id, one of Rules().
 	Rule string
 	// Severity distinguishes blocking errors from flags such as the
 	// policy-gated "*" egress.
@@ -102,7 +102,8 @@ func Blocking(errs []error) []error {
 	return out
 }
 
-// Name and namespace patterns exactly as the §4.2 DDL CHECK constraints.
+// Name and namespace patterns exactly as the database's CHECK
+// constraints.
 var (
 	nameRE      = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$`)
 	namespaceRE = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$`)
@@ -110,16 +111,18 @@ var (
 	envNameRE   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
-// ValidName reports whether s is a valid agent name per the §4.2 DDL
-// pattern (lowercase alphanumeric plus interior hyphens, at most 65 chars).
+// ValidName reports whether s is a valid agent name per the database's
+// pattern (lowercase alphanumeric plus interior hyphens, at most 65
+// chars).
 func ValidName(s string) bool { return nameRE.MatchString(s) }
 
 // ValidNamespace reports whether s is a valid namespace handle per the
-// §4.2 DDL pattern (at most 39 chars).
+// database's pattern (at most 39 chars).
 func ValidNamespace(s string) bool { return namespaceRE.MatchString(s) }
 
-// Quotas are the §19 archive quotas checked by V8. The zero value is not
-// meaningful; use DefaultQuotas and override fields per org entitlements.
+// Quotas are the archive quotas checked by V8. The zero value is not
+// meaningful; use DefaultQuotas and override fields per org
+// entitlements.
 type Quotas struct {
 	// MaxArchiveBytes caps the total size of the resolved include set.
 	MaxArchiveBytes int64
@@ -129,13 +132,14 @@ type Quotas struct {
 	MaxFileBytes int64
 	// MaxImageFileBytes caps each image file (recognized by extension).
 	MaxImageFileBytes int64
-	// MaxTextBytes caps the total size of the text files (FileInfo.IsText)
-	// in the resolved include set: §19's "instruction-file total ≤ 1 MB
-	// text", the prose S3/S4/S5 read in full. Zero disables the check.
+	// MaxTextBytes caps the total size of the text files
+	// (FileInfo.IsText) in the resolved include set: the
+	// instruction-file total, at most 1 MB of the prose S3/S4/S5 read
+	// in full. Zero disables the check.
 	MaxTextBytes int64
 }
 
-// DefaultQuotas returns the §19 v1 defaults: 10 MiB archive, 2000 files,
+// DefaultQuotas returns the default quotas: 10 MiB archive, 2000 files,
 // 2 MiB per file, 5 MiB per image, 1 MiB of text in total.
 func DefaultQuotas() Quotas {
 	return Quotas{
@@ -159,9 +163,9 @@ type FileInfo struct {
 	Symlink bool
 	// IsText marks a file the scanners read as prose (the same sniff S1
 	// applies: no NUL byte in the head, not an image). V8 sums these
-	// against Quotas.MaxTextBytes — §19's "instruction-file total"
-	// (agentry#44, DEV-036). A lister that does not classify leaves it
-	// false and the total check does not apply.
+	// against Quotas.MaxTextBytes, the instruction-file total. A lister
+	// that does not classify leaves it false and the total check does
+	// not apply.
 	IsText bool
 }
 
@@ -185,7 +189,7 @@ type Context struct {
 	Public bool
 	// Files lists the candidate repo files at the submitted commit.
 	Files []FileInfo
-	// Quotas overrides the §19 defaults (org entitlements); nil uses
+	// Quotas overrides the default quotas (org entitlements); nil uses
 	// DefaultQuotas.
 	Quotas *Quotas
 	// ReadFile returns the content of a repo-relative file at the
@@ -268,9 +272,9 @@ func Validate(m *Manifest) []error {
 }
 
 // validateClassification is V1's classification half. A v2 manifest
-// declares modes and nothing kind-shaped; a v1 manifest declares a kind and
-// nothing mode-shaped. The v1 mcp-server kind is withdrawn (DEV-088): such
-// a document still parses, for the archives published under it, but is
+// declares modes and nothing kind-shaped; a v1 manifest declares a kind
+// and nothing mode-shaped. The v1 mcp-server kind is withdrawn: such a
+// document still parses, for the archives published under it, but is
 // never valid for publish again.
 func validateClassification(s *issues, m *Manifest) {
 	switch m.Major() {
@@ -411,11 +415,10 @@ func validateRuntime(s *issues, m *Manifest) {
 // MaxIntakeQuestions bounds intake so a run's up-front form stays a form.
 const MaxIntakeQuestions = 20
 
-// The guide's bounds (plan guided-runs.md §6): it is read before a run, so
-// each part stays the size a person reads at a glance. A key's help is
-// markdown of up to 2,000 characters (plan builder-simplify.md D5, D11;
-// agentry#707): where to create a key and which scopes to give it can take
-// a few numbered steps and a link.
+// The guide's bounds: it is read before a run, so each part stays the
+// size a person reads at a glance. A key's help is markdown of up to
+// 2,000 characters: where to create a key and which scopes to give it
+// can take a few numbered steps and a link.
 const (
 	MaxGuideOverviewBytes = 4096
 	MaxGuidePrepare       = 10
@@ -444,9 +447,9 @@ var (
 	}()
 )
 
-// validateIntake is V10's intake half (plan §3.5): ids unique and
-// answer-key shaped, prompts present, types from the closed set, choices
-// exactly where the type wants them.
+// validateIntake is V10's intake half: ids unique and answer-key
+// shaped, prompts present, types from the closed set, choices exactly
+// where the type wants them.
 func validateIntake(s *issues, m *Manifest) {
 	if m.Major() != 2 {
 		return // reported as a v1 field mismatch by validateClassification
@@ -494,19 +497,19 @@ func validateIntake(s *issues, m *Manifest) {
 	}
 }
 
-// validateSecretIntakeAgreement is V10's rule for secret questions (plan
-// optional-secrets.md D7): the release's own declared secret of the
-// question's upper-cased id carries the answer (the runner's rule, so a
-// server's secret carries none), and the question's required must say
-// what that secret's marking says. A secret question with no such secret
-// is the runner's refusal, not this rule's.
+// validateSecretIntakeAgreement is V10's rule for secret questions: the
+// release's own declared secret of the question's upper-cased id
+// carries the answer (the runner's rule, so a server's secret carries
+// none), and the question's required must say what that secret's
+// marking says. A secret question with no such secret is the runner's
+// refusal, not this rule's.
 //
 // It is a publish rule, here and not in Validate, on purpose: a release
-// published before optionalSecrets existed may carry a secret question
-// that is not required over a required secret, and the CLI and the
-// desktop run Validate at install and at run. Those keep today's
-// behaviour (refused at run when the secret is missing) until the release
-// is published again.
+// published without optionalSecrets may carry a secret question that is
+// not required over a required secret, and the CLI and the desktop run
+// Validate at install and at run. Those keep their behaviour (refused
+// at run when the secret is missing) until the release is published
+// again.
 func validateSecretIntakeAgreement(s *issues, m *Manifest) {
 	if m.Major() != 2 {
 		return
@@ -530,7 +533,7 @@ func validateSecretIntakeAgreement(s *issues, m *Manifest) {
 	}
 }
 
-// validateInteractive is V10's session-hints half (plan §3.6).
+// validateInteractive is V10's session-hints half.
 func validateInteractive(s *issues, m *Manifest) {
 	if m.Major() != 2 || m.Interactive == nil {
 		return
@@ -547,19 +550,19 @@ func validateInteractive(s *issues, m *Manifest) {
 	}
 }
 
-// validateGuide is V10's third half: the author's words for the run setup
-// (plan guided-runs.md §6). The overview and each key's connect help are
-// markdown and may span lines (the help since agentry#707); every other part
-// is one plain line. A connect key must be a secret the release declares, in
-// capabilities.secrets or a declared MCP server's secrets, so help never
-// names a key the run cannot take. No part may carry a format character (a
-// bidi override, a zero-width space) or a C1 control: the guide is read by a
-// person deciding what to hand a run, and the connect help is read by one
-// deciding where to create a key, so what it says must be what it shows.
-// The markdown parts keep newlines and tabs and refuse every other C0
-// control and DEL (agentry#558): ESC starts a terminal escape sequence and
-// CR rewrites a printed line, and a client that prints them should not have
-// to remember to clean them.
+// validateGuide is V10's third half: the author's words for the run
+// setup. The overview and each key's connect help are markdown and may
+// span lines; every other part is one plain line. A connect key must be
+// a secret the release declares, in capabilities.secrets or a declared
+// MCP server's secrets, so help never names a key the run cannot take.
+// No part may carry a format character (a bidi override, a zero-width
+// space) or a C1 control: the guide is read by a person deciding what
+// to hand a run, and the connect help is read by one deciding where to
+// create a key, so what it says must be what it shows. The markdown
+// parts keep newlines and tabs and refuse every other C0 control and
+// DEL: ESC starts a terminal escape sequence and CR rewrites a printed
+// line, and a client that prints them should not have to remember to
+// clean them.
 func validateGuide(s *issues, m *Manifest) {
 	if m.Major() != 2 || m.Guide == nil {
 		return
@@ -719,14 +722,15 @@ const (
 	MaxMCPServerEnvValue   = 512
 )
 
-// envExpandRE matches what the runner's gateway would rewrite in a declared
-// env value: a `$` followed by a name character, `{` or a special shell
-// parameter — the shapes os.Expand substitutes. docker/mcp-gateway (the
-// runner's pin) expands those against the server container's environment,
-// the server's secrets included, so `LOGS_DIR: $GITHUB_TOKEN` would copy a
-// secret into a plain variable (agentry-cli#99). V5 refuses them at
-// validation so an author learns at `agentry validate`, not at first run
-// (agentry#291); the runner's compile.envExpandRE is this expression.
+// envExpandRE matches what the runner's gateway would rewrite in a
+// declared env value: a `$` followed by a name character, `{` or a
+// special shell parameter — the shapes os.Expand substitutes.
+// docker/mcp-gateway (the runner's pin) expands those against the
+// server container's environment, the server's secrets included, so
+// `LOGS_DIR: $GITHUB_TOKEN` would copy a secret into a plain variable.
+// V5 refuses them at validation so an author learns at `agentry
+// validate`, not at first run; the runner's compile.envExpandRE is this
+// expression.
 var envExpandRE = regexp.MustCompile(`\$[A-Za-z0-9_{*#@!?$-]`)
 
 // LiteralEnvValue reports whether a declared env value would reach the
@@ -748,16 +752,15 @@ var (
 	npmNameRE  = regexp.MustCompile(`^(@[a-z0-9][a-z0-9-_.]*/)?[a-z0-9][a-z0-9-_.]*$`)
 	pypiNameRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$`)
 	// pep440ExactRE accepts an exact PEP-440 release (with optional
-	// pre/post/dev segment) and nothing else: no operators, no wildcards,
-	// no ranges — the pin IS the trust decision (RUNNER-PLAN-3).
+	// pre/post/dev segment) and nothing else: no operators, no
+	// wildcards, no ranges — the pin IS the trust decision.
 	pep440ExactRE = regexp.MustCompile(`^[0-9]+(\.[0-9]+)*((a|b|rc)[0-9]+)?(\.post[0-9]+)?(\.dev[0-9]+)?$`)
 )
 
-// validateMCPServers checks capabilities.mcpServers (V5, RUNNER-PLAN-3):
-// exactly one source per entry (npm, pypi, or since agentry#910 a remote
-// server's url, checked by validateRemoteServer), ecosystem name grammar,
-// EXACT version pins
-// (a range is an error — the pin rides the release archive, so a new agent
+// validateMCPServers checks capabilities.mcpServers (V5): exactly one
+// source per entry (npm, pypi, or a remote server's url, checked by
+// validateRemoteServer), ecosystem name grammar, EXACT version pins (a
+// range is an error — the pin rides the release archive, so a new agent
 // version is a new supply-chain decision by construction), single-token
 // tool names, env-grammar secret names, egress host grammar, no
 // duplicates, runnable kinds only, the plain env map (v2 only), and a
@@ -858,11 +861,11 @@ func validateMCPServerTools(s *issues, p string, srv MCPServer) {
 	}
 }
 
-// validateOptionalSecrets is V5's optional-secrets half (plan
-// optional-secrets.md D1): a v2 list, without duplicates, of names the
-// release already declares, in capabilities.secrets or a declared MCP
-// server's secrets (one namespace, as the runner and the vault treat it),
-// so it can mark a secret optional but never add one to the contract.
+// validateOptionalSecrets is V5's optional-secrets half: a v2 list,
+// without duplicates, of names the release already declares, in
+// capabilities.secrets or a declared MCP server's secrets (one
+// namespace, as the runner and the vault treat it), so it can mark a
+// secret optional but never add one to the contract.
 func validateOptionalSecrets(s *issues, m *Manifest) {
 	c := m.Capabilities
 	if len(c.OptionalSecrets) == 0 {
@@ -1050,14 +1053,14 @@ func ValidateInContext(m *Manifest, ctx Context) []error {
 	return s.list
 }
 
-// validateFrontmatter is V9 (agentry#47, DEV-044): a skill file's YAML
-// frontmatter is what the consuming runtime shows and the claude-skill
-// export keeps it verbatim, so it must not contradict the signed manifest.
-// A `name` that differs from the manifest name is an error; a
-// `description` that differs from the summary (after whitespace/case
-// folding) is a warning — summaries are short and descriptions may say
-// more, but the reviewer should see that they diverge. A block that does
-// not parse is a warning too: the runtime will not read it either.
+// validateFrontmatter is V9: a skill file's YAML frontmatter is what
+// the consuming runtime shows and the claude-skill export keeps it
+// verbatim, so it must not contradict the signed manifest. A `name`
+// that differs from the manifest name is an error; a `description` that
+// differs from the summary (after whitespace/case folding) is a warning
+// — summaries are short and descriptions may say more, but the reviewer
+// should see that they diverge. A block that does not parse is a
+// warning too: the runtime will not read it either.
 func validateFrontmatter(s *issues, m *Manifest, ctx Context) {
 	if ctx.ReadFile == nil {
 		return
@@ -1177,10 +1180,10 @@ func resolveInclude(s *issues, m *Manifest, files []FileInfo) []FileInfo {
 	if len(resolved) == 0 {
 		s.errf("V4", "publish.include", "include patterns resolve to zero files")
 	}
-	// A v2 manifest ships in its own archive: the runner reads agent.yaml
-	// from the installed tree and S2 scans the archive's files, so a
-	// release without it could neither run nor have its declared values
-	// scanned (agentry#288). The v1 reading path keeps the warning.
+	// A v2 manifest ships in its own archive: the runner reads
+	// agent.yaml from the installed tree and S2 scans the archive's
+	// files, so a release without it could neither run nor have its
+	// declared values scanned. The v1 reading path keeps the warning.
 	if len(resolved) > 0 && !seen["agent.yaml"] {
 		if m.Major() == 2 {
 			s.errf("V4", "publish.include", "agent.yaml is not matched by publish.include; the manifest must ship in the release archive")
@@ -1249,11 +1252,11 @@ func validatePublicPublish(s *issues, m *Manifest, ctx Context) {
 	}
 }
 
-// validateQuotas is V8's context half: §19 archive quotas over the
-// resolved include set. The trees of the packs the release ships are held
-// to a pack's own caps instead (validateShippedPacks): they are outside the
-// file count, the per-file sizes, the text total and the archive total, so
-// the archive's cap is raised by what it ships (plan knowledge.md §4.6).
+// validateQuotas is V8's context half: archive quotas over the resolved
+// include set. The trees of the packs the release ships are held to a
+// pack's own caps instead (validateShippedPacks): they are outside the
+// file count, the per-file sizes, the text total and the archive total,
+// so the archive's cap is raised by what it ships.
 func validateQuotas(s *issues, m *Manifest, ctx Context, all []FileInfo) {
 	q := DefaultQuotas()
 	if ctx.Quotas != nil {
@@ -1283,9 +1286,9 @@ func validateQuotas(s *issues, m *Manifest, ctx Context, all []FileInfo) {
 	if total > q.MaxArchiveBytes {
 		s.errf("V8", "publish.include", "archive would be %d bytes; the maximum is %d", total, q.MaxArchiveBytes)
 	}
-	// §19: the prose the scanners read in full is capped as a total, not
-	// only per file — a package cannot spread an oversized instruction set
-	// across many files (agentry#44).
+	// The prose the scanners read in full is capped as a total, not
+	// only per file: a package cannot spread an oversized instruction
+	// set across many files.
 	if q.MaxTextBytes > 0 {
 		var text int64
 		for _, f := range resolved {
@@ -1299,7 +1302,7 @@ func validateQuotas(s *issues, m *Manifest, ctx Context, all []FileInfo) {
 	}
 }
 
-// imageExtensions are the extensions granted the §19 image per-file quota.
+// imageExtensions are the extensions granted the image per-file quota.
 func isImagePath(p string) bool {
 	switch strings.ToLower(path.Ext(p)) {
 	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp":

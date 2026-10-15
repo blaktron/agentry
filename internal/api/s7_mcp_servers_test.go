@@ -36,7 +36,7 @@ func mcpManifest(ns, name, version, pkg, pkgVersion string) string {
 		"\n      version: \"" + pkgVersion + "\"\npublish:\n  include: [\"agent.yaml\", \"AGENT.md\", \"README.md\", \"LICENSE\"]\n"
 }
 
-// S7 (agentry#177): a declared MCP server version with a known advisory is a
+// S7: a declared MCP server version with a known advisory is a
 // finding at the advisory's severity, the lookup happens once per server
 // version, the registry remembers it, and the version ↔ server join is
 // recorded for the daily sweep.
@@ -78,7 +78,7 @@ func TestS7DeclaredMCPServerVulnerability(t *testing.T) {
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+author+"/uses-minimist/versions/1.0.0/report", nil, &rep, http.StatusOK)
 	var s7 []string
 	for _, f := range rep.Findings {
-		// The version check (agentry#1036) is off in tests and says so with
+		// The version check is off in tests and says so with
 		// an info finding of its own; this test is about the advisory.
 		if strings.HasPrefix(f.Scanner, "S7/") && !strings.HasPrefix(f.Scanner, "S7/version-") {
 			s7 = append(s7, f.Scanner+":"+f.Severity)

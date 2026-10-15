@@ -12,7 +12,7 @@ import (
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
-// Release-diff helpers for S9 (§8.3). S9's job is to compare THIS version's
+// Release-diff helpers for S9. S9's job is to compare THIS version's
 // content against the previous published version's, because the documented
 // dominant real-world shape is a package that was clean for fifteen releases
 // and malicious in the sixteenth (postmark-mcp). Diffing manifests alone
@@ -57,7 +57,7 @@ type egressTarget struct {
 // check.
 //
 // The grammar is pkg/rules' (rules.Destinations), the one S4's rating by
-// declaration reads, so the two agree on what a URL reaches (agentry#958). A
+// declaration reads, so the two agree on what a URL reaches. A
 // bare name is held to isBareDestination as well, because without a scheme a
 // host, a file name and a code identifier look alike.
 //
@@ -270,8 +270,8 @@ func isCodePath(p string) bool {
 // reads rather than the agent: a `#` line in YAML, TOML, shell or Python, a
 // `//` line in code. A destination named only in such a comment is not one
 // the package can reach, and the CLI's own scaffold carries a commented
-// `# egress: [host]` example that sent every first publish to review
-// (agentry#223). Prose files (markdown, plain text) are not comment-aware:
+// `# egress: [host]` example that would otherwise send every first publish
+// to review. Prose files (markdown, plain text) are not comment-aware:
 // an agent reads all of them.
 func isCommentLine(path, line string) bool {
 	t := strings.TrimSpace(line)
@@ -299,11 +299,11 @@ func findingKey(f Finding) string { return f.Scanner + "\x00" + f.FilePath }
 // PREVIOUS version's files, so S9 can tell "this package has always had an
 // install script" from "this release added one".
 //
-// This re-scan is the fix for an escalation bug: S9 used to raise every
+// This re-scan keeps S9 from raising every
 // current S3/S4/install-script medium to high whenever any previous version
-// existed, so a package with one long-standing postinstall hook was escalated
-// on every single release forever, and the escalation carried no information
-// about the diff it claimed to describe.
+// exists: a package with one long-standing postinstall hook would be escalated
+// on every single release forever, and the escalation would carry no information
+// about the diff it claims to describe.
 func baselineFindings(bundle *rules.Bundle, prevFiles []FileEntry) map[string]bool {
 	out := map[string]bool{}
 	if len(prevFiles) == 0 {

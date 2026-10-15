@@ -19,7 +19,7 @@ func withClock(t *testing.T, idleTTL time.Duration) (*Buckets, func(time.Duratio
 	return b, func(d time.Duration) { now = now.Add(d) }
 }
 
-// §19: 5 webhook deliveries/s per org, with a one-second bucket.
+// Quota: 5 webhook deliveries/s per org, with a one-second bucket.
 func TestPerSecondBudgetRefillsOverTime(t *testing.T) {
 	b, advance := withClock(t, time.Hour)
 	lim, burst := PerSecond(5), 1
@@ -41,7 +41,7 @@ func TestPerSecondBudgetRefillsOverTime(t *testing.T) {
 	}
 }
 
-// §19: 60 pushes/h per repo, burst equal to the whole hourly budget so a run
+// Quota: 60 pushes/h per repo, burst equal to the whole hourly budget so a run
 // of commits is not paced one per minute.
 func TestPerHourBudgetExhaustsAndRecovers(t *testing.T) {
 	b, advance := withClock(t, 2*time.Hour)

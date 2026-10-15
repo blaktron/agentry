@@ -1,9 +1,9 @@
 -- +goose Up
--- Notification settings (agentry#190): how the registry's alerts reach a
--- person. One row per user; no row means everything on, which is what
--- every account had before this table existed. Email per kind, and the
--- in-app dependency-alert banner. Audit events and org webhooks are the
--- org's record and are not governed here.
+-- Notification settings: how the registry's alerts reach a person. One row
+-- per user; no row means everything on, which is what every account had
+-- before this table existed. Email per kind, and the in-app dependency-alert
+-- banner. Audit events and org webhooks are the org's record and are not
+-- governed here.
 CREATE TABLE user_notification_settings (
   user_id                 uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   email_dependency_alerts boolean NOT NULL DEFAULT true,

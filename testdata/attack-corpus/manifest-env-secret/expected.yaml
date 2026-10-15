@@ -1,4 +1,4 @@
-technique: "A declared MCP server's plain env carries a prefixed token under a credential-named key (S2's github-pat line rule over agent.yaml, agentry#286; the manifest pass adds the name finding, agentry#288)"
+technique: "A declared MCP server's plain env carries a prefixed token under a credential-named key (S2's github-pat line rule over agent.yaml; the manifest pass adds the name finding)"
 version: "1.0.0"
 manifest: |
   {"schemaVersion":"2","license":"MIT","capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"egress":["api.github.com"],"env":{"GITHUB_PERMISSION":"read-only","GITHUB_TOKEN":"ghp_corpusfixturenotarealtokenxxxxxxxxxx"}}]}}

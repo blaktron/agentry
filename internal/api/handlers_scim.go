@@ -18,7 +18,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// SCIM 2.0 data plane (§12.5). Mounted at /scim/v2 outside the generated
+// SCIM 2.0 data plane. Mounted at /scim/v2 outside the generated
 // OpenAPI handler; authenticated by a SCIM bearer token (scim_tokens), which
 // identifies the tenant org. Media type is application/scim+json.
 //
@@ -76,7 +76,7 @@ func (s *Server) scimAuth(next scimHandler) http.HandlerFunc {
 			scimError(w, http.StatusUnauthorized, "invalid or expired SCIM token")
 			return
 		}
-		// §19's `scim` class (agentry#453), one bucket per organization: a
+		// The `scim` rate class, one bucket per organization: a
 		// directory syncs from one place, and every token is the
 		// organization's, so a second token buys no second budget. Spent
 		// once the token is known and before anything else is read. The
@@ -95,14 +95,14 @@ func (s *Server) scimAuth(next scimHandler) http.HandlerFunc {
 			return
 		}
 		// The IdP provisions nothing into an organization that is
-		// suspended or being decommissioned (agentry#363): every SCIM
+		// suspended or being decommissioned: every SCIM
 		// call changes or reads membership, which the hold has frozen.
 		if org.State != registry.OrgStateActive {
 			scimError(w, http.StatusForbidden, "this organization is "+org.State)
 			return
 		}
 		// The data plane closes with the entitlement, not only the door
-		// that mints tokens (D11): a token issued while the tier included
+		// that mints tokens: a token issued while the tier included
 		// SCIM must stop provisioning when it no longer does. The token's
 		// row survives, so the directory works again the moment the
 		// subscription does — nothing has to be re-issued. Unknown
@@ -180,9 +180,9 @@ func scimWrite(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// itoa renders a status as SCIM's error schema wants it, a string. It was a
-// fixed map, and the statuses missing from it (403 for a suspended
-// organization or a missing entitlement, then 429) went out as "".
+// itoa renders a status as SCIM's error schema wants it, a string. Every
+// status renders, including 403 (a suspended organization or a missing
+// entitlement) and 429.
 func itoa(n int) string { return strconv.Itoa(n) }
 
 func userToSCIM(id uuid.UUID, email, displayName string, active bool) scimUser {
@@ -214,7 +214,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 		})
 		return
 	}
-	// The staff organization provisions only its own domain (agentry#556),
+	// The staff organization provisions only its own domain,
 	// before any account is made for the address.
 	if err := s.staffOrgAddressIn(r.Context(), s.q(), sc.orgID, email); err != nil {
 		scimStaffOrgRefusal(w, r, s, err)
@@ -235,13 +235,13 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 }
 
 // scimProvisionUser links an existing global user by email or JIT-creates
-// one, then adds a **pending** org membership marked via_scim (agentry#361,
-// D7): the IdP says who exists, an admin says who is a member. A pending
+// one, then adds a **pending** org membership marked via_scim: the IdP
+// says who exists, an admin says who is a member. A pending
 // membership holds no seat and confers nothing, so a SCIM create still
 // answers 201 however many seats the organization has left — the wall is at
 // the approval. A new account's handle is seeded from the IdP's userName
 // (its local part when the userName is the address), the name the directory
-// knows the person by (agentry#517).
+// knows the person by.
 func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, userName, displayName string) (uuid.UUID, error) {
 	if u, err := s.q().GetUserByEmail(ctx, email); err == nil {
 		if err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
@@ -355,16 +355,16 @@ func (s *Server) scimPatchUser(w http.ResponseWriter, r *http.Request, sc scimCt
 		scimWrite(w, http.StatusOK, userToSCIM(id, u.Email, orDefault(u.DisplayName, u.Email), false))
 		return
 	}
-	// No-op / reactivation not modeled beyond membership presence in v1.
+	// No-op / reactivation not modeled beyond membership presence.
 	scimWrite(w, http.StatusOK, userToSCIM(id, u.Email, orDefault(u.DisplayName, u.Email), u.State == "active"))
 }
 
 // scimPutUser implements the spec-conformant full-resource replace (RFC 7644
-// §3.5.1). It used to be routed to the PatchOp decoder, which meant Okta's
-// deactivation — a PUT of the whole user with "active": false — decoded to
-// zero operations and returned 200 with nothing done. An IdP that believes it
+// §3.5.1). Okta's deactivation is a PUT of the whole user with
+// "active": false, so it is not decoded as PatchOp operations, which would
+// yield zero operations and a 200 with nothing done. An IdP that believes it
 // has offboarded someone, on a registry where their sessions still work, is
-// the worst possible failure mode for §12.5.
+// the worst possible failure mode for SCIM provisioning.
 func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
@@ -405,8 +405,7 @@ func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx)
 		return
 	}
 
-	// Reinstating provisions again, so the staff organization's door applies
-	// (agentry#556).
+	// Reinstating provisions again, so the staff organization's door applies.
 	if err := s.staffOrgAddressIn(r.Context(), s.q(), sc.orgID, u.Email); err != nil {
 		scimStaffOrgRefusal(w, r, s, err)
 		return
@@ -425,7 +424,7 @@ func (s *Server) scimPutUser(w http.ResponseWriter, r *http.Request, sc scimCtx)
 		}
 		// Re-assert the membership: a PUT with active=true on someone
 		// previously deactivated is how an IdP reinstates them — as a
-		// PENDING member (agentry#361, D7). Deactivating removed the row,
+		// PENDING member. Deactivating removed the row,
 		// so this is a fresh provisioning, and SCIM provisions; an admin
 		// approves. Someone who is still an active member is untouched.
 		if _, err := q.UpsertPendingMembership(r.Context(), storegen.UpsertPendingMembershipParams{
@@ -473,12 +472,12 @@ func scimLastAdmin(w http.ResponseWriter, err error) bool {
 	return true
 }
 
-// scimDeactivate is the §12.5 deactivation: drop the membership, revoke the
+// scimDeactivate is the deactivation: drop the membership, revoke the
 // user's org-bound PATs, and kill the user's sessions — all in one request so
 // access is revoked well within the 60s acceptance bound. SCIM never
 // hard-deletes the global user (they may exist outside the org). The
-// organization's last admin is the one person it cannot deprovision
-// (agentry#360, D14): the IdP is answered errLastAdmin and the org keeps
+// organization's last admin is the one person it cannot deprovision:
+// the IdP is answered errLastAdmin and the org keeps
 // someone who can act until another admin is made.
 func (s *Server) scimDeactivate(ctx context.Context, orgID, userID uuid.UUID) error {
 	return s.st.WithTx(ctx, func(q *storegen.Queries) error {
@@ -499,15 +498,15 @@ func (s *Server) scimDeactivate(ctx context.Context, orgID, userID uuid.UUID) er
 		// state untouched on purpose — the person may exist outside the
 		// organization. Without this the deprovisioned user could sign in again
 		// and be asked for *less* than before, the second factor skipped, which
-		// is the opposite of what this function promises (agentry#461).
+		// is the opposite of what this function promises.
 		if _, err := q.RevokeTrustedDevicesForUser(ctx, userID); err != nil {
 			return err
 		}
 		if err := s.auditW.Write(ctx, q, s.scimEvent(orgID, audit.ActionSCIMUserDeactivate, "user", userID)); err != nil {
 			return err
 		}
-		// Deprovisioned from the staff organization is no longer staff
-		// (agentry#556); the IdP is the actor.
+		// Deprovisioned from the staff organization is no longer staff;
+		// the IdP is the actor.
 		return s.syncStaffIn(ctx, q, userID, registry.StaffSyncMembership, s.scimEvent(orgID, audit.ActionUserStaffSync, "user", userID))
 	})
 }
@@ -571,7 +570,7 @@ func (s *Server) scimCreateGroup(w http.ResponseWriter, r *http.Request, sc scim
 		return
 	}
 	// A membership write that fails must be reported: SCIM clients retry on
-	// 5xx, and silently discarding the error left the IdP believing a group
+	// 5xx, and silently discarding the error would leave the IdP believing a group
 	// had been synced when the team was empty.
 	if len(in.Members) > 0 {
 		if err := s.scimReplaceMembers(r.Context(), sc.orgID, teamID, in.Members); err != nil {
@@ -773,7 +772,7 @@ func scimPrimaryEmail(u scimUser) string {
 	return ""
 }
 
-// parseUserNameEqFilter parses SCIM `userName eq "x"` (the only filter §12.5
+// parseUserNameEqFilter parses SCIM `userName eq "x"` (the only filter
 // requires).
 func parseUserNameEqFilter(filter string) (string, bool) {
 	f := strings.TrimSpace(filter)

@@ -23,13 +23,13 @@ import (
 	"github.com/blaktron/agentry/internal/voice"
 )
 
-// Account deletion (§12.7). PII is purged and the account row is
+// Account deletion. PII is purged and the account row is
 // pseudonymized so that audit events keep a stable opaque actor id and
 // already-published immutable content keeps working for the people who
 // installed it. Published public versions are NOT deleted: the caller
 // chooses to yank them (default) or transfer the namespace's agents to an
 // org, because deleting bytes consumers depend on would break installs and
-// defeat the yank-not-delete semantics of §5.5.
+// defeat the yank-not-delete semantics.
 
 // DeleteCurrentUser implements DELETE /user.
 func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, params DeleteCurrentUserParams) {
@@ -52,7 +52,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 
-	// The last admin stays (D14, agentry#363): an organization is never
+	// The last admin stays: an organization is never
 	// left without someone who can act, and erasing its only admin would.
 	// Promote another member first, or decommission the organization.
 	if org, err := q.GetOrgWhereUserIsLastAdmin(r.Context(), p.UserID); err == nil {
@@ -64,15 +64,15 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 
-	// Published content chooser (§12.7).
+	// Published content chooser.
 	publishedCount, err := q.CountPublishedVersionsByUser(r.Context(), p.UserID)
 	if err != nil {
 		problemInternal(w, r)
 		return
 	}
-	// The chooser is EXPLICIT when there is published content (§12.7). It
-	// used to default to "yank", which made the guard below unreachable and
-	// silently pulled a user's published packages out from under everyone who
+	// The chooser is EXPLICIT when there is published content. A default
+	// of "yank" would make the guard below unreachable and
+	// silently pull a user's published packages out from under everyone who
 	// had installed them. With nothing published there is nothing to choose,
 	// so the parameter stays optional in that case.
 	disposition := ""
@@ -96,8 +96,8 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 
 	// transfer: hand the personal namespace's agents to an org the caller
 	// administers, so published content keeps a maintainer instead of being
-	// yanked out from under its consumers (§12.7 "transfer to an org or
-	// yank-all"). Done before the erasure transaction: a transfer that fails
+	// yanked out from under its consumers. Done before the erasure
+	// transaction: a transfer that fails
 	// must leave the account intact rather than orphan the agents.
 	var transferOrgID uuid.UUID
 	if disposition == "transfer" {
@@ -128,7 +128,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		}
 		// A deleted agent's tombstone stays in the erased namespace, holding
 		// its name there: it has no maintainer to gain, and its name must not
-		// collide with a live agent of the organization's (agentry#942).
+		// collide with a live agent of the organization's.
 		movable := agents[:0:0]
 		for _, a := range agents {
 			if a.DeletedAt == nil {
@@ -136,10 +136,10 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 			}
 		}
 		agents = movable
-		// The private-agent cap (agentry#363): the transfer door is one
+		// The private-agent cap: the transfer door is one
 		// more way private agents enter a namespace, and it respects the
-		// cap the other two do. A retired agent holds no place under it
-		// (agentry#942, D13). Nothing is erased on a refusal.
+		// cap the other two do. A retired agent holds no place under it.
+		// Nothing is erased on a refusal.
 		var private int64
 		for _, a := range agents {
 			if a.Visibility == "private" && a.RetiredAt == nil {
@@ -169,7 +169,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	}
 
 	// Yank outside the erasure transaction: each yank is its own audited
-	// state-machine transition (§7) and must not be rolled back by a later
+	// state-machine transition and must not be rolled back by a later
 	// failure — a yanked version is safe, a half-erased account is not.
 	// Transferred agents are deliberately skipped: their whole point is that
 	// the content survives with a new maintainer.
@@ -227,7 +227,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 
 	s.knowledge.FinishErasure(r.Context(), knowledge.User(p.UserID), erased.knowledgeKeys)
 
-	// The other half (agentry#20): with credentials in the directory service
+	// The other half: with credentials in the directory service
 	// the person's sign-in account — email, display name, password hash —
 	// outlives the registry erasure and can sign in again to JIT-create a
 	// fresh account. Delete it there too. Deliberately AFTER the registry
@@ -235,7 +235,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	// registry erasure would lock the person out of an account whose data
 	// still exists. A failure here is audited and logged, never hidden, and
 	// does not undo the erasure that already happened: a failed attempt is
-	// handed to a retrying job (agentry#499), and the response says where the
+	// handed to a retrying job, and the response says where the
 	// directory step stands so the site can tell the person.
 	e := auditEvent(r, audit.ActionUserDirectoryErase)
 	e.Actor, e.ActorKind = p.UserID, audit.ActorUser
@@ -245,7 +245,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	}
 
 	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
-	// A header on the 204, not a body: the contract is additive-only (D-09).
+	// A header on the 204, not a body: the contract is additive-only.
 	w.Header().Set(directoryErasureHeader, dir)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -279,7 +279,7 @@ func (s *Server) transferAgents(r *http.Request, agents []storegen.ListPersonalN
 }
 
 // hashForTombstone derives a keyed hash of an email for abuse-recurrence
-// detection (§12.7). Keyed with the sealing key so the tombstone alone
+// detection. Keyed with the sealing key so the tombstone alone
 // cannot be brute-forced back to an address by anyone reading the database.
 func (s *Server) hashForTombstone(email string) string {
 	key := []byte(s.cfg.Auth.SealingKey)
@@ -299,10 +299,10 @@ type erasedRows struct {
 }
 
 // eraseAccountIn erases an account's registry half inside the caller's
-// transaction (§12.7): pseudonymized, its handle retired, every credential,
+// transaction: pseudonymized, its handle retired, every credential,
 // seat, knowledge pack and Writing Voice gone, and what extensions keep
 // about it. The account's own erasure and the removal of an unactivated
-// account a provider's verified address superseded (agentry#861, D10) both
+// account a provider's verified address superseded both
 // run it. The caller writes the audit row, finishes the knowledge erasure
 // after the commit, and decides about the directory half.
 func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Queries, userID uuid.UUID, email, reason string, staffActor audit.Event) (erasedRows, error) {
@@ -344,44 +344,44 @@ func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Que
 	// users row survives erasure only because audit events and immutable
 	// published content need a stable actor id. Nothing needs that of a
 	// browser credential, and that one was issued is already in the audit
-	// log (agentry#461).
+	// log.
 	if _, err := tq.DeleteTrustedDevicesForUser(ctx, userID); err != nil {
 		return out, err
 	}
 	// A desktop sign-in code another session minted moments before the
-	// erasure would otherwise still exchange for a token afterwards
-	// (agentry#502): ExchangeDesktopCode checks only the grant, not the
-	// account's state. Consumed here, as clearing data does (agentry#498).
+	// erasure would otherwise still exchange for a token afterwards:
+	// ExchangeDesktopCode checks only the grant, not the
+	// account's state. Consumed here, as clearing data does.
 	if out.desktopCodes, err = tq.ConsumeDesktopGrantsForUser(ctx, userID); err != nil {
 		return out, err
 	}
-	// An erased account holds no seat anywhere (agentry#363). Every caller
+	// An erased account holds no seat anywhere. Every caller
 	// has refused an organization's last admin first, so nothing is left
 	// headless by this.
 	if _, err := tq.DeleteUserMemberships(ctx, userID); err != nil {
 		return out, err
 	}
-	// An erased account is not staff (agentry#556): the account is
+	// An erased account is not staff: the account is
 	// deleted and belongs to no organization, so the rule answers no.
 	if err := s.syncStaffIn(ctx, tq, userID, registry.StaffSyncErasure, staffActor); err != nil {
 		return out, err
 	}
-	// The account's knowledge packs go with it (agentry#593), and the
+	// The account's knowledge packs go with it, and the
 	// key that opens them once this commits.
 	if out.knowledgeKeys, err = knowledge.EraseOwner(ctx, tq, knowledge.User(userID)); err != nil {
 		return out, err
 	}
-	// And the Writing Voice (agentry#809), whose key went with the
+	// And the Writing Voice, whose key went with the
 	// knowledge store's erasure of the same person.
 	if _, err = voice.Erase(ctx, tq, userID); err != nil {
 		return out, err
 	}
-	// Its report design and the logo uploaded with it (agentry#1025): an
+	// Its report design and the logo uploaded with it: an
 	// image the person chose is theirs, not the record's.
 	if _, err := tq.DeleteUserReportSettings(ctx, userID); err != nil {
 		return out, err
 	}
-	// Its activation links too (agentry#861): one followed afterwards would
+	// Its activation links too: one followed afterwards would
 	// confirm an address nobody holds.
 	if err := tq.DeleteEmailVerificationsForUser(ctx, userID); err != nil {
 		return out, err
@@ -397,7 +397,7 @@ func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Que
 		}
 	}
 	// What extensions keep about the account goes in this transaction
-	// too (agentry#638), after every step of the core's own.
+	// too, after every step of the core's own.
 	if out.extensions, err = s.eraseInExtensions(ctx, tx, userID, AccountErased); err != nil {
 		return out, err
 	}

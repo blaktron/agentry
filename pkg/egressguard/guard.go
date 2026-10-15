@@ -1,15 +1,14 @@
-// Package egressguard is the core's SSRF egress guard (T-08,
-// ARCHITECTURE.md §9): every fetch the registry makes to an address someone
-// else chose (a webhook endpoint, an OIDC issuer, a README image, an MCP
-// server's vendor) goes through it. A candidate address must be public
-// unicast, the address dialled is the one checked (no second lookup between
-// the check and the connect), no redirect is followed and no proxy is taken
-// from the environment.
+// Package egressguard is the core's SSRF egress guard: every fetch the
+// registry makes to an address someone else chose (a webhook endpoint, an
+// OIDC issuer, a README image, an MCP server's vendor) goes through it. A
+// candidate address must be public unicast, the address dialled is the one
+// checked (no second lookup between the check and the connect), no
+// redirect is followed and no proxy is taken from the environment.
 //
 // It lives in pkg/ so that modules outside the core use this one
-// implementation rather than a copy: the enterprise build's vault (its
-// vendor client, agentry#968) and the CLI's OAuth fetches (agentry#928).
-// internal/webhook keeps its names as aliases of these.
+// implementation rather than a copy: the enterprise build's vault vendor
+// client and the CLI's OAuth fetches. internal/webhook keeps its names as
+// aliases of these.
 package egressguard
 
 import (
@@ -24,11 +23,11 @@ import (
 )
 
 // DefaultTimeout bounds one request when a Guard names no Timeout: the
-// webhook delivery's 10 s (§9.3).
+// webhook delivery's 10 s.
 const DefaultTimeout = 10 * time.Second
 
 // BlockedAddressError is the guarded dialer's refusal of a destination that
-// resolves to a non-public address (T-08), or to none.
+// resolves to a non-public address, or to none.
 type BlockedAddressError struct {
 	Host string
 	IP   string
@@ -41,21 +40,21 @@ func (e *BlockedAddressError) Error() string {
 // Guard is the SSRF egress policy. The zero value is production's.
 //
 // AllowLoopback is a test-only seam so a loopback httptest server can be
-// reached; production leaves it false. LookupNetIP is the resolver seam; nil
-// means net.DefaultResolver. Tests use it to answer a name with an address
-// of their choosing, the only way to exercise the resolve-then-pin half of
-// DialContext. TLS is the client's TLS configuration: nil in production
-// (system roots), a pool trusting an httptest certificate in a test.
-// Timeout bounds one request (DefaultTimeout when zero). HTTPSOnly refuses a
-// request that is not https before anything is dialled, for a caller whose
-// every destination must be (an OAuth vendor).
+// reached; production leaves it false. LookupNetIP is the resolver seam;
+// nil means net.DefaultResolver. Tests use it to answer a name with an
+// address of their choosing, the only way to exercise the resolve-then-pin
+// half of DialContext. TLS is the client's TLS configuration: nil in
+// production (system roots), a pool trusting an httptest certificate in a
+// test. Timeout bounds one request (DefaultTimeout when zero). HTTPSOnly
+// refuses a request that is not https before anything is dialled, for a
+// caller whose every destination must be (an OAuth vendor).
 //
-// Proxy, when set, is a fixed CONNECT proxy the operator names
-// (agentry#974): production's worker reaches vendors' token endpoints only
-// through its allowlisting egress proxy. The client then dials that proxy's
-// address and nothing else, asks it for a tunnel to the target, and before
-// asking resolves the target's name and refuses it if any answer is not
-// public unicast; only https is carried, whatever HTTPSOnly says. The proxy
+// Proxy, when set, is a fixed CONNECT proxy the operator names:
+// production's worker reaches vendors' token endpoints only through its
+// allowlisting egress proxy. The client then dials that proxy's address
+// and nothing else, asks it for a tunnel to the target, and before asking
+// resolves the target's name and refuses it if any answer is not public
+// unicast; only https is carried, whatever HTTPSOnly says. The proxy
 // resolves the name again when it opens the tunnel, so this check is not
 // pinned the way a direct dial is: the proxy's own exact-host allowlist is
 // what bounds where a tunnel goes. The environment's proxy settings are
@@ -169,7 +168,7 @@ func (g Guard) checked(ctx context.Context, host string) ([]netip.Addr, error) {
 // DialContext resolves the host, verifies every candidate address, and dials a
 // verified address directly (not the hostname) so a DNS answer cannot change
 // between the check and the connect (TOCTOU / DNS-rebinding defense). Because
-// this runs on every attempt, re-resolution per attempt (§9.3) is inherent.
+// this runs on every attempt, re-resolution per attempt is inherent.
 // It is exported for a caller that must build its own transport; Client is
 // the usual way in.
 func (g Guard) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -245,7 +244,7 @@ func (g Guard) Client() *http.Client {
 	return &http.Client{
 		Timeout: timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse // never follow redirects (T-08)
+			return http.ErrUseLastResponse // never follow redirects
 		},
 		Transport: rt,
 	}

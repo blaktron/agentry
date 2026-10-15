@@ -31,7 +31,7 @@ const (
 // reviewAttempts is one review job's retry budget, with the queue's
 // backoff between tries (about a quarter of an hour in all). A version
 // still in review after it is queued again by the sweep: a judge that
-// cannot answer leaves it in review, never live (D7).
+// cannot answer leaves it in review, never live.
 const reviewAttempts = 5
 
 // StallAfter is how long a version waits in review since its last try
@@ -386,7 +386,7 @@ var ErrRestoreNeedsReview = errors.New("voice: the previous version needs a revi
 // Restore puts a person's previous version back. Reviewed under the set
 // in use now, it and the live one trade places at once; reviewed under
 // another, it becomes the pending version, source restore, and is
-// reviewed like any other (D8), which the caller must have admitted
+// reviewed like any other, which the caller must have admitted
 // (review).
 func (s *Service) Restore(ctx context.Context, user uuid.UUID, review bool) (State, error) {
 	if err := s.ready(); err != nil {
@@ -474,7 +474,7 @@ func (s *Service) DiscardPending(ctx context.Context, user uuid.UUID) (State, er
 	return st, err
 }
 
-// SetAlwaysAttach sets the account's always-attach flag (D11).
+// SetAlwaysAttach sets the account's always-attach flag.
 func (s *Service) SetAlwaysAttach(ctx context.Context, user uuid.UUID, on bool) (State, error) {
 	if err := s.ready(); err != nil {
 		return State{}, err

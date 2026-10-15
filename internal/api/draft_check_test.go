@@ -14,7 +14,7 @@ import (
 	"github.com/blaktron/agentry/pkg/judge"
 )
 
-// The check route (agentry#708): AI Review of a finished draft's package,
+// The check route: AI Review of a finished draft's package,
 // with the release rubric S5 asks and the draft question set. The checker
 // here is the real pkg/draftcheck over a fake judge, so the route is tested
 // with the questions, the state and the verdicts every client gets.
@@ -121,10 +121,10 @@ func checkDraft(t *testing.T, env *testEnv, c caller, headers map[string]string,
 	return res.StatusCode, b, p
 }
 
-// The draft check flags what would hold the version, as the gate does since
-// ruleset 0.3.0 (agentry#773): a probable obfuscation is a medium finding, a
-// note on a pass; a probable undeclared capability is high and flags, and so
-// is a probable deception since ruleset 0.4.0 (agentry#893).
+// The draft check flags what would hold the version, as the gate does: a
+// probable obfuscation is a medium finding, a note on a pass; a probable
+// undeclared capability is high and flags, and so is a probable
+// deception.
 func TestTheDraftCheckFlagsOnlyWhatTheGateHolds(t *testing.T) {
 	env := newTestEnvWith(t, func(s *api.Server) { s.SetDraftChecker(draftcheck.New(&draftJudge{})) })
 	staff := staffCaller(t, env, "dc-bar")

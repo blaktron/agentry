@@ -11,7 +11,7 @@ import (
 )
 
 // TestDirectorySignInFactsAgainstALiveDirectory checks SignInFacts against a
-// real authentik carrying the account-flows blueprint (agentry#706), the way
+// real authentik carrying the account-flows blueprint, the way
 // TestAuthentikGroupsAgainstALiveDirectory checks the staff mirror. An
 // account the API creates has run no flow, so nothing is recorded for it
 // and it has no connection: the shapes parse and both answers are absent.
@@ -24,7 +24,7 @@ import (
 //	an account a social provider created (want that provider first, and
 //	hasPassword false).
 //
-// CI skips it; the workstation runs it against a throwaway directory.
+// CI skips it; run it against a throwaway directory.
 func TestDirectorySignInFactsAgainstALiveDirectory(t *testing.T) {
 	base, token := os.Getenv("AGENTRY_TEST_AUTHENTIK_URL"), os.Getenv("AGENTRY_TEST_AUTHENTIK_TOKEN")
 	if base == "" || token == "" {
@@ -52,8 +52,8 @@ func TestDirectorySignInFactsAgainstALiveDirectory(t *testing.T) {
 		t.Fatalf("an account no flow has touched: %+v %v, want nothing", f, err)
 	}
 
-	// agentry#727: by the directory's id, the account is found although the
-	// registry's address is another (the DEV-061 placeholder), and the uid
+	// By the directory's id, the account is found although the
+	// registry's address is another (a placeholder address), and the uid
 	// still has to agree.
 	elsewhere := "live-facts-" + tag + "@authentik.social.local"
 	byID := directoryLink{AccountID: int64(u.PK), UID: accounts[0].UID, Email: elsewhere}
@@ -77,12 +77,12 @@ func TestDirectorySignInFactsAgainstALiveDirectory(t *testing.T) {
 		t.Fatalf("sign-in facts by id at another registry address: %+v %v, want hasPassword true", f, err)
 	}
 	if f, err := a.SignInFacts(ctx, directoryLink{UID: accounts[0].UID, Email: elsewhere}); err != nil || f.HasPassword != nil {
-		t.Fatalf("sign-in facts by uid at the other address: %+v %v, want none (agentry#727's bug)", f, err)
+		t.Fatalf("sign-in facts by uid at the other address: %+v %v, want none", f, err)
 	}
 	if devs, err := a.Devices(ctx, byID); err != nil || len(devs) != 0 {
 		t.Fatalf("devices by id: %+v %v, want an empty list", devs, err)
 	}
-	// agentry#617: the address with other capitals than the directory's.
+	// The address with other capitals than the directory's.
 	if got, how, err := a.findAccount(ctx, directoryLink{Email: strings.ToUpper(email)}); err != nil || got == nil || got.PK != u.PK || how != dirLookupByAddress {
 		t.Fatalf("by the address in capitals: %+v %s %v, want account %d", got, how, err, u.PK)
 	}

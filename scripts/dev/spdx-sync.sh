@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Refresh the embedded SPDX license and exception lists (agentry#28) from
+# Refresh the embedded SPDX license and exception lists from
 # the canonical license-list-data repository (CC0). Commit the result; V7
 # accepts exactly what these files list.
 set -euo pipefail

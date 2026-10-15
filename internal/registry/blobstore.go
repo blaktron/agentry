@@ -9,16 +9,16 @@ import (
 	"strings"
 )
 
-// BlobStore stores release archives content-addressed by digest (§6.5 step
-// 3). Keys look like "releases/ab/sha256:abcd....tar.zst"→ the implementation
-// maps them to its backend. Objects are write-once: Put to an existing key
+// BlobStore stores release archives content-addressed by digest. Keys look
+// like "releases/ab/sha256:abcd....tar.zst"; the implementation maps them
+// to its backend. Objects are write-once: Put to an existing key
 // verifies nothing and returns nil (same content by construction).
 type BlobStore interface {
 	Put(ctx context.Context, key string, r io.Reader) error
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	Exists(ctx context.Context, key string) (bool, error)
 	// Delete removes an object; a key that is not there is not an error,
-	// so a sweep that runs twice is a sweep that ran (agentry#348).
+	// so a sweep that runs twice is a sweep that ran.
 	Delete(ctx context.Context, key string) error
 }
 
@@ -32,8 +32,8 @@ func ArchiveKey(digest string) string {
 	return "releases/" + hex[:2] + "/" + hex + ".tar.zst"
 }
 
-// LocalFS is the self-host/dev BlobStore (D-21: no hard cloud deps); the S3
-// implementation ships with the AWS deployment work (WG-K).
+// LocalFS is the self-host/dev BlobStore (no hard cloud dependency); the S3
+// implementation is S3Store.
 type LocalFS struct {
 	Root string
 }

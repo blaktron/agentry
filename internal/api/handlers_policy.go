@@ -22,7 +22,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// GetPlatformPolicy implements GET /platform/policy (public, read-only §8.6).
+// GetPlatformPolicy implements GET /platform/policy (public, read-only).
 func (s *Server) GetPlatformPolicy(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActPublicRead, uuid.Nil) {
 		return
@@ -62,7 +62,7 @@ func (s *Server) GetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 	_, _ = w.Write(row.Document)
 }
 
-// SetOrgPolicy implements PUT /orgs/{org}/policy (admin; tighten-only §8.6).
+// SetOrgPolicy implements PUT /orgs/{org}/policy (admin; tighten-only).
 func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return
@@ -85,7 +85,7 @@ func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 		return
 	}
 
-	// Tighten-only guard (§8.6): the merged policy must equal the org
+	// Tighten-only guard: the merged policy must equal the org
 	// overlay merged onto baseline — a document that tries to loosen is
 	// silently clamped by Merge, but we reject an attempt to set
 	// maxAutoPublishSeverity looser than baseline so the author gets a clear
@@ -113,7 +113,7 @@ func (s *Server) SetOrgPolicy(w http.ResponseWriter, r *http.Request, org OrgHan
 		return
 	}
 	merged := scan.Merge(baseline, orgPolicy)
-	// §9.3 catalog (agentry#56): the org's policy changed; the payload names
+	// The org's policy changed; the payload names
 	// the knobs present, never the whole document (it may be large).
 	if s.webhooks != nil {
 		keys := []string{}
@@ -139,7 +139,7 @@ func (s *Server) baselinePolicy(r *http.Request) scan.Policy {
 }
 
 // PlatformAgentAction implements POST /platform/agents/{ns}/{name}/{action}
-// (§7 T&S actions: quarantine, block, reinstate). Platform staff only.
+// (T&S actions: quarantine, block, reinstate). Platform staff only.
 func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, actionParam PlatformAgentActionParamsAction) {
 	if !s.requireDB(w, r) {
 		return
@@ -153,8 +153,8 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 		problemForbidden(w, r, "Trust & safety actions are open to platform staff only.")
 		return
 	}
-	// A deleted agent's tombstone stays within trust & safety's reach
-	// (agentry#942): whoever installed it before its publisher deleted it
+	// A deleted agent's tombstone stays within trust & safety's reach:
+	// whoever installed it before its publisher deleted it
 	// still holds a copy.
 	a, err := s.reg.ResolveIncludingDeleted(r.Context(), ns, name)
 	if err != nil {
@@ -181,7 +181,7 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 
-	// How many forks the action leaves as they are (agentry#943, D11): a
+	// How many forks the action leaves as they are: a
 	// fork went through its own pipeline and may have changed, so it is not
 	// quarantined or blocked with its origin, and staff see how many there
 	// are on the record of the act. A count only, never which.
@@ -211,7 +211,7 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	}
 
 	// The agent flag alone changes nothing a consumer can observe: downloads
-	// and resolution read the VERSION state machine (§7). Every T&S action
+	// and resolution read the VERSION state machine. Every T&S action
 	// therefore has to walk the agent's versions too — without this, a
 	// "blocked" agent kept serving 200s and the download handler's 410 branch
 	// was unreachable code.
@@ -247,8 +247,8 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ListAdvisories implements GET /advisories?affecting=ns/name[&digest=] (§8.7,
-// public; a holder's door to a private agent's, agentry#949).
+// ListAdvisories implements GET /advisories?affecting=ns/name[&digest=]
+// (public; a holder's door to a private agent's).
 func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params ListAdvisoriesParams) {
 	if !s.authorize(w, r, auth.ActPublicRead, uuid.Nil) {
 		return
@@ -266,7 +266,7 @@ func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params L
 		return
 	}
 	// The same read gate as the agent page: a private agent's advisories
-	// are its readers' (agentry#313) and its holders' (agentry#949); anyone
+	// are its readers' and its holders'; anyone
 	// else gets a missing name's 404.
 	a, err := s.advisoryAgentFor(r.Context(), principalFrom(r.Context()), ref.Namespace, ref.Name, params.Digest)
 	if !s.agentAccess(w, r, ref.Namespace, ref.Name, a, err) {
@@ -295,10 +295,10 @@ func (s *Server) ListAdvisories(w http.ResponseWriter, r *http.Request, params L
 }
 
 // advisoryAgentFor is agentForAction for the advisories of ns/name, with
-// one door more (agentry#949): a caller who cannot read the agent but holds
+// one door more: a caller who cannot read the agent but holds
 // a release of it still gets it, so an advisory published after the agent
 // went private, was retired or was deleted reaches the people who installed
-// it. The owning organization's gate still answers first (agentry#363).
+// it. The owning organization's gate still answers first.
 func (s *Server) advisoryAgentFor(ctx context.Context, p *auth.Principal, ns, name string, digest *string) (registry.Agent, error) {
 	a, _, err := s.agentForAction(ctx, p, ns, name, auth.ActAgentRead)
 	if !errors.Is(err, registry.ErrNotFound) {
@@ -342,8 +342,8 @@ const (
 	advisoryFeedMaxLimit     = 100
 )
 
-// listAdvisoryFeed is GET /advisories without `affecting` (agentry#24,
-// DEV-038): the global feed over public agents, newest first, keyset-paged
+// listAdvisoryFeed is GET /advisories without `affecting`:
+// the global feed over public agents, newest first, keyset-paged
 // with a Link: rel="next" header. During a quarantine wave this is the page
 // that shows the wave as a wave.
 func (s *Server) listAdvisoryFeed(w http.ResponseWriter, r *http.Request, params ListAdvisoriesParams) {

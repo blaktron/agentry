@@ -19,10 +19,10 @@ WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
 `
 
 // ClearLiveTrustedDevicesForUser is the site's "Clear remembered devices"
-// (DELETE /user/trusted-devices, agentry#672, DEV-163), for the caller's own
-// account only. It revokes exactly the rows the count counts, live ones, so
-// the number the button reports is the number it showed; expired rows are
-// already inert and are the sweep's (agentry#464).
+// (DELETE /user/trusted-devices), for the caller's own account only. It
+// revokes exactly the rows the count counts, live ones, so the number the
+// button reports is the number it showed; expired rows are already inert and
+// are the sweep's.
 func (q *Queries) ClearLiveTrustedDevicesForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, clearLiveTrustedDevicesForUser, userID)
 	if err != nil {
@@ -37,9 +37,9 @@ WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
 `
 
 // CountLiveTrustedDevicesForUser is what the site's "Clear remembered
-// devices" button reads to say whether there is anything to clear
-// (agentry#672). Live is what the lookup honours: not revoked, not expired,
-// so the number is exactly the browsers that would skip the code.
+// devices" button reads to say whether there is anything to clear. Live is
+// what the lookup honours: not revoked, not expired, so the number is exactly
+// the browsers that would skip the code.
 func (q *Queries) CountLiveTrustedDevicesForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countLiveTrustedDevicesForUser, userID)
 	var count int64
@@ -71,14 +71,12 @@ type CreateTrustedDeviceRow struct {
 	ExpiresAt  time.Time `json:"expires_at"`
 }
 
-// Trusted devices (plan trusted-devices.md, agentry#461). The credential a
-// browser earns by answering the second factor, so a later password sign-in
-// from it skips the code.
+// Trusted devices. The credential a browser earns by answering the second
+// factor, so a later password sign-in from it skips the code.
 //
 // The credential's queries: establish and touch it, take it away when access
-// is taken away (SCIM, erasure), the account's own count and clear
-// (agentry#672), and the expiry sweep (agentry#464). There is no list and no per-browser removal: DEV-163
-// dropped them with the closed agentry#462.
+// is taken away (SCIM, erasure), the account's own count and clear, and the
+// expiry sweep. There is no list and no per-browser removal.
 func (q *Queries) CreateTrustedDevice(ctx context.Context, arg CreateTrustedDeviceParams) (CreateTrustedDeviceRow, error) {
 	row := q.db.QueryRow(ctx, createTrustedDevice,
 		arg.ID,
@@ -103,12 +101,12 @@ const deleteExpiredTrustedDevices = `-- name: DeleteExpiredTrustedDevices :execr
 DELETE FROM trusted_devices WHERE expires_at <= now()
 `
 
-// DeleteExpiredTrustedDevices is the expiry sweep (agentry#464): it removes
-// the rows past their own expiry, and only those. A revoked record that has
-// not expired yet is kept until it does: it is already inert, and keeping it
-// to its own lifetime means no cap or clock of the sweep's ever decides when
-// a record goes. Every read already filters on expiry, so a row the sweep
-// has not reached behaves exactly like one it has.
+// DeleteExpiredTrustedDevices is the expiry sweep: it removes the rows past
+// their own expiry, and only those. A revoked record that has not expired yet
+// is kept until it does: it is already inert, and keeping it to its own
+// lifetime means no cap or clock of the sweep's ever decides when a record
+// goes. Every read already filters on expiry, so a row the sweep has not
+// reached behaves exactly like one it has.
 func (q *Queries) DeleteExpiredTrustedDevices(ctx context.Context) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteExpiredTrustedDevices)
 	if err != nil {
@@ -121,13 +119,13 @@ const deleteTrustedDevicesForUser = `-- name: DeleteTrustedDevicesForUser :execr
 DELETE FROM trusted_devices WHERE user_id = $1
 `
 
-// DeleteTrustedDevicesForUser is the erasure half (§12.7), and it deletes
-// rather than revokes. A revoked row still holds an address and a user agent,
-// which is personal data belonging to a person who asked to be deleted; the
-// users row survives erasure only because audit events and immutable published
-// content need a stable, now-opaque actor id, and nothing needs that of a
-// browser credential. That the credential was issued is already in the audit
-// log as user.trusted_device_add, so deleting the row loses no record.
+// DeleteTrustedDevicesForUser is the erasure half, and it deletes rather than
+// revokes. A revoked row still holds an address and a user agent, which is
+// personal data belonging to a person who asked to be deleted; the users row
+// survives erasure only because audit events and immutable published content
+// need a stable, now-opaque actor id, and nothing needs that of a browser
+// credential. That the credential was issued is already in the audit log as
+// user.trusted_device_add, so deleting the row loses no record.
 func (q *Queries) DeleteTrustedDevicesForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteTrustedDevicesForUser, userID)
 	if err != nil {
@@ -161,7 +159,8 @@ type GetTrustedDeviceByHashRow struct {
 // than in a branch above it — there is no lookup that could leak another
 // user's record, and no path where a valid token for someone else is
 // distinguished from an invalid one. Expiry and revocation are filtered here
-// too, so a row the sweep has not reached yet behaves exactly like one it has.
+// too, so a row the sweep has not reached yet behaves exactly like one it
+// has.
 func (q *Queries) GetTrustedDeviceByHash(ctx context.Context, arg GetTrustedDeviceByHashParams) (GetTrustedDeviceByHashRow, error) {
 	row := q.db.QueryRow(ctx, getTrustedDeviceByHash, arg.TokenSha256, arg.UserID)
 	var i GetTrustedDeviceByHashRow
@@ -180,20 +179,20 @@ UPDATE trusted_devices SET revoked_at = now() WHERE user_id = $1 AND revoked_at 
 `
 
 // RevokeTrustedDevicesForUser revokes every live record of one account. It
-// sits beside RevokeUserSessions in §12.5 SCIM deactivation, because a
-// remembered browser is a way back in that outliving the sessions would
-// otherwise leave open.
+// sits beside RevokeUserSessions in SCIM deactivation, because a remembered
+// browser is a way back in that outliving the sessions would otherwise leave
+// open.
 //
-// That deactivation is what makes this load-bearing rather than tidy: it drops
-// the membership, revokes the org-bound PATs and kills the sessions, but it
-// deliberately does not change the account's state or clear its password,
-// since the person may exist outside the organization. So without this, a
-// deprovisioned user could sign straight back in with their password from a
-// remembered browser and be asked for *less* than before — the second factor
-// skipped — which is the opposite of the guarantee scimDeactivate exists to
-// make (agentry#461).
+// That deactivation is what makes this load-bearing rather than tidy: it
+// drops the membership, revokes the org-bound PATs and kills the sessions,
+// but it deliberately does not change the account's state or clear its
+// password, since the person may exist outside the organization. So without
+// this, a deprovisioned user could sign straight back in with their password
+// from a remembered browser and be asked for *less* than before — the second
+// factor skipped — which is the opposite of the guarantee scimDeactivate
+// exists to make.
 //
-// §12.7 erasure is the other place access is taken away, and it uses
+// Erasure is the other place access is taken away, and it uses
 // DeleteTrustedDevicesForUser below instead: erasure sets state='deleted' and
 // nulls the password hash, so its rows are already inert as credentials, and
 // what it owes is the removal of the personal data they hold.
@@ -215,8 +214,7 @@ UPDATE trusted_devices SET last_seen_at = now() WHERE id = $1
 // TouchTrustedDevice records use. It moves last_seen_at and deliberately not
 // expires_at: the lifetime is absolute, so a stolen cookie does not become
 // immortal by being used, and a person who signs in daily is still asked
-// again on day thirty (plan D9, matching §12.4's "24 h absolute" for
-// sessions).
+// again on day thirty (matching the 24 h absolute lifetime of sessions).
 func (q *Queries) TouchTrustedDevice(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, touchTrustedDevice, id)
 	return err

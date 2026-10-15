@@ -10,25 +10,25 @@ import (
 // stageContext is what a stage may reach: a cancellable context (per-stage
 // timeout applied by the orchestrator), the loaded ruleset, the judge, and a
 // logger. Deliberately narrow — stages have no DB, network, or FS beyond the
-// read-only Input.Dir (the sandbox profile enforces the rest, §8.2).
+// read-only Input.Dir (the sandbox profile enforces the rest).
 type stageContext struct {
 	ctx    context.Context
 	bundle *rules.Bundle
 	judge  JudgeProvider
 	log    *slog.Logger
 	// osv and mcpCache are S7's vulnerability database and the registry of
-	// scanned MCP server versions (agentry#177); nil = offline.
+	// scanned MCP server versions; nil = offline.
 	osv      OSVClient
 	mcpCache MCPScanCache
-	// registries answer whether a declared server's version is published
-	// (agentry#1036); nil = not asked.
+	// registries answer whether a declared server's version is published;
+	// nil = not asked.
 	registries PackageRegistries
 }
 
 // Context returns the cancellation context.
 func (s stageContext) Context() context.Context { return s.ctx }
 
-// textScanCap bounds how much of a file S3/S4/S5 read (§19: 1 MB
+// textScanCap bounds how much of a file S3/S4/S5 read (1 MB
 // instruction-file total; per-file safety cap here).
 const textScanCap = 1 << 20
 

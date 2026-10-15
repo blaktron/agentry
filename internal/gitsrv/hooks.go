@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// RunPreReceiveHook implements `agentryd hook pre-receive` (§6.3). git runs
+// RunPreReceiveHook implements `agentryd hook pre-receive`. git runs
 // it inside the bare repo with "old new ref" lines on stdin; the request
 // context (pusher permissions, quotas) arrives via AGENTRY_HOOK_* env vars
 // set by the serving process. Exit non-zero rejects the push; stderr lines
@@ -20,12 +20,12 @@ import (
 // Enforced here (object-level checks are possible because git exposes the
 // quarantined incoming objects to hooks):
 //   - v* tags: creation requires publish permission; updating or deleting
-//     an existing v* tag is always denied (§5.5 immutable version namespace)
+//     an existing v* tag is always denied (immutable version namespace)
 //   - default branch: no deletion; no force-push unless allowed
-//   - new tips: no nested .git entries, no blobs over the size cap (§6.3)
-//   - repo quota: approximate disk usage check (§19); over the warn tier
+//   - new tips: no nested .git entries, no blobs over the size cap
+//   - repo quota: approximate disk usage check; over the warn tier
 //     the push succeeds and the pusher is told (git relays hook stderr as
-//     "remote:" lines — the channel DEV-036 said a hook lacks; agentry#44)
+//     "remote:" lines)
 func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 	deny := func(format string, args ...any) int {
 		_, _ = fmt.Fprintf(stderr, "agentry: "+format+"\n", args...)
@@ -54,7 +54,7 @@ func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 		}
 		oldOID, newOID, ref := parts[0], parts[1], parts[2]
 
-		// Protected version-tag namespace (§6.3, §6.4).
+		// Protected version-tag namespace.
 		if strings.HasPrefix(ref, "refs/tags/v") {
 			if oldOID != zeroOID {
 				return deny("version tags are immutable: %s cannot be updated or deleted", ref)
@@ -102,7 +102,7 @@ func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 
 // checkTree scans the tip tree for nested .git entries and oversized blobs.
 // History interior is intentionally not scanned: receive.maxInputSize caps
-// pack size and the tip is what archives/scans consume (§6.5).
+// pack size and the tip is what archives/scans consume.
 func checkTree(oid string, maxBlob int) string {
 	out, err := exec.Command("git", "ls-tree", "-r", "-l", oid).Output() //nolint:gosec // fixed binary, oid validated by git
 	if err != nil {

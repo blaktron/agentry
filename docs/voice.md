@@ -152,8 +152,8 @@ A closed build reaches the store through `pkg/extension`:
 
 - **`AdmitsVoice`** admits, and may charge for, the review a route asks
   for: an edit saved, an upload, a Restore that is reviewed again. AI
-  Review costs 1 credit an operation where an extension charges for it
-  (DEV-150); the core charges nothing. A refusal is answered in its own
+  Review costs 1 credit an operation where an extension charges for it;
+  the core charges nothing. A refusal is answered in its own
   status and words before anything is stored, and the ticket is voided
   when nothing was.
 - **`Deps.Voice`** reads a person's live voice (never a pending one) for a
@@ -165,7 +165,7 @@ A closed build reaches the store through `pkg/extension`:
 ## The clients
 
 Every client goes through the routes above, and none moves a voice between
-a computer and the account on its own (plan `writing-voice.md` D6):
+a computer and the account on its own:
 
 - **The CLI** keeps this computer's voice and runs the Voice Writer free
   ([A Writing Voice](runner.md#a-writing-voice)). `agentry voice upload`
@@ -215,7 +215,7 @@ described with the rest of its runs on [Hosted runs](hosted-runs.md):
   `voice: true` is handed the runner's live version at the hand-off
   ([A run in the Writing Voice](hosted-runs.md#a-run-in-the-writing-voice)).
 - **The review's credit**: `AdmitsVoice` charges 1 credit for the review of
-  an edit, an upload or a Restore reviewed again (DEV-150).
+  an edit, an upload or a Restore reviewed again.
 
 ## Erasure
 

@@ -10,15 +10,15 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// The shared implementations (agentry#414, DEV-119): the replay cache and
-// the request tracker in the registry's own database, so an assertion
-// consumed by one API replica is a replay at every other, and a login
-// started on one can be completed on another. A database that cannot be
-// reached fails closed — an assertion is treated as a replay, a request
-// as unknown — because the alternative is a session minted on a guess;
-// each refusal is a catalogued signal, so an operator can tell that apart
-// from a replay that was really presented. Expired rows are swept by the
-// writers every so often; the sets stay the size of what is live.
+// The shared implementations: the replay cache and the request tracker in
+// the registry's own database, so an assertion consumed by one API replica
+// is a replay at every other, and a login started on one can be completed
+// on another. A database that cannot be reached fails closed — an
+// assertion is treated as a replay, a request as unknown — because the
+// alternative is a session minted on a guess; each refusal is a
+// catalogued signal, so an operator can tell that apart from a replay
+// that was really presented. Expired rows are swept by the writers every
+// so often; the sets stay the size of what is live.
 
 // sweepEvery is how many writes pass between one sweep of expired rows
 // and the next.

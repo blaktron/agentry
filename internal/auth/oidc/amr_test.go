@@ -3,7 +3,7 @@ package oidc
 import "testing"
 
 // One rule decides whether an ID token's `amr` names a second factor, for the
-// directory's callback and an organization's (agentry#23, agentry#705).
+// directory's callback and an organization's.
 func TestAMRNamesSecondFactor(t *testing.T) {
 	for _, tc := range []struct {
 		amr  []string

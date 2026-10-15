@@ -33,7 +33,7 @@ func gather(t *testing.T, m *Metrics) string {
 	return string(b)
 }
 
-// The §16.3 alarms and §16.2 dashboards address these metrics by name. If a
+// The alarms and dashboards address these metrics by name. If a
 // rename ever lands, this test is the thing that should fail — not a silent
 // alarm in production that never fires again.
 func TestInstrumentNamesMatchTerraform(t *testing.T) {
@@ -59,7 +59,8 @@ func TestInstrumentNamesMatchTerraform(t *testing.T) {
 	m.RecordFailOpen(ctx, FailOpenOSVNotChecked)
 
 	out := gather(t, m)
-	// Exactly the names referenced by deploy/terraform/modules/observability.
+	// Exactly the names the hosted deployment's dashboards and alarms
+	// reference.
 	for _, name := range []string{
 		"QueueDepth", "QueueAgeSeconds",
 		"ScanStageErrors", "ScanStageRuns", "ScanStageDurationSeconds", "ScanStageHits",
@@ -244,7 +245,7 @@ func sampleValue(t *testing.T, exposition, name, match string) string {
 }
 
 // An extension's instrument is scraped beside the core's, with the same
-// resource labels (agentry#777).
+// resource labels.
 func TestExtensionInstrumentIsScrapedWithTheResourceLabels(t *testing.T) {
 	m := newTestMetrics(t)
 	c, err := m.ExtensionMeter("runs").Int64Counter("RunsHostedTokens")

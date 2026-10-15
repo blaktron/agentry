@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Notification settings (agentry#190): defaults read back as everything on,
+// Notification settings: defaults read back as everything on,
 // a full replace persists, and each caller sees only their own.
 func TestNotificationSettingsRoundTrip(t *testing.T) {
 	env := newTestEnv(t)

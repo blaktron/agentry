@@ -11,11 +11,11 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Abuse reporting (§8.7 intake). Reports are authed and rate-limited so the
+// Abuse reporting. Reports are authed and rate-limited so the
 // queue cannot be flooded, and they land in the platform triage queue rather
 // than taking automatic action — a report is a signal, not a verdict.
 
-// maxReportsPerHour bounds one reporter's submissions (§9.2 rate-limited).
+// maxReportsPerHour bounds one reporter's submissions.
 const maxReportsPerHour = 10
 
 // ReportAbuse implements POST /agents/{ns}/{name}/abuse-reports.
@@ -135,7 +135,7 @@ func (s *Server) ListAbuseReports(w http.ResponseWriter, r *http.Request, params
 
 // TriageAbuseReport implements POST /platform/abuse-reports/{id} (staff only).
 // Recording a triage outcome is bookkeeping — enforcement actions go through
-// the §7 platform agent actions so their audit trail names the agent.
+// the platform agent actions so their audit trail names the agent.
 func (s *Server) TriageAbuseReport(w http.ResponseWriter, r *http.Request, id uuid.UUID) {
 	if !s.requireDB(w, r) {
 		return

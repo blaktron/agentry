@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tag-guard.sh — refuses a release tag of the wrong shape, one on the wrong
-# branch, and any 1.x or later without the operator (DEV-148, agentry#597).
+# branch, and any 1.x or later without the maintainers' go-ahead.
 # release.yaml's first job runs it, and dev-release.yaml runs it before it
 # creates a tag.
 #
@@ -15,7 +15,7 @@
 # signed from main, or a main release signed from dev, would carry the other
 # channel's identity. A major version of 1 or more is refused unless
 # AGENTRY_ALLOW_V1 is exactly "true": the repository variable only the
-# operator's 1.0 step sets (agentry#522).
+# maintainers' 1.0 step sets.
 #
 # On success it prints the lines a workflow appends to $GITHUB_OUTPUT,
 #   version=X.Y.Z[-dev.N]
@@ -42,7 +42,7 @@ else
 fi
 
 if [ "$major" -ge 1 ] && [ "${AGENTRY_ALLOW_V1:-}" != true ]; then
-  refuse "a v$major release is the operator's (set the repository variable AGENTRY_ALLOW_V1=true, agentry#522)"
+  refuse "a v$major release is a maintainer's call (set the repository variable AGENTRY_ALLOW_V1=true)"
 fi
 
 if [ -n "${RUN_REF:-}" ] && [ "$RUN_REF" != "refs/heads/$branch" ]; then

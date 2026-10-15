@@ -1,7 +1,7 @@
 package api
 
 // The handle FieldError states the whole rule reHandle enforces rather than
-// printing the pattern (agentry#260): a reader can act on "1-39 lowercase
+// printing the pattern: a reader can act on "1-39 lowercase
 // letters, digits and hyphens, starting and ending with a letter or digit",
 // and cannot act on a regex. This test is what stops the sentence drifting
 // from the pattern — widen reHandle and the bound asserted here fails.

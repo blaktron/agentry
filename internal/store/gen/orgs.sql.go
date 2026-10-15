@@ -78,9 +78,9 @@ UPDATE orgs SET logo_object_key = NULL, updated_at = now() FROM old WHERE orgs.i
 RETURNING old.logo_object_key AS previous_key
 `
 
-// Removes the organization's logo and returns the key that was served,
-// for the caller to delete the object (agentry#367); the same one-statement
-// shape as SetOrgLogo. No row when there was no logo.
+// Removes the organization's logo and returns the key that was served, for
+// the caller to delete the object; the same one-statement shape as
+// SetOrgLogo. No row when there was no logo.
 func (q *Queries) ClearOrgLogo(ctx context.Context, id uuid.UUID) (*string, error) {
 	row := q.db.QueryRow(ctx, clearOrgLogo, id)
 	var previous_key *string
@@ -92,8 +92,8 @@ const countActiveMemberships = `-- name: CountActiveMemberships :one
 SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active'
 `
 
-// The same rule at the creation door (agentry#370): a person who is an
-// active member anywhere founds nothing until they leave.
+// The same rule at the creation door: a person who is an active member
+// anywhere founds nothing until they leave.
 func (q *Queries) CountActiveMemberships(ctx context.Context, userID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countActiveMemberships, userID)
 	var count int64
@@ -110,8 +110,8 @@ type CountActiveMembershipsElsewhereParams struct {
 	OrgID  uuid.UUID `json:"org_id"`
 }
 
-// One organization per person (D26): an invitation or an approval for
-// someone already active elsewhere is refused.
+// One organization per person: an invitation or an approval for someone
+// already active elsewhere is refused.
 func (q *Queries) CountActiveMembershipsElsewhere(ctx context.Context, arg CountActiveMembershipsElsewhereParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countActiveMembershipsElsewhere, arg.UserID, arg.OrgID)
 	var count int64
@@ -123,9 +123,9 @@ const countMemberships = `-- name: CountMemberships :one
 SELECT count(*) FROM memberships m WHERE m.user_id = $1
 `
 
-// Every membership row a person holds, pending included: the fold-in
-// (agentry#364) fires only for a member of no organization, and a person
-// already waiting somewhere is not folded in elsewhere.
+// Every membership row a person holds, pending included: the fold-in fires
+// only for a member of no organization, and a person already waiting
+// somewhere is not folded in elsewhere.
 func (q *Queries) CountMemberships(ctx context.Context, userID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countMemberships, userID)
 	var count int64
@@ -140,7 +140,7 @@ WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'a
 
 // Only an admin who can still act counts: an erased account keeps its
 // membership row (and the last-owner guard this replaces counted it), and a
-// pending admin holds nothing until they are approved (agentry#361).
+// pending admin holds nothing until they are approved.
 func (q *Queries) CountOrgAdmins(ctx context.Context, orgID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countOrgAdmins, orgID)
 	var count int64
@@ -161,9 +161,8 @@ type CountOrgSeatsRow struct {
 	Pending int64 `json:"pending"`
 }
 
-// A seat is every active membership plus every open invitation (plan §4
-// "Seats"); pending members hold none and are reported so an admin can see
-// who is waiting.
+// A seat is every active membership plus every open invitation; pending
+// members hold none and are reported so an admin can see who is waiting.
 func (q *Queries) CountOrgSeats(ctx context.Context, orgID uuid.UUID) (CountOrgSeatsRow, error) {
 	row := q.db.QueryRow(ctx, countOrgSeats, orgID)
 	var i CountOrgSeatsRow
@@ -247,11 +246,11 @@ type CreateOrgParams struct {
 	Domain      *string    `json:"domain"`
 }
 
-// Orgs, memberships, teams (M1/WG-B).
+// Orgs, memberships, teams.
 // activated_at is now() where nothing will activate the org later (no
-// admission extension), NULL where one will (agentry#360). domain is the
-// creator's verified email domain, or NULL for none (agentry#363); the
-// unique constraint refuses a second organization at one domain.
+// admission extension), NULL where one will. domain is the creator's verified
+// email domain, or NULL for none; the unique constraint refuses a second
+// organization at one domain.
 func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (Org, error) {
 	row := q.db.QueryRow(ctx, createOrg,
 		arg.ID,
@@ -414,8 +413,8 @@ const deleteUserMemberships = `-- name: DeleteUserMemberships :execrows
 DELETE FROM memberships WHERE user_id = $1
 `
 
-// An erased account holds no seat anywhere (agentry#363): its rows go
-// with it, after the last-admin guard has passed.
+// An erased account holds no seat anywhere: its rows go with it, after the
+// last-admin guard has passed.
 func (q *Queries) DeleteUserMemberships(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteUserMemberships, userID)
 	if err != nil {
@@ -473,8 +472,8 @@ type GetInvitationByTokenRow struct {
 }
 
 // Whether the invited address is at one of the organization's DNS-verified
-// domains travels with the invitation: it decides both whether the offer
-// was mailed and whether accepting confirms the address (agentry#361).
+// domains travels with the invitation: it decides both whether the offer was
+// mailed and whether accepting confirms the address.
 func (q *Queries) GetInvitationByToken(ctx context.Context, tokenSha256 []byte) (GetInvitationByTokenRow, error) {
 	row := q.db.QueryRow(ctx, getInvitationByToken, tokenSha256)
 	var i GetInvitationByTokenRow
@@ -548,12 +547,12 @@ type GetOrgByDomainRow struct {
 	Handle             string     `json:"handle"`
 }
 
-// The organization a domain belongs to: recorded at its creation, or
-// verified over DNS by it. One organization per domain (D21, D26) spans
-// both facts, so a creation at a DNS-verified domain and a verification
-// of another organization's creation domain are both refused by the API
-// against this lookup. A decommissioned organization has released its
-// domain (both columns are cleared by the erasure), so it never matches.
+// The organization a domain belongs to: recorded at its creation, or verified
+// over DNS by it. One organization per domain spans both facts, so a creation
+// at a DNS-verified domain and a verification of another organization's
+// creation domain are both refused by the API against this lookup. A
+// decommissioned organization has released its domain (both columns are
+// cleared by the erasure), so it never matches.
 func (q *Queries) GetOrgByDomain(ctx context.Context, domain string) (GetOrgByDomainRow, error) {
 	row := q.db.QueryRow(ctx, getOrgByDomain, domain)
 	var i GetOrgByDomainRow
@@ -599,9 +598,9 @@ type GetOrgByHandleRow struct {
 	VerifiedDomains    []string   `json:"verified_domains"`
 }
 
-// verified_domains is every domain the organization proved control of
-// over DNS (domain_claims.verified_at), oldest first: the T-12 auto-link
-// rule and the invitation door read it (agentry#363).
+// verified_domains is every domain the organization proved control of over
+// DNS (domain_claims.verified_at), oldest first: the SSO auto-link rule and
+// the invitation door read it.
 func (q *Queries) GetOrgByHandle(ctx context.Context, handle string) (GetOrgByHandleRow, error) {
 	row := q.db.QueryRow(ctx, getOrgByHandle, handle)
 	var i GetOrgByHandleRow
@@ -679,8 +678,8 @@ type GetOrgStateRow struct {
 	DecommissionAt *time.Time `json:"decommission_at"`
 }
 
-// What the organization's state permits, for the one gate the API, the
-// git door and the membership chokepoint consult (agentry#363).
+// What the organization's state permits, for the one gate the API, the git
+// door and the membership chokepoint consult.
 func (q *Queries) GetOrgState(ctx context.Context, id uuid.UUID) (GetOrgStateRow, error) {
 	row := q.db.QueryRow(ctx, getOrgState, id)
 	var i GetOrgStateRow
@@ -700,9 +699,9 @@ ORDER BY h.handle
 LIMIT 1
 `
 
-// The erasure guard (D14): an account that is the only active admin of an
-// organization that still exists cannot be erased until another admin is
-// in place. Counts the way CountOrgAdmins does.
+// The erasure guard: an account that is the only active admin of an
+// organization that still exists cannot be erased until another admin is in
+// place. Counts the way CountOrgAdmins does.
 func (q *Queries) GetOrgWhereUserIsLastAdmin(ctx context.Context, userID uuid.UUID) (string, error) {
 	row := q.db.QueryRow(ctx, getOrgWhereUserIsLastAdmin, userID)
 	var handle string
@@ -764,11 +763,10 @@ type GetUserPendingOrgRow struct {
 }
 
 // The organization a person is waiting to be approved by, for GET /user's
-// pendingOrg (agentry#364): every page and client says it until an admin
-// approves or declines. Active organizations only: a suspended one is
-// absent to everyone, its pending members included, and one in its hold
-// can approve nobody, so a notice that its admins have been asked would
-// promise what cannot happen.
+// pendingOrg: every page and client says it until an admin approves or
+// declines. Active organizations only: a suspended one is absent to everyone,
+// its pending members included, and one in its hold can approve nobody, so a
+// notice that its admins have been asked would promise what cannot happen.
 func (q *Queries) GetUserPendingOrg(ctx context.Context, userID uuid.UUID) (GetUserPendingOrgRow, error) {
 	row := q.db.QueryRow(ctx, getUserPendingOrg, userID)
 	var i GetUserPendingOrgRow
@@ -851,8 +849,8 @@ type ListOrgAdminsForMailRow struct {
 }
 
 // The organization's active admins with what a mail to them needs; whether
-// each may be written to — a verified address, the orgInvites preference —
-// is notify.AllowsEmail's decision, not this query's (agentry#363).
+// each may be written to — a verified address, the orgInvites preference — is
+// notify.AllowsEmail's decision, not this query's.
 func (q *Queries) ListOrgAdminsForMail(ctx context.Context, orgID uuid.UUID) ([]ListOrgAdminsForMailRow, error) {
 	rows, err := q.db.Query(ctx, listOrgAdminsForMail, orgID)
 	if err != nil {
@@ -965,10 +963,9 @@ type ListOrgsWithUnnotifiedPendingRow struct {
 	DisplayName string    `json:"display_name"`
 }
 
-// The organizations the daily digest has something to say to
-// (agentry#364), or the one named: active ones with a pending member no
-// admin has been mailed about. A suspended or held organization gets no
-// digest; its admins can add nobody.
+// The organizations the daily digest has something to say to, or the one
+// named: active ones with a pending member no admin has been mailed about. A
+// suspended or held organization gets no digest; its admins can add nobody.
 func (q *Queries) ListOrgsWithUnnotifiedPending(ctx context.Context, orgID *uuid.UUID) ([]ListOrgsWithUnnotifiedPendingRow, error) {
 	rows, err := q.db.Query(ctx, listOrgsWithUnnotifiedPending, orgID)
 	if err != nil {
@@ -1111,10 +1108,10 @@ type ListUserMembershipsRow struct {
 }
 
 // The caller's org roles, for the principal every request is authorized
-// against. ACTIVE memberships only (agentry#361): a pending member —
-// provisioned by the IdP, or folded in from the domain — is waiting for an
-// admin and holds nothing of the organization until then, so their row
-// must not reach auth.Check as a role.
+// against. ACTIVE memberships only: a pending member — provisioned by the
+// IdP, or folded in from the domain — is waiting for an admin and holds
+// nothing of the organization until then, so their row must not reach
+// auth.Check as a role.
 func (q *Queries) ListUserMemberships(ctx context.Context, userID uuid.UUID) ([]ListUserMembershipsRow, error) {
 	rows, err := q.db.Query(ctx, listUserMemberships, userID)
 	if err != nil {
@@ -1223,11 +1220,11 @@ type ListUsersAtDomainForFoldInRow struct {
 }
 
 // The accounts the fold-in sweep considers when an organization gains a
-// domain (agentry#364): a verified address at the domain — the part after
-// the last @, a trailing dot dropped, the way maildomains.Of reads it —
-// an active account, a member of nothing, and not declined by this
-// organization before. The sign-in step applies the same rules one
-// person at a time (registry.writePending).
+// domain: a verified address at the domain — the part after the last @, a
+// trailing dot dropped, the way maildomains.Of reads it — an active account,
+// a member of nothing, and not declined by this organization before. The
+// sign-in step applies the same rules one person at a time
+// (registry.writePending).
 func (q *Queries) ListUsersAtDomainForFoldIn(ctx context.Context, arg ListUsersAtDomainForFoldInParams) ([]ListUsersAtDomainForFoldInRow, error) {
 	rows, err := q.db.Query(ctx, listUsersAtDomainForFoldIn, arg.Domain, arg.OrgID)
 	if err != nil {
@@ -1252,10 +1249,10 @@ const lockKey = `-- name: LockKey :exec
 SELECT pg_advisory_xact_lock(hashtext($1::text))
 `
 
-// A transaction-scoped advisory lock on a name, for the rules that span
-// more than one table or row and so have no constraint to hold them: a
-// domain across orgs.domain and the verified claims, a person's once-a-day
-// request for access (agentry#363). Released with the transaction.
+// A transaction-scoped advisory lock on a name, for the rules that span more
+// than one table or row and so have no constraint to hold them: a domain
+// across orgs.domain and the verified claims, a person's once-a-day request
+// for access. Released with the transaction.
 func (q *Queries) LockKey(ctx context.Context, key string) error {
 	_, err := q.db.Exec(ctx, lockKey, key)
 	return err
@@ -1278,8 +1275,8 @@ SELECT id FROM users WHERE id = $1 FOR UPDATE
 
 // Serialises the membership doors of one PERSON across organizations: the
 // one-organization-per-person count runs under this lock, after the
-// organization's (always in that order), so two organizations admitting
-// the same person at once cannot both count zero (agentry#412).
+// organization's (always in that order), so two organizations admitting the
+// same person at once cannot both count zero.
 func (q *Queries) LockUser(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockUser, id)
 	return err
@@ -1367,12 +1364,12 @@ type SetOrgLogoParams struct {
 	LogoObjectKey *string   `json:"logo_object_key"`
 }
 
-// Records the logo now served for the organization and returns the key
-// it replaces (NULL for none), so the caller can remove the old object
-// once the row points at the new one (agentry#367). The previous value
-// is read under the row lock in the same statement — a departure from
-// this file's LockOrg-then-write shape, taken so the swap and what it
-// replaced are one round trip and cannot disagree.
+// Records the logo now served for the organization and returns the key it
+// replaces (NULL for none), so the caller can remove the old object once the
+// row points at the new one. The previous value is read under the row lock in
+// the same statement — a departure from this file's LockOrg-then-write shape,
+// taken so the swap and what it replaced are one round trip and cannot
+// disagree.
 func (q *Queries) SetOrgLogo(ctx context.Context, arg SetOrgLogoParams) (*string, error) {
 	row := q.db.QueryRow(ctx, setOrgLogo, arg.ID, arg.LogoObjectKey)
 	var previous_key *string
@@ -1426,7 +1423,7 @@ type UpsertFoldInDeclineParams struct {
 	DeclinedBy *uuid.UUID `json:"declined_by"`
 }
 
-// A decline is remembered for that person at that organization (D25).
+// A decline is remembered for that person at that organization.
 func (q *Queries) UpsertFoldInDecline(ctx context.Context, arg UpsertFoldInDeclineParams) error {
 	_, err := q.db.Exec(ctx, upsertFoldInDecline, arg.OrgID, arg.UserID, arg.DeclinedBy)
 	return err
@@ -1444,9 +1441,9 @@ type UpsertMembershipParams struct {
 }
 
 // Role changes only, and it cannot create: every door that makes someone a
-// member goes through registry.ActivateMember (agentry#361), which counts
-// seats. An UPDATE with no row is 0 rows, so a caller that reaches here
-// with nobody to change writes nothing rather than admitting them.
+// member goes through registry.ActivateMember, which counts seats. An UPDATE
+// with no row is 0 rows, so a caller that reaches here with nobody to change
+// writes nothing rather than admitting them.
 func (q *Queries) UpsertMembership(ctx context.Context, arg UpsertMembershipParams) (int64, error) {
 	result, err := q.db.Exec(ctx, upsertMembership, arg.OrgID, arg.UserID, arg.Role)
 	if err != nil {
@@ -1470,10 +1467,10 @@ type UpsertPendingMembershipParams struct {
 }
 
 // The SCIM and fold-in doors: a membership that holds no seat and confers
-// nothing until an admin approves it. An existing membership is left alone
-// — approving twice, or provisioning someone who is already active, must
-// not push them back to pending. Reports 1 when this call wrote the row,
-// which is how the fold-in knows to audit and count it once (agentry#364).
+// nothing until an admin approves it. An existing membership is left alone —
+// approving twice, or provisioning someone who is already active, must not
+// push them back to pending. Reports 1 when this call wrote the row, which is
+// how the fold-in knows to audit and count it once.
 func (q *Queries) UpsertPendingMembership(ctx context.Context, arg UpsertPendingMembershipParams) (int64, error) {
 	result, err := q.db.Exec(ctx, upsertPendingMembership,
 		arg.OrgID,

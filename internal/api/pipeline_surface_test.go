@@ -1,6 +1,6 @@
 package api_test
 
-// The HTTP surface of the §7/§8 fixes: what a consumer, an uploader and a
+// The HTTP surface of the pipeline: what a consumer, an uploader and a
 // reviewer actually observe. The lifecycle itself is covered in internal/scan;
 // these pin the parts that only exist over HTTP.
 
@@ -18,12 +18,13 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// ---------------------------------------------------------------- B-02 blocked
+// ---------------------------------------------------------------- blocked
 
-// TestBlockedAgentDownloadReturns410 pins §7 `blocked`: "downloads return 410".
-// Staff block only set agents.quarantine_state, leaving every published
-// version downloadable — so the 410 branch in the download handler was
-// unreachable and the T&S action did nothing a consumer could notice.
+// TestBlockedAgentDownloadReturns410 pins `blocked`: "downloads return 410".
+// A staff block sets agents.quarantine_state and every published version
+// stops downloading: the 410 branch in the download handler must be
+// reachable, or the trust-and-safety action does nothing a consumer could
+// notice.
 func TestBlockedAgentDownloadReturns410(t *testing.T) {
 	env := newTestEnv(t)
 	author := env.register("blk-auth")
@@ -69,7 +70,7 @@ func TestBlockedAgentDownloadReturns410(t *testing.T) {
 	res = env.do(anonymous, http.MethodGet, dl, nil)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusGone {
-		t.Fatalf("blocked download: got %d want 410 (§7)", res.StatusCode)
+		t.Fatalf("blocked download: got %d want 410", res.StatusCode)
 	}
 	// Resolution must refuse it too — a blocked package that still resolves is
 	// a blocked package that still installs.
@@ -79,7 +80,7 @@ func TestBlockedAgentDownloadReturns410(t *testing.T) {
 		t.Fatal("resolve still returns a blocked agent")
 	}
 
-	// Reinstate restores service (§7: only platform staff set/unset).
+	// Reinstate restores service (only platform staff set/unset).
 	res = env.do(staffSess, http.MethodPost,
 		"/api/v1/platform/agents/"+author+"/banned/reinstate", map[string]any{"reason": "appeal upheld"})
 	_ = res.Body.Close()
@@ -93,7 +94,7 @@ func TestBlockedAgentDownloadReturns410(t *testing.T) {
 	}
 }
 
-// --------------------------------------------------------- B-10 upload limits
+// --------------------------------------------------------- upload limits
 
 // postArchive uploads raw bytes as the archive part, bypassing the CLI helper
 // so malformed and oversized payloads can be tested.
@@ -120,11 +121,11 @@ func (env *testEnv) postArchive(ns, name, pat string, archive []byte) (int, stri
 
 // TestUploadRejectsOversizedBodyAndRatioBomb pins the two hardening gaps on the
 // upload path. ParseMultipartForm's argument is only a MEMORY budget —
-// everything past it spools to disk — so an unbounded body let an
-// authenticated client fill the server's temp filesystem before any
-// validation ran. And the upload used a weaker extractor than the scanner
-// would later apply to the very same bytes: no file-count cap, no compression
-// ratio check, no decoder memory bound.
+// everything past it spools to disk — so the body must be bounded, or an
+// authenticated client could fill the server's temp filesystem before any
+// validation ran. And the upload must apply the extractor limits the
+// scanner later applies to the very same bytes: a file-count cap, a
+// compression ratio check and a decoder memory bound.
 func TestUploadRejectsOversizedBodyAndRatioBomb(t *testing.T) {
 	env := newTestEnv(t)
 	author := env.register("upl-auth")
@@ -202,7 +203,7 @@ func (zeroReader) Read(p []byte) (int, error) {
 
 // --------------------------------------------------------- report surface
 
-// TestReportCarriesScanDateAndDismissalRationale pins §8.5: dismissed findings
+// TestReportCarriesScanDateAndDismissalRationale pins dismissed findings
 // "stay on the public report with rationale". A finding that vanishes without
 // explanation — or a report with no date on it — is the opposite of the
 // honesty the report exists for.
@@ -276,7 +277,7 @@ func TestReportCarriesScanDateAndDismissalRationale(t *testing.T) {
 			t.Fatalf("verdict = %q, want the dismissal", f.Verdict)
 		}
 		if f.VerdictReason == nil || *f.VerdictReason != reason {
-			t.Fatalf("verdictReason = %v, want the reviewer's rationale (§8.5)", f.VerdictReason)
+			t.Fatalf("verdictReason = %v, want the reviewer's rationale", f.VerdictReason)
 		}
 		return
 	}

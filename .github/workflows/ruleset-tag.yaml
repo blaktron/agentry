@@ -1,7 +1,6 @@
-# A tag per ruleset version (agentry#772; plan scan-and-run-tweaks.md D8,
-# "always keep the old rulesets for lineage tracing"). Every scan run names
-# the ruleset_releases row that judged it, and the row keeps the bundle's
-# semver and digest but not the bundle. The first main commit that carries a
+# A tag per ruleset version, so old rulesets can be read back for lineage
+# tracing. Every scan run names the ruleset_releases row that judged it, and
+# the row keeps the bundle's semver and digest but not the bundle. The first main commit that carries a
 # new version in rules/bundle.yaml is tagged ruleset/v<version>, so the bundle
 # (and the Go stages of its day) can be read back and the row's digest
 # checked against it (pkg/ruleset/README.md). A tag that exists is left where

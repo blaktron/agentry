@@ -1,7 +1,6 @@
 package api_test
 
-// The roles after agentry#360 (plan organization-subscriptions §5.1, D14,
-// D20): there is no owner; the creator is the first admin; the last admin
+// The roles: there is no owner; the creator is the first admin; the last admin
 // cannot be demoted or removed, only joined by another; the security
 // reviewer exists only inside a first-party organization; and creating an
 // organization needs a verified address and, where an admission extension
@@ -35,8 +34,7 @@ func problemOf(t *testing.T, res *http.Response) (int, string, string) {
 
 // TestLastAdminCannotBeRemoved: demoting, removing and self-demoting the
 // only admin are each 409 last-admin; promoting another member first makes
-// every one of them succeed. An erased admin does not count — the guard
-// this replaces counted a deleted account as an owner.
+// every one of them succeed. An erased admin does not count.
 func TestLastAdminCannotBeRemoved(t *testing.T) {
 	env := newTestEnv(t)
 	adminH := env.register("la-admin")
@@ -110,7 +108,7 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 		t.Fatalf("self-demote beside an erased admin: %d %s, want 409 last-admin", code, slug)
 	}
 
-	// The erasure case (agentry#363): the last admin cannot erase their
+	// The erasure case: the last admin cannot erase their
 	// account either, and the refusal names the organization; with another
 	// admin in place the erasure goes through and takes the membership
 	// with it, so no seat is held by an account that is gone.
@@ -136,7 +134,7 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 
 // TestSecurityReviewerIsFirstPartyOnly: the role is refused in an ordinary
 // organization, with the refusal naming who holds its powers there, and
-// assignable inside a first-party one. The retired owner spelling still
+// assignable inside a first-party one. The owner spelling still
 // parses and is refused by naming the roles that exist.
 func TestSecurityReviewerIsFirstPartyOnly(t *testing.T) {
 	env := newTestEnv(t)
@@ -160,7 +158,7 @@ func TestSecurityReviewerIsFirstPartyOnly(t *testing.T) {
 
 	// The first-party org: created here by a second staff account — the
 	// first now belongs to the ordinary organization, and a person belongs
-	// to one at a time (D26, agentry#363) — or already present from an
+	// to one at a time — or already present from an
 	// earlier run over the same database (the handle is fixed by design),
 	// in which case this run's account is seeded as one of its admins.
 	// (The refusals above needed no membership: an unassignable role is
@@ -214,10 +212,10 @@ func TestCreateOrgRequiresVerifiedEmail(t *testing.T) {
 // organization is created awaiting activation, and its creator may not
 // create another until it is activated through Deps.Orgs; with no
 // extension every organization is activated as it is created and the
-// pending rule never bites (§3: the core with no extension is unchanged).
-// A person belongs to one organization at a time whatever the deployment
-// (D26, agentry#370), so between the two creations the creator hands the
-// first organization to another admin and leaves it.
+// pending rule never bites (the core with no extension is unchanged).
+// A person belongs to one organization at a time whatever the deployment,
+// so between the two creations the creator hands the first organization
+// to another admin and leaves it.
 func TestOnePendingOrgPerAccount(t *testing.T) {
 	t.Run("without an extension", func(t *testing.T) {
 		env := newTestEnv(t)
@@ -307,7 +305,7 @@ func TestSCIMCannotDeactivateTheLastAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	// SCIM provisioned her as pending; approving is what gives her the seat
-	// and the role (agentry#361).
+	// and the role.
 	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+carolH+"/approve",
 		map[string]any{"role": "admin"}, nil, http.StatusOK)
 	env.doJSON(admin, http.MethodDelete, "/api/v1/orgs/"+orgH+"/members/"+adminH, nil, nil, http.StatusNoContent)

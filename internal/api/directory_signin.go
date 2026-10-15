@@ -8,7 +8,7 @@ import (
 )
 
 // directorySignInFacts is what the settings page needs to know about how the
-// caller signs in at the directory (agentry#706): the social provider the
+// caller signs in at the directory: the social provider the
 // account was first connected to, and whether it has a password.
 type directorySignInFacts interface {
 	SignInFacts(ctx context.Context, link directoryLink) (DirectorySignInFacts, error)

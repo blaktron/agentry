@@ -9,7 +9,7 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 )
 
-// The agent-read seam (agentry#381): an extension asks the core whether a
+// The agent-read seam: an extension asks the core whether a
 // principal may read an agent and gets the answer the core's own routes
 // give — the effective role over the namespace and the grants, the PAT's
 // scope, the organization's state — and never distinguishes "absent" from

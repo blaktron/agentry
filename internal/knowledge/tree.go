@@ -18,8 +18,7 @@ import (
 )
 
 // MaxBytes caps a pack: every file of its tree, in MiB as the CLI counts
-// it (agentry-cli pkg/knowledge.MaxBytes; plan D16, "no knowledge set
-// should exceed 10mb").
+// it (agentry-cli pkg/knowledge.MaxBytes).
 const MaxBytes = manifest.MaxKnowledgePackBytes
 
 // MaxFiles caps the files of one pack's tree.

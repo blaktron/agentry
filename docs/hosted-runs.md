@@ -12,7 +12,7 @@ plan, the gateway and the receipts are the ones the
 daemon, what bounds the run, and that it costs credits.
 
 Hosted runs are not part of this repository's server. They are an extension a
-deployment mounts (`internal/runs` in the closed enterprise build): the routes
+deployment mounts (the runs extension of the enterprise build): the routes
 sit under `/api/v1/x/runs/` and `GET /api/v1/meta` lists the extension where
 one is loaded. A registry built from this repository has none, and a token
 carrying only `run:read` and `run:write` is refused there exactly as a token
@@ -20,8 +20,8 @@ without the right scope is anywhere else
 ([API conventions](api-conventions.md#personal-access-tokens-and-their-scopes)).
 The secrets a run declares are kept by a second extension, the vault
 (`/api/v1/x/vault/`), which returns no value on any route. `secret:write` is
-the scope it is to admit a token by to set and delete the account's secrets
-(agentry-enterprise#251); listing them stays a signed-in session's.
+the scope it is to admit a token by to set and delete the account's secrets;
+listing them stays a signed-in session's.
 [A run's secrets](#a-runs-secrets) says how a run gets them.
 
 `GET /api/v1/x/runs/status` answers anyone: whether this deployment can take
@@ -63,8 +63,8 @@ run is not.
 
 **Platform staff** act through a signed-in session. Their read routes (the
 `GET`s on hosts, enrolments, the fleet, its scaling and the hosted model)
-also admit a personal access token carrying `audit:read`
-(agentry-enterprise#169). Every staff change is a session's alone, and a
+also admit a personal access token carrying `audit:read`.
+Every staff change is a session's alone, and a
 token on one is `403`.
 
 A **sandbox host** holds no credential of Agentry's but its one-use enrolment
@@ -162,11 +162,11 @@ deployment sets them apart, since a member has everything Pro has — and
 `AGENTRY_RUNS_OUTPUT_TOKENS_PER_CREDIT` (25,000) are the two rates the hold
 and the settlement are computed at: 1,000 credits buy about US$5 of
 inference at US$0.10 a million input tokens and US$0.20 a million output.
-They replaced a single tokens-per-credit rate; a deployment that still sets
-`AGENTRY_RUNS_TOKENS_PER_CREDIT` is stopped at start-up with a message naming
-the two, as is one that sets a zero rate, an empty cap or a zero timeout,
-rather than running with a price it did not mean. One that still sets
-`AGENTRY_RUNS_DRAFT_TOKEN_CREDITS` is stopped too, with a message naming
+`AGENTRY_RUNS_TOKENS_PER_CREDIT` is not a setting: a deployment that sets it
+is stopped at start-up with a message naming the two, as is one that sets a
+zero rate, an empty cap or a zero timeout, rather than running with a price
+it did not mean. One that sets `AGENTRY_RUNS_DRAFT_TOKEN_CREDITS` is stopped
+too, with a message naming
 `AGENTRY_RUNS_DRAFT_CREDITS` and `AGENTRY_RUNS_DRAFT_MAX_TOKENS`.
 `GET /api/v1/x/runs/status` reports the live seconds, turns and holds.
 
@@ -192,7 +192,7 @@ outcome decides what the hold becomes.
 | `interrupted` | an envelope whose error is `interrupted`, and any run the account cancelled that ran and did not succeed | settled from the tokens when something ran; refunded when the envelope reports no tokens and no turns |
 | `refused` | `verify` (10), `policy` (11), `compile` (12) | refunded in full, except a run AI Review refused for an input it flagged, which settles AI Review's one credit alone ([a run's files](#a-runs-files)) |
 | `error` | `cli` (1), `usage` (2), `gateway` (13), and any exit class the mapping does not know | refunded in full |
-| `blocked` | `blocked` (18), the agent could not do its task with what the run had | settled from the tokens when the receipt's reason is `agent-blocked` (the agent said so); refunded in full when it is `runner-blocked` (the runner's own tools failed the agent) or names no reason (DEV-216) |
+| `blocked` | `blocked` (18), the agent could not do its task with what the run had | settled from the tokens when the receipt's reason is `agent-blocked` (the agent said so); refunded in full when it is `runner-blocked` (the runner's own tools failed the agent) or names no reason |
 
 A run cancelled while still queued is `cancelled`, not an outcome, and its
 hold is refunded in full. So is a run nobody claimed within the queue timeout;
@@ -262,8 +262,8 @@ the changed key ids; re-pin its home deliberately.
 
 A release that declares a browser (`capabilities.browser`,
 [QuickAgents](quickagents.md#the-browsers-site-a-url-question-named-in-capabilitiesbrowser))
-runs here since the enterprise build's v0.6.57 (agentry-enterprise#565,
-DEV-248), its CLI v0.6.118 (agentry-cli#941):
+runs here with the enterprise build v0.6.57 or later and CLI v0.6.118 or
+later:
 
 - **Its sites are public.** Each site question's answer is the address the
   browser opens, sent as a plain intake answer: it is not an input source,
@@ -306,8 +306,7 @@ refunded in full.
 
 ### AI Review of a run's inputs
 
-Then AI Review reads the inputs' text (agentry-enterprise#333, with
-agentry-cli#321). A run with inputs, or a session, that a host whose health
+Then AI Review reads the inputs' text. A run with inputs, or a session, that a host whose health
 says `acceptsInputReview` claims is minted a job credential, as a draft is.
 The host runs the CLI with `--review-inputs <the registry>` and the
 credential in `AGENTRY_JOB_TOKEN`, and the CLI sends every text the agent
@@ -322,13 +321,12 @@ for an input it flagged (`input-refused` with the detail `ai-review`)
 settles that one credit alone. A run refused because a text could not be
 read (`not-reviewed`), or for malware, settles nothing. AI Review reads at
 most 16 MiB of text a run; a file past that is withheld from the agent and
-named in the receipt, and the run goes on. A host older than the field is
+named in the receipt, and the run goes on. A host whose health lacks the field is
 handed no credential, and its runs' inputs are not reviewed.
 
 ## A run's data at rest
 
-A hosted run's own data rests encrypted in Agentry's cloud
-(agentry-enterprise#547, #548; DEV-245). What is sealed:
+A hosted run's own data rests encrypted in Agentry's cloud. What is sealed:
 
 - **A run's text:** its task, its intake answers, its receipt and its error,
   and a draft's hints, instructions and problems.
@@ -376,12 +374,9 @@ the role that asked (a batch per request).
 answer carries `"withheld": true`, and the task, intake answers, receipt
 and error are empty. A pushed run's output answers staff `404`.
 
-**Runs from before the push path.** Until agentry-enterprise#86
-(2026-10-13) a pull worker also ran hosted runs, but production never ran
-one, and dev moved to the push path on 2026-09-24. A run dev ran the older
-way before that date keeps its per-file sealed outputs and its narration
-(event) rows until the 30-day sweep removes them
-([retention](#retention)).
+**Runs that did not use the push path.** A run recorded by a pull worker
+keeps its per-file sealed outputs and its narration (event) rows until the
+30-day sweep removes them ([retention](#retention)).
 
 **What this does not protect.**
 
@@ -399,10 +394,10 @@ way before that date keeps its per-file sealed outputs and its narration
   names of attached packs, and a draft's package list, proof and revision.
   The last three are file names and digests that the provenance check reads
   at a publish.
-- **Backups.** Data written before this change is sealed in place by the
-  seal passes (the [retention](#retention) section). Database backups and
-  object versions taken before that pass still hold it in the clear until
-  their own retention ends.
+- **Backups.** Data written unsealed is sealed in place by the seal passes
+  (the [retention](#retention) section). Database backups and object
+  versions taken before that pass still hold it in the clear until their own
+  retention ends.
 
 ## Watching a run, and cancelling it
 
@@ -459,7 +454,7 @@ walks through what a person sees.
 
 A hosted run is reported in credits, turns and time, to everyone who reads
 it: its runner, the admins of the organization that pays for it, and platform
-staff alike (agentry-enterprise#291). No answer of the runs routes or the
+staff alike. No answer of the runs routes or the
 status route carries a hosted run's token counts, a dollar cost, a token cap
 or a per-credit rate: each leaves out any member that names tokens or a
 dollar figure, at any depth: the receipt is served without its `usage` block,
@@ -646,11 +641,10 @@ held or queued. More than 32 required names is `422 validation`. With every
 required name set, the run **carries** every declared name the caller has
 a value for: each required one, and each optional one that is set. It
 records those names (`secrets`, names only) and is queued. An optional name
-that is not set is not carried, and the run starts without it
-(agentry-enterprise#424). A run that would carry more than 32 names is
+that is not set is not carried, and the run starts without it. A run that would carry more than 32 names is
 `422 validation` too.
 
-A create may send `ask_optional_secrets: true` (agentry-enterprise#517).
+A create may send `ask_optional_secrets: true`.
 Then, where the deployment keeps secrets, an optional name the caller has
 not set is refused as a required one is: `409 secret-missing`, with
 `missing` naming every declared name not set, required and optional, and
@@ -724,8 +718,7 @@ The receipt's `capabilities_enforced.secrets` names every declared secret by
 name, never a value: the release's own, and each declared MCP server's with
 that server. It says where each goes, and that the MCP gateway's container
 holds every value it injects. An optional secret the run went without is
-named again under `secrets.absent` (agentry-cli#651). A sandbox host whose CLI predates
-agentry-cli#376 still writes `none declared` when only a declared server
+named again under `secrets.absent`. A sandbox host with an older CLI still writes `none declared` when only a declared server
 declares a secret, although that secret was resolved and injected.
 
 The registry's audit log, which platform staff read, holds three events.
@@ -775,8 +768,7 @@ OS keychain ([Connections](runner.md#connections)). A hosted run uses the connec
 vault keeps for the account and the release, a different connection from
 the local one. Each connection is made once on the vendor's consent screen
 and refreshed by Agentry. A run is given an access token alone, never the
-refresh token or a client secret (blaktron/agentry-enterprise#426,
-DEV-223).
+refresh token or a client secret.
 
 ### Making one
 
@@ -958,7 +950,7 @@ packs the Drafter reads first (below). It names no `ref`, and takes no
 `knowledge:read` beside it to name packs. The description is the run's
 `task`; the hints are in its `draft` record.
 
-**Knowledge in a draft** (agentry-enterprise#295). The packs are checked as
+**Knowledge in a draft.** The packs are checked as
 a run's are ([knowledge attached to a run](#knowledge-attached-to-a-run)):
 the caller's own `ready` packs, or their organization's while they are an
 active member, at most the run's number of packs. A draft never scans a pack
@@ -980,8 +972,8 @@ and `draft_release`, or `draft_refund`). Its caps are
 `AGENTRY_RUNS_DRAFT_SECONDS` (1,800 s), `AGENTRY_RUNS_DRAFT_MAX_TURNS` (300)
 and `AGENTRY_RUNS_DRAFT_MAX_TOKENS` (5,000,000). Unlike a build's, the token
 cap is not what the hold buys: a draft may use more than it is charged for,
-and what it uses past its hold is the platform's cost
-(agentry-enterprise#292). The status route's `draft.tokenCredits` (39, the
+and what it uses past its hold is the platform's cost.
+The status route's `draft.tokenCredits` (39, the
 hold less AI Review's credit) is the most its model use may cost the
 account. It pays under
 the same payer rule as a run and counts against one active run per account.

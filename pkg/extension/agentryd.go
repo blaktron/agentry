@@ -1,7 +1,7 @@
-// agentryd is the Agentry server binary: a modular monolith whose role is
-// selected at start (D-02): `agentryd api|git|worker|all`.
-// The agentryd entry point, parameterised by extensions (DEV-091): the
-// core build is Main() with none, a closed build is Main(theirs...).
+// agentryd is the Agentry server binary: a modular monolith whose role
+// is selected at start: `agentryd api|git|worker|all`. The entry point
+// is parameterised by extensions: the core build is Main() with none,
+// an extended build is Main(theirs...).
 package extension
 
 import (
@@ -77,9 +77,10 @@ func rootCmd(exts []Extension) *cobra.Command {
 			},
 		}
 		if role == "worker" {
-			// The §13.3 SaaS split runs the sandbox queue on its own task
-			// profile (no egress); a worker deployment names the queue it
-			// drains. The default drains both, the self-host shape.
+			// The split deployment runs the sandbox queue on its own
+			// task profile (no egress); a worker deployment names the
+			// queue it drains. The default drains both, the self-host
+			// shape.
 			cmd.Flags().StringVar(&queues, "queues", "", "comma-separated queues to drain: core, sandbox (default: both)")
 		}
 		root.AddCommand(cmd)
@@ -192,8 +193,8 @@ func RunWith(ctx context.Context, cfgPath, role string, opts Options, exts ...Ex
 		defer st.Close()
 	}
 
-	// §16.2 telemetry. OTLP export is opt-in (AGENTRY_OTEL_ENDPOINT); the
-	// Prometheus /metrics endpoint is always on (D-25), so a self-hosted
+	// Telemetry. OTLP export is opt-in (AGENTRY_OTEL_ENDPOINT); the
+	// Prometheus /metrics endpoint is always on, so a self-hosted
 	// instance is never dark even without a collector.
 	mx, err := metrics.New(ctx, metrics.Config{
 		OTLPEndpoint:   cfg.Telemetry.OTLPEndpoint,
@@ -227,18 +228,17 @@ func RunWith(ctx context.Context, cfgPath, role string, opts Options, exts ...Ex
 	}
 }
 
-// runWorker runs the async scan/notification worker (§8.2, §13.3). It wires
-// the pipeline's job handlers onto the Postgres queue and works the sandbox
+// runWorker runs the async scan/notification worker. It wires the
+// pipeline's job handlers onto the Postgres queue and works the sandbox
 // and core queues until the context is cancelled.
 func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, mx *metrics.Metrics, exts []Extension, queues []string) error {
 	if st == nil {
 		return errors.New("the worker role requires a database")
 	}
-	// One assembly site for the pipeline, shared with the api role. The worker
-	// used to build its own registry service and its own ruleset registration:
-	// the two copies had already drifted, and the worker's registry had NO
-	// event sink, so every rescan-driven agent.quarantined webhook — the
-	// notification path §8.7 relies on — was dropped on the floor.
+	// One assembly site for the pipeline, shared with the api role. Two
+	// separate assemblies would drift: the worker's registry needs the
+	// same event sink as the api role's, or every rescan-driven
+	// agent.quarantined webhook is dropped.
 	srv := api.New(cfg, st, log)
 	srv.SetMetrics(mx)
 	applyExtensions(srv, exts)
@@ -250,11 +250,12 @@ func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 	}
 
 	// Queues: "core" (webhooks, audit exports, reconcile) and "sandbox"
-	// (scans — §8.2's untrusted-content task profile). There is no "judge"
-	// queue: S5 runs inside the orchestrator's DAG, and §8.4's separate task
-	// profile for it is a deployment boundary, not a second queue. Working a
-	// queue nothing enqueues to only burns claim attempts. --queues narrows
-	// the set for the split deployment (§13.3).
+	// (scans, which run under the untrusted-content task profile).
+	// There is no "judge" queue: S5 runs inside the orchestrator's DAG,
+	// and a separate task profile for it is a deployment boundary, not
+	// a second queue. Working a queue nothing enqueues to only burns
+	// claim attempts. --queues narrows the set for the split
+	// deployment.
 	if len(queues) == 0 {
 		queues = workerQueues
 	}
@@ -265,23 +266,24 @@ func runWorker(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 // workerQueues are the queues a worker drains.
 var workerQueues = []string{"core", "sandbox"}
 
-// newWorkerQueue registers every async handler on a queue client and starts
-// the §7 watchdog ticker. Shared by the `worker` role and by `all`, so the
-// single-process shape runs exactly the handler set the split shape does.
+// newWorkerQueue registers every async handler on a queue client and
+// starts the watchdog ticker. Shared by the `worker` role and by `all`,
+// so the single-process shape runs exactly the handler set the split
+// shape does.
 func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st *store.Store, log *slog.Logger, mx *metrics.Metrics, exts []Extension) (queue.Worker, error) {
 	pipeline := srv.Pipeline()
 	if pipeline == nil {
 		return nil, fmt.Errorf("the worker role requires archive storage (storage.kind=%q has none wired)", cfg.Storage.Kind)
 	}
-	// A worker that shares the git data directory (compose `all`, EFS in
-	// ECS) can scan git history for secrets; one that does not simply
-	// reports S2/history-not-scanned (agentry#54).
+	// A worker that shares the git data directory (compose `all`, a
+	// shared volume in a cloud deployment) can scan git history for
+	// secrets; one that does not simply reports S2/history-not-scanned.
 	repos, rerr := gitsrv.NewRepoStore(cfg)
 	if rerr == nil {
 		pipeline.SetGitHistory(repos)
 		// A git role's tag submission is stored by the worker, which
-		// rebuilds its archive from the repository (agentry#508), and a
-		// fork's repository is copied here (agentry#943).
+		// rebuilds its archive from the repository, and a fork's
+		// repository is copied here.
 		srv.Reg().SetGitArchiver(repos)
 		srv.Reg().SetForkRepos(repos)
 	} else {
@@ -295,14 +297,13 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	}
 	q.SetMetrics(mx, cfg.Telemetry.QueueSampleInterval)
 	pipeline.RegisterHandlers(q)
-	// repo.pushed bookkeeping (§6.3, agentry#43): size when this role can
-	// see the repositories, last_push_at + audit either way.
+	// repo.pushed bookkeeping: size when this role can see the
+	// repositories, last_push_at + audit either way.
 	gitsrv.NewPushBookkeeper(st, repos, audit.NewWriter(log), log).Register(q)
-	// Enterprise async handlers (M6/WG-J): webhook delivery (§9.3) and audit
-	// export (§12.6).
+	// Enterprise async handlers: webhook delivery and audit export.
 	srv.RegisterQueueHandlers(q)
-	// Extension jobs (DEV-091), on the queue each names; a periodic one is
-	// enqueued on its period like the core's own tickers (agentry#324).
+	// Extension jobs, on the queue each names; a periodic one is
+	// enqueued on its period like the core's own tickers.
 	for _, e := range exts {
 		for _, j := range e.Jobs() {
 			q.Register(j.Kind, j.Handler)
@@ -312,23 +313,23 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 		}
 	}
 
-	// §7 watchdog. Enqueued rather than called inline so that across worker
-	// replicas exactly one runs it per interval (SKIP LOCKED), and so an
-	// operator can trigger a reconcile by hand.
+	// Watchdog. Enqueued rather than called inline so that across
+	// worker replicas exactly one runs it per interval (SKIP LOCKED),
+	// and so an operator can trigger a reconcile by hand.
 	go reconcileTicker(ctx, q, log)
 	go mcpSweepTicker(ctx, q, log)
-	// The organization decommission sweep (agentry#363): hourly, and once
-	// at start; the handler erases only what is past its hold.
+	// The organization decommission sweep: hourly, and once at start;
+	// the handler erases only what is past its hold.
 	go periodicTicker(ctx, q, api.JobOrgDecommissionSweep, "core", time.Hour, log)
-	// The pending members digest (agentry#364): daily by default, and once
-	// at start; the handler mails only what no digest has named yet.
+	// The pending members digest: daily by default, and once at start;
+	// the handler mails only what no digest has named yet.
 	go periodicTicker(ctx, q, api.JobPendingMembersDigest, "core", api.PendingDigestPeriod(cfg), log)
-	// Remembered browsers past their expiry (agentry#464): hourly, and once
-	// at start; the handler deletes only what has expired.
+	// Remembered browsers past their expiry: hourly, and once at start;
+	// the handler deletes only what has expired.
 	go periodicTicker(ctx, q, api.JobTrustedDeviceSweep, "core", time.Hour, log)
-	// Writing Voice reviews left in review since their last try
-	// (agentry#809): hourly, and once at start; a judge that could not
-	// answer is asked again, never skipped.
+	// Writing Voice reviews left in review since their last try:
+	// hourly, and once at start; a judge that could not answer is asked
+	// again, never skipped.
 	go periodicTicker(ctx, q, voice.JobSweep, "core", time.Hour, log)
 	return q, nil
 }
@@ -375,7 +376,7 @@ func agentsOf(srv *api.Server, pool *pgxpool.Pool) Agents {
 type serverAgents struct{ srv *api.Server }
 
 // agentRefOf is what the seams say of a resolved agent, its origin
-// included when it is a fork (agentry#943).
+// included when it is a fork.
 func agentRefOf(ag registry.Agent) AgentRef {
 	ref := AgentRef{ID: ag.ID, NamespaceID: ag.NamespaceID, NamespaceKind: NamespaceKind(ag.NamespaceKind), Public: ag.Visibility == "public"}
 	if ag.ForkedFromAgentID != nil && ag.OriginNamespaceID != nil && ag.OriginNamespaceKind != nil {
@@ -527,8 +528,8 @@ func (r serverReportSettings) Theme(ctx context.Context, user uuid.UUID) (string
 	return r.srv.ReportTheme(ctx, user)
 }
 
-// meterOf is the server's meter under the extension's scope (agentry#777),
-// or a no-op one when the server runs without a database, as every other
+// meterOf is the server's meter under the extension's scope, or a no-op
+// one when the server runs without a database, as every other
 // dependency is absent then.
 func meterOf(srv *api.Server, pool *pgxpool.Pool, name string) metric.Meter {
 	if pool == nil {
@@ -599,9 +600,9 @@ func periodicTicker(ctx context.Context, q queue.Client, kind, queueName string,
 	}
 }
 
-// reconcileWindow is how often the watchdog job is enqueued. Versions become
-// eligible at the §7 30-minute cap, so checking every few minutes is prompt
-// without being chatty.
+// reconcileWindow is how often the watchdog job is enqueued. Versions
+// become eligible at the 30-minute cap, so checking every few minutes
+// is prompt without being chatty.
 const reconcileWindow = 5 * time.Minute
 
 func reconcileTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
@@ -609,9 +610,9 @@ func reconcileTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
 }
 
 // mcpSweepWindow is how often the MCP server vulnerability sweep is
-// enqueued (agentry#177): daily, and once shortly after start-up so a
-// worker that was down for a day catches up; the handler re-checks only
-// rows older than its own threshold, so an early run is cheap.
+// enqueued: daily, and once shortly after start-up so a worker that was
+// down for a day catches up; the handler re-checks only rows older than
+// its own threshold, so an early run is cheap.
 const mcpSweepWindow = 24 * time.Hour
 
 func mcpSweepTicker(ctx context.Context, q queue.Client, log *slog.Logger) {
@@ -676,13 +677,13 @@ func serveHTTP(ctx context.Context, cfg config.Config, st *store.Store, log *slo
 func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, role string, mx *metrics.Metrics, exts []Extension) (http.Handler, func() error, error) {
 	switch role {
 	case "api":
-		// The api role holds no signing key (agentry#479): it serves the key
-		// set and the ruleset attestation from the record, and hands an
+		// The api role holds no signing key: it serves the key set and
+		// the ruleset attestation from the record, and hands an
 		// approval's publish to the worker.
 		s := api.New(cfg, st, log, api.WithoutSigningKey())
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
-		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
+		s.HandOffScans() // a submission is the worker's to scan
 		staffAtStart(ctx, cfg, s, log)
 		return api.NewHandler(s), s.Close, nil
 	case "git", "all":
@@ -693,14 +694,14 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		if err != nil {
 			return nil, nil, err
 		}
-		// A git role whose pushes could not be policed does not start: the
-		// hook must run from the hooks base now, rather than every push
-		// being refused later (agentry#495).
+		// A git role whose pushes could not be policed does not start:
+		// the hook must run from the hooks base now, rather than every
+		// push being refused later.
 		if err := repos.PrepareHooks(); err != nil {
 			return nil, nil, err
 		}
-		// The git role terminates untrusted git traffic and never signs, so
-		// it holds no key (agentry#479); `all` is also the worker and does.
+		// The git role terminates untrusted git traffic and never
+		// signs, so it holds no key; `all` is also the worker and does.
 		var opts []api.Option
 		if role == "git" {
 			opts = append(opts, api.WithoutSigningKey())
@@ -708,10 +709,10 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		s := api.New(cfg, st, log, opts...)
 		s.SetMetrics(mx)
 		applyExtensions(s, exts)
-		s.HandOffScans() // a submission is the worker's to scan (agentry#507)
+		s.HandOffScans() // a submission is the worker's to scan
 		if role == "git" {
 			// The git pods hold no object-store credential: a tag's
-			// archive is the worker's to store (agentry#508).
+			// archive is the worker's to store.
 			s.DeferTagArchives()
 		}
 		if role == "all" {
@@ -720,24 +721,24 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		reg := s.Reg()
 		reg.SetGitArchiver(repos)
 		if role == "all" {
-			reg.SetForkRepos(repos) // `all` is also the worker that copies forks (agentry#943)
+			reg.SetForkRepos(repos) // `all` is also the worker that copies forks
 		}
 		if pl := s.Pipeline(); pl != nil {
-			pl.SetGitHistory(repos) // S2 history scan on git-tag publishes (agentry#54)
+			pl.SetGitHistory(repos) // S2 history scan on git-tag publishes
 		}
 		aud := audit.NewWriter(log)
 		git := gitsrv.NewHandler(cfg, st, repos, reg, aud, log)
 		git.SetMetrics(mx)
-		// Push bookkeeping rides the queue as repo.pushed (§6.3, agentry#43);
-		// the worker (in-process for `all`) runs it.
+		// Push bookkeeping rides the queue as repo.pushed; the worker
+		// (in-process for `all`) runs it.
 		gq, qerr := queue.Open(cfg.Queue.Driver, cfg.Queue.Workers, st, log)
 		if qerr != nil {
 			return nil, nil, qerr
 		}
 		git.SetQueue(gq)
 		closeAll := func() error { return errors.Join(git.Close(), s.Close()) }
-		// The SSH transport (§6.1 Q7, agentry#70) rides beside smart HTTP
-		// when configured; same handler, same authorization and hooks.
+		// The SSH transport rides beside smart HTTP when configured;
+		// same handler, same authorization and hooks.
 		if cfg.Git.SSHAddr != "" {
 			sshSrv, err := git.NewSSHServer(cfg.Git.SSHAddr, cfg.Git.SSHHostKeyFile)
 			if err != nil {
@@ -757,21 +758,21 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		}
 		if role == "git" {
 			mux := http.NewServeMux()
-			// Through api.Mount rather than mux.HandleFunc: this mux is not
-			// the recorded one the completeness gate reads, so the
-			// declaration check at start-up is the only thing tying these
-			// two patterns to the gate and the api role (agentry#415).
+			// Through api.Mount rather than mux.HandleFunc: this mux is
+			// not the recorded one the completeness gate reads, so the
+			// declaration check at start-up is the only thing tying
+			// these two patterns to the gate and the api role.
 			api.MountFunc(mux, "GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(`{"status":"ok"}`))
 			})
-			// Readiness is the database ping, as on the api role: the chart's
-			// git Deployment probes /readyz, and a git pod without it never
-			// became Ready on the first live install (agentry#450).
+			// Readiness is the database ping, as on the api role: the
+			// chart's git Deployment probes /readyz, and a git pod
+			// without it never becomes Ready.
 			api.MountFunc(mux, "GET /readyz", s.Readyz)
-			// The git role has no /api/v1 surface, so /metrics is mounted
-			// here too — a git deployment is exactly the one whose clone
-			// first-byte SLI (§16.1) needs scraping.
+			// The git role has no /api/v1 surface, so /metrics is
+			// mounted here too: a git deployment is exactly the one
+			// whose clone first-byte SLI needs scraping.
 			api.Mount(mux, "GET /metrics", mx.Handler())
 			git.Mount(mux)
 			// The same middleware stack as the api role: a git deployment
@@ -779,11 +780,12 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 			return s.WrapMiddleware(mux), closeAll, nil
 		}
 
-		// §2.4: `all` runs EVERY role in-process. Without this the
-		// single-process self-host shape started no worker at all, so webhook
-		// deliveries, audit exports and queue-driven scans were enqueued and
-		// never claimed — enqueued work that silently never runs is worse than
-		// work that fails, because nothing reports it.
+		// `all` runs EVERY role in-process. Without this the
+		// single-process self-host shape would start no worker at all,
+		// so webhook deliveries, audit exports and queue-driven scans
+		// would be enqueued and never claimed. Enqueued work that
+		// silently never runs is worse than work that fails, because
+		// nothing reports it.
 		q, err := newWorkerQueue(ctx, cfg, s, st, log, mx, exts)
 		if err != nil {
 			return nil, nil, err
@@ -801,7 +803,7 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 }
 
 // hookCmd implements the git hook shim (`agentryd hook pre-receive`),
-// invoked by git inside bare repos (§6.3).
+// invoked by git inside bare repos.
 func hookCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "hook", Hidden: true, Short: "git hook shims (invoked by git)"}
 	cmd.AddCommand(&cobra.Command{
@@ -891,16 +893,16 @@ func migrateExtensions(ctx context.Context, databaseURL string, exts []Extension
 	return nil
 }
 
-// staffAtStart warns about the retired staff keys and recomputes platform
-// staff once over every account the staff organization's rule could change
-// (agentry#556), so a configuration change takes effect when the server
-// starts rather than at each person's next sign-in. Several replicas may
-// run it at once; the registry serialises them on an advisory lock. A
-// failure is logged, not fatal: the flag is recomputed again at every
+// staffAtStart warns about the retired staff keys and recomputes
+// platform staff once over every account the staff organization's rule
+// could change, so a configuration change takes effect when the server
+// starts rather than at each person's next sign-in. Several replicas
+// may run it at once; the registry serialises them on an advisory lock.
+// A failure is logged, not fatal: the flag is recomputed again at every
 // sign-in and membership change.
 func staffAtStart(ctx context.Context, cfg config.Config, s *api.Server, log *slog.Logger) {
 	if keys := cfg.RetiredStaffKeys(); len(keys) > 0 {
-		log.Warn("retired platform-staff keys are set and grant nothing; platform staff is membership of auth.staffOrg at auth.staffDomain (agentry#556)", "keys", keys)
+		log.Warn("retired platform-staff keys are set and grant nothing; platform staff is membership of auth.staffOrg at auth.staffDomain", "keys", keys)
 	}
 	reg := s.Reg()
 	if reg == nil || !reg.StaffConfigured() {
@@ -912,8 +914,8 @@ func staffAtStart(ctx context.Context, cfg config.Config, s *api.Server, log *sl
 		return
 	}
 	log.Info("platform staff resync", "org", cfg.Auth.StaffOrg, "domain", cfg.Auth.StaffDomain, "accounts", n)
-	// Members the rule does not make staff are said, not removed
-	// (agentry#598): removing a member is the organization's admins' act.
+	// Members the rule does not make staff are said, not removed:
+	// removing a member is the organization's admins' act.
 	if handles, err := reg.StaffOrgMembersNotStaff(ctx); err != nil {
 		log.Error("platform staff: list the staff organization's members who are not staff", "err", err)
 	} else if len(handles) > 0 {

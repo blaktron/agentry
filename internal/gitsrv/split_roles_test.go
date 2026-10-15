@@ -1,8 +1,8 @@
 package gitsrv_test
 
-// A tag pushed on a split deployment (agentry#508): the git role holds no
-// object-store credential (the chart gives the store's Secret to the api and
-// worker pods only), so it records the version and hands the archive write
+// A tag pushed on a split deployment: the git role holds no object-store
+// credential (the chart gives the store's Secret to the api and worker pods
+// only), so it records the version and hands the archive write
 // to a worker, which rebuilds the archive from the recorded commit, checks
 // the digest, stores it and enters the version into the machine.
 

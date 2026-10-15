@@ -16,7 +16,7 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// A git-tag submission on a split deployment (agentry#508).
+// A git-tag submission on a split deployment.
 //
 // The git role terminates untrusted git traffic and holds no object-store
 // credential: the chart gives the store's Secret to the api and worker pods
@@ -26,7 +26,7 @@ import (
 // with that digest and key. Then it hands StoreTagArchive to a worker. The
 // worker holds the git volume and the store credential. It rebuilds the
 // archive from the commit the git role recorded, refuses it unless the
-// digest matches (archives are byte-reproducible, §9), writes it once, and
+// digest matches (archives are byte-reproducible), writes it once, and
 // only then takes the version into the machine. Until then the version is
 // `submitted`: the row comes before the object here, where every other
 // door stores first. ReconcileStuckSubmissions is the watchdog for a store
@@ -42,7 +42,7 @@ const JobStoreTagArchive = "registry.store_tag_archive"
 
 // StuckSubmissionCap is how long a handed-off submission may stay
 // `submitted` before the watchdog rejects it. Longer than a scan's 30
-// minutes (§7), because the store job waits in the sandbox queue behind
+// minutes, because the store job waits in the sandbox queue behind
 // scans and a rejection burns the version string, where a stuck scan only
 // goes to review; the job's own retries are over well before it.
 const StuckSubmissionCap = 2 * time.Hour
@@ -110,7 +110,7 @@ func (s *Service) StoreTagArchive(ctx context.Context, args StoreTagArchiveArgs,
 	_, err = s.enterPipeline(ctx, a, v.ID, nil, audit.Event{ActorKind: audit.ActorSystem}, pipeline)
 	if errors.Is(err, ErrScanNotScheduled) {
 		// The version is in `scanning` now; a retry would find it past
-		// `submitted` and do nothing. The scan watchdog has it (§7).
+		// `submitted` and do nothing. The scan watchdog has it.
 		return nil
 	}
 	return err
@@ -217,7 +217,7 @@ func (s *Service) ReconcileStuckSubmissions(ctx context.Context) (int, error) {
 			continue
 		}
 		// The rejection is the platform's fault: an extension that charged
-		// for the submission refunds on it (plan subscription-tiers §5.4).
+		// for the submission refunds on it.
 		toScanning.Cause = TransitionCause{PipelineError: true}
 		toRejected.Cause = TransitionCause{PipelineError: true}
 		s.EmitTransition(ctx, toScanning)

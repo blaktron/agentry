@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Local PostgreSQL 16 lifecycle for machines without Docker (DEVIATIONS.md
-# DEV-001). Creates a private cluster under .devdata/pg on port 5477 with
+# Local PostgreSQL 16 lifecycle for machines without Docker.
+# Creates a private cluster under .devdata/pg on port 5477 with
 # databases agentry_dev and agentry_test, role agentry/agentry.
 set -euo pipefail
 

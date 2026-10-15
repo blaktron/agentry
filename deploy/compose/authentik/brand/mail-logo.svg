@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <!-- The Agentry mark (the site's lib/brand-mark.ts geometry, agentry-web#677)
+  <!-- The Agentry mark (the hosted site's brand-mark geometry)
        in the light scheme, the source of mail-logo.png: the image the
-       directory's mails show inline in their header (agentry#720). authentik
+       directory's mails show inline in their header. authentik
        attaches the PNG at its logo path as cid:logo; the compose file mounts
        it there. Re-render after changing this file:
          magick -background none -density 1152 mail-logo.svg -resize 96x96 -depth 8 -strip mail-logo.png -->

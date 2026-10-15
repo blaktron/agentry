@@ -1,8 +1,7 @@
 # Fixture expectation (see README.md).
 # The s4-exfiltration directive in a release whose manifest declares the
 # destination: since ruleset 0.4.0 an S4 capability hit about a declared
-# internet host is medium, and publishes with the finding on the report
-# (agentry#893, DEV-221; plan quickagents-that-run.md D7 as answered). A
+# internet host is medium, and publishes with the finding on the report. A
 # loosening, so its outcome is asserted.
 technique: "S4 exfiltration directive to a host the manifest declares (rated by declaration)"
 manifest: |

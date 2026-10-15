@@ -1,10 +1,10 @@
 package api_test
 
-// §8.8, agentry#350: a rotation used to orphan every attestation the
-// outgoing key had signed — the well-known set named only the current key,
-// so a client pinning afterwards refused everything published before it.
-// The registry now keeps every key it signed with, advertises the retired
-// ones, and countersigns existing attestations with the new key.
+// A rotation must not orphan the attestations the outgoing key signed: a
+// well-known set that named only the current key would make a client
+// pinning afterwards refuse everything published before it. The registry
+// keeps every key it signed with, advertises the retired ones, and
+// countersigns existing attestations with the new key.
 
 import (
 	"context"

@@ -1,7 +1,6 @@
 package api_test
 
-// Retire, Restore and the tombstone Delete (plan forks-and-publisher.md M1,
-// agentry#942; D1–D4, D13).
+// Retire, Restore and the tombstone Delete.
 
 import (
 	"context"
@@ -154,7 +153,7 @@ func TestRetireNeedsTheNamespacesAdministrators(t *testing.T) {
 	env.doJSON(adminSess, http.MethodPost, "/api/v1/agents/"+org+"/kept/retire", nil, nil, http.StatusOK)
 }
 
-// TestRetiredAgentsHoldNoPlaceUnderTheCap (D13): retiring is never refused
+// TestRetiredAgentsHoldNoPlaceUnderTheCap: retiring is never refused
 // by the private-agent cap, a retired agent frees its place, and Restore
 // back to private takes it again under the cap.
 func TestRetiredAgentsHoldNoPlaceUnderTheCap(t *testing.T) {
@@ -189,7 +188,7 @@ func TestRetiredAgentsHoldNoPlaceUnderTheCap(t *testing.T) {
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents/"+user+"/open/restore", nil, nil, http.StatusOK)
 }
 
-// TestDeleteAgentWithHistoryLeavesATombstone (D3, D4): an agent with a
+// TestDeleteAgentWithHistoryLeavesATombstone: an agent with a
 // published version is deleted only with its name confirmed; afterwards
 // every read by name is a 404 for everyone, its owner included, its version
 // row stays (yanked, with the reason), the name is held, and platform staff
@@ -340,8 +339,7 @@ func TestNamespaceListSearchesAndSorts(t *testing.T) {
 
 // TestRestoreToPublicMeetsTheUnscannedRules: an organization's agent
 // retired from public and taken off the pipeline while private comes back
-// public only once the flag is cleared — the same refusal PATCH gives
-// (DEV-115).
+// public only once the flag is cleared, the same refusal PATCH gives.
 func TestRestoreToPublicMeetsTheUnscannedRules(t *testing.T) {
 	env := newTestEnvWith(t, onTier(unscannedOn(true)))
 	adminH := env.register("rst-admin")

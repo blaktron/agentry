@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// A rescan in flight does not blank a published version's verdict
-// (agentry#542, DEV-146): the report and the account install row describe
+// A rescan in flight does not blank a published version's verdict:
+// the report and the account install row describe
 // the latest finished run and the report names the rescan beside it. A
 // rescan that finishes in error is still the report's run: an error is
 // never hidden behind the verdict before it.

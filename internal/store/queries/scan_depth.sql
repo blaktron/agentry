@@ -1,13 +1,13 @@
 -- Queries the scanner stages need beyond the scan-run bookkeeping in
--- scanning.sql (§8.3). Kept in their own file so the pipeline's read-only
--- context lookups are obvious to a reviewer.
+-- scanning.sql. Kept in their own file so the pipeline's read-only context
+-- lookups are obvious to a reviewer.
 
 -- name: ListPopularAgentNames :many
 -- Top-N published public agent names by lifetime installs — the live feed for
--- S8's anti-typosquat compare (§8.3 S8, T-10). Without it the confusable and
--- edit-distance checks compare against an empty list and never fire.
--- Quarantined/blocked agents are excluded: a name nobody should be installing
--- is not a name worth protecting from imitation.
+-- S8's anti-typosquat compare. Without it the confusable and edit-distance
+-- checks compare against an empty list and never fire. Quarantined/blocked
+-- agents are excluded: a name nobody should be installing is not a name worth
+-- protecting from imitation.
 SELECT a.name::text AS name
 FROM agents a
 LEFT JOIN (

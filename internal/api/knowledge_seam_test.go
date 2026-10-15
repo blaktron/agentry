@@ -14,7 +14,7 @@ import (
 	"github.com/blaktron/agentry/pkg/packseal"
 )
 
-// The key-wrapper seam (agentry#593, plan knowledge.md §4.4): an extension's
+// The key-wrapper seam: an extension's
 // KeyWrapper replaces the deployment key and nothing else — the store, the
 // routes, the scan and the erasure are the core's — and with no extension
 // the core wraps under its own knowledge sealing key.

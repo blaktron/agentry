@@ -1,13 +1,13 @@
 # Directory groups the registry gives meaning to.
 #
-# agentry-platform-staff is retired (agentry#556). It made platform staff
-# from the OIDC `groups` claim (agentry#51, DEV-083); platform staff is now
+# agentry-platform-staff is retired. It made platform staff
+# from the OIDC `groups` claim; platform staff is now
 # membership of the staff organization (AGENTRY_STAFF_ORG at
 # AGENTRY_STAFF_DOMAIN), granted by that organization's admins in the
 # registry. `state: absent` removes the group from a directory that still
 # has it, so nobody reads a membership in it as meaning something.
 #
-# The staff mirror group (AGENTRY_IDP_STAFF_MIRROR_GROUP, agentry#598) is the
+# The staff mirror group (AGENTRY_IDP_STAFF_MIRROR_GROUP) is the
 # reverse: the registry writes it, equal to its platform staff, for
 # applications such as the log stack's Dashboards to read. It is not
 # declared here, because its name is the deployment's; the registry and

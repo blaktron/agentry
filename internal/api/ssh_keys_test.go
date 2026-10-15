@@ -28,9 +28,9 @@ func testPublicKeyLine(t *testing.T) string {
 	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPub))) + " me@laptop"
 }
 
-// SSH keys (agentry#70): a session registers, lists and removes keys; a
+// SSH keys: a session registers, lists and removes keys; a
 // malformed key and a duplicate are refused with the field named; a PAT
-// may list but neither add nor remove (D-22 for keys); another user's key
+// may list but neither add nor remove; another user's key
 // is not removable.
 func TestSSHKeysLifecycle(t *testing.T) {
 	env := newTestEnv(t)
@@ -99,8 +99,8 @@ func (r noSSHKeys) Features(ctx context.Context, s entitlements.Subject) (entitl
 	return f, err
 }
 
-// Adding a key is a feature the subscription may not include
-// (agentry#820): off, the add is 403 feature-not-included and writes
+// Adding a key is a feature the subscription may not include:
+// off, the add is 403 feature-not-included and writes
 // nothing; a key already held stays listed, removable and in force; an
 // entitlement that cannot be resolved refuses rather than admits.
 func TestSSHKeyAddIsGatedOnTheSubscription(t *testing.T) {

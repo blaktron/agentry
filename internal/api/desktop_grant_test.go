@@ -1,6 +1,6 @@
 package api_test
 
-// The desktop browser sign-in's code exchange (agentry#19). A signed-in
+// The desktop browser sign-in's code exchange. A signed-in
 // session records a grant bound to the app's state nonce; the app exchanges
 // the code — once — for a PAT that works; wrong state, reuse, and expiry all
 // answer 403; the grant endpoint is session-only.
@@ -66,28 +66,28 @@ func TestDesktopGrantExchange(t *testing.T) {
 			has[s] = true
 		}
 	}
-	// The hosted-run scopes ride on the desktop grant (agentry#353): In
+	// The hosted-run scopes ride on the desktop grant: In
 	// Agentry on RunPanel creates and reads runs with this token.
 	if !has["run:read"] || !has["run:write"] {
 		t.Fatalf("desktop PAT lacks the hosted-run scopes: %v", scopes)
 	}
-	// The knowledge scopes too (agentry#593): the Knowledge panel wraps,
+	// The knowledge scopes too: the Knowledge panel wraps,
 	// unwraps, uploads and downloads packs with this token.
 	if !has["knowledge:read"] || !has["knowledge:write"] {
 		t.Fatalf("desktop PAT lacks the knowledge scopes: %v", scopes)
 	}
-	// And secret:write (agentry#676, vault D13): the hosted-run start sets
+	// And secret:write: the hosted-run start sets
 	// a secret the account does not keep, and deletes it if the create is
 	// refused.
 	if !has["secret:write"] {
 		t.Fatalf("desktop PAT lacks secret:write: %v", scopes)
 	}
-	// And the voice scopes (agentry#809): the desktop's Voice panel submits
-	// this computer's voice and downloads the account's (writing-voice D6).
+	// And the voice scopes: the desktop's Voice panel submits
+	// this computer's voice and downloads the account's.
 	if !has["voice:read"] || !has["voice:write"] {
 		t.Fatalf("desktop PAT lacks the voice scopes: %v", scopes)
 	}
-	// And agent:manage (agentry#993): the desktop's Publisher section makes
+	// And agent:manage: the desktop's Publisher section makes
 	// a QuickAgent private or public, retires, restores and deletes it.
 	if !has["agent:manage"] {
 		t.Fatalf("desktop PAT lacks agent:manage: %v", scopes)
@@ -135,7 +135,7 @@ func TestDesktopGrantExchange(t *testing.T) {
 }
 
 // Erasure consumes the account's unconsumed desktop codes in its own
-// transaction (agentry#502): a code minted by another session moments before
+// transaction: a code minted by another session moments before
 // the erasure cannot be exchanged for a token afterwards.
 func TestErasureConsumesDesktopGrants(t *testing.T) {
 	env := newTestEnv(t)

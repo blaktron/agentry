@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Exercise the headless edge's actual HTTP routing and per-client budgets
-# (agentry#983, #984). The directory is an external HTTP stub: no real account,
-# credential or mail is needed. Token exchange must stay outside this budget.
+# Exercise the headless edge's actual HTTP routing and per-client budgets.
+# The directory is an external HTTP stub: no real account, credential or
+# mail is needed. Token exchange must stay outside this budget.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 source scripts/acceptance/directory-resources.sh

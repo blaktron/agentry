@@ -1,6 +1,6 @@
 // Package auth implements authentication and authorization primitives:
-// argon2id password hashing, PAT/session token handling (D-22, D-23), TOTP
-// 2FA, PAT scopes (§12.3), and the single authorization chokepoint (§12.2).
+// argon2id password hashing, PAT/session token handling, TOTP 2FA, PAT
+// scopes, and the single authorization chokepoint.
 package auth
 
 import (
@@ -56,7 +56,7 @@ var decoyHash = sync.OnceValue(func() string {
 // SpendPasswordCheck runs the argon2id comparison against a decoy, so a
 // login that found no account, an inactive one, or one without a password
 // takes as long to refuse as a wrong password does; otherwise the time a
-// refusal takes says which of those it was (agentry#413).
+// refusal takes says which of those it was.
 func SpendPasswordCheck(password string) {
 	_ = VerifyPassword(password, decoyHash())
 }

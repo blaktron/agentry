@@ -11,19 +11,17 @@ import (
 // pairsChanged are the pairs whose Builder rendering changes what the
 // version declares, so the proof must not hold, each with what changed.
 // Every other pair under testdata/pairs must prove as its draft. The pairs
-// were made on 2026-10-02 by running each draft through the site's own
-// Publish this version path (revision import, /build/submit, a headless
-// browser's form post; agentry#794): draft/ is the Drafter's package/,
-// builder/ is what the registry received. Every builder/ was regenerated on
-// 2026-10-04 from the site at agentry-web#1068, which keeps a choice as
-// written and reads every field with LF (agentry-web#949, agentry#888):
-// each draft through the revision import of the same QuickAgent and licence,
-// Publish this version's entries posted with CRLF as a browser does, then
-// inputFromForm and workspaceFiles. What is left below is what the Builder
-// still changes: a name the registry does not know (a mode, a data category,
-// a question type), and a value with a space its one-word fields cannot
-// hold. The registry would refuse each of those but a path with a space,
-// which it accepts (agentry-web#1074).
+// were made by running each draft through the hosted site's own Publish
+// this version path (revision import, build submit, a headless browser's
+// form post): draft/ is the Drafter's package/, builder/ is what the
+// registry received. The site keeps a choice as written and reads every
+// field with LF, and each builder/ is each draft through the revision
+// import of the same QuickAgent and licence, with Publish this version's
+// entries posted with CRLF as a browser does. What is left below is what
+// the Builder still changes: a name the registry does not know (a mode, a
+// data category, a question type), and a value with a space its one-word
+// fields cannot hold. The registry would refuse each of those but a path
+// with a space, which it accepts.
 var pairsChanged = map[string]string{
 	"data-access-unknown-dupes-order": "an unknown data category is dropped",
 	"egress-host-with-space":          "a host holding a space is dropped",

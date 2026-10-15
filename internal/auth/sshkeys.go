@@ -22,13 +22,13 @@ func ParseSSHPublicKey(line string) (keyType, canonical, fingerprint string, err
 }
 
 // SSHKeyScopes is what an SSH key is worth: the repository transport and
-// the release tag it may create when the role allows (§6.4); never the API.
+// the release tag it may create when the role allows; never the API.
 var SSHKeyScopes = []string{string(ScopeRepoRead), string(ScopeRepoWrite), string(ScopeAgentPublish)}
 
 // ResolveSSHKey builds the Principal for a presented SSH public key by its
-// fingerprint (§6.1 Q7, agentry#70). Via is "ssh": an SSH key is never
+// fingerprint. Via is "ssh": an SSH key is never
 // org-bound, so SSOSatisfied is false and an enforced-SSO org's push stays
-// HTTPS-with-org-bound-PAT only, exactly as §6.4's table reads.
+// HTTPS-with-org-bound-PAT only.
 func ResolveSSHKey(ctx context.Context, q *storegen.Queries, fingerprint string) (*Principal, error) {
 	key, err := q.GetSSHKeyByFingerprint(ctx, fingerprint)
 	if err != nil {

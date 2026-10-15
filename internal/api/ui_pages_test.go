@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// The server's own browser surface (DEV-091, internal/ui) against the real
+// The server's own browser surface (internal/ui) against the real
 // API: sign in through the form, read the account, mint a token, authorize
 // a device and exchange its code, sign out — every step through the same
 // handlers and the same session the API issues.

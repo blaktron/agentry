@@ -10,7 +10,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Notification settings (agentry#190): how the registry's alerts reach the
+// Notification settings: how the registry's alerts reach the
 // caller. Self-scoped like the profile; a PAT with user:profile may read
 // and change them.
 
@@ -34,11 +34,11 @@ func (s *Server) GetUserNotificationSettings(w http.ResponseWriter, r *http.Requ
 
 // UpdateUserNotificationSettings implements PUT /user/notifications: a full
 // replace of the switches every client knows, sent back as read and
-// changed — with three exceptions. billing (agentry#366), schedules
-// (agentry#1002) and bugReports (agentry#1113) may be omitted, and an
+// changed — with three exceptions. billing, schedules
+// and bugReports may be omitted, and an
 // omitted one keeps the row's value: clients predate them, and reading an
 // absence as false would switch that mail off for anyone who saved any
-// other setting, the hazard agentry#344 names. The keep is the
+// other setting. The keep is the
 // statement's own (COALESCE in the upsert), so two clients writing at
 // once cannot resurrect a value neither sent.
 func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.Request) {
