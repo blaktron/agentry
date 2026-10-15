@@ -29,9 +29,9 @@ type ListActiveUserSessionsRow struct {
 	LastSeenAt time.Time   `json:"last_seen_at"`
 }
 
-// Session-management queries behind GET/DELETE /user/sessions (§12.1).
-// Distinct from the auth-path queries in auth.sql: those establish and touch
-// the credential, these let a user see and revoke their own sessions.
+// Session-management queries behind GET/DELETE /user/sessions. Distinct from
+// the auth-path queries in auth.sql: those establish and touch the
+// credential, these let a user see and revoke their own sessions.
 // ListActiveUserSessions returns the caller's live sessions, newest activity
 // first. Expired and revoked rows are excluded — a session list is a list of
 // ways someone can still act as you, not a history.

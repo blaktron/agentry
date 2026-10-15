@@ -57,8 +57,8 @@ type CreateVoiceParams struct {
 	WrappedKey       []byte    `json:"wrapped_key"`
 }
 
-// The Writing Voice (plan writing-voice.md §4, agentry#809). Every read and
-// write names the person: a voice is found only by its owner.
+// The Writing Voice. Every read and write names the person: a voice is found
+// only by its owner.
 // A person's voice row, made with the first version they put; a second
 // caller racing the first finds the row the first made.
 func (q *Queries) CreateVoice(ctx context.Context, arg CreateVoiceParams) (Voice, error) {
@@ -127,7 +127,7 @@ type FlagVoiceVersionParams struct {
 }
 
 // A flagged review: the version stays pending, with its findings, and the
-// live one stays live (D7).
+// live one stays live.
 func (q *Queries) FlagVoiceVersion(ctx context.Context, arg FlagVoiceVersionParams) (VoiceVersion, error) {
 	row := q.db.QueryRow(ctx, flagVoiceVersion, arg.ID, arg.Review, arg.QuestionSet)
 	var i VoiceVersion
@@ -311,8 +311,8 @@ type InsertPendingVoiceVersionParams struct {
 	Bytes  int32     `json:"bytes"`
 }
 
-// A new version for review. The pending one it replaces, if any, is
-// deleted first in the same transaction (one pending a person, D13).
+// A new version for review. The pending one it replaces, if any, is deleted
+// first in the same transaction (one pending version per person).
 func (q *Queries) InsertPendingVoiceVersion(ctx context.Context, arg InsertPendingVoiceVersionParams) (VoiceVersion, error) {
 	row := q.db.QueryRow(ctx, insertPendingVoiceVersion,
 		arg.UserID,
@@ -519,8 +519,8 @@ WHERE user_id = $1
 RETURNING user_id, wrapper_kind, wrapper_recipient, wrapped_key, always_attach, went_live, created_at, updated_at
 `
 
-// A version went live. The first time, the account's always-attach flag
-// comes on (D11); after that it stays as the person set it.
+// A version went live. The first time, the account's always-attach flag comes
+// on; after that it stays as the person set it.
 func (q *Queries) SetVoiceWentLive(ctx context.Context, userID uuid.UUID) (Voice, error) {
 	row := q.db.QueryRow(ctx, setVoiceWentLive, userID)
 	var i Voice

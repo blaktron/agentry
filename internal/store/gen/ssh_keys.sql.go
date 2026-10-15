@@ -27,7 +27,7 @@ type CreateSSHKeyParams struct {
 	Fingerprint string    `json:"fingerprint"`
 }
 
-// SSH keys (§6.1 Q7, agentry#70).
+// SSH keys.
 func (q *Queries) CreateSSHKey(ctx context.Context, arg CreateSSHKeyParams) (UserSshKey, error) {
 	row := q.db.QueryRow(ctx, createSSHKey,
 		arg.ID,
@@ -111,7 +111,7 @@ const revokeAllSSHKeysForUser = `-- name: RevokeAllSSHKeysForUser :execrows
 UPDATE user_ssh_keys SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL
 `
 
-// Clear-data (agentry#498).
+// Clear-data.
 func (q *Queries) RevokeAllSSHKeysForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeAllSSHKeysForUser, userID)
 	if err != nil {
