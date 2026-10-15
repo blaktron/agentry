@@ -1,6 +1,6 @@
-// Package gitsrv implements git hosting (§6): bare-repo storage keyed by
-// repo UUID (D-19), smart HTTP v2 by shelling out to git (D-07), and the
-// pre-receive policy hook.
+// Package gitsrv implements git hosting: bare-repo storage keyed by repo
+// UUID, smart HTTP v2 by shelling out to git, and the pre-receive policy
+// hook.
 package gitsrv
 
 import (
@@ -19,7 +19,7 @@ import (
 )
 
 // RepoStore manages bare repositories under cfg.Git.DataDir:
-// {dataDir}/{uuid[0:2]}/{uuid}.git (§6.2).
+// {dataDir}/{uuid[0:2]}/{uuid}.git.
 type RepoStore struct {
 	dataDir string
 	gitBin  string
@@ -40,9 +40,10 @@ func NewRepoStore(cfg config.Config) (*RepoStore, error) {
 		}
 		gitBin = p
 	}
-	// §6.5 depends on `git archive` ignoring gitattributes; prove it against
-	// this binary now rather than discovering at publish time that releases
-	// have been silently filtered by a pushed export-ignore (see archive.go).
+	// Release archives depend on `git archive` ignoring gitattributes;
+	// prove it against this binary now rather than discovering at publish
+	// time that releases have been silently filtered by a pushed
+	// export-ignore (see archive.go).
 	if err := verifyArchiveNeutralizesAttributes(gitBin); err != nil {
 		return nil, err
 	}
@@ -77,8 +78,8 @@ const preReceiveShim = "#!/bin/sh\nexec \"${AGENTRY_HOOK_BIN:?AGENTRY_HOOK_BIN i
 //
 // Git runs the hook from such a directory rather than from each bare
 // repository's hooks/ because the repository volume may be one the kernel
-// will not exec from: on Vultr's virtiofs file system every push failed
-// with "cannot exec 'hooks/pre-receive': Bad address" (agentry#495).
+// will not exec from: on a virtiofs file system, for example, git fails
+// with "cannot exec 'hooks/pre-receive': Bad address".
 func (s *RepoStore) PrepareHooks() error {
 	_, done, err := s.pushHooks()
 	if err != nil {
@@ -163,7 +164,7 @@ func (s *RepoStore) Path(repoID uuid.UUID) string {
 	return filepath.Join(s.dataDir, id[:2], id+".git")
 }
 
-// InitBare creates and configures a bare repository (§6.2): default branch,
+// InitBare creates and configures a bare repository: default branch,
 // deny-delete-current, quota-derived receive.maxInputSize, policy hooks.
 func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranch string) error {
 	dir := s.Path(repoID)
@@ -187,8 +188,8 @@ func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranc
 	for _, kv := range [][2]string{
 		{"receive.denyDeleteCurrent", "true"},
 		{"receive.maxInputSize", fmt.Sprintf("%d", s.limits.RepoQuotaBytes)},
-		{"uploadpack.allowFilter", "true"}, // partial clone (§6.1)
-		{"core.commitGraph", "true"},       // §6.2 mitigation
+		{"uploadpack.allowFilter", "true"}, // partial clone
+		{"core.commitGraph", "true"},       // faster history walks on large repos
 	} {
 		if err := run("-C", dir, "config", kv[0], kv[1]); err != nil {
 			return err
@@ -217,7 +218,7 @@ func (s *RepoStore) Remove(repoID uuid.UUID) error {
 // not exist. Push bookkeeping uses it to tell which requested updates were
 // actually applied: receive-pack exits 0 even when the pre-receive hook
 // rejects every command, so the repository — not the request — is the
-// authority on what changed (§6.3).
+// authority on what changed.
 func (s *RepoStore) RefsAt(ctx context.Context, repoID uuid.UUID, refs []string) (map[string]string, error) {
 	args := []string{"-C", s.Path(repoID), "for-each-ref", "--format=%(objectname) %(refname)"}
 	for _, ref := range refs {

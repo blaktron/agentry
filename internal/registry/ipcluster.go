@@ -9,7 +9,7 @@ import (
 )
 
 // IPClusterHash is the value agent_versions.submitter_ip_hash carries
-// (agentry#27, §8.3 S8 "IP cluster"). It is HMAC-SHA256 over the address
+// (the S8 "IP cluster" signal). It is HMAC-SHA256 over the address
 // with a key derived from the deployment secret and the calendar month, so
 // the same address hashes alike within a month — which is the window the
 // ClawHavoc pattern (1,184 skills from 12 accounts in days) needs — and

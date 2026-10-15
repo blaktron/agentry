@@ -1,9 +1,8 @@
 package registry
 
-// The membership chokepoint (plan organization-subscriptions §5.2, D3, D7,
-// D26; agentry#361). Every path that makes someone an active member of an
-// organization — accepting an invitation, an admin approving a
-// SCIM-provisioned or domain-folded person, an admin changing a role —
+// The membership chokepoint. Every path that makes someone an active
+// member of an organization — accepting an invitation, an admin approving
+// a SCIM-provisioned or domain-folded person, an admin changing a role —
 // comes through ActivateMember. It is one function so the things that must
 // be true of every door are true by construction rather than by each
 // door's diligence: the seat count is taken under the organization's row
@@ -57,7 +56,7 @@ func (s Seats) Taken() int64 { return s.Used + s.Invited }
 var ErrSeatAllowance = errors.New("registry: this organization holds as many seats as its subscription allows")
 
 // ErrAlreadyAMember reports that the person is an active member of another
-// organization (D26: one organization per person).
+// organization (one organization per person).
 var ErrAlreadyAMember = errors.New("registry: this person is already a member of another organization")
 
 // ErrSeatsNotOffered reports that the organization may hold no seats at
@@ -76,13 +75,13 @@ const (
 // row and the event payload.
 type MembershipVia string
 
-// The doors (plan §4 "The doors").
+// The doors a membership comes through.
 const (
 	ViaInvitation MembershipVia = "invitation" // the invitee accepted
 	ViaApproval   MembershipVia = "approval"   // an admin approved a pending member
 	ViaRoleChange MembershipVia = "role"       // an admin changed an existing member's role
 	// The two provisioning doors, which write pending and nothing else:
-	// the organization's IdP, and its domain (DEV-111).
+	// the organization's IdP, and its domain.
 	ViaSCIM   MembershipVia = "scim"
 	ViaDomain MembershipVia = "domain"
 )
@@ -140,16 +139,16 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 		if err := q.LockOrg(ctx, req.OrgID); err != nil {
 			return err
 		}
-		// A person is active in at most one organization at a time (D26).
+		// A person is active in at most one organization at a time.
 		// The person's row lock — after the organization's, always in
 		// that order — serialises the count below against every other
 		// organization's door; the partial unique index on active
-		// memberships is the wall behind it (agentry#412). It is taken
-		// here, before anything in this transaction touches the person's
-		// row: spending an invitation records accepted_by, whose foreign
-		// key holds the row KEY SHARE, and two doors each holding that and
-		// each then asking FOR UPDATE deadlock — a person accepting two
-		// invitations at once got 500 for the one that should be refused.
+		// memberships is the wall behind it. It is taken here, before
+		// anything in this transaction touches the person's row: spending
+		// an invitation records accepted_by, whose foreign key holds the
+		// row KEY SHARE, and two doors each holding that and each then
+		// asking FOR UPDATE deadlock — a person accepting two invitations
+		// at once would get a 500 for the one that should be refused.
 		if err := q.LockUser(ctx, req.UserID); err != nil {
 			return err
 		}
@@ -180,13 +179,13 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 		}
 
 		// Nobody joins an organization that is suspended or in its
-		// decommission hold (agentry#363); the row lock above means the
+		// decommission hold; the row lock above means the
 		// state read here is the one the activation commits against.
 		if err := s.OrgGateIn(ctx, q, req.OrgID, auth.ActOrgMembersManage); err != nil {
 			return err
 		}
 
-		// The staff organization admits only its domain (agentry#556): the
+		// The staff organization admits only its domain: the
 		// invitation's accept and an admin's approval both pass here.
 		if err := s.CheckStaffOrgDoorIn(ctx, q, req.OrgID, req.UserID); err != nil {
 			return err
@@ -220,7 +219,7 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 			return nil
 		}
 		// An admin's invitation or approval supersedes a decline the
-		// fold-in remembered (agentry#364, D25): the person is a member.
+		// fold-in remembered: the person is a member.
 		if _, err := q.DeleteFoldInDecline(ctx, storegen.DeleteFoldInDeclineParams{OrgID: req.OrgID, UserID: req.UserID}); err != nil {
 			return err
 		}
@@ -233,7 +232,7 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 			return err
 		}
 		// Joining the staff organization makes staff, in the same
-		// transaction (agentry#556).
+		// transaction.
 		return s.SyncStaffIn(ctx, q, req.UserID, StaffSyncMembership, req.Actor)
 	})
 	if err != nil {

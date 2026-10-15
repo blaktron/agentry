@@ -25,7 +25,7 @@ func newHooksStore(t *testing.T, base string) *RepoStore {
 
 // TestPushHooks: a push's hooks directory is private, holds exactly the
 // shim, and is gone once the push is done; the shim refuses to run
-// without AGENTRY_HOOK_BIN (agentry#495).
+// without AGENTRY_HOOK_BIN.
 func TestPushHooks(t *testing.T) {
 	base := t.TempDir()
 	s := newHooksStore(t, base)

@@ -1,12 +1,12 @@
-// Package social implements social login for individual accounts (§12.1
-// "Social/OIDC login (GitHub, Google) — linked via identities; no password
-// required"). It is deliberately separate from internal/auth/oidc, which
-// serves per-org enterprise SSO (§12.4): the two flows differ in who they
+// Package social implements social login for individual accounts
+// (GitHub, Google and others, linked via identities; no password required).
+// It is deliberately separate from internal/auth/oidc, which serves per-org
+// enterprise SSO: the two flows differ in who they
 // admit (anyone with an account at the provider vs. members of one org's
 // IdP), what they grant (an individual session vs. org membership with an
 // SSO freshness tag), and how they are configured (server-wide vs. per org).
 //
-// v1 ships two providers:
+// The providers fall into two kinds:
 //
 //	google — OpenID Connect proper, through the same RP as enterprise OIDC
 //	         (discovery, issuer pinning, PKCE, id_token verification).
@@ -16,8 +16,8 @@
 //	         asks the API who the token belongs to, taking the identity from
 //	         GitHub's answer over an authenticated channel. Email comes from
 //	         /user/emails and is accepted ONLY when GitHub reports it primary
-//	         AND verified — an unverified provider email must never satisfy
-//	         the T-12 auto-link rule.
+//	         AND verified — an unverified provider email must never satisfy the
+//	         rule that links a login to an existing account by email.
 package social
 
 import (
@@ -36,14 +36,14 @@ import (
 	oidcrp "github.com/blaktron/agentry/internal/auth/oidc"
 )
 
-// Provider ids (§12.1). Closed set: an unknown id is a 404, never a guess.
+// Provider ids. Closed set: an unknown id is a 404, never a guess.
 const (
 	ProviderGoogle    = "google"
 	ProviderGitHub    = "github"
 	ProviderMicrosoft = "microsoft"
 	ProviderOpenAI    = "openai"
 	ProviderClaude    = "claude"
-	// ProviderAuthentik is the deployment's own directory service (DEV-057):
+	// ProviderAuthentik is the deployment's own directory service:
 	// an Authentik instance shipped with the stack. OIDC proper, no default
 	// issuer — the operator points it at their instance's application slug
 	// (e.g. https://auth.example/application/o/agentry/).
@@ -51,10 +51,9 @@ const (
 )
 
 // ScopeAgentry is the scope the directory's `agentry_remember_device`
-// mapping answers to (agentry#670, DEV-163). Only the directory is asked for
-// it: no other provider has such a mapping, and one that invented the claim
-// would still not be the directory the registry trusts it from. authentik
-// drops a requested scope its provider has no mapping for, so asking before
+// mapping answers to. Only the directory is asked for it: no other provider
+// has such a mapping, and one that invented the claim would still not be
+// the directory the registry trusts it from. authentik drops a requested scope its provider has no mapping for, so asking before
 // the directory's flow carries the mapping is harmless.
 const ScopeAgentry = "agentry"
 
@@ -85,26 +84,26 @@ type Identity struct {
 	// Groups is the ID token's `groups` claim (directory group names).
 	Groups []string
 	// Username is the ID token's `preferred_username` (OIDC providers only):
-	// the name chosen at the IdP, which seeds a new account's handle
-	// (agentry#517). Never used to find an account.
+	// the name chosen at the IdP, which seeds a new account's handle. Never
+	// used to find an account.
 	Username string
 	// RememberDevice is the ID token's `agentry_remember_device` claim: the
 	// person ticked "Remember this device for 30 days" on the directory's
-	// code page (agentry#670). The API honours it from the directory alone,
-	// and only beside an AMR that names a second factor.
+	// code page. The API honours it from the directory alone, and only
+	// beside an AMR that names a second factor.
 	RememberDevice bool
 	// AuthTime is the ID token's `auth_time`: when the person last actually
 	// authenticated at the IdP (zero when absent). A remembered browser is
-	// minted only from a fresh one (agentry#670).
+	// minted only from a fresh one.
 	AuthTime time.Time
 	// DirectoryAccountID is the ID token's `agentry_directory_id` claim: the
-	// directory's own id for the account (agentry#727). The API records it
-	// from the directory alone, on the identity the token signs in.
+	// directory's own id for the account. The API records it from
+	// the directory alone, on the identity the token signs in.
 	DirectoryAccountID int64
-	// PromoCode is the ID token's `agentry_promo_code` claim (agentry#759):
-	// the promo code typed on the directory's sign-up form, upper-cased and
-	// held to its grammar. The API forwards it from the directory alone, and
-	// only when this sign-in makes the account.
+	// PromoCode is the ID token's `agentry_promo_code` claim: the
+	// promo code typed on the directory's sign-up form, upper-cased and held
+	// to its grammar. The API forwards it from the directory alone, and only
+	// when this sign-in makes the account.
 	PromoCode string
 }
 
@@ -115,7 +114,7 @@ func (id *Identity) MFAAsserted() bool {
 }
 
 // Config configures one provider. The URL overrides exist so tests can point
-// a provider at an in-process server (DEV-009); production leaves them empty
+// a provider at an in-process server; production leaves them empty
 // and gets the real endpoints.
 type Config struct {
 	ClientID     string
@@ -161,7 +160,7 @@ func New(ctx context.Context, name string, cfg Config, redirectURL string) (Prov
 	case ProviderClaude:
 		return newOIDC(ctx, ProviderClaude, "", cfg, redirectURL)
 	case ProviderAuthentik:
-		// The stack's own directory service (DEV-057). No default issuer:
+		// The stack's own directory service. No default issuer:
 		// every deployment's Authentik lives at its own URL. It is also the
 		// one provider asked for the agentry scope (ScopeAgentry).
 		if len(cfg.Scopes) == 0 {
@@ -358,7 +357,7 @@ func (p *githubProvider) Exchange(ctx context.Context, code, _, _ string) (*Iden
 
 	// Email: primary AND verified only. A GitHub account can carry several
 	// addresses in any verification state; treating an unverified one as
-	// proof of ownership is precisely the account-takeover path T-12 closes.
+	// proof of ownership is precisely the account-takeover path this closes.
 	var emails []struct {
 		Email    string `json:"email"`
 		Primary  bool   `json:"primary"`

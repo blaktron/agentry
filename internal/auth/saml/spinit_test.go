@@ -1,9 +1,9 @@
 package saml
 
-// SP-initiated SAML (§12.4, M-16): the SP generates an AuthnRequest, tracks
-// its id, and refuses an assertion whose InResponseTo names anything else.
-// crewjam skips the InResponseTo check whenever AllowIDPInitiated is set, so
-// these tests pin the check we added on top of it.
+// SP-initiated SAML: the SP generates an AuthnRequest, tracks its id, and
+// refuses an assertion whose InResponseTo names anything else. crewjam
+// skips the InResponseTo check whenever AllowIDPInitiated is set, so these
+// tests pin the check we added on top of it.
 
 import (
 	"context"
@@ -96,7 +96,7 @@ func TestSAML_IDPInitiatedStillAllowed(t *testing.T) {
 	idp := newTestIdP(t)
 	sp, _ := spWithTracker(t, idp)
 
-	// No InResponseTo at all: IdP-initiated, which §12.4 keeps supported.
+	// No InResponseTo at all: IdP-initiated, which stays supported.
 	if _, err := sp.ParseAndValidate(context.Background(), idp.mintResponse(t, goodOpts())); err != nil {
 		t.Fatalf("IdP-initiated assertion must still be accepted: %v", err)
 	}
