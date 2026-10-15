@@ -1,0 +1,11 @@
+# Fixture expectation (see README.md).
+# The same instruction in a release that declares the browser for the site
+# the person names: every tool it calls for is granted, so S6 has nothing to
+# say about the tools, and the browser_evaluate it turns away is not a need.
+technique: "Benign twin: the same instruction with capabilities.browser declared"
+manifest: |
+  {"license":"MIT","schemaVersion":"2","modes":["autonomous"],"entrypoints":{"instruction":"AGENT.md"},"intake":[{"id":"site","prompt":"Which site should I test?","type":"url","required":true}],"capabilities":{"network":{"egress":"none"},"filesystem":{"read":"none","write":"none"},"exec":"none","browser":{"sites":["site"]}}}
+expect: []
+forbid:
+  - S6/ungranted-tool
+expectClean: true
