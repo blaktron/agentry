@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Core UI acceptance (DEV-091, plan core-web-split §3.2): boot the API the
-# way m0.sh does and drive the server's own browser surface with curl and a
+# way smoke.sh does and drive the server's own browser surface with curl and a
 # cookie jar — sign in through the form, read the account, mint a token,
 # authorize a device and exchange its code from "the app", sign out. No
 # browser, no Node: this is the headless registry's own check.
@@ -50,7 +50,7 @@ curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/account" | grep "recently" >/dev/null &&
 # Organizations (agentry#363): the create form, then the decommission form.
 # Creating one needs a verified address, and the verification token never
 # leaves the server, so the address is marked verified directly, as
-# m3-cli.sh does — through the Go toolchain rather than psql.
+# cli.sh does — through the Go toolchain rather than psql.
 go run ./scripts/dev/dbexec "UPDATE users SET email_verified_at = now() WHERE id = (SELECT id FROM handles WHERE handle = '$HANDLE')" >/dev/null
 ORG="uiorg$SFX"
 loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \

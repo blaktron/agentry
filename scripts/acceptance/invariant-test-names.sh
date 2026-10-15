@@ -3,14 +3,14 @@
 # (agentry#420): a renamed or deleted test must not keep standing as the
 # evidence for an invariant.
 #
-#   section9-names.sh              check scripts/acceptance/section9-tests.txt
+#   invariant-test-names.sh              check scripts/acceptance/invariant-tests.txt
 #                                  against `go test -list` over the module
-#   section9-names.sh --from FILE  also compare the list with the test names
+#   invariant-test-names.sh --from FILE  also compare the list with the test names
 #                                  in FILE's §9, to keep the two in sync
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 
-list=scripts/acceptance/section9-tests.txt
+list=scripts/acceptance/invariant-tests.txt
 have=$(mktemp)
 trap 'rm -f "$have"' EXIT
 # `go test -list` compiles each package's tests and prints the top-level
@@ -29,7 +29,7 @@ fi
 echo "section 9 test names: OK ($(printf '%s\n' "$want" | wc -l | tr -d ' ') tests found under the names §9 gives)"
 
 if [ "${1:-}" = "--from" ]; then
-  arch=${2:?usage: section9-names.sh --from ARCHITECTURE.md}
+  arch=${2:?usage: invariant-test-names.sh --from ARCHITECTURE.md}
   cited=$(awk '/^## 9\. /{f=1; next} /^## /{f=0} f' "$arch" | grep -oE '\bTest[A-Za-z0-9_]+' | sort -u)
   echo "-- §9 names that are tests here but missing from $list (add them):"
   comm -12 <(printf '%s\n' "$cited") "$have" | comm -23 - <(printf '%s\n' "$want") | sed 's/^/  /'

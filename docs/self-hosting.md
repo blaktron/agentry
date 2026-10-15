@@ -237,7 +237,7 @@ reference (added for the Vultr production cluster, DEV-124):
   fails the render. The chart grants the accounts no Kubernetes RBAC: no
   role calls the Kubernetes API.
 
-`scripts/acceptance/m7.sh` asserts that shape on every render: the git
+`scripts/acceptance/helm.sh` asserts that shape on every render: the git
 Service, where each Secret lands and that nothing lands under `/etc/agentry`,
 the policy, a ServiceAccount per role, the refusals.
 

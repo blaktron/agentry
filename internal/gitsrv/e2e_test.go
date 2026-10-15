@@ -206,10 +206,10 @@ func (e *gitEnv) installRoundTrip(agent, rangeStr, wantVersion string, wantFiles
 	}
 }
 
-// TestM3PublishInstallRoundTrip covers the manifest shapes that publish ×
+// TestPublishInstallRoundTrip covers the manifest shapes that publish ×
 // 2 sources: the two v1 kinds still accepted, and a v2 manifest (modes,
 // DEV-088).
-func TestM3PublishInstallRoundTrip(t *testing.T) {
+func TestPublishInstallRoundTrip(t *testing.T) {
 	env := newGitEnv(t)
 
 	kinds := []struct {
@@ -263,7 +263,7 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 	}
 }
 
-// TestM3WithdrawnKindIsRefused: kind mcp-server is withdrawn (DEV-088). An
+// TestWithdrawnKindIsRefused: kind mcp-server is withdrawn (DEV-088). An
 // agent of that kind can no longer be created (the registry refuses it;
 // the rows that predate the withdrawal are blocked by migration 00023), so
 // the manifest arrives against an instruction agent and is refused on both
@@ -272,7 +272,7 @@ func TestM3PublishInstallRoundTrip(t *testing.T) {
 // (http.go: failures surface as the version's absence), so once the push
 // has returned the absence is the assertion; the CLI upload is refused
 // with 422 naming the withdrawal.
-func TestM3WithdrawnKindIsRefused(t *testing.T) {
+func TestWithdrawnKindIsRefused(t *testing.T) {
 	env := newGitEnv(t)
 
 	t.Run("git-tag", func(t *testing.T) {
@@ -373,9 +373,9 @@ func (e *gitEnv) uploadVersion(agent, ws string) (int, string) {
 	return res.StatusCode, string(respBody)
 }
 
-// TestM3YankSemantics pins §5.5: ranges skip yanked, exact pins resolve
+// TestYankSemantics pins §5.5: ranges skip yanked, exact pins resolve
 // with a warning, and re-publish of a yanked version string is impossible.
-func TestM3YankSemantics(t *testing.T) {
+func TestYankSemantics(t *testing.T) {
 	env := newGitEnv(t)
 	name := "yankcase"
 	env.seedAgent(name, "public")

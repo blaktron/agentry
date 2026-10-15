@@ -151,9 +151,9 @@ jobs:
       - name: release tag rules
         run: ./scripts/release/selftest.sh
       - name: section 9 test names exist
-        run: ./scripts/acceptance/section9-names.sh
+        run: ./scripts/acceptance/invariant-test-names.sh
       - name: acceptance M0
-        run: ./scripts/acceptance/m0.sh
+        run: ./scripts/acceptance/smoke.sh
       # The server's own browser surface, driven with curl (DEV-091).
       - name: acceptance core UI
         run: ./scripts/acceptance/ui.sh
@@ -408,8 +408,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
-      - name: helm lint + template (scripts/acceptance/m7.sh)
-        run: ./scripts/acceptance/m7.sh
+      - name: helm lint + template (scripts/acceptance/helm.sh)
+        run: ./scripts/acceptance/helm.sh
       - name: no web object in the rendered chart
         run: |
           set -euo pipefail

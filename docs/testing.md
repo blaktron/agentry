@@ -30,13 +30,13 @@ which entry points run; a listed support file is not another executed test.
 | Evidence | Owner and purpose |
 | --- | --- |
 | Full Go suite, including corpus and fuzz seeds | `make test`; owning rule, store, API, pipeline and transport packages |
-| Empty-filter and security-name gates | `scripts/acceptance/lib-selftest.sh`, `section9-names.sh`, `section9-tests.txt` |
-| Compiled process and generated client | `scripts/acceptance/m0.sh`; `TestM0Smoke` also runs in the Go suite |
+| Empty-filter and security-name gates | `scripts/acceptance/lib-selftest.sh`, `invariant-test-names.sh`, `invariant-tests.txt` |
+| Compiled process and generated client | `scripts/acceptance/smoke.sh`; `TestSmoke` also runs in the Go suite |
 | Actual headless UI flows | `scripts/acceptance/ui.sh`; page rendering is tested independently |
 | Published envelopes verified by independent code | `scripts/dev/attest-interop.sh` |
 | Directory integration and cleanup | `scripts/acceptance/directory-*.sh`, their Python drivers and cleanup self-tests; consult CI for the required jobs |
 | Historical milestone acceptance | `scripts/acceptance/m*.sh`; filtered Go evidence must name actual passing tests through `gotest` |
-| Helm and deployment configuration | `scripts/acceptance/m7.sh` and CI's render/config checks |
+| Helm and deployment configuration | `scripts/acceptance/helm.sh` and CI's render/config checks |
 | Release behavior | `scripts/release/selftest.sh` and signing/release workflows |
 | Prose and generated/spec/rules drift | `scripts/prose/check.sh --self-test` and Makefile/CI drift gates |
 

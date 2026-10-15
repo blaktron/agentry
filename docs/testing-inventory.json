@@ -1717,7 +1717,7 @@
         {
           "path": "internal/api/smoke_test.go",
           "tests": [
-            "TestM0Smoke",
+            "TestSmoke",
             "TestHealthEndpoints"
           ],
           "fuzz": [],
@@ -2556,9 +2556,9 @@
         {
           "path": "internal/gitsrv/m3_e2e_test.go",
           "tests": [
-            "TestM3PublishInstallRoundTrip",
-            "TestM3WithdrawnKindIsRefused",
-            "TestM3YankSemantics"
+            "TestPublishInstallRoundTrip",
+            "TestWithdrawnKindIsRefused",
+            "TestYankSemantics"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5164,47 +5164,47 @@
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/m0.sh",
+      "path": "scripts/acceptance/smoke.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/m1.sh",
+      "path": "scripts/acceptance/auth.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/m2.sh",
+      "path": "scripts/acceptance/git.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/m3-cli.sh",
+      "path": "scripts/acceptance/cli.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/m3.sh",
+      "path": "scripts/acceptance/publish-install.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/m4.sh",
+      "path": "scripts/acceptance/gate.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/m6.sh",
+      "path": "scripts/acceptance/enterprise-sso.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/m7.sh",
+      "path": "scripts/acceptance/helm.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/section9-names.sh",
+      "path": "scripts/acceptance/invariant-test-names.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },

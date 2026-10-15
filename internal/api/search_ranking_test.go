@@ -221,7 +221,7 @@ func TestSearchMatchesReadmeTerms(t *testing.T) {
 
 // Searching a namespace handle finds its agents. The handle is not in
 // search_tsv (§10.4 covers name/summary/readme), so this rides the dedicated
-// handle clause — the pre-FTS CLI listed by namespace, and m3-cli.sh looks a
+// handle clause — the pre-FTS CLI listed by namespace, and cli.sh looks a
 // fresh publish up by its random handle.
 func TestSearchMatchesNamespaceHandle(t *testing.T) {
 	env := newTestEnv(t)

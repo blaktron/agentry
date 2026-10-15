@@ -16,7 +16,7 @@ fi
 echo "== M3 acceptance =="
 gotest "archives byte-reproducible" -timeout 20m ./pkg/archive -run TestArchiveReproducible -count=1
 gotest "state machine edges (§7)" -timeout 20m ./internal/registry -run TestStateMachineEdges -count=1
-gotest "publish→install 3 kinds × 2 sources" -timeout 20m ./internal/gitsrv -run TestM3PublishInstallRoundTrip -count=1
-gotest "yank semantics (§5.5)" -timeout 20m ./internal/gitsrv -run TestM3YankSemantics -count=1
+gotest "publish→install 3 kinds × 2 sources" -timeout 20m ./internal/gitsrv -run TestPublishInstallRoundTrip -count=1
+gotest "yank semantics (§5.5)" -timeout 20m ./internal/gitsrv -run TestYankSemantics -count=1
 gotest "authz matrix incl. version routes" -timeout 20m ./internal/api -run TestAuthzMatrix -count=1
 echo "== M3 acceptance PASSED =="

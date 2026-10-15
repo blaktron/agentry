@@ -121,7 +121,7 @@ db-down:
 
 ## e2e: acceptance scripts (per-milestone)
 e2e:
-	./scripts/acceptance/m0.sh
+	./scripts/acceptance/smoke.sh
 
 clean:
 	rm -rf $(BIN_DIR)

@@ -12,7 +12,7 @@ paths = [
   # Generated base64 in the embedded OpenAPI spec.
   '''internal/api/openapi_gen\.go''',
   # A placeholder helm value in an acceptance script.
-  '''scripts/acceptance/m7\.sh''',
+  '''scripts/acceptance/helm\.sh''',
   # Attack-corpus fixtures that carry a fake credential on purpose: the
   # scanner must find it (manifest-env-*), or must not be fooled by a
   # credential-shaped token in benign text (s3-encoded-blob-benign).
