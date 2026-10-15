@@ -5005,11 +5005,14 @@
             "TestEachGrantIsReportedWhenMissingAndNotWhenDeclared",
             "TestToolsTheInstructionTurnsAwayAreNotNeeds",
             "TestProseWordsAreNotToolNames",
+            "TestAQuickAgentSpeakingOfItselfStillNeedsItsTools",
+            "TestProhibitionsInOtherShapes",
             "TestAListItemAfterANegationIsJudgedAlone",
             "TestBrowserEvaluateIsNotGivenToABrowserThatTypesSecrets",
             "TestADeclaredServerIsMatchedByItsName",
             "TestTheTableNamesEachRunnerToolOnce",
-            "TestALargeInstructionIsReadInLinearTime"
+            "TestALargeInstructionIsReadInLinearTime",
+            "TestTheAnswerIsBounded"
           ],
           "fuzz": [],
           "benchmarks": [],

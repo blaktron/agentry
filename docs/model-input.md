@@ -182,13 +182,17 @@ grant them, as stage S6 does at publish (since ruleset 0.4.10; core
 `exec` commands, `fetch` with no `network.egress` host, a host tool with no
 `targetHosts`, `fs_read`, `fs_list` or `fs_write` with no `filesystem`
 access, and a `<server>__<tool>` name of a server the manifest does not
-declare. Each entry names the tool, the line it needs (`grant`), the
+declare. `browser_evaluate` is listed too where the browser may type
+secrets, since such a browser is not given it (its `path` is
+`capabilities.browser.secrets`). At most 50 tools are listed. Each entry
+names the tool, the line it needs (`grant`), the
 manifest path that holds it (`path`, such as `capabilities.browser`), the
 first line of the instruction that calls for it, and a sentence saying why.
 Any one sends the version to a person at publish, so the fix is to declare
 the line or to stop calling the tool. A tool the instruction names only to
 turn it away ("not `browser_pdf_save`", "never call `fetch`", "if you have
-`run_command`"), or in a paragraph about a QuickAgent, is not listed, and a
+`run_command`"), or in a paragraph that speaks of another package as "a
+QuickAgent" or "the QuickAgent's own", is not listed, and a
 word such as "browser" or "fetch the page" in prose is not a tool name.
 The list is empty when every tool the instruction names is granted, and it
 is answered even when both halves are `not_scanned`. A client that reads

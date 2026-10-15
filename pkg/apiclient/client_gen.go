@@ -2553,7 +2553,7 @@ type DraftCheck struct {
 	Model  string           `json:"model"`
 	Rubric DraftRubricCheck `json:"rubric"`
 
-	// Ungranted Each runner tool the instruction calls for that the manifest does not grant, in the order the instruction first names them; empty when every tool it names is granted. Any one sends the version to a person at publish (`S6/ungranted-tool`). A tool named only where the instruction turns it away ("not `browser_pdf_save`"), and one in a paragraph about a QuickAgent, is not listed. Read with no judge, so it is answered when both halves are `not_scanned`.
+	// Ungranted Each runner tool the instruction calls for that the manifest does not grant, in the order the instruction first names them, at most 50; empty when every tool it names is granted. A word longer than 80 bytes is not read as a tool name. Any one sends the version to a person at publish (`S6/ungranted-tool`). A tool named only where the instruction turns it away ("not `browser_pdf_save`"), and one in a paragraph that speaks of another package as "a QuickAgent", is not listed. Read with no judge, so it is answered when both halves are `not_scanned`.
 	Ungranted []DraftUngrantedTool `json:"ungranted"`
 
 	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation.
@@ -2666,7 +2666,7 @@ type DraftUngrantedTool struct {
 	// Path The manifest path that holds the grant, such as `capabilities.browser`.
 	Path string `json:"path"`
 
-	// Reason One sentence saying why, which quotes nothing of the instruction but the tool's name.
+	// Reason One sentence saying why, which quotes nothing of the instruction but the tool's name (and, for a server's tool, the server's).
 	Reason string `json:"reason"`
 
 	// Tool The tool as the instruction names it (`browser_click`, `run_command`, `fetch`), `browser_*` or `host_*` for a whole family, or `<server>__<tool>` for a declared server's tool.

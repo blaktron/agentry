@@ -179,8 +179,9 @@ notes: >
   that sends the version to a person and is never critical; a rescan
   weighs it at medium, so registering this version pulls no published
   version for it. A tool named only where the instruction turns it away,
-  or in a paragraph about a QuickAgent, is not a need. The threshold
-  stays medium.
+  or in a paragraph that speaks of another package as a QuickAgent, is
+  not a need, and browser_evaluate is a need a browser that may type
+  secrets does not meet. The threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
