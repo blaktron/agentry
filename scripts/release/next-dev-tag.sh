@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # next-dev-tag.sh — the tag a dev prerelease of HEAD gets, or nothing when
-# HEAD needs none (DEV-148, agentry#597). dev-release.yaml runs it on every
+# HEAD needs none. dev-release.yaml runs it on every
 # push to dev. Needs git and jq; reads release-please-config.json.
 #
 #   next-dev-tag.sh [--force]
@@ -13,7 +13,7 @@
 #
 # X.Y.Z is the version main's next release will have:
 #   - the config's release-as, while no vX.Y.Z tag exists for it and it is
-#     above the newest release (the operator moving the version);
+#     above the newest release (a maintainer moving the version);
 #   - else the newest vX.Y.Z tag with its patch bumped, since the config's
 #     versioning is always-bump-patch;
 #   - else, before any release, the config's initial-version.

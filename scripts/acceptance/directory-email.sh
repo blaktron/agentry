@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Directory email acceptance (agentry#518): the mails the directory sends a
+# Directory email acceptance: the mails the directory sends a
 # person (the sign-up confirmation and the password-reset link) are the
 # core's own templates, not authentik's stock ones.
 #
@@ -12,7 +12,7 @@
 # and asserts on what a recipient would get: the link in both parts, the
 # deployment's name, and no trace of authentik.
 #
-# Since agentry#720 the frame's header shows the Agentry mark inline. It
+# The frame's header shows the Agentry mark inline. It
 # names cid:logo, and authentik attaches whatever PNG is at its logo path;
 # the compose stack mounts the core's mark there
 # (deploy/compose/authentik/brand/mail-logo.png). The script puts the same

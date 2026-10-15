@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Directory user-settings acceptance (agentry#490): a signed-in person cannot
+"""Directory user-settings acceptance: a signed-in person cannot
 change their own directory email address (nor username or name) through the
 directory.
 
 The registry links and finds accounts by the address the directory holds, and
-the directory's OIDC provider asserts `email_verified: true` for it (DEV-061),
+the directory's OIDC provider asserts `email_verified: true` for it,
 so a self-service address change would be an account takeover. authentik's
 shipped `default-user-settings-flow` has an email field and is reachable at
 /if/flow/default-user-settings-flow/ even with the brand's settings panel

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Remembered-browser acceptance, the directory's half (agentry#671, DEV-163).
+"""Remembered-browser acceptance, the directory's half.
 
 Run by directory-remember.sh inside a container on the same private network
 as a throwaway directory. Stdlib only. Two roles in one file:
@@ -14,7 +14,7 @@ as a throwaway directory. Stdlib only. Two roles in one file:
              a ticked box is the intent cookie the page's script would set),
              exchanges the code, reads the ID token's amr,
              agentry_remember_device and auth_time, and mints a record exactly
-             when the registry would (agentry#670).
+             when the registry would.
   raise      one sign-in, after directory-remember.sh has made the skip
              policy raise: the code must be asked.
 
@@ -118,7 +118,7 @@ OPENER = urllib.request.build_opener(NoRedirect)
 
 # Every authentik_device cookie the directory wrote, in any browser: authentik's
 # own 30-day "known device" JWT, which the blueprint turns off on every login
-# stage (agentry#460). It must stay empty.
+# stage. It must stay empty.
 DEVICE_COOKIES = []
 
 
@@ -253,7 +253,7 @@ def sign_in(browser, user, tick=False):
 
 
 def mint_if_earned(browser, result):
-    """The registry's rule (agentry#670): the claim, a second factor, and a
+    """The registry's rule: the claim, a second factor, and a
     fresh auth_time. Returns the token when it minted."""
     fresh = result["auth_time"] and abs(time.time() - result["auth_time"]) <= 300
     if result["claim"] is True and "mfa" in result["amr"] and fresh:

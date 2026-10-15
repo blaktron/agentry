@@ -1,4 +1,4 @@
-"""Promo code acceptance, the directory's half (agentry#759).
+"""Promo code acceptance, the directory's half.
 
 Run by directory-promo.sh inside a container on the same private network as
 a throwaway directory. Stdlib only. It plays the browser through the flow
@@ -13,7 +13,7 @@ token, which the blueprint's default test keys accept.
        fills nothing in, and a code posted into the hidden field anyway is
        dropped. Prints the account it made as JSON.
 
-The accounts are written active but unactivated (agentry#861) and are left
+The accounts are written active but unactivated and are left
 there: the flow stops at the authenticator setup. directory-promo.sh
 reads their attributes and the agentry scope's claim with ak shell.
 """
@@ -74,8 +74,8 @@ class Flow:
         return user, self.step(body)
 
     def set_up_now(self, c):
-        """Past the choice to set up an authenticator now or later
-        (agentry#894), choosing now; anything else is returned as it came."""
+        """Past the choice to set up an authenticator now or later,
+        choosing now; anything else is returned as it came."""
         if c.get("component") == "ak-stage-prompt" and any(
                 f.get("field_key") == "agentry_authenticator_choice" for f in c.get("fields", [])):
             return self.step({"component": "ak-stage-prompt", "agentry_authenticator_choice": "now"})

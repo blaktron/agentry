@@ -1,7 +1,7 @@
 # A live exfiltration directive set directly under a Markdown heading whose
 # word ("Findings") is a bundle-level descriptive-framing suppression. Until
 # ruleset 0.3.3 the heading counted as part of the directive's paragraph and
-# suppressed it; a heading is now a block of its own (agentry#845, DEV-010).
+# suppressed it; a heading is now a block of its own.
 technique: "S4 exfiltration directive framed by a descriptive heading"
 expect:
   - S4/exfiltration-001

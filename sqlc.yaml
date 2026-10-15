@@ -1,4 +1,4 @@
-# sqlc configuration (D-04): typed queries generated into internal/store/gen.
+# sqlc configuration: typed queries generated into internal/store/gen.
 version: "2"
 sql:
   - engine: "postgresql"

@@ -1,29 +1,28 @@
-# CI gate for the core (DEV-091: the headless registry — the site has its
-# own repository and CI): lint, generated-code drift, ruleset-copy drift,
-# tests (real Postgres), build, the M0 and core-UI acceptance scripts,
+# CI gate for the core (the headless registry): lint, generated-code drift,
+# ruleset-copy drift, tests (real Postgres), build, the smoke and core-UI
+# acceptance scripts,
 # dependency hygiene (govulncheck + osv-scanner + lockfile integrity + image
 # scan), OpenAPI breaking-change check, the prose gate over the markdown, and
 # gitleaks over the commits each event brings. Every job carries the fork
 # guard (below), every checkout drops its token, and every action is pinned
-# to a commit SHA (agentry#419, the estate's shape from agentry-desktop#128).
+# to a commit SHA.
 name: ci
 on:
   push:
-    # dev is the integration branch; main is production (WORKFLOW.md
-    # "Branches", 2026-09-22).
+    # dev is the integration branch; main is production.
     branches: [main, dev]
   pull_request:
   # release-please's release PR is opened with GITHUB_TOKEN, so its
   # pull_request runs wait for approval. Dispatching this workflow on the
   # release branch runs every job a push runs on that head (oasdiff alone is
   # pull_request-only, and the release PR touches no schema), which is how
-  # that PR is gated before it merges (agentry#597).
+  # that PR is gated before it merges.
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# The CI tools' versions, in one place (agentry#419): no step installs
+# The CI tools' versions, in one place: no step installs
 # anything unpinned, release.yaml reads its versions from these lines, and
 # scripts/pins-check.sh (the daily pins workflow) reads them to report newer
 # releases. GITLEAKS_SHA256 is the checksum of
@@ -49,27 +48,26 @@ concurrency:
 
 # Every job carries the fork guard
 #   if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-# (agentry#419; the estate's shape, agentry-desktop#128). This repository goes
-# public at the 1.0 flip, and every job here runs on a persistent self-hosted
+# This repository is public, and every job here runs on a persistent self-hosted
 # runner whose containers share one module cache with each other. A pull
 # request from a fork would otherwise execute its own `run:` steps there. The
 # guard lives in the file, where a diff shows it; the repository setting
 # "Require approval for all external contributors" stays on as
-# belt-and-braces (PUBLIC-FLIP.md item 5). A fork's pull request shows these
+# belt-and-braces. A fork's pull request shows these
 # jobs as skipped; a maintainer who wants it built pushes its commits to a
 # branch here.
 jobs:
   check:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
-    # The job's backstop (agentry#452), sized from the Makefile's
-    # TEST_TIMEOUT (25m); change both or neither. `make check` is internal/api's
-    # time plus at most 0.6 min. Everything outside `make check` (container
-    # init, checkout, lint, the acceptance scripts) took at most 5.1 min on a
-    # green first-host run (124 jobs, 2026-09-22..25). So 25 + 0.6 + 5.1 ≈ 31,
-    # and 35 lets a package timeout print its diagnosis before the job is cut.
-    # The worst green job took 18.7 min, well below. A wedged runner then
-    # costs 35 minutes, not GitHub's default 360.
+    # The job's backstop, sized from the Makefile's TEST_TIMEOUT (25m);
+    # change both or neither. `make check` is internal/api's time plus at
+    # most 0.6 min. Everything outside `make check` (container init, checkout,
+    # lint, the acceptance scripts) took at most 5.1 min on a green run on the
+    # slower runners. So 25 + 0.6 + 5.1 ≈ 31, and 35 lets a package timeout
+    # print its diagnosis before the job is cut. The worst green job took
+    # 18.7 min, well below. A wedged runner then costs 35 minutes, not
+    # GitHub's default 360.
     timeout-minutes: 35
     services:
       postgres:
@@ -78,7 +76,7 @@ jobs:
           POSTGRES_USER: agentry
           POSTGRES_PASSWORD: agentry
           POSTGRES_DB: agentry_test
-        ports: ["5432"]  # ephemeral host port: several runners per host (agentry#125)
+        ports: ["5432"]  # ephemeral host port: several runners per host
         options: >-
           --health-cmd "pg_isready -U agentry" --health-interval 5s
           --health-timeout 3s --health-retries 10
@@ -91,10 +89,10 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-          # The runners share one persistent host module cache (agentry#154);
-          # restoring the Actions cache over it is slow and, with several jobs
+          # The runners share one persistent host module cache; restoring
+          # the Actions cache over it is slow and, with several jobs
           # extracting into the same directory, leaves partial modules that
-          # break `go mod verify` for everyone (agentry#225).
+          # break `go mod verify` for everyone.
           cache: false
       - name: Install sqlc
         run: go install "github.com/sqlc-dev/sqlc/cmd/sqlc@${SQLC_VERSION}"
@@ -104,26 +102,25 @@ jobs:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           # The runner keeps its own lint cache between jobs; the action's
           # default would also save it to GitHub's Actions cache and restore
-          # it over the directory the container already holds (agentry#534,
-          # as agentry-desktop#225 found).
+          # it over the directory the container already holds.
           skip-cache: true
       # The rule bundle exists twice — canonical /rules and the embeddable
-      # copy under internal/scan/ruleset/rules, because go:embed cannot reach
-      # outside a package directory. DEV-011 claimed CI enforced that they
-      # match; nothing did, so a rule could ship to the CLI and not the server.
+      # copy under pkg/ruleset/rules, because go:embed cannot reach outside a
+      # package directory. Without the check a rule could ship to the CLI and
+      # not the server.
       # `make check` runs this too; it is called out here so a drift failure
       # names itself in the job log rather than hiding inside a long target.
-      # The site left this repository at the cut-over (DEV-091, agentry#206):
-      # nothing of it may come back — its app, image, brand, terraform,
-      # downloads tooling and pages live in blaktron/agentry-web.
+      # The hosted site is not part of this repository: nothing of it may come
+      # back — its app, image, brand, terraform, downloads tooling and pages
+      # live elsewhere.
       - name: site files stay out
         run: |
           set -euo pipefail
           if git ls-files | grep -E '^(web/|deploy/compose/Dockerfile\.web$|deploy/terraform/|deploy/compose/downloads/|deploy/compose/authentik/branding\.css$|scripts/dev/authentik-brand\.sh$|scripts/release/build-downloads\.sh$|docs/agentry/|docs/index\.md$|docs/extra\.css$|docs/ops/deployment\.md$)'; then
-            echo "site files above belong to blaktron/agentry-web"; exit 1
+            echo "site files above do not belong in this repository"; exit 1
           fi
       # Every Dockerfile builds with go.mod's Go to the patch, so a go line
-      # bump has to move the builder tag with it (agentry#1021): a floating tag is
+      # bump has to move the builder tag with it: a floating tag is
       # whatever a host cached, and the Go images' GOTOOLCHAIN=local keeps it.
       - name: Dockerfiles build with go.mod's Go
         run: |
@@ -142,19 +139,19 @@ jobs:
       - name: make check
         run: make check
       # No acceptance line may print OK for a -run filter that matched
-      # nothing, and every test ARCHITECTURE §9 names for a core row exists
-      # under that name (agentry#420).
+      # nothing, and every test named as evidence for a security invariant
+      # exists under that name.
       - name: acceptance helper refuses an empty match
         run: ./scripts/acceptance/lib-selftest.sh
       # The release tag rules: the next dev prerelease, and every tag the
-      # release guard refuses (agentry#597).
+      # release guard refuses.
       - name: release tag rules
         run: ./scripts/release/selftest.sh
-      - name: section 9 test names exist
+      - name: security invariant test names exist
         run: ./scripts/acceptance/invariant-test-names.sh
-      - name: acceptance M0
+      - name: acceptance smoke
         run: ./scripts/acceptance/smoke.sh
-      # The server's own browser surface, driven with curl (DEV-091).
+      # The server's own browser surface, driven with curl.
       - name: acceptance core UI
         run: ./scripts/acceptance/ui.sh
       - name: directory edge request budgets
@@ -163,9 +160,8 @@ jobs:
         if: always()
         run: python3 scripts/acceptance/directory-cleanup.py --job
 
-  # The prose gate (plan front-end-voice-and-warmth §7, agentry#258): the
-  # honest-posture sentences of §4.6 are still where they belong, and no
-  # never-word of §4.4 has appeared outside an allowlisted span. Stdlib
+  # The prose gate: the honest-posture sentences are still where they
+  # belong, and no never-word has appeared outside an allowlisted span. Stdlib
   # python3 and bash — this repository's CI carries no Node. The job sets
   # UNSLOP_SKIP=1 because the advisory battery is read by a person in the copy
   # loop rather than in a job log, and a runner should not fetch and execute
@@ -204,14 +200,14 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-          # The runners share one persistent host module cache (agentry#154);
-          # restoring the Actions cache over it is slow and, with several jobs
+          # The runners share one persistent host module cache; restoring
+          # the Actions cache over it is slow and, with several jobs
           # extracting into the same directory, leaves partial modules that
-          # break `go mod verify` for everyone (agentry#225).
+          # break `go mod verify` for everyone.
           cache: false
       - run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
 
-  # Dependency hygiene of the product itself (§17.5, T-13). A registry that
+  # Dependency hygiene of the product itself. A registry that
   # gates other people's supply chains and does not audit its own is making a
   # claim it has not earned.
   deps:
@@ -224,10 +220,10 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-          # The runners share one persistent host module cache (agentry#154);
-          # restoring the Actions cache over it is slow and, with several jobs
+          # The runners share one persistent host module cache; restoring
+          # the Actions cache over it is slow and, with several jobs
           # extracting into the same directory, leaves partial modules that
-          # break `go mod verify` for everyone (agentry#225).
+          # break `go mod verify` for everyone.
           cache: false
       # Both lockfiles must exist and be internally consistent BEFORE the
       # vulnerability scan reads them: osv-scanner reports nothing at all for
@@ -251,7 +247,7 @@ jobs:
         run: go run "github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION}" scan --lockfile=go.mod
 
   # Third-party verification of the attestations this code signs
-  # (agentry#26, DEV-035): cosign — which shares no code with pkg/attest —
+  # cosign — which shares no code with pkg/attest —
   # must verify both the publish and the ruleset envelope over a fixture
   # blob. "Format-compatible" is a claim on the trust page; this is its test.
   attest-interop:
@@ -264,18 +260,18 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-          # The runners share one persistent host module cache (agentry#154);
-          # restoring the Actions cache over it is slow and, with several jobs
+          # The runners share one persistent host module cache; restoring
+          # the Actions cache over it is slow and, with several jobs
           # extracting into the same directory, leaves partial modules that
-          # break `go mod verify` for everyone (agentry#225).
+          # break `go mod verify` for everyone.
           cache: false
       - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
       - run: make attest-interop
 
-  # Container image scan. The ECR-side scan (§13) covers what is deployed;
+  # Container image scan. The registry-side scan covers what is deployed;
   # this catches a base-image CVE at PR time instead of at push time.
   # Non-blocking on purpose: a fresh base-image CVE with no fix available must
-  # not stop unrelated work, and §13 is where the deployment gate lives.
+  # not stop unrelated work; the deployment gate lives elsewhere.
   image-scan:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
@@ -284,9 +280,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      # --pull: the builder is pinned to go.mod's Go since agentry#1021, but
-      # the runtime base still floats, and a stale one would be scanned in
-      # place of the current one (agentry#1012).
+      # --pull: the builder is pinned to go.mod's Go, but the runtime base
+      # still floats, and a stale one would be scanned in place of the
+      # current one.
       - name: build image
         run: docker build --pull -t agentry:ci -f deploy/compose/Dockerfile .
       - name: trivy
@@ -297,7 +293,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "0"
 
-  # The directory's mails (agentry#518): the account flows' email stages name
+  # The directory's mails: the account flows' email stages name
   # the core's own templates, and each renders through authentik's own mail
   # class in the pinned image with the link, the name and no authentik logo
   # or footer. A template syntax error here would fail every sign-up.
@@ -317,7 +313,7 @@ jobs:
         if: always()
         run: python3 scripts/acceptance/directory-cleanup.py --job
 
-  # Remembered browsers, the directory's half (agentry#671, DEV-163): the
+  # Remembered browsers, the directory's half: the
   # flow page's template is still the pinned image's plus one block, the code
   # stage it writes into still exists, and a throwaway directory running the
   # account-flows blueprint asks for the code unless a stand-in registry says
@@ -336,7 +332,7 @@ jobs:
         if: always()
         run: python3 scripts/acceptance/directory-cleanup.py --job
 
-  # The sign-up form's promo code field (agentry#759): a throwaway directory
+  # The sign-up form's promo code field: a throwaway directory
   # on the pinned image, with the field on then off — the form, its refusal,
   # a promo link's prefill, the attribute, the agentry scope's claim, and a
   # hidden field that stores nothing whatever is posted.
@@ -354,14 +350,14 @@ jobs:
         if: always()
         run: python3 scripts/acceptance/directory-cleanup.py --job
 
-  # The sign-up's Terms of Service step and optional display name
-  # (agentry#788): a throwaway directory on the pinned image with a fixture
+  # The sign-up's Terms of Service step and optional display name: a
+  # throwaway directory on the pinned image with a fixture
   # terms file, then without it, then without the setting — the step after
   # the form, the refusal without the agreement, the record on the account,
   # the blank name that becomes the username, fail-closed on an unreadable
   # file, and no step where no terms are named. A real Chromium also checks
   # the customizations with arbitrary inline scripts and handlers denied
-  # by CSP (agentry#985); the browser and npm package revisions are pinned.
+  # by CSP; the browser and npm package revisions are pinned.
   directory-terms:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
@@ -376,7 +372,7 @@ jobs:
         if: always()
         run: python3 scripts/acceptance/directory-cleanup.py --job
 
-  # The per-IP sign-up budget (agentry#830, DEV-063) on a throwaway
+  # The per-IP sign-up budget on a throwaway
   # directory of the pinned image, at a budget of 3: a password sign-up and
   # a reset are counted with the client's address (an account, two mails),
   # and then a sign-up and a reset are refused at the start. One directory
@@ -396,10 +392,8 @@ jobs:
         run: python3 scripts/acceptance/directory-cleanup.py --job
 
   # The headless helm chart: lint, a template render with the required
-  # values, and the assertion that nothing web-shaped renders (the site is
-  # its own deployment since the cut-over, DEV-091). This lived in
-  # terraform.yaml until #218 deleted that workflow with the terraform
-  # roots; agentry#229 brings it back here.
+  # values, and the assertion that nothing web-shaped renders (the hosted
+  # site is its own deployment).
   helm:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
@@ -424,7 +418,7 @@ jobs:
           echo "rendered $(echo "$out" | grep -c '^kind: ') objects, none web-shaped"
 
   oasdiff:
-    # Breaking-change gate on the OpenAPI contract (D-09). Additive-only in v1.
+    # Breaking-change gate on the OpenAPI contract. Additive-only in v1.
     # Pull requests only, so the guard is the fork half alone.
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
@@ -436,8 +430,8 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-          # Shared persistent module cache on the self-hosted runners
-          # (agentry#225); the rebuilt runner image ships no Go of its own.
+          # Shared persistent module cache on the self-hosted runners; the
+          # runner image ships no Go of its own.
           cache: false
       - name: oasdiff breaking
         # The refs arrive through env:, never interpolated into the script.
@@ -446,19 +440,18 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           # Diff against the PR's merge-base, not the tip of main: a path that
-          # main gained after this branch was cut is not a removal by this PR
-          # (agentry#138).
+          # main gained after this branch was cut is not a removal by this PR.
           base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA" 2>/dev/null || echo "origin/$BASE_REF")
           git show "$base:schemas/openapi.yaml" > /tmp/base-openapi.yaml || cp schemas/openapi.yaml /tmp/base-openapi.yaml
           # A committed schemas/oasdiff-allow.txt names deliberate breaking
-          # changes to ignore — the one-time DEV-088 exception. The file is
-          # deleted by the PR after the one that lands them, so the gate is
-          # fully additive again; its presence on main is itself a finding.
+          # changes to ignore, a one-time exception. The file is deleted by
+          # the PR after the one that lands them, so the gate is fully
+          # additive again; its presence on main is itself a finding.
           ignore=""
-          if [ -f schemas/oasdiff-allow.txt ]; then ignore="--err-ignore schemas/oasdiff-allow.txt"; echo "::warning::oasdiff allow file present (DEV-088 one-time exception)"; fi
+          if [ -f schemas/oasdiff-allow.txt ]; then ignore="--err-ignore schemas/oasdiff-allow.txt"; echo "::warning::oasdiff allow file present (one-time exception)"; fi
           go run "github.com/oasdiff/oasdiff@${OASDIFF_VERSION}" breaking /tmp/base-openapi.yaml schemas/openapi.yaml --fail-on ERR $ignore
 
-  # Secret scanning (agentry#419): gitleaks over the commits this event
+  # Secret scanning: gitleaks over the commits this event
   # brings — a pull request's own range, or a push's before..after — with the
   # repository's .gitleaks.toml, failing on any hit (a dispatched run: the
   # ref's commits over main). The binary is the release

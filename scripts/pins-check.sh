@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# The CI supply chain's pins, checked (agentry#419; copied from
-# agentry-desktop#128, only the tool list at the bottom differs). Run daily by
+# The CI supply chain's pins, checked. Run daily by
 # .github/workflows/pins.yaml, and by hand from the repository root.
 #
 #   1. Every `uses:` in .github/workflows is pinned to a full commit SHA with

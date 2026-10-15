@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M3 CLI acceptance (WG-F, PLAN §11/§18.2): boots a real agentryd against
+# CLI acceptance: boots a real agentryd against
 # local Postgres, then drives the agentry CLI end to end:
 #   login (PAT via stdin) → init → validate → publish (cli-upload source) →
 #   install --target=claude-skill → verify → yank → yanked-range exclusion.
@@ -43,8 +43,8 @@ AGENTRY="$TMP/agentry"
 
 echo "== boot agentryd all on $BASE =="
 mkdir -p "$TMP/storage" "$TMP/git"
-# Acceptance traffic is a tight scripted loop from one IP; the real §19
-# limits are exercised by auth.sh, not here.
+# Acceptance traffic is a tight scripted loop from one IP; the real
+# rate limits are exercised by auth.sh, not here.
 AGENTRY_LIMITS_AUTHED_BURST_PER_MIN="100000" \
 AGENTRY_LIMITS_AUTHED_PER_HOUR="1000000" \
 AGENTRY_LIMITS_ANONYMOUS_PER_MIN="100000" \
@@ -110,7 +110,7 @@ export AGENTRY_TOKEN="$PAT"
 echo "== agentry init =="
 "$AGENTRY" init --kind=skill --namespace "$HANDLE" --name "$NAME" "$TMP/$NAME"
 
-echo "== agentry validate (offline D-12 parity, embedded-rules dir) =="
+echo "== agentry validate (offline, embedded-rules dir) =="
 AGENTRY_RULES_DIR="$ROOT/rules" "$AGENTRY" validate "$TMP/$NAME"
 
 echo "== create agent via API =="
@@ -140,12 +140,12 @@ echo "== agentry verify (digest, exit code for CI) =="
 grep -q "digest: PASS" "$TMP/verify.out" || { echo "verify did not PASS"; exit 1; }
 
 echo "== agentry yank =="
-"$AGENTRY" yank --registry "$BASE" "$HANDLE/$NAME@0.1.0" --reason "m3-cli acceptance cleanup"
+"$AGENTRY" yank --registry "$BASE" "$HANDLE/$NAME@0.1.0" --reason "cli acceptance cleanup"
 
-# §5.5: yanked versions leave range resolution — a rangeless install must fail.
+# Yanked versions leave range resolution — a rangeless install must fail.
 if "$AGENTRY" install --registry "$BASE" "$HANDLE/$NAME" --target=claude-skill --dir "$TMP/skills2" --yes >/dev/null 2>&1; then
   echo "install of a fully-yanked agent unexpectedly succeeded"; exit 1
 fi
 echo "yanked version excluded from range resolution: OK"
 
-echo "== M3 CLI acceptance PASSED =="
+echo "== CLI acceptance PASSED =="

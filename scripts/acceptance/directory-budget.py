@@ -1,4 +1,4 @@
-"""The per-IP sign-up budget's acceptance, the driver (agentry#830).
+"""The per-IP sign-up budget's acceptance, the driver.
 
 Run by directory-budget.sh inside a container on the same private network as
 a throwaway directory whose budget is 4 an hour and whose registry

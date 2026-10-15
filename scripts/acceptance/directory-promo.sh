@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Promo code acceptance, the directory's half (plan promo-codes.md §5.1,
-# agentry#759).
+# Promo code acceptance, the directory's half.
 #
 # The sign-up form's optional promo code field is configuration the directory
 # applies: one prompt field whose type, prefill and initial value turn on
@@ -60,7 +59,7 @@ AK_ENV=(
   -e AUTHENTIK_LOG_LEVEL=warning
   -e AGENTRY_ACCOUNT_URL=http://registry.test/settings -e AGENTRY_PUBLIC_WEB_URL=http://registry.test
   -e AGENTRY_IDP_TRUST_CHECK_TOKEN="$(openssl rand -hex 32)" -e AGENTRY_REGISTRY_INTERNAL_URL=http://dp-driver:8080
-  # Registry activation on (agentry#861), as compose sets it: sign-up ends
+  # Registry activation on, as compose sets it: sign-up ends
   # at the authenticator setup, the account active and unactivated.
   -e AGENTRY_DIRECTORY_REGISTRY_ACTIVATION=true
 )
@@ -128,7 +127,7 @@ coded, empty = User.objects.get(username=a["coded"]), User.objects.get(username=
 print("ATTR coded", repr(coded.attributes.get("agentry_promo_code")), "empty", repr(empty.attributes.get("agentry_promo_code")))
 # The field is the first to put a nested attributes value in the prompt data,
 # beside the has-password policy's flat attributes.agentry_has_password: the
-# two must merge, and nothing else may be written (agentry#706).
+# two must merge, and nothing else may be written.
 print("KEYS coded", sorted(coded.attributes), coded.attributes.get("agentry_has_password"))
 print("CLAIM coded", m.evaluate(user=coded, request=PolicyRequest(coded), token=None).get("agentry_promo_code"))
 print("CLAIM empty", "agentry_promo_code" in m.evaluate(user=empty, request=PolicyRequest(empty), token=None))
@@ -136,7 +135,7 @@ PY
 )
 case "$check" in *"ATTR coded 'launch-2026' empty ''"*) echo "ok   the code is written to the account's attributes as typed; an empty field leaves it empty" ;;
   *) echo "FAIL: the accounts' attributes: $check"; exit 1 ;; esac
-case "$check" in *"KEYS coded ['agentry_email_verified', 'agentry_has_password', 'agentry_promo_code'] True"*) echo "ok   the code merges beside agentry_has_password and agentry_email_verified (agentry#861), and nothing else is written" ;;
+case "$check" in *"KEYS coded ['agentry_email_verified', 'agentry_has_password', 'agentry_promo_code'] True"*) echo "ok   the code merges beside agentry_has_password and agentry_email_verified, and nothing else is written" ;;
   *) echo "FAIL: the coded account's attributes: $check"; exit 1 ;; esac
 case "$check" in *"CLAIM coded launch-2026"*) echo "ok   the agentry scope sends agentry_promo_code for the account with a code" ;;
   *) echo "FAIL: the claim for the account with a code: $check"; exit 1 ;; esac

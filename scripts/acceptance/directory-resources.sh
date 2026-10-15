@@ -1,7 +1,7 @@
 # shellcheck shell=bash disable=SC2034
 # The label array is consumed by each sourcing script.
 # Sourced by directory acceptance scripts. Local runs keep their EXIT trap;
-# CI also has an independent cleanup step and a host-side expiry sweep (#800).
+# CI also has an independent cleanup step and a host-side expiry sweep.
 DIRECTORY_DOCKER_LABELS=()
 if [ "${GITHUB_ACTIONS:-}" = true ]; then
   DIRECTORY_JOB="${GITHUB_REPOSITORY:?}/${GITHUB_RUN_ID:?}/${GITHUB_RUN_ATTEMPT:?}/${GITHUB_JOB:?}"

@@ -1,4 +1,4 @@
-technique: "Benign twin: the same script, its three hosts declared in network.egress (agentry#1149)"
+technique: "Benign twin: the same script, its three hosts declared in network.egress"
 version: "1.0.0"
 manifest: |
   {"license":"MIT","capabilities":{"network":{"egress":["release.invalid.example","192.0.2.10","mirror.invalid.example"]},"filesystem":{"read":"workspace"},"exec":{"commands":["sh","rsync","scp","sftp"]}}}

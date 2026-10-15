@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Terms of Service step acceptance, the directory's half (agentry#788).
+# Terms of Service step acceptance, the directory's half.
 #
 # The sign-up's terms step and its optional display name are configuration
 # the directory applies: a prompt stage after the form, shown only where the
@@ -12,10 +12,10 @@
 #   1. On (a fixture terms file named): the display name is optional; the
 #      terms step follows the form with the file's text; an unticked
 #      agreement is refused; a ticked one reaches the authenticator setup
-#      with no mail step (agentry#861); the
+#      with no mail step; the
 #      accounts record agreement, version and time, a blank name became the
-#      username as typed while the username was written lower-cased
-#      (agentry#856), a typed name and a promo code were kept, and the text
+#      username as typed while the username was written lower-cased,
+#      a typed name and a promo code were kept, and the text
 #      shown was not stored.
 #   2. Unreadable (the file not UTF-8, then removed): the step says the
 #      terms could not be loaded and refuses the sign-up. Not UTF-8 is the
@@ -24,9 +24,8 @@
 #   3. Off (the server and the worker recreated without either variable:
 #      no terms, and registry activation off): the form leads straight to
 #      the directory's confirmation mail and the account is written
-#      inactive, as before agentry#861 (DEV-197). That is production's path
-#      until its chart turns registry activation on (agentry-web#972).
-#   4. The email claim (agentry#861): the agentry-verified-email mapping
+#      inactive (the path when registry activation is not turned on).
+#   4. The email claim: the agentry-verified-email mapping
 #      says email_verified false for a fresh sign-up, true once the
 #      registry confirms its subject and address, and true for an account
 #      from before (no attribute). Refused/unreachable checks fail closed.
@@ -95,7 +94,7 @@ AK_ENV=(
   # the terms step's merge into the same prompt data.
   -e AGENTRY_DIRECTORY_PROMO_FIELD=true
 )
-# Registry activation (agentry#861): on for every phase but the last, on the
+# Registry activation: on for every phase but the last, on the
 # server (the write's policy reads it) and the worker (the blueprint's
 # conditions read it).
 ACT=(-e AGENTRY_DIRECTORY_REGISTRY_ACTIVATION=true)
@@ -241,12 +240,12 @@ case "$check" in *"KEYS named ['agentry_email_verified', 'agentry_has_password',
 
 case "$check" in *"ACTIVE blank True False"*"ACTIVE named True False"*) echo "ok   both accounts are written active and unactivated (agentry_email_verified false)" ;;
   *) echo "FAIL: an account is not written active and unactivated: $check"; exit 1 ;; esac
-# The named sign-up chose "later" (agentry#894): it is signed in with no
+# The named sign-up chose "later": it is signed in with no
 # authenticator, and nothing of the choice is stored (KEYS above).
 case "$check" in *"DEVICES named 0"*) echo "ok   the account that skipped the authenticator setup has no authenticator" ;;
   *) echo "FAIL: the account that skipped the setup: $check"; exit 1 ;; esac
 
-# The claim the registry reads (agentry#869): the directory asks the registry.
+# The claim the registry reads: the directory asks the registry.
 docker exec -i "$AK" ak shell -c \
   'exec(compile(__import__("sys").stdin.read(), "verification-acceptance", "exec"))' \
   < scripts/acceptance/directory-verification.py
