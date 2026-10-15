@@ -250,9 +250,8 @@ A release that asks for a server is given it at `add`: `--intake
 id=[user@]host[:port]` and the `--host-*` flags, its host key accepted then
 and its sign-in kept in the keychain
 ([below](#in-a-session-a-schedule-and-an-install)). [Scheduled runs](agentry/scheduling.md) is the guide,
-with the desktop app and schedules In Agentry; the CLI's
-[README](https://github.com/blaktron/agentry-cli#runs-for-later-and-on-repeat-schedule)
-has every flag.
+with the desktop app and schedules In Agentry; `agentry schedule --help`
+lists every flag.
 
 ### `agentry uninstall <ns/name[@version]>`
 
