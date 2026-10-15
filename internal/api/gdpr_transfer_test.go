@@ -1,10 +1,10 @@
 package api_test
 
-// §12.7 account erasure: the published-content chooser is explicit, and
-// `transfer` actually transfers. Before this, the disposition defaulted to
-// "yank", which made the explicit-choice guard dead code — a user deleting
-// their account silently pulled their published packages out from under
-// everyone who had installed them.
+// Account erasure: the published-content chooser is explicit, and
+// `transfer` actually transfers. A disposition that defaulted to "yank"
+// would make the explicit-choice guard dead code: a user deleting
+// their account would silently pull their published packages out from
+// under everyone who had installed them.
 
 import (
 	"context"
@@ -90,7 +90,7 @@ func TestErasureTransferPath(t *testing.T) {
 	orgID := env.createOrg(sess, orgH)
 	agentName := "transferable-" + env.sfx
 	env.publishUnder(t, sess, user, agentName)
-	// The organization keeps an admin when its founder goes (agentry#363):
+	// The organization keeps an admin when its founder goes:
 	// the erasure is refused until another is in place.
 	res0 := env.do(sess, http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil)
 	if code, slug, _ := problemOf(t, res0); code != http.StatusConflict || slug != "last-admin" {

@@ -1,6 +1,6 @@
 package api_test
 
-// M1 acceptance flows (§18.2): full auth lifecycle, PAT lifecycle e2e, and
+// Acceptance flows: full auth lifecycle, PAT lifecycle e2e, and
 // audit coverage for mutating calls.
 
 import (
@@ -64,8 +64,8 @@ func TestAuthLifecycle(t *testing.T) {
 	}
 }
 
-// TestPATLifecycle is the M1 acceptance item: mint → use → scope-limit →
-// revoke → immediate rejection (§12.3, D-22).
+// TestPATLifecycle is the acceptance item: mint → use → scope-limit →
+// revoke → immediate rejection.
 func TestPATLifecycle(t *testing.T) {
 	env := newTestEnv(t)
 	h := env.register("patty")
@@ -124,7 +124,7 @@ func TestPATLifecycle(t *testing.T) {
 	}
 }
 
-// TestAuditCoverage asserts audit rows exist for every M1 mutating action
+// TestAuditCoverage asserts audit rows exist for every mutating action
 // after driving each flow once, and that audit rows are immutable.
 func TestAuditCoverage(t *testing.T) {
 	env := newTestEnv(t)
@@ -177,7 +177,7 @@ func TestAuditCoverage(t *testing.T) {
 		}
 	}
 
-	// Append-only: UPDATE/DELETE must be blocked by trigger (§4.3).
+	// Append-only: UPDATE/DELETE must be blocked by trigger.
 	if _, err := env.st.Pool().Exec(context.Background(),
 		`UPDATE audit_events SET action = 'tampered' WHERE action = 'user.register'`); err == nil {
 		t.Fatal("audit UPDATE must be rejected")
@@ -220,9 +220,9 @@ func TestTOTPFlow(t *testing.T) {
 	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/login",
 		map[string]any{"login": h, "password": "hunter2hunter2", "totpCode": code2}, nil, http.StatusOK)
 
-	// Extended for trusted devices (agentry#461): answering the code is not by
+	// Trusted devices: answering the code is not by
 	// itself consent to be remembered. A sign-in that did not ask earns
-	// nothing, and the next one is asked for the code again — which is the
+	// nothing, and the next one is asked for the code again, which is the
 	// assertion above, now reached a second time on purpose.
 	res = env.do(anonymous, http.MethodPost, "/api/v1/auth/login",
 		map[string]any{"login": h, "password": "hunter2hunter2", "totpCode": code2})

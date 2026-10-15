@@ -1,14 +1,13 @@
 package api_test
 
-// The fold-in (agentry#364, plan organization-subscriptions §4 "Fold-in",
-// §5.5; D22, D25): an account whose verified address is at an
+// The fold-in: an account whose verified address is at an
 // organization's domain becomes a pending member at its next directory
 // sign-in, once; the sweep folds in the accounts already known at a domain
 // the organization gains; a decline is remembered; GET /user names the
 // organization until an admin decides; the admins are mailed one daily
 // digest naming each person once, under the verified-address rule. The
 // fold-in writes pending and nothing else — the seat is still taken in
-// ActivateMember (M3's TestPendingMemberHoldsNothing covers what a pending
+// ActivateMember (TestPendingMemberHoldsNothing covers what a pending
 // member holds, which is nothing).
 
 import (
@@ -337,7 +336,7 @@ func TestFoldInSweepAndDecisions(t *testing.T) {
 		t.Fatalf("members via the domain: %d in %+v, want 2", viaDomain, members)
 	}
 
-	// Approval is M2's path: Bob is a member, the flag stays, pendingOrg goes.
+	// Approval: Bob is a member, the flag stays, pendingOrg goes.
 	bob := env.login(bobH)
 	if u := env.userOf(bob); u.PendingOrg == nil || u.PendingOrg.Handle != org {
 		t.Fatalf("bob's pendingOrg before approval: %+v", u.PendingOrg)

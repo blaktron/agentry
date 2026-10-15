@@ -1,6 +1,6 @@
 package api_test
 
-// §4.3 database-level hardening, exercised with RAW SQL rather than through
+// Database-level hardening, exercised with RAW SQL rather than through
 // the API: these guards exist precisely because application code cannot be
 // trusted to be the only writer. A compromised app role, a migration, or a
 // careless psql session must all bounce off them.
@@ -25,11 +25,12 @@ func (env *testEnv) publishedVersionID(t *testing.T, sess caller, ns, name strin
 	return id
 }
 
-// TestVersionImmutabilityBlocksStatusRollback is the B-14 regression. The
-// 00004 trigger only checked immutable fields when OLD.status <> 'submitted',
-// so two statements — roll the row back to 'submitted', then rewrite it —
-// bypassed the whole guarantee and let a published version's manifest and
-// archive digest be replaced under consumers who had already installed it.
+// TestVersionImmutabilityBlocksStatusRollback pins the guarantee that a
+// published version cannot be rewritten. A trigger that checked immutable
+// fields only when OLD.status <> 'submitted' would let two statements
+// (roll the row back to 'submitted', then rewrite it) bypass the guarantee
+// and replace a published version's manifest and archive digest under
+// consumers who had already installed it.
 func TestVersionImmutabilityBlocksStatusRollback(t *testing.T) {
 	env := newTestEnv(t)
 	user := env.register("imm-usr")
@@ -71,7 +72,7 @@ func TestVersionImmutabilityBlocksStatusRollback(t *testing.T) {
 	}
 }
 
-// TestAuditEventsRefuseTruncate covers the second half of B-14: the 00002
+// TestAuditEventsRefuseTruncate: the 00002
 // trigger guards UPDATE and DELETE, but TRUNCATE fires neither, so the
 // append-only log could be emptied in one statement.
 func TestAuditEventsRefuseTruncate(t *testing.T) {

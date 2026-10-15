@@ -1,9 +1,9 @@
 package api
 
-// GET /ruleset-releases/latest/bundle (§11 `agentry validate --rules-update`).
+// GET /ruleset-releases/latest/bundle (`agentry validate --rules-update`).
 //
 // The CLI ships an embedded S3/S4 rule bundle so offline validation matches
-// what the server runs (D-12). Rules move faster than CLI releases, so the
+// what the server runs. Rules move faster than CLI releases, so the
 // CLI needs a way to pick up a newer bundle without waiting for a new binary.
 // This endpoint is that way: it serves THIS deployment's bundle — the exact
 // bytes its own pipeline scans with — as a tar, with the bundle's semver and
@@ -17,8 +17,7 @@ package api
 // Trust: the digest is the pin, and — when this deployment signs releases —
 // GET /ruleset-releases/latest/attestation is a DSSE envelope over that
 // digest, signed with the same key, so a client can verify the bundle by
-// signature and not only by a digest the same server advertised (agentry#25;
-// DEV-024 recorded the earlier deferral).
+// signature and not only by a digest the same server advertised.
 
 import (
 	"context"
@@ -108,7 +107,7 @@ func normalizeDigest(d string) string {
 }
 
 // storeRulesetAttestation signs the statement over the embedded bundle's
-// digest and stores it (agentry#479). The process that holds the key does
+// digest and stores it. The process that holds the key does
 // this once at start; the api role, which holds no key, serves the stored
 // envelope. A row already there for this digest and key is kept.
 func storeRulesetAttestation(ctx context.Context, st *store.Store, signer scan.Signer, baseURL string) error {
@@ -135,7 +134,7 @@ func storeRulesetAttestation(ctx context.Context, st *store.Store, signer scan.S
 
 // GetLatestRulesetAttestation implements GET /ruleset-releases/latest/attestation.
 // It serves the envelope the key holder stored for this binary's bundle,
-// signed by the active key (agentry#479), so the api role answers without
+// signed by the active key, so the api role answers without
 // the private key. 404 when no key holder has started with this bundle.
 func (s *Server) GetLatestRulesetAttestation(w http.ResponseWriter, r *http.Request) {
 	bundle, err := ruleset.Load()

@@ -153,7 +153,7 @@ func patToAPI(row storegen.ListPATsRow) Pat {
 	return p
 }
 
-// CreateToken implements POST /user/tokens (session-only, D-22).
+// CreateToken implements POST /user/tokens (session-only).
 func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActUserTokensManage, uuid.Nil) {
 		return
@@ -184,7 +184,7 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 
-	// Org binding (§12.4): a token bound to an org may be minted only from an
+	// Org binding: a token bound to an org may be minted only from an
 	// SSO-fresh session for that org, and is capped at the org-bound max TTL
 	// (90 days). It is the only kind of PAT accepted against an enforced-SSO
 	// org's resources.

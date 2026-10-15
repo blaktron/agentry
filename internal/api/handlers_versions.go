@@ -21,8 +21,8 @@ import (
 
 // Upload limits for cli-upload archives. maxUploadBytes caps the whole
 // request body, compressed: a release's 10 MB post-filter compresses well
-// below it, and a release that ships knowledge packs (plan knowledge.md
-// §4.6) has up to the edge's own 16 MiB request cap on this door — a
+// below it, and a release that ships knowledge packs has up to the
+// edge's own 16 MiB request cap on this door — a
 // larger one is published by a tag push, which has no body cap.
 // multipartMemoryBytes is only how much of it net/http may hold in memory
 // before spooling.
@@ -43,11 +43,11 @@ func versionToAPI(v registry.Version) AgentVersion {
 	if v.StatusReason != nil {
 		out.StatusReason = v.StatusReason
 	}
-	// How the version was admitted (M21): a skipped one is what a client
+	// How the version was admitted: a skipped one is what a client
 	// asks consent for before it installs or runs it.
 	scan := AgentVersionScanStatus(v.ScanStatus)
 	out.ScanStatus = &scan
-	// Which manifest schema the snapshot follows (DEV-088): clients read a
+	// Which manifest schema the snapshot follows: clients read a
 	// v1 snapshot through the kind mapping and a v2 one by its modes.
 	var snap struct {
 		SchemaVersion string `json:"schemaVersion"`
@@ -133,7 +133,7 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 	}
 }
 
-// SubmitVersion implements POST /agents/{ns}/{name}/versions (§6.5, §7).
+// SubmitVersion implements POST /agents/{ns}/{name}/versions.
 func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName) {
 	if !s.requireDB(w, r) {
 		return
@@ -194,11 +194,11 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 }
 
 // submitUpload handles the cli-upload source: unpack, then hand the
-// workspace to the registry which re-validates and re-packs (§6.5).
+// workspace to the registry which re-validates and re-packs.
 func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Principal, a registry.Agent) (registry.Version, error) {
 	// Cap the BODY, not just the in-memory part. ParseMultipartForm's argument
 	// is only the memory budget: everything past it spools to disk, so an
-	// unbounded body let an authenticated client fill the server's temp
+	// unbounded body would let an authenticated client fill the server's temp
 	// filesystem before a single byte was validated.
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
 	if err := r.ParseMultipartForm(multipartMemoryBytes); err != nil {
@@ -230,18 +230,16 @@ func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	}
 	defer func() { _ = os.RemoveAll(ws) }()
 
-	// One hardened extractor for untrusted archives (§8.2). registry's older
-	// unpacker checked traversal and sizes but not file COUNT, not the
-	// compression ratio, and did not bound decoder memory — so an upload was
-	// unpacked under weaker rules than the scanner would later apply to the
-	// very same bytes.
+	// One hardened extractor for untrusted archives: it bounds file COUNT,
+	// the compression ratio and decoder memory, so an upload is unpacked
+	// under the same rules the scanner later applies to the very same
+	// bytes.
 	if err := scan.Extract(file, ws, hdr.Size, scan.DefaultLimits()); err != nil {
 		problemValidation(w, r, "The extractor rejected this archive: "+err.Error())
 		return registry.Version{}, nil
 	}
-	// A claimed draft is stored as a claim (plan drafter-revisions.md §6;
-	// agentry#794): the scan asks the extension's DraftProvenance whether it
-	// holds, and only the scan's answer changes how S9 reads the version.
+	// A claimed draft is stored as a claim: the scan asks the extension's
+	// DraftProvenance whether it holds, and only the scan's answer changes how S9 reads the version.
 	var draftRun *uuid.UUID
 	if raw := strings.TrimSpace(r.FormValue("draftRun")); raw != "" {
 		id, err := uuid.Parse(raw)
@@ -253,7 +251,7 @@ func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	}
 	// The server rebuilds the archive from this workspace and its own digest
 	// is authoritative; a claimed digest that disagrees fails validation
-	// inside SubmitVersion (§6.5 — never trust client packing).
+	// inside SubmitVersion (never trust client packing).
 	return s.reg.SubmitVersion(r.Context(), p, a, registry.SubmitInput{
 		Source:        "cli-upload",
 		Workspace:     ws,
@@ -323,7 +321,7 @@ func (s *Server) GetVersionManifest(w http.ResponseWriter, r *http.Request, ns N
 	_, _ = w.Write(v.Manifest)
 }
 
-// YankVersion implements POST .../versions/{version}/yank (§5.5).
+// YankVersion implements POST .../versions/{version}/yank.
 func (s *Server) YankVersion(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString) {
 	if !s.requireDB(w, r) {
 		return
@@ -357,8 +355,8 @@ func (s *Server) YankVersion(w http.ResponseWriter, r *http.Request, ns Namespac
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DownloadVersion implements GET .../versions/{version}/download (§9.4).
-// Self-host streams the archive directly; SaaS will 302 to the CDN (M7).
+// DownloadVersion implements GET .../versions/{version}/download.
+// Self-host streams the archive directly.
 func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString) {
 	if !s.requireDB(w, r) {
 		return
@@ -367,7 +365,7 @@ func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Name
 	if !ok {
 		return
 	}
-	// Agent-level block short-circuits every version (§7 blocked: downloads
+	// Agent-level block short-circuits every version (blocked: downloads
 	// return 410). Blocking walks the versions too; this catches the case
 	// where a scan finishes and publishes a version after the block landed.
 	if a.QuarantineState == "blocked" {
@@ -418,7 +416,7 @@ func (s *Server) DownloadVersion(w http.ResponseWriter, r *http.Request, ns Name
 	_, _ = io.Copy(w, blob)
 }
 
-// ResolveRef implements GET /resolve (§9.4 step 1).
+// ResolveRef implements GET /resolve.
 func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params ResolveRefParams) {
 	if !s.requireDB(w, r) {
 		return
@@ -453,7 +451,7 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 	v := res.Version
 
 	// The install-intent hint keeps CLI stats honest without a download
-	// round-trip through the API (§9.4 step 4).
+	// round-trip through the API.
 	if r.Header.Get("X-Agentry-Install") == "1" {
 		if err := s.q().BumpDownloadStat(r.Context(), storegen.BumpDownloadStatParams{AgentID: a.ID, VersionID: v.ID}); err != nil {
 			s.log.WarnContext(r.Context(), "install count", "err", err)
@@ -476,14 +474,14 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 		Manifest:   manifestDoc,
 		Yanked:     res.Yanked,
 	}
-	// How the version was admitted (M21): a client that installs or runs
+	// How the version was admitted: a client that installs or runs
 	// a skipped one asks for consent first, and reads it here rather than
 	// inferring it from a missing attestation, which an unsigned registry
 	// also has.
 	scan := ResolveResultScanStatus(v.ScanStatus)
 	out.ScanStatus = &scan
-	// §9.4 step 1: point verifiers at the attestation whenever one exists
-	// (signing happens exactly once, on publish — §7).
+	// Point verifiers at the attestation whenever one exists
+	// (signing happens exactly once, on publish).
 	if _, err := s.q().GetAttestation(r.Context(), v.ID); err == nil {
 		u := fmt.Sprintf("%s/api/v1/agents/%s/%s/versions/%s/attestation", base, ref.Namespace, ref.Name, v.Version)
 		out.AttestationUrl = &u

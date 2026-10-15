@@ -1,7 +1,7 @@
 package api
 
-// An organization's shared knowledge (plan knowledge.md §4.7, D13, D26;
-// agentry#646): packs the organization owns, their data keys wrapped for
+// An organization's shared knowledge: packs the organization owns, their
+// data keys wrapped for
 // the organization — under the deployment's knowledge sealing key on a
 // core registry, to the organization's own key on an extension's wrapper —
 // written by its admins and read by its active members. Membership is
@@ -86,7 +86,7 @@ func (s *Server) GetOrgKnowledgePack(w http.ResponseWriter, r *http.Request, org
 }
 
 // UpdateOrgKnowledgePack implements PATCH /orgs/{org}/knowledge/packs/{packId}:
-// whether the organization's members may export the pack (D26).
+// whether the organization's members may export the pack.
 func (s *Server) UpdateOrgKnowledgePack(w http.ResponseWriter, r *http.Request, org OrgHandle, packID openapi_types.UUID) {
 	row, owner, ok := s.orgKnowledge(w, r, org, auth.ActOrgKnowledgeWrite)
 	if !ok {
@@ -129,7 +129,7 @@ func (s *Server) DownloadOrgKnowledgeTree(w http.ResponseWriter, r *http.Request
 }
 
 // ExportOrgKnowledgePack implements GET /orgs/{org}/knowledge/packs/{packId}/export:
-// an admin's always, a member's once the pack is marked exportable (D26).
+// an admin's always, a member's once the pack is marked exportable.
 func (s *Server) ExportOrgKnowledgePack(w http.ResponseWriter, r *http.Request, org OrgHandle, packID openapi_types.UUID) {
 	row, owner, ok := s.orgKnowledge(w, r, org, auth.ActOrgKnowledgeRead)
 	if !ok {

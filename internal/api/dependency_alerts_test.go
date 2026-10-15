@@ -10,7 +10,7 @@ import (
 	"github.com/blaktron/agentry/internal/scan"
 )
 
-// The surfaces of a dependency alert (agentry#177 M3): the submitter's list
+// The surfaces of a dependency alert: the submitter's list
 // (banner and dashboard), the agent's public page, and the registry's scan
 // record for one server version.
 func TestDependencyAlertSurfaces(t *testing.T) {
@@ -54,7 +54,7 @@ func TestDependencyAlertSurfaces(t *testing.T) {
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/mcp-servers/scan?ecosystem=npm&package=alerts-fixture&version=9.9.9", nil, nil, http.StatusNotFound)
 
 	// Each advisory is served with its own severity and the gate's rating
-	// of it beside it (agentry#774): a High below 8.5 is medium for the
+	// of it beside it: a High below 8.5 is medium for the
 	// gate, a High with no score and a Critical keep their own.
 	if _, err := env.st.Pool().Exec(context.Background(), `
 		INSERT INTO mcp_server_scans (ecosystem, package, version, status, max_severity, advisories)

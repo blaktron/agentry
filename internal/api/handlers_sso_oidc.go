@@ -23,8 +23,7 @@ type oidcState struct {
 	Org      string `json:"o"`
 	// Next is the same-origin path a browser returns to, sealed here
 	// rather than carried in the query so the IdP round trip cannot
-	// change it (plan organization-subscriptions.md §5.7). Empty is API
-	// mode, which answers JSON as before.
+	// change it. Empty is API mode, which answers JSON.
 	Next string `json:"x,omitempty"`
 }
 
@@ -40,7 +39,7 @@ func (s *Server) oidcContext(ctx context.Context) context.Context {
 	return coreoidc.ClientContext(ctx, s.oidcEgress)
 }
 
-// OidcStart implements GET /orgs/{org}/sso/oidc/start (§12.4): auth-code + PKCE.
+// OidcStart implements GET /orgs/{org}/sso/oidc/start: auth-code + PKCE.
 func (s *Server) OidcStart(w http.ResponseWriter, r *http.Request, org OrgHandle, params OidcStartParams) {
 	if !s.requireDB(w, r) {
 		return
@@ -51,8 +50,7 @@ func (s *Server) OidcStart(w http.ResponseWriter, r *http.Request, org OrgHandle
 	}
 	// A tier that does not include SSO has no door here, and the
 	// organization is not a thing this route will admit to having one: the
-	// answer is the same 404 as an organization with no connection at all
-	// (D11).
+	// answer is the same 404 as an organization with no connection at all.
 	if !s.ssoIncluded(r.Context(), orgRow.ID) {
 		problemNotFound(w, r)
 		return
@@ -91,7 +89,7 @@ func (s *Server) OidcStart(w http.ResponseWriter, r *http.Request, org OrgHandle
 	http.Redirect(w, r, rp.AuthURL(state, nonce, verifier), http.StatusFound)
 }
 
-// OidcCallback implements GET /orgs/{org}/sso/oidc/callback (§12.4): exchange
+// OidcCallback implements GET /orgs/{org}/sso/oidc/callback: exchange
 // the code, verify the ID token (signature/issuer/audience/nonce), respect
 // email_verified, and establish the SSO session via JIT.
 func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHandle, params OidcCallbackParams) {
@@ -171,7 +169,7 @@ func (s *Server) OidcCallback(w http.ResponseWriter, r *http.Request, org OrgHan
 		problemUnauthorized(w, r, msg)
 		return
 	}
-	// Respect email_verified (§12.4): an unverified email must not drive a
+	// Respect email_verified: an unverified email must not drive a
 	// verified-email JIT link.
 	if claims.Email != "" && !claims.EmailVerified {
 		const msg = "The identity provider reports this email address as unverified. Verify it there, then sign in again."

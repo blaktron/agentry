@@ -19,12 +19,12 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Handle/name grammar shared with the DDL (§4.2).
+// Handle/name grammar shared with the DDL.
 var reHandle = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$`)
 
 const emailVerificationTTL = 48 * time.Hour
 
-// newUUID returns a UUIDv7 (D-10); generation failure is unrecoverable.
+// newUUID returns a UUIDv7; generation failure is unrecoverable.
 func newUUID() uuid.UUID {
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -69,8 +69,8 @@ func auditEvent(r *http.Request, action audit.Action) audit.Event {
 // that presented it: the address it came from and the user agent it claimed.
 // Both are display facts for the pages that list credentials — a session, a
 // trusted device — and neither takes part in any decision, so a value the
-// client can choose never influences what the server trusts. agentry#429 is
-// about that address being choosable; keeping it out of every decision is what
+// client can choose never influences what the server trusts. The address
+// is choosable by the client; keeping it out of every decision is what
 // makes it harmless here. Both are best-effort: an address that does not parse
 // is left nil rather than refused.
 func requestFacts(r *http.Request) (ip *netip.Addr, ua string) {
@@ -80,8 +80,8 @@ func requestFacts(r *http.Request) (ip *netip.Addr, ua string) {
 	return ip, r.UserAgent()
 }
 
-// Register implements POST /auth/register (§12.1).
-// nativeCredsGone enforces auth.externalOnly (DEV-057): with an external
+// Register implements POST /auth/register.
+// nativeCredsGone enforces auth.externalOnly: with an external
 // directory service owning credentials, the native register / password /
 // email-verify / TOTP endpoints answer 410 Gone. The handlers below stay
 // intact — clearing the flag restores them — and social/SSO sign-in plus
@@ -195,7 +195,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // VerifyEmail implements POST /auth/verify-email. It is the activation
-// link's target for every account (agentry#861), so unlike the rest of the
+// link's target for every account, so unlike the rest of the
 // native credential endpoints it stays open under externalOnly: a directory
 // account follows the link the registry mailed it. Where the account signed
 // in through the directory, the confirmation is written there too, before
@@ -255,8 +255,8 @@ func (s *Server) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
-	// Extensions hear the address confirmed (agentry#861): a sign-up's
-	// allowance and promo code wait for it (plan unactivated-accounts.md D9).
+	// Extensions hear the address confirmed: a sign-up's
+	// allowance and promo code wait for it.
 	if verified != uuid.Nil {
 		s.fireEvent(r.Context(), Event{Kind: "user.email_verified", UserID: verified})
 	}
@@ -312,7 +312,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil || row.State != "active" || row.PasswordHash == nil {
 		// The miss pays the same comparison as a wrong password, so the
 		// refusal's timing does not say whether the account exists, is
-		// active, or signs in another way (agentry#413).
+		// active, or signs in another way.
 		auth.SpendPasswordCheck(req.Password)
 		deny(uuid.Nil)
 		return
@@ -325,7 +325,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	// A trusted device skips the second factor; answering the factor earns
 	// one. The two are kept apart here because the difference is the whole
 	// security model: a skip never mints, which is what makes the credential's
-	// lifetime absolute rather than sliding (plan trusted-devices.md D9). The
+	// lifetime absolute rather than sliding. The
 	// password above has already been verified, so the cookie is never itself
 	// an authentication — it only stands in for the code.
 	var totpAnswered, totpSkipped bool
@@ -377,7 +377,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		// Platform staff is recomputed at every sign-in (agentry#556).
+		// Platform staff is recomputed at every sign-in.
 		staffActor := auditEvent(r, audit.ActionUserStaffSync)
 		staffActor.Actor, staffActor.ActorKind = row.ID, audit.ActorUser
 		if err := s.syncStaffIn(ctx, q, row.ID, registry.StaffSyncSignIn, staffActor); err != nil {
@@ -449,7 +449,7 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 		problemForbidden(w, r, "Signing out requires a session, not a token.")
 		return
 	}
-	// SP-initiated SAML Single Logout (§12.4, agentry#62): resolved before
+	// SP-initiated SAML Single Logout: resolved before
 	// the revoke, which is what makes the session unreadable.
 	idpLogout := s.samlLogoutURLForSession(r, p.SessionID)
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {

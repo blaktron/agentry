@@ -27,8 +27,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// orgFeatures answers what the organization's subscription includes (plan
-// organization-subscriptions.md §5.7, D11).
+// orgFeatures answers what the organization's subscription includes.
 //
 // Which way an error falls depends on what the caller is deciding, and the
 // two directions are opposite, so every caller says which it wants rather
@@ -38,7 +37,7 @@ import (
 //     while the answer is unknown, like every other entitlement check;
 //   - the enforced-SSO gate fails *enforcing*, because an unknown answer
 //     must never be the reason a person walks past an organization's own
-//     sign-in policy. Billing state does not loosen identity (DEV-114).
+//     sign-in policy. Billing state does not loosen identity.
 func (s *Server) orgFeatures(ctx context.Context, orgID uuid.UUID) (entitlements.Features, error) {
 	return s.entitlements().Features(ctx, entitlements.ForOrg(orgID))
 }
@@ -88,13 +87,13 @@ func (s *Server) ssoURLs(r *http.Request, handle string) (metadataURL, acsURL, o
 	return prefix + "/saml/metadata", prefix + "/saml/acs", prefix + "/oidc/callback"
 }
 
-// samlSloURL is the SP's Single Logout endpoint for an org (§12.4, agentry#62).
+// samlSloURL is the SP's Single Logout endpoint for an org.
 func (s *Server) samlSloURL(r *http.Request, handle string) string {
 	metadataURL, _, _ := s.ssoURLs(r, handle)
 	return strings.TrimSuffix(metadataURL, "/metadata") + "/slo"
 }
 
-// ---- SSO connection config CRUD (admin only, §12.4) ----
+// ---- SSO connection config CRUD (admin only) ----
 
 // ListSsoConnections implements GET /orgs/{org}/sso/connections.
 func (s *Server) ListSsoConnections(w http.ResponseWriter, r *http.Request, org OrgHandle) {
@@ -133,7 +132,7 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 		return
 	}
 	// The tier decides whether this organization may have SSO at all
-	// (D11). Unknown refuses: an entitlement outage must not be a way to
+	// Unknown refuses: an entitlement outage must not be a way to
 	// add a sign-in door.
 	f, err := s.orgFeatures(r.Context(), orgRow.ID)
 	if err != nil {
@@ -155,8 +154,8 @@ func (s *Server) PutSsoConnection(w http.ResponseWriter, r *http.Request, org Or
 		return
 	}
 	// The stored row, when there is one, so a save that omits the client
-	// secret keeps the sealed one (agentry#272): the upsert replaces the whole
-	// config, and before this an edit to any other field dropped the secret.
+	// secret keeps the sealed one: the upsert replaces the whole
+	// config, so without this an edit to any other field would drop the secret.
 	var prev []byte
 	if row, err := s.q().GetSSOConnection(r.Context(), storegen.GetSSOConnectionParams{OrgID: orgRow.ID, Kind: k}); err == nil {
 		prev = row.Config
@@ -357,12 +356,11 @@ func (s *Server) oidcRPForOrg(ctx context.Context, r *http.Request, orgRow store
 	return rp, conn.ID, err
 }
 
-// establishSSOSession is the shared sign-in step for SAML and OIDC
-// (§12.4). It recognises the member the assertion names — since
-// agentry#361 it creates nobody — opens an SSO-tagged session, and writes
-// the LoginResult.
+// establishSSOSession is the shared sign-in step for SAML and OIDC. It
+// recognises the member the assertion names (it creates nobody), opens an
+// SSO-tagged session, and writes the LoginResult.
 // samlSessionLink is what a SAML-established session remembers for Single
-// Logout (§12.4, agentry#62): the asserted NameID and the IdP's
+// Logout: the asserted NameID and the IdP's
 // SessionIndex, keyed by the connection.
 type samlSessionLink struct {
 	NameID       string
@@ -370,17 +368,17 @@ type samlSessionLink struct {
 }
 
 // establishSSOSession opens the session an organization's IdP just
-// authorized. next non-empty is browser mode (plan
-// organization-subscriptions.md §5.7): the browser is the client, so a
+// authorized. next non-empty is browser mode: the browser is the
+// client, so a
 // JSON body would be the page a person lands on. It answers a 303 to next
 // with the session and CSRF cookies set, exactly as issueSocialSession
 // does, and sends failures back to the login page with the sentence
 // instead of a problem document. next has already been through
 // safeNextPath, so it is a same-origin path and nothing else. API mode —
 // next empty — is unchanged.
-// mfa is whether the validated assertion or ID token named a second factor
-// (agentry#705). It stamps users.idp_mfa_at, the evidence the public-publish
-// gate accepts (agentry#23, DEV-080), only on a deployment that has opted into
+// mfa is whether the validated assertion or ID token named a second factor.
+// It stamps users.idp_mfa_at, the evidence the public-publish
+// gate accepts, only on a deployment that has opted into
 // IdP-asserted evidence with auth.requireIdpMFA: the stamp is account-wide and
 // kept, and an organization's IdP is its admins', not the operator's, so on a
 // registry whose gate asks for native TOTP an organization's claim must not
@@ -466,13 +464,13 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 		}); err != nil {
 			return err
 		}
-		// Tag the session SSO-fresh for this org (§12.4 enforced SSO).
+		// Tag the session SSO-fresh for this org (enforced SSO).
 		if err := q.TagSessionSSO(ctx, storegen.TagSessionSSOParams{
 			ID: sessID, Column2: orgRow.ID.String(), Column3: time.Now().UTC().Format(time.RFC3339),
 		}); err != nil {
 			return err
 		}
-		// Platform staff is recomputed at every sign-in (agentry#556).
+		// Platform staff is recomputed at every sign-in.
 		staffActor := auditEvent(r, audit.ActionUserStaffSync)
 		staffActor.Actor, staffActor.ActorKind = userID, audit.ActorUser
 		if err := s.syncStaffIn(ctx, q, userID, registry.StaffSyncSignIn, staffActor); err != nil {
@@ -501,7 +499,7 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 		// Browser mode has no JSON body to carry the CSRF token, and the
 		// web tier can only echo what it holds, so it goes in the cookie
 		// the web tier's apiSend reads — the same double-submit shape the
-		// native login route produces (agentry#77). httpOnly: page script
+		// native login route produces. httpOnly: page script
 		// never needs it, and a cross-site page can neither read the
 		// cookie nor set the header.
 		http.SetCookie(w, &http.Cookie{
@@ -526,10 +524,10 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 	})
 }
 
-// errExplicitLinkRequired signals the T-12 guard: an existing account holds
+// errExplicitLinkRequired signals the account-takeover guard: an existing account holds
 // the asserted address and the asserting party has not proved it controls
 // that address's domain, so linking it would be taking the account over.
-// Raised by the org-SSO path (agentry#361 keeps T-12's condition for the
+// Raised by the org-SSO path (which keeps the guard's condition for the
 // first link) and by the social sign-in path.
 var errExplicitLinkRequired = errors.New("explicit link confirmation required")
 
@@ -538,10 +536,10 @@ var errExplicitLinkRequired = errors.New("explicit link confirmation required")
 var errNotAMember = errors.New("not an active member of this organization")
 
 // resolveSSOUser answers who the IdP just authenticated, and refuses
-// anyone the organization has not already admitted (agentry#361, D7, D11).
-// It used to be a door: it linked accounts by verified domain and
-// JIT-created an account and a membership for whoever the IdP asserted,
-// which meant the IdP decided who belonged. Now the organization decides —
+// anyone the organization has not already admitted. It links no account
+// by verified domain and creates no account or membership for whoever
+// the IdP asserted, because that would let the IdP decide who belonged.
+// The organization decides —
 // an admin invites, or approves someone the IdP provisioned over SCIM —
 // and this path only recognises them. Nothing is created here: no account,
 // no identity for an unknown person, no membership.
@@ -574,7 +572,7 @@ func (s *Server) resolveSSOUser(ctx context.Context, orgRow storegen.GetOrgByHan
 	//
 	//   - the account is an active member of this organization, and
 	//   - the address is at the domain this organization proved it
-	//     controls (T-12, the DNS-TXT verified domain).
+	//     controls (the DNS-TXT verified domain).
 	//
 	// A member who joined with a personal address is therefore never
 	// linked automatically, which is the case that would hurt. Once an
@@ -624,8 +622,8 @@ var reHandleChars = regexp.MustCompile(`[^a-z0-9-]+`)
 // from handleSeed. When the seed's handle is taken, the first fallback is
 // the same name with a suffix derived from the subject — deterministic, so
 // the same person signing up again lands on the same name, and still
-// recognisably the one they chose — and only after that a random suffix
-// (agentry#517). The derived suffix is keyed, so a public handle cannot be
+// recognisably the one they chose — and only after that a random suffix.
+// The derived suffix is keyed, so a public handle cannot be
 // used to confirm a guess at the subject (for SCIM, the email).
 func (s *Server) allocateHandle(ctx context.Context, username, email, subject string) (string, error) {
 	base := sanitizeHandle(handleSeed(username, email, subject))
@@ -666,7 +664,7 @@ func (s *Server) handleSuffix(subject string) string {
 // like an address (Microsoft's UPN, a SCIM userName that is the email)
 // contributes its local part, as the email would. The username was the
 // person's choice at sign-up; the email's local part was never meant as a
-// name (agentry#517).
+// name.
 func handleSeed(username, email, subject string) string {
 	username = strings.TrimSpace(username)
 	if strings.Contains(username, "@") {
@@ -684,7 +682,7 @@ func handleSeed(username, email, subject string) string {
 // handleRequestedDetail is what an audit event and the user.registered
 // event record when the handle a JIT sign-up got is not the username the
 // IdP asserted (taken, reserved, or outside the grammar), so the difference
-// is on the record rather than silent (agentry#517). Nil when they agree or
+// is on the record rather than silent. Nil when they agree or
 // no username was asserted.
 func handleRequestedDetail(username, handle string) map[string]any {
 	username = strings.TrimSpace(username)
@@ -702,7 +700,7 @@ func sanitizeHandle(s string) string {
 	if len(s) < 1 {
 		return ""
 	}
-	return unreservedHandle(s) // root paths are not handles (DEV-091)
+	return unreservedHandle(s) // root paths are not handles
 }
 
 func truncateHandle(s string, n int) string {

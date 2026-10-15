@@ -1,7 +1,6 @@
 package api
 
-// Organization invitations (plan organization-subscriptions §4 "The doors",
-// §5.2; D7, D12; agentry#361). Nobody joins an organization uninvited: an
+// Organization invitations. Nobody joins an organization uninvited: an
 // admin invites an address, the invitation reserves a seat from the moment
 // it is sent, and the person accepts it from a session whose verified email
 // is that address. The token is a credential — shown once at creation,
@@ -25,7 +24,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// invitationTTL is how long an invitation stands (plan §4: seven days).
+// invitationTTL is how long an invitation stands: seven days.
 const invitationTTL = 7 * 24 * time.Hour
 
 // errInvitationSpent reports that the token was already used, from inside
@@ -110,7 +109,7 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 	}
 
 	// Someone already in this organization is not invited again; someone
-	// active in another organization cannot be (D26).
+	// active in another organization cannot be.
 	if u, err := s.q().GetUserByEmail(r.Context(), email); err == nil {
 		if m, err := s.q().GetMembership(r.Context(), storegen.GetMembershipParams{OrgID: orgRow.ID, UserID: u.ID}); err == nil && m.State == "active" {
 			problemConflict(w, r, "That person is already a member of "+orgRow.Handle+".")
@@ -145,7 +144,7 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 		if err := q.LockOrg(r.Context(), orgRow.ID); err != nil {
 			return err
 		}
-		// The staff organization invites only its own domain (agentry#556);
+		// The staff organization invites only its own domain;
 		// the accept checks the account's verified address again.
 		if err := s.staffOrgAddressIn(r.Context(), q, orgRow.ID, email); err != nil {
 			return err
@@ -199,8 +198,8 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, org Or
 // atOrgDomain reports whether an address belongs to the organization's own
 // verified domain — the one it proved control of with a DNS TXT record
 // (handlers_domains.go). That proof is what lets an invitation to such an
-// address be treated as an address the organization vouches for
-// (operator decision, 2026-09-18): the organization holds the mail domain,
+// address be treated as an address the organization vouches for: the
+// organization holds the mail domain,
 // so it holds the mailbox.
 func atOrgDomain(org storegen.GetOrgByHandleRow, email string) bool {
 	domain := maildomains.Of(email)
@@ -217,13 +216,13 @@ func atOrgDomain(org storegen.GetOrgByHandleRow, email string) bool {
 
 // mailInvitation sends the offer and reports whether it went.
 //
-// The registry mails no address it has not verified (DEV-099), which for
+// The registry mails no address it has not verified, which for
 // an invitation would mean never writing to the very people an
 // organization most needs to invite — colleagues with no account here yet.
-// The organization's own verified domain is the way out (operator
-// decision, 2026-09-18): an address at a domain the organization proved
+// The organization's own verified domain is the way out: an address at a
+// domain the organization proved
 // control of is one it vouches for, so the offer is mailed there whether
-// or not an account holds it. Every other address keeps DEV-099's rule —
+// or not an account holds it. Every other address keeps the verified-address rule —
 // a verified account, and its orgInvites preference — and the response
 // says plainly whether the mail went, because when it did not the admin's
 // copy of the link is the only one.
@@ -330,7 +329,7 @@ func (s *Server) invitationForToken(w http.ResponseWriter, r *http.Request, toke
 // The address must also be one the registry trusts, which is either of two
 // things: the account confirmed it, or the invitation is at a domain the
 // organization proved it controls, in which case the organization's proof
-// stands in for the account's (operator decision, 2026-09-18) and
+// stands in for the account's, and
 // accepting confirms it.
 func (s *Server) invitationAcceptable(r *http.Request, row storegen.GetInvitationByTokenRow) (bool, string) {
 	p := principalFrom(r.Context())
@@ -421,9 +420,9 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 			}
 			spent = true
 			// The organization's own verified domain vouches for the address,
-			// so accepting from it confirms the account's address (operator
-			// decision, 2026-09-18). It is stamped here, inside the
-			// activation, so the staff organization's door (agentry#556)
+			// so accepting from it confirms the account's address. It is
+			// stamped here, inside the
+			// activation, so the staff organization's door
 			// reads the address as verified.
 			if invitationAtOrgDomain(row) {
 				if err := q.MarkEmailVerified(ctx, p.UserID); err != nil {

@@ -47,7 +47,7 @@ func TestDirectoryEmailVerificationGate(t *testing.T) {
 	}
 }
 
-// TestDirectoryAccountGone is D10's question (agentry#861): only an account
+// TestDirectoryAccountGone: only an account
 // the directory no longer holds is gone, and doubt is not gone.
 func TestDirectoryAccountGone(t *testing.T) {
 	a, _ := fakeAuthentik(t)
@@ -99,7 +99,7 @@ func TestUnactivated(t *testing.T) {
 }
 
 // unactivatedOperations are the operations an unactivated account may call
-// with a writing method (plan unactivated-accounts.md D8). Every other
+// with a writing method. Every other
 // writing operation in the spec is refused, so a new one starts refused.
 var unactivatedOperations = map[string]bool{
 	"register": true, "verifyEmail": true, "login": true, "logout": true,
@@ -112,7 +112,7 @@ var unactivatedOperations = map[string]bool{
 }
 
 // TestUnactivatedWritesFollowTheSpec holds the gate's list to the spec, one
-// operation at a time (invariant I3).
+// operation at a time.
 func TestUnactivatedWritesFollowTheSpec(t *testing.T) {
 	raw, err := os.ReadFile("../../schemas/openapi.yaml")
 	if err != nil {

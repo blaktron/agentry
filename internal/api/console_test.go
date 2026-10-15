@@ -1,6 +1,6 @@
 package api_test
 
-// Reviewer-detail and T&S-console API surface (§10.1): the enriched review
+// Reviewer-detail and T&S-console API surface: the enriched review
 // bundle (manifest + capability-diff baseline), archive file browsing with
 // its safety properties, and abuse-report triage.
 
@@ -53,7 +53,7 @@ publish:
 	env.makePlatformStaff(t, staff)
 	staffSess := env.login(staff)
 
-	// The platform queue is a FIFO window (§8.6) capped at 100 rows, and the
+	// The platform queue is a FIFO window capped at 100 rows, and the
 	// shared test database is never truncated. Leftover pending items from
 	// earlier runs push fresh items past that window, so each test rejects
 	// its own items on the way out.

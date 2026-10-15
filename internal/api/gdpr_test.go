@@ -1,6 +1,6 @@
 package api_test
 
-// M8 / §12.7 account-erasure flow: PII is purged, credentials die, published
+// Account-erasure flow: PII is purged, credentials die, published
 // content is yanked rather than deleted (so installed copies keep verifying),
 // and the audit trail keeps an opaque actor id.
 
@@ -38,7 +38,7 @@ func TestAccountErasureFlow(t *testing.T) {
 	}
 	env.waitStatus(user, "doomed", "1.0.0", "published")
 
-	// A knowledge pack (agentry#593) goes with the account.
+	// A knowledge pack goes with the account.
 	uid := env.selfID(sess)
 	kn := seedKnowledge(t, env, knowledge.User(uuid.MustParse(uid)))
 
@@ -99,7 +99,7 @@ func TestAccountErasureFlow(t *testing.T) {
 		t.Fatal("retired handle must be reserved against impersonation")
 	}
 
-	// Published content was YANKED, not deleted (§5.5, §12.7): the row and
+	// Published content was YANKED, not deleted: the row and
 	// its archive digest survive so installed copies still verify.
 	var vStatus, digest string
 	if err := env.st.Pool().QueryRow(ctx,
@@ -123,8 +123,7 @@ func TestAccountErasureFlow(t *testing.T) {
 	if n == 0 {
 		t.Fatal("no user.delete audit event")
 	}
-	// No extension erases anything here, so the detail names none
-	// (agentry#638).
+	// No extension erases anything here, so the detail names none.
 	if err := env.st.Pool().QueryRow(ctx,
 		`SELECT count(*) FROM audit_events WHERE action = 'user.delete' AND target_id = $1 AND detail ? 'extensions'`, uid).Scan(&n); err != nil {
 		t.Fatal(err)

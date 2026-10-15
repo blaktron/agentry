@@ -1,8 +1,8 @@
 package api
 
-// Hot-table audit retention (§4.3: "400 days hot on SaaS, then S3 archive
-// (already streamed there continuously, §12.6); self-host retention
-// configurable").
+// Hot-table audit retention: 400 days hot on SaaS, then an S3 archive the
+// events already stream to continuously; self-host retention is
+// configurable.
 //
 // Pruning DROPS whole monthly partitions rather than deleting rows. Two
 // reasons: the append-only trigger from migration 00002 refuses row deletes
@@ -41,7 +41,7 @@ type auditPruneArgs struct {
 // seeds the recurring job. Called from Server.RegisterQueueHandlers.
 //
 // The job reschedules itself rather than relying on an external scheduler
-// (there is none in v1), and the seed and the reschedule both keep one run
+// (there is none), and the seed and the reschedule both keep one run
 // waiting (keepOneWaiting), so a worker restart cannot stack duplicates.
 func (s *Server) registerAuditRetention(q queue.Client) {
 	if q == nil {
@@ -84,7 +84,7 @@ func (s *Server) runAuditPrune(ctx context.Context, job queue.Job) error {
 		return nil
 	}
 	s.log.InfoContext(ctx, "audit retention: partitions dropped", "count", dropped, "retention_days", days)
-	// The prune is itself an auditable act on the audit log (§12.6).
+	// The prune is itself an auditable act on the audit log.
 	return s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		return s.auditW.Write(ctx, q, audit.Event{
 			Action: audit.ActionAuditPrune, ActorKind: audit.ActorSystem,

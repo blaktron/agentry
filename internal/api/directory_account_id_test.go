@@ -1,6 +1,6 @@
 package api_test
 
-// The directory's own id for the account (agentry#727): the directory's
+// The directory's own id for the account: the directory's
 // agentry scope sends it as agentry_directory_id, and the registry records
 // it on the identity the token signed in, from the directory alone.
 

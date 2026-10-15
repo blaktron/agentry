@@ -1,7 +1,7 @@
 package api
 
-// The §9.2 agent endpoints beyond CRUD: deletion (outright, or as a
-// tombstone), retire and restore (agentry#942), the activity feed, and tag
+// The agent endpoints beyond CRUD: deletion (outright, or as a
+// tombstone), retire and restore, the activity feed, and tag
 // browsing.
 
 import (
@@ -43,7 +43,7 @@ var publicActivityActions = []string{
 
 // ownActivityActions are the actions that target a QuickAgent but describe
 // a person's own choice rather than the QuickAgent's history: an account
-// install and its removal (agentry#448). They stay on the person's own
+// install and its removal. They stay on the person's own
 // activity (GET /user/activity) and off the QuickAgent's feed at every
 // role — a star is public approval, an install a private acceptance.
 var ownActivityActions = map[string]bool{
@@ -57,11 +57,11 @@ var publicTransitionStates = map[string]bool{
 	"published": true, "yanked": true, "quarantined": true, "blocked": true,
 }
 
-// DeleteAgent implements DELETE /agents/{ns}/{name} (§9.2, agentry#942),
+// DeleteAgent implements DELETE /agents/{ns}/{name},
 // for the namespace's administrators (ActAgentManage: a token's
-// agent:manage or org:admin, agentry#993).
+// agent:manage or org:admin).
 //
-// §4.3 forbids deleting agent_version rows outright — yanked hides, blocked
+// The database forbids deleting agent_version rows outright — yanked hides, blocked
 // disables, but the row and its digest survive so installed copies keep
 // verifying. An agent with no version row at all is deleted outright, with
 // its repository. One with version history is deleted as a tombstone
@@ -70,7 +70,7 @@ var publicTransitionStates = map[string]bool{
 // key to the agent, and a version in the pipeline or in review would be
 // decided onto a deleted agent, so both wait for the verdict. Advisories,
 // abuse reports and a quarantine or block are trust & safety records: they
-// outlive the publisher's wish to remove the agent (DEV-021 §1).
+// outlive the publisher's wish to remove the agent.
 func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, params DeleteAgentParams) {
 	if !s.requireDB(w, r) {
 		return
@@ -118,7 +118,7 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	repoID := a.RepoID
 	err = s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		// Audit BEFORE the row disappears: the event references the agent id,
-		// and it must commit with the deletion or not at all (§12.6).
+		// and it must commit with the deletion or not at all.
 		e := auditEvent(r, audit.ActionAgentDelete)
 		if a.NamespaceKind == "org" {
 			e.OrgID = a.NamespaceID
@@ -141,7 +141,7 @@ func (s *Server) DeleteAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 
 	// Repo directory cleanup is best-effort and deliberately outside the
 	// transaction: bytes left on disk are garbage, but a rolled-back deletion
-	// because a directory was busy would be a bug (D-19 paths derive from the
+	// because a directory was busy would be a bug (paths derive from the
 	// repo uuid, so an orphan is inert).
 	s.removeRepoDir(repoID.String())
 	w.WriteHeader(http.StatusNoContent)
@@ -154,7 +154,7 @@ func problemDeleteInFlight(w http.ResponseWriter, r *http.Request) {
 		"A version of this QuickAgent is still being scanned or reviewed. Delete it once that version has its verdict.")
 }
 
-// RetireAgent implements POST /agents/{ns}/{name}/retire (agentry#942).
+// RetireAgent implements POST /agents/{ns}/{name}/retire.
 // The namespace's administrators: it changes who can see the agent.
 func (s *Server) RetireAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName) {
 	if !s.requireDB(w, r) {
@@ -172,7 +172,7 @@ func (s *Server) RetireAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	s.writeAgentAfterChange(w, r, ns, name)
 }
 
-// RestoreAgent implements POST /agents/{ns}/{name}/restore (agentry#942).
+// RestoreAgent implements POST /agents/{ns}/{name}/restore.
 func (s *Server) RestoreAgent(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName) {
 	if !s.requireDB(w, r) {
 		return
@@ -230,7 +230,7 @@ func (s *Server) removeRepoDir(repoID string) {
 	}
 }
 
-// ListAgentActivity implements GET /agents/{ns}/{name}/activity (§9.2).
+// ListAgentActivity implements GET /agents/{ns}/{name}/activity.
 func (s *Server) ListAgentActivity(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, params ListAgentActivityParams) {
 	if !s.requireDB(w, r) {
 		return
@@ -306,7 +306,7 @@ func (s *Server) ListAgentActivity(w http.ResponseWriter, r *http.Request, ns Na
 	writeJSON(w, http.StatusOK, page)
 }
 
-// ListAgentsByTag implements GET /tags/{tag} (§9.2): public agents whose
+// ListAgentsByTag implements GET /tags/{tag}: public agents whose
 // latest published manifest carries the tag.
 func (s *Server) ListAgentsByTag(w http.ResponseWriter, r *http.Request, tag string, params ListAgentsByTagParams) {
 	if !s.authorize(w, r, auth.ActPublicRead, uuid.Nil) {

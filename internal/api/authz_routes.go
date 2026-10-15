@@ -6,9 +6,9 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 )
 
-// RouteDecl declares the authorization contract of one API operation
-// (§12.2 "every route declares (resource, action)"). The declaration table
-// drives the §17.4 authz matrix test; the completeness test fails CI when an
+// RouteDecl declares the authorization contract of one API operation:
+// every route declares (resource, action). The declaration table
+// drives the authz matrix test; the completeness test fails CI when an
 // OpenAPI operation lacks an entry, so a new route cannot ship undeclared.
 type RouteDecl struct {
 	// Action is the chokepoint action the handler enforces via authorize().
@@ -29,7 +29,7 @@ type RouteDecl struct {
 	// HiddenFromOutsiders org-scoped routes answer a signed-in caller who is
 	// not an active member of the organization 404 rather than 403, so they
 	// say nothing of what the organization keeps (an organization's shared
-	// knowledge, agentry#646). The matrix expects that 404 as the denial.
+	// knowledge). The matrix expects that 404 as the denial.
 	HiddenFromOutsiders bool
 	// SelfAuthorized routes perform their own bespoke authorization inside
 	// the handler (platform-staff / org-reviewer / author checks that the
@@ -73,17 +73,16 @@ var routeAuthz = map[string]RouteDecl{
 	// which a publisher may change. The fields that are not are checked in
 	// the handler: visibility against ActAgentManage, allowForcePush and
 	// pipelineSkip against ActAgentAdminister, the way ssoRequired is
-	// inside updateOrg, and builtin against platform staff (agentry#737,
-	// DEV-174). A body that sets visibility alone, sent with a token that
-	// carries agent:manage and not org:admin, is decided as ActAgentManage
-	// (agentry#993).
+	// inside updateOrg, and builtin against platform staff. A body that sets
+	// visibility alone, sent with a token that carries agent:manage and not
+	// org:admin, is decided as ActAgentManage.
 	"updateAgent": {Action: auth.ActAgentMaintain, AgentScoped: true},
-	// The owner actions (agentry#942, agentry#993): the administrators',
+	// The owner actions: the administrators',
 	// and a token's agent:manage or org:admin.
 	"deleteAgent": {Action: auth.ActAgentManage, AgentScoped: true},
 	"retireAgent": {Action: auth.ActAgentManage, AgentScoped: true},
 	// The origin is read by name and the target namespace decided by the
-	// handler, as createAgent's is (agentry#943).
+	// handler, as createAgent's is.
 	"forkAgent":         {Action: auth.ActAgentCreate},
 	"restoreAgent":      {Action: auth.ActAgentManage, AgentScoped: true},
 	"listAgentActivity": {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
@@ -93,7 +92,7 @@ var routeAuthz = map[string]RouteDecl{
 	// anonymous callers in the handler — there is no anonymous star list.
 	"starAgent":   {Action: auth.ActAgentRead, AgentScoped: true},
 	"unstarAgent": {Action: auth.ActAgentRead, AgentScoped: true},
-	// Account installs (agentry#448) are the CALLER's own record, so they
+	// Account installs are the CALLER's own record, so they
 	// carry the self actions — a PAT needs user:profile, as it does for
 	// the notification settings — and the handler resolves the QuickAgent
 	// for read first, so a non-reader gets the missing name's 404 and a
@@ -103,7 +102,7 @@ var routeAuthz = map[string]RouteDecl{
 	"deleteAccountInstall": {Action: auth.ActUserSelfUpdate},
 	// The grants are administrative: handing someone access to an
 	// organization's private agent is a disclosure, so it belongs with the
-	// admins rather than with everyone who may publish (agentry#362).
+	// admins rather than with everyone who may publish.
 	"listAgentGrants":       {Action: auth.ActAgentAdminister, AgentScoped: true},
 	"setAgentUserGrant":     {Action: auth.ActAgentAdminister, AgentScoped: true},
 	"removeAgentUserGrant":  {Action: auth.ActAgentAdminister, AgentScoped: true},
@@ -130,7 +129,7 @@ var routeAuthz = map[string]RouteDecl{
 	"getPlatformPolicy":     {Action: auth.ActPublicRead, Anonymous: true},
 	"getOrgPolicy":          {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"setOrgPolicy":          {Action: auth.ActOrgSettingsManage, OrgScoped: true},
-	// The logo (agentry#367): readable by anyone who may see the
+	// The logo: readable by anyone who may see the
 	// organization, set and removed by its admins behind Features.Branding.
 	"getOrgLogo":          {Action: auth.ActPublicRead, Anonymous: true},
 	"putOrgLogo":          {Action: auth.ActOrgBrandingManage, OrgScoped: true},
@@ -147,7 +146,7 @@ var routeAuthz = map[string]RouteDecl{
 	"listPlatformAudit":    {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listRedTeamReports":   {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Social login establishes a credential (like login/register), so it sits
-	// outside the chokepoint and is rate-limited instead (§12.1).
+	// outside the chokepoint and is rate-limited instead.
 	"socialOidcStart":      {NoAuthz: true, Anonymous: true},
 	"socialOidcCallback":   {NoAuthz: true, Anonymous: true},
 	"totpChallenge":        {NoAuthz: true, Anonymous: true},
@@ -157,10 +156,10 @@ var routeAuthz = map[string]RouteDecl{
 	"reportAbuse":          {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listAbuseReports":     {Action: auth.ActPublicRead, SelfAuthorized: true},
 	// Staff see an account's knowledge packs by name and size, nothing of
-	// their content (agentry#593): requireStaff, and knowledge:read on a
+	// their content: requireStaff, and knowledge:read on a
 	// token, inside the handler.
 	"listKnowledgePackSizes": {Action: auth.ActPublicRead, SelfAuthorized: true},
-	// The model-input routes (agentry#608) spend the deployment's own judge
+	// The model-input routes spend the deployment's own judge
 	// and search keys: platform staff by session, or a hosted job's
 	// credential that an extension admits, decided in the handler. A token
 	// is refused whatever its scopes, and an ordinary account never reaches
@@ -169,7 +168,7 @@ var routeAuthz = map[string]RouteDecl{
 	"checkDraft":        {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"searchModelInput":  {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"triageAbuseReport": {Action: auth.ActPublicRead, SelfAuthorized: true},
-	// Enterprise (M6/WG-J). SSO/SCIM config = admin (ActOrgSettingsManage,
+	// Enterprise: SSO/SCIM config = admin (ActOrgSettingsManage,
 	// session-only for PATs); webhooks/domains = admin+ (ActOrgUpdate);
 	// audit export = admin+ (ActOrgAuditRead). The SSO login-flow endpoints
 	// establish credentials (like login/register) so they are NoAuthz. The
@@ -201,7 +200,7 @@ var routeAuthz = map[string]RouteDecl{
 	"createAuditExport":     {Action: auth.ActOrgAuditRead, OrgScoped: true},
 	"getAuditExport":        {Action: auth.ActOrgAuditRead, OrgScoped: true},
 	"createOrg":             {Action: auth.ActOrgCreate},
-	// The lifecycle (agentry#363). Decommissioning is the admins' and a
+	// The lifecycle. Decommissioning is the admins' and a
 	// session's; suspending and reinstating are platform staff's, which
 	// the chokepoint cannot express (requireStaff does).
 	"decommissionOrg":    {Action: auth.ActOrgDecommission, OrgScoped: true, SessionOnly: true},
@@ -212,7 +211,7 @@ var routeAuthz = map[string]RouteDecl{
 	"createDesktopGrant": {Action: auth.ActUserTokensManage, SessionOnly: true},
 	"deleteTeam":         {Action: auth.ActOrgTeamsManage, OrgScoped: true},
 	"getCurrentUser":     {Action: auth.ActUserSelfRead},
-	// Knowledge packs (agentry#593) are the CALLER's own: self-scoped, each
+	// Knowledge packs are the CALLER's own: self-scoped, each
 	// looked up by its owner, so another account's pack is a 404.
 	"listKnowledgePacks":    {Action: auth.ActKnowledgeRead},
 	"createKnowledgePack":   {Action: auth.ActKnowledgeWrite},
@@ -224,14 +223,14 @@ var routeAuthz = map[string]RouteDecl{
 	"wrapKnowledgeKey":      {Action: auth.ActKnowledgeWrite},
 	"unwrapKnowledgeKey":    {Action: auth.ActKnowledgeRead},
 	"getKnowledgeUsage":     {Action: auth.ActKnowledgeRead},
-	// The Writing Voice (agentry#809) is the CALLER's own: self-scoped.
+	// The Writing Voice is the CALLER's own: self-scoped.
 	"getVoice":            {Action: auth.ActVoiceRead},
 	"putVoice":            {Action: auth.ActVoiceWrite},
 	"deleteVoice":         {Action: auth.ActVoiceWrite},
 	"discardVoicePending": {Action: auth.ActVoiceWrite},
 	"restoreVoice":        {Action: auth.ActVoiceWrite},
 	"updateVoiceSettings": {Action: auth.ActVoiceWrite},
-	// An organization's shared knowledge (agentry#646): members read and
+	// An organization's shared knowledge: members read and
 	// unwrap, admins write; outsiders are 404. The export is a read that a
 	// member makes only of a pack marked exportable, which the handler
 	// decides with the pack in hand (org_knowledge_test.go).
@@ -269,18 +268,18 @@ var routeAuthz = map[string]RouteDecl{
 	"listUserActivity":               {Action: auth.ActUserSelfRead},
 	"getUserNotificationSettings":    {Action: auth.ActUserSelfRead},
 	"updateUserNotificationSettings": {Action: auth.ActUserSelfUpdate},
-	// The report theme (agentry#989), a profile setting like the above:
+	// The report theme, a profile setting like the above:
 	// user:profile, which the sign-in grant carries, so the CLI and the
 	// desktop read it for a local run.
 	"getUserReportSettings":    {Action: auth.ActUserSelfRead},
 	"updateUserReportSettings": {Action: auth.ActUserSelfUpdate},
-	// Its logo (agentry#1025), the same setting's image.
+	// Its logo, the same setting's image.
 	"putUserReportLogo":         {Action: auth.ActUserSelfUpdate},
 	"deleteUserReportLogo":      {Action: auth.ActUserSelfUpdate},
 	"deleteUserDirectoryDevice": {Action: auth.ActUserSelfUpdate},
 	"revokeUserSession":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"revokeOtherUserSessions":   {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	// Remembered browsers (agentry#672), on the sessions' rule: a token
+	// Remembered browsers, on the sessions' rule: a token
 	// reads a count of 0 and cannot clear them.
 	"countTrustedDevices": {Action: auth.ActUserSelfRead},
 	"clearTrustedDevices": {Action: auth.ActUserSecurityManage, SessionOnly: true},
@@ -310,7 +309,7 @@ var routeAuthz = map[string]RouteDecl{
 	"totpSetup":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"totpVerify":        {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"updateCurrentUser": {Action: auth.ActUserSelfUpdate},
-	// A new activation link (agentry#861): the site's Dashboard asks for it
+	// A new activation link: the site's Dashboard asks for it
 	// with the session; one of the writes an unactivated account may make.
 	"sendEmailVerification": {Action: auth.ActUserSelfUpdate, SessionOnly: true},
 	"updateOrg":             {Action: auth.ActOrgUpdate, OrgScoped: true},
@@ -319,8 +318,8 @@ var routeAuthz = map[string]RouteDecl{
 
 // MountGate is what stands between a caller and a root mount. A route on the
 // generated surface states its gate through RouteDecl's action and flags; a
-// root mount has no operationId to key a RouteDecl on, so it states it here
-// (§12.2, agentry#415).
+// root mount has no operationId to key a RouteDecl on, so it states it
+// here.
 type MountGate string
 
 const (
@@ -340,12 +339,12 @@ const (
 	// surface is.
 	GatePrincipal MountGate = "principal"
 	// GateDirectoryToken is gated by auth.idpTrustCheckToken, the secret the
-	// directory's sign-in flow presents (agentry#670). The route is absent
+	// directory's sign-in flow presents. The route is absent
 	// (404) while that is unset.
 	GateDirectoryToken MountGate = "directory-token"
 )
 
-// RateNone says a mount draws from no §19 bucket. It is a claim rather than
+// RateNone says a mount draws from no rate-limit bucket. It is a claim rather than
 // an omission: Why has to say what stands in for one, and the completeness
 // gate fails without it.
 const RateNone = "none"
@@ -357,13 +356,13 @@ const RateNone = "none"
 // routes the middleware classifies one by one.
 const RatePerPrincipal = "per-principal"
 
-// MountDecl declares one root mount: what gates it, and which §19 rate class
+// MountDecl declares one root mount: what gates it, and which rate class
 // it draws from. Why is required when the gate is public or the class is one
 // of the two sentinels — the declaration is where a reviewer looks for the
 // reason, and both are choices that go stale silently.
 type MountDecl struct {
 	Gate MountGate
-	// Class is the §19 bucket the mount's own code applies, or one of the
+	// Class is the rate-limit bucket the mount's own code applies, or one of the
 	// two sentinels. The gate checks the name against the catalogued set, so
 	// a typo fails; it cannot check the wiring. That the handler really
 	// draws from the bucket named here is the handler's own tests' job, and
@@ -375,7 +374,7 @@ type MountDecl struct {
 // extensionMountPrefix is the one prefix whose mounts are declared at run
 // time instead of in the table below: an extension's routes are registered
 // under it behind the principal middleware, and the extension's own matrix
-// test declares each of them (DEV-091). The completeness gate treats a
+// test declares each of them. The completeness gate treats a
 // recorded pattern under this prefix as declared, and asserts the gate.
 const extensionMountPrefix = "/api/v1/x/"
 
@@ -389,7 +388,7 @@ func MountAuthzDecl(pattern string) (MountDecl, bool) {
 		return MountDecl{
 			Gate:  GatePrincipal,
 			Class: RatePerPrincipal,
-			Why:   "the principal middleware picks the bucket per request, and an extension's route opts out of the anonymous one exactly by method and path (DEV-091)",
+			Why:   "the principal middleware picks the bucket per request, and an extension's route opts out of the anonymous one exactly by method and path",
 		}, true
 	}
 	return MountDecl{}, false
@@ -405,8 +404,8 @@ func AllMountAuthzDecls() map[string]MountDecl {
 }
 
 // scimDataPlane is what every SCIM route declares: the SCIM bearer token,
-// and the `scim` bucket scimAuth spends per organization (limits.scimPerMin;
-// agentry#453, DEV-140). Its burst is sized for a directory's initial sync,
+// and the `scim` bucket scimAuth spends per organization (limits.scimPerMin).
+// Its burst is sized for a directory's initial sync,
 // which is legitimate traffic; past it an IdP is refused with Retry-After.
 var scimDataPlane = MountDecl{Gate: GateSCIMToken, Class: "scim"}
 
@@ -419,18 +418,18 @@ var mountAuthz = map[string]MountDecl{
 	// git's: a PAT over Basic auth, then the effective agent role. Pushes
 	// draw from the `push` bucket inside admitPush, which is the code that
 	// says so. The read side draws from `git-concurrent`, acquireGit's
-	// budget of concurrent operations per trusted client address (§19's 20,
-	// agentry#454), beside its caps of 4 per repository and 32
+	// budget of concurrent operations per trusted client address (20),
+	// beside its caps of 4 per repository and 32
 	// instance-wide. A push draws from it too, before `push` — one class
 	// per declaration, so the push route names the bucket that is its own.
 	"GET /{ns}/{repo}/info/refs":         {Gate: GateGit, Class: "git-concurrent"},
 	"POST /{ns}/{repo}/git-upload-pack":  {Gate: GateGit, Class: "git-concurrent"},
 	"POST /{ns}/{repo}/git-receive-pack": {Gate: GateGit, Class: "push"},
 
-	// The image proxy: the signature is the route's only gate (agentry#64).
+	// The image proxy: the signature is the route's only gate.
 	"GET /api/v1/img/{sig}/{ref}": {
 		Gate: GateSignature, Class: RateNone,
-		Why: "the HMAC bounds what can be asked for; its key is never a public constant and the fetch is https only (agentry#403)",
+		Why: "the HMAC bounds what can be asked for; its key is never a public constant and the fetch is https only",
 	},
 
 	// The probes: infrastructure, not a principal. The access log skips
@@ -438,17 +437,17 @@ var mountAuthz = map[string]MountDecl{
 	"GET /healthz": {Gate: GatePublic, Class: RateNone, Why: "a liveness probe answers whoever asks, by design"},
 	"GET /readyz":  {Gate: GatePublic, Class: RateNone, Why: "a readiness probe answers whoever asks, by design"},
 
-	// Prometheus exposition (D-25). server.go carries the reasoning; the
-	// compose edge answers /metrics with 404 (agentry#408), so there only a
+	// Prometheus exposition. server.go carries the reasoning; the
+	// compose edge answers /metrics with 404, so there only a
 	// scraper on the private network reaches it. The Helm chart's ingress
 	// routes the whole host to the api and does not exclude it. This is the
 	// declaration's own claim.
 	"GET /metrics": {
 		Gate: GatePublic, Class: RateNone,
-		Why: "a scraper is infrastructure, not a principal; the compose edge 404s it (agentry#408); a Helm ingress must exclude it",
+		Why: "a scraper is infrastructure, not a principal; the compose edge 404s it; a Helm ingress must exclude it",
 	},
 
-	// The directory's trust check (agentry#670, DEV-163): the directory's
+	// The directory's trust check: the directory's
 	// MFA-stage policy asks whether a browser is remembered before asking
 	// for the code. It is outside /api/ on purpose: the site's edge and the
 	// production chart route only /api/, /ui/, /scim/ and /.well-known/ to
@@ -460,7 +459,7 @@ var mountAuthz = map[string]MountDecl{
 	},
 	"POST /internal/directory/email-verification": {
 		Gate: GateDirectoryToken, Class: RateNone,
-		Why: "the directory reads confirmation for its subject and address over the private network with the same secret as the remembered-browser check; edges exclude /internal/ and proxy headers are refused (agentry#869)",
+		Why: "the directory reads confirmation for its subject and address over the private network with the same secret as the remembered-browser check; edges exclude /internal/ and proxy headers are refused",
 	},
 
 	// The discovery documents are what a client reads before it holds
@@ -469,7 +468,7 @@ var mountAuthz = map[string]MountDecl{
 	"GET /.well-known/agentry/registry.json":     {Gate: GatePublic, Class: RateNone, Why: "discovery: read before a caller holds a credential"},
 	"GET /.well-known/agentry/signing-keys.json": {Gate: GatePublic, Class: RateNone, Why: "the keys are public by construction; a verifier needs them"},
 
-	// SCIM 2.0's data plane (§12.5): its own base path, media type and
+	// SCIM 2.0's data plane: its own base path, media type and
 	// credential, so it is deliberately not part of the OpenAPI surface.
 	"POST /scim/v2/Users":         scimDataPlane,
 	"GET /scim/v2/Users":          scimDataPlane,
@@ -483,7 +482,7 @@ var mountAuthz = map[string]MountDecl{
 	"PATCH /scim/v2/Groups/{id}":  scimDataPlane,
 	"DELETE /scim/v2/Groups/{id}": scimDataPlane,
 
-	// The org SSO landing (§12.4) is a browser destination, reachable by
+	// The org SSO landing is a browser destination, reachable by
 	// definition without a session: it is the door to making one. It draws
 	// from the `login` bucket, which the handler applies.
 	"GET /sso/{org}": {

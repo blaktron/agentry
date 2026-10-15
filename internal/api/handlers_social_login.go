@@ -1,10 +1,10 @@
 package api
 
-// Social login for individual accounts (§12.1, §9.2
-// GET /auth/oidc/{provider}/{start,callback}).
+// Social login for individual accounts
+// (GET /auth/oidc/{provider}/{start,callback}).
 //
-// The identity rules are the T-12 account-takeover guard, restated for a
-// server-wide provider rather than a per-org one (§12.4's JIT paragraph):
+// The identity rules are the account-takeover guard, restated for a
+// server-wide provider rather than a per-org one:
 //
 //  1. An identities row for this provider+subject wins outright — the link
 //     was made deliberately once and is not re-litigated.
@@ -84,7 +84,7 @@ type socialState struct {
 }
 
 // safeNextPath admits only a path-absolute reference on this origin — the
-// same rule as the site's safeNext (agentry-web, lib/urls.ts), mirrored here because the callback
+// same rule as the site's safeNext, mirrored here because the callback
 // is the one that redirects. "//host" (scheme-relative), "/\host" (browsers
 // normalize the backslash) and control characters are the open-redirect
 // shapes a naive HasPrefix("/") lets through.
@@ -99,7 +99,7 @@ func safeNextPath(v string) string {
 	// org OIDC flow seals it into a state cookie, and a long enough path
 	// pushes that cookie past what a browser will store, so it is dropped
 	// and the callback fails on a missing state. A link alone would then
-	// deny someone their organization's sign-in (agentry#365). No real
+	// deny someone their organization's sign-in. No real
 	// return path is anywhere near this long.
 	if len(v) > maxNextPathBytes {
 		return ""
@@ -121,7 +121,7 @@ const maxNextPathBytes = 512
 // names the user and expires; possessing it is not authentication, which is
 // why the code is still required. ID is random and is recorded in the
 // database when the challenge completes, which is what makes it single use
-// at every replica (agentry#457).
+// at every replica.
 type totpChallengeBlob struct {
 	ID        string    `json:"i"`
 	UserID    uuid.UUID `json:"u"`
@@ -138,7 +138,7 @@ var socialProviderIDs = []string{
 
 // configuredSocialProviders lists the providers socialProviderConfig accepts,
 // which are the ones SocialOidcStart can redirect for. /meta reports it so a
-// front end never has to start a flow to learn what is offered (agentry#694).
+// front end never has to start a flow to learn what is offered.
 func (s *Server) configuredSocialProviders() []string {
 	out := []string{}
 	for _, id := range socialProviderIDs {
@@ -212,7 +212,7 @@ func (s *Server) SocialOidcStart(w http.ResponseWriter, r *http.Request, provide
 	if err != nil {
 		// A provider that is not configured, or not completely, is absent
 		// from this deployment: 404, never 422, so its settings are not
-		// probed. /meta lists the configured ones (agentry#694), so a
+		// probed. /meta lists the configured ones, so a
 		// listed provider answering 404 here says only that its issuer
 		// could not be reached just now.
 		problemNotFound(w, r)
@@ -312,7 +312,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		problemNotFound(w, r)
 		return
 	}
-	// Browser mode (DEV-061): a front end (the site, or /ui/login) started this login with a return
+	// Browser mode: a front end (the site, or /ui/login) started this login with a return
 	// path, so the browser is the client and a JSON body would be the page
 	// it lands on. Failures go back to /login with the message; success is
 	// a 303 to `next` once the session cookie is set. API mode is unchanged.
@@ -346,14 +346,14 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		problemInternal(w, r)
 		return
 	}
-	// Evidence for the public-publish gate (agentry#23): the ID token's
+	// Evidence for the public-publish gate: the ID token's
 	// `amr` named a second factor, so record it on the account.
 	if id.MFAAsserted() {
 		if err := s.q().SetUserIdPMFA(r.Context(), userID); err != nil {
 			s.log.WarnContext(r.Context(), "social login: record idp mfa", "err", err)
 		}
 	}
-	// The directory's own id for the account (agentry#727): every later
+	// The directory's own id for the account: every later
 	// directory lookup reads the account by it. Only the directory's token
 	// is believed, and it is recorded on the identity this token signed in,
 	// so it is a directory fact and never one a person sets.
@@ -365,10 +365,9 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			s.log.WarnContext(r.Context(), "social login: record the directory account id", "err", err)
 		}
 	}
-	// Platform staff is membership of the staff organization
-	// (agentry#556): recomputed at every sign-in, from facts nobody sets
-	// about themselves. The directory group and the domain-alone rule are
-	// retired.
+	// Platform staff is membership of the staff organization,
+	// recomputed at every sign-in, from facts nobody sets
+	// about themselves.
 	if s.reg != nil {
 		actor := auditEvent(r, audit.ActionUserStaffSync)
 		actor.Actor, actor.ActorKind = userID, audit.ActorUser
@@ -376,7 +375,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			s.log.ErrorContext(r.Context(), "social login: platform staff sync", "err", err, "user", userID)
 		}
 	}
-	// The fold-in (agentry#364): an account at an organization's domain
+	// The fold-in: an account at an organization's domain
 	// becomes a pending member of it, once, keyed on this token's email
 	// and its verified assertion.
 	s.foldInAtSignIn(r, userID, id)
@@ -395,7 +394,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 
-	// 2FA still applies (§12.1): social login is an authentication method,
+	// 2FA still applies: social login is an authentication method,
 	// not an exemption. A redirect callback has nowhere to carry a code, so
 	// the session is withheld behind a sealed challenge the client completes
 	// at POST /auth/2fa/totp/challenge.
@@ -439,7 +438,7 @@ func (s *Server) peekSocialState(w http.ResponseWriter, r *http.Request, provide
 	return st, "", false
 }
 
-// resolveSocialUser applies the §12.1/T-12 linking rules and returns the user.
+// resolveSocialUser applies the linking rules and returns the user.
 func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.UUID, error) {
 	ctx := r.Context()
 	q := s.q()
@@ -456,10 +455,10 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 		u, err := q.GetUserByEmail(ctx, id.Email)
 		switch {
 		case err == nil && id.EmailVerified && u.EmailVerifiedAt == nil && s.unactivatedSuperseded(ctx, u.ID, u.Email):
-			// D10 (agentry#861): the address is held by an account that
+			// The address is held by an account that
 			// never confirmed it, and the directory account it signed in
 			// with is gone, removed by the directory when a trusted
-			// provider proved the address (D3). It was read-only and is
+			// provider proved the address. It was read-only and is
 			// no organization's last admin (unactivatedSuperseded), so it
 			// is erased and the address starts clean.
 			if err := s.eraseSuperseded(r, u.ID, u.Email, id.Provider); err != nil {
@@ -522,7 +521,7 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 			}
 		} else if id.Email != "" {
 			// An address the provider did not vouch for (a self-enrolled
-			// directory account, agentry#861): the account starts
+			// directory account): the account starts
 			// unactivated, and its first activation link is made here so
 			// the five-minute limit counts it.
 			var err error
@@ -553,8 +552,8 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	}
 	// The same event the native register handler fires: an extension that
 	// provisions something per account (a subscription tier's allowance)
-	// hears every new account, whichever door created it (plan
-	// subscription-tiers §5.2; under externalOnly this is the door). The
+	// hears every new account, whichever door created it (under
+	// externalOnly this is the door). The
 	// email is the IdP's assertion and emailVerified says whether it was
 	// asserted verified — a hook must not mail an unverified one.
 	payload := map[string]any{
@@ -564,7 +563,7 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	for k, v := range handleRequestedDetail(id.Username, handle) {
 		payload[k] = v
 	}
-	// The promo code typed at sign-up (agentry#759): the core names it and
+	// The promo code typed at sign-up: the core names it and
 	// the billing extension decides what it is worth. Only here, on the
 	// sign-in that makes the account: the claim rides every later token of
 	// the account too, and a linked account or a returning one is not new.
@@ -580,7 +579,7 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 
 // signupPromoCode is the promo code a new account's first token carries,
 // believed from the directory alone: another provider asserting the claim
-// is a claim about nothing it holds (agentry#759).
+// is a claim about nothing it holds.
 func signupPromoCode(id *social.Identity) string {
 	if id.Provider != social.ProviderAuthentik {
 		return ""
@@ -635,8 +634,8 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	var blob totpChallengeBlob
 	if err := json.Unmarshal(raw, &blob); err != nil || blob.ID == "" || len(blob.ID) > maxTOTPChallengeID {
-		// A challenge sealed before agentry#457 carries no id, so it cannot
-		// be held to single use: it is refused, and the sign-in starts again.
+		// A challenge that carries no id cannot be held to single use: it is
+		// refused, and the sign-in starts again.
 		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
 		return
 	}
@@ -644,7 +643,7 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 	user, err := s.q().GetUserByID(r.Context(), blob.UserID)
 	if err != nil || user.State != "active" || !user.TotpEnabled {
 		if expired {
-			// The expiry is answered as it always was; only an account that
+			// The expiry is answered the same either way; only an account that
 			// still signs in has the refusal written to its audit trail.
 			writeProblem(w, r, http.StatusUnauthorized, "totp-challenge-expired", "Two-factor challenge expired",
 				"The two-factor challenge expired. Start the sign-in again.")
@@ -672,8 +671,7 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	// The challenge is consumed only once its code is right, so a mistyped
 	// code can be tried again; a second completion is refused. A store that
-	// cannot record it refuses the challenge, as the SAML consumed set does
-	// (DEV-119).
+	// cannot record it refuses the challenge, as the SAML consumed set does.
 	consumed, err := s.consumeTOTPChallenge(r.Context(), blob)
 	if err != nil {
 		// A request that had already ended is a refusal, not an outage: a
@@ -732,7 +730,7 @@ func (s *Server) auditTOTPChallengeFailure(r *http.Request, userID uuid.UUID, pr
 // a 303 to next in browser mode (next non-empty, already validated by
 // safeNextPath), else the LoginResult-shaped body both social endpoints
 // return. remember mints a remembered browser in the same transaction
-// (directoryRemembers decided it; agentry#670).
+// (directoryRemembers decided it).
 func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string, remember bool) {
 	ctx := r.Context()
 	var cookieDomain string
@@ -775,7 +773,7 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		e.Actor, e.ActorKind = user.ID, audit.ActorUser
 		e.TargetKind, e.TargetID = "user", user.ID
 		e.Detail = map[string]any{"method": "social", "provider": provider}
-		// What the directory said about the sign-in's factors (agentry#23):
+		// What the directory said about the sign-in's factors:
 		// the operator reads this row before turning on
 		// auth.requireIdpMFA, and an empty value is itself the finding.
 		if amr != nil {
@@ -817,7 +815,7 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		// login route produces). httpOnly: page script never needs it, and
 		// a cross-site page can neither read the cookie nor set the header.
 		// Without this every cookie-authenticated mutation from a
-		// directory-signed-in browser 403'd (agentry#77).
+		// directory-signed-in browser would 403.
 		http.SetCookie(w, &http.Cookie{
 			Name: csrfCookieName, Value: csrfToken, Path: "/", HttpOnly: true,
 			Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode,

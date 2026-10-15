@@ -11,8 +11,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Version progress as server-sent events (§11 "streams pipeline progress
-// (SSE/poll)"; agentry#65). The pipeline persists per stage (DEV-026), so
+// Version progress as server-sent events. The pipeline persists per stage, so
 // progress is a read of what is already durable: no new state, no
 // coupling to the worker — the stream is a poll the server does on the
 // client's behalf, which also means a disconnected client loses nothing.

@@ -9,8 +9,8 @@ import (
 )
 
 // The directory's enrolment prompt refuses a username the registry would
-// not take as a handle (agentry#590, agentry-web#417): the username seeds
-// the handle at the first sign-in (DEV-142). Its policy carries a copy of
+// not take as a handle: the username seeds
+// the handle at the first sign-in. Its policy carries a copy of
 // the handle grammar and of the names no sign-up may take, because authentik
 // cannot ask the registry. This holds the copy to the code, so a handle rule
 // that changes here without the blueprint fails CI instead of letting the

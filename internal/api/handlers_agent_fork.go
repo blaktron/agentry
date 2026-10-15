@@ -14,7 +14,7 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 )
 
-// ForkAgent implements POST /agents/{ns}/{name}/fork (agentry#943): a
+// ForkAgent implements POST /agents/{ns}/{name}/fork: a
 // private copy of a public agent in a namespace the caller may create in.
 // The handler records it; a worker copies the repository and submits the
 // first version (registry.Fork, registry.CopyFork).
@@ -95,7 +95,7 @@ func (s *Server) agentByNameForRead(w http.ResponseWriter, r *http.Request, p *a
 	return registry.Agent{}, err
 }
 
-// addLineage fills what an agent's read says of forks (agentry#943): on a
+// addLineage fills what an agent's read says of forks: on a
 // fork, its origin and its copy's state; on a public agent, how many forks
 // it has, a count only (no read names a fork to the origin's publisher).
 // A lineage read that fails leaves the fields out rather than failing the

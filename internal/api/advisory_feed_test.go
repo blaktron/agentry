@@ -1,6 +1,6 @@
 package api_test
 
-// The global advisory feed and permalinks (agentry#24, DEV-038): newest
+// The global advisory feed and permalinks: newest
 // first, public agents only, keyset-paged with a Link header; the per-agent
 // mode is unchanged.
 
@@ -75,7 +75,7 @@ func TestAdvisoryFeedAndPermalink(t *testing.T) {
 	// Page 2 is compared with what page 1 actually returned, not with the
 	// feed snapshot above: the feed is global and the package's tests run
 	// in parallel, so another test can publish an advisory between the
-	// two requests and move the head (agentry#226).
+	// two requests and move the head.
 	res := env.do(anonymous, http.MethodGet, "/api/v1/advisories?limit=1", nil)
 	var page1 []adv
 	if err := json.NewDecoder(res.Body).Decode(&page1); err != nil {

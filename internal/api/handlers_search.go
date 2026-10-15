@@ -17,8 +17,8 @@ const (
 	searchMaxLimit     = 100
 )
 
-// SearchAgents implements GET /search (§10.4, D-20): Postgres FTS over public
-// agents with the §9.2 facets — kind, capability, license, verified — and a
+// SearchAgents implements GET /search: Postgres FTS over public
+// agents with the facets — kind, capability, license, verified — and a
 // sort selector. capability/license read the LATEST PUBLISHED version, so a
 // filter always describes what someone would install today. Blocked agents
 // never appear.
@@ -33,8 +33,8 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	if params.Q != nil {
 		query = strings.TrimSpace(*params.Q)
 	}
-	// §9.1: out-of-range paging parameters are clamped, not rejected. A
-	// negative limit used to reach LIMIT/OFFSET verbatim and 500.
+	// Out-of-range paging parameters are clamped, not rejected. A
+	// negative limit must not reach LIMIT/OFFSET verbatim (a 500).
 	limit := clampLimit(params.Limit, searchDefaultLimit, searchMaxLimit)
 	offset := clampOffset(params.Offset)
 
@@ -68,8 +68,8 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 		problemInternal(w, r)
 		return
 	}
-	// total is the hit count for the same predicate before paging
-	// (agentry#290): without it every client that printed the count said
+	// total is the hit count for the same predicate before paging:
+	// without it every client that printed the count said
 	// "0 results" above a full list.
 	n, err := s.q().CountSearchAgents(r.Context(), storegen.CountSearchAgentsParams{
 		Query: qp.Query, Mode: qp.Mode, Capability: qp.Capability, License: qp.License, VerifiedOnly: qp.VerifiedOnly,
@@ -98,7 +98,7 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	// can show "12 MIT, 3 Apache-2.0" alongside an active license filter
 	// rather than only the count of what is already selected.
 	facets := map[string]map[string]int{}
-	// The run-mode facet (DEV-088) replaced the kind facet in 0.3.0.
+	// The run-mode facet.
 	if mrows, err := s.q().SearchFacetModes(r.Context(), query); err == nil && len(mrows) > 0 {
 		modes := map[string]int{}
 		for _, f := range mrows {
@@ -117,9 +117,9 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	writeJSON(w, http.StatusOK, SearchResults{Results: hits, Facets: &facets, Total: &total})
 }
 
-// GetAgentReadme implements GET /agents/{ns}/{name}/readme (§10.3): the
+// GetAgentReadme implements GET /agents/{ns}/{name}/readme: the
 // README of a published version, rendered server-side through the strict
-// sanitizer. The web app never parses user markdown client-side (D-11).
+// sanitizer. The web app never parses user markdown client-side.
 func (s *Server) GetAgentReadme(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, params GetAgentReadmeParams) {
 	if !s.requireDB(w, r) {
 		return
@@ -187,8 +187,8 @@ const inertDocumentCSP = "default-src 'none'; sandbox"
 // writeHTMLFragment serves rendered markdown for a page to embed. It is
 // text/html on the API origin, where the session cookie lives, so it
 // carries inertDocumentCSP: a browser that renders it directly gets a
-// document that can do nothing, whatever the sanitiser let through
-// (agentry#413). The site embeds the body server-side and never sees the
+// document that can do nothing, whatever the sanitiser let through.
+// The site embeds the body server-side and never sees the
 // header.
 func writeHTMLFragment(w http.ResponseWriter, html string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

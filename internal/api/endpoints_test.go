@@ -1,9 +1,9 @@
 package api_test
 
-// The §9.2 endpoints the audit found missing — stars and stats, agent
-// deletion, the activity feed, tag browsing, webhook ping and the §19 cap,
-// ruleset releases, and the platform audit view — plus the §9.1 conventions
-// they all inherit.
+// Endpoints covered here: stars and stats, agent
+// deletion, the activity feed, tag browsing, webhook ping and the per-org
+// endpoint cap, ruleset releases, and the platform audit view, plus the
+// list conventions they all inherit.
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-// ---- M-09: stars + stats ----
+// ---- stars + stats ----
 
 func TestStarsAndStats(t *testing.T) {
 	env := newTestEnv(t)
@@ -43,7 +43,7 @@ func TestStarsAndStats(t *testing.T) {
 		t.Fatal("anonymous callers have no star of their own to report")
 	}
 
-	// Starring is idempotent in both directions (§9.2): a retried PUT or
+	// Starring is idempotent in both directions: a retried PUT or
 	// DELETE must not be an error.
 	env.doJSON(sess, http.MethodPut, starPath, nil, nil, http.StatusNoContent)
 	env.doJSON(sess, http.MethodPut, starPath, nil, nil, http.StatusNoContent)
@@ -84,7 +84,7 @@ func TestStatsAndStarsHidePrivateAgents(t *testing.T) {
 	env.verifyEmail(outsider)
 	outSess := env.login(outsider)
 
-	// Existence privacy (§6.4): a stranger gets 404, not 403.
+	// Existence privacy: a stranger gets 404, not 403.
 	for _, tc := range []struct{ method, path string }{
 		{http.MethodGet, "/api/v1/agents/" + owner + "/hidden/stats"},
 		{http.MethodPut, "/api/v1/user/stars/" + owner + "/hidden"},
@@ -97,7 +97,7 @@ func TestStatsAndStarsHidePrivateAgents(t *testing.T) {
 	}
 }
 
-// ---- M-10a: agent deletion ----
+// ---- agent deletion ----
 
 func TestDeleteAgentWithoutVersions(t *testing.T) {
 	env := newTestEnv(t)
@@ -122,7 +122,7 @@ func TestDeleteAgentWithoutVersions(t *testing.T) {
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("deleted agent: got %d want 404", res.StatusCode)
 	}
-	// The repo row goes with it (§9.2 "create incl. repo" in reverse).
+	// The repo row goes with it, the reverse of create.
 	var repos int64
 	if err := env.st.Pool().QueryRow(context.Background(),
 		`SELECT count(*) FROM repos r WHERE r.id = $1::uuid`, repoID,
@@ -143,7 +143,7 @@ func TestDeleteAgentWithoutVersions(t *testing.T) {
 	}
 }
 
-// ---- M-10b: activity ----
+// ---- activity ----
 
 func TestAgentActivityPublicVersusFull(t *testing.T) {
 	env := newTestEnv(t)
@@ -199,7 +199,7 @@ func TestAgentActivityPublicVersusFull(t *testing.T) {
 	}
 }
 
-// ---- M-10c: tags ----
+// ---- tags ----
 
 func TestTagListing(t *testing.T) {
 	env := newTestEnv(t)
@@ -247,7 +247,7 @@ func TestTagListing(t *testing.T) {
 	}
 }
 
-// ---- M-10d/e + §19: webhooks and ruleset releases ----
+// ---- webhooks and ruleset releases ----
 
 func TestWebhookPingAndEndpointCap(t *testing.T) {
 	env := newTestEnv(t)
@@ -284,7 +284,7 @@ func TestWebhookPingAndEndpointCap(t *testing.T) {
 		t.Fatalf("ping delivery not in the ledger: %+v", deliveries)
 	}
 
-	// §19: 20 endpoints per org. One exists; add 19 more, then expect a
+	// 20 endpoints per org. One exists; add 19 more, then expect a
 	// refusal rather than an unbounded fan-out surface.
 	for i := 1; i < 20; i++ {
 		env.doJSON(sess, http.MethodPost, "/api/v1/orgs/"+orgH+"/webhooks", map[string]any{
@@ -323,7 +323,7 @@ func TestRulesetReleaseAndPlatformAudit(t *testing.T) {
 	env.makePlatformStaff(t, staffH)
 	staff := env.login(staffH)
 
-	// An empty body registers the deployment's own embedded bundle (§8.3).
+	// An empty body registers the deployment's own embedded bundle.
 	var rel struct {
 		Id           string `json:"id"`
 		Semver       string `json:"semver"`
@@ -369,11 +369,11 @@ func TestRulesetReleaseAndPlatformAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reads == 0 {
-		t.Fatal("§12.6 requires staff access to the audit log to be audited itself")
+		t.Fatal("staff access to the audit log must be audited itself")
 	}
 }
 
-// ---- §9.1 conventions ----
+// ---- list conventions ----
 
 func TestListParamsAreClampedNotRejected(t *testing.T) {
 	env := newTestEnv(t)
@@ -382,7 +382,7 @@ func TestListParamsAreClampedNotRejected(t *testing.T) {
 	env.makePlatformStaff(t, staffH)
 	staff := env.login(staffH)
 
-	// A negative limit used to reach LIMIT/OFFSET verbatim and 500.
+	// A negative limit must not reach LIMIT/OFFSET verbatim (a 500).
 	for _, path := range []string{
 		"/api/v1/search?q=&limit=-5",
 		"/api/v1/search?q=&limit=99999",
@@ -473,8 +473,7 @@ func TestSearchFacets(t *testing.T) {
 	}
 
 	// capability=targetHosts matches only a release that declares a target
-	// host (plan runtime-hosts.md §7; agentry#1092), and a target host is
-	// not network egress.
+	// host, and a target host is not network egress.
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
 		"namespace": owner, "name": "facethost", "modes": []string{"autonomous"}, "visibility": "public",
 		"summary": q,
@@ -503,9 +502,9 @@ capabilities:
 		t.Fatalf("capability=network matched a target host release: %+v", caps.Results)
 	}
 
-	// capability=browser matches only a release that declares a browser
-	// (plan browser-testing.md §5; agentry#1134), and a browser is not
-	// network egress. A site-scoped browser publishes under the baseline.
+	// capability=browser matches only a release that declares a browser,
+	// and a browser is not network egress. A site-scoped browser publishes
+	// under the baseline.
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
 		"namespace": owner, "name": "facetbrowser", "modes": []string{"autonomous"}, "visibility": "public",
 		"summary": q,
@@ -543,7 +542,7 @@ func TestRateLimitHeadersOnEveryResponse(t *testing.T) {
 	defer func() { _ = res.Body.Close() }()
 	for _, h := range []string{"RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"} {
 		if res.Header.Get(h) == "" {
-			t.Fatalf("%s missing from a 200 response (§9.1)", h)
+			t.Fatalf("%s missing from a 200 response", h)
 		}
 	}
 	if res.Header.Get("Retry-After") != "" {
@@ -608,7 +607,7 @@ func TestIdempotencyKeyReplaysAndConflicts(t *testing.T) {
 
 	// A failed request must not lock the key out. A second account makes
 	// the attempts: the first is now an admin of the organization it
-	// created, and a person belongs to one organization at a time (D26).
+	// created, and a person belongs to one organization at a time.
 	otherH := env.register("idem-other")
 	env.verifyEmail(otherH)
 	other := env.login(otherH)
@@ -685,7 +684,7 @@ func TestCursorPagingEmitsLinkHeader(t *testing.T) {
 	}
 }
 
-// ---- M-18: review:act ----
+// ---- review:act ----
 
 func TestReviewSurfaceRequiresReviewActScope(t *testing.T) {
 	env := newTestEnv(t)
@@ -697,7 +696,7 @@ func TestReviewSurfaceRequiresReviewActScope(t *testing.T) {
 	_, wrongPAT := env.mintPAT(sess, "no-review", "user:profile", "agent:read")
 	_, rightPAT := env.mintPAT(sess, "review", "user:profile", "review:act")
 
-	// The role is sufficient (platform staff) but the token is not: §12.3
+	// The role is sufficient (platform staff) but the token is not:
 	// scopes are the least-privilege gate on top of the role.
 	res := env.do(caller{name: "pat-wrong", pat: wrongPAT},
 		http.MethodGet, "/api/v1/review-queue?queue=platform", nil)
@@ -713,7 +712,7 @@ func TestReviewSurfaceRequiresReviewActScope(t *testing.T) {
 		t.Fatalf("PAT with review:act: got %d want 200", res.StatusCode)
 	}
 
-	// A session carries the user's full authority (§12.3): no scope needed.
+	// A session carries the user's full authority: no scope needed.
 	res = env.do(sess, http.MethodGet, "/api/v1/review-queue?queue=platform", nil)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -722,7 +721,7 @@ func TestReviewSurfaceRequiresReviewActScope(t *testing.T) {
 }
 
 // GET /platform/ruleset-releases lists the release history for staff and
-// refuses everyone else (agentry#63).
+// refuses everyone else.
 func TestRulesetReleaseList(t *testing.T) {
 	env := newTestEnv(t)
 	user := env.register("rl-user")

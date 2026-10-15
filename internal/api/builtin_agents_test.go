@@ -1,8 +1,8 @@
 package api_test
 
-// Built-in agents (agentry#737): the packages the Agentry CLI embeds are
-// published under the platform's own organization for reading
-// (agentry-cli#470, DR-50), and the directory labels them Built-in in
+// Built-in agents: the packages the Agentry CLI embeds are
+// published under the platform's own organization for reading, and the
+// directory labels them Built-in in
 // place of their run modes. The label is the platform's to say: only
 // platform staff set or clear it, never the namespace's own
 // administrators, and it marks an agent only in a first-party namespace.
@@ -99,9 +99,9 @@ func TestOnlyStaffMarkABuiltInAgentInTheFirstPartyNamespace(t *testing.T) {
 		t.Fatalf("staff marking an agent outside the first-party namespace: %d %s, want 409 builtin-first-party", code, s)
 	}
 
-	// Staff mark it, with a token as the CLI's release does
-	// (agentry-cli#474); the change is audited, and the agent, the
-	// namespace listing and search all say so.
+	// Staff mark it, with a token as the CLI's release does; the change
+	// is audited, and the agent, the namespace listing and search all
+	// say so.
 	_, staffTok := env.mintPAT(staff, "bt-staff-"+env.sfx, "agent:read", "agent:publish", "org:admin")
 	env.doJSON(caller{name: "staff-pat", pat: staffTok}, http.MethodPatch, "/api/v1/agents/agentry/"+name, map[string]any{"builtin": true}, &got, http.StatusOK)
 	if got.Builtin == nil || !*got.Builtin {
