@@ -762,7 +762,8 @@
           "path": "internal/api/knowledge_admission_test.go",
           "tests": [
             "TestAKnowledgeUploadIsAdmittedBeforeAnythingIsStored",
-            "TestAnUploadTheAllocationRefusesIsVoided"
+            "TestAnUploadTheAllocationRefusesIsVoided",
+            "TestAnUploadPastTheAllocationIsRefusedBeforeItIsAdmitted"
           ],
           "fuzz": [],
           "benchmarks": [],

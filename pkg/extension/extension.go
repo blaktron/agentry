@@ -315,7 +315,8 @@ type (
 // and may charge for, the scan an upload of a knowledge pack's tree queues
 // (PUT …/knowledge/packs/{id}/tree, an account's or an organization's).
 // AI Review is 1 credit an operation; the core charges nothing. It is
-// asked after the core has read the tree and before anything is stored; a
+// asked after the core has read the tree and checked it against the
+// owner's allocation, and before anything is stored; a
 // refusal is answered in its own status and words, and a ticket is voided
 // when the core then stores nothing. An upload of the tree the pack
 // already holds queues no scan and is never asked about, nor is a pack an

@@ -15,18 +15,25 @@ import (
 )
 
 // stubKnowledgeAdmitter admits, refuses or fails, and records what it
-// admitted and voided.
+// was asked, admitted and voided. onAdmit, when set, runs as an admission
+// is asked, before it answers.
 type stubKnowledgeAdmitter struct {
 	mu       sync.Mutex
 	mode     string
+	asked    int
 	admitted []api.KnowledgeAdmission
 	tickets  []string
 	voided   []string
+	onAdmit  func()
 }
 
 func (a *stubKnowledgeAdmitter) AdmitKnowledge(_ context.Context, adm api.KnowledgeAdmission) (registry.Ticket, *registry.Refusal, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.asked++
+	if a.onAdmit != nil {
+		a.onAdmit()
+	}
 	switch a.mode {
 	case "refuse":
 		return registry.Ticket{}, &registry.Refusal{Status: http.StatusPaymentRequired, Slug: "credits-exhausted", Title: "Out of credits", Detail: "No credits left."}, nil
@@ -138,8 +145,9 @@ func TestAKnowledgeUploadIsAdmittedBeforeAnythingIsStored(t *testing.T) {
 }
 
 // TestAnUploadTheAllocationRefusesIsVoided: an upload admitted and then
-// refused by the core under the pack's lock (the account's allocation) is
-// voided, so nothing is charged for it.
+// refused by the core under the pack's lock (the account's allocation, filled
+// by another upload between the admission and the lock) is voided, so
+// nothing is charged for it.
 func TestAnUploadTheAllocationRefusesIsVoided(t *testing.T) {
 	env := newTestEnvCfg(t, func(c *config.Config) { c.Limits.KnowledgeBytesPerAccount = 400 })
 	adm := &stubKnowledgeAdmitter{}
@@ -151,12 +159,57 @@ func TestAnUploadTheAllocationRefusesIsVoided(t *testing.T) {
 		t.Fatalf("200 of 400: %d %s", st, b)
 	}
 	b, bKey := newPack(t, env, o, "second")
-	sealedB, _, _ := sealedPack(t, sizedPack(250, 'b'), bKey)
-	if st, _, body := env.raw(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+b+"/tree", sealedB); st == http.StatusAccepted {
-		t.Fatalf("past the allocation: %d %s", st, body)
+	sealedB, _, _ := sealedPack(t, sizedPack(150, 'b'), bKey)
+	// 150 beside 200 fits when it is admitted; the first pack grows by 100
+	// before the second takes the lock, so the reservation refuses it.
+	adm.onAdmit = func() {
+		if _, err := env.st.Pool().Exec(context.Background(), `UPDATE knowledge_packs SET bytes = bytes + 100 WHERE id = $1`, a); err != nil {
+			t.Error(err)
+		}
+	}
+	st, _, body := env.raw(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+b+"/tree", sealedB)
+	if st != http.StatusRequestEntityTooLarge || problemTypeOf(body) != "knowledge-allocation" {
+		t.Fatalf("a race lost to the allocation: %d %s", st, body)
 	}
 	admitted, voided := adm.counts()
 	if admitted != 2 || voided != 1 || adm.voided[0] != adm.tickets[1] {
 		t.Fatalf("admitted %d, voided %v of %v; want the refused upload's ticket voided", admitted, adm.voided, adm.tickets)
+	}
+	if n := knowledgeObjects(t, env, b); n != 0 {
+		t.Fatalf("the refused upload stored %d objects", n)
+	}
+}
+
+// TestAnUploadPastTheAllocationIsRefusedBeforeItIsAdmitted: an upload the
+// allocation refuses is answered 413 knowledge-allocation before the
+// admission is asked, so a payer who could not pay either is told what
+// would still refuse it once they could, and nothing is charged.
+func TestAnUploadPastTheAllocationIsRefusedBeforeItIsAdmitted(t *testing.T) {
+	env := newTestEnvCfg(t, func(c *config.Config) { c.Limits.KnowledgeBytesPerAccount = 400 })
+	adm := &stubKnowledgeAdmitter{}
+	env.srvObj.SetKnowledgeAdmitter(adm)
+	o := newKnowledgeOwner(env, "kn-precheck")
+	a, aKey := newPack(t, env, o, "first")
+	sealedA, _, _ := sealedPack(t, sizedPack(200, 'a'), aKey)
+	if st, _, b := env.raw(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+a+"/tree", sealedA); st != http.StatusAccepted {
+		t.Fatalf("200 of 400: %d %s", st, b)
+	}
+	adm.mode = "refuse" // a payer with no credits
+	b, bKey := newPack(t, env, o, "second")
+	sealedB, _, _ := sealedPack(t, sizedPack(250, 'b'), bKey)
+	st, _, body := env.raw(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+b+"/tree", sealedB)
+	if st != http.StatusRequestEntityTooLarge || problemTypeOf(body) != "knowledge-allocation" {
+		t.Fatalf("past the allocation and unpaid: %d %s, want 413 knowledge-allocation", st, body)
+	}
+	adm.mu.Lock()
+	asked := adm.asked
+	adm.mu.Unlock()
+	if asked != 1 {
+		t.Fatalf("the admission was asked %d times, want once (the first upload only)", asked)
+	}
+	// A tree that fits is still asked about, and refused for credits.
+	small, _, _ := sealedPack(t, sizedPack(64, 'c'), bKey)
+	if st, _, body := env.raw(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+b+"/tree", small); st != http.StatusPaymentRequired {
+		t.Fatalf("a tree that fits, unpaid: %d %s, want 402", st, body)
 	}
 }
