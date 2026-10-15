@@ -176,8 +176,8 @@ func TestAuthorizeNeedsASession(t *testing.T) {
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "127.0.0.1:40123") || !strings.Contains(w.Body.String(), "chris") {
 		t.Fatalf("page: %d %s", w.Code, w.Body.String())
 	}
-	// The page names exactly what approving grants: the grant's own list
-	// (agentry#676), not a hand-kept copy that fell behind it.
+	// The page names exactly what approving grants: the grant's own list,
+	// not a hand-kept copy that could fall behind it.
 	if want := "Scopes: " + strings.Join(auth.SignInGrantScopes(), ", ") + "."; !strings.Contains(w.Body.String(), want) || !strings.Contains(want, "secret:write") {
 		t.Fatalf("authorize page does not name the grant's scopes %q:\n%s", want, w.Body.String())
 	}
@@ -270,10 +270,9 @@ func TestModeAuthorizeServesOnlyTheAuthorizePage(t *testing.T) {
 	}
 }
 
-// The four refusals that used to answer as bare text: the same status codes,
-// now the message page inside the layout, carrying the reason and the same
-// CSP as any other page. A path that exists under another method keeps the
-// mux's 405.
+// The four refusals answer with the message page inside the layout, carrying
+// the reason and the same CSP as any other page. A path that exists under
+// another method keeps the mux's 405.
 func TestRefusalsRenderInsideTheLayout(t *testing.T) {
 	h := newUI(t, Options{Brand: Brand{Name: "Acme Registry"}})
 	raw := func(method, path, body string, hdr map[string]string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
@@ -324,7 +323,7 @@ func TestRefusalsRenderInsideTheLayout(t *testing.T) {
 		if got := tc.got.Header().Get("Content-Security-Policy"); got != csp {
 			t.Fatalf("%s: csp %q, want %q", tc.name, got, csp)
 		}
-		// A refusal is a page like any other, and §5b's no-store applies to it:
+		// A refusal is a page like any other, and no-store applies to it:
 		// nothing about a rejected form or a wrong address is cacheable, and a
 		// CDN in front must not rewrite it either.
 		if cc := tc.got.Header().Get("Cache-Control"); cc != "no-store, no-transform" {
@@ -394,7 +393,7 @@ func TestAccountPagesAndTheDirectoryRedirect(t *testing.T) {
 		t.Fatalf("flash escaping: %s", w.Body.String())
 	}
 	// The URL cannot choose a page's notice: ?ok= and ?error= are ignored
-	// everywhere, the 404 page included (agentry#271).
+	// everywhere, the 404 page included.
 	for _, path := range []string{"/ui/account?ok=Token+revoked.&error=%3Cb%3Ex%3C%2Fb%3E", "/ui/no-such?ok=Token+revoked."} {
 		w = get(h, path, sessCookie, csrfCookieV)
 		if body := w.Body.String(); strings.Contains(body, "Token revoked.") || strings.Contains(body, "x&lt;/b&gt;") || strings.Contains(body, `class="flash ok"`) {
@@ -429,7 +428,7 @@ func TestSSHKeysPageRendersTheKeyAndItsLimits(t *testing.T) {
 }
 
 // reviewFake is what the review fake varies: the version status it
-// reports on ri1 (agentry#273).
+// reports on ri1.
 type reviewFake struct {
 	versionStatus string
 	// queues is each review-queue query the page sent.
@@ -481,7 +480,7 @@ func reviewAPI(t *testing.T, f *reviewFake) http.Handler {
 }
 
 // The org queue with no organization named asks the API for every
-// organization's, which platform staff are given (agentry#912); naming one
+// organization's, which platform staff are given; naming one
 // asks for that one.
 func TestReviewQueueNamesAnOrganizationOnlyWhenChosen(t *testing.T) {
 	f := &reviewFake{versionStatus: "needs_review"}
@@ -511,13 +510,13 @@ func TestReviewPages(t *testing.T) {
 		t.Fatalf("item: %d %s", w.Code, body)
 	}
 	// A declared server's plain env is shown beside its tools, keys sorted,
-	// so a reviewer reads the configuration the server will receive
-	// (agentry#286); the order is fixed so the page never shuffles.
+	// so a reviewer reads the configuration the server will receive; the
+	// order is fixed so the page never shuffles.
 	if !strings.Contains(body, `capabilities: {mcpServers={env={GITHUB_PERMISSION=read-only LOGS_DIR=/tmp/logs} npm=github-mcp-server-js secrets=GITHUB_TOKEN tools=list_issues version=0.1.7}}`) {
 		t.Fatalf("manifest summary lacks the server's env beside its tools: %s", body)
 	}
 	// The judge line names the model and, when the API sent it (platform
-	// staff), what the adjudication cost in tokens (agentry#318).
+	// staff), what the adjudication cost in tokens.
 	if !strings.Contains(body, "Judge: qwen-test · 812 prompt tokens, 97 completion tokens") {
 		t.Fatalf("review page lacks the judge usage line: %s", body)
 	}
@@ -531,7 +530,7 @@ func TestReviewPages(t *testing.T) {
 		t.Fatalf("decide: %d %s %q %s", w.Code, loc, okMsg, w.Body.String())
 	}
 	// A needs_review version rejected will not publish; the item said which
-	// status the version was in (agentry#273; the quarantined branches are
+	// status the version was in (the quarantined branches are
 	// TestReviewDecisionFlashNamesTheConsequence).
 	w = post(h, "/ui/review/ri1/decision", url.Values{"_csrf": {"csrf1"}, "decision": {"reject"}, "rationale": {"looks fine"}}, nil, sessCookie, csrfCookieV)
 	if loc, okMsg, _ := redirectedTo(t, w); w.Code != http.StatusSeeOther || loc != "/ui/review" || okMsg != "Rejected. This version will not publish." {
@@ -550,8 +549,8 @@ func TestReviewPages(t *testing.T) {
 }
 
 // Each enforcement action's flash names what a consumer now meets, and the
-// three read as sentences: the flash used to be built as action + "d.", which
-// said "blockd". An action the form does not offer never reaches the API.
+// three read as sentences, not as the action name plus "d" ("blockd"). An
+// action the form does not offer never reaches the API.
 func TestStaffEnforcementFlashesNameTheConsequence(t *testing.T) {
 	base := fakeAPI(t)
 	calls := 0
@@ -654,18 +653,18 @@ func TestOrgAdminPage(t *testing.T) {
 	w := get(h, "/ui/orgs/acme", sessCookie, csrfCookieV)
 	body := w.Body.String()
 	for _, want := range []string{"Acme Corp", "<strong>chris</strong>", "<strong>platform</strong>", `&#34;allowPrivateIps&#34;: false`, "Create webhook",
-		// Seats, the pending member's two buttons and the open invitation
-		// (agentry#361): the page an admin runs the doors from.
+		// Seats, the pending member's two buttons and the open invitation:
+		// the page an admin runs the doors from.
 		"Seats: 1 used, 1 invited, 1 waiting of 5",
 		"waiting for approval", `name="action" value="approve"`, `name="action" value="decline"`,
 		"<strong>dana@acme.example</strong>", `value="invitation"`,
-		// agentry#272: the SSO forms reflect the stored state on load — the
+		// The SSO forms reflect the stored state on load — the
 		// SAML metadata and its Enabled box, the OIDC fields with Enabled off.
 		`<textarea name="idpMetadataXml" rows="4" class="mono">&lt;EntityDescriptor/&gt;</textarea>`,
 		`<input type="checkbox" name="enabled" value="true" checked> Enabled</label><div><button type="submit" class="secondary">Save SAML</button>`,
 		`value="https://idp.example"`, `placeholder="blank keeps the stored secret"`,
 		`<input type="checkbox" name="enabled" value="true"> Enabled</label><div><button type="submit" class="secondary">Save OIDC</button>`,
-		// The domain and the decommission form (agentry#363); no staff
+		// The domain and the decommission form; no staff
 		// section for a viewer who is not staff.
 		"Registered at <strong>acme.example</strong>", "Verified domains: acme.example, acme.co",
 		`name="section" value="decommission"`, `Type <code>acme</code> to confirm`,
@@ -706,7 +705,7 @@ func TestOrgAdminPage(t *testing.T) {
 	}
 }
 
-// TestAccountPagesTellCouldNotLookFromEmpty (agentry#271): a read the API
+// TestAccountPagesTellCouldNotLookFromEmpty: a read the API
 // refused renders a notice that the page could not look, never the empty
 // state that claims there is nothing; an answered-empty read renders the
 // empty state and no notice.
@@ -766,7 +765,7 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 	}
 }
 
-// TestLoginPageIsTheOneThatReadsAnErrorFromTheURL (agentry#271): the API's
+// TestLoginPageIsTheOneThatReadsAnErrorFromTheURL: the API's
 // social-login callback addresses the signed-out entrance with ?error= on
 // a headless deployment, so that page alone honours it, as text; ?ok= is
 // not read there either. With one directory and nothing else the page
@@ -793,8 +792,8 @@ func TestLoginPageIsTheOneThatReadsAnErrorFromTheURL(t *testing.T) {
 	}
 }
 
-// TestReviewDecisionFlashNamesTheConsequence (agentry#273): the decision
-// flash says what the §7 state machine does to the version it decided —
+// TestReviewDecisionFlashNamesTheConsequence: the decision
+// flash says what the state machine does to the version it decided —
 // a quarantined version is public, so approve publishes it again and
 // reject yanks it — and when the item could not be read before the
 // decision, the flash records the decision and claims nothing more. The
@@ -839,7 +838,7 @@ func TestReviewDecisionFlashNamesTheConsequence(t *testing.T) {
 	}
 }
 
-// TestAccountNotificationSettings (agentry#274): the account page shows
+// TestAccountNotificationSettings: the account page shows
 // the person's mail and in-app switches as the API reports them, and the
 // form sends the whole set back — an unticked box is a switch off — then
 // flashes the save.
@@ -874,7 +873,7 @@ func TestAccountNotificationSettings(t *testing.T) {
 	}
 }
 
-// TestOrgsIndexCreateForm (agentry#363): the organizations page offers the
+// TestOrgsIndexCreateForm: the organizations page offers the
 // create form to a person who belongs to no organization, posts it
 // in-process, lands them on the new organization's page with what was
 // recorded, renders the API's refusal inside the layout, and withholds the
@@ -946,7 +945,7 @@ func TestOrgsIndexCreateForm(t *testing.T) {
 	}
 }
 
-// TestStaffOrgFormSuspendsAndReinstates (agentry#374): a suspended
+// TestStaffOrgFormSuspendsAndReinstates: a suspended
 // organization answers 404 to everyone, platform staff included, so the
 // reinstate form on its page is unreachable once staff have used the
 // suspend form there. The staff console carries the two acts by handle —
@@ -1095,7 +1094,7 @@ func TestStaffOrgFormSuspendsAndReinstates(t *testing.T) {
 	}
 }
 
-// TestLayoutNamesThePendingOrganization (agentry#364): while GET /user
+// TestLayoutNamesThePendingOrganization: while GET /user
 // carries pendingOrg, every page says which organization the person is
 // waiting on and that they hold nothing of it yet; the wording names the
 // door. Without it, no notice.
@@ -1129,9 +1128,9 @@ func TestLayoutNamesThePendingOrganization(t *testing.T) {
 }
 
 // The directory's sign-out URL is a redirect chain that browsers hold to the
-// page's form-action (DEV-082); the policy admits its origin and nothing more
-// of it, so the cancel-view shape of agentry#441 — a path and a query on the
-// same host — changes nothing here.
+// page's form-action; the policy admits its origin and nothing more of it,
+// so a path and a query on the same host (a cancel-view shape) change
+// nothing here.
 func TestCSPAdmitsTheSignOutOrigin(t *testing.T) {
 	h := newUI(t, Options{IdPLogoutURL: "https://auth.site.example/flows/-/cancel/?next=/application/o/agentry/end-session/", SiteURL: "https://site.example"})
 	w := get(h, "/ui/login")
@@ -1144,7 +1143,7 @@ func TestCSPAdmitsTheSignOutOrigin(t *testing.T) {
 	}
 }
 
-// TestAccountShowsTheKnowledgeMeter (agentry#593): the account view says
+// TestAccountShowsTheKnowledgeMeter: the account view says
 // what the person keeps in the registry against their allocation, and that
 // a registry with the store off keeps none.
 func TestAccountShowsTheKnowledgeMeter(t *testing.T) {
@@ -1183,7 +1182,7 @@ func TestAccountShowsTheKnowledgeMeter(t *testing.T) {
 
 // TestTokenFormOffersEveryScope: the token form's list, kept in the order
 // the page shows it, is the closed scope list exactly — a scope added to
-// auth and not to the form (or the reverse) fails here (agentry#676).
+// auth and not to the form (or the reverse) fails here.
 func TestTokenFormOffersEveryScope(t *testing.T) {
 	want := map[string]bool{}
 	for _, s := range auth.AllScopes() {
@@ -1207,7 +1206,7 @@ func TestTokenFormOffersEveryScope(t *testing.T) {
 }
 
 // TestAccountActivationResend: an account that is not activated is told so
-// on its account page and can ask for a new link there (agentry#861); the
+// on its account page and can ask for a new link there; the
 // registry's refusal inside five minutes reaches the person in its words.
 func TestAccountActivationResend(t *testing.T) {
 	tooSoon := false

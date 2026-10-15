@@ -1,6 +1,6 @@
-// Package webhook implements org-configurable webhooks (§9.3): HMAC-SHA256
+// Package webhook implements org-configurable webhooks: HMAC-SHA256
 // signed delivery through the async queue with 5× exponential backoff, and the
-// T-08 SSRF egress guard (https-only, re-resolve to public unicast per
+// SSRF egress guard (https-only, re-resolve to public unicast per
 // attempt, block private/link-local/metadata ranges, no redirect following,
 // 10s timeout).
 package webhook
@@ -12,13 +12,13 @@ import (
 	"github.com/blaktron/agentry/pkg/egressguard"
 )
 
-// DeliveryTimeout bounds a single delivery attempt (§9.3).
+// DeliveryTimeout bounds a single delivery attempt.
 const DeliveryTimeout = egressguard.DefaultTimeout
 
 // ErrBlockedAddress is returned by the guarded dialer when a destination
-// resolves to a non-public address (T-08). The guard itself is
-// pkg/egressguard's since agentry#968; these names are its aliases, so the
-// core's callers and an extension's share one implementation.
+// resolves to a non-public address. The guard itself is
+// pkg/egressguard's; these names are its aliases, so the core's callers
+// and an extension's share one implementation.
 type ErrBlockedAddress = egressguard.BlockedAddressError
 
 // Guard is the SSRF egress policy (pkg/egressguard.Guard).
