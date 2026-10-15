@@ -1,20 +1,19 @@
 -- +goose Up
--- Knowledge packs (plan knowledge.md §4.4, agentry#593): a pack a person
--- (or, from the shared-knowledge milestone, an organization) keeps in
--- Agentry. The row holds what may be read without the pack's data key —
--- its name, size, digest, page count, scan state and report — and the data
--- key only as its owner's wrapper wrapped it; the tree itself is sealed in
--- the blob store (knowledge_objects). The owner is a kind and an id with no
--- foreign key, because it is one of two tables: every path that erases an
--- owner deletes its packs by name (the account erasure, a data clear, an
--- organization's decommission).
+-- Knowledge packs: a pack a person (or an organization) keeps in Agentry. The
+-- row holds what may be read without the pack's data key — its name, size,
+-- digest, page count, scan state and report — and the data key only as its
+-- owner's wrapper wrapped it; the tree itself is sealed in the blob store
+-- (knowledge_objects). The owner is a kind and an id with no foreign key,
+-- because it is one of two tables: every path that erases an owner deletes
+-- its packs by name (the account erasure, a data clear, an organization's
+-- decommission).
 CREATE TABLE knowledge_packs (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_kind        text NOT NULL CHECK (owner_kind IN ('user', 'org')),
   owner_id          uuid NOT NULL,
   name              text NOT NULL,
   -- empty (created, no tree yet) → scanning (a tree uploaded, its scan
-  -- queued) → ready (scanned, findings or not: D27) or failed (the stored
+  -- queued) → ready (scanned, findings or not) or failed (the stored
   -- tree could not be read at scan time).
   state             text NOT NULL DEFAULT 'empty' CHECK (state IN ('empty', 'scanning', 'ready', 'failed')),
   bytes             bigint NOT NULL DEFAULT 0,

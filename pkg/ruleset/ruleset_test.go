@@ -2,14 +2,15 @@ package ruleset
 
 import "testing"
 
-// releasedDigests is every bundle version that has reached a registry, with
-// the digest the server records for it in ruleset_releases (agentry#772).
-// Entries are only ever added. A bundle whose content changes keeps its old
-// digest here and fails the test below until its version is bumped and the
-// new version pinned: a ruleset_releases row is keyed by semver, so two
-// bundles under one semver would rewrite the row's digest and break the
-// check against its ruleset/v<semver> tag (README.md). Compute a digest with
-// `go run ./scripts/dev/ruleset-digest`.
+// releasedDigests is every bundle version that has reached a registry,
+// with the digest the server records for it in ruleset_releases.
+// Entries are only ever added. A bundle whose content changes keeps its
+// old digest here and fails the test below until its version is bumped
+// and the new version pinned: a ruleset_releases row is keyed by
+// semver, so two bundles under one semver would rewrite the row's
+// digest and break the check against its ruleset/v<semver> tag
+// (README.md). Compute a digest with `go run
+// ./scripts/dev/ruleset-digest`.
 var releasedDigests = map[string]string{
 	"0.2.0": "9395e31404aefa5256103a3977d86ec482927a6717235a4a487952a65b9b4ed5",
 	"0.2.1": "24def4274e46f12a7dddd6b10d018b166ce6a0414cc62c28e05f1718ece3c030",
@@ -65,8 +66,8 @@ func TestEveryReleasedVersionNamesItsThreshold(t *testing.T) {
 	}
 }
 
-// The thresholds of released versions are history: 0.3.0 is the first
-// version that publishes on medium (agentry#773).
+// The thresholds of released versions are fixed: 0.3.0 is the first
+// version that publishes on medium.
 func TestReleasedThresholdsAreHistory(t *testing.T) {
 	for v, want := range map[string]string{"0.2.3": "low", "0.3.0": "medium", "0.3.1": "medium", "0.3.2": "medium", "0.3.3": "medium", "0.3.4": "medium", "0.4.0": "medium", "0.4.1": "medium", "0.4.2": "medium", "0.4.3": "medium", "0.4.4": "medium", "0.4.5": "medium", "0.4.6": "medium", "0.4.7": "medium", "0.4.8": "medium", "0.4.9": "medium", "0.0.0-unknown": "low"} {
 		if got := BaselineMaxAutoPublishSeverityFor(v); got != want {

@@ -8,11 +8,11 @@ import (
 	"unicode/utf8"
 )
 
-// The guide block (V10; plan guided-runs.md §6, agentry#529): the author's
-// words for the run setup, shown to people before a run. These tests pin
-// its bounds, that a connect key names a declared secret, that it is a v2
-// field, and that it changes nothing about the security contract: two
-// releases that differ only in their guide have an empty capability diff.
+// The guide block (V10): the author's words for the run setup, shown to
+// people before a run. These tests pin its bounds, that a connect key
+// names a declared secret, that it is a v2 field, and that it changes
+// nothing about the security contract: two releases that differ only in
+// their guide have an empty capability diff.
 
 const guideYAML = v2YAML + `
 guide:
@@ -79,8 +79,8 @@ func TestGuideRefusals(t *testing.T) {
 		}, "guide.connect.PAGERDUTY_TOKEN"},
 		{"files with a zero-width space", func(g *Guide) { g.Files = "the con\u200Btract" }, "guide.files"},
 		{"overview with a C1 control", func(g *Guide) { g.Overview = "a\u0085b" }, "guide.overview"},
-		// agentry#558: ESC starts a terminal escape sequence (colours, OSC 8
-		// links, OSC 52 clipboard writes); CR rewrites a printed line.
+		// ESC starts a terminal escape sequence (colours, OSC 8 links,
+		// OSC 52 clipboard writes); CR rewrites a printed line.
 		{"overview with ESC", func(g *Guide) { g.Overview = "a\x1b]52;c;ZXZpbA==\x07b" }, "guide.overview"},
 		{"overview with CR", func(g *Guide) { g.Overview = "first line\rrewritten" }, "guide.overview"},
 		{"overview with BEL", func(g *Guide) { g.Overview = "a\x07b" }, "guide.overview"},
@@ -90,8 +90,8 @@ func TestGuideRefusals(t *testing.T) {
 		{"connect help too long", func(g *Guide) {
 			g.Connect = map[string]string{"PAGERDUTY_TOKEN": strings.Repeat("é", MaxGuideConnectChars+1)}
 		}, "guide.connect.PAGERDUTY_TOKEN"},
-		// agentry#707: the help is Markdown over several lines, and keeps
-		// the overview's character rule.
+		// The help is Markdown over several lines, and keeps the
+		// overview's character rule.
 		{"connect help of blank lines", func(g *Guide) { g.Connect = map[string]string{"PAGERDUTY_TOKEN": "\n\t\n"} }, "guide.connect.PAGERDUTY_TOKEN"},
 		{"connect help with ESC", func(g *Guide) {
 			g.Connect = map[string]string{"PAGERDUTY_TOKEN": "Create a key\x1b]8;;https://evil.example/\x07here"}
@@ -120,9 +120,9 @@ func TestGuideRefusals(t *testing.T) {
 	}
 }
 
-// TestGuideOverviewKeepsNewlinesAndTabs (agentry#558): the overview is
-// markdown over several lines, so a newline and a tab are the two control
-// characters it may carry.
+// TestGuideOverviewKeepsNewlinesAndTabs: the overview is markdown over
+// several lines, so a newline and a tab are the two control characters
+// it may carry.
 func TestGuideOverviewKeepsNewlinesAndTabs(t *testing.T) {
 	m := mustParse(t, guideYAML)
 	m.Guide.Overview = "Reads the export.\n\n- one\n\t- nested\n"
@@ -133,13 +133,12 @@ func TestGuideOverviewKeepsNewlinesAndTabs(t *testing.T) {
 	}
 }
 
-// TestGuideConnectIsMarkdownOfUpTo2000Characters (agentry#707, plan
-// builder-simplify.md D5, D11): a key's help is Markdown a person reads,
-// never an agent, of up to 2,000 characters (runes, not bytes), with line
-// breaks and tabs.
+// TestGuideConnectIsMarkdownOfUpTo2000Characters: a key's help is
+// Markdown a person reads, never an agent, of up to 2,000 characters
+// (runes, not bytes), with line breaks and tabs.
 func TestGuideConnectIsMarkdownOfUpTo2000Characters(t *testing.T) {
 	if MaxGuideConnectChars != 2000 {
-		t.Fatalf("MaxGuideConnectChars = %d, want 2000 (D11)", MaxGuideConnectChars)
+		t.Fatalf("MaxGuideConnectChars = %d, want 2000", MaxGuideConnectChars)
 	}
 	md := "1. Open **PagerDuty → Integrations → API Access Keys**.\n" +
 		"2. Create a *read-only* key.\n\n" +
@@ -187,9 +186,9 @@ func TestGuideIsAV2Field(t *testing.T) {
 	}
 }
 
-// TestGuideChangesNothingAboutTheContract is the plan's invariant: the
-// guide is text for people, so a release that changes only its guide asks
-// no consent again, and a manifest without one encodes exactly as before.
+// TestGuideChangesNothingAboutTheContract pins that the guide is text
+// for people, so a release that changes only its guide asks no consent
+// again, and a manifest without one encodes exactly as before.
 func TestGuideChangesNothingAboutTheContract(t *testing.T) {
 	with := mustParse(t, guideYAML)
 	without := mustParse(t, v2YAML)
@@ -268,11 +267,11 @@ func TestV2SchemaGuideShape(t *testing.T) {
 	}
 	p := g.Properties
 	// The overview keeps newlines and tabs and refuses every other C0
-	// control and DEL (agentry#558).
+	// control and DEL.
 	if want := `^[^\u0000-\u0008\u000b-\u001f\u007f]*$`; p.Overview.Pattern != want {
 		t.Errorf("schema overview pattern is %q, want %q", p.Overview.Pattern, want)
 	}
-	// A key's help is Markdown too, under the same character rule (agentry#707).
+	// A key's help is Markdown too, under the same character rule.
 	if p.Connect.AdditionalProperties.Pattern != p.Overview.Pattern {
 		t.Errorf("schema connect pattern is %q, want the overview's %q", p.Connect.AdditionalProperties.Pattern, p.Overview.Pattern)
 	}

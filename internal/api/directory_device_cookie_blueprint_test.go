@@ -7,8 +7,8 @@ import "testing"
 // the field defaults to 30 days. The cookie is a stateless JWT signed with a
 // key derived from the installation's identifier and the stage's primary key:
 // the directory keeps no record of it, so it cannot be listed or revoked, and
-// rotating the secret key does not end it (agentry#460). The operator turned it off on 2026-09-25 ("do not
-// create unrecoverable tokens"); the remembered browser (DEV-163) is the one
+// rotating the secret key does not end it. Agentry issues no
+// unrecoverable tokens; the remembered browser is the one
 // device credential. Every login stage the directory ships or we add is
 // therefore declared by name with the cookie off, not left to the default.
 //

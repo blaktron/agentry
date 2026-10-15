@@ -1,4 +1,4 @@
--- Dependency alerts (agentry#177 M2, DEV-090).
+-- Dependency alerts for declared MCP server versions.
 
 -- name: OpenMCPDependencyAlert :one
 INSERT INTO mcp_dependency_alerts (id, version_id, ecosystem, package, package_version, severity, advisory_ids, fixed_in)

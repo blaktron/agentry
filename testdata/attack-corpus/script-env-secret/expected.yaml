@@ -1,4 +1,4 @@
-technique: "Support script reads an environment variable the manifest does not declare (S6, agentry#239)"
+technique: "Support script reads an environment variable the manifest does not declare (S6)"
 version: "1.0.0"
 manifest: |
   {"license":"MIT","capabilities":{"network":{"egress":["tickets.example.test"]},"exec":{"commands":["python"]},"secrets":["TICKETS_TOKEN"]}}

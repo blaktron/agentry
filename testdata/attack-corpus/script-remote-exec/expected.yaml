@@ -1,4 +1,4 @@
-technique: "Support script pipes a download into a shell (S6 remote-exec, agentry#239)"
+technique: "Support script pipes a download into a shell (S6 remote-exec)"
 version: "1.0.0"
 manifest: |
   {"license":"MIT","capabilities":{"network":{"egress":["get.tooling.invalid.example"]},"exec":{"commands":["bash","curl"]}}}

@@ -13,8 +13,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Dependency alerts and the scanned-server registry (agentry#177 M3, plan
-// agentry-notes/plans/mcp-vuln-scanning.md §6).
+// Dependency alerts and the scanned-server registry.
 
 // ListUserDependencyAlerts implements GET /user/dependency-alerts: the open
 // alerts on published versions the caller submitted, newest first. This is
@@ -124,7 +123,7 @@ func mcpServerScanToAPI(row storegen.McpServerScan) McpServerScan {
 		out.MaxSeverity = &sev
 	}
 	out.LastError = row.LastError
-	// A version its registry does not publish (agentry#1036) is no answer
+	// A version its registry does not publish is no answer
 	// about advisories: served as error, with the reason, so the response
 	// keeps its contract and never reads as safe.
 	if row.Status == "not-found" {

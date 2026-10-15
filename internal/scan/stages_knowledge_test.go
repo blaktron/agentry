@@ -10,11 +10,10 @@ import (
 	"testing"
 )
 
-// A release that ships a knowledge pack (plan knowledge.md §4.6, D19;
-// agentry#594): the version's scan reads the pack with the pack scan —
-// every rule stage over every page and source, AI Review over the sources
-// and the wiki in chunks — reports what it read, and gates on what it
-// found; the release's own stages read only the release's files.
+// A release that ships a knowledge pack: the version's scan reads the pack with
+// the pack scan — every rule stage over every page and source, AI Review over
+// the sources and the wiki in chunks — reports what it read, and gates on what
+// it found; the release's own stages read only the release's files.
 
 const shipsManifest = `{"schemaVersion":"2","name":"reviewer","capabilities":{},"knowledge":{"ships":[{"name":"aws-docs"}]}}`
 

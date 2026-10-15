@@ -8,8 +8,8 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// agentry#1036: a version its registry does not publish is served as error
-// with the reason, never as a status the API contract lacks, and never safe.
+// A version its registry does not publish is served as error with the
+// reason, never as a status the API contract lacks, and never safe.
 func TestMCPServerScanNotFoundIsServedAsError(t *testing.T) {
 	now := time.Now()
 	out := mcpServerScanToAPI(storegen.McpServerScan{Ecosystem: "npm", Package: "x", Version: "0.1.23",

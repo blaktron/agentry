@@ -2,10 +2,10 @@ package registry
 
 import "github.com/blaktron/agentry/pkg/archive"
 
-// Deterministic release archives (D-15) were promoted to the public
-// pkg/archive so the CLI (a separate module) builds byte-identical archives
-// with the exact server implementation (§6.5). Aliases below keep this
-// package's historical names for internal call sites.
+// Deterministic release archives live in the public pkg/archive so the
+// CLI (a separate module) builds byte-identical archives with the exact
+// server implementation. The aliases below give internal call sites this
+// package's names for them.
 
 // ArchiveInfo describes a built archive.
 type ArchiveInfo = archive.ArchiveInfo

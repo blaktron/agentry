@@ -32,7 +32,7 @@ type GetMCPServerScanParams struct {
 	Version   string `json:"version"`
 }
 
-// MCP server vulnerability scanning (agentry#177, DEV-090).
+// MCP server vulnerability scanning.
 func (q *Queries) GetMCPServerScan(ctx context.Context, arg GetMCPServerScanParams) (McpServerScan, error) {
 	row := q.db.QueryRow(ctx, getMCPServerScan, arg.Ecosystem, arg.Package, arg.Version)
 	var i McpServerScan
@@ -128,8 +128,8 @@ type ListPublishedVersionsUsingMCPServerParams struct {
 }
 
 // The MCP sweep leaves out a version published without a scan and every
-// version of an agent with pipeline_skip set (M21): no alert is opened on
-// what the organization chose not to have scanned.
+// version of an agent with pipeline_skip set: no alert is opened on what the
+// organization chose not to have scanned.
 func (q *Queries) ListPublishedVersionsUsingMCPServer(ctx context.Context, arg ListPublishedVersionsUsingMCPServerParams) ([]AgentVersion, error) {
 	rows, err := q.db.Query(ctx, listPublishedVersionsUsingMCPServer, arg.Ecosystem, arg.Package, arg.Version)
 	if err != nil {

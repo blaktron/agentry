@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// brand.name, else the public host, else "Agentry" (DEV-091).
+// brand.name, else the public host, else "Agentry".
 func TestDisplayName(t *testing.T) {
 	if got := (Config{}).DisplayName(); got != "Agentry" {
 		t.Fatalf("empty: %q", got)

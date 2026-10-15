@@ -8,11 +8,11 @@ import (
 	"testing"
 )
 
-// The inputs declaration (V12; plan quickagents-that-run.md M6, D1;
-// agentry#892): what files a QuickAgent takes and which view of them the
-// agent reads by default. These tests pin its shape, that a manifest
-// without it reads exactly as before (any kind, each file's own default),
-// that it is a v2 field, and that it changes nothing about the contract.
+// The inputs declaration (V12): what files a QuickAgent takes and which
+// view of them the agent reads by default. These tests pin its shape,
+// that a manifest without it reads exactly as before (any kind, each
+// file's own default), that it is a v2 field, and that it changes
+// nothing about the contract.
 
 const inputsYAML = v2YAML + `
 inputs:
@@ -47,10 +47,10 @@ func TestInputsParsesAndValidates(t *testing.T) {
 	}
 }
 
-// TestInputsAbsentKeepsTodaysBehaviour is D1's compatibility rule: a
-// manifest without the block, which is every release published before it,
-// takes any kind of file and leaves each file's own default view (a
-// document's text, anything else as uploaded), which is what "both" means.
+// TestInputsAbsentKeepsTodaysBehaviour pins the compatibility rule: a
+// manifest without the block takes any kind of file and leaves each
+// file's own default view (a document's text, anything else as
+// uploaded), which is what "both" means.
 func TestInputsAbsentKeepsTodaysBehaviour(t *testing.T) {
 	m := mustParse(t, v2YAML)
 	if m.Inputs != nil {

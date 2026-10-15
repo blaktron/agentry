@@ -20,7 +20,7 @@ func (u usageJudge) Judge(context.Context, JudgeContent) (JudgeVerdict, error) {
 }
 
 // TestJudgeUsageReachesTheRunAndNotTheReport pins two things about where the
-// judge's token use goes (plan subscription-tiers §10). S5 lifts it onto the
+// judge's token use goes. S5 lifts it onto the
 // run result so the scan run can record it; and the canonical S10 report —
 // whose digest is the subject of the signed attestation and must be
 // reproducible — never carries it, because a token count varies from one

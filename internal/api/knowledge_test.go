@@ -29,7 +29,7 @@ import (
 	"github.com/blaktron/agentry/pkg/packseal"
 )
 
-// The knowledge store (agentry#593) through its routes: a pack is wrapped,
+// The knowledge store through its routes: a pack is wrapped,
 // created, uploaded sealed, scanned, listed, downloaded, exported and
 // deleted by its owner, and by no one else.
 
@@ -275,7 +275,7 @@ func TestAPackIsScannedBeforeItIsFinal(t *testing.T) {
 	}{{flagged.ID, true}, {clean.ID, false}} {
 		var p knowledgePackBody
 		env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+tc.id, nil, &p, http.StatusOK)
-		// Ready after its scan, findings or not (D27).
+		// Ready after its scan, findings or not.
 		if p.State != knowledge.StateReady || p.Scan == nil {
 			t.Fatalf("pack %s after its scan: %q", tc.id, p.State)
 		}
@@ -661,7 +661,7 @@ func TestKnowledgeUploadRefusals(t *testing.T) {
 		t.Fatalf("a refused upload stored %d objects (%v)", objects, err)
 	}
 
-	// While its tree is scanned the pack is unusable (D27), then usable.
+	// While its tree is scanned the pack is unusable, then usable.
 	good, _, _ := sealedPack(t, knowledgeFiles(), key)
 	if st, typ := put(good); st != http.StatusAccepted {
 		t.Fatalf("a good upload: %d %s", st, typ)
@@ -821,9 +821,9 @@ func TestTheLastScanAttemptSettlesThePack(t *testing.T) {
 }
 
 // TestTheLastScanAttemptSettlesThePackWhenItsTimeRunsOut: the queue cancels
-// an attempt's context at its job timeout (DEV-176, agentry#750). When that
-// was the last attempt, the pack is still failed rather than left scanning
-// for good: the settling write must not ride the cancelled context.
+// an attempt's context at its job timeout. When that was the last
+// attempt, the pack is still failed rather than left scanning for good:
+// the settling write must not ride the cancelled context.
 func TestTheLastScanAttemptSettlesThePackWhenItsTimeRunsOut(t *testing.T) {
 	env := newTestEnv(t)
 	o := newKnowledgeOwner(env, "kn-timeout")
@@ -886,7 +886,7 @@ type meter struct {
 	Pooled bool  `json:"pooled"`
 }
 
-// TestKnowledgePoolIsCountedAndLocked (agentry#612): two owners in one pool
+// TestKnowledgePoolIsCountedAndLocked: two owners in one pool
 // of 400 bytes upload 300 each at once; the pool's lock lets exactly one in,
 // both meters report the pool, a member still reads only their own packs, a
 // cap never deletes, and a wrong or failed answer is not permission.

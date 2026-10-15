@@ -1,9 +1,8 @@
 package api
 
-// The directory's mirror of platform staff (agentry#598, DB2 of the 1.0
-// plan's Dashboards decisions). Platform staff is the registry's word: the
-// platform_staff flag, which the staff organization's rule sets and nothing
-// else does (agentry#556, registry/staff.go). An application that signs in
+// The directory's mirror of platform staff. Platform staff is the
+// registry's word: the platform_staff flag, which the staff organization's
+// rule sets and nothing else does (registry/staff.go). An application that signs in
 // through the directory and should admit staff alone, the log stack's
 // OpenSearch Dashboards first, can read only what the directory's tokens
 // carry. So the registry keeps one directory group, auth.idpStaffMirrorGroup,
@@ -16,8 +15,7 @@ package api
 // keep addresses unique, and a second account at a staff member's address
 // gains nothing. Staff who never signed in through the directory have no
 // link and are not mirrored until they do. The directory never feeds the
-// group back: it is a mirror, never a source, and the retired DEV-083 group
-// stays retired.
+// group back: it is a mirror, never a source.
 //
 // One job does all of it, idempotently: read the flagged set, read the
 // group, add who is missing and remove who should not be there, each change
@@ -82,7 +80,7 @@ type directoryAccount struct {
 	UID    string
 	Active bool
 	// HasPassword is the directory's own record of whether the account has
-	// a password (agentry#706); nil when it has none yet. Only
+	// a password; nil when it has none yet. Only
 	// AccountsByEmail reads it; the mirror's group listing leaves it nil.
 	HasPassword *bool
 }
@@ -340,7 +338,7 @@ type authentikUser struct {
 	IsSuperuser bool `json:"is_superuser"`
 	Attributes  struct {
 		// Kept by the account-flows blueprint's agentry-record-has-password
-		// policy (agentry#706); absent on an account that has not signed in
+		// policy; absent on an account that has not signed in
 		// or written a password since. Raw, so a value someone edited into
 		// the wrong type reads as unknown instead of failing the lookup the
 		// staff mirror shares.
@@ -398,7 +396,7 @@ func (a *authentikEraser) GroupMembers(ctx context.Context, group string) (strin
 }
 
 func (a *authentikEraser) AccountsByEmail(ctx context.Context, email string) ([]directoryAccount, error) {
-	// accountsAt matches the address exactly and case-blind (agentry#617);
+	// accountsAt matches the address exactly and case-blind;
 	// the mirror also leaves inactive accounts out.
 	users, err := a.accountsAt(ctx, email)
 	if err != nil {

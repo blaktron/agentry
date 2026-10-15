@@ -1,9 +1,8 @@
 package scan_test
 
-// The review queue a new ruleset redoes (agentry#772; the operator's D19 of
-// 2026-09-30): every version waiting for a person is judged again under the
-// new ruleset, and one the gate now passes is published by the gate, its
-// review item superseded. Everything else stays where it was.
+// The review queue a new ruleset redoes: every version waiting for a person is
+// judged again under the new ruleset, and one the gate now passes is published
+// by the gate, its review item superseded. Everything else stays where it was.
 
 import (
 	"context"
@@ -162,7 +161,7 @@ func TestRedoReviewQueueRefreshesWhatIsStillHeld(t *testing.T) {
 }
 
 // forcedReviewProvider finds nothing and requires a person, as the `none`
-// judge does (§8.4.6).
+// judge does.
 type forcedReviewProvider struct{}
 
 func (forcedReviewProvider) Name() string              { return "forced" }
@@ -212,7 +211,7 @@ func TestRedoReviewQueueNeverPublishesPastAForcedReview(t *testing.T) {
 
 // TestRedoReviewQueueLeavesWhatAPersonDecided: an approval whose publish was
 // handed to the worker leaves its version in needs_review for a moment
-// (agentry#479); the redo must not judge it again, and a version a person
+// the redo must not judge it again, and a version a person
 // published is not in the queue at all.
 func TestRedoReviewQueueLeavesWhatAPersonDecided(t *testing.T) {
 	e := newPipeEnv(t)
@@ -311,8 +310,8 @@ func TestRedoReviewQueueTwiceDoesNothing(t *testing.T) {
 	}
 }
 
-// TestRegisteringANewRulesetKeepsEveryEarlierRelease pins D8 of the plan
-// (agentry#772): a ruleset release row is never removed or rewritten by the
+// TestRegisteringANewRulesetKeepsEveryEarlierRelease pins that
+// a ruleset release row is never removed or rewritten by the
 // next one, so every scan run keeps naming the bundle that judged it.
 func TestRegisteringANewRulesetKeepsEveryEarlierRelease(t *testing.T) {
 	e := newPipeEnv(t)
@@ -594,7 +593,7 @@ func rulesetJob(t *testing.T, semver string) queue.Job {
 
 // A rolling deploy runs a worker of the outgoing build beside the api of the
 // incoming one, which registers the new ruleset and enqueues its jobs
-// (agentry#805: production's 0.2.3 sweep ran under 0.2.2). A worker never does
+// (the sweep of a new ruleset must not run under the old one). A worker never does
 // a newer ruleset's job under its own: it hands the job back for retry, so a
 // worker of the new build takes it. An older ruleset's job is done by nothing:
 // the newer registration enqueued its own.

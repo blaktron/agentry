@@ -1,4 +1,4 @@
-# Words the core's markdown does not use (plan front-end-voice-and-warmth §4.4).
+# Words the core's markdown does not use.
 #
 # One entry per line, matched as whole words, case-insensitive, with flexible
 # whitespace and either apostrophe. Blank lines and lines starting with # are

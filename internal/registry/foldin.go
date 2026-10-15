@@ -1,7 +1,6 @@
 package registry
 
-// The fold-in (plan organization-subscriptions §4 "Fold-in", §5.5; D22,
-// D25; agentry#364). When an organization exists at a domain, an account
+// The fold-in. When an organization exists at a domain, an account
 // whose verified address is at that domain and who is a member of nothing
 // becomes a pending member of it — at the person's next directory sign-in,
 // or when the sweep runs over the accounts already known at the domain.
@@ -30,8 +29,8 @@ import (
 type FoldInRequest struct {
 	UserID uuid.UUID
 	// Email and EmailVerified are the identity token's fresh assertion,
-	// not the stored address: the plan keys the step on what the
-	// directory said at this sign-in.
+	// not the stored address: the step runs on what the directory
+	// said at this sign-in.
 	Email         string
 	EmailVerified bool
 	// Actor is the audit event to fill in — the person themselves.
@@ -127,7 +126,7 @@ func (s *Service) FoldInSweep(ctx context.Context, orgID uuid.UUID, domain strin
 // anywhere, no decline by this organization — so two fold-ins of one
 // person (a sign-in and a sweep at once) cannot both pass. An activation
 // elsewhere at the same moment is not serialised against this (the
-// chokepoint takes the person's row lock, agentry#412, and this takes an
+// chokepoint takes the person's row lock, and this takes an
 // advisory lock on the person: different locks); the worst of it is a
 // pending row beside an active membership, which the approval then
 // refuses with already-a-member and an admin declines. Reports whether
@@ -148,7 +147,7 @@ func (s *Service) writePending(ctx context.Context, orgID, userID uuid.UUID, dom
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		// The staff organization folds in only its own domain (agentry#556):
+		// The staff organization folds in only its own domain:
 		// a DNS claim of another domain does not make its people eligible.
 		if err := s.CheckStaffOrgDoorIn(ctx, q, orgID, userID); errors.Is(err, ErrStaffOrgDomain) {
 			return nil

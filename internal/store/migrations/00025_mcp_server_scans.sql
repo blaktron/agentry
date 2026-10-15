@@ -1,13 +1,12 @@
 -- +goose Up
--- MCP server vulnerability scanning (agentry#177, plan
--- agentry-notes/plans/mcp-vuln-scanning.md, DEV-090).
+-- MCP server vulnerability scanning.
 --
 -- mcp_server_scans is the registry of every declared MCP server version the
 -- pipeline has looked up: one row per (ecosystem, package, version) with the
--- advisories OSV knew at last_checked_at. S7 reads it before asking OSV
--- (a version seen within 24 h is not re-queried) and the daily sweep
--- refreshes every row. "safe" means "no known advisories as of
--- last_checked_at" — the same honesty rule as the scan itself.
+-- advisories OSV knew at last_checked_at. S7 reads it before asking OSV (a
+-- version seen within 24 h is not re-queried) and the daily sweep refreshes
+-- every row. "safe" means "no known advisories as of last_checked_at" — the
+-- same honesty rule as the scan itself.
 CREATE TABLE mcp_server_scans (
   ecosystem       text NOT NULL CHECK (ecosystem IN ('npm','pypi')),
   package         text NOT NULL,

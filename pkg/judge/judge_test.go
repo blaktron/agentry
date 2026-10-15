@@ -234,7 +234,7 @@ func TestTheQuestionSetsAreConstants(t *testing.T) {
 	}
 	got := ModelInputQuestions()
 	if len(got) != len(want) {
-		t.Fatalf("the model-input set has %d questions, want %d (D23)", len(got), len(want))
+		t.Fatalf("the model-input set has %d questions, want %d", len(got), len(want))
 	}
 	for _, q := range got {
 		if want[q.ID] != q.Text {
@@ -255,9 +255,9 @@ func TestTheQuestionSetsAreConstants(t *testing.T) {
 	}
 }
 
-// Every set's hash names every question's wording (agentry#703): change one
-// question's text, or its id, and the hash changes. A hash that dropped the
-// texts would make two differently worded sets read as one.
+// Every set's hash names every question's wording: change one
+// question's text, or its id, and the hash changes. A hash that dropped
+// the texts would make two differently worded sets read as one.
 func TestEveryQuestionSetHashNamesEachQuestionsWording(t *testing.T) {
 	for name, c := range map[string]struct {
 		set  func() []Question

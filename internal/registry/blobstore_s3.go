@@ -40,7 +40,7 @@ type S3Options struct {
 	UsePathStyle bool
 }
 
-// S3Store is the SaaS BlobStore (D-21). Keys are content-addressed by the
+// S3Store is the hosted BlobStore. Keys are content-addressed by the
 // caller (ArchiveKey), so an object's name already commits to its bytes.
 type S3Store struct {
 	api    S3API
@@ -49,8 +49,8 @@ type S3Store struct {
 }
 
 // maxArchiveBufferBytes bounds what Put will hold in memory. Put buffers
-// because the S3 request signer needs to seek the body, and because §1.6.4
-// makes agents small by construction — the §19 archive quota is 10 MB, so a
+// because the S3 request signer needs to seek the body, and because agents
+// are small by construction — the archive quota is 10 MB, so a
 // 64 MB ceiling is generous headroom, not a design assumption. A body past
 // the ceiling is refused rather than silently truncated.
 const maxArchiveBufferBytes = 64 << 20

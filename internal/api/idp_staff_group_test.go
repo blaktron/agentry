@@ -1,9 +1,9 @@
 package api_test
 
-// The directory's word at sign-in no longer makes platform staff
-// (agentry#556): the group of DEV-083 and the domain-alone rule of DEV-137
-// are retired, and staff is membership of the staff organization. The
-// sign-in through the deployment's directory still recomputes the flag.
+// The directory's word at sign-in does not make platform staff: neither
+// a directory group nor an address domain alone grants it, and staff is
+// membership of the staff organization. The sign-in through the
+// deployment's directory still recomputes the flag.
 
 import (
 	"context"
@@ -57,7 +57,7 @@ func TestRetiredDirectoryRulesGrantNothing(t *testing.T) {
 	env := newTestEnvCfg(t, func(cfg *config.Config) {
 		cfg.Social.Authentik = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
 		cfg.Auth.StaffOrg, cfg.Auth.StaffDomain = org, domain
-		// The retired keys still load, and grant nothing.
+		// The group and domain settings still load, and grant nothing.
 		cfg.Auth.IdPStaffGroup, cfg.Auth.IdPStaffDomain = "agentry-platform-staff", domain
 	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
 
@@ -67,7 +67,7 @@ func TestRetiredDirectoryRulesGrantNothing(t *testing.T) {
 	env.makePlatformStaff(t, founder) // founding the staff organization is reserved to staff
 	env.createOrg(founderSess, org)
 
-	// In the retired group, with a verified address at the domain, through
+	// In the directory's staff group, with a verified address at the domain, through
 	// the deployment's own directory: not staff, because not a member.
 	idp.sub, idp.email, idp.groups = "d-"+tag, "dir-"+env.sfx+"@"+domain, []string{"agentry-platform-staff"}
 	userID := loginThroughFakeOIDCAs(t, env, idp)

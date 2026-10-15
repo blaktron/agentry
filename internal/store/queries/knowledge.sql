@@ -1,6 +1,5 @@
--- Knowledge packs (plan knowledge.md §4.4, agentry#593). Every read and
--- write names the owner: a pack is found only by its owner, and anyone
--- else's lookup is a pack that does not exist.
+-- Knowledge packs. Every read and write names the owner: a pack is found only
+-- by its owner, and anyone else's lookup is a pack that does not exist.
 
 -- name: CreateKnowledgePack :one
 INSERT INTO knowledge_packs (owner_kind, owner_id, name, wrapper_kind, wrapper_recipient, wrapped_key)
@@ -23,11 +22,11 @@ SELECT id, name, state, bytes, created_at, updated_at FROM knowledge_packs
 WHERE owner_kind = $1 AND owner_id = $2 ORDER BY name;
 
 -- name: SumKnowledgeBytesOfPool :one
--- What a pool's owners keep in the registry, the pack named aside (the one
--- an upload replaces; uuid.Nil for none): the allocation counts every other
--- pack of every owner in the pool (agentry#612). An owner's id is a handle's,
--- unique across people and organizations, so the two lists match exactly
--- the owners given, on the owner index.
+-- What a pool's owners keep in the registry, the pack named aside (the one an
+-- upload replaces; uuid.Nil for none): the allocation counts every other pack
+-- of every owner in the pool. An owner's id is a handle's, unique across
+-- people and organizations, so the two lists match exactly the owners given,
+-- on the owner index.
 SELECT COALESCE(SUM(bytes), 0)::bigint FROM knowledge_packs
 WHERE owner_kind = ANY(sqlc.arg(owner_kinds)::text[]) AND owner_id = ANY(sqlc.arg(owner_ids)::uuid[])
   AND id <> sqlc.arg(except_id);
@@ -88,7 +87,7 @@ RETURNING salt;
 DELETE FROM knowledge_owner_keys WHERE owner_kind = $1 AND owner_id = $2;
 
 -- name: SetKnowledgePackExportable :one
--- Whether an organization's members may export its shared pack (D26).
+-- Whether an organization's members may export its shared pack.
 UPDATE knowledge_packs SET exportable = $4, updated_at = now()
 WHERE id = $1 AND owner_kind = $2 AND owner_id = $3
 RETURNING *;

@@ -4,12 +4,7 @@ The complete operator reference for running QuickAgents: every command,
 flag, file, and enforcement mechanism. The [QuickAgents](quickagents.md)
 page explains the package format; this page is the runtime side, and
 [Hosted runs](hosted-runs.md) is the same runner driven on a deployment's
-own machine, with caps and credits, instead of yours. The
-as-built architecture is
-[ARCHITECTURE.md](https://github.com/blaktron/agentry-notes/blob/main/ARCHITECTURE.md)
-§6 in agentry-notes; the original runner design records are archived there
-under `archive/agentry-cli/`, and departures from them are logged in
-[RUNNER-DEVIATIONS.md](https://github.com/blaktron/agentry-notes/blob/main/agentry-cli/RUNNER-DEVIATIONS.md).
+own machine, with caps and credits, instead of yours.
 
 ## Commands
 
@@ -94,7 +89,7 @@ One QuickAgent, one job, one container tree, then gone.
 | `--keep-profile true\|false` | this run's MCP-profile completion choice (default: the profile's own setting, else policy) |
 | `--reconfigure-profile` | re-run guided profile setup over an existing profile |
 | `--timeout N` / `--max-turns N` / `--max-cost USD` | override the policy budgets (exit 15 / 16 on breach; cost is the harness's running total, `0` = unlimited; `--max-cost` is refused, exit 2, for a run paid by a [model sign-in](#tokens-not-dollars), which records tokens and no dollars) |
-| `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`, or the image adapter a [model sign-in](#model-sign-ins) names: `codex-image`, `claude-image` or `copilot-image`; `claude` and `codex` drive your own installation of those CLIs, see below; goose is a planned slot) |
+| `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`, or the image adapter a [model sign-in](#model-sign-ins) names: `codex-image`, `claude-image` or `copilot-image`; `claude` and `codex` drive your own installation of those CLIs, see below) |
 | `--local DIR` | run an unpublished QuickAgent tree (unsigned by definition: requires `--allow-unsigned`) |
 | `--allow-unsigned` | run a release the registry has no attestation for; a *mismatched* attestation always refuses |
 | `--allow-vulnerable-mcp` | run even though the registry's gate rates an advisory of a declared MCP server version high or critical (the receipt records the override) |
@@ -166,7 +161,7 @@ through the session protocol below.
 
 Without a terminal, an interactive run is refused: the chat is its input.
 `--session-protocol` is the other way in, for a program that drives the
-session itself, such as runhost on a sandbox host (DR-51):
+session itself, such as runhost on a sandbox host:
 
 ```
 agentry run ns/name --mode interactive --session-protocol \
@@ -264,7 +259,7 @@ has every flag.
 Removes this machine's runner state for a QuickAgent: the verified
 install cache (workspace + compiled plans) and — **by default** — its
 MCP profile, stored keys and installed MCP servers included
-(RUNNER-PLAN-3: remove on uninstall is the default). `--keep-mcp`
+`--keep-mcp`
 retains the profile directory, which stays locked to the exact release
 digest it was created for: a same-digest reinstall reconnects without
 re-prompting; nothing else — no other QuickAgent, no other user, no
@@ -323,10 +318,10 @@ version exists.
 Embedded mode: the QuickAgent installs into a host agent application and
 runs on **its** MCP servers and built-in tools — no docker gateway
 involved. `--provider` picks the target (`claude`→claude-skill,
-`codex`→agents-md, `openclaw`→claude-skill today); explicit `--target
+`codex`→agents-md, `openclaw`→claude-skill); explicit `--target
 claude-skill|agents-md` remains. The claude-skill target compiles the
 capability contract into `allowed-tools` frontmatter; agents-md records
-it as a Tools note. Plugin-system distribution per provider is planned.
+it as a Tools note.
 
 ### `agentry draft "<description>"`
 
@@ -439,7 +434,7 @@ done, and writes a draft. It never submits anything.
 
 #### Before a draft is written
 
-The CLI checks every draft in four steps (agentry-cli#417, agentry-cli#418):
+The CLI checks every draft in four steps:
 
 1. **Mechanical slips are corrected without the model.** A mode, a tag or
    a choice named twice loses the second one. An optional part left empty,
@@ -537,8 +532,8 @@ under `~/.agentry/runner/profiles/…` (directory `0700`, file `0600`).
   policy's env file. A required secret nothing resolves refuses the run
   (exit 11, naming the variable) — never a silent degrade. A manifest may
   mark declared secrets optional (`capabilities.optionalSecrets`, see
-  [QuickAgents](quickagents.md)), and since v0.6.66 a run starts without an
-  optional secret nothing resolves. It is written **empty** into the
+  [QuickAgents](quickagents.md)), and a run starts without an
+  optional secret nothing resolves (v0.6.66 or later). It is written **empty** into the
   gateway's secrets file, because a variable the file lacks would get the
   gateway's own placeholder, so the runner's `fetch` answers `secret NAME
   not set`. The System Prompt names the optional secrets this run was not
@@ -554,7 +549,7 @@ under `~/.agentry/runner/profiles/…` (directory `0700`, file `0600`).
   guided setup. Non-interactive runs never create profiles and behave
   exactly like v1.
 
-### Declared MCP servers (RUNNER-PLAN-3)
+### Declared MCP servers
 
 A release that declares `capabilities.mcpServers` installs them as part
 of its own install: each entry resolves against the operator's configured
@@ -584,17 +579,17 @@ keeps it a run's own depends on where it runs:
   and Windows, where it is a container of the run's own)**, the filter translates the
   gateway's two fixed relay network names to two networks made for the run,
   `agentry-<run>-relays` and `agentry-<run>-relays-out`, and removes them
-  with the run (agentry-cli#220). Runs with declared egress share the host
+  with the run. Runs with declared egress share the host
   without seeing each other's relays, and the user's own
   `docker mcp gateway` and its networks are untouched.
 - **Where the filter does not run (a platform other than Linux, macOS and
-  Windows; Docker Desktop too before agentry-cli#322)**, the
-  network is the host's one fixed network, so such runs take turns (DR-22).
+  Windows)**, the network is the host's one fixed network, so such runs
+  take turns.
   A run whose declared servers need relays holds `relays.lock` under the
   runner home from its relay listing to the end of its teardown, so a
   second `agentry` relay run on the host, from the CLI, the desktop or
-  runhost, is refused while it runs (exit 13, naming the lock), not queued
-  (agentry-cli#268). It also does not start (exit 13) while another
+  runhost, is refused while it runs (exit 13, naming the lock), not queued.
+  It also does not start (exit 13) while another
   gateway's relay sidecars are on the network: the user's own
   `docker mcp gateway`, or a client that passes no runner home and so takes
   no lock. That check is made as the run starts, so such a gateway started
@@ -611,7 +606,7 @@ holding `$NAME`, `${NAME}` or `{{…}}`), an empty one, or one carrying the
 run's `@@…@@` placeholder marker: a declared value is literal or it is not
 declared.
 
-**Remote servers** (agentry-cli#663). A server declared by its `url` (see
+**Remote servers.** A server declared by its `url` (see
 the [QuickAgent reference](quickagents.md)) is not installed and has no
 store. The gateway would call such a server from its own process, and the
 gateway has no network of its own, so the run reaches it through the runner
@@ -741,7 +736,7 @@ low runs and only prints a line, so a High advisory scoring below CVSS 8.5,
 which the gate rates medium and publishes, runs too. A Critical advisory is
 critical whatever rating is served. A registry that serves no rating (an
 older or a self-hosted one), or a rating word the runner does not know, is
-weighed by the advisory's own severity: high or critical refuses, as before.
+weighed by the advisory's own severity: high or critical refuses.
 A version the registry has never seen only prints a line, and a registry
 that cannot be reached does not stop the run. Whatever happened, the
 receipt's `capabilities_enforced.mcpServers.vulnerabilities` says what was
@@ -751,7 +746,7 @@ rating the gate gave it (for example "an advisory the gate rates high
 (GHSA-… [advisory high, CVSS 8.7])"). `agentry doctor` and `run --plan`'s
 `refusals[]` use the same words; `doctor` reports a server a run would
 refuse as a failure. The rule reads advisories only, never a version's other
-findings (DR-60, amending DR-16).
+findings.
 
 The isolation rules are the profile rules: server configuration and keys
 belong to one signature (ns/name@version + digest). No other QuickAgent
@@ -796,7 +791,7 @@ its digest, so a run record says which file a run obeyed.
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
-| `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode (DR-53; [Unsafe Mode](agentry/unsafe-mode.md)) |
+| `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode ([Unsafe Mode](agentry/unsafe-mode.md)) |
 | `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
 | `images.hostlink` | the hostlink image the host link is built on, the OpenSSH client a run reaches a [target host](#target-hosts-a-server-named-at-run-time) with, pinned by digest (the default is the one the CLI release names) |
 | `images.browser` | the browser server's image a release that declares a [browser](#the-browser-a-site-to-test-named-at-run-time) runs on, `agentry-browser` (`@playwright/mcp` and Chrome for Testing), pinned by digest (the default is the one the CLI release names) |
@@ -827,15 +822,14 @@ store, and the MCP server installer that builds a declared server's dependency
 closure. Unset, the shipped default, every container takes the daemon's own
 default and the receipt says nothing about a runtime.
 
-Since agentry-cli#221 the runtime also holds the gateway's health probe and,
+The runtime also holds the gateway's health probe and,
 through the run's docker filter, the tools server and the declared MCP servers
 the gateway launches. A sandboxed runtime's own network stack does not reach
 docker's embedded DNS at `127.0.0.11`, so the containers under it find the
 ones they talk to through `/etc/hosts` entries pinned from the containers'
 addresses.
 
-Four classes need more than that, measured on a live run rather than assumed
-(DR-23), and since agentry-cli#337 each can move under a sandbox too:
+Four classes need more than that, and each can move under a sandbox too:
 
 - **The llm-proxy, the MCP server install proxy and the relays** resolve the
   hosts they forward to by name. With `docker.resolvers` (below) they run
@@ -872,7 +866,7 @@ Four classes need more than that, measured on a live run rather than assumed
   `docker.runtime`: the gateway is never sandboxed while the QuickAgent's
   code is not. Unset, the gateway stays on the daemon's default.
 
-gVisor's `--reproduce-nat`, the other flag the measurements tried, starts no
+gVisor's `--reproduce-nat`, the other option, starts no
 container on a host whose docker writes its rules through nftables. The
 receipt's runtime line names each class, and each that takes the default and
 why; with both settings it says that no class of the run is on the daemon's
@@ -891,14 +885,13 @@ of the run's own. Under a sandboxed runtime their container cannot reach
 docker's embedded DNS there. `--dns` only sets that server's upstream on a
 user-defined network. gVisor's `--reproduce-nat`, which would copy docker's
 DNS rule into the sandbox, does not start a container on a host whose docker
-writes its rules through nftables. Both were measured on 2026-09-27
-(agentry-cli#386).
+writes its rules through nftables.
 
 So the runner writes the policy's `docker.resolvers` into a `resolv.conf` of
 the run's own, and the docker filter binds it read-only at `/etc/resolv.conf`
 in the web tools' server and, under the runtime, in each relay. The runner
-binds it into the llm-proxy too, and the install proxy gets one of its own
-(agentry-cli#337). That server takes no DNS setting, hosts
+binds it into the llm-proxy too, and the install proxy gets one of its own.
+That server takes no DNS setting, hosts
 entry, volume or tmpfs of the gateway's, and nothing under `/etc` but its
 tools spec.
 
@@ -942,7 +935,7 @@ receipt is written at run time, because two of its facts are the run's:
 whether the docker filter runs and
 what the run started. It names what was created under the runtime, what the
 gateway's containers were given through the filter, and each class on the
-daemon's default with its measured reason.
+daemon's default with its reason.
 
 Hosted runs are why the knob exists: the platform's sandbox host renders
 `docker.runtime: runsc` into the policy of every run it drives. That side is
@@ -958,8 +951,8 @@ docker:
     pids: 512    # processes, 32 to 65536
 ```
 
-Every container the runner starts for a run takes the same posture
-(agentry-cli#163, DR-30): all capabilities dropped (`--cap-drop ALL`),
+Every container the runner starts for a run takes the same posture:
+all capabilities dropped (`--cap-drop ALL`),
 `--security-opt no-new-privileges`, and the memory, CPUs and processes
 above. That covers the llm proxy, the gateway, the gateway's health probe,
 the agent container (an interactive session's too) and the MCP server
@@ -986,7 +979,7 @@ also holds each of them to the run's memory, CPUs and processes:
 it fills in a bound the gateway left unset and refuses one set higher, and
 it refuses a privileged container and any added capability the gateway
 asks for. It also drops every capability of each of them and gives back
-only what its kind needs (agentry-cli#227):
+only what its kind needs:
 
 | launched by the gateway | capabilities kept |
 | --- | --- |
@@ -1017,7 +1010,7 @@ lower them for your own host.
 | `egress: none` | tools container networking disabled; no `fetch` tool |
 | `egress: [hosts]` | gateway per-server proxies + DNS interception (`--block-network`, always on) pin the tools container to `host:443`; the `fetch` tool re-checks the host per request and per redirect hop |
 | `filesystem.*` | mount table on the tools container (`:ro`/`:rw`, per-path binds) + server-side grant checks; the agent container never mounts the workspace |
-| `exec: {commands}` | `run_command` argv0 allowlist + a shim `PATH` containing only the declared commands; each command writes only beneath `/tmp`, `/scratch` and, when `filesystem.write` is granted, the workspace, never the output folder, its reports or its receipts: through the runner binary's `confine` role (Landlock), or, where the kernel or runtime has no Landlock (gVisor, so every hosted run), as uid and gid 65534, where a contract that grants workspace writes runs no declared command (DR-63; [below](#where-a-declared-command-can-write)) |
+| `exec: {commands}` | `run_command` argv0 allowlist + a shim `PATH` containing only the declared commands; each command writes only beneath `/tmp`, `/scratch` and, when `filesystem.write` is granted, the workspace, never the output folder, its reports or its receipts: through the runner binary's `confine` role (Landlock), or, where the kernel or runtime has no Landlock (gVisor, so every hosted run), as uid and gid 65534, where a contract that grants workspace writes runs no declared command ([below](#where-a-declared-command-can-write)) |
 | `secrets: [names]` | values only in the profile, the per-run secrets file (0600, deleted at teardown), the tools container env (a declared server's own: that server's container env), and the MCP gateway's container, which reads the whole secrets file to inject them — never in plans, receipts, or process listings |
 | a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer, or an `auth: oauth` connection's access token, is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file; a connection's refresh token and any client secret stay in the runner's store and never enter the run |
 | a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
@@ -1027,10 +1020,10 @@ lower them for your own host.
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
 | `grep` and `glob` (granted with the scratch folder) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds and, on Linux through the run's docker filter, every capability dropped but each kind's own ([above](#container-limits-dockerlimits)) |
-| the gateway's reach into the docker daemon | only through the run's docker filter, which admits the run's own containers, networks and volumes and checks every create (DR-36; every decision in `receipts/docker-filter.log`). On Linux the CLI serves it on a socket mounted in place of the daemon's. On Docker Desktop (macOS, Windows) it runs in a container of the run's own, from the runner image, with no network, every capability dropped and a read-only root, and serves its socket in a volume the gateway mounts at `/var/run`; the gateway starts only once it is ready (agentry-cli#322). Elsewhere the gateway holds the daemon's own socket, and the receipt's `daemon` line says so |
+| the gateway's reach into the docker daemon | only through the run's docker filter, which admits the run's own containers, networks and volumes and checks every create (every decision in `receipts/docker-filter.log`). On Linux the CLI serves it on a socket mounted in place of the daemon's. On Docker Desktop (macOS, Windows) it runs in a container of the run's own, from the runner image, with no network, every capability dropped and a read-only root, and serves its socket in a volume the gateway mounts at `/var/run`; the gateway starts only once it is ready. Elsewhere the gateway holds the daemon's own socket, and the receipt's `daemon` line says so |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
-| a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool's result, `run_command`'s included, and the arguments of every call, a `write_report` that quotes a key included. **The person's own inputs are the exception** (agentry-cli#632): a successful `read_input` or `search_inputs` serves the file unchanged, keys and passwords included, so a QuickAgent whose job is to *find* credentials can read them. An input tool's error, and the input tools under the review grant, are still refused. A `git log -p` through `run_command` that would print a key is refused too, and a finding should name a credential's kind and where it is, never its value, because a report that repeats it is refused. |
+| a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool's result, `run_command`'s included, and the arguments of every call, a `write_report` that quotes a key included. **The person's own inputs are the exception**: a successful `read_input` or `search_inputs` serves the file unchanged, keys and passwords included, so a QuickAgent whose job is to *find* credentials can read them. An input tool's error, and the input tools under the review grant, are still refused. A `git log -p` through `run_command` that would print a key is refused too, and a finding should name a credential's kind and where it is, never its value, because a report that repeats it is refused. |
 | a **host-run** harness instead (`--adapter claude`) | no agent container: the gateway's catalog is still the whole tool surface, and the proxy variables are still the route to the model, but they are configuration the harness is asked to honour rather than a network it cannot leave. The receipt says so in `capabilities_enforced["harness.isolation"]`, and `receipts/proxy.log` shows every CONNECT it actually made. Beside it, `capabilities_enforced["harness.env"]` names the variables of your own environment the harness is given unchanged, where they are set: the ones its adapter asks for (`HOME` and `PATH` for `claude` and `codex`), and on Windows also `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, `TMP`, `PATHEXT`, `ComSpec` and `SystemRoot`. Everything else it has is set by the plan and the run. |
 
 Every claim above appears, mechanism named, in the run's
@@ -1057,7 +1050,7 @@ serves the tools), built once at install time from a generated Dockerfile
 packages and the mirror, so a changed catalog entry is a new image).
 `run_command` is still gated by the argv0 allowlist and shim `PATH`; the
 image contains nothing else to run. Under the desktop's
-[Unsafe Mode](agentry/unsafe-mode.md) (DR-53) three things change for a run on
+[Unsafe Mode](agentry/unsafe-mode.md) three things change for a run on
 that computer: the exec catalogue is not consulted (each declared command is
 installed from the `images.unsafe` base, and one that fails to install is left
 absent and named in the receipt), the image is built from that base and not
@@ -1083,8 +1076,8 @@ workspace and inputs mounts — exactly those paths, and the receipt says so.
 
 ### Where a declared command can write
 
-The allowlist says which programs run; where they write is held too
-(DR-63). The tools container mounts the run's output folder read-write for
+The allowlist says which programs run; where they write is held too.
+The tools container mounts the run's output folder read-write for
 `write_report` and the receipts' ledgers, so a declared command is kept
 away from it: it can write only beneath `/tmp`, [`/scratch`](#the-scratch-folder)
 and, when the contract grants `filesystem.write`, the workspace (plus
@@ -1113,7 +1106,7 @@ holds in a run.
 ### The commands every machine provides
 
 Every machine provides these to a QuickAgent that declares them in `exec`,
-with no entry in `exec.packages` (DR-64): `base64`, `basename`, `bunzip2`,
+with no entry in `exec.packages`: `base64`, `basename`, `bunzip2`,
 `bzcat`, `cat`, `cksum`, `cmp`, `comm`, `cut`, `diff`, `dirname`, `du`,
 `fold`, `grep`, `gunzip`, `head`, `hexdump`, `ls`, `md5sum`, `nl`, `od`,
 `paste`, `realpath`, `rev`, `sha1sum`, `sha256sum`, `sha512sum`, `sort`,
@@ -1135,7 +1128,7 @@ inputs uploaded with a hosted run. They are copied read-only to `/inputs`.
 Before the agent starts, the runner opens every one of them in a container
 of its own, checks each for malware and turns what it can into text, and
 the agent then reads them through three tools. A run with no files does
-none of this and pulls nothing (plan `file-handling.md`, agentry-cli#560).
+none of this and pulls nothing.
 
 ### Before the agent starts
 
@@ -1144,10 +1137,10 @@ none of this and pulls nothing (plan `file-handling.md`, agentry-cli#560).
    the CLI's policy defaults (`images.files`). The CLI pulls it the first
    time a run has files and adds the runner binary to it in a local layer
    that installs nothing (`agentry-decode:<hash>`); nothing is installed
-   from a package mirror during a run (agentry-cli#559).
+   from a package mirror during a run.
    `agentry files ensure` pulls it ahead of time and refreshes the ClamAV
-   signatures (below); a sandbox host runs it at each update
-   (agentry-cli#572). A pull that fails refuses the run with exit 13, the
+   signatures (below); a sandbox host runs it at each update.
+   A pull that fails refuses the run with exit 13, the
    reason `inputs-not-decoded` and the detail `image`.
 2. **One container reads them all.** It has no network, every capability
    dropped, no new privileges and a read-only root. The files are mounted
@@ -1156,7 +1149,7 @@ none of this and pulls nothing (plan `file-handling.md`, agentry-cli#560).
    files. In it each file is identified by its content, not its name, so a
    renamed `.docx` is still read as a document. Each archive is unpacked,
    every file is checked by ClamAV, and only what ClamAV did not find is
-   turned into text (agentry-cli#561, #562, #563).
+   turned into text.
 3. **The runner checks what came out.** It reads the container's output
    only as regular files within their caps, each text it made at most
    10 MiB, and only for the files it staged. It hashes each staged file
@@ -1187,19 +1180,18 @@ mounted read-only at `/inputs-text`, beside the originals at `/inputs`.
 | archives | zip, tar, 7z, rar; gzip, bzip2, xz and zstd streams | unpacked, and each file in it read by this table ([archives](#archives)) |
 
 Code, markup and data are not converted: the agent reads them as you
-uploaded them (agentry-cli#630). A file nothing reads (an executable, a
+uploaded them. A file nothing reads (an executable, a
 database, an image `tesseract` could not read) is listed as not read, with
 the reason,
 and the agent can still read its original. Files inside a repository's
 `.git` folder are listed, checked by ClamAV and never read as text: a
-QuickAgent that wants a repository's history declares `git` in `exec`
-(agentry-cli#642).
+QuickAgent that wants a repository's history declares `git` in `exec`.
 
 ### Archives
 
 A zip, tar, 7z or rar, or a gzip, bzip2, xz or zstd stream, is unpacked
 inside the same container, and each file in it is listed, checked and read
-by its path inside the archive: `bundle.zip/notes/memo.docx` (agentry-cli#562).
+by its path inside the archive: `bundle.zip/notes/memo.docx`.
 
 - At most three archives deep. A fourth level is listed, not unpacked.
 - At most 2,000 files in all, the files you gave and the files inside
@@ -1222,7 +1214,7 @@ by its path inside the archive: `bundle.zip/notes/memo.docx` (agentry-cli#562).
 | `search_inputs` | the lines that hold a word or phrase, regardless of case, as `path:line: excerpt` (20 by default, 100 at most, fewer when they would pass one tool result, with a count of those left out) |
 | `grep`, `glob` (path `/inputs`) | the inputs searched by regular expression, or listed by a path pattern; a search reads each input in the view `read_input` gives it ([searching files](#searching-files-grep-and-glob)) |
 
-Each file can be read in two **views** (agentry-cli#631). `text` is a
+Each file can be read in two **views**. `text` is a
 document's text, HTML's Markdown or a text file itself. `original` is the
 file as uploaded; a binary original comes as pages of base64, headed with
 its size and detected type. A document's default is its text, and
@@ -1235,7 +1227,7 @@ read its inputs.
 
 The files reach the agent unchanged, keys and passwords included: an input
 is never masked, and the gateway's secret block does not refuse it, so a
-QuickAgent whose job is to find credentials sees them (agentry-cli#632).
+QuickAgent whose job is to find credentials sees them.
 Only the malware checks and, on Agentry, AI Review refuse a file, before
 the agent starts. Its report must not
 repeat them ([what a run enforces](#what-a-run-enforces)).
@@ -1246,7 +1238,7 @@ repeat them ([what a run enforces](#what-a-run-enforces)).
 
 Every file and every file in an archive is checked by ClamAV's `clamscan`
 in the same container, before its text is extracted, locally and on
-Agentry (agentry-cli#563). The one exception is a repository given as an
+Agentry. The one exception is a repository given as an
 [input source](#input-sources-a-repository-or-a-file-at-a-web-address),
 where only the executable and binary risky files are checked; a file at a
 web address is checked as an upload is. Its arguments are fixed, potentially unwanted
@@ -1274,7 +1266,7 @@ contents past that, is not checked and the receipt says so.
 #### Hybrid Analysis, by hash
 
 The risky files are also looked up on CrowdStrike's Hybrid Analysis by
-their SHA-256 alone (agentry-cli#564). The CLI process asks, after the
+their SHA-256 alone. The CLI process asks, after the
 container has exited and before the agent starts. No file, file name or
 account detail is sent, and nothing is ever submitted: Hybrid Analysis
 receives the hash and the key, and sees the address the request came from.
@@ -1299,7 +1291,7 @@ receives the hash and the key, and sees the address the request came from.
   `hybridAnalysis` block: `$HYBRID_API_KEY` by default, or another variable
   named by `apiKeyEnv`; when the variable is not set and `apiKeySource` is
   `keyring`, the keychain entry `provider:hybrid-analysis`, which the desktop app writes from
-  Settings → Provider settings → Hybrid Analysis key (agentry-desktop#530).
+  Settings → Provider settings → Hybrid Analysis key.
   A free key from Hybrid Analysis is enough. With no key nothing is asked,
   nothing warns, and the receipt says `not checked: no key`. A hosted run
   uses Agentry's key, which the registry pushes to its sandbox hosts
@@ -1309,7 +1301,7 @@ receives the hash and the key, and sees the address the request came from.
 ### AI Review of a hosted run's inputs
 
 On Agentry, the text of every input is also read by AI Review before the
-agent starts (agentry-cli#321, agentry-enterprise#333). A sandbox host runs
+agent starts. A sandbox host runs
 the CLI with `--review-inputs REGISTRY` and the job's credential in
 `$AGENTRY_JOB_TOKEN`, and the CLI sends every text the agent could read to
 that registry's [model-input scan](model-input.md) as `input_file`: a
@@ -1350,9 +1342,9 @@ AI Review costs one credit a run however many calls it takes
 
 Two lines of `capabilities_enforced` say what happened to the files. The
 `decode` line names the files image, the readers and their versions, what
-was read, the ClamAV signatures and every outcome. From hosted run
-`01a12288` on dev (2026-10-09), given two documents, one of a type
-Hybrid Analysis is asked about, with the package versions cut:
+was read, the ClamAV signatures and every outcome. For example,
+for a hosted run given two documents, one of a type Hybrid Analysis is
+asked about, with the package versions cut:
 
 > the inputs were decoded before the run, in agentry-decode:83ac5a7a15027347
 > (built on ghcr.io/blaktron/agentry-files:2026.10.04.3@sha256:f8da034b…)
@@ -1374,8 +1366,8 @@ checked with the reason. A session that added files has a second clause
 for them. With no signatures it reads "no file was checked for malware:
 …".
 
-A hosted run's `inputReview` line says what AI Review read; the same run's
-was "AI Review (the registry's model-input scan, question set
+A hosted run's `inputReview` line says what AI Review read, for example
+"AI Review (the registry's model-input scan, question set
 f04db41f43fc, jev-1.13.0) was asked about the inputs' text; before the
 agent started: 3 text(s), 2 KiB, in 1 call(s) and 1 judge request(s), none
 flagged". It names any file withheld past the cap.
@@ -1383,15 +1375,13 @@ flagged". It names any file withheld past the cap.
 ### Input sources: a repository or a file at a web address
 
 An **input source** is where a run's inputs come from beyond what you
-upload (plan `input-sources.md` §5; agentry-cli#833). A QuickAgent asks for
+upload. A QuickAgent asks for
 one with an intake question of the source's type, and the run fetches it
 before the agent starts into `/inputs/<question id>/`, where the input
 tools list, search and read it like any input. The kinds sit on one seam
-in the CLI (`pkg/runner/sources`), so a later kind is a new entry on it.
-There are two: **`repository`**, a git repository at one commit, and
-**`url`**, one file at a web address ([below](#a-file-at-a-web-address-url),
-agentry-cli#834). A run in Agentry fetches them too, on its sandbox host
-(agentry-enterprise#516).
+in the CLI (`pkg/runner/sources`). There are two: **`repository`**, a git repository at one commit, and
+**`url`**, one file at a web address ([below](#a-file-at-a-web-address-url)).
+A run in Agentry fetches them too, on its sandbox host.
 
 **The answer.** An https address, with the ref after `#` as Docker's
 build-context addresses carry one: a branch, a tag, or a full 40-character
@@ -1405,7 +1395,7 @@ agentry run you/code-audit --intake codebase=https://github.com/you/app#v2.1 --i
 are an address that carries credentials, a port other than 443, a query
 and a ref with a folder after it (`#main:docs`).
 
-**The access token** is used by the fetch step alone (D5). It is taken, in
+**The access token** is used by the fetch step alone. It is taken, in
 order:
 1. from the environment variable `--intake-token <id>=ENV_NAME` names (an
    unset or empty variable is an error, never a quiet anonymous fetch);
@@ -1427,8 +1417,8 @@ environment, `intake.json`, a receipt or `result.json`.
 - It runs on a network of the run's own whose only route out is a CONNECT
   proxy (the runner's `proxy` role with `--public-only`) allowing the
   source's host on port 443. The proxy resolves the host itself and refuses
-  it when any address is private, loopback, link-local, shared (CGNAT, a
-  tailnet's range) or otherwise not public, then dials the address it
+  it when any address is private, loopback, link-local, shared (CGNAT, such
+  as a Tailscale network's range) or otherwise not public, then dials the address it
   checked. A redirect is followed only on the same host over https.
 - The token arrives on the container's stdin. The container runs as your
   uid with a read-only root, every capability dropped and the run's limits.
@@ -1437,7 +1427,7 @@ environment, `intake.json`, a receipt or `result.json`.
   kept as `receipts/source-proxy-<id>.log`.
 - The clone is a depth-1 fetch of the one commit over git's smart HTTP
   protocol (v2, or v0 from a host without it), spoken by the runner itself
-  (the runner image builds with no module download, DR-2), and checked
+  (the runner image builds with no module download), and checked
   out as plain files: no `.git`, no submodules (a submodule is left out),
   Git LFS files as their pointer files, every file written 0644 whatever
   mode git gave it. Links are left out, never followed, and so is a name no
@@ -1452,7 +1442,7 @@ environment, `intake.json`, a receipt or `result.json`.
   the files and bytes the step reported. A tree that breaks one is not
   staged, and the run fails with exit 13.
 
-**Caps** (D7): 20,000 files and 1 GiB checked out. A repository past
+**Caps**: 20,000 files and 1 GiB checked out. A repository past
 either is refused before anything is staged, with exit 11, the reason
 `input-refused`, the detail `source-cap` and its count ("the input source
 codebase: the repository holds 25000 files at <commit>, past the 20000-file
@@ -1462,7 +1452,7 @@ own cap, apart from the uploads' 2,000.
 
 **The decode** treats a source's files as it treats uploads, with two
 differences:
-- **Malware checks** (D8): ClamAV and Hybrid Analysis check only the
+- **Malware checks**: ClamAV and Hybrid Analysis check only the
   executable and binary risky files in a source, detected by content with
   their extension as a fallback: PE, ELF and Mach-O executables, libraries
   and objects (`.exe`, `.dll`, `.so`, `.dylib`), Java and WebAssembly code
@@ -1494,7 +1484,7 @@ be fetched fails with exit 1, the reason `input-refused` and the detail
 
 #### A file at a web address (`url`)
 
-A `url` intake question takes one file's https address (agentry-cli#834):
+A `url` intake question takes one file's https address:
 
 ```bash
 agentry run you/paper-review --intake paper=https://arxiv.org/pdf/1706.03762
@@ -1544,8 +1534,7 @@ only to the fetch step, as its argument.
 ### Target hosts: a server named at run time
 
 A **target host** is a machine you name when a run starts, such as a Linux
-server for the QuickAgent to set up or manage (plan `runtime-hosts.md`;
-agentry-cli#861). A QuickAgent that takes one asks for it with an intake
+server for the QuickAgent to set up or manage. A QuickAgent that takes one asks for it with an intake
 question of type `host` and lists that question under
 `capabilities.targetHosts` ([QuickAgents](quickagents.md)). It never names
 which machine: the answer is yours, so one QuickAgent serves every server.
@@ -1557,8 +1546,8 @@ hosted (the host passes its run grant, its job credential or
 11, the reason `host-refused`, the detail `hosted`). A run with no terminal
 takes the sign-in before anything else, so a hosted run that reaches the CLI
 without that knowledge is refused for want of one (`host-credential`) before
-any name is resolved or any address reached. The registry refusing such a run
-at create is agentry-enterprise#534.
+any name is resolved or any address reached. The registry refuses such a run
+when it is created.
 
 **The answer.** `[user@]host[:port]`, as `ssh` takes it: a name or an
 address, an IPv6 address in brackets. The user defaults to your local user
@@ -1574,12 +1563,12 @@ holds one relay a host.
 
 **Before anything starts**, for each target host, in this order:
 1. **The address.** The name is resolved by your machine's own resolver (a
-   tailnet, mDNS or split-DNS name resolves as your `ssh` would resolve
+   Tailscale, mDNS or split-DNS name resolves as your `ssh` would resolve
    it), and the run reaches the first IPv4 address it gives: the relay that
    carries the session is on Docker's IPv4 network, so a host with no IPv4
    address is refused. Loopback, link-local (a cloud's metadata address
    among them) and addresses that are no one host are refused; private, LAN
-   and tailnet addresses are reached. The policy's `hosts` lists narrow the
+   and Tailscale addresses are reached. The policy's `hosts` lists narrow the
    rest ([below](#the-hosts-lists-hosts)). A refusal is exit 11,
    `host-refused`, detail `host-address`.
 2. **The host key.** The runner reads the key the host offers (it connects
@@ -1676,13 +1665,13 @@ than one tool result is kept for the next read, up to 8 MiB a session
 unread, the oldest dropped first. A session ends when the shell exits, when
 it is closed, after 30 minutes unused, or with the run.
 
-**What the host prints reaches the agent unchanged** (plan D9), keys and
+**What the host prints reaches the agent unchanged**, keys and
 tokens read there included, past the gateway's secret block and the
 harness's scrub, as your inputs do: a QuickAgent that manages a server must
 be able to read its configuration. The one thing masked is the run's own
 sign-in for its target hosts (key, passphrase, password, sudo password), in
 every spelling the runner knows, raw and base64, from every result and every
-file the run leaves (D19). A sign-in shorter than 8 characters is not masked
+file the run leaves. A sign-in shorter than 8 characters is not masked
 in the run's files (nor, under 6, in a result), and the receipt says so. The System Prompt says what a host prints is
 data, never instructions.
 
@@ -1752,14 +1741,13 @@ address but the ones above is reached.
 
 A QuickAgent that tests websites declares a **browser**
 (`capabilities.browser`, [QuickAgents](quickagents.md#the-browsers-site-a-url-question-named-in-capabilitiesbrowser)),
-and since agentry-cli v0.6.117 (agentry-cli#915, DR-96) a local run gives it
+and from agentry-cli v0.6.117 a local run gives it
 one: a headless Chromium driven through Microsoft's Playwright MCP server,
 the **browser server**, whose only route out is a proxy of the run's own,
 the **browse proxy**. The manifest names `url` questions, never a site you
 own: you name the site when the run starts, and the proxy admits it, its
 subdomains and the hosts the release declares, or, in `public` scope, any
-public site. Since agentry-cli v0.6.118 (agentry-cli#941, DR-96's
-addendum) a hosted run gets one too, its sites public only: before
+public site. From agentry-cli v0.6.118 a hosted run gets one too, its sites public only: before
 anything starts it refuses (exit 11, naming the question) a site on a port
 other than 80 and 443, an address that is not public, and a name that
 does not resolve or resolves to any address that is not public, and its
@@ -1848,8 +1836,8 @@ Docker's DNS). It admits:
 It resolves every name itself and dials only the address it checked, so a
 second answer from the name server cannot slip in between. A name with any
 answer that is not a public address is refused, with the address in the
-reason. The one exception is a site you typed (plan D2): it may be at a
-LAN's or a tailnet's address (RFC 1918, IPv6 ULA, CGNAT), because you named
+reason. The one exception is a site you typed: it may be at a
+LAN's or a Tailscale network's address (RFC 1918, IPv6 ULA, CGNAT), because you named
 it. Loopback, link-local (where a cloud's metadata service answers),
 multicast and unspecified addresses are never dialled, a site of yours
 included, and a subdomain of your site must be at public addresses. Every
@@ -1917,19 +1905,14 @@ scope and secrets. The install record keeps the line, so an update that
 adds a browser, a site, a host or a secret, or moves from `site` to
 `public`, asks for consent again.
 
-**Not verified** (DR-96): the browser has been run on a workstation under
-runc, with a scripted model; a real model's run, a sandboxed runtime
-(`runsc`), Docker Desktop's sidecar filter and arm64 have not been tried.
-
 ## The scratch folder and PDF reports
 
-Since agentry-cli v0.6.82 every release's run and session gets a
-**scratch folder** and the **`export_pdf`** tool, with five report themes
-(agentry-cli#729, #730, #731). They are the runner's grants, not lines of
+From agentry-cli v0.6.82 every release's run and session gets a
+**scratch folder** and the **`export_pdf`** tool, with five report themes.
+They are the runner's grants, not lines of
 the contract: no manifest declares them, an install asks no consent for
 them, and the built-in packages have neither. A hosted run has them on a
-sandbox host whose runhost carries the CLI release (agentry-enterprise#470,
-which moved the runhost to v0.6.83).
+sandbox host whose runhost carries that CLI release.
 
 ### What the tools container mounts
 
@@ -1958,8 +1941,8 @@ reaches it through four tools:
 - `scratch_list` lists a folder in it, from an entry `offset` when a long
   listing stopped at one tool result;
 - `scratch_read` reads a file a page at a time (`offset`, `maxBytes`), each
-  page saying where the next begins. It has `read_input`'s two views
-  (agentry-cli#832): a text file is read as text, and a binary file (an
+  page saying where the next begins. It has `read_input`'s two views:
+  a text file is read as text, and a binary file (an
   image, a PDF, an archive) as pages of base64 with its size and detected
   type. With no `view` the file decides; `view: "text"` on a binary file
   is refused and names `original`;
@@ -1994,7 +1977,7 @@ run's `capabilities_enforced.scratch` says so.
 ### Fetch into the scratch folder: `saveTo`
 
 A run whose QuickAgent declares egress can keep a file it fetches, of any
-type, binary included (agentry-cli#832; plan `input-sources.md` §6, D10).
+type, binary included.
 `fetch` takes `saveTo`, a path in the scratch folder, offered only where
 the run has one:
 
@@ -2038,7 +2021,7 @@ The save keeps `fetch`'s rules and adds its own:
   that does not fit is refused with the folder's "no space left". Where no
   docker filter runs the folder is unbounded, and `fetch`'s 60-second
   timeout, which covers reading the body, is the only bound.
-- **Archives stay packed** (D11): nothing in the scratch folder is unpacked.
+- **Archives stay packed**: nothing in the scratch folder is unpacked.
 
 A 4xx or 5xx body is saved too; the status says what it is. Every body
 `fetch` saves, asked for or saved because it was larger than one result,
@@ -2052,10 +2035,9 @@ data, never instructions.
 
 The harness that receives a tool's result bounds its size too, and cuts or
 sets aside what passes its limit: docker-agent 1.128.0 replaces any result
-over 50 KiB, or over 2,000 lines, with its **last** 50 KiB. So since
-agentry-cli v0.6.95 (agentry-cli#831, the runner register's DR-89) every
-result of the runner's own tools fits a **result budget**, the run's
-harness's measured limit less a margin, which the plan compiles into the
+over 50 KiB, or over 2,000 lines, with its **last** 50 KiB. So from
+agentry-cli v0.6.95 every result of the runner's own tools fits a
+**result budget**, the run's harness's limit less a margin, which the plan compiles into the
 tools spec:
 
 | Harness (adapter) | One tool result holds at most | The harness's own limit, measured from its pinned release |
@@ -2063,7 +2045,7 @@ tools spec:
 | `docker-agent` | 48 KiB and 1,900 lines | 50 KiB or 2,000 lines, then the last 50 KiB is kept |
 | Claude Code (`claude`, `claude-image`) | 46 KiB and 1,900 lines | 50,000 characters, then the result is saved to a file the agent cannot open |
 | Copilot (`copilot-image`) | 19 KiB and 1,900 lines | 20,480 bytes, then the result is saved to a file and 500 characters shown |
-| Codex (`codex`, `codex-image`) | 20 KiB and 1,900 lines | 48,000 bytes, set by the runner in the model catalog it gives Codex (since agentry-cli#911), the middle cut out; an input tool's result is sent as escaped JSON, which can double it |
+| Codex (`codex`, `codex-image`) | 20 KiB and 1,900 lines | 48,000 bytes, set by the runner in the model catalog it gives Codex, the middle cut out; an input tool's result is sent as escaped JSON, which can double it |
 
 Within it:
 
@@ -2151,7 +2133,7 @@ How a PDF looks comes from a **theme document** (`"agentryTheme": 1`:
 page, fonts, sizes, colours, header, footer, tables), one template for all
 of them. The model never chooses it: `export_pdf` takes no theme argument,
 and a request for "something formal" changes the words, not the layout.
-There are five, all in the runner image since agentry-cli v0.6.82:
+There are five, all in the runner image from agentry-cli v0.6.82:
 
 - **Plain**, the default: Noto Sans, page numbers.
 - **Formal**: Noto Serif, a cover page with the title and the date, and
@@ -2171,9 +2153,8 @@ There are five, all in the runner image since agentry-cli v0.6.82:
 No theme carries a logo, a name or an address, and none carries Agentry's
 branding.
 
-The account's setting is a **report design** since agentry#1024 (plan
-`report-designs.md`, M2): the whole theme document version 2, not a
-theme's name. `GET` and `PUT /api/v1/user/report-settings` read and write
+The account's setting is a **report design**: the whole theme document
+version 2, not a theme's name. `GET` and `PUT /api/v1/user/report-settings` read and write
 it, with the `user:profile` scope that the CLI's and the desktop's sign-in
 carries:
 
@@ -2210,16 +2191,16 @@ anything:
   control or bidirectional formatting characters. The footer is set as
   text by the template, never evaluated;
 - `agentryTheme` 2. The version-1 documents and the old names (`formal`,
-  `brief`, `letter`) are not read (D16, D20).
+  `brief`, `letter`) are not read.
 
 A refusal is a 422 whose field is `design.<path>` (`design.fonts.body`).
 The answer, and every later read, is the design's canonical document. An
 account that never chose reads back `{}`, which is not the same as Plain,
 and a `PUT` with no `design` clears the choice. Clearing an account's data
-clears it too. The migration that brought designs in (00054) cleared every
-stored theme name, so each account starts as never chosen.
+clears it too. An account that had saved only a theme's name reads back as
+never chosen.
 
-**The logo** (agentry#1025, plan D9). A design may carry the person's own
+**The logo.** A design may carry the person's own
 logo, which the runner draws only in the title block. It never comes from
 the model or from a URL: the person uploads a file to
 `PUT /api/v1/user/report-settings/logo`, one multipart part named `file`,
@@ -2249,13 +2230,6 @@ one by saving. A `PUT` of a design that carries one replaces it with the
 core's own encoding of it. Clearing the design, clearing the account's
 data and erasing the account delete the logo with it.
 
-Until the runner reads designs (agentry-cli#784, M3), a CLI finds no theme
-in the account's answer and takes the next choice below; the site's Profile
-card (agentry-web#1381, M4) and the desktop's (agentry-desktop#759, M5)
-cannot save a theme's name any more. A hosted run's job still carries a
-theme's name until agentry-enterprise#479 (M6): the design's `basedOn`,
-which a sandbox host passes only when its CLI has that name.
-
 A CLI run takes the first of these that is set:
 
 1. `agentry run --report-theme <name>`, for that run alone;
@@ -2279,21 +2253,16 @@ no reason to stop a run.
 
 The other places the theme is chosen and used:
 
-- **The site** edited a theme's name on Settings → Profile, *Report theme*
-  (agentry-web#1314); its *Report design* page replaces the card
-  (agentry-web#1381).
-- **The desktop app** edited it on Settings → Profile and passes the
-  account's choice to every local run and chat (agentry-desktop#730); its
-  own *Report design* page replaces the card (agentry-desktop#759). It has
-  no `report.theme` of its own, so *Not chosen* is Plain there.
+- **The site** sets the design on its *Report design* page.
+- **The desktop app** sets it on its own *Report design* page and passes
+  the account's choice to every local run and chat. It has no
+  `report.theme` of its own, so *Not chosen* is Plain there.
 - **A hosted run** holds a run grant, not the person's sign-in, so its CLI
   never reads the account. Agentry reads the account's choice when it hands
   the run to a sandbox host and puts it in the job, and the host passes it
-  as `--report-theme` (agentry-enterprise#470); since agentry#1024 that is
-  the design's `basedOn`, until the job carries the design itself
-  (agentry-enterprise#479). So the receipt says
-  "chosen by the --report-theme flag". A host whose runhost predates this
-  is sent no theme, and its runs use Plain.
+  as `--report-theme`. So the receipt says
+  "chosen by the --report-theme flag". A host whose runhost is too old to
+  take it is sent no theme, and its runs use Plain.
 
 There is no theme picker in a run dialog.
 
@@ -2325,10 +2294,10 @@ its line:
 
 The block is what a reader holds a PDF to before opening it in place:
 
-- **The site's run page** (agentry-web#1314) reads it from the `result.json`
+- **The site's run page** reads it from the `result.json`
   inside `output.tar`, hashes each PDF in the browser, and offers *Open in
   a new tab* only for a PDF it names with a matching SHA-256.
-- **The desktop's run result** (agentry-desktop#730) checks in the app,
+- **The desktop's run result** checks in the app,
   `reports/` paths only, and offers its in-app viewer and *Open in system
   viewer* the same way.
 
@@ -2340,7 +2309,7 @@ block.
 #### The fetch ledger and `fetchSaves`
 
 The scratch folder is gone with the run, so a run whose `fetch` can save
-into it keeps a record of what it saved (agentry-cli#832). The engine
+into it keeps a record of what it saved. The engine
 writes the ledger's path into the run's own tools spec, and each body
 `fetch` saves is one line of `receipts/fetches.ndjson`: its path in the
 scratch folder, the declared host it came from, its size, its SHA-256 and
@@ -2358,8 +2327,8 @@ and a run without egress has no ledger at all.
 
 ## Searching files: `grep` and `glob`
 
-Since agentry-cli v0.6.114 every release's run and session has two search
-tools, **`grep`** and **`glob`** (agentry-cli#912, DR-94). `grep` searches
+From agentry-cli v0.6.114 every release's run and session has two search
+tools, **`grep`** and **`glob`**. `grep` searches
 the contents of files with a regular expression and `glob` lists files by
 a path pattern. They find files; reading one stays with the tool that
 already reads it. Like the scratch folder they are the runner's grant, not
@@ -2393,7 +2362,7 @@ which ripgrep is given by name, whatever its size. A search of the inputs reads
 each input in the view `read_input` gives it (a document's text, a text
 file as uploaded), or in the `view` the call names, and answers as
 `search_inputs` does: the person's own files, unchanged, past the
-gateway's secret block (agentry-cli#632). Every other area answers as a
+gateway's secret block. Every other area answers as a
 text the gateway scans.
 
 ### The tools
@@ -2433,7 +2402,7 @@ pack's pages, which `grep` does not.
 ### How ripgrep is held
 
 The runner image carries ripgrep 15.2.0, built from pinned source as the
-signed `agentry-ripgrep` image (agentry-dockerimages#81) and copied in by
+signed `agentry-ripgrep` image and copied in by
 digest to `/opt/agentry/ripgrep`. That folder is outside every bin
 directory, so no declared command finds it and an exec image keeps it.
 `rg` is not a command a QuickAgent can declare: its `--pre` option would
@@ -2461,7 +2430,7 @@ The tools server starts it the way `export_pdf` starts Typst:
   no Landlock (gVisor, so every hosted run) only its uid, the memory cap
   and no_new_privs hold it: it reads and writes only what any user may,
   and TCP is not refused. A tools server that is not root and has no
-  Landlock refuses to search. DR-94 records the one residual: without
+  Landlock refuses to search. One residual remains: without
   Landlock, a link a declared command plants between the server's check
   and ripgrep's open could point it at a world-readable file outside the
   area (a hosted run provides no command that makes a link).
@@ -2479,8 +2448,7 @@ Every run's model reads the **System Prompt** first, and the QuickAgent's
 own instruction after it. The text is the same on every adapter, but for
 the size of one tool result it states, which is the harness's own
 ([pages](#one-tool-result-at-a-time-pages)), and the same in a hosted run,
-since a sandbox host runs the same CLI. It replaced the
-one-paragraph runner contract in agentry-cli v0.6.34 (agentry-cli#520).
+since a sandbox host runs the same CLI.
 
 It has two parts:
 
@@ -2532,7 +2500,7 @@ tool". The tool exists only while a pack is attached, and its description
 names the attached packs ("Knowledge is attached to this run: … Start
 here, before your own knowledge or any other tool.").
 
-**So is the Writing Voice** (agentry-cli v0.6.36). A run that attaches the
+**So is the Writing Voice** (agentry-cli v0.6.36 or later). A run that attaches the
 person's voice gets one more tool, `voice_read`, which returns `VOICE.md`
 (a page at a time where it is larger than one tool result) and exists only
 while a voice is attached; the System Prompt
@@ -2541,9 +2509,8 @@ the plan nor its hash. [The Writing Voice](voice.md) has the rest.
 
 ### The text, for a sample plan
 
-What follows was compiled by agentry-cli **v0.6.114** (built from its tag,
-`12c0555`, on 2026-10-13: the first release with `grep` and `glob`) for a
-QuickAgent with no grants:
+What follows was compiled by agentry-cli **v0.6.114**, the first release
+with `grep` and `glob`, for a QuickAgent with no grants:
 
 ```yaml
 # agent.yaml
@@ -2728,7 +2695,6 @@ plan, so `agentry run` picks it without `--adapter`.
 | `codex-image` | OpenAI's Codex CLI in agentry-dockerimages' signed `agentry-codex` image, pinned by digest | autonomous, interactive (codex's app-server; an autonomous run is one session turn) | a container on the run's internal network, as for `docker-agent`; the default for a ChatGPT plan |
 | `claude-image` | Claude Code in an image **your computer builds** from pinned npm packages, never published | autonomous, interactive (stream-json) | a container, as above; runs only on a Claude subscription sign-in, and is its default |
 | `copilot-image` | GitHub's Copilot CLI in an image your computer builds from a checksummed release download, never published | autonomous, interactive (Copilot CLI's JSON-RPC server mode, driven by the runner) | a container, as above, with nothing mounted; runs only on a Copilot plan sign-in, and is its default |
-| `goose` | planned (RUNNER M-R4d) | — | — |
 
 ### `claude`
 
@@ -2752,8 +2718,7 @@ A run that spends your **Claude subscription** is a [model
 sign-in](#a-claude-subscription), not this key path. It drops `--bare` and runs
 Claude Code on its own sign-in, in a config directory of Agentry's, by default in
 the `claude-image` adapter and, when you sign in with `--installed` and choose
-`--adapter claude`, here. (DR-18's rule that a run never spends your
-subscription was reversed by DR-86 for exactly this.) A subscription token you
+`--adapter claude`, here. A subscription token you
 pasted (`claude setup-token`, `apiKeyKind: subscription`) is a separate
 route: this adapter passes it as `CLAUDE_CODE_OAUTH_TOKEN` without `--bare`,
 the run is refused when a `CLAUDE.md` sits in an ancestor of its directory, and
@@ -2797,8 +2762,7 @@ version bump. It replays the rendered config against the installed codex with a
 fake endpoint and a fake gateway, needs no key and no network, and fails unless
 the request's tools are exactly the gateway's and codex's three readers, no
 developer message lists a bundled skill, and no skill is installed in the run's
-`CODEX_HOME`. It drives `codex exec` only; whether the skills listing is also
-absent in an app-server turn is not verified (the install is).
+`CODEX_HOME`. It drives `codex exec` only.
 
 Codex speaks the OpenAI Responses API and, in the release the adapter was
 written against, nothing else. The policy's `model.baseUrl`, `.apiKeyEnv`
@@ -2818,7 +2782,7 @@ a container; this adapter is the choice for your installed Codex
 (`--adapter codex`). On a plan both modes are the app-server protocol, and the
 plan's access token is a file the runner keeps fresh in the run's own folder,
 which codex reads with `cat`. A Windows host has no `cat`, so this adapter is
-refused on a plan there (agentry-cli#798); the image is the default on Windows
+refused on a plan there; the image is the default on Windows
 anyway.
 
 The trade-off to understand: a harness running as your own process is not
@@ -2846,11 +2810,8 @@ account](#connect-your-account) (OpenRouter, Poe, Hugging Face) is not a model
 sign-in either: the vendor makes an ordinary key and a run spends it as it
 spends any key.
 
-The runner's rule since DR-18 was that a run spends the operator's model
-access and never your own subscription. The operator reversed that on
-2026-10-08 (DR-86, which amends DR-18 and DR-26): a run may spend a plan you
-hold, by your explicit choice in model setup. A run on a key still spends
-the key.
+A run may spend a plan you hold, by your explicit choice in model setup. A
+run on a key still spends the key.
 
 ### The credential kinds
 
@@ -2867,8 +2828,7 @@ The policy's `model.apiKeyKind` says what pays for the model:
 A sign-in kind belongs to its provider alone, needs no `apiKeyEnv`, and refuses
 a cost budget (below). Setup writes the rest: the policy names the kind and the
 egress, never a token, an account or a host path. `subscription` is the
-older, separate route of a pasted token; it is unchanged, and it is not the
-Claude sign-in below.
+separate route of a pasted token; it is not the Claude sign-in below.
 
 Each kind has one egress allowlist, and the compiler refuses a run whose
 `model.proxyAllow` is anything else, so a run paid by a plan reaches the model
@@ -2943,8 +2903,7 @@ refresh token never enters the run. `harness.<adapter>.signInTokenRoute:
 restart` selects OpenAI's other documented route: the token is read once at
 start, a session starts the harness again on a renewed token and resumes the
 thread, and an autonomous turn longer than the token's hour fails on a 401.
-`auth-command` is the default; which route OpenAI's service prefers is not
-verified.
+`auth-command` is the default.
 
 **Which harness.** The `codex-image` adapter: OpenAI's Codex, unmodified, in
 the `agentry-codex` image that agentry-dockerimages builds from OpenAI's
@@ -2955,7 +2914,7 @@ verifies that digest against the signing workflow's identity on every pull
 request. An `images.harnessImages` entry of your own is yours to verify. `codex-image` may also run on an
 OpenAI key, by choice. Your own installed Codex (`--adapter codex`) spends the
 plan too, reading the same token file with `cat` and mounting nothing; on
-Windows that adapter is refused (agentry-cli#798), where the image is the
+Windows that adapter is refused, where the image is the
 default anyway. Both modes run Codex's app-server on a plan: an autonomous run
 is one session turn.
 
@@ -2994,7 +2953,7 @@ Anthropic sign-in page whose redirect is Claude Code's own `localhost`
 callback, opens it in your browser, and relays the browser's connection byte
 for byte into the container's loopback through `docker exec`. Claude Code
 receives the code on its own callback and exchanges it itself, so nobody pastes
-anything (agentry-cli#848). The relay serves at most eight connections and
+anything. The relay serves at most eight connections and
 closes when the sign-in returns; the whole sign-in is bounded at fifteen
 minutes, and ends with "nothing kept" on a timeout or an interrupt. A person at
 a terminal gets Anthropic's paste-code page as a fallback, with the reason, when
@@ -3035,9 +2994,9 @@ login), with `--setting-sources ""`, `ENABLE_CLAUDEAI_MCP_SERVERS=false`, the
 gateway as its one MCP server and its built-in tools off, as the
 [`claude` adapter](#claude) does on a key. A `harness.<adapter>.baseUrl`
 beside the sign-in is refused, since it would hand that endpoint your login.
-The installed Claude Code also meets DR-26's refusal when a `CLAUDE.md` sits in
+The installed Claude Code also refuses to run when a `CLAUDE.md` sits in
 an ancestor of the run directory, and its managed settings, which the machine's
-administrator owns, are closed by no flag (agentry-cli#171).
+administrator owns, are closed by no flag.
 
 **Outcomes.** A rejected `rate_limit_event`, or `credits_required`, is the
 plan's limit, reported once with Claude Code's own reset time.
@@ -3063,8 +3022,7 @@ OAuth App whose tokens do not expire) is revoked and refused, and so is a grant
 whose account cannot be named; nothing is kept in either case. The CLI keeps the refresh token and renews it; a GitHub
 App user token lasts eight hours.
 
-Agentry's two GitHub apps are registered in agentry-cli#743. Until then the
-build carries no client id: the command says so and keeps nothing, and
+A build that carries no client id says so and keeps nothing;
 `AGENTRY_GITHUB_APP_CLIENT_ID` or `AGENTRY_GITHUB_OAUTH_APP_CLIENT_ID` names
 one.
 
@@ -3137,7 +3095,7 @@ starts, naming the fix (run it while signed in, or paste a Hugging Face token
 that does not expire), and a Poe key past its expiry is refused as above.
 `schedule add` and `edit --signed-out` refuse both up front, a re-seal will not
 seal them, and a connect or disconnect seals every signed-out schedule's keys
-again (CLI v0.6.103, agentry-cli#811).
+again (CLI v0.6.103 or later).
 
 These runs use docker-agent, with the vendor's one host as the allowlist. No
 model list is offered, because the catalogues are huge: you type the model id
@@ -3157,7 +3115,7 @@ can end in four ways that have their own `reason` ([the table](#exit-codes-stage
 |---|---|---|---|
 | plan limit | 16 | `plan-limit` | the plan refused the model's calls for its usage limit: said once in the vendor's words, never retried, never a success even when the harness exits 0. A reset time appears only when the vendor gave one (Claude Code does; the Codex and Copilot adapters do not invent one) |
 | sign-in missing | 11 | `signin-missing` | the run spends a sign-in and was given none it could use, or one of another kind: refused before the daemon, naming the fix, and never on a hosted run |
-| organization policy | 11 | `org-policy` | an organization's or enterprise's policy at the model vendor refused the run; Copilot only so far |
+| organization policy | 11 | `org-policy` | an organization's or enterprise's policy at the model vendor refused the run; Copilot only |
 | out of credits | 16 | `out-of-credits` | the provider answered 402 or said so in words: the account that pays has no credits left; never retried; not specific to a connected key |
 
 A plan limit reuses exit 16 because the exit codes are a contract a driver
@@ -3177,7 +3135,7 @@ policy. Bound the run with `--max-turns` and `--timeout`.
 The built-ins (the Drafter, AI Review's local half, and the knowledge and voice
 builds) follow the adapter the sign-in names, so on a ChatGPT, Claude or
 Copilot plan they run on the Codex, Claude Code or Copilot CLI image, and are
-handed the sign-in's grant as `agentry run` is (agentry-cli#845). A built-in
+handed the sign-in's grant as `agentry run` is. A built-in
 running in a hosted process (`--hosted`, or a run grant or job token in the
 environment) never spends a sign-in.
 
@@ -3209,51 +3167,12 @@ relay cannot work (its port is in use) the sign-in ends with that reason and
 offers no paste. GitHub's device code is shown, put on the clipboard, and
 GitHub's page opened. For a connect you type the model id. A Claude sign-in
 made only by the installed Claude Code does not count for the desktop, which
-runs the image (D-078).
+runs the image.
 
-### Not verified
+### Known limits
 
-Everything above is tested against fakes and against the real harnesses'
-images, never against a vendor's service: nothing has been signed in or run with
-a real ChatGPT, Claude, GitHub, OpenRouter, Poe or Hugging Face account. That
-live test is model sign-ins M11 (agentry-cli#744). As of 2026-10-11 these are
-the open questions:
-
-- **ChatGPT.** OpenAI's own answer to the authorize address; plan-usage
-  acceptance, and the words of the limit and eligibility errors; which token
-  route OpenAI's service prefers; whether Codex calls anything at start beyond
-  the model, under the proxy; and whether Codex's own skills listing is also
-  absent in an app-server turn (the script's check drives `codex exec`; the
-  install is measured gone).
-- **Claude.** A real account's sign-in completing in the browser, a run on it,
-  a refresh persisting to the volume, and the limit with a real
-  `rate_limit_event`; the macOS Keychain question for an installed Claude Code;
-  an installed Claude Code's directory under SELinux (the runner does not
-  relabel a directory of yours; the image uses a docker volume); the exec relay
-  on Docker Desktop for macOS and Windows (on a Linux daemon it reached Claude
-  Code with a fake code); `auth login` with no TTY, which only
-  the paste fallback meets; whether `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
-  leaves the in-run refresh alone; and the two built-in plugins Claude Code
-  loads that `--setting-sources ""` does not turn off (they added no tool and no
-  skill in the one live run).
-- **Copilot.** Any real GitHub sign-in; whether Copilot accepts a GitHub App
-  user token that carries no permission, or an OAuth App token of scope
-  `read:user`, which is why `--oauth-app` exists; which Copilot API host each
-  plan uses; the `mcpServerName` Copilot CLI reports on gateway tools, on which
-  the tripwire relies (a release that does not report it fails every run loudly
-  rather than running open); a refresh in the middle of a run; and the words of
-  an organization's policy refusal.
-- **Connect your account.** Poe's acceptance of a `127.0.0.1` redirect on any
-  port; Hugging Face's acceptance of the served client document, whether it
-  issues a refresh token to a metadata-document client, that token's lifetime
-  and the consent wording; the words of a real 402; and a run's egress to each
-  host.
-- **Built-ins and images.** A built-in answering from a real plan (a stand-in
-  record reached Claude Code, which answered "Not logged in"); and the Claude
-  Code and Copilot CLI images on arm64 and on Docker Desktop.
-
-Listing a Copilot plan's models through the harness is not built (agentry-cli#808);
-setup asks the model until it is.
+Listing a Copilot plan's models through the harness is not supported; setup
+asks for the model.
 
 ## The output folder
 
@@ -3303,7 +3222,7 @@ envelope's `exitClass` names the code (`ok`, `cli`, `usage`, `verify`,
 `outputSchema`, `blocked`); a client acts on the name, never on the number.
 
 **18, blocked.** An autonomous run of a release whose agent could not do its
-task ends `blocked`, not `ok` (DR-72). The agent says so with the runner's
+task ends `blocked`, not `ok`. The agent says so with the runner's
 `end_blocked` tool, one sentence that lands in the envelope's `error` and in
 `receipts/calls.ndjson`, masked like every receipt. The runner also ends a
 run blocked on its own evidence, from that ledger: its tools could not write
@@ -3325,7 +3244,7 @@ the closed list below, the release's own declared `names` it concerns
 (commands, servers as `npm:`/`pypi:` ids, secret names, or an input
 source's question id; never a file name, a path or any text the run, the
 model, the author or the person wrote; at most eight), for some codes a
-`detail` word (DR-68), and for a refusal over an input source's cap its
+`detail` word, and for a refusal over an input source's cap its
 `count` ([below](#a-sources-count)):
 
 | `code` | Decided by | `names` | `detail` |
@@ -3343,7 +3262,7 @@ model, the author or the person wrote; at most eight), for some codes a
 | `runner-blocked` | the runner's evidence | none | `tools-unrecorded`, `inputs-unread`, `report-unwritten` |
 | `signin-missing` | prepare: the run spends a [model sign-in](#model-sign-ins) and was given none it could use (exit 11; never a hosted run) | none | — |
 | `plan-limit` | the agent: your plan refused the model's calls for its usage limit (exit 16; never retried) | none | — |
-| `org-policy` | the agent: an organization's or enterprise's policy at the model vendor refused the run (exit 11; Copilot only so far) | none | `client-disabled`, `managed-approval` |
+| `org-policy` | the agent: an organization's or enterprise's policy at the model vendor refused the run (exit 11; Copilot only) | none | `client-disabled`, `managed-approval` |
 | `out-of-credits` | the agent: the model's provider answered 402, or said so: the account that pays has no credits (exit 16; never retried) | none | — |
 | `host-refused` | readying a [target host](#target-hosts-a-server-named-at-run-time) before anything starts, or the host link's sign-in when the gateway starts it: a host the run will not reach (exit 11, except `host-unreachable` at the host link's start, exit 13) | the target host's question id (never its name or address) | `host-address` (an address a target host never is, one the policy's `hosts` lists exclude, or a name with no IPv4 address), `host-key-unknown` (a key on no file, not accepted at a terminal), `host-key-changed` (a key other than the one on file, or a revoked one), `host-auth` (the host did not accept the sign-in), `host-credential` (no sign-in given, or one that cannot be used; also an unanswered host), `host-unreachable` (the host did not answer on its port), `hosted` (a hosted run never reaches a target host) |
 
@@ -3359,8 +3278,7 @@ and stage and no reason yet. A hosted run's record keeps `stage` and
 #### A source's count
 
 A run refused over an input source's cap carries the count in typed
-fields as well as in its error, so a driver that keeps no text can say it
-(agentry-cli#884):
+fields as well as in its error, so a driver that keeps no text can say it:
 `count` is `{cap, limit, of, count, more}`, on `source-cap`, and on
 `not-reviewed` when a source's Markdown does not fit in what AI Review reads
 of a run.
@@ -3458,7 +3376,7 @@ ClamAV and then the files image's readers, in a container with no network
 and every capability dropped, then the Hybrid Analysis lookup. A document either check
 refuses stops the build with exit 11, naming it. Markdown, text, HTML,
 CSV, JSON, YAML and source files pass as they are; an archive is listed as
-not read, since a pack keeps each document as given (agentry-cli#619).
+not read, since a pack keeps each document as given.
 Then the Creator compiles their
 text into pages against the model your policy names, and the build applies
 what it wrote. A local build costs no credits and is not scanned; the pack
@@ -3703,7 +3621,7 @@ are not yet pinned pins them on first use, as `verify` does — the one thing
 mismatch, a refused attestation, a failed download) exits non-zero with the
 reason on stderr and no JSON on stdout — the exit class is the answer then.
 
-**Exit classes.** Every command exits with one of the §R8 classes, which
+**Exit classes.** Every command exits with one of these classes, which
 `run`'s envelope names in `exitClass`: `0` ok, `1` cli, `2` usage, `10`
 verify, `11` policy, `12` compile, `13` gateway, `14` harness, `15` timeout,
 `16` budget, `17` outputSchema. An interrupted run (SIGINT, SIGTERM) tears

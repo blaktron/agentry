@@ -162,9 +162,7 @@ The instruction is one file:
 
 There are no other package kinds. An MCP server is something a QuickAgent
 *uses* — declared under `capabilities.mcpServers` and installed with the
-release — not a package of its own; the former `mcp-server` kind was
-withdrawn, and the one such package on the public registry is blocked
-with an advisory saying so.
+release — not a package of its own.
 
 ### `intake`: questions asked before a run
 
@@ -217,23 +215,22 @@ intake:
 | `repository` | an https git URL and an optional ref (a branch, a tag or a commit) | the repository's files at that ref under `/inputs/<id>/` |
 | `url` | one https URL | the file at that address under `/inputs/<id>/` |
 
-**Which runners fetch them.** The CLI fetches a `repository` answer since
-v0.6.97 (agentry-cli#833) and a `url` answer since v0.6.98
-(agentry-cli#834); [the runner reference](runner.md#input-sources-a-repository-or-a-file-at-a-web-address)
+**Which runners fetch them.** The CLI fetches a `repository` answer from
+v0.6.97 and a `url` answer from v0.6.98;
+[the runner reference](runner.md#input-sources-a-repository-or-a-file-at-a-web-address)
 describes the clone, the download, their caps and the token's path. A run
-in Agentry fetches them too, on its sandbox host (agentry-enterprise#516).
-A CLI or desktop older than the core release that added the two types
-refuses a manifest carrying either as an unknown intake type.
+in Agentry fetches them too, on its sandbox host. A CLI or desktop older
+than the core release that added the two types refuses a manifest
+carrying either as an unknown intake type.
 
 - **The id names the folder.** A runner that supports sources fetches the
   answer before the run starts into `/inputs/<id>/`, where the input tools
   read it as they read an upload. V10's id rules (the pattern, which allows
   no `.` or `/`, and uniqueness) therefore give each source a folder of its
   own.
-- **The token belongs to the run.** The run setup is to ask for an
-  optional access token beside the answer, for a private repository or
-  file. A release never declares it, and it is used by the fetch step
-  alone.
+- **The token belongs to the run.** The run setup asks for an optional
+  access token beside the answer, for a private repository or file. A
+  release never declares it, and it is used by the fetch step alone.
 - **A source grants nothing.** Giving the source is the grant, as
   attaching a file is. A source question needs no `capabilities` entry:
   no egress to the source's host and no secret for its token. Adding or
@@ -272,10 +269,8 @@ capabilities:
 - **The runner makes the connection, not the agent.** A runner that
   supports target hosts opens the SSH session from a container of its own,
   and the agent works the machine through the runner's host tools, a
-  command at a time or in a shell. The design is in the plan for target
-  hosts (agentry-cli#865). Target hosts are for local runs: the plan has a
-  hosted run refuse a release that declares one, from the runner release
-  that adds the host link (agentry-cli#861).
+  command at a time or in a shell. Target hosts are for local runs: a
+  hosted run refuses a release that declares one.
 - **A target host is part of the contract.** Unlike a source, it lets the
   agent act on the machine: run any command the account can run there. So
   the install consent shows it, a new version that adds one asks for
@@ -283,7 +278,7 @@ capabilities:
   capability, and `GET /search?capability=targetHosts` finds such releases.
   It is not network egress. A support script the release ships that runs
   `ssh` itself is still the release reaching a host on its own, and the
-  scan reports it as it did before (stage S6).
+  scan reports it as such (stage S6).
 - **The rules (V14).** Every `host` question is listed in
   `capabilities.targetHosts`, and every entry there names a `host`
   question, once. A release declares at most four. `choices` are refused
@@ -291,14 +286,13 @@ capabilities:
   declaration that names `ssh`, `scp`, `sftp` or `rsync` is warned, without
   failing, toward `targetHosts`, and the scan reports it low (S1).
 
-**Which runners reach them.** The CLI reaches a target host since v0.6.105
-(agentry-cli#861): the host link and its tools (`host_run`, `host_read`,
-`host_write`, `host_put`, `host_get`) are in
+**Which runners reach them.** The CLI reaches a target host from v0.6.105:
+the host link and its tools (`host_run`, `host_read`, `host_write`,
+`host_put`, `host_get`) are in
 [the runner reference](runner.md#target-hosts-a-server-named-at-run-time),
-and since v0.6.106 (agentry-cli#862) so is an interactive shell on the
-host (`host_shell_open`, `host_shell_send`, `host_shell_read`,
-`host_shell_close`). A run in Agentry
-refuses a target host. A CLI or desktop older than the core release that
+and from v0.6.106 so is an interactive shell on the host
+(`host_shell_open`, `host_shell_send`, `host_shell_read`,
+`host_shell_close`). A run in Agentry refuses a target host. A CLI or desktop older than the core release that
 added the type refuses a manifest carrying it as an unknown intake type.
 
 #### The browser's site: a `url` question named in `capabilities.browser`
@@ -329,7 +323,7 @@ capabilities:
   exact name or a `*.` suffix. In `public` scope, any public site. The
   runner holds the scope in a proxy of its own, the browser's only route
   out; private addresses are refused, except in a local run the site the
-  person typed, which may be on a LAN or a tailnet.
+  person typed, which may be on a LAN or a Tailscale network.
 - **Signing in.** `secrets` names declared secrets the browser may type:
   the agent passes a secret's name and the runner's browser server types
   its value, which the agent never reads back. A browser that types
@@ -355,15 +349,13 @@ capabilities:
   `optionalSecrets`, and `secrets` with `public` is refused.
 
 **What a runner does with it.** The core accepts the line and checks it as
-above (agentry#1134). Since agentry-cli v0.6.117 (agentry-cli#915) a local
-run gives the release its browser: Microsoft's Playwright MCP server on the
+above. From agentry-cli v0.6.117 a local run gives the release its browser: Microsoft's Playwright MCP server on the
 pinned `agentry-browser` image, whose one route out is a browse proxy of the
 run's own, the site answer opened and never downloaded, the browser secrets
 typed by name, and the screenshots and PDFs in `reports/browser/`
 ([the runner reference](runner.md#the-browser-a-site-to-test-named-at-run-time)).
-Since agentry-cli v0.6.118 (agentry-cli#941) and the enterprise build's
-v0.6.57 (agentry-enterprise#565) a run in Agentry gets one too, its sites
-public addresses on ports 80 and 443 only
+From agentry-cli v0.6.118 and the enterprise build's v0.6.57 a run in
+Agentry gets one too, its sites public addresses on ports 80 and 443 only
 ([hosted runs](hosted-runs.md#a-run-with-a-browser)). A CLI or desktop
 older than this core release
 refuses a manifest carrying the line as an unknown field. `public` scope
@@ -431,7 +423,7 @@ A release may carry its own reference set: one or more
 `knowledge/<name>/` exactly as the CLI keeps it: `manifest.json`, `wiki/`
 with its `index.md` and `log.md`, and `sources/`. The runner mounts each
 read-only at `/knowledge/<name>`, searched with the three knowledge tools
-(since CLI v0.6.11, agentry-cli#320). The block also says what a person
+(CLI v0.6.11 or later). The block also says what a person
 may attach of their own, which the run setup shows and the agent never
 sees.
 
@@ -541,13 +533,11 @@ file is the grant, so the block is outside the capability contract, and a
 release that changes only its inputs asks no one to consent again. Write
 `guide.files` to match it.
 
-The runner sets the default view from the block since CLI v0.6.73
-(agentry-cli#693): `list_inputs` marks it, and the System Prompt names it.
-The Drafter fills the block since Drafter 1.9.0 (agentry-cli#634), in the
-CLI release after it. A hosted run takes the block (its sandbox hosts run
-a later CLI); a CLI before v0.6.73, or a desktop built on one, refuses a
-manifest carrying it as an unknown field. The site's and the desktop's run
-setups are to show it (agentry-web#1235, agentry-desktop#704).
+The runner sets the default view from the block (CLI v0.6.73 or later):
+`list_inputs` marks it, and the System Prompt names it. The Drafter fills
+the block from Drafter 1.9.0. A hosted run takes the block; a CLI before
+v0.6.73, or a desktop built on one, refuses a manifest carrying it as an
+unknown field. The site's and the desktop's run setups show it.
 
 ### `runtime`: informational hints
 
@@ -599,7 +589,7 @@ run's own copy of the workspace before the tools start, so a write grant of
 `out` needs no `out/` in the package. An entry that names a file is made a
 folder too when the file is missing, and a write to that name then fails:
 ship a file you grant by name. An entry inside another write entry shares
-that entry's mount (agentry-cli#855).
+that entry's mount.
 
 The agent container itself never mounts the workspace. File access goes
 through the gateway's tools, which is what makes the contract enforceable.
@@ -841,10 +831,9 @@ capabilities:
   an added OAuth sign-in, and a changed `oauth` file or env. The CLI and
   the desktop show them once their core pin carries this change.
 
-The manifest accepts these fields since agentry#910. The CLI runs a remote
-server with `auth: none` or `auth: secret` since agentry-cli#663, through
-the runner image's bridge, `auth: oauth` on the person's connection since
-agentry-cli#664, and a package server's `oauth` block since agentry-cli#665
+The CLI runs a remote server with `auth: none` or `auth: secret` through
+the runner image's bridge, `auth: oauth` on the person's connection, and a
+package server's `oauth` block
 (see [the runner reference](runner.md#connections)): the access token is
 written into the files the block declares, in a folder of the server's own,
 or into its env, and renewed before it expires while a local run lasts
@@ -854,8 +843,8 @@ token expires, about an hour for Google). A file's client id or secret, if
 the server's format has one, is a fixed placeholder the author writes (as
 `agentry` above), never a real value: the runner substitutes nothing but
 the placeholders. A run in Agentry uses the connection Agentry keeps for
-the account and the release (agentry-enterprise#425;
-[Hosted runs](hosted-runs.md#a-runs-connections)). A CLI or desktop older
+the account and the release
+([Hosted runs](hosted-runs.md#a-runs-connections)). A CLI or desktop older
 than its core pin refuses such a manifest by its unknown field.
 
 ### `dependencies`
@@ -938,8 +927,8 @@ by name, and the inputs under `/inputs`. It explains how to read an
 attached knowledge pack, that reports go through `write_report`, when to
 also export one as a PDF with `export_pdf`, and that the final message is
 the run's result.
-So an instruction need not repeat any of this. The text is in the plan's
-hash, and [the runner reference](runner.md#the-system-prompt) shows it word
+So an instruction need not repeat any of this. The text is in the run
+plan's hash, and [the runner reference](runner.md#the-system-prompt) shows it word
 for word for a sample QuickAgent.
 
 **Input files.** Files and artifacts from outside the container reach a
@@ -1020,9 +1009,8 @@ agentry install ns/name --provider codex     # Codex
 agentry install ns/name --provider openclaw  # OpenClaw
 ```
 
-`--provider` picks the right target below (distribution through each
-provider's plugin system is planned; the web Downloads page lists these
-flows); the explicit `--target` forms remain, and either names the
+`--provider` picks the right target below (the web Downloads page lists
+these flows); the explicit `--target` forms remain, and either names the
 export — with neither, `agentry install` goes to the runner home:
 
 | Target | What lands | Contract mapping |

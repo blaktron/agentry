@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestDecoyHashUsesTheRealParameters (agentry#413): the comparison a login
+// TestDecoyHashUsesTheRealParameters: the comparison a login
 // miss pays is worth exactly a real one — same memory, time and lanes —
 // or its timing would still tell a miss from a wrong password.
 func TestDecoyHashUsesTheRealParameters(t *testing.T) {

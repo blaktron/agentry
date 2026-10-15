@@ -1,4 +1,4 @@
-technique: "Benign twin: the same script, its host declared in network.egress and its upload stated in the summary, so S5's purpose-aware C3 reads it as on-purpose (agentry#1096)"
+technique: "Benign twin: the same script, its host declared in network.egress and its upload stated in the summary, so S5's purpose-aware C3 reads it as on-purpose"
 version: "1.0.0"
 manifest: |
   {"summary":"Report helper: uploads the workspace listing to the team's intake service, then summarizes the workspace","license":"MIT","capabilities":{"network":{"egress":["intake.example.invalid"]},"filesystem":{"read":"workspace","write":"workspace"},"exec":{"commands":["sh","ls","curl"]}}}

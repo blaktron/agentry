@@ -111,7 +111,7 @@ func TestProbesAreNotAccessLogged(t *testing.T) {
 // An inbound X-Request-Id is honoured only when the operator has said the
 // hop in front sets it (http.proxyRequestID) on top of a trusted hop count —
 // a hop that merely forwards the header would let a client choose its own
-// id — and only when well-formed (D19).
+// id — and only when well-formed.
 func TestInboundRequestIDHonouredOnlyWhenTheHopSetsIt(t *testing.T) {
 	const edgeID = "5f3a9c0e1b2d4f6a8c0e2b4d6f8a0c1e" // nginx's $request_id shape
 	cases := []struct {
@@ -153,7 +153,7 @@ func TestInboundRequestIDHonouredOnlyWhenTheHopSetsIt(t *testing.T) {
 	}
 }
 
-// The split git role mounts a bare mux through the same stack: a git
+// The git role mounts a bare mux through the same stack: a git
 // deployment answers with a request id and logs an access line too.
 func TestWrapMiddlewareGivesABareMuxTheContract(t *testing.T) {
 	cfg := config.Default()
@@ -204,9 +204,9 @@ func TestRequestIDReachesTheAuditRow(t *testing.T) {
 
 // A failed native sign-in is named (`auth.login_failed`) and, with the audit
 // mirror on, its audit event is a line too (`audit.user.login_failed`) — both
-// under the request's id, beside the access line. Needs the database; on the
-// dev host native sign-in answers 410 under the directory service (DEV-057),
-// so this test is where the criterion is proved.
+// under the request's id, beside the access line. Needs the database. Native
+// sign-in answers 410 under a directory service, so this test is where the
+// criterion is proved.
 func TestFailedSignInIsNamedAndMirrored(t *testing.T) {
 	var buf bytes.Buffer
 	old := slog.Default()
@@ -245,7 +245,7 @@ func TestFailedSignInIsNamedAndMirrored(t *testing.T) {
 }
 
 // On the assembled handler, http.trustedProxyCIDRs decides whose forwarded
-// headers count (agentry#429): the test client connects from 127.0.0.1, so
+// headers count: the test client connects from 127.0.0.1, so
 // a list that leaves loopback out makes it a direct client, whose
 // X-Forwarded-For and X-Request-Id are both ignored, and a list that names
 // it makes it the trusted hop.

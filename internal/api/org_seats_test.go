@@ -1,8 +1,6 @@
 package api_test
 
-// Seats, invitations and approvals (agentry#361; plan
-// organization-subscriptions §4 "Seats" and "The doors", §5.2; D3, D7,
-// D12, D26). The chokepoint is one function, so these tests drive each
+// Seats, invitations and approvals. The chokepoint is one function, so these tests drive each
 // door at it: the wall, the fail-closed rule, the token's semantics, and
 // the two facts that must survive a cap — nothing already active is
 // touched, and a registry with no extension caps nothing.
@@ -156,7 +154,7 @@ func TestSeatCapNeverRemovesAMember(t *testing.T) {
 	admin := env.login(adminH)
 	orgH := "scorg" + env.sfx
 	env.createOrg(admin, orgH)
-	// Two more actives than the allowance of one, as a Portal reduction
+	// Two more actives than the allowance of one, as a seat reduction
 	// would leave them.
 	for _, h := range []string{"sc-a", "sc-b"} {
 		env.seedMembership(orgH, env.register(h), "member", "active")
@@ -231,8 +229,7 @@ func TestSeatDoorsFailClosed(t *testing.T) {
 
 // TestSeatCapIsAbsentWithoutAnExtension: the core caps nothing. A registry
 // with no billing extension lets an organization hold as many people as it
-// likes, which is what §3's "the core with no extension is unchanged" means
-// for seats.
+// likes: the core with no extension is unchanged.
 func TestSeatCapIsAbsentWithoutAnExtension(t *testing.T) {
 	env := newTestEnv(t)
 	adminH := env.register("nc-admin")
@@ -370,7 +367,7 @@ func TestInvitationIsACredential(t *testing.T) {
 }
 
 // TestOneOrgPerPerson: an active member of one organization cannot be
-// invited into, or approved into, another (D26).
+// invited into, or approved into, another.
 func TestOneOrgPerPerson(t *testing.T) {
 	env := newTestEnv(t)
 	firstAdminH := env.register("op-a1")
@@ -405,13 +402,13 @@ func TestOneOrgPerPerson(t *testing.T) {
 
 // TestOneOrgPerPersonHoldsUnderConcurrentDoors: four organizations
 // approve the same pending person at the same moment, and then a second
-// person accepts four invitations at once. Each door used to count the
+// person accepts four invitations at once. Each door counts the
 // person's memberships under its own organization's row lock, which does
-// not serialise against the other organization's, so both counted zero
-// and both activated — two seats across two tenants for one person
-// (security review 2026-09-20 §5.8.3; agentry#412). The doors now lock the
-// person's row after the organization's, and the partial unique index on
-// active memberships is the wall behind them.
+// not serialise against the other organization's, so without more both
+// would count zero and both activate — two seats across two tenants for
+// one person. The doors lock the person's row after the organization's,
+// and the partial unique index on active memberships is the wall behind
+// them.
 func TestOneOrgPerPersonHoldsUnderConcurrentDoors(t *testing.T) {
 	env := newTestEnv(t)
 	type door struct {
@@ -429,7 +426,7 @@ func TestOneOrgPerPersonHoldsUnderConcurrentDoors(t *testing.T) {
 	}
 
 	// race opens every door at once and sorts the answers: one admission,
-	// the rest refused with the D26 problem, nothing else.
+	// the rest refused with the one-organization problem, nothing else.
 	race := func(what string, open func(i int) *http.Response) {
 		t.Helper()
 		codes := make([]int, len(doors))
@@ -650,13 +647,12 @@ func (n *invitationNotifier) sentTo(email string) *notify.InviteOffer {
 	return nil
 }
 
-// TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress: the
-// operator's rule of 2026-09-18. An organization that proved it controls a
-// domain (DNS TXT) vouches for the addresses there, so an invitation to one
+// TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress: an
+// organization that proved it controls a domain (DNS TXT) vouches for the addresses there, so an invitation to one
 // is mailed even though no verified account holds it — which is the whole
 // point, since those are the colleagues an organization most needs to
 // invite — and accepting it confirms the accepting account's address.
-// Every other address keeps DEV-099's rule.
+// Every other address keeps the verified-address rule.
 func TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress(t *testing.T) {
 	mails := &invitationNotifier{Notifier: notify.LogNotifier{}}
 	env := newTestEnvCfg(t, func(c *config.Config) {
@@ -690,7 +686,7 @@ func TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress(t *testing.T)
 	}
 
 	// An address somewhere else, held by nobody: not mailed, and the admin
-	// is handed the link instead (DEV-099 unchanged).
+	// is handed the link instead (the verified-address rule is unchanged).
 	outsider := "someone@elsewhere.example"
 	var elsewhere struct {
 		Mailed    bool   `json:"mailed"`
@@ -778,8 +774,8 @@ func TestPendingMemberHoldsNothing(t *testing.T) {
 // TestOrgSSODoesNotLinkAnAccountOutsideTheVerifiedDomain: an organization's
 // admin configures its SSO connection, so an assertion alone must not be
 // able to speak for an account. Linking an identity to an existing member
-// needs the organization's verified domain as well as the membership
-// (T-12); a member who joined with a personal address is never linked
+// needs the organization's verified domain as well as the membership;
+// a member who joined with a personal address is never linked
 // automatically.
 func TestOrgSSODoesNotLinkAnAccountOutsideTheVerifiedDomain(t *testing.T) {
 	env := newTestEnv(t)

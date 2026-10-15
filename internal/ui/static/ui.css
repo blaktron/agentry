@@ -1,11 +1,11 @@
-/* The core surface's one stylesheet (DEV-091). Plain on purpose: a brand
+/* The core surface's one stylesheet. Plain on purpose: a brand
    supplies its own through brand.cssURL, layered after this one.
 
-   The token names and values are the estate's design tokens, the same table
-   the site's app/globals.css carries. Only the colours are taken. There is no
-   web font, no JavaScript, no decoration and no radius scale here: the type
-   stacks stay the system ones and the radii stay the pixel values they were,
-   because these pages are deliberately plain (ARCHITECTURE §5b).
+   The token names and values are the design tokens the hosted site also
+   uses. Only the colours are taken. There is no web font, no JavaScript,
+   no decoration and no radius scale here: the type stacks are the system
+   ones and the radii are fixed pixel values, because these pages are
+   deliberately plain.
 
    Every text pair below measures at least 4.5:1 against its own ground in its
    own scheme. Severity is not carried by colour alone: critical is the one
@@ -89,8 +89,7 @@ pre.code .ln.hit { background: var(--color-sev-high-bg); color: var(--color-sev-
 pre.excerpt { padding: 0.3rem 0.5rem; border-left: 3px solid var(--color-border-strong); margin: 0.3rem 0; white-space: pre-wrap; }
 .files a { margin-right: 0.2rem; }
 /* Severity: critical is the one solid chip, so it differs from high in fill,
-   polarity and shade rather than by a shade of red. The two were the same
-   colour here until now, while the site kept them apart. */
+   polarity and shade rather than by a shade of red. */
 .badge.sev-critical { background: var(--color-sev-critical); border-color: var(--color-sev-critical); color: var(--color-bg); }
 .badge.sev-high { border-color: var(--color-sev-high); color: var(--color-sev-high); }
 .badge.sev-medium { border-color: var(--color-sev-medium); color: var(--color-sev-medium); }

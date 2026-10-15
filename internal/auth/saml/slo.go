@@ -1,6 +1,6 @@
 package saml
 
-// SAML Single Logout (§12.4, agentry#62). Two directions:
+// SAML Single Logout. Two directions:
 //
 //   - IdP-initiated: the IdP sends a LogoutRequest naming the NameID (and
 //     optionally the SessionIndex) to the SP's SLO endpoint, over the

@@ -6,9 +6,9 @@ import (
 	"github.com/crewjam/saml"
 )
 
-// TestSAMLReplayFloorOutlivesTheAcceptanceWindow (agentry#414): the record
-// of a consumed assertion is what refuses its replay, so it has to outlive
-// the window in which the validator would still accept that assertion.
+// TestSAMLReplayFloorOutlivesTheAcceptanceWindow: the record of a
+// consumed assertion is what refuses its replay, so it has to outlive the
+// window in which the validator would still accept that assertion.
 //
 // That window ends at IssueInstant + MaxIssueDelay, and at the expiry the
 // assertion carries plus MaxClockSkew; the first presentation that writes

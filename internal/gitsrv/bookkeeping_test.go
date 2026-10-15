@@ -51,7 +51,7 @@ func (c *captureQueue) Work(context.Context, ...string) error             { retu
 // enqueues one repo.pushed job carrying everything the bookkeeping needs
 // and does NOT bookkeep inline; running the job does. When the enqueue
 // itself fails, the inline path still runs — durability is best effort
-// on top of correctness, never instead of it (agentry#43).
+// on top of correctness, never instead of it.
 func TestPushBookkeepingRidesTheQueue(t *testing.T) {
 	env := newBookkeepingEnv(t)
 	principal := &auth.Principal{UserID: env.owner, Via: "pat"}
@@ -112,8 +112,8 @@ func TestPushBookkeepingRidesTheQueue(t *testing.T) {
 }
 
 // TestRepoGCJob: the push handler enqueues a delayed repo.gc beside
-// repo.pushed, and the job runs git's auto housekeeping on the bare repo
-// (agentry#55). A role without repositories completes the job quietly.
+// repo.pushed, and the job runs git's auto housekeeping on the bare repo.
+// A role without repositories completes the job quietly.
 func TestRepoGCJob(t *testing.T) {
 	env := newBookkeepingEnv(t)
 	principal := &auth.Principal{UserID: env.owner, Via: "pat"}

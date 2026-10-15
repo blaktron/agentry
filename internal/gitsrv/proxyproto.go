@@ -1,9 +1,8 @@
 package gitsrv
 
-// PROXY protocol on the SSH listener (agentry#492). Behind a TCP proxy (the
-// site's edge on production) every SSH connection's peer is the proxy, so
-// the key-offer budget (agentry#410) keyed on the peer would be one budget
-// for every client. The proxy prepends a PROXY header naming the client;
+// PROXY protocol on the SSH listener. Behind a TCP proxy (such as a hosted
+// deployment's edge) every SSH connection's peer is the proxy, so the
+// key-offer budget keyed on the peer would be one budget for every client. The proxy prepends a PROXY header naming the client;
 // this file reads it, from trusted peers only, and nothing else.
 //
 // Both versions of the header are read (haproxy's proxy-protocol.txt): v1,

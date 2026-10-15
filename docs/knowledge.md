@@ -5,7 +5,7 @@ together with the documents and the brief they were compiled from, at most
 10 MB, that a run searches through the knowledge tools over a read-only
 `/knowledge` mount. A pack may come from documents, from a brief alone
 (what it should cover and for whom, kept as `sources/brief.md`), or both;
-its pages cite `[src: doc:<path>]`, and since agentry-cli v0.6.43 also
+its pages cite `[src: doc:<path>]`, and, with CLI v0.6.43 or later, also
 `[src: web:<url>]` for a page the Knowledge Creator read on the web (the
 page's text is not kept) and `[src: model]` for what it took from its
 model's own knowledge. [Running QuickAgents](runner.md#knowledge-packs) covers making one,
@@ -45,7 +45,7 @@ a run attaches a pack, or a hosted build is given one, the registry opens
 the tree at the hand-off and stages it for the sandbox host sealed again,
 under a fresh key that only the job carries. The host opens it as it streams
 it into the job's own directory, and both copies are deleted with the job
-([a run's data at rest](hosted-runs.md#a-runs-data-at-rest); DEV-245).
+([a run's data at rest](hosted-runs.md#a-runs-data-at-rest)).
 While the run uses the pack, the tree is in the clear on that host, as a
 run's own files are.
 
@@ -347,7 +347,7 @@ not keep them from the registry's own code:
   the paths above run in both. What holds them to a pack's owner, or an
   active member of its organization, is the code's owner check, not the
   vault's policy. A SecureAgentry deployment without the vault keeps the
-  older arrangement, where the CA's master key with the database opens the
+  arrangement where the CA's master key with the database opens the
   keys.
 - AI Review sends the text of each chunk to the judge provider the
   registry is configured with. With a hosted model, that provider reads

@@ -1,6 +1,5 @@
--- Stars and the per-agent counters the stats endpoint reports (§9.2
--- "Stars & counts"). Install counts read the download_stats daily rollup
--- (§4.2) rather than raw events.
+-- Stars and the per-agent counters the stats endpoint reports. Install counts
+-- read the download_stats daily rollup rather than raw events.
 
 -- name: StarAgent :exec
 -- Idempotent by design: PUT /user/stars/{ns}/{name} may be retried.

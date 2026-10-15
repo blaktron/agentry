@@ -99,22 +99,20 @@ rescan sweep surfacing many new high findings at once. The ClawHavoc pattern
 is hundreds of malicious agents from a handful of accounts, so assume the
 blast radius is an *account cluster*, not one agent.
 
-**A rescan sweep is now the most likely way you find out.** Registering a new
-ruleset release enqueues the §8.7 catalogue sweep automatically; you do not
+**A rescan sweep is the most likely way you find out.** Registering a new
+ruleset release enqueues the catalogue sweep automatically; you do not
 schedule it. Shipping detection for a live technique surfaces every
 already-published version that trips it, all at once. Expect a wave of
 quarantines after a rule that matters lands, and read it as the system
-working rather than as an incident of its own. (Sweeps used to need
-triggering by hand, which meant new detection sat unapplied; the 2026-08-29
-remediation fixed that.)
+working rather than as an incident of its own.
 
 S8's publisher-behaviour signal covers **account age × publish velocity**
-and, since DEV-026.1, the **IP cluster** half of §8.3 (`S8/ip-cluster`: three
+and the **IP cluster** (`S8/ip-cluster`: three
 or more accounts and ten or more versions publishing from one keyed IP hash
 within 24 hours). The actual ClawHavoc incident (1,184 skills from 12
 accounts) turned on that axis; the finding narrows step 1 below, it does not
-replace it. Neither signal is raised for a platform-staff submitter
-(DEV-143), so a burst from a staff account carries no S8 publisher finding:
+replace it. Neither signal is raised for a platform-staff submitter,
+so a burst from a staff account carries no S8 publisher finding:
 if one is in the cluster, scope it by the query below, not by the findings.
 
 1. **Scope it before acting.** Find the cluster:
@@ -134,14 +132,10 @@ if one is in the cluster, scope it by the query below, not by the findings.
    use. New publishes stop; existing content is untouched.
 3. **Quarantine, then block.** Quarantine is reversible: it stops resolution
    and refuses direct downloads with `409`. Block is for confirmed malware and
-   returns **`410 Gone`** on every download of that agent or version, which
-   is now true in fact and not only on paper. Work through the API
+   returns **`410 Gone`** on every download of that agent or version. Work
+   through the API
    (`POST /platform/agents/{ns}/{name}/quarantine`, then `.../block`) so every
-   action is audited with a reason, not in SQL. Until the 2026-08-29
-   remediation, `block` set the agent's quarantine state and nothing else, so
-   a blocked agent kept serving `200`s and its archive stayed downloadable;
-   the `410` branch was unreachable code. If you ran this runbook before that
-   fix, **re-check anything you blocked**; it may still be downloadable.
+   action is audited with a reason, not in SQL.
 4. **Publish one advisory per affected agent** (or one covering the cluster,
    referenced from each). Consumers who already installed are reached by
    advisory + webhook, not by any push we control.
@@ -153,8 +147,7 @@ one who quarantined. If you are alone, block anyway and get review after.
 
 **Verify:** no new versions from the cluster; quarantined/blocked states
 reflected on the agent pages; **an actual `curl` of a blocked version's
-download URL returns `410`** (verify the effect, not the state column;
-that is the exact failure that hid here once); advisories visible; audit
+download URL returns `410`** (verify the effect, not the state column); advisories visible; audit
 trail complete.
 
 ---
@@ -166,7 +159,7 @@ alert.
 
 Clients pin what they have seen (TOFU), so a rotation is visible to every
 installed client: at its next login it is told the advertised key ids
-changed. What a rotation does **not** do any more is orphan what the old key
+changed. What a rotation does **not** do is orphan what the old key
 signed. The registry records the public part of every key it signs with
 (`signing_keys`); the outgoing key stays in
 `/.well-known/agentry/signing-keys.json` with `status: retired` for as long
@@ -178,15 +171,15 @@ verifies everything; a client that pinned the old key keeps verifying the
 original signatures.
 
 1. Create the new key (your KMS or a new file key; on the hosted deployment
-   the site's Terraform, `modules/kms`). Keep the old key material: an
+   the site's Terraform). Keep the old key material: an
    attestation it signed stays verifiable through its own signature for
    clients that pinned it, and **never schedule deletion of a key that
    signed a published version**.
 2. Point signing at the new key (`AGENTRY_SIGNING_KMS_KEY_ARN`, or the file
    key) and roll the role that holds it: the worker (`all`, on compose). The
    api and git roles hold no key and need no restart: they read the active
-   key and the ruleset attestation from what the worker recorded at start
-   (agentry#479), within the key set's five-minute cache. At start the log
+   key and the ruleset attestation from what the worker recorded at start,
+   within the key set's five-minute cache. At start the log
    reads `attestations
    lack the signing key; re-attestation sweep enqueued` with the count; the
    worker then logs `re-attestation sweep complete` with how many it signed.
@@ -224,7 +217,7 @@ after the warning.
 
 ## 6. Database restore (point in time)
 
-**Trigger:** data loss or corruption. RPO 15 minutes, RTO 4 hours (§13.6).
+**Trigger:** data loss or corruption. RPO 15 minutes, RTO 4 hours.
 
 1. Stop writes: scale `api`, `git`, and `worker` to zero. Leave the edge (and
    a site in front) up: it will show errors, which is better than silent
@@ -252,8 +245,7 @@ after the warning.
 **Verify:** `/readyz` green, a test publish reaches `published`, `agentry
 verify` passes on a pre-incident version.
 
-**On the Vultr production** (Vultr Managed Databases, plan
-`production-on-vultr.md` D7/D13; agentry-web#212): the point-in-time history
+**On the Vultr production** (Vultr Managed Databases): the point-in-time history
 is the managed service's own, and the call that restores from it to a new
 cluster is its **fork**. Give it the source database, a label, the plan, the
 region, `type: pitr`, and a date and time; the result is a new cluster with
@@ -262,13 +254,12 @@ Point the DSN (terraform's `agentry-app` Secret) at the fork, or restore in
 place with the service's restore call once the fork has shown that the
 chosen time is right. The history covers two days on the Startup plan and
 fourteen on Business. It lives in the same region as the database, so it
-does not survive the loss of that region. Two scripts, both in agentry-web:
-- `scripts/dr/pitr-fork.sh` proves the recovery. It forks to a chosen second
-  between two audited requests and checks that the fork holds the first and
-  not the second.
-- `scripts/dr/drill.sh` runs the whole restore beside production. Its runs
-  and times are in agentry-web's `docs/ops/deployment.md`, "Production on
-  Vultr: backups and the restore drill".
+does not survive the loss of that region. Two scripts in the site's repository exercise it. One proves the recovery:
+it forks to a chosen second between two audited requests and checks that the
+fork holds the first and not the second. The other runs the whole restore
+beside production. Its runs and times are in the
+[deployment guide](https://docs.secureagentry.net/ops/deployment/), "Production
+on Vultr: backups and the restore drill".
 
 ---
 
@@ -292,11 +283,11 @@ published version was never affected.
 
 **On the Vultr production** the repositories are on a Vultr File System
 claim, of which Vultr states no snapshot. The nightly `backup-git` job
-(agentry-web's umbrella chart) copies each repository to the backup bucket in
+(in the hosted site's Helm chart) copies each repository to the backup bucket in
 a second region, as a `git bundle --all` with the repository's `config`,
 `HEAD` and pre-receive shim beside it, and the git role's SSH host key. To
-restore a repository, stop the git role and run agentry-web's
-`scripts/dr/restore-git.yaml` Job pointed at the claim. It makes each
+restore a repository, stop the git role and run the site's
+`restore-git` Job pointed at the claim. It makes each
 repository as `InitBare` would (`git init --bare`, then the saved config,
 `HEAD` and shim), fetches the bundle and checks connectivity. The copy is
 nightly, so the RPO is a day: pushes since the last bundle come back only
@@ -311,7 +302,7 @@ flood.
 
 1. Identify the shape: per-IP flood (WAF rate rules), distributed scraping of
    `/search` (cache and raise the anonymous limit), or targeted publish abuse
-   (see §4 quarantine wave).
+   (see runbook 4, Quarantine wave).
 2. Cheap levers first: WAF rate rule threshold, `AGENTRY_LIMITS_*` anonymous
    limits, CloudFront caching on public GETs. Release downloads are
    content-addressed and CDN-cached, so they should never be the bottleneck;
@@ -333,15 +324,15 @@ publisher locked out (check `user.login_failed` audit volume by handle).
 2. It purges PII, pseudonymizes the account, retires the handle (reserved, not
    recycled), revokes every credential, and disposes of published public
    versions **without ever deleting them**: consumers who already installed
-   keep a verifiable artifact, which is the §5.5 contract. Explain this to the
+   keep a verifiable artifact, which is the contract consumers rely on. Explain this to the
    requester; it is a lawful-interest position, not an oversight.
 3. **The requester must choose a disposition.** If the account has any
    published public versions, the call requires `publishedContent=yank` or
    `publishedContent=transfer` (the latter also needs
    `transferOrg=<org handle>`, and the caller must be an owner or admin
    there); without it the request is refused with `400` naming the count.
-   There is no default. It used to silently default to `yank`, so nobody
-   asked the requester. Ask before you run it, and record the answer.
+   There is no default, so ask the requester before you run it, and record the
+   answer.
 4. If they insist published bytes be removed, that is a `blocked` decision by
    trust & safety with a written rationale, not an erasure step.
 5. Audit events keep the opaque user id. Do not delete audit rows; the table
@@ -401,10 +392,9 @@ cannot sign in.
    `scripts/dev/authentik-bootstrap.sh` (idempotent): it restores the
    provider's redirect URIs (authorization *and* logout), the scope
    mappings, its one grant (the authorization code; a provider with none
-   answers every sign-in with `invalid_request`, agentry#494), the
+   answers every sign-in with `invalid_request`), the
    application's launch URL, and the brand's default
-   application and unset user-settings flow — everything a deployment that
-   predates agentry#164 lacks. It needs `AGENTRY_PUBLIC_WEB_URL` and the
+   application and unset user-settings flow. It needs `AGENTRY_PUBLIC_WEB_URL` and the
    bootstrap token from `.env`; read individual keys from that file rather
    than `source`-ing it (values with spaces are not shell-quoted).
 4. Do the containers know where to return? `AGENTRY_PUBLIC_WEB_URL` (sign-out)
@@ -412,7 +402,7 @@ cannot sign in.
    the `authentik-*` containers (compose passes them through, defaulting to
    the server's own `/ui/` pages; a site's overlay sets its own); the
    account-flows blueprint formats them into sign-out's redirect stage and
-   the settings flows' return-to-settings policy (DEV-118). After changing
+   the settings flows' return-to-settings policy. After changing
    them, recreate the authentik containers, not the registry alone.
 5. A user who cannot complete MFA is an operator action in the authentik
    admin console (`/if/admin/` still serves); email alone never resets both

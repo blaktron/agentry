@@ -14,9 +14,9 @@ import (
 
 // The image proxy's only gate is its signature, so its key must never be a
 // value the open-source tree gives away. With no sealing key configured —
-// which dev mode permits — it used to be sha256("img-proxy:"), and anyone
-// could sign any destination (security review 2026-09-20 §5.1, C7). Now a
-// dev-mode server with no sealing key signs with a per-process random key.
+// which dev mode permits — a key derived from a public constant would let
+// anyone sign any destination, so a dev-mode server with no sealing key
+// signs with a per-process random key.
 
 // publishReadmeImage publishes an agent whose README carries one image and
 // returns the src the renderer produced for it (empty when the renderer

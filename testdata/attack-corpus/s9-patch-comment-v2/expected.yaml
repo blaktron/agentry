@@ -1,5 +1,5 @@
 # Fixture expectation (see README.md).
-technique: "Release-diff pair, v2: a patch release adds a plain HTML comment (publishes since ruleset 0.3.2, agentry#775)"
+technique: "Release-diff pair, v2: a patch release adds a plain HTML comment (publishes since ruleset 0.3.2)"
 version: "1.0.1"
 prev: s9-patch-comment-v1
 expect:

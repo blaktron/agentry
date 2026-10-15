@@ -1,4 +1,4 @@
-technique: "Support script reaches a host the manifest does not declare through a path-qualified curl and a backtick-wrapped ssh (S6, agentry#1148)"
+technique: "Support script reaches a host the manifest does not declare through a path-qualified curl and a backtick-wrapped ssh (S6)"
 version: "1.0.0"
 manifest: |
   {"license":"MIT","capabilities":{"filesystem":{"read":"workspace"},"exec":{"commands":["sh","curl","ssh"]}}}

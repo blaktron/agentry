@@ -15,8 +15,8 @@ import (
 )
 
 // directoryEraser deletes a person's sign-in account in the external
-// directory service as part of account erasure (§12.7, agentry#20). With
-// credentials held by the directory (DEV-057), the registry's own
+// directory service as part of account erasure. With
+// credentials held by the directory, the registry's own
 // pseudonymization leaves the email, display name and password hash alive
 // there — and the person able to sign in again and JIT-create a fresh
 // account. Erasure is only erasure if both halves happen.
@@ -28,8 +28,8 @@ type directoryEraser interface {
 	EraseAccount(ctx context.Context, link directoryLink) (bool, directoryLookup, error)
 }
 
-// directoryLink is how the registry names a person's directory account
-// (agentry#727): the directory's own id for it, learnt at sign-in; the uid
+// directoryLink is how the registry names a person's directory account:
+// the directory's own id for it, learnt at sign-in; the uid
 // the directory reports for it, which is the registry's `authentik:`
 // subject; and the registry's copy of the address, the lookup of last
 // resort. The id and the uid are zero for an account that never signed in
@@ -65,7 +65,7 @@ func (l directoryLookup) unresolved() bool {
 }
 
 // directoryLinksFor names every directory account the person is linked to
-// (agentry#727), oldest first: the directory's id and uid from each
+// oldest first: the directory's id and uid from each
 // directory sign-in, with the registry's address as the last resort. With
 // no directory sign-in it is the address alone.
 func (s *Server) directoryLinksFor(ctx context.Context, userID uuid.UUID, email string) ([]directoryLink, error) {
@@ -114,7 +114,7 @@ func (a *authentikEraser) do(ctx context.Context, method, path string) (*http.Re
 	res, err := a.http.Do(req)
 	// A transport error names the URL, and the lookup's URL carries the
 	// person's address in its query. The error goes to the audit log and the
-	// server's log for an erasure (agentry#499), so it keeps the method and
+	// server's log for an erasure, so it keeps the method and
 	// the cause and drops the URL.
 	var ue *url.Error
 	if errors.As(err, &ue) {
@@ -124,8 +124,7 @@ func (a *authentikEraser) do(ctx context.Context, method, path string) (*http.Re
 }
 
 // findAccount finds the directory account a link names, by the one rule
-// every directory lookup the registry makes shares (agentry#727,
-// agentry#617):
+// every directory lookup the registry makes shares:
 //
 //  1. When the registry has learnt the directory's id for the account, the
 //     account at that id, and only if its uid is the linked one: an id that
@@ -134,7 +133,7 @@ func (a *authentikEraser) do(ctx context.Context, method, path string) (*http.Re
 //     account at the registry's address that carries the linked uid.
 //  3. For an account that never signed in through the directory, the
 //     account at the address, and only when exactly one holds it: authentik
-//     does not keep addresses unique (agentry#712), and a guess between two
+//     does not keep addresses unique, and a guess between two
 //     is somebody else's account half the time (address-shared).
 //
 // Addresses match exactly and case-blind; a service account never counts.
@@ -199,7 +198,7 @@ func (a *authentikEraser) accountByID(ctx context.Context, pk int64) (*authentik
 
 // accountsAt lists the directory accounts at exactly this address,
 // case-blind, active or not, service accounts left out. authentik 2026.8's
-// email= filter is exact and case-sensitive (agentry#617), so an address
+// email= filter is exact and case-sensitive, so an address
 // the directory holds with capitals would never be found from the
 // registry's lower-cased one; search= is case-blind and also matches parts
 // of the username and the name, so it only narrows.
@@ -249,7 +248,7 @@ func (a *authentikEraser) EraseAccount(ctx context.Context, link directoryLink) 
 }
 
 // directoryDevices is the read side of the same admin access: the
-// authenticators a user has enrolled, for the settings page (agentry#113).
+// authenticators a user has enrolled, for the settings page.
 type directoryDevices interface {
 	Devices(ctx context.Context, link directoryLink) ([]DirectoryDevice, error)
 	// DeleteDevice removes one of the account's authenticators; false when

@@ -1,8 +1,7 @@
 package api_test
 
 // An organization's own SSO is second-factor evidence for the public-publish
-// gate when its signed assertion says a second factor was used (agentry#705,
-// the organization counterpart of agentry#23): a SAML AuthnContextClassRef or
+// gate when its signed assertion says a second factor was used: a SAML AuthnContextClassRef or
 // Entra ID's authnmethodsreferences attribute naming multi-factor, an OIDC
 // ID token whose `amr` names a factor. It counts only on a deployment that
 // accepts IdP-asserted evidence (auth.requireIdpMFA): an organization's IdP

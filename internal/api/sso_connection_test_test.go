@@ -10,7 +10,7 @@ import (
 )
 
 // POST /orgs/{org}/sso/connections/{kind}/test probes a stored connection
-// without a sign-in (agentry#50): OIDC discovery, SAML metadata facts.
+// without a sign-in: OIDC discovery, SAML metadata facts.
 func TestSsoConnectionProbe(t *testing.T) {
 	idp := newOIDCEndpointIdP(t)
 	env := newTestEnvWith(t, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })

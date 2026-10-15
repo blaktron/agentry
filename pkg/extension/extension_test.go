@@ -35,8 +35,7 @@ import (
 )
 
 // A minimal extension compiles against the interface using only the
-// aliases this package exports — what a closed module outside the core
-// can do.
+// aliases this package exports: what a module outside the core can do.
 type noop struct{}
 
 func (noop) Name() string { return "noop" }
@@ -50,9 +49,9 @@ func (noop) Jobs() []Job            { return nil }
 
 var _ Extension = noop{}
 
-// billingLike is the shape the billing extension takes (plan
-// subscription-tiers §5.1, §5.5): the optional seams, satisfied with the
-// aliases alone. It must compile; the behaviour is the API's tests.
+// billingLike is the shape a billing extension takes: the optional
+// seams, satisfied with the aliases alone. It must compile; the
+// behaviour is the API's tests.
 type billingLike struct{ noop }
 
 func (billingLike) Admitter() Admitter {
@@ -76,8 +75,9 @@ type bound struct {
 
 func (bound) Name() string { return "bound" }
 
-// tiered is the shape a closed resolver takes: the core's, with Features
-// answered by the extension. It must compile against the aliases alone.
+// tiered is the shape an extension's resolver takes: the core's, with
+// Features answered by the extension. It must compile against the
+// aliases alone.
 type tiered struct {
 	Resolver
 }
@@ -129,11 +129,11 @@ type binder struct {
 
 func (b *binder) Bind(d Deps) { b.deps = d }
 
-// TestBindHandsTheBaseURL: a bound extension gets the address the core's
-// own links use, whether the deployment names it in the config file (as
-// production's chart does) or in AGENTRY_BASE_URL (as dev's compose does),
-// the variable winning over the file, and nothing when neither names one
-// (agentry#969).
+// TestBindHandsTheBaseURL: a bound extension gets the address the
+// core's own links use, whether the deployment names it in the config
+// file (as a chart does) or in AGENTRY_BASE_URL (as a compose file
+// does), the variable winning over the file, and nothing when neither
+// names one.
 func TestBindHandsTheBaseURL(t *testing.T) {
 	cases := []struct {
 		name, file, env, want string
@@ -276,10 +276,10 @@ func TestNoopSatisfiesTheInterface(t *testing.T) {
 	}
 }
 
-// TestParseQueues pins the worker's --queues contract (agentry#312): a
-// subset of the queues that exist, in the order given, duplicates folded;
-// an unknown name — "judge" included, which has no queue — is refused
-// rather than drained as nothing; empty means both.
+// TestParseQueues pins the worker's --queues contract: a subset of the
+// queues that exist, in the order given, duplicates folded; an unknown
+// name ("judge" included, which has no queue) is refused rather than
+// drained as nothing; empty means both.
 func TestParseQueues(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -312,8 +312,8 @@ func TestParseQueues(t *testing.T) {
 }
 
 // ScopeAllows is how an extension route requires a hosted-run scope
-// through the seam alone (agentry#348): nobody anonymous; a session,
-// which has the account's full authority; a PAT only with the scope.
+// through the seam alone: nobody anonymous; a session, which has the
+// account's full authority; a PAT only with the scope.
 func TestScopeAllows(t *testing.T) {
 	if ScopeAllows(nil, ScopeRunWrite) || ScopeAllows(&Principal{Anonymous: true}, ScopeRunWrite) {
 		t.Fatal("an anonymous caller passed")
@@ -335,11 +335,11 @@ func TestScopeAllows(t *testing.T) {
 		t.Fatal("secret:write is not read as the core reads it")
 	}
 	if ScopeAllows(&Principal{Via: "user"}, ScopeRunRead) {
-		t.Fatal("a principal from Principals.ForUser passed; it is no caller (agentry#838)")
+		t.Fatal("a principal from Principals.ForUser passed; it is no caller")
 	}
-	// A schedule's credential (agentry#1002) is read as a token minted
-	// with auth.ScheduleScopes: it starts and reads a run and attaches
-	// knowledge, and writes nothing else — never as a session.
+	// A schedule's credential is read as a token minted with
+	// auth.ScheduleScopes: it starts and reads a run and attaches
+	// knowledge, and writes nothing else, never as a session.
 	sched := &Principal{Via: "schedule", ScheduleID: uuid.New(), Scopes: auth.ScheduleScopes()}
 	for _, s := range []Scope{ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead} {
 		if !ScopeAllows(sched, s) {
@@ -356,8 +356,8 @@ func TestScopeAllows(t *testing.T) {
 	}
 }
 
-// wrapperLike is the shape SecureAgentry's knowledge wrapper takes (plan
-// knowledge.md §4.4): the WrapsKeys seam, satisfied with the aliases alone.
+// wrapperLike is the shape a knowledge wrapper takes: the WrapsKeys
+// seam, satisfied with the aliases alone.
 type wrapperLike struct{ noop }
 
 func (wrapperLike) KeyWrapper() KeyWrapper { return certWrapper{} }
@@ -391,9 +391,8 @@ func TestApplyExtensionsSetsTheKeyWrapper(t *testing.T) {
 	}
 }
 
-// jobAdmitter is the shape SecureAgentry's runs extension takes for the
-// model-input routes (agentry#608): the AdmitsModelInput seam, with the
-// aliases alone.
+// jobAdmitter is the shape a runs extension takes for the model-input
+// routes: the AdmitsModelInput seam, with the aliases alone.
 type jobAdmitter struct{ noop }
 
 func (jobAdmitter) ModelInputCallers() ModelInputCallers { return jobCallers{} }
@@ -427,8 +426,8 @@ func TestApplyExtensionsSetsTheModelInputCallers(t *testing.T) {
 	}
 }
 
-// poolingResolver is the shape a closed resolver that pools knowledge takes
-// (agentry#612): the PoolsKnowledge seam, with the aliases alone.
+// poolingResolver is the shape a resolver that pools knowledge takes:
+// the PoolsKnowledge seam, with the aliases alone.
 type poolingResolver struct{ tiered }
 
 func (poolingResolver) KnowledgePool(_ context.Context, o KeyOwner) (KnowledgePool, error) {
@@ -437,9 +436,8 @@ func (poolingResolver) KnowledgePool(_ context.Context, o KeyOwner) (KnowledgePo
 
 var _ PoolsKnowledge = poolingResolver{}
 
-// builder is the shape SecureAgentry's hosted build takes over the
-// knowledge store (agentry#624): it reads Deps.Knowledge and speaks only
-// the seam's aliases.
+// builder is the shape a hosted build takes over the knowledge store:
+// it reads Deps.Knowledge and speaks only the seam's aliases.
 type builder struct {
 	noop
 	store Knowledge
@@ -496,9 +494,9 @@ func TestBindHandsTheKnowledgeStore(t *testing.T) {
 	}
 }
 
-// vaultLike is the shape SecureAgentry's vault takes (agentry#638): it
-// deletes an account's rows in the core's erasure transaction, through the
-// aliases alone.
+// vaultLike is the shape a vault extension takes: it deletes an
+// account's rows in the core's erasure transaction, through the aliases
+// alone.
 type vaultLike struct{ noop }
 
 func (vaultLike) Name() string { return "vault" }
@@ -528,9 +526,8 @@ func TestApplyExtensionsRegistersTheAccountEraser(t *testing.T) {
 	}
 }
 
-// voiceWriter is the shape SecureAgentry's hosted Voice Writer takes
-// (agentry#809): it is handed the core's voice store, and admits the
-// reviews the routes ask for.
+// voiceWriter is the shape a hosted Voice Writer takes: it is handed
+// the core's voice store, and admits the reviews the routes ask for.
 type voiceWriter struct {
 	noop
 	store Voice
@@ -588,7 +585,7 @@ func TestBindHandsTheVoiceStore(t *testing.T) {
 	if err != nil || s.Pending == nil || s.Pending.Source != VoiceSourceBuild || s.Live != nil {
 		t.Fatalf("propose: %+v %v", s, err)
 	}
-	// Pending is never what a run attaches (plan §3, invariant 4).
+	// Pending is never what a run attaches.
 	if _, err := v.store.Live(ctx, user); !errors.Is(err, ErrVoiceNotFound) {
 		t.Fatalf("a pending voice read as live: %v", err)
 	}
@@ -623,7 +620,7 @@ func (m *metered) Bind(d Deps) {
 
 // TestBindHandsTheServersMeter: an extension bound to a server with a
 // database and metrics records a counter on its meter, and the server's
-// own /metrics serves it with the core's resource labels (agentry#777).
+// own /metrics serves it with the core's resource labels.
 func TestBindHandsTheServersMeter(t *testing.T) {
 	st := migratedStore(t)
 	cfg := config.Default()
@@ -656,9 +653,8 @@ func TestBindHandsTheServersMeter(t *testing.T) {
 	}
 }
 
-// designReader is the shape SecureAgentry's hosted runs take for the report
-// design (agentry#1015, agentry#1024): it is handed the core's report
-// settings.
+// designReader is the shape a hosted run takes for the report design:
+// it is handed the core's report settings.
 type designReader struct {
 	noop
 	settings ReportSettings
@@ -666,11 +662,11 @@ type designReader struct {
 
 func (r *designReader) Bind(d Deps) { r.settings = d.ReportSettings }
 
-// TestBindHandsTheReportSettings: a bound extension reads a person's report
-// design as its canonical document, nil while they never chose one and again
-// once they clear it, and another person's design is never theirs (DEV-227:
-// no row is not Plain). Theme, the transitional read, answers the design's
-// basedOn.
+// TestBindHandsTheReportSettings: a bound extension reads a person's
+// report design as its canonical document, nil while they never chose
+// one and again once they clear it, and another person's design is
+// never theirs (no row is not Plain). Theme, the transitional read,
+// answers the design's basedOn.
 func TestBindHandsTheReportSettings(t *testing.T) {
 	st := migratedStore(t)
 	cfg := config.Default()
@@ -718,8 +714,8 @@ func TestBindHandsTheReportSettings(t *testing.T) {
 	if got, err := r.settings.DesignWithLogo(ctx, user); err != nil || !bytes.Equal(got, technical.Canonical()) {
 		t.Fatalf("chosen, no logo: %s, %v", got, err)
 	}
-	// A logo (agentry#1025) comes only with DesignWithLogo: Design stays
-	// what a reader without logos can parse.
+	// A logo comes only with DesignWithLogo: Design stays what a reader
+	// without logos can parse.
 	var pb bytes.Buffer
 	if err := png.Encode(&pb, image.NewNRGBA(image.Rect(0, 0, 8, 4))); err != nil {
 		t.Fatal(err)

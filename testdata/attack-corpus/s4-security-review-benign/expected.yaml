@@ -1,11 +1,10 @@
-# Regression fixture: the passages that held two security QuickAgents on dev
-# (blaktron/sast-scan and blaktron/eks-security-review, 2026-10-04) on
-# S4's credential-harvest and exfiltration rules. Each describes a risk for
-# the agent to look for, in code, a table or a description, and none tells
-# the agent to do it. Since ruleset 0.4.0 those rules fire only on a
-# directive addressed to the agent (agentry#893, DEV-221). If one fires
-# here, a security review has become unpublishable again.
-technique: "Security review prose describing credential and data-exposure risks (agentry#893)"
+# Regression fixture: passages from security-review agents that S4's
+# credential-harvest and exfiltration rules once held. Each describes a risk
+# for the agent to look for, in code, a table or a description, and none
+# tells the agent to do it. Since ruleset 0.4.0 those rules fire only on a
+# directive addressed to the agent. If one fires here, a security review has
+# become unpublishable.
+technique: "Security review prose describing credential and data-exposure risks"
 expect: []
 forbid:
   - S4/credential-harvest-001

@@ -1,9 +1,9 @@
 package api_test
 
-// Idempotency-Key on POST /agents/{ns}/{name}/versions (agentry#22, DEV-021.2):
+// Idempotency-Key on POST /agents/{ns}/{name}/versions:
 // a retried multipart upload — new boundary, same files — replays the 202
 // instead of hitting V3 "version exists"; the same key with different files
-// is a 409; and an archive over the old 1 MiB body cap is accepted.
+// is a 409; and an archive over 1 MiB is accepted.
 
 import (
 	"crypto/sha256"
@@ -24,10 +24,9 @@ func TestSubmitVersionIdempotencyReplay(t *testing.T) {
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
 
 	// A body past 1 MiB that does not compress away (the archive builder
-	// refuses zip-bomb ratios): the guard used to refuse to read it at all.
-	// It is an image, not text: §19 caps the text files of a package at
-	// 1 MiB in total (V8, agentry#44), so a large README would be refused
-	// before the replay under test.
+	// refuses zip-bomb ratios). It is an image, not text: the text files of
+	// a package are capped at 1 MiB in total (V8), so a large README would
+	// be refused before the replay under test.
 	var sb strings.Builder
 	sb.WriteString("\x89PNG\r\n\x1a\n")
 	seed := sha256.Sum256([]byte("idempotency fixture"))

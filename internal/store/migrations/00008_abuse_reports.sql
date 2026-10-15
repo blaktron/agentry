@@ -1,6 +1,6 @@
 -- +goose Up
--- Abuse reports (§8.7 intake): the web "report" button and security@ intake
--- feed the platform review queue.
+-- Abuse reports: the web "report" button and security@ intake feed the
+-- platform review queue.
 CREATE TABLE abuse_reports (
   id uuid PRIMARY KEY,
   agent_id uuid NOT NULL REFERENCES agents(id),

@@ -12,13 +12,13 @@ import (
 	"time"
 )
 
-// benchDir is the model-input bench's corpus (plan builder-rework.md D23):
-// hostile pages, results, registry answers and descriptions (instructions
-// in comments, hidden text, encoded and invisible payloads, exfiltration
-// through a link, fake tool calls) and benign ones (install guides with
-// `curl | bash`, API references with example keys, an article that quotes
-// an injection to explain it). index.json names each file's class, source
-// and what it tests.
+// benchDir is the model-input bench's corpus: hostile pages, results,
+// registry answers and descriptions (instructions in comments, hidden
+// text, encoded and invisible payloads, exfiltration through a link,
+// fake tool calls) and benign ones (install guides with `curl | bash`,
+// API references with example keys, an article that quotes an injection
+// to explain it). index.json names each file's class, source and what
+// it tests.
 const benchDir = "testdata/model-input-bench"
 
 type benchCase struct {
@@ -63,7 +63,7 @@ func TestTheModelInputBenchCorpusIsIndexed(t *testing.T) {
 			t.Fatalf("%s: source %q, what %q", c.File, c.Source, c.What)
 		}
 		if b, err := os.ReadFile(filepath.Join(benchDir, c.File)); err != nil || len(b) == 0 || len(b) > 4*ChunkSize {
-			t.Fatalf("%s: %d bytes, %v (a page is at most 32 KiB, D24)", c.File, len(b), err)
+			t.Fatalf("%s: %d bytes, %v (a page is at most 32 KiB)", c.File, len(b), err)
 		}
 		classes[c.Class]++
 	}
@@ -81,12 +81,11 @@ func TestTheModelInputBenchCorpusIsIndexed(t *testing.T) {
 	}
 }
 
-// TestModelInputBench is the by-hand bench of the model-input question set
-// (agentry#608, D23): it scans every case of the corpus with the live Jev
-// Samples times, one request per chunk each time, and writes one CSV row per
+// TestModelInputBench is the by-hand bench of the model-input question
+// set: it scans every case of the corpus with the live Jev Samples
+// times, one request per chunk each time, and writes one CSV row per
 // case × sample × question with the probability, so the wording and the
-// withhold line are chosen on numbers. The summary it logs is what
-// agentry-notes measurements/model-input-bench.md records.
+// withhold line are chosen on numbers. It logs a summary of the run.
 //
 // It never runs in CI: it needs AGENTRY_JUDGE_BENCH=1 and a key in
 // AGENTRY_JUDGE_API_KEY, and spends real requests. The CSV goes to
@@ -200,9 +199,10 @@ func TestModelInputBench(t *testing.T) {
 	}
 }
 
-// compareWithTheRubric asks the gate's own four texts (C1, C2, C4, C5, the
-// ones D23 re-words) about each case once, as S5 would with no declared
-// capabilities, so the record can say what the re-wording changes.
+// compareWithTheRubric asks the gate's own four texts (C1, C2, C4, C5,
+// the ones the model-input set re-words) about each case once, as S5
+// would with no declared capabilities, so the record can say what the
+// re-wording changes.
 func compareWithTheRubric(t *testing.T, c *Client) {
 	t.Helper()
 	var four []Question

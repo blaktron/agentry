@@ -1,6 +1,6 @@
 package api
 
-// Account installs (plan web-dashboard-shell §5, D3/D4; agentry#448): a
+// Account installs: a
 // signed-in person's record, on the registry, of a QuickAgent release they
 // accepted for their account — the version, the declared capabilities they
 // consented to, and the unsigned or unscanned consents the release needed.
@@ -37,7 +37,7 @@ const (
 // for read, and the caller — or the problem written and false. The
 // QuickAgent comes first, before the self-scoped authorization: a caller
 // who cannot read it, anonymous or a stranger, gets the missing name's 404
-// before any 401 that would say the name exists (§9, agentry#313); a
+// before any 401 that would say the name exists; a
 // public name keeps the conventional 401 for an anonymous write.
 func (s *Server) installTarget(w http.ResponseWriter, r *http.Request, ns, name string) (registry.Agent, *auth.Principal, bool) {
 	if !s.requireDB(w, r) {
@@ -354,7 +354,7 @@ func (s *Server) versionSigned(ctx context.Context, versionID uuid.UUID) (bool, 
 // its finding counts when a run stands behind the report, absent while a
 // first scan is pending or when the report's run errored. A rescan in
 // flight does not blank it: the report's run is the latest finished one
-// (reportRun, agentry#542).
+// (reportRun).
 func (s *Server) versionVerdict(ctx context.Context, v registry.Version) (*ReportVerdict, *map[string]int, error) {
 	if v.ScanStatus == registry.ScanStatusSkipped {
 		unscanned := Unscanned

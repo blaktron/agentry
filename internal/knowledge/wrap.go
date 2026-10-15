@@ -16,9 +16,10 @@ import (
 )
 
 // WrappedKey is a pack's data key as its owner's wrapper sealed it: which
-// wrapper (Kind), to which key (Recipient: the deployment key's id, or on
-// SecureAgentry a certificate's serial), and the sealed bytes. It is what
-// a client keeps beside a sealed pack and what a pack's row holds.
+// wrapper (Kind), to which key (Recipient: the deployment key's id, or,
+// with an extension's wrapper, a certificate's serial), and the sealed
+// bytes. It is what a client keeps beside a sealed pack and what a pack's
+// row holds.
 type WrappedKey struct {
 	Kind      string
 	Recipient string
@@ -26,9 +27,9 @@ type WrappedKey struct {
 }
 
 // KeyWrapper wraps a pack's data key for its owner and unwraps it again,
-// and destroys what makes an owner's wrapped keys open (plan knowledge.md
-// §4.3, D4, D22). The registry is the only party that unwraps: a data key
-// leaves it over TLS to its owner, and no route ever returns what wraps it.
+// and destroys what makes an owner's wrapped keys open. The registry is
+// the only party that unwraps: a data key leaves it over TLS to its owner,
+// and no route ever returns what wraps it.
 type KeyWrapper interface {
 	// Wrap seals dataKey for owner.
 	Wrap(ctx context.Context, owner Owner, dataKey []byte) (WrappedKey, error)

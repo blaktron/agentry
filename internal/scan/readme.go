@@ -27,7 +27,7 @@ type BlobGetter interface {
 }
 
 // ExtractREADME pulls the README out of a release archive. It reuses the
-// hardened extractor (§8.2) rather than reading the tar directly, so both the
+// hardened extractor rather than reading the tar directly, so both the
 // rendering path and the search-index path get the same traversal and
 // decompression-bomb protections the scanners do.
 func ExtractREADME(ctx context.Context, blobs BlobGetter, archiveKey string, archiveSize *int64) ([]byte, error) {
@@ -63,12 +63,12 @@ func ExtractREADME(ctx context.Context, blobs BlobGetter, archiveKey string, arc
 }
 
 // MaxIndexedReadmeBytes bounds the README text denormalized onto the agent row
-// for the §10.4 weight-C index.
+// for the weight-C search index.
 //
 // to_tsvector runs inside a BEFORE trigger on every agent write, and its
 // output is capped at 1 MB — past that Postgres errors, which would turn an
 // oversized README into a failed publish. 64 KB is far more prose than any
-// agent's README carries (§1.6.4: agents are small by design) and keeps the
+// agent's README carries (agents are small by design) and keeps the
 // trigger's cost bounded and predictable.
 const MaxIndexedReadmeBytes = 64 << 10
 

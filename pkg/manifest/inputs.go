@@ -5,18 +5,18 @@ import (
 	"slices"
 )
 
-// A QuickAgent may say what files it takes and how its agent reads them
-// (plan quickagents-that-run.md M6, D1; agentry#892; DEV-218). The runner
-// offers every input in two views since agentry-cli#631: `text`, the
-// text a decoder made (a document's, an image's, HTML's Markdown), and
-// `original`, the file as uploaded. Without a declaration each file keeps
-// its own default (a decoder's text where one made it, anything else as
-// uploaded) and any kind of file is taken, which is how every release
-// published before the block reads.
-// The kinds tell the run setup and the Drafter what to ask for; the view
-// tells the runner which one the agent is pointed at first. Neither grants
-// anything: attaching a file is the grant, so the block is outside the
-// contract, as the guide is.
+// A QuickAgent may say what files it takes and how its agent reads
+// them. The runner offers every input in two views: `text`, the text a
+// decoder made (a document's, an image's, HTML's Markdown), and
+// `original`, the file as uploaded. Without a declaration each file
+// keeps its own default (a decoder's text where one made it, anything
+// else as uploaded) and any kind of file is taken, which is how a
+// release without the block reads.
+//
+// The kinds tell the run setup and the Drafter what to ask for; the
+// view tells the runner which one the agent is pointed at first.
+// Neither grants anything: attaching a file is the grant, so the block
+// is outside the contract, as the guide is.
 
 // InputKind is one kind of file a QuickAgent takes.
 type InputKind string

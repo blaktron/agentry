@@ -10,7 +10,7 @@ import (
 
 // fakeSignInDirectory answers the calls SignInFacts makes, in authentik
 // 2026.8's shapes: two accounts share one address (authentik does not keep
-// addresses unique, agentry#712), told apart by uid; the second has two
+// addresses unique), told apart by uid; the second has two
 // source connections, the older one Google, and carries the blueprint's
 // agentry_has_password attribute as given (omitted when attr is nil).
 func fakeSignInDirectory(t *testing.T, attr any) *httptest.Server {
@@ -82,7 +82,7 @@ func TestDirectorySignInFacts(t *testing.T) {
 				// Signed in before the directory sent its id: the uid at the address.
 				{UID: "uid-pat", Email: "pat@example.test"},
 				// The directory's id, the registry's address being another
-				// (agentry#727: the bootstrap admin on dev).
+				// (the bootstrap admin).
 				{AccountID: 12, UID: "uid-pat", Email: "pat@authentik.social.local"},
 			} {
 				f, err := a.SignInFacts(ctx, link)

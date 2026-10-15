@@ -1,11 +1,11 @@
 package api_test
 
-// Remembered browsers on the directory's sign-in (agentry#670, DEV-163).
+// Remembered browsers on the directory's sign-in.
 //
-// Dev and production sign in through the directory, so the "Remember this
-// device for 30 days" box lives on its code page. The directory passes the
+// A deployment that signs in through the directory shows the "Remember this
+// device for 30 days" box on the directory's code page. The directory passes the
 // choice to the registry as the ID-token claim agentry_remember_device, and
-// the registry mints the DEV-123 record on the callback. These tests pin the
+// the registry mints the trusted-device record on the callback. These tests pin the
 // rule that decides the mint: only the directory's claim, only beside an
 // `amr` that names a second factor, only while the directory path is on.
 
@@ -153,7 +153,7 @@ func TestDirectoryRemembersOnlyOnItsClaimAndASecondFactor(t *testing.T) {
 					t.Fatalf("%d records minted, want none", rows)
 				}
 				// A sign-in whose factor was skipped is no evidence of one
-				// for the publish gate either (agentry#23).
+				// for the publish gate either.
 				if len(tc.amr) == 1 {
 					var stamped bool
 					if err := env.st.Pool().QueryRow(context.Background(),
@@ -383,10 +383,10 @@ func TestDirectoryTrustCheckIsAbsentWhenOff(t *testing.T) {
 	}
 }
 
-// TestDirectoryRememberCookieCoversTheDirectorysHost is the shape dev and
-// production run: the registry at a host, the directory on a subdomain of it.
+// TestDirectoryRememberCookieCoversTheDirectorysHost is the shape of a
+// hosted deployment: the registry at a host, the directory on a subdomain of it.
 // The cookie is set for the registry's host so the browser sends it to the
-// directory's flow executor (DEV-163 accepts that this domain also covers the
+// directory's flow executor (that domain also covers the
 // registry's other subdomains).
 func TestDirectoryRememberCookieCoversTheDirectorysHost(t *testing.T) {
 	idp := newFakeOIDC(t)
@@ -433,7 +433,7 @@ func signInCaller(t *testing.T, env *testEnv, idp *fakeOIDC) (caller, *http.Resp
 }
 
 // TestClearTrustedDevices is the account's one control over remembered
-// browsers (agentry#672, DEV-163): a count the site shows, and a clear that
+// browsers: a count the site shows, and a clear that
 // revokes every one of the caller's, this browser's included. It follows the
 // session routes' rule: a token reads 0 and cannot clear.
 func TestClearTrustedDevices(t *testing.T) {
@@ -554,7 +554,7 @@ func intOrNil(p *int) string {
 	return strconv.Itoa(*p)
 }
 
-// TestDirectoryRememberedBrowserSurvivesLogout (agentry#464): signing out of
+// TestDirectoryRememberedBrowserSurvivesLogout: signing out of
 // the registry leaves a browser remembered through the directory's sign-in,
 // and the directory's next check still says yes. The directory's own sign-out
 // (the agentry-invalidation flow) ends the directory's session and calls

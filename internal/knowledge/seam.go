@@ -15,14 +15,13 @@ import (
 	"github.com/blaktron/agentry/pkg/packseal"
 )
 
-// What an extension may do with the store (pkg/extension.Knowledge,
-// agentry#624; plan knowledge.md §4.5, M6): a hosted build of the built-in
-// Creator makes a pack, reads its tree to stage it for the sandbox host,
-// and puts back the tree the build made. The data key never leaves the
-// registry: the extension hands over plaintext files and reads metadata,
-// and the tree it puts back is sealed here and stored through the upload's
-// own path, so the allocation, the bookkeeping and the scan are the same
-// for both doors.
+// What an extension may do with the store (pkg/extension.Knowledge): a hosted
+// build of the built-in Creator makes a pack, reads its tree to stage it for
+// the sandbox host, and puts back the tree the build made. The data key never
+// leaves the registry: the extension hands over plaintext files and reads
+// metadata, and the tree it puts back is sealed here and stored through the
+// upload's own path, so the allocation, the bookkeeping and the scan are the
+// same for both doors.
 
 // ErrChanged is a replace whose pack no longer holds the tree it was read
 // with: another upload or build landed in between.

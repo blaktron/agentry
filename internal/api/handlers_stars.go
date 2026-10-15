@@ -1,6 +1,6 @@
 package api
 
-// Stars and per-agent counters (§9.2 "Stars & counts").
+// Stars and per-agent counters.
 
 import (
 	"net/http"
@@ -81,8 +81,8 @@ func (s *Server) UnstarAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 }
 
 // GetAgentStats implements GET /agents/{ns}/{name}/stats: star count plus
-// lifetime and trailing-30-day installs from the download_stats rollup
-// (§4.2). Public for public agents; private ones need read like every other
+// lifetime and trailing-30-day installs from the download_stats rollup.
+// Public for public agents; private ones need read like every other
 // agent-scoped route.
 func (s *Server) GetAgentStats(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName) {
 	if !s.requireDB(w, r) {

@@ -10,13 +10,13 @@ import (
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
-// S8 — Metadata, namespace & publisher abuse (§8.3). Name similarity vs
+// S8 — Metadata, namespace & publisher abuse. Name similarity vs
 // popular agents (normalized edit distance + UTS #39 confusable-skeleton
 // compare), URL reputation in readme/manifest, keyword-stuffing heuristics,
 // and publisher-behaviour signals (young account + publish velocity — the
 // ClawHavoc pattern).
 type S8Metadata struct {
-	// PopularAgentNames seeds the anti-typosquat compare (T-10); the
+	// PopularAgentNames seeds the anti-typosquat compare; the
 	// orchestrator injects the live top-N.
 	PopularAgentNames []string
 	// AgentName is this agent's name (for self-exclusion).
@@ -33,8 +33,8 @@ func (s S8Metadata) Run(sc stageContext, in *Input) StageResult {
 	findings = append(findings, s8URLReputation(in)...)
 	findings = append(findings, s8Spam(in)...)
 
-	// Platform staff skip the publisher signals (operator, 2026-09-24,
-	// agentry#563): staff is an account set the operator controls, and its
+	// Platform staff skip the publisher signals:
+	// staff is an account set the platform controls, and its
 	// checks and first-party publishes are bursts from young accounts by
 	// design. The rest of S8 and every other stage still run for them.
 	if !in.SubmitterIsStaff {
@@ -72,7 +72,7 @@ func s8URLReputation(in *Input) []Finding {
 // against publish velocity, and the several-accounts-one-address cluster.
 func s8PublisherSignals(in *Input) []Finding {
 	var out []Finding
-	// Publisher anomaly (§8.3, §19 ramp): young account + high velocity.
+	// Publisher anomaly: young account + high velocity.
 	if in.AccountAgeDays >= 0 && in.AccountAgeDays < 7 && in.RecentPublishCount >= 5 {
 		out = append(out, Finding{
 			Scanner: "S8/publisher-velocity", Severity: SevMedium, Confidence: ConfMedium,
@@ -81,7 +81,7 @@ func s8PublisherSignals(in *Input) []Finding {
 			Taxonomy: []string{"LLM03"},
 		})
 	}
-	// The cluster axis (§8.3, agentry#27): several accounts publishing
+	// The cluster axis: several accounts publishing
 	// from one address in a day is the ClawHavoc shape (12 accounts, one
 	// operator) that per-account velocity cannot see. Routes to platform
 	// review like the other publisher signals; the hash is keyed and
@@ -106,7 +106,7 @@ const (
 	ipClusterMinVersions = 10
 )
 
-// s8NameSimilarity implements both halves of §8.3's anti-typosquat compare:
+// s8NameSimilarity implements both halves of the anti-typosquat compare:
 // the UTS #39 confusable skeleton (catches Cyrillic-а for Latin-a, which is
 // edit distance 1 but visually distance 0) and normalized edit distance
 // (catches "githib-mcp" for "github-mcp", which no skeleton collapses).
@@ -175,7 +175,7 @@ func nameDistance(a, b string) (dist int, normalized float64, ok bool) {
 	return d, norm, true
 }
 
-// s8Spam is the keyword-stuffing heuristic (§8.3 S8: "spam/keyword-stuffing
+// s8Spam is the keyword-stuffing heuristic (spam/keyword-stuffing
 // heuristics"). It reads the agent summary and the README — the two fields
 // that feed search ranking — and flags text whose vocabulary has collapsed
 // onto one repeated token or degenerated into a keyword list.
@@ -232,7 +232,7 @@ func s8Spam(in *Input) []Finding {
 	return findings
 }
 
-// S9 — Release-diff risk (§8.3). Diffs this version against the previous
+// S9 — Release-diff risk. Diffs this version against the previous
 // published version — manifest AND content — for new egress hosts/URLs,
 // capability additions, newly added install scripts or dependencies, the first
 // appearance of obfuscation markers, and large instruction rewrites shipped as
@@ -264,8 +264,8 @@ func (s S9ReleaseDiff) Run(sc stageContext, in *Input) StageResult {
 	current := s.CurrentFindings
 	if rev := in.DraftRevision; rev != nil {
 		// A Drafter revision of this baseline, proved by the registry
-		// against the draft's recorded proof (plan drafter-revisions.md §6,
-		// D2; agentry#794), is read as a first release where the proof
+		// against the draft's recorded proof,
+		// is read as a first release where the proof
 		// reaches: its manifest and instruction file leave the content diff
 		// and the escalation, on both sides. The manifest diff above still
 		// reports, and every other file is diffed as for any version.
@@ -310,10 +310,10 @@ func withoutProved(in *Input, prevFiles []FileEntry, current []Finding, rev *Dra
 }
 
 // s9ManifestDiff covers the declared surface: egress hosts and capabilities
-// the previous manifest did not have. A newly declared host is low (ruleset
-// 0.3.2, agentry#775): reaching the internet is what a QuickAgent is for, the
+// the previous manifest did not have. A newly declared host is low:
+// reaching the internet is what a QuickAgent is for, the
 // host is shown to whoever installs it and the runner holds the run to it,
-// so declaring one is not suspicious (the operator, 2026-10-01). A suspicious
+// so declaring one is not suspicious. A suspicious
 // link is S8's url-reputation finding. Wildcard egress names no host and
 // stays medium.
 func s9ManifestDiff(in *Input) []Finding {
@@ -333,7 +333,7 @@ func s9ManifestDiff(in *Input) []Finding {
 			})
 		}
 	}
-	// A remote MCP server's host is a destination too (agentry#910): one
+	// A remote MCP server's host is a destination too: one
 	// the previous release did not reach is the same low finding.
 	prevCapsBlock, _ := readManifestCaps(in.PrevManifestJSON)
 	curCapsBlock, _ := readManifestCaps(in.ManifestJSON)
@@ -355,7 +355,7 @@ func s9ManifestDiff(in *Input) []Finding {
 			Taxonomy: []string{"LLM03", "ASI04"},
 		})
 	}
-	// So is a host the browser may open (agentry#1198): one the previous
+	// So is a host the browser may open: one the previous
 	// release did not name is the same low finding, and medium for a "*."
 	// entry, which names every host below it, as "*" egress names any.
 	prevBrowser := map[string]bool{}
@@ -422,10 +422,10 @@ func s9ContentDiff(bundle *rules.Bundle, in *Input, prevFiles []FileEntry, bump 
 		// A patch release that introduces a destination is the exact documented
 		// rug-pull shape; a major rewrite that adds one is ordinary. A host
 		// this release's manifest names in network.egress, whether declared
-		// before or in this release, is low at any bump (ruleset 0.3.2,
-		// agentry#775): the author declared it, the installer is shown it and
+		// before or in this release, is low at any bump:
+		// the author declared it, the installer is shown it and
 		// the runner holds the run to it. So is a host its browser may open,
-		// exact or below a "*." entry (ruleset 0.4.9, agentry#1198). An
+		// exact or below a "*." entry. An
 		// email recipient is never declared that way, whatever its domain
 		// (postmark-mcp's BCC line), and neither "*" nor a public browser
 		// names a host.
@@ -455,7 +455,7 @@ func s9ContentDiff(bundle *rules.Bundle, in *Input, prevFiles []FileEntry, bump 
 
 	// (b) Obfuscation markers appearing for the first time. An S3 class the
 	// previous release did not contain is a change in kind, not degree. Only
-	// a class rated medium or above counts (ruleset 0.3.2, agentry#775): a
+	// a class rated medium or above counts: a
 	// patch that adds an HTML comment or trailing whitespace is ordinary
 	// editing, and its own finding is on the report. The class is rated at
 	// its worst in this release, with the bundle, so a comment that hides an
@@ -523,20 +523,20 @@ func s9ContentDiff(bundle *rules.Bundle, in *Input, prevFiles []FileEntry, bump 
 	return findings
 }
 
-// s9Escalate raises the severity of findings that arrive VIA the diff (§8.3
-// S9). The scoping matters: escalation used to apply to every current
-// S3/S4/install-script medium whenever any previous version existed, so a
+// s9Escalate raises the severity of findings that arrive VIA the diff.
+// The scoping matters: escalating every current
+// S3/S4/install-script medium whenever any previous version existed would mean a
 // package with one long-standing postinstall hook was escalated on every
 // release forever — an alarm that fires identically whether or not anything
 // changed carries no information. Only findings absent from the previous
-// version's own content escalate now.
+// version's own content escalate.
 func s9Escalate(sc stageContext, in *Input, prevFiles []FileEntry, current []Finding, bump string) []Finding {
 	if len(prevFiles) == 0 && in.PrevArchiveDir != "" {
 		return nil
 	}
 	baseline := baselineFindings(sc.bundle, prevFiles)
 	// Without a baseline archive the previous version's content is unknown.
-	// Escalating everything would restore the bug; escalating nothing would
+	// Escalating everything would over-escalate; escalating nothing would
 	// drop the signal. The middle course: escalate only when the manifest diff
 	// already shows this release widened its reach.
 	manifestWidened := len(s9ManifestDiff(in)) > 0
@@ -572,8 +572,7 @@ func isDiffEscalatable(f Finding) bool {
 	// A capability family's hit rated by declaration is about a capability
 	// the manifest declares (a high one holds already): what this release
 	// newly declares is the manifest diff's to report (S9/new-egress,
-	// S9/capability-widened), never an escalation of the text that uses it
-	// (ruleset 0.4.0, agentry#893).
+	// S9/capability-widened), never an escalation of the text that uses it.
 	if _, rated := f.Detail[rules.DeclarationDetail]; rated {
 		return false
 	}
@@ -598,7 +597,7 @@ func truncateStr(s string, n int) string {
 }
 
 // Deterministic iteration helpers: findings must be reproducible because the
-// canonical report is hashed and signed (§8.8).
+// canonical report is hashed and signed.
 
 func sortedSet(m map[string]bool) []string {
 	out := make([]string, 0, len(m))

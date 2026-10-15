@@ -9,13 +9,13 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 )
 
-// The agent-publish seam and the agent route's canPublish (agentry#875):
+// The agent-publish seam and the agent route's canPublish:
 // whether a principal may add a version to an agent, as the core's own
-// routes decide it — the publish role over the namespace or a grant, a
+// routes decide it: the publish role over the namespace or a grant, a
 // PAT's agent:publish, and the organization's gate for a write. The
 // desktop's sign-in token carries agent:publish and never org:admin, so it
-// never reads the maintainer's settings: this is what it offers Edit on
-// (drafter-revisions R7), and what the hosted revision admits it by (R8).
+// never reads the maintainer's settings: this is what it offers Edit on,
+// and what the hosted revision admits it by.
 // A probe extension answers 200 when the seam says publishable and 404
 // otherwise, and each answer is checked against the route's canPublish.
 func TestAgentPublishSeamAnswersAsTheCoreDoes(t *testing.T) {

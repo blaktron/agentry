@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// An optional secret is still a declared secret to every stage (plan
-// optional-secrets.md, agentry#906): S6, the gate and namespace policy read
+// An optional secret is still a declared secret to every stage: S6,
+// the gate and namespace policy read
 // the same env capability whether or not the release lists it in
 // capabilities.optionalSecrets, and a release whose secrets are all
 // optional declares them all.

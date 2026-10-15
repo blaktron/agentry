@@ -56,7 +56,7 @@ publish:
 `
 }
 
-// The daily sweep (agentry#177 M2): a server version that was clean at
+// The daily sweep: a server version that was clean at
 // publication (a fixture package name of its own: this binary's pipeline tests
 // share a database, and mcp_server_scans is keyed by version) and now
 // carries a high advisory opens one alert per published
@@ -88,7 +88,7 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	// Only this test's fixture package goes stale: the database is shared
 	// by this binary's tests, and a server row another test
 	// published at the same time would otherwise be re-checked and counted
-	// here (agentry#245).
+	// here.
 	backdate := func() {
 		if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours' WHERE ecosystem = 'npm' AND package = 'mcp-sweep-fixture'`); err != nil {
 			t.Fatal(err)
@@ -116,7 +116,7 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	if n.ToEmail != u.Email || n.Server != "npm:mcp-sweep-fixture@0.1.0" || n.Severity != "high" || len(n.Advisories) != 1 || n.FixedIn[0] != "1.2.6" || n.Version != "1.0.0" {
 		t.Fatalf("notice: %+v", n)
 	}
-	// The sweep writes the row as read since scores were (agentry#774), so
+	// The sweep writes the row as read since scores were kept, so
 	// S7 answers from it rather than asking again.
 	if rec, _ := scan.NewStoreMCPScanCache(e.st).Get(ctx, "npm", "mcp-sweep-fixture", "0.1.0"); rec == nil || len(rec.Advisories) != 1 || !rec.Advisories[0].Scored {
 		t.Fatalf("swept row: %+v", rec)
@@ -164,7 +164,7 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	}
 }
 
-// A person who switched dependency-alert mail off (agentry#190) still gets
+// A person who switched dependency-alert mail off still gets
 // the alert — banner, dashboard, audit, webhook — and no mail.
 func TestMCPSweepRespectsEmailPreference(t *testing.T) {
 	notifier := &recordingNotifier{}
@@ -201,8 +201,8 @@ func TestMCPSweepRespectsEmailPreference(t *testing.T) {
 }
 
 // A sweep that stops on an error is counted as McpSweepRuns{outcome="error"},
-// the series runbook 12 tells operators to watch; it used to record every
-// run as "ok" whatever it returned.
+// the series operators watch; a failed sweep must not record
+// its run as "ok".
 func TestMCPSweepCountsAFailedRunAsAnError(t *testing.T) {
 	e := newPipeEnv(t)
 	m, err := metrics.New(t.Context(), metrics.Config{ServiceName: "agentryd", Role: "all", Env: "dev"})
@@ -231,7 +231,7 @@ func TestMCPSweepCountsAFailedRunAsAnError(t *testing.T) {
 
 // A sweep whose lookup fails keeps each row's answer: a safe or vulnerable
 // row stays so, advisories and all, and only records the error. S7 counts
-// an error row as no answer (agentry#480), so a sweep that turned a real
+// an error row as no answer, so a sweep that turned a real
 // answer into an error row would hold every later submission for review.
 func TestMCPSweepLookupFailureKeepsTheAnswer(t *testing.T) {
 	e := newPipeEnv(t)
@@ -267,9 +267,9 @@ func TestMCPSweepLookupFailureKeepsTheAnswer(t *testing.T) {
 	}
 }
 
-// agentry#1036: a version its registry does not publish keeps "not-found"
+// A version its registry does not publish keeps "not-found"
 // through the daily sweep. OSV's "no advisories" would otherwise turn it
-// back into "safe", which is the record this issue exists to stop. The row
+// back into "safe". The row
 // moves past the cutoff, so the sweep's loop ends, and OSV is not asked.
 func TestMCPSweepLeavesANotFoundRow(t *testing.T) {
 	e := newPipeEnv(t)

@@ -1,6 +1,6 @@
 package api
 
-// The Writing Voice (plan writing-voice.md §4, §7; agentry#809): the one
+// The Writing Voice: the one
 // VOICE.md a person keeps in Agentry. Every route is the caller's own: a
 // voice is found by its owner, and nobody else's is reachable. A version
 // put here is pending until AI Review passes it; the review runs on the
@@ -31,7 +31,7 @@ type VoiceAdmission struct {
 
 // VoiceAdmitter is the seam through which an extension admits a review a
 // route asks for, and may charge for it (pkg/extension AdmitsVoice;
-// DEV-150's 1 credit an operation, plan writing-voice.md D8): an edit
+// one credit an operation): an edit
 // saved, a client's upload, a Restore of a version reviewed under another
 // question set. A build's own output reaches the store through the
 // extension's door (Voice.Propose) and is never admitted here. The core

@@ -10,11 +10,11 @@ import (
 	"time"
 )
 
-// SignatureHeader is the delivery signature header name (§9.3).
+// SignatureHeader is the delivery signature header name.
 const SignatureHeader = "X-Agentry-Signature"
 
 // MaxSignatureAge is the freshness window a receiver should enforce on the
-// timestamp (§9.3: ±5 min). Exposed for the receiver-side Verify used in tests
+// timestamp (±5 min). Exposed for the receiver-side Verify used in tests
 // and by any first-party consumer.
 const MaxSignatureAge = 5 * time.Minute
 

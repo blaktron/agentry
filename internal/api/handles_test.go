@@ -12,22 +12,20 @@ func TestOrgHandleReserved(t *testing.T) {
 	}{
 		{"ui", false, true},
 		{"ui", true, true},
-		// The site's own root paths (plan web-dashboard-shell §4, agentry#448):
-		// a person named `runs` would shadow the runs pages.
+		// The site's own root paths: a person named `runs` would shadow the
+		// runs pages.
 		{"runs", false, true},
 		{"runs", true, true},
 		{"invitations", true, true},
 		{"pricing", true, true},
-		// The site's later roots: About us (agentry#1083, plan
-		// web-landing-page.md M0), the account-deleted page (agentry-web#297),
-		// the Scheduled pages (agentry-web#1346) and the OAuth client
-		// metadata documents (agentry-web#1331) — agentry#506.
+		// The site's later roots: About us, the account-deleted page, the
+		// Scheduled pages and the OAuth client metadata documents.
 		{"aboutus", false, true},
 		{"aboutus", true, true},
 		{"account-deleted", true, true},
 		{"scheduled", true, true},
 		{"oauth", true, true},
-		// The site's Report bug page (agentry-web#1576), agentry#1124.
+		// The site's Report bug page.
 		{"report-bug", false, true},
 		{"report-bug", true, true},
 		{"agentry", false, true},
@@ -55,7 +53,7 @@ func TestOrgHandleReserved(t *testing.T) {
 
 // TestHandleSeed: a JIT handle is seeded from the username the IdP asserts,
 // falling back to the email's local part only when the username is absent
-// or yields no valid handle (agentry#517).
+// or yields no valid handle.
 func TestHandleSeed(t *testing.T) {
 	cases := []struct{ username, email, subject, want string }{
 		{"blaktron", "chris@example.test", "sub", "blaktron"},

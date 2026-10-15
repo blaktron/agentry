@@ -17,41 +17,42 @@ import (
 // scannerS4 is the pipeline stage id for signature-engine findings.
 const scannerS4 = "S4"
 
-// Manifest is the bundle.yaml document at the root of a rule bundle. It gives
-// the bundle a semantic version that is recorded on every scan_run (§8.3) and
-// pinned in the CLI release (D-12).
+// Manifest is the bundle.yaml document at the root of a rule bundle. It
+// gives the bundle a semantic version that is recorded on every
+// scan_run and pinned in the CLI release.
 type Manifest struct {
 	// Version is the bundle's semantic version, e.g. "0.1.0".
 	Version string `yaml:"version"`
 	// Notes is free-form release notes for the bundle.
 	Notes string `yaml:"notes"`
-	// NotPatterns are suppressions applied to EVERY rule in the bundle, in
-	// addition to each rule's own. They exist for cross-cutting precision
-	// concerns — most importantly descriptive framing: prose that catalogues
-	// an attack ("prompts to echo secrets", "look for exfiltration
-	// directives") rather than issuing it. §17.3 requires that an agent
-	// *about* prompt-injection defense remain publishable, and repeating the
-	// same alternation in every rule file guarantees it drifts.
+	// NotPatterns are suppressions applied to EVERY rule in the bundle,
+	// in addition to each rule's own. They exist for cross-cutting
+	// precision concerns, most importantly descriptive framing: prose
+	// that catalogues an attack ("prompts to echo secrets", "look for
+	// exfiltration directives") rather than issuing it. An agent
+	// *about* prompt-injection defense must remain publishable, and
+	// repeating the same alternation in every rule file guarantees it
+	// drifts.
 	//
-	// Unlike per-rule notPatterns, which see only the matched line(s), these
-	// are scoped to the containing paragraph (contiguous non-blank lines, a
-	// Markdown heading being a paragraph of its own), because descriptive
-	// prose wraps and its marker can sit on the line before the match. A blank
-	// line or a heading ends the paragraph, so a single descriptive phrase
-	// cannot whitelist a whole file (pkg/rules/s4.go suppressed; DEV-010,
-	// agentry#845).
+	// Unlike per-rule notPatterns, which see only the matched line(s),
+	// these are scoped to the containing paragraph (contiguous
+	// non-blank lines, a Markdown heading being a paragraph of its
+	// own), because descriptive prose wraps and its marker can sit on
+	// the line before the match. A blank line or a heading ends the
+	// paragraph, so a single descriptive phrase cannot whitelist a
+	// whole file.
 	NotPatterns []string `yaml:"notPatterns"`
 }
 
-// Fixtures are the required per-rule test strings (§8.3: "every rule ships
-// with match + non-match fixtures"). The fixture-runner test asserts that
-// every Match string produces the rule's finding and every NonMatch string
-// does not.
+// Fixtures are the required per-rule test strings: every rule ships
+// with match and non-match fixtures. The fixture-runner test asserts
+// that every Match string produces the rule's finding and every
+// NonMatch string does not.
 type Fixtures struct {
 	// Match holds strings that MUST trigger the rule (recall).
 	Match []string `yaml:"match"`
-	// NonMatch holds benign look-alike strings that MUST NOT trigger the rule
-	// (precision — §17.3 benign lookalikes).
+	// NonMatch holds benign look-alike strings that MUST NOT trigger
+	// the rule (precision: benign lookalikes).
 	NonMatch []string `yaml:"nonMatch"`
 }
 
@@ -60,7 +61,7 @@ type Rule struct {
 	// ID is the rule identifier, "family-nnn" (e.g. "instruction-override-001").
 	// Findings use "S4/<ID>".
 	ID string `yaml:"id"`
-	// Family groups related rules (one of the six §8.3 S4 families).
+	// Family groups related rules (one of the six S4 families).
 	Family string `yaml:"family"`
 	// Title is a short human-readable summary.
 	Title string `yaml:"title"`
@@ -100,9 +101,9 @@ type compiledRule struct {
 	bundleNotPatterns []*regexp.Regexp
 }
 
-// Bundle is a loaded, compiled, versioned rule set (the S4 engine input). It
-// is the ruleset_releases artifact of §8.3, shared byte-for-byte between the
-// server pipeline and the CLI.
+// Bundle is a loaded, compiled, versioned rule set (the S4 engine
+// input). It is the ruleset release artifact, shared byte-for-byte
+// between the server pipeline and the CLI.
 type Bundle struct {
 	manifest Manifest
 	rules    []*compiledRule
@@ -335,12 +336,12 @@ func compileRule(r Rule, fp string, bundleNot []*regexp.Regexp) (*compiledRule, 
 // do not double-apply the case-insensitive default.
 var flagGroupRe = regexp.MustCompile(`^\(\?[a-zA-Z]+\)`)
 
-// compilePattern compiles a rule pattern, applying case-insensitivity and
-// multiline anchoring by default (§8.3: "case-insensitive by default"). The
-// multiline flag makes ^ and $ match at line boundaries so rules can anchor to
-// a line (e.g. a fake "System:" role turn) while the engine still scans whole
-// content in one pass. "." does not cross newlines unless the author opts in
-// with an explicit (?s) flag group.
+// compilePattern compiles a rule pattern, applying case-insensitivity
+// and multiline anchoring by default. The multiline flag makes ^ and $
+// match at line boundaries so rules can anchor to a line (e.g. a fake
+// "System:" role turn) while the engine still scans whole content in
+// one pass. "." does not cross newlines unless the author opts in with
+// an explicit (?s) flag group.
 func compilePattern(p string) (*regexp.Regexp, error) {
 	if !flagGroupRe.MatchString(p) {
 		p = "(?im)" + p

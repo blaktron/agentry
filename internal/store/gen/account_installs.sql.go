@@ -66,7 +66,7 @@ const deleteAccountInstallsForUser = `-- name: DeleteAccountInstallsForUser :exe
 DELETE FROM account_installs WHERE user_id = $1
 `
 
-// Clear-data (agentry#498): every record the user holds.
+// Clear-data: every record the user holds.
 func (q *Queries) DeleteAccountInstallsForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteAccountInstallsForUser, userID)
 	if err != nil {
@@ -191,9 +191,9 @@ type UpsertAccountInstallParams struct {
 	AcceptedUnscanned bool      `json:"accepted_unscanned"`
 }
 
-// Account installs (plan web-dashboard-shell §5; agentry#448): the
-// per-account record of a QuickAgent release a person accepted and the
-// contract they consented to. Nothing here touches download_stats.
+// Account installs: the per-account record of a QuickAgent release a person
+// accepted and the contract they consented to. Nothing here touches
+// download_stats.
 // A PUT on an existing record is the update: the version moves and the
 // snapshot and consents are the new release's; the ref is the name the
 // caller used, which they can read.

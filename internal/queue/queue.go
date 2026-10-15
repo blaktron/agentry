@@ -1,9 +1,6 @@
-// Package queue is the async job abstraction (D-05). The interface is the
-// commitment; the backend is River (river.go, Postgres-backed, DEV-095),
-// behind Client without changing enqueue sites or handlers — see DEVIATIONS
-// DEV-005. The SELECT … FOR UPDATE SKIP LOCKED driver the first releases
-// shipped, kept selectable as "pg" for one release after River, is gone
-// with its jobs table (agentry#244).
+// Package queue is the async job abstraction. The interface is the
+// commitment; the backend is River (river.go, Postgres-backed), behind
+// Client without changing enqueue sites or handlers.
 package queue
 
 import (
@@ -37,7 +34,7 @@ type Client interface {
 	// scheduled for later, or waiting out a retry, in this driver's own
 	// table. A self-rescheduling job keeps one successor waiting and asks
 	// this before it enqueues another, so a restart or a stacked chain never
-	// adds one (agentry#853).
+	// adds one.
 	CountWaiting(ctx context.Context, kind string) (int64, error)
 }
 
@@ -65,7 +62,7 @@ func WithMaxAttempts(n int) EnqueueOption {
 // it).
 const (
 	defaultReclaimAfter = 30 * time.Minute
-	// defaultSampleEvery refreshes the backlog gauges. Well under the §16.3
+	// defaultSampleEvery refreshes the backlog gauges. Well under the
 	// 15-minute queue-age alarm threshold, so the alarm never fires — or
 	// clears — on a stale sample.
 	defaultSampleEvery = 15 * time.Second

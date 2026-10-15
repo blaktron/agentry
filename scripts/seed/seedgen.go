@@ -1,12 +1,11 @@
-// Command seedgen writes the §17.6 performance seed dataset: N published
+// Command seedgen writes the performance seed dataset: N published
 // agents with realistic names, summaries, manifests, capabilities and install
 // counts, straight into the database through the store.
 //
-// §17.6 fixes the search baseline at "p95 < 300 ms at 10k-agent seed dataset
-// (seed generator committed)". A baseline is only a baseline if the dataset it
-// was measured against can be reproduced, so this generator is deterministic:
-// the same -count and -seed always produce the same corpus, including the
-// install-count distribution that drives search ranking.
+// The search baseline is "p95 < 300 ms at a 10k-agent seed dataset". A
+// baseline is only a baseline if the dataset it was measured against can be
+// reproduced, so this generator is deterministic: the same -count and -seed always produce the same corpus,
+// including the install-count distribution that drives search ranking.
 //
 // It is staging/dev tooling. It is not run by CI, it writes no archives, and
 // it never invokes the scan pipeline — versions are inserted already
@@ -35,7 +34,7 @@ import (
 
 func main() {
 	dsn := flag.String("dsn", os.Getenv("AGENTRY_DATABASE_URL"), "PostgreSQL DSN (default $AGENTRY_DATABASE_URL)")
-	count := flag.Int("count", 10000, "number of agents to create (§17.6 baseline is 10000)")
+	count := flag.Int("count", 10000, "number of agents to create (the search baseline is 10000)")
 	namespaces := flag.Int("namespaces", 200, "number of publisher namespaces to spread the agents across")
 	seed := flag.Int64("seed", 1, "PRNG seed; the same seed reproduces the same corpus")
 	prefix := flag.String("prefix", "seed", "handle/name prefix, so a seed run is identifiable and removable")
@@ -94,14 +93,14 @@ type generator struct {
 }
 
 // seedNamespaces creates the publisher accounts. A user's handle IS its
-// namespace (§4), so one row each in users and handles.
+// namespace, so one row each in users and handles.
 func (g *generator) seedNamespaces(ctx context.Context, st *store.Store, n int) ([]owner, error) {
 	owners := make([]owner, 0, n)
 	err := st.WithTx(ctx, func(q *storegen.Queries) error {
 		for i := 0; i < n; i++ {
 			handle := fmt.Sprintf("%s-pub-%04d", g.pfx, i)
 			userID := uuid.Must(uuid.NewV7())
-			handleID := userID // a user's handle row shares its id (§4 layout)
+			handleID := userID // a user's handle row shares its id
 			if err := q.CreateHandle(ctx, storegen.CreateHandleParams{
 				ID: handleID, Handle: handle, Kind: "user",
 			}); err != nil {
@@ -187,9 +186,9 @@ func (g *generator) seedAgents(ctx context.Context, st *store.Store, owners []ow
 
 	// Install counts go in with CopyFrom rather than one BumpDownloadStat per
 	// row: at 10k agents the per-row round trips dominate the whole run. This
-	// is the one place the generator steps outside sqlc (§18.1 coding
-	// standards) — CopyFrom is a typed bulk API, not string-built SQL, and it
-	// exists precisely for loading a table this way.
+	// is the one place the generator steps outside sqlc —
+	// CopyFrom is a typed bulk API, not string-built SQL, and it exists
+	// precisely for loading a table this way.
 	rows := make([][]any, 0, len(stats))
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	for _, s := range stats {

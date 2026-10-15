@@ -7,13 +7,13 @@ import (
 )
 
 // ReplayCache records assertion IDs that have been consumed so a captured
-// assertion cannot be replayed within its validity window (§12.4, T-12). The
+// assertion cannot be replayed within its validity window. The
 // SP records each accepted assertion's ID until at least its NotOnOrAfter
 // (replayFloor is the least time either implementation keeps one); a second
 // presentation of the same ID is rejected.
 //
 // The interface is the commitment. A server with a database keeps the set
-// there (StoreReplayCache, agentry#414), shared by every API replica; the
+// there (StoreReplayCache), shared by every API replica; the
 // in-memory implementation below serves a server without one. A single
 // replica losing its cache (restart) is bounded by the short assertion
 // lifetime, so the exposure window is minutes, not the session lifetime.

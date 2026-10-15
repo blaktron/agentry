@@ -1,10 +1,9 @@
 package api
 
-// The organization at a person's email domain (agentry#363, plan
-// organization-subscriptions §4 "The sign-up and the org's domain"; D13,
-// D21): a signed-in person can ask which organization their verified
+// The organization at a person's email domain: a signed-in person can ask
+// which organization their verified
 // address's domain belongs to, and mail its administrators a request to be
-// added. Nobody joins uninvited (D7), so the request is a request — the
+// added. Nobody joins uninvited, so the request is a request — the
 // admins invite, or do not.
 
 import (
@@ -183,7 +182,7 @@ func (s *Server) RequestDomainOrgAccess(w http.ResponseWriter, r *http.Request) 
 }
 
 // mailAccessRequest writes to each of the organization's active admins
-// that notify.AllowsEmail admits — a verified address (DEV-099) and the
+// that notify.AllowsEmail admits — a verified address and the
 // orgInvites preference, since the request is the invitation flow seen
 // from the admin's side. Reports how many went.
 func (s *Server) mailAccessRequest(r *http.Request, org storegen.GetOrgByDomainRow, requester, requesterEmail string) int {

@@ -1,5 +1,5 @@
 // attest-fixture writes what a third-party verifier needs to check one of
-// this registry's attestations (agentry#26, DEV-035): a blob, the DSSE
+// this registry's attestations: a blob, the DSSE
 // envelope this code produces over the blob's digest — the exact bytes the
 // server would store and serve — and the signing public key. CI then runs
 // `cosign verify-blob-attestation` against them, which turns "our DSSE and

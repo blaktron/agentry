@@ -1,4 +1,4 @@
-// RFC 9457 problem+json helpers (D-10). Every non-2xx response the API emits
+// RFC 9457 problem+json helpers. Every non-2xx response the API emits
 // goes through this file so the error contract can't drift per-handler.
 package api
 
@@ -17,7 +17,7 @@ import (
 )
 
 // ProblemTypeBase prefixes stable problem type URIs. The domain is a
-// placeholder per PLAN §0.8 / Q1.
+// placeholder.
 const ProblemTypeBase = "https://agentry.dev/problems/"
 
 // FieldError describes one field-level validation failure.
@@ -144,8 +144,7 @@ func problemGone(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusGone, "gone", "No longer available", detail)
 }
 
-// problemAdmissionRefused answers a registry admission refusal (plan
-// subscription-tiers §5.1) with the refusal's own status and slug — 402
+// problemAdmissionRefused answers a registry admission refusal with the refusal's own status and slug — 402
 // credits-exhausted from the billing extension, which says so explicitly —
 // and its fields at top level. A refusal that names no status is a 403
 // admission-refused: "payment required" is a claim an extension makes,
@@ -164,8 +163,7 @@ func problemAdmissionRefused(w http.ResponseWriter, r *http.Request, ref registr
 	writeProblemWith(w, r, status, slug, title, sentence(ref.Detail), ref.Fields)
 }
 
-// problemPrivateAgentCap answers the namespace's private-agent cap (plan
-// subscription-tiers §5.3): a 422 with its own slug, so a client can offer
+// problemPrivateAgentCap answers the namespace's private-agent cap: a 422 with its own slug, so a client can offer
 // the upgrade rather than a generic validation message.
 func problemPrivateAgentCap(w http.ResponseWriter, r *http.Request) {
 	writeProblem(w, r, http.StatusUnprocessableEntity, "private-agent-cap",
@@ -173,13 +171,12 @@ func problemPrivateAgentCap(w http.ResponseWriter, r *http.Request) {
 		"This namespace holds as many private agents as its subscription tier allows. Make one public, or upgrade the account.")
 }
 
-// The organization problems (agentry#360, plan organization-subscriptions
-// §5.1). Each has its own slug so a client can offer the right next step
+// The organization problems. Each has its own slug so a client can offer the right next step
 // rather than parse a sentence.
 
 // problemLastAdmin refuses the demotion or removal of an organization's
 // last admin: the org must first have another one, and only a decommission
-// removes the last (D14; the erasure guard is M4's).
+// removes the last.
 func problemLastAdmin(w http.ResponseWriter, r *http.Request, org string) {
 	writeProblem(w, r, http.StatusConflict, "last-admin", "The last admin stays",
 		"This organization must keep at least one admin. Make another member of "+org+" an admin first.")
@@ -199,7 +196,7 @@ func problemOrgPending(w http.ResponseWriter, r *http.Request, org string) {
 }
 
 // problemSeatAllowance refuses an invitation or an approval past the
-// organization's seats (plan §4 "Seats"). The counts ride at the top level
+// organization's seats. The counts ride at the top level
 // so a console can say "24 of 25 used, 1 invited" without parsing a
 // sentence; nothing is removed when it is answered.
 func problemSeatAllowance(w http.ResponseWriter, r *http.Request, org string, seats *registry.Seats) {
@@ -224,14 +221,14 @@ func problemUploadTooLarge(w http.ResponseWriter, r *http.Request, detail string
 // problemUnsupportedImage refuses an image the registry will not serve:
 // not a raster the standard library decodes, or not one this route
 // admits. SVG in particular — there is no sanitiser for it here and there
-// will not be one by accident (agentry#367).
+// will not be one by accident.
 func problemUnsupportedImage(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusUnsupportedMediaType, "unsupported-image", "Not a PNG or JPEG", detail)
 }
 
 // problemAgentUnscanned refuses making a QuickAgent public while it holds
 // versions admitted unscanned that are published, or could be again from
-// quarantine (M21): only a version that passed the gate is ever public.
+// quarantine: only a version that passed the gate is ever public.
 // The count travels as `unscanned` beside the words.
 func problemAgentUnscanned(w http.ResponseWriter, r *http.Request, standing int64) {
 	detail := "One version of this QuickAgent was admitted unscanned and stands published, quarantined or blocked. Yank it, then make the QuickAgent public: only a version that passed the gate is ever public."
@@ -241,7 +238,7 @@ func problemAgentUnscanned(w http.ResponseWriter, r *http.Request, standing int6
 	writeProblemWith(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public", detail, map[string]any{"unscanned": standing})
 }
 
-// problemForkStaysPrivate refuses making a fork public (agentry#943, D9):
+// problemForkStaysPrivate refuses making a fork public:
 // a fork is private for good, to keep Publisher Earnings with the
 // QuickAgent's own publisher.
 func problemForkStaysPrivate(w http.ResponseWriter, r *http.Request) {
@@ -249,15 +246,15 @@ func problemForkStaysPrivate(w http.ResponseWriter, r *http.Request) {
 		"A fork of a QuickAgent is private for good, so it cannot be made public. Its origin's publisher keeps the public QuickAgent.")
 }
 
-// problemAgentRetired refuses a write a retired agent does not take
-// (agentry#942): a submission, or being made public other than by Restore.
+// problemAgentRetired refuses a write a retired agent does not take:
+// a submission, or being made public other than by Restore.
 func problemAgentRetired(w http.ResponseWriter, r *http.Request) {
 	writeProblem(w, r, http.StatusConflict, "agent-retired", "This QuickAgent is retired",
 		"A retired QuickAgent takes no new versions and stays private. Restore it first.")
 }
 
 // problemFeatureNotIncluded refuses an act the subscription — the
-// organization's, or a person's own (agentry#820) — does not include at
+// organization's, or a person's own — does not include at
 // all, distinct from its allowance being reached. detail names whose.
 func problemFeatureNotIncluded(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusForbidden, "feature-not-included", "Not included in this subscription", detail)
@@ -265,7 +262,7 @@ func problemFeatureNotIncluded(w http.ResponseWriter, r *http.Request, detail st
 
 // problemAlreadyAMember refuses an invitation, an approval or a creation
 // for someone who is already an active member of another organization
-// (D26: one organization per person). detail says whose membership it is.
+// (one organization per person). detail says whose membership it is.
 func problemAlreadyAMember(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusConflict, "already-a-member", "Already in an organization", detail)
 }
@@ -278,7 +275,7 @@ const alreadyAMemberDetail = "That person is already a member of another organiz
 const alreadyAMemberCreatorDetail = "This account is already a member of an organization. A person belongs to one organization at a time: leave it before creating another."
 
 // problemDomainClaimed refuses an organization at a domain another one
-// holds (D21, D26: one organization per domain). It names the holder,
+// holds (one organization per domain). It names the holder,
 // whose handle is public, so the person can ask its administrators — the
 // site's sign-up page and GET /user/domain-org say the same thing.
 func problemDomainClaimed(w http.ResponseWriter, r *http.Request, domain, org, displayName string) {
@@ -298,7 +295,7 @@ func orgLabel(handle, displayName string) string {
 }
 
 // problemOrgDecommissioning refuses a change to an organization in its
-// decommission hold (D23): reads and exports go on, nothing else, until
+// decommission hold: reads and exports go on, nothing else, until
 // the erasure at the hold's end.
 func problemOrgDecommissioning(w http.ResponseWriter, r *http.Request, org string, until *time.Time) {
 	detail := "The " + org + " organization is being decommissioned and is read-only: its members can still read its agents and export its audit log, and nothing else changes."

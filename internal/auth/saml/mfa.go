@@ -6,10 +6,10 @@ import (
 )
 
 // mfaAuthnContexts are the AuthnContextClassRef values that say the IdP
-// authenticated the person with more than one factor (agentry#705). An
+// authenticated the person with more than one factor. An
 // assertion naming one is second-factor evidence for the public-publish gate,
 // the organization-SSO counterpart of a directory ID token whose `amr` names
-// a factor (DEV-080). The list is deliberately short: a password class,
+// a factor. The list is deliberately short: a password class,
 // however it travelled, is one factor. docs/self-hosting.md lists the same
 // values for operators; change both together.
 var mfaAuthnContexts = []string{

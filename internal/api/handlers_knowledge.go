@@ -1,12 +1,12 @@
 package api
 
-// Knowledge packs (plan knowledge.md §4.3, §4.4; agentry#593): an account's
+// Knowledge packs: an account's
 // packs kept in the registry, sealed under data keys of their own, scanned
 // on arrival. Every route under /knowledge/ is the caller's own: a pack is
 // looked up by its owner, so another account's pack — a fellow member's
 // included — is one that does not exist, and platform staff see names and
 // sizes through their own route and nothing else. An organization's shared
-// packs are the routes of handlers_knowledge_org.go (agentry#646).
+// packs are the routes of handlers_knowledge_org.go.
 
 import (
 	"context"

@@ -12,9 +12,9 @@ import (
 )
 
 // PackageRegistries answers whether a declared MCP server's package
-// registry publishes the version a manifest pins (agentry#1036). OSV
+// registry publishes the version a manifest pins. OSV
 // answers "no advisories" for a version that does not exist, so without
-// this S7 recorded such a server as safe and the release published, to be
+// this S7 would record such a server as safe and the release would publish, to be
 // refused by every run that tried to install it (mcp-not-resolved).
 type PackageRegistries interface {
 	// Published reports whether ecosystem ("npm" or "pypi") publishes
@@ -42,7 +42,7 @@ func registriesEnabled(r PackageRegistries) bool {
 }
 
 // HTTPRegistries asks the public npm registry and PyPI's JSON API, the
-// registries the runner installs from by default (DR-67), through the
+// registries the runner installs from by default, through the
 // worker's egress proxy like the OSV client (the default transport reads
 // the proxy variables).
 type HTTPRegistries struct {

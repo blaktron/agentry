@@ -1,7 +1,7 @@
 -- +goose Up
--- Identity core (PLAN §4.2, M1/WG-B): global handle namespace, users, orgs,
--- memberships, teams, PATs, sessions, SSO shells, and the append-only audit
--- log. UUIDs are UUIDv7 generated app-side (D-10).
+-- Identity core: global handle namespace, users, orgs, memberships, teams,
+-- PATs, sessions, SSO shells, and the append-only audit log. UUIDs are UUIDv7
+-- generated app-side.
 
 CREATE TABLE handles (
   id uuid PRIMARY KEY,
@@ -35,7 +35,8 @@ CREATE TABLE orgs (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- SSO connection shells now (referenced by identities); logic lands in M6.
+-- SSO connection shells (referenced by identities); the logic is in
+-- application code.
 CREATE TABLE sso_connections (
   id uuid PRIMARY KEY,
   org_id uuid NOT NULL REFERENCES orgs(id),
@@ -109,14 +110,14 @@ CREATE TABLE pats (
 CREATE INDEX pats_user_idx ON pats(user_id);
 CREATE INDEX pats_prefix_idx ON pats(token_prefix);
 
--- Server-side sessions (D-23). SaaS may front with Redis; Postgres is the
--- durable store and the self-host default.
+-- Server-side sessions. A hosted deployment may front them with Redis;
+-- Postgres is the durable store and the self-host default.
 CREATE TABLE sessions (
   id uuid PRIMARY KEY,
   token_sha256 bytea UNIQUE NOT NULL,
   user_id uuid NOT NULL REFERENCES users(id),
   csrf_token text NOT NULL,
-  sso_tags jsonb NOT NULL DEFAULT '{}',        -- {"<org_id>": "<refreshed_at>"} (§12.4, M6)
+  sso_tags jsonb NOT NULL DEFAULT '{}',        -- {"<org_id>": "<refreshed_at>"}
   ip inet,
   user_agent text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -134,7 +135,7 @@ CREATE TABLE email_verifications (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Append-only audit log, monthly range partitions (§4.3, §12.6).
+-- Append-only audit log, monthly range partitions.
 CREATE TABLE audit_events (
   id uuid NOT NULL,
   occurred_at timestamptz NOT NULL,
@@ -177,8 +178,8 @@ SELECT audit_ensure_partition(now()::date);
 SELECT audit_ensure_partition((now() + interval '1 month')::date);
 
 -- +goose StatementBegin
--- Audit rows are immutable regardless of connection role (§4.3 hardening;
--- role-level REVOKEs additionally apply on SaaS where roles are split).
+-- Audit rows are immutable regardless of connection role (role-level REVOKEs
+-- additionally apply on hosted deployments where roles are split).
 CREATE FUNCTION audit_events_block_mutation() RETURNS trigger AS $$
 BEGIN
   RAISE EXCEPTION 'audit_events is append-only';

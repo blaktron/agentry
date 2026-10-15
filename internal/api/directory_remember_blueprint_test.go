@@ -11,10 +11,10 @@ import (
 	"github.com/blaktron/agentry/internal/auth/social"
 )
 
-// The directory's half of remembered browsers (agentry#671, DEV-163) is
+// The directory's half of remembered browsers is
 // configuration, not code: a blueprint and a template the directory applies.
-// Two of its settings decide whether it fails open, and a probe of the pinned
-// directory found both by getting them wrong, so they are pinned here:
+// Two of its settings decide whether it fails open, so they are pinned
+// here:
 //
 //   - the sign-in's MFA binding must evaluate its policies in mode `all`. The
 //     stock binding already carries authentik's passwordless-WebAuthn policy,
@@ -166,7 +166,7 @@ func TestDirectoryRememberBlueprint(t *testing.T) {
 	if !strings.Contains(scalar(scope.Attrs["expression"]), `"agentry_remember_device"`) {
 		t.Error("the scope mapping does not emit agentry_remember_device, the claim the registry reads")
 	}
-	// agentry#727: the same scope carries the directory's own id for the
+	// The same scope carries the directory's own id for the
 	// account, which every directory lookup the registry makes reads by.
 	if !strings.Contains(scalar(scope.Attrs["expression"]), `claims["agentry_directory_id"] = account.pk`) {
 		t.Error("the scope mapping does not emit agentry_directory_id from the signed-in account's pk")

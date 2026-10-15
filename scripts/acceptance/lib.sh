@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Shared by the acceptance scripts: sourced, never run (agentry#420).
+# Shared by the acceptance scripts: sourced, never run.
 
 # gotest LABEL [go test arguments...]
 #
@@ -7,7 +7,7 @@
 # run checked something:
 #   - go test exited 0;
 #   - no package answered "no tests to run" (a -run filter that matches
-#     nothing exits 0 and used to print OK for an invariant never checked);
+#     nothing exits 0 and would otherwise print OK for an invariant never checked);
 #   - at least one top-level test passed, and none was skipped (a test that
 #     skips, for want of a database or a tool, checked nothing);
 #   - every alternative of the -run filter (split on "|", anchors dropped)

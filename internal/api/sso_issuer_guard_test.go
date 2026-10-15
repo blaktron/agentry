@@ -22,7 +22,6 @@ import (
 // org admin is any account with a verified email. The registry fetches it, so
 // it is judged like every other outbound destination: https only, a public
 // host, no credentials in the URL, and — at dial time — the egress guard.
-// Security review 2026-09-20 §5.8.1 (C15).
 
 func TestOIDCIssuerIsValidatedAtWrite(t *testing.T) {
 	env := newTestEnv(t) // dev mode: http to a loopback IdP is the one allowance

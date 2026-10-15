@@ -11,8 +11,8 @@ import (
 )
 
 // HistoryPatch streams the added lines of every non-merge commit reachable
-// from commit as a unified diff (§8.3: S2 scans full git history on
-// git-tag publishes, agentry#54). The stream is `git log -p` with each
+// from commit as a unified diff (S2 scans full git history on git-tag
+// publishes). The stream is `git log -p` with each
 // commit introduced by a line of the form "\x01<sha>" so the consumer can
 // attribute a hit without ambiguity, zero context lines, no renames, and
 // binary hunks summarized. Closing the reader terminates git.

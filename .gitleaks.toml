@@ -1,8 +1,7 @@
-# gitleaks configuration (agentry#209, open-source readiness; agentry#419 for
-# the CI job that runs it on every event). The default rules apply; the
-# entries below are the known false positives, each named, so a clean scan
-# means something and a new fixture that looks like a secret is a decision,
-# not an accident of a tree-wide allowlist.
+# gitleaks configuration (run by the CI job on every event). The default
+# rules apply; the entries below are the known false positives, each named,
+# so a clean scan means something and a new fixture that looks like a
+# secret is a decision, not an accident of a tree-wide allowlist.
 [extend]
 useDefault = true
 
@@ -12,7 +11,7 @@ paths = [
   # Generated base64 in the embedded OpenAPI spec.
   '''internal/api/openapi_gen\.go''',
   # A placeholder helm value in an acceptance script.
-  '''scripts/acceptance/m7\.sh''',
+  '''scripts/acceptance/helm\.sh''',
   # Attack-corpus fixtures that carry a fake credential on purpose: the
   # scanner must find it (manifest-env-*), or must not be fooled by a
   # credential-shaped token in benign text (s3-encoded-blob-benign).
@@ -21,14 +20,14 @@ paths = [
   '''testdata/attack-corpus/manifest-env-token-unquoted/agent\.yaml''',
   '''testdata/attack-corpus/manifest-env-token-unquoted/expected\.yaml''',
   '''testdata/attack-corpus/s3-encoded-blob-benign/readme\.md''',
-  # The model-input bench's benign API reference (agentry#608): a curl
+  # The model-input bench's benign API reference: a curl
   # example with a placeholder bearer token, on purpose, so the bench shows
   # the scan does not withhold documentation of a credential.
   '''pkg/judge/testdata/model-input-bench/benign-api-reference\.txt''',
 ]
 # The helm job's placeholder sealing key in ci.yaml: base64 of the words
 # "sealingkey" repeated, not a key.
-# The config and knowledge tests' sealing-key fixtures (agentry#593): base64
+# The config and knowledge tests' sealing-key fixtures: base64
 # of "0123456789abcdef" twice and of "knowledge-knowledge-knowledge-!!",
 # 32 readable bytes each, not keys; gitleaks decodes base64, so the first
 # is listed decoded as well.

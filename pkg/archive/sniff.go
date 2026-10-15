@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// Content sniffing for package inventories (§8.3 S1). Detection is by MAGIC
+// Content sniffing for package inventories (S1). Detection is by MAGIC
 // BYTES, never by extension — renaming evil.so to notes.md fools nobody. The
 // server's S1 stage and the CLI's `agentry validate` both classify through
-// these predicates, which is what makes local/remote parity (D-12) a property
+// these predicates, which is what makes local/remote parity a property
 // of the code rather than a promise.
 
 var execMagic = [][]byte{
@@ -28,7 +28,7 @@ var archiveMagic = [][]byte{
 }
 
 // imageExt drives image classification: an image is not text, and not a
-// finding either — S1 flags it in the inventory and caps its size (§19).
+// finding either — S1 flags it in the inventory and caps its size.
 var imageExt = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
 	".webp": true, ".bmp": true, ".ico": true,
@@ -78,10 +78,9 @@ func LooksText(head []byte) bool {
 
 // Head returns the first 512 bytes of data, the window the sniffers use.
 // Nothing in this repo calls it directly — the sniffers take the whole
-// buffer — but it is part of pkg/archive's shared surface: agentry-cli
-// (cmd/agentry/localscan.go) and agentry-desktop (internal/validate) feed
-// it to LooksText so their offline scans classify files exactly as S1 does
-// (D-12). Keep it.
+// buffer — but it is part of pkg/archive's shared surface: the CLI and the
+// desktop app feed it to LooksText so their offline scans classify files
+// exactly as S1 does. Keep it.
 func Head(data []byte) []byte {
 	if len(data) > 512 {
 		return data[:512]

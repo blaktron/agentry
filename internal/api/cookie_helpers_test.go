@@ -8,8 +8,7 @@ import (
 // requireClearedCookie asserts that among a response's cookies the named
 // one is cleared with the attributes it was set with: HttpOnly, SameSite
 // and (when the server is configured for it) Secure. A clear that drops
-// them is an empty cookie today and a leak the day a value lands in it
-// (agentry#413).
+// them is an empty cookie today and a leak the day a value lands in it.
 func requireClearedCookie(t *testing.T, cookies []*http.Cookie, name string, secure bool) {
 	t.Helper()
 	for _, c := range cookies {
@@ -29,7 +28,7 @@ func requireClearedCookie(t *testing.T, cookies []*http.Cookie, name string, sec
 
 // requireClearedCookieAt is requireClearedCookie for the Set-Cookie with this
 // exact path and domain: a clear that names another path or domain is, to a
-// browser, a different cookie, and clears nothing (agentry#672).
+// browser, a different cookie, and clears nothing.
 func requireClearedCookieAt(t *testing.T, cookies []*http.Cookie, name, path, domain string, secure bool) {
 	t.Helper()
 	var at []*http.Cookie
@@ -49,13 +48,11 @@ func requireClearedCookieAt(t *testing.T, cookies []*http.Cookie, name, path, do
 // equal to wantMaxAge. It returns the cookie so a caller can assert on its
 // value too.
 //
-// This is requireClearedCookie's twin, and the pair is what makes agentry#413's
-// rule checkable: a cookie must be cleared with the attributes it was set with,
-// which is only provable if both directions are assertable. Nothing in
-// internal/api asserted a cookie being *set* before this (agentry#461), so a
-// cookie issued without HttpOnly — auth material readable by browser
-// JavaScript, which DEV-012 forbids — would have passed every test in the
-// package.
+// This is requireClearedCookie's twin, and the pair is what makes the
+// rule checkable: a cookie must be cleared with the attributes it was set
+// with, which is only provable if both directions are assertable. Without
+// it, a cookie issued without HttpOnly (auth material readable by browser
+// JavaScript, which is forbidden) would pass every test in the package.
 func requireSetCookie(t *testing.T, cookies []*http.Cookie, name string, wantMaxAge int, secure bool) *http.Cookie {
 	t.Helper()
 	return requireSetCookieAt(t, cookies, name, "/", "", wantMaxAge, secure)
@@ -64,7 +61,7 @@ func requireSetCookie(t *testing.T, cookies []*http.Cookie, name string, wantMax
 // requireSetCookieAt is requireSetCookie for a cookie scoped somewhere other
 // than the whole host: the directory path's remembered-browser cookie is set
 // for authentik's flow executor alone, and on a parent domain when the
-// directory is a subdomain (agentry#670). wantDomain "" means host-only.
+// directory is a subdomain. wantDomain "" means host-only.
 func requireSetCookieAt(t *testing.T, cookies []*http.Cookie, name, wantPath, wantDomain string, wantMaxAge int, secure bool) *http.Cookie {
 	t.Helper()
 	for _, c := range cookies {
@@ -75,7 +72,7 @@ func requireSetCookieAt(t *testing.T, cookies []*http.Cookie, name, wantPath, wa
 			t.Fatalf("%s was issued empty", name)
 		}
 		if !c.HttpOnly {
-			t.Fatalf("%s issued without HttpOnly: readable by browser JavaScript, which DEV-012 forbids for auth material", name)
+			t.Fatalf("%s issued without HttpOnly: readable by browser JavaScript, which is forbidden for auth material", name)
 		}
 		if c.SameSite != http.SameSiteLaxMode {
 			t.Fatalf("%s issued with SameSite=%v, want Lax", name, c.SameSite)
@@ -105,11 +102,10 @@ func requireSetCookieAt(t *testing.T, cookies []*http.Cookie, name, wantPath, wa
 // silently extend the trust it used.
 //
 // The name parameter takes the cookie's name so that all three helpers read as
-// one family at the call site. Every caller today passes the trusted-device
-// cookie; the second name arrives with the revoke route, which has to clear it
-// (agentry#672).
+// one family at the call site. Every caller passes the trusted-device
+// cookie.
 //
-//nolint:unparam // one caller today, a second with agentry#672
+//nolint:unparam // every caller passes the trusted-device cookie
 func requireNoCookie(t *testing.T, cookies []*http.Cookie, name string) {
 	t.Helper()
 	for _, c := range cookies {
