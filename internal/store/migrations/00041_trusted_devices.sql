@@ -1,16 +1,15 @@
 -- +goose Up
--- Trusted devices (plan trusted-devices.md, agentry#461): a browser that
--- answered the second factor once may be remembered, so a later password
--- sign-in from it skips the code. This is a second browser credential class
--- beside sessions — it outlives the §12.4 24h session cap by design, under
--- its own ceiling in internal/config, and it skips the second factor and
--- nothing else.
+-- Trusted devices: a browser that answered the second factor once may be
+-- remembered, so a later password sign-in from it skips the code. This is a
+-- second browser credential class beside sessions — it outlives the 24h
+-- session cap by design, under its own ceiling in internal/config, and it
+-- skips the second factor and nothing else.
 --
--- The token is the whole trust decision (D5): possession of the cookie is
--- what authenticates it, matched here by its hash. ip and user_agent are
--- kept so the account page can describe the browser to its owner; neither is
+-- The token is the whole trust decision: possession of the cookie is what
+-- authenticates it, matched here by its hash. ip and user_agent are kept so
+-- the account page can describe the browser to its owner; neither is
 -- consulted in any decision, so a client-choosable X-Forwarded-For cannot
--- influence trust (agentry#429).
+-- influence trust.
 CREATE TABLE trusted_devices (
   id           uuid PRIMARY KEY,
   user_id      uuid NOT NULL REFERENCES users(id),

@@ -1,4 +1,4 @@
--- Desktop browser sign-in grants (agentry#19).
+-- Desktop browser sign-in grants.
 
 -- name: CreateDesktopGrant :one
 INSERT INTO desktop_grants (id, user_id, code_sha256, state_sha256, scopes, name, expires_at)
@@ -17,6 +17,6 @@ RETURNING *;
 DELETE FROM desktop_grants WHERE expires_at < now() - interval '1 day';
 
 -- name: ConsumeDesktopGrantsForUser :execrows
--- Clear-data (agentry#498): a code minted before the clear cannot be
--- exchanged for a token after it.
+-- Clear-data: a code minted before the clear cannot be exchanged for a token
+-- after it.
 UPDATE desktop_grants SET consumed_at = now() WHERE user_id = $1 AND consumed_at IS NULL;

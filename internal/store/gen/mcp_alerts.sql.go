@@ -193,7 +193,7 @@ type OpenMCPDependencyAlertParams struct {
 	FixedIn        []string  `json:"fixed_in"`
 }
 
-// Dependency alerts (agentry#177 M2, DEV-090).
+// Dependency alerts for declared MCP server versions.
 func (q *Queries) OpenMCPDependencyAlert(ctx context.Context, arg OpenMCPDependencyAlertParams) (McpDependencyAlert, error) {
 	row := q.db.QueryRow(ctx, openMCPDependencyAlert,
 		arg.ID,

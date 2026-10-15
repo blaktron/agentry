@@ -1,4 +1,4 @@
--- The consumed set of the 2FA social login's second leg (agentry#457).
+-- The consumed set of the 2FA social login's second leg.
 
 -- name: ConsumeTOTPChallenge :execrows
 -- Records the challenge's id as consumed. A row already there means it was

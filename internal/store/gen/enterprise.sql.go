@@ -42,7 +42,7 @@ const countWebhookEndpoints = `-- name: CountWebhookEndpoints :one
 SELECT count(*)::bigint FROM webhook_endpoints WHERE org_id = $1
 `
 
-// §19: 20 webhook endpoints per org.
+// At most 20 webhook endpoints per org.
 func (q *Queries) CountWebhookEndpoints(ctx context.Context, orgID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countWebhookEndpoints, orgID)
 	var column_1 int64
@@ -394,7 +394,8 @@ WHERE a.id = $1 AND h.kind = 'org'
 `
 
 // GetAgentOwnerOrg returns the owning org id when an agent's namespace is an
-// org (webhook fan-out is org-scoped; personal-namespace agents return no row).
+// org (webhook fan-out is org-scoped; personal-namespace agents return no
+// row).
 func (q *Queries) GetAgentOwnerOrg(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, getAgentOwnerOrg, id)
 	var org_id uuid.UUID
@@ -580,8 +581,8 @@ type GetSSOConnectionWithOrgRow struct {
 	OrgHandle string    `json:"org_handle"`
 }
 
-// SAML Single Logout (agentry#62): a session remembers its connection id;
-// the logout path needs the org handle to rebuild the SP.
+// SAML Single Logout: a session remembers its connection id; the logout path
+// needs the org handle to rebuild the SP.
 func (q *Queries) GetSSOConnectionWithOrg(ctx context.Context, id uuid.UUID) (GetSSOConnectionWithOrgRow, error) {
 	row := q.db.QueryRow(ctx, getSSOConnectionWithOrg, id)
 	var i GetSSOConnectionWithOrgRow
@@ -640,8 +641,8 @@ SELECT id, user_id, provider_kind, sso_connection_id, subject, created_at, direc
 WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1
 `
 
-// Social login (§12.1) has no sso_connection: the subject is namespaced by
-// provider ("google:1234") and unique on its own.
+// Social login has no sso_connection: the subject is namespaced by provider
+// ("google:1234") and unique on its own.
 func (q *Queries) GetSocialIdentity(ctx context.Context, subject string) (Identity, error) {
 	row := q.db.QueryRow(ctx, getSocialIdentity, subject)
 	var i Identity
@@ -985,7 +986,7 @@ type ListWebhookDeliveriesParams struct {
 	BeforeID   *uuid.UUID `json:"before_id"`
 }
 
-// Keyset-paged on (created_at, id) so the §9.1 cursor stays stable while new
+// Keyset-paged on (created_at, id) so the cursor stays stable while new
 // deliveries land at the head.
 func (q *Queries) ListWebhookDeliveries(ctx context.Context, arg ListWebhookDeliveriesParams) ([]WebhookDelivery, error) {
 	rows, err := q.db.Query(ctx, listWebhookDeliveries,
@@ -1283,8 +1284,8 @@ type UpsertSSOConnectionParams struct {
 	Enabled bool      `json:"enabled"`
 }
 
-// Enterprise features (M6/WG-J): SSO connections, identities, SCIM tokens and
-// SCIM data-plane, webhooks, domain claims, audit exports, enforced-SSO helpers.
+// Enterprise features: SSO connections, identities, SCIM tokens and SCIM
+// data-plane, webhooks, domain claims, audit exports, enforced-SSO helpers.
 // ============================ SSO connections ============================
 func (q *Queries) UpsertSSOConnection(ctx context.Context, arg UpsertSSOConnectionParams) (SsoConnection, error) {
 	row := q.db.QueryRow(ctx, upsertSSOConnection,

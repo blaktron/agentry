@@ -1,4 +1,4 @@
--- Agent versions + state machine (M3/WG-E).
+-- Agent versions + state machine.
 
 -- name: CreateAgentVersion :one
 INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabilities, channel, submitted_by, source, submitter_ip_hash, draft_run)
@@ -6,20 +6,19 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: MarkVersionDrafterRevision :execrows
--- The scan proved the version's claimed draft (plan drafter-revisions.md
--- §6; agentry#794): the source becomes 'drafter-revision', with the S9
--- baseline it was proved against. Only once, only while scanning, and only
--- for a cli-upload that claimed a draft (the immutability trigger holds
--- the same edge).
+-- The scan proved the version's claimed draft: the source becomes
+-- 'drafter-revision', with the S9 baseline it was proved against. Only once,
+-- only while scanning, and only for a cli-upload that claimed a draft (the
+-- immutability trigger holds the same edge).
 UPDATE agent_versions SET source = 'drafter-revision', draft_baseline = $2, updated_at = now()
 WHERE id = $1 AND status = 'scanning' AND source = 'cli-upload'
   AND draft_run IS NOT NULL AND draft_baseline IS NULL;
 
 -- name: MarkVersionScanSkipped :execrows
--- The version was admitted without a scan (M21): recorded in the same
--- transaction as the submitted → published edge, which refuses a version
--- not so marked. Only a submitted version is marked; the caller requires
--- the one row, so a version that has moved on is never marked.
+-- The version was admitted without a scan: recorded in the same transaction
+-- as the submitted → published edge, which refuses a version not so marked.
+-- Only a submitted version is marked; the caller requires the one row, so a
+-- version that has moved on is never marked.
 UPDATE agent_versions SET scan_status = 'skipped', updated_at = now()
 WHERE id = $1 AND status = 'submitted';
 
@@ -59,9 +58,9 @@ WHERE agents.id = $1;
 -- name: ListVersions :many
 SELECT * FROM agent_versions WHERE agent_id = $1 ORDER BY created_at DESC;
 
--- Resolution set (§9.4): published resolves by range, yanked resolves only by
--- exact pin. quarantined and blocked are excluded here by construction — a
--- version the platform has disabled must never come back from a resolve.
+-- Resolution set: published resolves by range, yanked resolves only by exact
+-- pin. quarantined and blocked are excluded here by construction — a version
+-- the platform has disabled must never come back from a resolve.
 -- name: ListResolvableVersions :many
 SELECT * FROM agent_versions
 WHERE agent_id = $1 AND status IN ('published','yanked')

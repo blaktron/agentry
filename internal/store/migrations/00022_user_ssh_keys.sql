@@ -1,8 +1,8 @@
 -- +goose Up
--- SSH git transport (§6.1 Q7, agentry#70): a user's SSH public keys are the
--- credential for ssh://git@…/{ns}/{name}.git. The fingerprint (SHA256, as
--- OpenSSH prints it) is the lookup key; the key itself is kept for display
--- and for re-deriving the fingerprint should the format ever change.
+-- SSH git transport: a user's SSH public keys are the credential for
+-- ssh://git@…/{ns}/{name}.git. The fingerprint (SHA256, as OpenSSH prints it)
+-- is the lookup key; the key itself is kept for display and for re-deriving
+-- the fingerprint should the format ever change.
 CREATE TABLE user_ssh_keys (
   id           uuid PRIMARY KEY,
   user_id      uuid NOT NULL REFERENCES users(id),

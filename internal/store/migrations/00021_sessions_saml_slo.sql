@@ -1,9 +1,8 @@
 -- +goose Up
--- SAML Single Logout (§12.4, agentry#62): a session established through a
--- SAML connection remembers the connection, the asserted NameID and the
--- IdP's SessionIndex, so an IdP-initiated LogoutRequest can revoke exactly
--- the sessions it names, and an SP-initiated logout can tell the IdP whom
--- it is logging out.
+-- SAML Single Logout: a session established through a SAML connection
+-- remembers the connection, the asserted NameID and the IdP's SessionIndex,
+-- so an IdP-initiated LogoutRequest can revoke exactly the sessions it names,
+-- and an SP-initiated logout can tell the IdP whom it is logging out.
 ALTER TABLE sessions
   ADD COLUMN sso_connection_id uuid REFERENCES sso_connections(id),
   ADD COLUMN saml_name_id text,

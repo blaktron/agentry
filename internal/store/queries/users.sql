@@ -1,4 +1,4 @@
--- Users, handles, and email verification (M1/WG-B).
+-- Users, handles, and email verification.
 
 -- name: CreateHandle :exec
 INSERT INTO handles (id, handle, kind) VALUES ($1, $2, $3);
@@ -33,12 +33,12 @@ UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() 
 UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1;
 
 -- name: ListUserDirectoryLinks :many
--- The directory accounts the account is linked to by directory sign-ins
--- (agentry#706, agentry#727), oldest first: each one's subject, "authentik:"
--- stripped (the uid the directory reports for it), and the directory's own
--- id for it, learnt at sign-in (0 until the identity signs in under a
--- directory that sends it). The settings page reads the oldest, so its
--- answer does not move while the account keeps one; erasure takes them all.
+-- The directory accounts the account is linked to by directory sign-ins,
+-- oldest first: each one's subject, "authentik:" stripped (the uid the
+-- directory reports for it), and the directory's own id for it, learnt at
+-- sign-in (0 until the identity signs in under a directory that sends it).
+-- The settings page reads the oldest, so its answer does not move while the
+-- account keeps one; erasure takes them all.
 SELECT substring(i.subject from 11)::text AS directory_subject,
        COALESCE(i.directory_account_id, 0)::bigint AS directory_account_id
 FROM identities i
@@ -48,18 +48,18 @@ ORDER BY i.created_at, i.id;
 
 -- name: SetSocialIdentityDirectoryAccount :exec
 -- Records the directory's id for the account a directory identity signs in
--- as (agentry#727), from the directory's signed ID token; moves it when the
--- directory reports another.
+-- as, from the directory's signed ID token; moves it when the directory
+-- reports another.
 UPDATE identities SET directory_account_id = $2
 WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1
   AND directory_account_id IS DISTINCT FROM $2;
 
 -- name: ListStaffMirrorAccounts :many
--- Every account that is platform staff and active, with its verified
--- address (lower-cased; the directory's match is case-blind) and each
--- directory subject it is linked to by a directory sign-in, "authentik:"
--- stripped (empty when it has none): the set the directory's staff mirror
--- group is kept equal to (agentry#598).
+-- Every account that is platform staff and active, with its verified address
+-- (lower-cased; the directory's match is case-blind) and each directory
+-- subject it is linked to by a directory sign-in, "authentik:" stripped
+-- (empty when it has none): the set the directory's staff mirror group is
+-- kept equal to.
 SELECT u.id, lower(u.email)::text AS email,
        coalesce(substring(i.subject from 11), '')::text AS directory_subject
 FROM users u
@@ -70,8 +70,8 @@ ORDER BY 2, 3;
 
 -- name: ListStaffOrgMembersNotStaff :many
 -- Active members of the staff organization who are not platform staff: an
--- address outside its domain or unverified, or an account that is not
--- active (agentry#598). Reported at start-up, never removed.
+-- address outside its domain or unverified, or an account that is not active.
+-- Reported at start-up, never removed.
 SELECT h.handle FROM memberships m
 JOIN users u ON u.id = m.user_id
 JOIN handles h ON h.id = u.id
@@ -79,20 +79,20 @@ WHERE m.org_id = $1 AND m.state = 'active' AND NOT u.platform_staff
 ORDER BY h.handle;
 
 -- name: ListStaffSyncCandidates :many
--- The accounts whose platform_staff the staff rule could change
--- (agentry#556): every account flagged today, and every active member of
--- the staff organization. The start-up resync recomputes exactly these.
+-- The accounts whose platform_staff the staff rule could change: every
+-- account flagged today, and every active member of the staff organization.
+-- The start-up resync recomputes exactly these.
 SELECT id FROM users
 WHERE platform_staff
    OR id IN (SELECT m.user_id FROM memberships m WHERE m.org_id = $1 AND m.state = 'active')
 ORDER BY id;
 
 -- name: SetUserPlatformStaff :exec
--- The staff rule decides platform staff (agentry#556; registry.SyncStaffIn).
+-- The staff rule decides platform staff (registry.SyncStaffIn).
 UPDATE users SET platform_staff = $2, updated_at = now() WHERE id = $1;
 
 -- name: SetUserIdPMFA :exec
--- The directory asserted a second factor at this sign-in (agentry#23).
+-- The directory asserted a second factor at this sign-in.
 UPDATE users SET idp_mfa_at = now(), updated_at = now() WHERE id = $1;
 
 -- name: SetUserCookieAck :exec
@@ -106,27 +106,27 @@ UPDATE users SET email_verified_at = now(), updated_at = now() WHERE id = $1;
 INSERT INTO email_verifications (token_sha256, user_id, expires_at) VALUES ($1, $2, $3);
 
 -- name: LockUserRow :one
--- Serializes the activation mail per account (agentry#861): the five-minute
--- limit is read and the new link written under this lock, so two replicas
--- answering at once send one mail, not two.
+-- Serializes the activation mail per account: the five-minute limit is read
+-- and the new link written under this lock, so two replicas answering at once
+-- send one mail, not two.
 SELECT id FROM users WHERE id = $1 FOR UPDATE;
 
 -- name: LatestEmailVerificationAt :one
--- When the account's newest verification link was made, or the epoch when
--- it has none (agentry#861's five-minute limit).
+-- When the account's newest verification link was made, or the epoch when it
+-- has none (for the five-minute limit).
 SELECT COALESCE(max(created_at), 'epoch'::timestamptz)::timestamptz AS sent_at
 FROM email_verifications WHERE user_id = $1;
 
 -- name: CountEmailVerificationsSince :one
--- How many links the account was sent since a moment, and the oldest of
--- them (agentry#861's daily cap).
+-- How many links the account was sent since a moment, and the oldest of them
+-- (for the daily cap).
 SELECT count(*)::bigint AS sent,
        COALESCE(min(created_at), now())::timestamptz AS oldest
 FROM email_verifications WHERE user_id = $1 AND created_at > $2;
 
 -- name: DeleteEmailVerificationsForUser :exec
--- An erased account's links go with it: one followed afterwards would
--- confirm an address nobody holds any more (agentry#861).
+-- An erased account's links go with it: one followed afterwards would confirm
+-- an address nobody holds any more.
 DELETE FROM email_verifications WHERE user_id = $1;
 
 -- name: ConsumeEmailVerification :one
@@ -136,8 +136,8 @@ WHERE token_sha256 = $1 AND consumed_at IS NULL AND expires_at > now()
 RETURNING user_id;
 
 -- name: CountPublishedVersionsByUser :one
--- Published public versions under a user's PERSONAL namespace (§12.7: the
--- deletion chooser needs to know whether consumers depend on them).
+-- Published public versions under a user's PERSONAL namespace (the deletion
+-- chooser needs to know whether consumers depend on them).
 SELECT count(*) FROM agent_versions av
 JOIN agents a ON a.id = av.agent_id
 JOIN handles h ON h.id = a.namespace_id
@@ -149,10 +149,10 @@ FROM agents a JOIN handles h ON h.id = a.namespace_id
 WHERE h.id = $1 AND h.kind = 'user';
 
 -- name: PseudonymizeUser :exec
--- GDPR erasure (§12.7): PII is purged, the row survives so audit events and
--- immutable published content keep a stable (now opaque) actor id. The
--- tombstone keeps only a salted hash of the email for abuse-recurrence
--- detection — never the address itself.
+-- GDPR erasure: PII is purged, the row survives so audit events and immutable
+-- published content keep a stable (now opaque) actor id. The tombstone keeps
+-- only a salted hash of the email for abuse-recurrence detection — never the
+-- address itself.
 UPDATE users SET
   email = $2,
   email_verified_at = NULL,

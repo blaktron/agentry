@@ -1,18 +1,16 @@
 -- +goose Up
--- Retire and Delete for a publisher's own QuickAgent (plan
--- forks-and-publisher.md M1, agentry#942; D1–D4, D13).
+-- Retire and Delete for a publisher's own QuickAgent.
 --
--- Retire puts an agent away: it becomes private (D2, the operator's answer
--- of 2026-10-06), takes no new submission, and Restore returns the
--- visibility it had, kept in retired_visibility. A retired agent does not
--- count toward the private-agent cap (D13).
+-- Retire puts an agent away: it becomes private, takes no new submission, and
+-- Restore returns the visibility it had, kept in retired_visibility. A
+-- retired agent does not count toward the private-agent cap.
 --
 -- Delete of an agent that has version history leaves a tombstone: the row
 -- stays, so its versions (whose rows the 00004 trigger keeps forever), their
 -- archives, its advisories and every receipt naming it stay with it, and so
 -- does the name, which UNIQUE (namespace_id, name) then holds in its
--- namespace for good (D4). deleted_at hides the agent from every read path;
--- the agent is private as well, so no public listing can name it either.
+-- namespace for good. deleted_at hides the agent from every read path; the
+-- agent is private as well, so no public listing can name it either.
 ALTER TABLE agents
   ADD COLUMN retired_at         timestamptz,
   ADD COLUMN retired_visibility text CHECK (retired_visibility IN ('public', 'private')),

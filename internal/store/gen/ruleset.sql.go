@@ -14,9 +14,9 @@ const getRulesetReleaseBySemver = `-- name: GetRulesetReleaseBySemver :one
 SELECT id, semver, bundle_digest, notes, published_at FROM ruleset_releases WHERE semver = $1
 `
 
-// Ruleset releases (§8.3, §9.2 POST /platform/ruleset-releases). The insert
-// lives in scanning.sql (the pipeline owns it); this is the read side the
-// platform endpoint needs to make re-registration idempotent.
+// Ruleset releases (POST /platform/ruleset-releases). The insert lives in
+// scanning.sql (the pipeline owns it); this is the read side the platform
+// endpoint needs to make re-registration idempotent.
 func (q *Queries) GetRulesetReleaseBySemver(ctx context.Context, semver string) (RulesetRelease, error) {
 	row := q.db.QueryRow(ctx, getRulesetReleaseBySemver, semver)
 	var i RulesetRelease
