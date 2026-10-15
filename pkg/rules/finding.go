@@ -7,8 +7,8 @@ import (
 	"unicode/utf8"
 )
 
-// Severity ranks how dangerous a finding is. It mirrors the pipeline gate
-// vocabulary of PLAN §8.5.
+// Severity ranks how dangerous a finding is. It mirrors the pipeline
+// gate vocabulary.
 type Severity string
 
 // Severity levels, ordered least to most severe.
@@ -17,7 +17,7 @@ const (
 	SeverityInfo Severity = "info"
 	// SeverityLow is a minor concern surfaced on the report.
 	SeverityLow Severity = "low"
-	// SeverityMedium routes a version to human review (§8.5).
+	// SeverityMedium routes a version to human review.
 	SeverityMedium Severity = "medium"
 	// SeverityHigh routes a version to human review (platform queue if public).
 	SeverityHigh Severity = "high"
@@ -25,9 +25,9 @@ const (
 	SeverityCritical Severity = "critical"
 )
 
-// Confidence expresses how sure the detector is that the match is a true
-// positive. Low-confidence findings never gate alone (§8.5); they surface to
-// reviewers.
+// Confidence expresses how sure the detector is that the match is a
+// true positive. Low-confidence findings never gate alone; they surface
+// to reviewers.
 type Confidence string
 
 // Confidence levels.
@@ -40,8 +40,8 @@ const (
 	ConfidenceHigh Confidence = "high"
 )
 
-// OWASP taxonomy ids attached to findings per PLAN §8.10. S3 and S4 both map
-// to prompt injection (LLM01) and memory/context poisoning (ASI06).
+// OWASP taxonomy ids attached to findings. S3 and S4 both map to prompt
+// injection (LLM01) and memory/context poisoning (ASI06).
 const (
 	// TaxonomyLLM01 is OWASP Top 10 for LLM Applications 2025: Prompt Injection.
 	TaxonomyLLM01 = "LLM01"
@@ -66,7 +66,7 @@ type Finding struct {
 	RuleID string
 	// Scanner is the pipeline stage that produced the finding: "S3" or "S4".
 	Scanner string
-	// Severity is the gate-facing severity (§8.5).
+	// Severity is the gate-facing severity.
 	Severity Severity
 	// Confidence is the detector's confidence in the match.
 	Confidence Confidence
@@ -87,7 +87,7 @@ type Finding struct {
 	// code points, matched pattern, and so on). Always non-nil on emitted
 	// findings.
 	Detail map[string]string
-	// Taxonomy holds the OWASP ids for the finding (§8.10).
+	// Taxonomy holds the OWASP ids for the finding.
 	Taxonomy []string
 }
 

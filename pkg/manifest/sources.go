@@ -5,20 +5,19 @@ import (
 	"slices"
 )
 
-// Input sources (plan input-sources.md §5, D2–D5; agentry#1060). An input
-// source is where a run's inputs come from: the upload every run has, and
-// the kinds an intake question asks for by its type, one type value per
-// kind. A repository answer is an https git URL and an optional ref; a url
-// answer is one https URL. A runner that supports sources (agentry-cli#833,
-// #834) fetches each answer before the run into /inputs/<question id>/, so
-// the question's id names the folder, and the run setup asks for an
-// optional access token beside it. The token belongs to the run, not to
-// the manifest.
+// Input sources. An input source is where a run's inputs come from: the
+// upload every run has, and the kinds an intake question asks for by
+// its type, one type value per kind. A repository answer is an https
+// git URL and an optional ref; a url answer is one https URL. A runner
+// that supports sources fetches each answer before the run into
+// /inputs/<question id>/, so the question's id names the folder, and
+// the run setup asks for an optional access token beside it. The token
+// belongs to the run, not to the manifest.
 //
-// A source is outside the contract, as an attached file is (DEV-218,
-// DEV-240): giving the source is the grant. A source question declares no
-// egress and no secret, needs no capabilities entry, and the scanner does
-// not diff it. A later kind (a SharePoint library, say) is its IntakeType
+// A source is outside the contract, as an attached file is: giving the
+// source is the grant. A source question declares no egress and no
+// secret, needs no capabilities entry, and the scanner does not diff
+// it. A later kind (a SharePoint library, say) is its IntakeType
 // constant, its line in sourceTypes and in the schema's enum, its rule
 // here where it needs one, and its fetch in the runner.
 

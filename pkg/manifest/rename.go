@@ -8,14 +8,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Rename returns raw, an agent.yaml, with its top-level namespace and name
-// set to the given ones: the one change a fork's first commit makes to the
-// manifest it copies (agentry#943), since a manifest must name the agent it
-// is submitted to. Everything else stays as written, comments included,
-// though the YAML is re-emitted with two-space indentation. A key that is
-// absent is added after the last of schemaVersion, namespace and name that
-// is present, so the file still reads in the usual order. It refuses a
-// document that is not a single mapping.
+// Rename returns raw, an agent.yaml, with its top-level namespace and
+// name set to the given ones: the one change a fork's first commit
+// makes to the manifest it copies, since a manifest must name the agent
+// it is submitted to. Everything else stays as written, comments
+// included, though the YAML is re-emitted with two-space indentation. A
+// key that is absent is added after the last of schemaVersion,
+// namespace and name that is present, so the file still reads in the
+// usual order. It refuses a document that is not a single mapping.
 func Rename(raw []byte, namespace, name string) ([]byte, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(raw, &doc); err != nil {

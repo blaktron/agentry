@@ -1,8 +1,8 @@
 // Package rules is the embedded scanner engine that powers both the
-// server-side publication pipeline stages S3 and S4 (PLAN §8.3) and the
-// offline `agentry validate` command (D-12). Server and CLI run the same
-// code over the same versioned rule bundle, so a local scan is a faithful
-// subset of what the registry runs at publish time — "local/remote parity".
+// server-side publication pipeline stages S3 and S4 and the offline
+// `agentry validate` command. Server and CLI run the same code over the
+// same versioned rule bundle, so a local scan is a faithful subset of
+// what the registry runs at publish time: "local/remote parity".
 //
 // The package has two scanners:
 //
@@ -15,16 +15,17 @@
 //     the rules are the code.
 //
 //   - S4 (Bundle) is a signature engine that loads a versioned YAML rule
-//     bundle (see the repo's /rules directory, shipped as ruleset_releases)
+//     bundle (see the repo's /rules directory, shipped as ruleset releases)
 //     and evaluates regex + suppression rules over prose and prompt files.
 //     Rules carry an id, severity, confidence, references, and match /
-//     non-match fixtures so every rule ships with tests (§8.3).
+//     non-match fixtures so every rule ships with tests.
 //
-// Scan runs both scanners over a file set. Every finding carries the OWASP
-// taxonomy ids required by §8.10 (LLM01 prompt injection, ASI06 memory &
-// context poisoning).
+// Scan runs both scanners over a file set. Every finding carries the
+// OWASP taxonomy ids (LLM01 prompt injection, ASI06 memory & context
+// poisoning).
 //
-// Nothing in this package executes, decodes, or renders untrusted content:
-// it only inspects bytes and reports. That property is what lets it run
-// inside the sandboxed scanner task profile (§8.2) and unchanged in the CLI.
+// Nothing in this package executes, decodes, or renders untrusted
+// content: it only inspects bytes and reports. That property is what
+// lets it run inside the sandboxed scanner task profile and unchanged
+// in the CLI.
 package rules

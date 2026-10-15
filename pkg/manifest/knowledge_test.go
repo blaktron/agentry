@@ -10,11 +10,11 @@ import (
 	"testing"
 )
 
-// A release that ships knowledge packs (V11, V8's pack quota; plan
-// knowledge.md §4.6, agentry#594): the block's shape, the pack in the
-// archive in the CLI's layout and within its caps, its manifest.json the
-// tree's own, the pack's files outside the release's own quotas, and the
-// shipped names in the contract so one more asks again.
+// A release that ships knowledge packs (V11, V8's pack quota): the
+// block's shape, the pack in the archive in the CLI's layout and within
+// its caps, its manifest.json the tree's own, the pack's files outside
+// the release's own quotas, and the shipped names in the contract so
+// one more asks again.
 
 const knowledgeYAML = `schemaVersion: "2"
 name: incident-summarizer

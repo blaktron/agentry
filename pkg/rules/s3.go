@@ -36,10 +36,10 @@ var s3Checks = []s3Check{
 	detectNFCDelta,
 }
 
-// ScanS3 runs every S3 deterministic detector over a single text file and
-// returns the findings sorted deterministically. Non-text (binary) content is
-// skipped — binaries are S1's concern (§8.3). ScanS3 is pure: same input,
-// same output, no I/O.
+// ScanS3 runs every S3 deterministic detector over a single text file
+// and returns the findings sorted deterministically. Non-text (binary)
+// content is skipped — binaries are S1's concern. ScanS3 is pure: same
+// input, same output, no I/O.
 func ScanS3(path string, content []byte) []Finding {
 	if !isTextFile(content) {
 		return nil
@@ -119,9 +119,9 @@ func lineRuneFinding(path, ruleID, title string, sev Severity, conf Confidence, 
 }
 
 // ShannonEntropy returns the Shannon entropy (bits per symbol) of b.
-// Exported because internal/scan's S2 secret detector needs the same measure:
-// it had its own byte-for-byte copy, and two implementations of a scoring
-// function that gates findings are two thresholds waiting to drift apart.
+// Exported because internal/scan's S2 secret detector needs the same
+// measure: two implementations of a scoring function that gates
+// findings are two thresholds waiting to drift apart.
 func ShannonEntropy(b []byte) float64 {
 	if len(b) == 0 {
 		return 0
@@ -158,14 +158,14 @@ func isZeroWidth(r rune) bool {
 	return false
 }
 
-// detectZeroWidth flags zero-width code points (§8.3 S3.a). High/high: these
-// are invisible and have no legitimate place in agent prose, with two
-// exceptions that are how ordinary text is written (ruleset 0.3.2,
-// agentry#775): a zero-width joiner inside an emoji ZWJ sequence (the joiner
-// that makes woman and laptop one glyph, U+1F469 U+200D U+1F4BB) and a
-// byte-order mark at the very start of the file. Anywhere else the same code
-// points still fire: a joiner between letters, beside only one emoji, or
-// doubled; a U+FEFF after the first byte.
+// detectZeroWidth flags zero-width code points. High/high: these are
+// invisible and have no legitimate place in agent prose, with two
+// exceptions that are how ordinary text is written: a zero-width joiner
+// inside an emoji ZWJ sequence (the joiner that makes woman and laptop
+// one glyph, U+1F469 U+200D U+1F4BB) and a byte-order mark at the very
+// start of the file. Anywhere else the same code points still fire: a
+// joiner between letters, beside only one emoji, or doubled; a U+FEFF
+// after the first byte.
 func detectZeroWidth(path string, content []byte, lm *lineMap) []Finding {
 	hits := map[int][]rune{}
 	runes, offsets := decodeRunes(content)
@@ -293,7 +293,7 @@ func isBidiControl(r rune) bool {
 	return false
 }
 
-// detectBidiControls flags bidi override controls (§8.3 S3.b, Trojan Source).
+// detectBidiControls flags bidi override controls (Trojan Source).
 func detectBidiControls(path string, content []byte, lm *lineMap) []Finding {
 	hits := runeSetsByLine(content, lm, isBidiControl)
 	var out []Finding
@@ -312,9 +312,9 @@ func isTagBlock(r rune) bool {
 	return r >= 0xE0000 && r <= 0xE007F
 }
 
-// detectTagBlock flags Unicode tag-block code points (§8.3 S3.c). The Detail
-// includes the decoded ASCII where the tag characters map to printable ASCII,
-// so a reviewer can read the smuggled message.
+// detectTagBlock flags Unicode tag-block code points. The Detail
+// includes the decoded ASCII where the tag characters map to printable
+// ASCII, so a reviewer can read the smuggled message.
 func detectTagBlock(path string, content []byte, lm *lineMap) []Finding {
 	hits := runeSetsByLine(content, lm, isTagBlock)
 	var out []Finding
@@ -350,7 +350,7 @@ func isPrivateUse(r rune) bool {
 	return unicode.Is(unicode.Co, r)
 }
 
-// detectPrivateUse flags private-use code points (§8.3 S3.d). Medium: PUA has
+// detectPrivateUse flags private-use code points. Medium: PUA has
 // occasional legitimate use (icon fonts) so confidence is medium.
 func detectPrivateUse(path string, content []byte, lm *lineMap) []Finding {
 	hits := runeSetsByLine(content, lm, isPrivateUse)
@@ -364,9 +364,9 @@ func detectPrivateUse(path string, content []byte, lm *lineMap) []Finding {
 
 // --- (e) mixed-script / confusable tokens --------------------------------
 
-// detectMixedScript flags single tokens that mix letters from two or more
-// confusable-prone scripts (Latin/Cyrillic/Greek/Armenian) — the homograph
-// technique (§8.3 S3.e). One finding per line; the Detail lists offending
+// detectMixedScript flags single tokens that mix letters from two or
+// more confusable-prone scripts (Latin/Cyrillic/Greek/Armenian) — the
+// homograph technique. One finding per line; the Detail lists offending
 // tokens and the scripts they mixed.
 func detectMixedScript(path string, content []byte, lm *lineMap) []Finding {
 	type hit struct {
@@ -453,9 +453,10 @@ var htmlCommentRe = regexp.MustCompile(`(?s)<!--(.*?)-->`)
 // an HTML comment worth reporting. Short comments (<!-- TODO -->) are noise.
 const commentTextMinLen = 20
 
-// detectHTMLComment flags HTML comments carrying substantial text inside
-// Markdown files (§8.3 S3.f). Base severity is low; Scan escalates a comment
-// to medium when its text matches an S4 signature (see escalateComments).
+// detectHTMLComment flags HTML comments carrying substantial text
+// inside Markdown files. Base severity is low; Scan escalates a comment
+// to medium when its text matches an S4 signature (see
+// escalateComments).
 func detectHTMLComment(path string, content []byte, lm *lineMap) []Finding {
 	if !isMarkdownFile(path) {
 		return nil
@@ -503,10 +504,11 @@ var (
 	styleAttrRe    = regexp.MustCompile(`(?is)style\s*=\s*(?:"([^"]*)"|'([^']*)')`)
 )
 
-// detectCSSHidden flags markup that hides text from a human reader while
-// leaving it visible to a model: the hidden attribute, display:none,
-// visibility:hidden, font-size:0, and same-color-as-background (white-on-white)
-// styles (§8.3 S3.g). Runs on HTML and Markdown (which allows raw HTML).
+// detectCSSHidden flags markup that hides text from a human reader
+// while leaving it visible to a model: the hidden attribute,
+// display:none, visibility:hidden, font-size:0, and
+// same-color-as-background (white-on-white) styles. Runs on HTML and
+// Markdown (which allows raw HTML).
 func detectCSSHidden(path string, content []byte, lm *lineMap) []Finding {
 	if !isHTMLBearingFile(path) {
 		return nil
@@ -641,8 +643,9 @@ var dataURIRe = regexp.MustCompile(`(?i)data:[a-z0-9!$&;/=+._~*'()-]*,([^\s"'<>]
 // dataURIPayloadMax is the payload length above which a data: URI is a finding.
 const dataURIPayloadMax = 128
 
-// detectDataURI flags data: URIs whose payload exceeds dataURIPayloadMax
-// characters (§8.3 S3.h) — a common way to smuggle a blob into prose.
+// detectDataURI flags data: URIs whose payload exceeds
+// dataURIPayloadMax characters — a common way to smuggle a blob into
+// prose.
 func detectDataURI(path string, content []byte, lm *lineMap) []Finding {
 	var out []Finding
 	for _, m := range dataURIRe.FindAllSubmatchIndex(content, -1) {
@@ -688,15 +691,16 @@ var (
 	hexRunRe    = regexp.MustCompile(`\b[0-9a-fA-F]{256,}\b`)
 )
 
-// encodedBlobEntropyMin gates base64/hex findings: only high-entropy runs are
-// reported, so long low-entropy identifiers do not false-positive (§8.3 S3.i).
-// Note: a pure hex alphabet tops out at 4.0 bits/symbol, so in practice this
-// gate fires on base64; hex sits at the ceiling and is reported only if it
-// slightly exceeds it, which is intentional (see corpus README).
+// encodedBlobEntropyMin gates base64/hex findings: only high-entropy
+// runs are reported, so long low-entropy identifiers do not
+// false-positive. Note: a pure hex alphabet tops out at 4.0
+// bits/symbol, so in practice this gate fires on base64; hex sits at
+// the ceiling and is reported only if it slightly exceeds it, which is
+// intentional (see corpus README).
 const encodedBlobEntropyMin = 4.0
 
-// detectEncodedBlob flags long base64/hex runs in prose files whose Shannon
-// entropy exceeds encodedBlobEntropyMin (§8.3 S3.i).
+// detectEncodedBlob flags long base64/hex runs in prose files whose
+// Shannon entropy exceeds encodedBlobEntropyMin.
 func detectEncodedBlob(path string, content []byte, lm *lineMap) []Finding {
 	if !isProseFile(path) {
 		return nil
@@ -743,9 +747,9 @@ const (
 	trailingWSMinLines = 5 // consecutive qualifying lines that make a finding
 )
 
-// detectTrailingWhitespace flags blocks of consecutive lines each carrying a
-// long trailing run of spaces/tabs (§8.3 S3.j) — an off-screen column that can
-// hide instructions past the right margin.
+// detectTrailingWhitespace flags blocks of consecutive lines each
+// carrying a long trailing run of spaces/tabs — an off-screen column
+// that can hide instructions past the right margin.
 func detectTrailingWhitespace(path string, content []byte, lm *lineMap) []Finding {
 	var out []Finding
 	runStart := 0
@@ -808,11 +812,12 @@ func trailingWSCount(line string) int {
 
 // --- (k) NFC-normalization delta -----------------------------------------
 
-// detectNFCDelta flags files where NFC normalization would change one or more
-// non-Latin-1 code points (§8.3 S3.k). Pure Latin-1 accented text that merely
-// composes (e + combining acute → é) is not flagged; the signal is a
-// non-Latin-1 code point that is not already in NFC (e.g. U+212B ANGSTROM SIGN
-// normalizing to U+00C5), which is a normalization-confusable trick.
+// detectNFCDelta flags files where NFC normalization would change one
+// or more non-Latin-1 code points. Pure Latin-1 accented text that
+// merely composes (e + combining acute → é) is not flagged; the signal
+// is a non-Latin-1 code point that is not already in NFC (e.g. U+212B
+// ANGSTROM SIGN normalizing to U+00C5), which is a
+// normalization-confusable trick.
 func detectNFCDelta(path string, content []byte, lm *lineMap) []Finding {
 	if norm.NFC.Bytes(content) == nil {
 		return nil

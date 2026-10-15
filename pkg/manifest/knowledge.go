@@ -15,15 +15,15 @@ import (
 	"unicode/utf8"
 )
 
-// A release may ship knowledge packs (plan knowledge.md §4.6, D11, D18;
-// agentry#594): the pack is made with the Knowledge Creator and travels in
-// the release archive under knowledge/<name>/, in the layout the CLI
-// writes (agentry-cli pkg/knowledge: manifest.json, wiki/ with its index
-// and log, sources/). The manifest names the packs it ships, so the
-// registry scans each one as part of the version's scan and a person is
-// asked again when a later release ships one more. What a person may
-// attach of their own is text for the run setup: it never reaches the
-// agent and never widens the contract (attaching is the grant, as for
+// A release may ship knowledge packs: the pack is made with the
+// Knowledge Creator and travels in the release archive under
+// knowledge/<name>/, in the layout the CLI writes (the CLI's
+// pkg/knowledge: manifest.json, wiki/ with its index and log,
+// sources/). The manifest names the packs it ships, so the registry
+// scans each one as part of the version's scan and a person is asked
+// again when a later release ships one more. What a person may attach
+// of their own is text for the run setup: it never reaches the agent
+// and never widens the contract (attaching is the grant, as for
 // /inputs).
 
 // KnowledgeDir is the archive directory shipped packs live under.
@@ -33,8 +33,8 @@ const KnowledgeDir = "knowledge"
 const (
 	// MaxShippedPacks caps knowledge.ships.
 	MaxShippedPacks = 5
-	// MaxKnowledgePackBytes caps one shipped pack: its manifest.json and
-	// every file of its tree, as the CLI counts a pack (plan D16).
+	// MaxKnowledgePackBytes caps one shipped pack: its manifest.json
+	// and every file of its tree, as the CLI counts a pack.
 	MaxKnowledgePackBytes = 10 << 20
 	// MaxKnowledgePackFiles caps the files of one shipped pack's tree, as
 	// the registry's store does.
@@ -114,9 +114,9 @@ func ShippedPacksOf(manifestJSON []byte) []string {
 	return slices.Compact(out)
 }
 
-// Contract is the capability contract a person consents to: the declared
-// capabilities, and the names of the packs the release ships, so that a
-// later release shipping one more asks again (plan §4.6). It is what the
+// Contract is the capability contract a person consents to: the
+// declared capabilities, and the names of the packs the release ships,
+// so that a later release shipping one more asks again. It is what the
 // registry records for a version and an install, and what a client
 // compares with DiffCapabilities.
 func (m *Manifest) Contract() Capabilities {
