@@ -28,17 +28,19 @@ func s6UngrantedTools(in *Input) []Finding {
 		return nil
 	}
 	missing := toolgrant.Check(m.Capabilities, string(file.Content))
-	var order []toolgrant.Grant
-	byGrant := map[toolgrant.Grant][]toolgrant.Missing{}
+	// One finding per manifest line to change, in the order the
+	// instruction first calls for each.
+	var order []string
+	byPath := map[string][]toolgrant.Missing{}
 	for _, x := range missing {
-		if _, ok := byGrant[x.Grant]; !ok {
-			order = append(order, x.Grant)
+		if _, ok := byPath[x.Path]; !ok {
+			order = append(order, x.Path)
 		}
-		byGrant[x.Grant] = append(byGrant[x.Grant], x)
+		byPath[x.Path] = append(byPath[x.Path], x)
 	}
 	var out []Finding
-	for _, g := range order {
-		xs := byGrant[g]
+	for _, p := range order {
+		xs := byPath[p]
 		tools := make([]string, len(xs))
 		lines := make([]int, len(xs))
 		for i, x := range xs {
@@ -46,12 +48,9 @@ func s6UngrantedTools(in *Input) []Finding {
 		}
 		out = append(out, Finding{
 			Scanner: scannerUngrantedTool, Severity: SevHigh, Confidence: ConfHigh,
-			Title:    "The instruction calls for tools the manifest does not grant (" + g.Path() + "): " + truncateStr(strings.Join(tools, ", "), 160),
+			Title:    "The instruction calls for runner tools a run of this release does not have (" + p + "): " + truncateStr(strings.Join(tools, ", "), 160),
 			FilePath: file.Path, LineStart: lines[0], LineEnd: lines[0],
-			Detail: map[string]any{
-				"grant": string(g), "add": g.Path(), "tools": tools, "lines": lines,
-				"reason": xs[0].Reason,
-			},
+			Detail: map[string]any{"grant": string(xs[0].Grant), "path": p, "tools": tools, "lines": lines},
 		})
 	}
 	return out

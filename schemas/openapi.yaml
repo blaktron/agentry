@@ -6982,7 +6982,7 @@ components:
           description: The first line of the instruction that calls for the tool.
         reason:
           type: string
-          description: One sentence saying why, which quotes nothing of the instruction but the tool's name.
+          description: One sentence saying why, which quotes nothing of the instruction but the tool's name (and, for a server's tool, the server's).
     DraftCheck:
       type: object
       required: [rubric, draft, ungranted, model, usage]
@@ -6995,12 +6995,13 @@ components:
           type: array
           description: >-
             Each runner tool the instruction calls for that the manifest
-            does not grant, in the order the instruction first names them;
-            empty when every tool it names is granted. Any one sends the
+            does not grant, in the order the instruction first names them,
+            at most 50; empty when every tool it names is granted. A word
+            longer than 80 bytes is not read as a tool name. Any one sends the
             version to a person at publish (`S6/ungranted-tool`). A tool
             named only where the instruction turns it away ("not
-            `browser_pdf_save`"), and one in a paragraph about a QuickAgent,
-            is not listed. Read with no judge, so it is answered when both
+            `browser_pdf_save`"), and one in a paragraph that speaks of
+            another package as "a QuickAgent", is not listed. Read with no judge, so it is answered when both
             halves are `not_scanned`.
           items:
             $ref: "#/components/schemas/DraftUngrantedTool"

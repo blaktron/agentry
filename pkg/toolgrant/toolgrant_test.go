@@ -1,6 +1,7 @@
 package toolgrant_test
 
 import (
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -152,6 +153,43 @@ func TestProseWordsAreNotToolNames(t *testing.T) {
 	}
 }
 
+// An instruction that calls itself a QuickAgent is speaking of its own
+// run; only a paragraph about another package is left out.
+func TestAQuickAgentSpeakingOfItselfStillNeedsItsTools(t *testing.T) {
+	for _, instr := range []string{
+		"You are a QuickAgent that tests sites. Use `browser_click` on each button.",
+		"This QuickAgent opens the page with browser_navigate.",
+	} {
+		if got := toolgrant.Check(caps(t, ""), instr); len(got) != 1 {
+			t.Errorf("%q: got %v", instr, tools(got))
+		}
+	}
+}
+
+// Prohibitions written with a colon, across a CRLF file, or with the
+// negation further back than the tool before it, are still prohibitions;
+// a blank line ends what a list carries.
+func TestProhibitionsInOtherShapes(t *testing.T) {
+	for _, instr := range []string{
+		"Never use any of these tools: browser_click, `fetch`.",
+		"Do not call fetch or run_command.",
+		"Do not use `fetch`,\r\n`run_command` or `fs_write`.",
+	} {
+		if got := toolgrant.Check(caps(t, ""), instr); len(got) != 0 {
+			t.Errorf("%q: got %v", instr, tools(got))
+		}
+	}
+	for instr, want := range map[string][]string{
+		"A QuickAgent reviewer reads this.\r\n\r\nUse `browser_click` here.": {"browser_click"},
+		"Never call `fetch`.\n\n`run_command` counts the lines.":             {"run_command"},
+		"Never submit real orders: use browser_click only on test items.":    {"browser_click"},
+	} {
+		if got := toolgrant.Check(caps(t, ""), instr); !slices.Equal(tools(got), want) {
+			t.Errorf("%q: got %v, want %v", instr, tools(got), want)
+		}
+	}
+}
+
 func TestAListItemAfterANegationIsJudgedAlone(t *testing.T) {
 	instr := "Never submit real payments.\n- Use `browser_click` to press each button.\n- Do not use browser_evaluate."
 	got := toolgrant.Check(caps(t, ""), instr)
@@ -167,7 +205,7 @@ func TestAListItemAfterANegationIsJudgedAlone(t *testing.T) {
 func TestBrowserEvaluateIsNotGivenToABrowserThatTypesSecrets(t *testing.T) {
 	c := caps(t, "  secrets: [SITE_PASSWORD]\n  browser:\n    sites: [site]\n    secrets: [SITE_PASSWORD]\n")
 	got := toolgrant.Check(c, "Read the total with browser_evaluate.")
-	if !slices.Equal(tools(got), []string{"browser_evaluate"}) || got[0].Grant != toolgrant.GrantBrowser {
+	if !slices.Equal(tools(got), []string{"browser_evaluate"}) || got[0].Grant != toolgrant.GrantBrowser || got[0].Path != "capabilities.browser.secrets" {
 		t.Fatalf("got %+v", got)
 	}
 	if got := toolgrant.Check(c, "Click with browser_click."); len(got) != 0 {
@@ -224,5 +262,21 @@ func TestALargeInstructionIsReadInLinearTime(t *testing.T) {
 	}
 	if !slices.Equal(tools(got), []string{"browser_click"}) {
 		t.Fatalf("got %v", tools(got))
+	}
+}
+
+// The answer is bounded however the instruction is written: a name past
+// MaxNameBytes is not a tool, and at most MaxMissing tools are reported.
+func TestTheAnswerIsBounded(t *testing.T) {
+	var b strings.Builder
+	for i := range 500 {
+		fmt.Fprintf(&b, "Call s%d__t%d. ", i, i)
+	}
+	if got := toolgrant.Check(caps(t, ""), b.String()); len(got) != toolgrant.MaxMissing {
+		t.Fatalf("got %d entries", len(got))
+	}
+	long := "Call " + strings.Repeat("x", toolgrant.MaxNameBytes) + "__tool."
+	if got := toolgrant.Check(caps(t, ""), long); len(got) != 0 {
+		t.Fatalf("a name past the bound: %v", tools(got))
 	}
 }

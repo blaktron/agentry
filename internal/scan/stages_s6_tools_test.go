@@ -57,7 +57,7 @@ func TestS6ReportsTheBrowserToolsAReleaseDoesNotGrant(t *testing.T) {
 	f := got[0]
 	tools, _ := f.Detail["tools"].([]string)
 	if f.Severity != SevHigh || f.Confidence != ConfHigh || f.FilePath != "AGENT.md" || f.LineStart < 1 ||
-		f.Detail["add"] != "capabilities.browser" || f.Detail["grant"] != "browser" ||
+		f.Detail["path"] != "capabilities.browser" || f.Detail["grant"] != "browser" ||
 		!slices.Contains(tools, "browser_click") || slices.Contains(tools, "browser_pdf_save") ||
 		!strings.Contains(f.Title, "capabilities.browser") {
 		t.Errorf("finding = %+v", f)
@@ -86,7 +86,7 @@ func TestS6ReportsEachGrantOnce(t *testing.T) {
 	var got []string
 	for _, f := range (S6Scripts{}).Run(testStageContext(t), in).Findings {
 		if f.Scanner == scannerUngrantedTool {
-			got = append(got, f.Detail["add"].(string))
+			got = append(got, f.Detail["path"].(string))
 		}
 	}
 	if !slices.Equal(got, []string{"capabilities.network.egress", "capabilities.exec.commands"}) {

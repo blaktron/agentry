@@ -23,7 +23,8 @@
 // name. A mention in a sentence that turns the tool away ("not
 // browser_pdf_save", "never call fetch", "if you have run_command") is not
 // a need, and neither is a list continuing one, nor a paragraph that
-// speaks of a QuickAgent, which describes another package's tools (an
+// speaks of a QuickAgent in the third person ("a QuickAgent", "the
+// QuickAgent's own fetch"), which describes another package's tools (an
 // instruction that drafts or reviews QuickAgents). Words such as
 // "browser" or "fetch the page" in prose are not tool names.
 package toolgrant
@@ -171,8 +172,8 @@ func Table() map[string]Grant {
 	return out
 }
 
-// ToolsOf returns the tools a grant gives, sorted; a browser that may type
-// secrets has every one but browser_evaluate.
+// ToolsOf returns the tools a grant gives, sorted. (A browser that may
+// type secrets is given every one of its tools but browser_evaluate.)
 func ToolsOf(g Grant) []string {
 	var out []string
 	for k, v := range table {
@@ -206,7 +207,9 @@ type Missing struct {
 	// mcp__<server>__ prefix for a runner tool; browser_* or host_* for
 	// a whole family; <server>__<tool> for a declared server's tool.
 	Tool string
-	// Grant is what the tool needs; Path is where the manifest holds it.
+	// Grant is what the tool needs; Path is the manifest line to change:
+	// Grant.Path(), or capabilities.browser.secrets for browser_evaluate,
+	// which a browser that may type secrets is not given.
 	Grant Grant
 	Path  string
 	// Line is the first line, from 1, that names the tool as a need.
@@ -215,46 +218,58 @@ type Missing struct {
 	Reason string
 }
 
+// Bounds on what Check answers, which callers return and record: a name
+// longer than MaxNameBytes is not a tool name, and at most MaxMissing
+// tools are reported.
+const (
+	MaxNameBytes = 80
+	MaxMissing   = 50
+)
+
 // Check returns each tool the instruction calls for that the
 // capabilities do not grant, in the order the instruction first names
-// them. A tool named only where the instruction turns it away is not
-// reported.
+// them, at most MaxMissing. A tool named only where the instruction turns
+// it away is not reported.
 func Check(c manifest.Capabilities, instruction string) []Missing {
 	var out []Missing
 	seen := map[string]bool{}
-	for _, m := range mentions(instruction) {
+	for _, m := range mentions(strings.ReplaceAll(instruction, "\r\n", "\n")) {
 		if m.negated || seen[m.key] {
 			continue
 		}
-		var miss *Missing
-		switch {
-		case m.server != "":
-			if !serverDeclared(c.MCPServers, m.server) {
-				miss = &Missing{Tool: m.key, Grant: GrantMCPServer,
-					Reason: "The instruction calls " + m.key + ", a tool of an MCP server named " + m.server + ", and the manifest declares no such server."}
+		seen[m.key] = true
+		var miss Missing
+		if m.server != "" {
+			if serverDeclared(c.MCPServers, m.server) {
+				continue
 			}
-		default:
+			miss = Missing{Tool: m.key, Grant: GrantMCPServer, Path: GrantMCPServer.Path(),
+				Reason: "The instruction calls " + m.key + ", a tool of an MCP server named " + m.server + ", and the manifest declares no such server."}
+		} else {
 			g := m.grant
-			if !granted(c, g) {
-				miss = &Missing{Tool: m.key, Grant: g,
+			switch {
+			case !granted(c, g):
+				miss = Missing{Tool: m.key, Grant: g, Path: g.Path(),
 					Reason: "The instruction calls " + m.key + ", which only a run with " + g.what() + " has, and the manifest does not declare " + g.Path() + "."}
-			} else if m.key == browserEvaluate && len(c.Browser.Secrets) > 0 {
-				miss = &Missing{Tool: m.key, Grant: g,
-					Reason: "The instruction calls browser_evaluate, which a browser that may type secrets (capabilities.browser.secrets) does not have."}
+			case m.key == browserEvaluate && len(c.Browser.Secrets) > 0:
+				miss = Missing{Tool: m.key, Grant: g, Path: "capabilities.browser.secrets",
+					Reason: "The instruction calls browser_evaluate, which a browser that may type secrets (capabilities.browser.secrets) is not given."}
+			default:
+				continue
 			}
 		}
-		seen[m.key] = true
-		if miss != nil {
-			miss.Path = miss.Grant.Path()
-			miss.Line = m.line
-			out = append(out, *miss)
+		miss.Line = m.line
+		out = append(out, miss)
+		if len(out) == MaxMissing {
+			break
 		}
 	}
 	return out
 }
 
 // granted reports whether the capabilities hold g, as the runner reads
-// them when it builds a run's tools.
+// them when it builds a run's tools. A server's tools are judged by
+// serverDeclared, never here.
 func granted(c manifest.Capabilities, g Grant) bool {
 	switch g {
 	case GrantBrowser:
@@ -393,10 +408,11 @@ func mentions(text string) []mention {
 			if p+1 < len(paras) {
 				end = paras[p+1]
 			}
-			q = quickAgent.MatchString(text[paras[p]:end])
+			q = aboutAQuickAgent(text[paras[p]:end])
 			about[p] = q
 		}
-		out[i].negated = q || turnedAway(text[clauseStart(text, out[i].start):out[i].start])
+		cs := clauseStart(text, out[i].start)
+		out[i].negated = q || turnedAway(text[cs:out[i].start]) || colonTurnsAway(text, cs)
 	}
 	return out
 }
@@ -420,6 +436,9 @@ func isWordByte(b byte) bool {
 // classify reads one token. ok is false for a token that names no tool
 // this package knows.
 func classify(text string, s, e int) (mention, bool) {
+	if e-s > MaxNameBytes {
+		return mention{}, false
+	}
 	t := text[s:e]
 	if g, ok := families[t]; ok {
 		return mention{key: t, grant: g}, true
@@ -514,26 +533,66 @@ func lineBreaksClause(text string, j int) bool {
 // three words before the tool in its clause: do not, never, without,
 // instead of, rather than, avoid, unless, except, and the hedges of a tool
 // the run may lack (if you have, if the run has).
-var turnAway = regexp.MustCompile(`(?i)\b(?:not|never|no|without|avoid|avoiding|unless|except|instead\s+of|rather\s+than|n't|if\s+(?:you|the\s+run|this\s+run|it)\s+(?:have|has))\b`)
+var turnAway = regexp.MustCompile(`(?i)\b(?:not|never|no|without|avoid|avoiding|unless|except|instead\s+of|rather\s+than|if\s+(?:you|the\s+run|this\s+run|it)\s+(?:have|has))\b`)
 
+// turnedAway reads the last three words of the clause before a tool,
+// leaving out list joiners and other tool names, so "do not call fetch or
+// run_command" turns both away.
 func turnedAway(clause string) bool {
-	clause = strings.ReplaceAll(clause, "’", "'")
-	clause = strings.ReplaceAll(clause, "n't", " not")
-	fields := strings.FieldsFunc(clause, func(r rune) bool {
-		return r == ' ' || r == '\t' || r == '\n' || r == '`' || r == '*' || r == '"' || r == '_'
+	all := strings.FieldsFunc(normalizeQuotes(clause), func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '\n' || r == '`' || r == '*' || r == '"' || r == ','
 	})
+	var fields []string
+	for _, f := range all {
+		lf := strings.ToLower(f)
+		if _, tool := table[lf]; tool || lf == "or" || lf == "and" || lf == "nor" {
+			continue
+		}
+		fields = append(fields, f)
+	}
 	if len(fields) > 3 {
 		fields = fields[len(fields)-3:]
 	}
 	return turnAway.MatchString(strings.Join(fields, " "))
 }
 
-// quickAgent is the product's word for a package, which an instruction
-// uses of another package and not of its own run.
-var quickAgent = regexp.MustCompile(`(?i)\bquickagents?\b|\bquickagent['’]s\b`)
+// colonTurnsAway reports whether a clause starting at cs follows a colon
+// that ends a clause turning tools away ("Never use these tools: …").
+func colonTurnsAway(text string, cs int) bool {
+	if cs == 0 || text[cs-1] != ':' {
+		return false
+	}
+	before := normalizeQuotes(text[clauseStart(text, cs-1) : cs-1])
+	return turnAway.MatchString(before) && toolWord.MatchString(before)
+}
+
+// toolWord marks a clause about using tools.
+var toolWord = regexp.MustCompile(`(?i)\b(?:tools?|use|using|call|calling)\b`)
+
+func normalizeQuotes(s string) string {
+	s = strings.ReplaceAll(s, "’", "'")
+	return strings.ReplaceAll(s, "n't", " not")
+}
+
+// quickAgent is the product's word for a package used of another
+// package: a, the, each or another QuickAgent, or QuickAgents. An
+// instruction that calls its own run a QuickAgent ("you are a QuickAgent",
+// "this QuickAgent") is speaking of itself (selfQuickAgent).
+var (
+	quickAgent     = regexp.MustCompile(`(?i)\b(?:a|an|the|each|every|any|another|other|that)\s+quickagent\b|\bquickagents\b`)
+	selfQuickAgent = regexp.MustCompile(`(?i)\b(?:you\s+are|you['’]re|i\s+am|i['’]m|as)\s+(?:a|an|the)\s+quickagent\b|\bthis\s+quickagent\b`)
+)
+
+// aboutAQuickAgent reports whether a paragraph speaks of another package.
+func aboutAQuickAgent(para string) bool {
+	return quickAgent.MatchString(para) && !selfQuickAgent.MatchString(para)
+}
 
 // listJoin is the text between two tool names in one list: spaces,
-// backticks, commas, slashes, and "or", "and", "nor".
-var listJoin = regexp.MustCompile("(?i)^(?:[\\s`*,/]|\\bor\\b|\\band\\b|\\bnor\\b)*$")
+// backticks, commas, slashes, and "or", "and", "nor", on one line or
+// wrapped onto the next.
+var listJoin = regexp.MustCompile("(?i)^(?:[ \\t\\n`*,/]|\\bor\\b|\\band\\b|\\bnor\\b)*$")
 
-func continuesList(gap string) bool { return listJoin.MatchString(gap) }
+func continuesList(gap string) bool {
+	return !strings.Contains(gap, "\n\n") && listJoin.MatchString(gap)
+}
