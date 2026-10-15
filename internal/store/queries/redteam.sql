@@ -1,5 +1,5 @@
--- §17.5 red-team reports (agentry#67): written by the scheduled job, read
--- by the staff console. Report-only; nothing on the publish path reads it.
+-- Red-team reports: written by the scheduled job, read by the staff console.
+-- Report-only; nothing on the publish path reads it.
 
 -- name: InsertRedTeamReport :one
 INSERT INTO redteam_reports (id, ruleset_semver, bundle_digest, fixtures, cases, evaded, report)

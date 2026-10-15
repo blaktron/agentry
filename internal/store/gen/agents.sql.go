@@ -16,7 +16,7 @@ const countAgentDeleteBlockers = `-- name: CountAgentDeleteBlockers :one
 SELECT
   (SELECT count(*) FROM agent_versions av WHERE av.agent_id = $1)::bigint AS versions,
   -- Versions the pipeline or a reviewer has yet to decide: a tombstone waits
-  -- for them, so nothing is published onto a deleted agent (agentry#942).
+  -- for them, so nothing is published onto a deleted agent.
   (SELECT count(*) FROM agent_versions av3 WHERE av3.agent_id = $1
      AND av3.status IN ('submitted', 'scanning', 'needs_review', 'approved'))::bigint AS versions_in_flight,
   (SELECT count(*) FROM advisories adv WHERE adv.agent_id = $1)::bigint AS advisories,
@@ -30,10 +30,10 @@ type CountAgentDeleteBlockersRow struct {
 	AbuseReports     int64 `json:"abuse_reports"`
 }
 
-// What DELETE /agents/{ns}/{name} must know (§9.2, §4.3, agentry#942).
-// Version rows can never be deleted, so an agent with any is deleted as a
-// tombstone rather than outright. Advisories and abuse reports are trust &
-// safety records: they outlive the author's wish to remove the agent.
+// What DELETE /agents/{ns}/{name} must know. Version rows can never be
+// deleted, so an agent with any is deleted as a tombstone rather than
+// outright. Advisories and abuse reports are trust & safety records: they
+// outlive the author's wish to remove the agent.
 func (q *Queries) CountAgentDeleteBlockers(ctx context.Context, agentID uuid.UUID) (CountAgentDeleteBlockersRow, error) {
 	row := q.db.QueryRow(ctx, countAgentDeleteBlockers, agentID)
 	var i CountAgentDeleteBlockersRow
@@ -50,8 +50,7 @@ const countAgentsInNamespace = `-- name: CountAgentsInNamespace :one
 SELECT count(*) FROM agents WHERE namespace_id = $1 AND deleted_at IS NULL
 `
 
-// A deleted agent's tombstone holds its name, not a place in the quota
-// (agentry#942).
+// A deleted agent's tombstone holds its name, not a place in the quota.
 func (q *Queries) CountAgentsInNamespace(ctx context.Context, namespaceID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countAgentsInNamespace, namespaceID)
 	var count int64
@@ -63,8 +62,8 @@ const countForks = `-- name: CountForks :one
 SELECT count(*) FROM agents WHERE forked_from_agent_id = $1::uuid AND deleted_at IS NULL
 `
 
-// How many forks an agent has: a count only, never which (agentry#943,
-// the plan's invariant 5). A fork deleted as a tombstone is not counted.
+// How many forks an agent has: a count only, never which. A fork deleted as a
+// tombstone is not counted.
 func (q *Queries) CountForks(ctx context.Context, id uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countForks, id)
 	var count int64
@@ -78,11 +77,11 @@ WHERE namespace_id = $1 AND visibility = 'private'
   AND retired_at IS NULL AND deleted_at IS NULL
 `
 
-// The private-agent cap a subscription tier sets (plan subscription-tiers
-// §5.3): what a namespace holds today, so one more can be refused.
-// A retired agent (D13 of plan forks-and-publisher.md) and a deleted one's
-// tombstone are private but put away: neither takes a submission or runs
-// for anyone, so neither holds a place under the cap (agentry#942).
+// The private-agent cap a subscription tier sets: what a namespace holds
+// today, so one more can be refused.
+// A retired agent and a deleted one's tombstone are private but put away:
+// neither takes a submission or runs for anyone, so neither holds a place
+// under the cap.
 func (q *Queries) CountPrivateAgentsInNamespace(ctx context.Context, namespaceID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countPrivateAgentsInNamespace, namespaceID)
 	var count int64
@@ -107,15 +106,14 @@ WHERE a.visibility = 'public'
     $1::text = ''
     OR a.search_tsv @@ websearch_to_tsquery('english', $1::text)
     OR a.name::text % $1::text
-    -- The namespace handle is not in search_tsv (§10.4 weights cover
+    -- The namespace handle is not in search_tsv (the weights cover
     -- name/summary/readme), but "search for acme" finding acme's agents is
-    -- table-stakes for a registry — the pre-FTS CLI stopgap behaved that
-    -- way, and m3-cli.sh publishes into a random namespace and then looks
-    -- itself up by handle.
+    -- table-stakes for a registry, and cli.sh publishes into a random
+    -- namespace and then looks itself up by handle.
     OR h.handle = lower($1::text)::citext
     OR h.handle::text % $1::text
   )
-  -- mode= means "supports this run mode" (DEV-088): one of the array's values.
+  -- mode= means "supports this run mode": one of the array's values.
   AND ($2::text IS NULL OR $2::text = ANY(a.modes))
   -- capability= means "this agent actually asks for it", not merely "the key
   -- is present": a manifest that says ` + "`" + `network: {egress: none}` + "`" + ` serializes
@@ -136,7 +134,7 @@ WHERE a.visibility = 'public'
   AND ($5::boolean = false
        OR (h.kind = 'org' AND EXISTS (SELECT 1 FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL)))
   -- An organization that is suspended or erased is absent everywhere, its
-  -- listings included (agentry#363); one in its decommission hold is read.
+  -- listings included; one in its decommission hold is read.
   AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
 `
 
@@ -149,9 +147,9 @@ type CountSearchAgentsParams struct {
 }
 
 // The number of hits SearchAgents would return for the same predicate before
-// LIMIT/OFFSET (agentry#290), so a client can say "2 of 8" truthfully. The
-// WHERE clause is SearchAgents' verbatim and the two must move together; the
-// installs join is absent because nothing in the predicate reads it.
+// LIMIT/OFFSET, so a client can say "2 of 8" truthfully. The WHERE clause is
+// SearchAgents' verbatim and the two must move together; the installs join is
+// absent because nothing in the predicate reads it.
 func (q *Queries) CountSearchAgents(ctx context.Context, arg CountSearchAgentsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countSearchAgents,
 		arg.Query,
@@ -171,11 +169,11 @@ WHERE agent_id = $1 AND scan_status = 'skipped'
   AND status IN ('published', 'quarantined', 'blocked')
 `
 
-// The versions of an agent that were admitted without a scan and could
-// still be, or return to being, published (M21): published, quarantined
-// or blocked — a reinstate walks the last two back to published. While
-// one stands the agent cannot become public, since only a version that
-// passed the gate is ever public; yanking is what ends it.
+// The versions of an agent that were admitted without a scan and could still
+// be, or return to being, published: published, quarantined or blocked — a
+// reinstate walks the last two back to published. While one stands the agent
+// cannot become public, since only a version that passed the gate is ever
+// public; yanking is what ends it.
 func (q *Queries) CountUnscannedVersionsStanding(ctx context.Context, agentID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countUnscannedVersionsStanding, agentID)
 	var column_1 int64
@@ -260,9 +258,9 @@ type CreateForkAgentParams struct {
 	ForkedBy            *uuid.UUID `json:"forked_by"`
 }
 
-// A fork's row (agentry#943): private, with its origin and the version it
-// was taken from, copying until a worker has copied the repository and
-// submitted the first version.
+// A fork's row: private, with its origin and the version it was taken from,
+// copying until a worker has copied the repository and submitted the first
+// version.
 func (q *Queries) CreateForkAgent(ctx context.Context, arg CreateForkAgentParams) (Agent, error) {
 	row := q.db.QueryRow(ctx, createForkAgent,
 		arg.ID,
@@ -311,7 +309,7 @@ const createRepo = `-- name: CreateRepo :one
 INSERT INTO repos (id) VALUES ($1) RETURNING id, default_branch, size_bytes, last_push_at, created_at
 `
 
-// Agents, repos, and per-agent grants (M2/WG-C; grows in M3).
+// Agents, repos, and per-agent grants.
 func (q *Queries) CreateRepo(ctx context.Context, id uuid.UUID) (Repo, error) {
 	row := q.db.QueryRow(ctx, createRepo, id)
 	var i Repo
@@ -334,8 +332,8 @@ type CreateRepoWithBranchParams struct {
 	DefaultBranch string    `json:"default_branch"`
 }
 
-// A fork's repository row (agentry#943), on the origin's default branch so
-// the copied history keeps its trunk's name.
+// A fork's repository row, on the origin's default branch so the copied
+// history keeps its trunk's name.
 func (q *Queries) CreateRepoWithBranch(ctx context.Context, arg CreateRepoWithBranchParams) (Repo, error) {
 	row := q.db.QueryRow(ctx, createRepoWithBranch, arg.ID, arg.DefaultBranch)
 	var i Repo
@@ -527,12 +525,11 @@ type GetAgentByPathRow struct {
 	OriginNamespaceKind      *string     `json:"origin_namespace_kind"`
 }
 
-// A deleted agent's tombstone (agentry#942) is absent from every read path
-// that asks for it by name; include_deleted is the platform staff's door to
-// it, for the trust & safety actions, and the advisories' door for a caller
-// proved to hold a release of it (agentry#949).
-// A fork carries its origin's namespace (the origin's publisher) for the
-// extension seam (agentry#943).
+// A deleted agent's tombstone is absent from every read path that asks for it
+// by name; include_deleted is the platform staff's door to it, for the trust
+// & safety actions, and the advisories' door for a caller proved to hold a
+// release of it. A fork carries its origin's namespace (the origin's
+// publisher) for the extension seam.
 func (q *Queries) GetAgentByPath(ctx context.Context, arg GetAgentByPathParams) (GetAgentByPathRow, error) {
 	row := q.db.QueryRow(ctx, getAgentByPath, arg.Handle, arg.Name, arg.IncludeDeleted)
 	var i GetAgentByPathRow
@@ -609,9 +606,9 @@ type GetAgentForUpdateRow struct {
 	NamespaceKind            string      `json:"namespace_kind"`
 }
 
-// The agent row under the row lock, with its namespace, for a decision
-// that must not race another writer of the row: the flag's refusals and
-// the private → public change (M21), and the gate-skipping edge.
+// The agent row under the row lock, with its namespace, for a decision that
+// must not race another writer of the row: the flag's refusals and the
+// private → public change, and the gate-skipping edge.
 func (q *Queries) GetAgentForUpdate(ctx context.Context, id uuid.UUID) (GetAgentForUpdateRow, error) {
 	row := q.db.QueryRow(ctx, getAgentForUpdate, id)
 	var i GetAgentForUpdateRow
@@ -680,10 +677,9 @@ type GetForkOriginRow struct {
 	OriginPublic    bool   `json:"origin_public"`
 }
 
-// What a fork's read says of its origin (agentry#943): the origin's path and
-// the version the fork was taken from, and whether the origin can still be
-// read by anyone (public, not deleted and not blocked), which is when a
-// page may link it.
+// What a fork's read says of its origin: the origin's path and the version
+// the fork was taken from, and whether the origin can still be read by anyone
+// (public, not deleted and not blocked), which is when a page may link it.
 func (q *Queries) GetForkOrigin(ctx context.Context, id uuid.UUID) (GetForkOriginRow, error) {
 	row := q.db.QueryRow(ctx, getForkOrigin, id)
 	var i GetForkOriginRow
@@ -867,15 +863,13 @@ type ListAgentsByNamespaceRow struct {
 	ForkCount                int64       `json:"fork_count"`
 }
 
-// A suspended or erased organization's agents are absent (agentry#363);
-// the handler answers 404 for the namespace before this runs, and the
-// predicate keeps the listing honest on its own. A deleted agent's
-// tombstone is never listed (agentry#942). The publisher's page searches
-// (query: name and summary, case-folded), filters by state (active,
-// retired; empty is both) and by origin (forks: only, none; empty is both,
-// agentry#943) and sorts (name, newest, installs, submitted —
-// the last submission of any version); the trailing keys keep every
-// ordering total.
+// A suspended or erased organization's agents are absent; the handler answers
+// 404 for the namespace before this runs, and the predicate keeps the listing
+// honest on its own. A deleted agent's tombstone is never listed. The
+// publisher's page searches (query: name and summary, case-folded), filters
+// by state (active, retired; empty is both) and by origin (forks: only, none;
+// empty is both) and sorts (name, newest, installs, submitted — the last
+// submission of any version); the trailing keys keep every ordering total.
 func (q *Queries) ListAgentsByNamespace(ctx context.Context, arg ListAgentsByNamespaceParams) ([]ListAgentsByNamespaceRow, error) {
 	rows, err := q.db.Query(ctx, listAgentsByNamespace,
 		arg.Handle,
@@ -979,9 +973,9 @@ type ListAgentsByTagRow struct {
 	Installs        int64     `json:"installs"`
 }
 
-// GET /tags/{tag} (§9.2): public agents whose LATEST PUBLISHED manifest
-// carries the tag (V8 tags are lowercase [a-z0-9-]). Keyset-paged on
-// (created_at, id) so the cursor is stable across inserts.
+// GET /tags/{tag}: public agents whose LATEST PUBLISHED manifest carries the
+// tag (V8 tags are lowercase [a-z0-9-]). Keyset-paged on (created_at, id) so
+// the cursor is stable across inserts.
 func (q *Queries) ListAgentsByTag(ctx context.Context, arg ListAgentsByTagParams) ([]ListAgentsByTagRow, error) {
 	rows, err := q.db.Query(ctx, listAgentsByTag,
 		arg.Limit,
@@ -1054,10 +1048,10 @@ const lockNamespace = `-- name: LockNamespace :exec
 SELECT id FROM handles WHERE id = $1 FOR UPDATE
 `
 
-// LockNamespace serialises the per-namespace counts — the agent quota and
-// the private-agent cap — inside the transaction that inserts or flips:
-// the count and the write commit together, as the seat cap's do under the
-// org row's lock (agentry#411).
+// LockNamespace serialises the per-namespace counts — the agent quota and the
+// private-agent cap — inside the transaction that inserts or flips: the count
+// and the write commit together, as the seat cap's do under the org row's
+// lock.
 func (q *Queries) LockNamespace(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockNamespace, id)
 	return err
@@ -1081,8 +1075,8 @@ UPDATE agents SET visibility = retired_visibility, retired_at = NULL,
 WHERE id = $1 AND retired_at IS NOT NULL AND deleted_at IS NULL
 `
 
-// Restore (agentry#942): the visibility the agent had when it was retired.
-// The caller has decided, under the row lock, that it may hold it.
+// Restore: the visibility the agent had when it was retired. The caller has
+// decided, under the row lock, that it may hold it.
 func (q *Queries) RestoreAgent(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, restoreAgent, id)
 	if err != nil {
@@ -1097,8 +1091,8 @@ UPDATE agents SET retired_at = now(), retired_visibility = visibility,
 WHERE id = $1 AND retired_at IS NULL AND deleted_at IS NULL
 `
 
-// Retire (agentry#942, D2): private, the visibility it had kept for Restore.
-// Already retired, nothing moves.
+// Retire: private, the visibility it had kept for Restore. Already retired,
+// nothing moves.
 func (q *Queries) RetireAgent(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, retireAgent, id)
 	if err != nil {
@@ -1111,26 +1105,26 @@ const searchAgents = `-- name: SearchAgents :many
 SELECT a.id, a.name, a.modes, a.visibility, a.summary, a.quarantine_state,
        a.created_at, a.builtin, h.handle AS namespace,
        -- The publishing organization's logo key, for the badge beside its
-       -- name on a hit (agentry#367); NULL for a person's namespace.
+       -- name on a hit; NULL for a person's namespace.
        o.logo_object_key,
        coalesce(d.installs, 0)::bigint AS installs,
        ts_rank_cd(a.search_tsv, websearch_to_tsquery('english', $3::text)) AS rank,
-       -- §10.4: relevance × log(1+installs_30d) × recency_decay, as one
-       -- score so the ordering below is a single comparison rather than the
-       -- lexicographic tie-break chain this used to be (which never combined
-       -- the three factors at all — it just fell through from one to the next).
+       -- relevance × log(1+installs_30d) × recency_decay, as one score so
+       -- the ordering below is a single comparison rather than a
+       -- lexicographic tie-break chain (which would never combine the three
+       -- factors at all — it would just fall through from one to the next).
        --
        --   relevance  ts_rank_cd over the weighted tsvector (A name, B
        --              summary, C readme), floored by trigram similarity so a
        --              fuzzy name match does not score zero and vanish. An
        --              empty query scores 1: browsing is not searching, and
        --              every row should then be ordered by popularity × recency.
-       --   popularity 1 + ln(1 + installs_30d). §10.4 writes log(1+installs);
-       --              taken literally that is 0 for a zero-install agent and
+       --   popularity 1 + ln(1 + installs_30d). log(1+installs) taken
+       --              literally is 0 for a zero-install agent and
        --              multiplies its whole score away, burying every new agent
        --              beneath every old one no matter how well it matches.
        --              The leading 1 makes popularity a multiplier of at least
-       --              1 — it can promote, never annihilate. (DEV-030)
+       --              1 — it can promote, never annihilate.
        --   recency    1 / (1 + age_days / 180): half weight at ~6 months.
        --              The catalogue turns over on a scale of seasons, so a
        --              decay measured in days would churn the front page.
@@ -1165,15 +1159,14 @@ WHERE a.visibility = 'public'
     $3::text = ''
     OR a.search_tsv @@ websearch_to_tsquery('english', $3::text)
     OR a.name::text % $3::text
-    -- The namespace handle is not in search_tsv (§10.4 weights cover
+    -- The namespace handle is not in search_tsv (the weights cover
     -- name/summary/readme), but "search for acme" finding acme's agents is
-    -- table-stakes for a registry — the pre-FTS CLI stopgap behaved that
-    -- way, and m3-cli.sh publishes into a random namespace and then looks
-    -- itself up by handle.
+    -- table-stakes for a registry, and cli.sh publishes into a random
+    -- namespace and then looks itself up by handle.
     OR h.handle = lower($3::text)::citext
     OR h.handle::text % $3::text
   )
-  -- mode= means "supports this run mode" (DEV-088): one of the array's values.
+  -- mode= means "supports this run mode": one of the array's values.
   AND ($4::text IS NULL OR $4::text = ANY(a.modes))
   -- capability= means "this agent actually asks for it", not merely "the key
   -- is present": a manifest that says ` + "`" + `network: {egress: none}` + "`" + ` serializes
@@ -1194,7 +1187,7 @@ WHERE a.visibility = 'public'
   AND ($7::boolean = false
        OR (h.kind = 'org' AND EXISTS (SELECT 1 FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL)))
   -- An organization that is suspended or erased is absent everywhere, its
-  -- listings included (agentry#363); one in its decommission hold is read.
+  -- listings included; one in its decommission hold is read.
   AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
 ORDER BY
   CASE WHEN $8::text = 'installs' THEN coalesce(d.installs, 0) END DESC NULLS LAST,
@@ -1232,12 +1225,12 @@ type SearchAgentsRow struct {
 	Score           float64   `json:"score"`
 }
 
-// Public FTS search (§10.4, D-20): weighted tsvector + trigram fuzzy fallback
-// on name, ranked by relevance × install popularity × recency decay. The
-// §9.2 facets (capability, license, verified) filter on the LATEST PUBLISHED
-// version's manifest/capabilities, so an agent's facets always describe what
-// someone would actually install today. `sort` picks the primary ordering;
-// the trailing keys keep every ordering total (stable pages).
+// Public FTS search: weighted tsvector + trigram fuzzy fallback on name,
+// ranked by relevance × install popularity × recency decay. The facets
+// (capability, license, verified) filter on the LATEST PUBLISHED version's
+// manifest/capabilities, so an agent's facets always describe what someone
+// would actually install today. `sort` picks the primary ordering; the
+// trailing keys keep every ordering total (stable pages).
 func (q *Queries) SearchAgents(ctx context.Context, arg SearchAgentsParams) ([]SearchAgentsRow, error) {
 	rows, err := q.db.Query(ctx, searchAgents,
 		arg.Limit,
@@ -1368,7 +1361,7 @@ type SetAgentNamespaceParams struct {
 	NamespaceID uuid.UUID `json:"namespace_id"`
 }
 
-// Moves an agent between namespaces (§12.7 deletion-with-transfer).
+// Moves an agent between namespaces (deletion with transfer).
 func (q *Queries) SetAgentNamespace(ctx context.Context, arg SetAgentNamespaceParams) error {
 	_, err := q.db.Exec(ctx, setAgentNamespace, arg.ID, arg.NamespaceID)
 	return err
@@ -1398,11 +1391,11 @@ type SetAgentReadmeTextParams struct {
 	ReadmeText string    `json:"readme_text"`
 }
 
-// Denormalizes the published version's README onto the agent so the §10.4
-// weight-C index has something to index (the tsvector trigger fires on this
-// column). Written on publish only: an agent's searchable description should
-// follow what people can actually install, not whatever the last submission
-// happened to contain.
+// Denormalizes the published version's README onto the agent so the weight-C
+// index has something to index (the tsvector trigger fires on this column).
+// Written on publish only: an agent's searchable description should follow
+// what people can actually install, not whatever the last submission happened
+// to contain.
 func (q *Queries) SetAgentReadmeText(ctx context.Context, arg SetAgentReadmeTextParams) error {
 	_, err := q.db.Exec(ctx, setAgentReadmeText, arg.ID, arg.ReadmeText)
 	return err
@@ -1435,8 +1428,8 @@ UPDATE agents SET deleted_at = now(), visibility = 'private',
 WHERE id = $1 AND deleted_at IS NULL
 `
 
-// Delete of an agent with version history (agentry#942, D3): the row stays
-// as a tombstone, private, taking no tag-push submissions.
+// Delete of an agent with version history: the row stays as a tombstone,
+// private, taking no tag-push submissions.
 func (q *Queries) TombstoneAgent(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, tombstoneAgent, id)
 	if err != nil {

@@ -1,11 +1,10 @@
 -- +goose Up
--- The owner role retires; admins hold what owners held (agentry#360, plan
--- organization-subscriptions D14): "there should be no owner role, merely
--- an admin role which can be passed to other users". Every owner becomes
--- an admin; the CHECK constraint stops accepting the old value, so no row
--- can carry it again. security_reviewer stays a valid value — the role
--- survives inside a first-party organization (D20), and whether it may be
--- assigned is the API's rule, not the schema's.
+-- The owner role retires; admins hold what owners held: there is no owner
+-- role, only an admin role that can be passed to other users. Every owner
+-- becomes an admin; the CHECK constraint stops accepting the old value, so no
+-- row can carry it again. security_reviewer stays a valid value — the role
+-- survives inside a first-party organization, and whether it may be assigned
+-- is the API's rule, not the schema's.
 UPDATE memberships SET role = 'admin', updated_at = now() WHERE role = 'owner';
 ALTER TABLE memberships DROP CONSTRAINT memberships_role_check;
 ALTER TABLE memberships

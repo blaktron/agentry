@@ -1,5 +1,5 @@
--- Enterprise features (M6/WG-J): SSO connections, identities, SCIM tokens and
--- SCIM data-plane, webhooks, domain claims, audit exports, enforced-SSO helpers.
+-- Enterprise features: SSO connections, identities, SCIM tokens and SCIM
+-- data-plane, webhooks, domain claims, audit exports, enforced-SSO helpers.
 
 -- ============================ SSO connections ============================
 
@@ -33,8 +33,8 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetSocialIdentity :one
--- Social login (§12.1) has no sso_connection: the subject is namespaced by
--- provider ("google:1234") and unique on its own.
+-- Social login has no sso_connection: the subject is namespaced by provider
+-- ("google:1234") and unique on its own.
 SELECT * FROM identities
 WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1;
 
@@ -113,7 +113,8 @@ SELECT user_id FROM team_members WHERE team_id = $1;
 DELETE FROM team_members WHERE team_id = $1;
 
 -- GetAgentOwnerOrg returns the owning org id when an agent's namespace is an
--- org (webhook fan-out is org-scoped; personal-namespace agents return no row).
+-- org (webhook fan-out is org-scoped; personal-namespace agents return no
+-- row).
 -- name: GetAgentOwnerOrg :one
 SELECT a.namespace_id AS org_id
 FROM agents a JOIN handles h ON h.id = a.namespace_id
@@ -163,7 +164,7 @@ SET attempt = $2, status_code = $3, error = $4, delivered_at = $5, next_retry_at
 WHERE id = $1;
 
 -- name: ListWebhookDeliveries :many
--- Keyset-paged on (created_at, id) so the §9.1 cursor stays stable while new
+-- Keyset-paged on (created_at, id) so the cursor stays stable while new
 -- deliveries land at the head.
 SELECT * FROM webhook_deliveries
 WHERE endpoint_id = $1
@@ -174,7 +175,7 @@ ORDER BY created_at DESC, id DESC
 LIMIT $2;
 
 -- name: CountWebhookEndpoints :one
--- §19: 20 webhook endpoints per org.
+-- At most 20 webhook endpoints per org.
 SELECT count(*)::bigint FROM webhook_endpoints WHERE org_id = $1;
 
 -- ============================ Domain claims ============================
@@ -231,6 +232,6 @@ ORDER BY a.occurred_at ASC, a.id ASC
 LIMIT $2;
 
 -- name: GetSSOConnectionWithOrg :one
--- SAML Single Logout (agentry#62): a session remembers its connection id;
--- the logout path needs the org handle to rebuild the SP.
+-- SAML Single Logout: a session remembers its connection id; the logout path
+-- needs the org handle to rebuild the SP.
 SELECT c.*, h.handle AS org_handle FROM sso_connections c JOIN handles h ON h.id = c.org_id WHERE c.id = $1;

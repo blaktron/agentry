@@ -1,4 +1,4 @@
--- Signing keys and re-attestation (§8.8, agentry#350).
+-- Signing keys and re-attestation.
 
 -- A signer registers its public key at start. Seeing a key again keeps it
 -- current (a rollback to the previous key file is a legitimate rotation
@@ -62,16 +62,16 @@ SET dsse_envelope = jsonb_set(dsse_envelope, '{signatures}', (dsse_envelope->'si
 WHERE id = sqlc.arg('id')
   AND NOT (dsse_envelope->'signatures' @> sqlc.arg('key_match')::jsonb);
 
--- The key the deployment signs with today, for a process that holds no key
--- of its own (the api and git roles, agentry#479): the one registered most
--- recently and not retired. A registration retires every other key, so at
--- most one row qualifies once the signer has started.
+-- The key the deployment signs with today, for a process that holds no key of
+-- its own (the api and git roles): the one registered most recently and not
+-- retired. A registration retires every other key, so at most one row
+-- qualifies once the signer has started.
 -- name: GetActiveSigningKey :one
 SELECT * FROM signing_keys WHERE retired_at IS NULL
 ORDER BY last_seen_at DESC LIMIT 1;
 
 -- The signer stores the ruleset attestation for the bundle it carries at
--- start (agentry#479); a row already there for that digest and key stays.
+-- start; a row already there for that digest and key stays.
 -- name: InsertRulesetAttestation :exec
 INSERT INTO ruleset_attestations (bundle_digest, key_id, dsse_envelope)
 VALUES ($1, $2, $3)

@@ -8,7 +8,7 @@ import (
 )
 
 // An extension's migrations run under their own version table and own
-// their schema; running them twice is a no-op (pkg/extension, DEV-091).
+// their schema; running them twice is a no-op (pkg/extension).
 func TestMigrateExtension(t *testing.T) {
 	url := os.Getenv("AGENTRY_TEST_DATABASE_URL")
 	if url == "" {

@@ -1,8 +1,8 @@
--- Security pipeline persistence (M4/WG-H).
+-- Security pipeline persistence.
 
 -- `inserted` distinguishes a brand-new semver from a re-registration of one
--- we already know: a NEW ruleset semver is what triggers the §8.7 rescan
--- sweep, and every process restart re-registers the bundle it embeds.
+-- we already know: a NEW ruleset semver is what triggers the rescan sweep,
+-- and every process restart re-registers the bundle it embeds.
 -- name: CreateRulesetRelease :one
 INSERT INTO ruleset_releases (id, semver, bundle_digest, notes)
 VALUES ($1, $2, $3, $4)
@@ -19,7 +19,7 @@ SELECT * FROM ruleset_releases WHERE id = $1;
 SELECT * FROM ruleset_releases ORDER BY published_at DESC LIMIT 1;
 
 -- name: ListRulesetReleases :many
--- The staff console's release history (agentry#63), newest first.
+-- The staff console's release history, newest first.
 SELECT * FROM ruleset_releases ORDER BY published_at DESC LIMIT 100;
 
 -- name: CreateScanRun :one
@@ -29,12 +29,11 @@ RETURNING *;
 
 -- judge_prompt_hash is written here rather than at CreateScanRun: the run row
 -- must exist before stages run (stage results reference it), and S5 only
--- reports which rubric version it used once it has run (§8.4.4).
--- The judge's token use is written the same way: known only once S5 ran,
--- NULL when the provider reported none. judge_model is re-stated at finish
--- with the value the report and the attestation carry, so a row created by
--- an earlier binary and resumed after an upgrade ends up agreeing with them
--- (agentry#321).
+-- reports which rubric version it used once it has run. The judge's token use
+-- is written the same way: known only once S5 ran, NULL when the provider
+-- reported none. judge_model is re-stated at finish with the value the report
+-- and the attestation carry, so a row created by an earlier binary and
+-- resumed after an upgrade ends up agreeing with them.
 -- name: FinishScanRun :exec
 UPDATE scan_runs
 SET status = $2, finished_at = now(), report_digest = $3,
@@ -51,8 +50,8 @@ SELECT * FROM scan_runs WHERE id = $1;
 SELECT * FROM scan_runs WHERE version_id = $1 ORDER BY started_at DESC LIMIT 1;
 
 -- name: LatestFinishedScanRunForVersion :one
--- The newest run of a version that has finished, whatever its outcome: what
--- a report describes while a later run is still going (agentry#542).
+-- The newest run of a version that has finished, whatever its outcome: what a
+-- report describes while a later run is still going.
 SELECT * FROM scan_runs WHERE version_id = $1 AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1;
 
 -- name: UpsertStageResult :exec
@@ -85,7 +84,7 @@ SELECT * FROM findings WHERE scan_run_id = $1 ORDER BY scanner, file_path, line_
 -- name: ListDecidedFindings :many
 -- The findings a person has decided on for a version, by scanner, file and
 -- line: every finding of a run that finished before the version's latest
--- approved review. None for a version no person approved (agentry#781).
+-- approved review. None for a version no person approved.
 SELECT DISTINCT f.scanner, coalesce(f.file_path, '')::text AS file_path, coalesce(f.line_start, 0)::int AS line_start
 FROM findings f
 JOIN scan_runs r ON r.id = f.scan_run_id
@@ -126,14 +125,14 @@ SELECT * FROM review_items WHERE version_id = $1 AND state = 'pending';
 
 -- A decision lands only on a pending item: a second reviewer acting on a
 -- stale page gets no row and a conflict, never an overwrite of the first
--- decision (agentry#479 made that reachable: a handed-off approval leaves
--- its version in needs_review for a moment).
+-- decision (a handed-off approval leaves its version in needs_review for a
+-- moment).
 -- name: DecideReviewItem :execrows
 UPDATE review_items SET state = $2, decided_by = $3, decided_at = now(), rationale = $4 WHERE id = $1 AND state = 'pending';
 
--- The gate takes back a pending item whose version a new ruleset published
--- (agentry#772): no person decided, so the item is superseded, not approved.
--- No row when a reviewer decided first.
+-- The gate takes back a pending item whose version a new ruleset published:
+-- no person decided, so the item is superseded, not approved. No row when a
+-- reviewer decided first.
 -- name: SupersedePendingReviewItem :one
 UPDATE review_items SET state = 'superseded', decided_at = now(), rationale = sqlc.arg(rationale)
 WHERE version_id = sqlc.arg(version_id) AND state = 'pending'
@@ -163,12 +162,12 @@ RETURNING *;
 -- name: GetAttestation :one
 SELECT * FROM attestations WHERE version_id = $1;
 
--- A published version with no attestation row is the shape a signing
--- failure after the transition used to leave (agentry#407); the attest
--- sweep signs each from its latest finished scan run.
+-- A published version with no attestation row is the shape a signing failure
+-- after the transition leaves; the attest sweep signs each from its latest
+-- finished scan run.
 -- name: ListPublishedVersionsWithoutAttestation :many
--- A version published without a scan (M21) has no attestation to backfill:
--- it attests nothing, and is left out here as it is by every sweep.
+-- A version published without a scan has no attestation to backfill: it
+-- attests nothing, and is left out here as it is by every sweep.
 SELECT av.*
 FROM agent_versions av
 LEFT JOIN attestations at ON at.version_id = av.id
@@ -191,10 +190,9 @@ RETURNING *;
 SELECT * FROM advisories WHERE agent_id = $1 ORDER BY published_at DESC;
 
 -- name: HoldsRelease :one
--- agentry#949: whether the caller holds a release of the agent, whatever
--- its visibility, retired or deleted state now: an account install of
--- theirs names it, or a version of it that was ever published has the
--- archive digest they present.
+-- Whether the caller holds a release of the agent, whatever its visibility,
+-- retired or deleted state now: an account install of theirs names it, or a
+-- version of it that was ever published has the archive digest they present.
 SELECT (EXISTS (SELECT 1 FROM account_installs ai
                 WHERE ai.agent_id = sqlc.arg(agent_id)::uuid AND ai.user_id = sqlc.narg(user_id)::uuid)
      OR EXISTS (SELECT 1 FROM agent_versions av
@@ -202,9 +200,9 @@ SELECT (EXISTS (SELECT 1 FROM account_installs ai
                   AND av.archive_digest = sqlc.narg(digest)::text))::boolean AS holds;
 
 -- name: ListAdvisoriesFeed :many
--- The global feed (agentry#24): published advisories against PUBLIC agents,
--- newest first, keyset-paged on (published_at, id) so the cursor is stable
--- while new advisories arrive at the head.
+-- The global feed: published advisories against PUBLIC agents, newest first,
+-- keyset-paged on (published_at, id) so the cursor is stable while new
+-- advisories arrive at the head.
 SELECT adv.*, h.handle AS namespace, a.name AS agent_name
 FROM advisories adv
 JOIN agents a ON a.id = adv.agent_id
@@ -216,7 +214,7 @@ ORDER BY adv.published_at DESC, adv.id DESC
 LIMIT $1;
 
 -- name: GetAdvisoryPublic :one
--- Permalink (agentry#24): only advisories against public agents resolve.
+-- Permalink: only advisories against public agents resolve.
 SELECT adv.*, h.handle AS namespace, a.name AS agent_name
 FROM advisories adv
 JOIN agents a ON a.id = adv.agent_id
@@ -229,9 +227,9 @@ WHERE adv.id = $1 AND a.visibility = 'public' AND adv.published_at IS NOT NULL;
 -- sweep action changes.
 -- name: ListPublishedVersionsForRescan :many
 -- A version published without a scan, and every version of an agent whose
--- administrator has set pipeline_skip, is not rescanned (M21): a rescan
--- would put a report on a version whose verdict is "unscanned", and the
--- flag says the organization has taken the pipeline off this agent.
+-- administrator has set pipeline_skip, is not rescanned: a rescan would put a
+-- report on a version whose verdict is "unscanned", and the flag says the
+-- organization has taken the pipeline off this agent.
 SELECT av.id, av.agent_id, av.archive_digest, av.archive_key, av.archive_size, av.manifest, av.capabilities, a.modes, a.visibility
 FROM agent_versions av JOIN agents a ON a.id = av.agent_id
 WHERE av.status = 'published'
@@ -241,12 +239,12 @@ ORDER BY av.id DESC
 LIMIT $1;
 
 -- name: ListHeldVersionsForRedo :many
--- The review queue a new ruleset redoes (agentry#772): versions in
--- needs_review whose item is still pending (no person has decided), that
--- no finished run of this ruleset has judged yet. The last condition makes
--- the redo idempotent: a redelivered job, or a second start on the same
--- ruleset, finds nothing. Unscanned versions and pipeline_skip agents are
--- left out, as from the catalogue sweep.
+-- The review queue a new ruleset redoes: versions in needs_review whose item
+-- is still pending (no person has decided), that no finished run of this
+-- ruleset has judged yet. The last condition makes the redo idempotent: a
+-- redelivered job, or a second start on the same ruleset, finds nothing.
+-- Unscanned versions and pipeline_skip agents are left out, as from the
+-- catalogue sweep.
 SELECT av.id
 FROM agent_versions av JOIN agents a ON a.id = av.agent_id
 WHERE av.status = 'needs_review'
@@ -259,8 +257,8 @@ WHERE av.status = 'needs_review'
 ORDER BY av.id DESC
 LIMIT sqlc.arg(row_limit);
 
--- Versions stuck mid-scan past the §7 30-minute cap. The watchdog routes
--- these to review: a scan job that died terminally must never leave a version
+-- Versions stuck mid-scan past the 30-minute cap. The watchdog routes these
+-- to review: a scan job that died terminally must never leave a version
 -- parked in `scanning` forever.
 -- name: ListStuckScanningVersions :many
 SELECT * FROM agent_versions
@@ -269,9 +267,9 @@ ORDER BY updated_at
 LIMIT $2;
 
 -- name: ListStuckSubmittedVersions :many
--- A git-tag submission recorded by a role that hands the archive write to
--- a worker (agentry#508) stays `submitted` until the worker stores it; one
--- still there past the cap was never stored.
+-- A git-tag submission recorded by a role that hands the archive write to a
+-- worker stays `submitted` until the worker stores it; one still there past
+-- the cap was never stored.
 SELECT * FROM agent_versions
 WHERE status = 'submitted' AND source = 'git-tag' AND updated_at < $1
 ORDER BY updated_at
@@ -280,10 +278,10 @@ LIMIT $2;
 -- name: ListStageResults :many
 SELECT * FROM scan_stage_results WHERE scan_run_id = $1;
 
--- An interrupted run is resumed only under the ruleset it was started with:
--- a run of an older ruleset carries that ruleset's findings and policy
--- snapshot, and a new ruleset's scan resuming it would judge a mix of two
--- (agentry#772). Such a run is left as it is; the new scan starts afresh.
+-- An interrupted run is resumed only under the ruleset it was started with: a
+-- run of an older ruleset carries that ruleset's findings and policy
+-- snapshot, and a new ruleset's scan resuming it would judge a mix of two.
+-- Such a run is left as it is; the new scan starts afresh.
 -- name: RunningScanRunForVersion :one
 SELECT * FROM scan_runs
 WHERE version_id = $1 AND trigger = $2 AND status = 'running'
@@ -327,8 +325,8 @@ SELECT count(*) FROM agent_versions
 WHERE submitted_by = $1 AND created_at >= now() - interval '7 days';
 
 -- name: CountIPClusterSubmissions :one
--- S8's cluster axis (agentry#27): how many distinct accounts and how many
--- versions share this submitting-address hash in the last 24 hours.
+-- S8's cluster axis: how many distinct accounts and how many versions share
+-- this submitting-address hash in the last 24 hours.
 SELECT count(DISTINCT submitted_by)::bigint AS accounts, count(*)::bigint AS versions
 FROM agent_versions
 WHERE submitter_ip_hash = $1 AND created_at >= now() - interval '24 hours';
@@ -358,10 +356,10 @@ SELECT * FROM abuse_reports WHERE id = $1;
 -- name: TriageAbuseReport :exec
 UPDATE abuse_reports SET state = $2, triaged_by = $3, triaged_at = now(), resolution = $4 WHERE id = $1;
 
--- Approvals a keyless role handed to the worker (agentry#479) whose version
--- has not been published yet: marked publish_pending, still approved, the
--- version still in needs_review. The same conditions PublishApproved
--- checks; the watchdog publishes them, so a lost enqueue delays a publish.
+-- Approvals a keyless role handed to the worker whose version has not been
+-- published yet: marked publish_pending, still approved, the version still in
+-- needs_review. The same conditions PublishApproved checks; the watchdog
+-- publishes them, so a lost enqueue delays a publish.
 -- name: ListApprovedReviewsAwaitingPublish :many
 SELECT ri.id FROM review_items ri
 JOIN agent_versions v ON v.id = ri.version_id

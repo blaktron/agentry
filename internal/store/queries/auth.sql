@@ -1,4 +1,4 @@
--- PATs and sessions (M1/WG-B, D-22, D-23).
+-- PATs and sessions.
 
 -- name: CreatePAT :one
 INSERT INTO pats (id, user_id, name, token_sha256, token_prefix, scopes, org_id, expires_at)
@@ -43,7 +43,7 @@ UPDATE sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL;
 -- name: RevokeUserSessions :execrows
 UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL;
 
--- SAML Single Logout (§12.4, agentry#62).
+-- SAML Single Logout.
 
 -- name: CreateSAMLSession :one
 INSERT INTO sessions (id, token_sha256, user_id, csrf_token, ip, user_agent, expires_at,
@@ -60,6 +60,5 @@ WHERE sso_connection_id = $1 AND saml_name_id = $2 AND revoked_at IS NULL
   AND (sqlc.narg('saml_session_index')::text IS NULL OR saml_session_index = sqlc.narg('saml_session_index')::text);
 
 -- name: RevokeAllPATsForUser :execrows
--- Clear-data (agentry#498): every live token the user holds, org-bound ones
--- included.
+-- Clear-data: every live token the user holds, org-bound ones included.
 UPDATE pats SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL;

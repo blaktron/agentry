@@ -1,19 +1,18 @@
 -- +goose Up
--- Membership is a state, not only a role (agentry#361, plan
--- organization-subscriptions §5.2, D7). A person the IdP provisioned, or the
--- domain folded in (M5), is `pending`: they hold no seat and the
--- organization confers nothing on them until an admin approves them. Every
--- membership that exists today was granted by an admin, which is what
--- `active` means, so the default backfills them correctly.
+-- Membership is a state, not only a role. A person the IdP provisioned, or
+-- the domain folded in, is `pending`: they hold no seat and the organization
+-- confers nothing on them until an admin approves them. Every membership that
+-- exists today was granted by an admin, which is what `active` means, so the
+-- default backfills them correctly.
 ALTER TABLE memberships
   ADD COLUMN state text NOT NULL DEFAULT 'active' CHECK (state IN ('pending','active'));
 CREATE INDEX memberships_org_state_idx ON memberships (org_id, state);
 
 -- An invitation is a credential, not a record: the token is stored only as
 -- its SHA-256, shown once at creation, single-use, bound to the invited
--- address and expiring in seven days. It reserves its seat from the moment
--- it is sent (plan §4 "Seats"), so the seat wall is met by the admin who
--- invites rather than by the person who accepts.
+-- address and expiring in seven days. It reserves its seat from the moment it
+-- is sent, so the seat wall is met by the admin who invites rather than by
+-- the person who accepts.
 CREATE TABLE org_invitations (
   id           uuid PRIMARY KEY,
   org_id       uuid NOT NULL REFERENCES orgs(id),

@@ -1,4 +1,4 @@
--- MCP server vulnerability scanning (agentry#177, DEV-090).
+-- MCP server vulnerability scanning.
 
 -- name: GetMCPServerScan :one
 SELECT * FROM mcp_server_scans WHERE ecosystem = $1 AND package = $2 AND version = $3;
@@ -27,8 +27,8 @@ ON CONFLICT DO NOTHING;
 
 -- name: ListPublishedVersionsUsingMCPServer :many
 -- The MCP sweep leaves out a version published without a scan and every
--- version of an agent with pipeline_skip set (M21): no alert is opened on
--- what the organization chose not to have scanned.
+-- version of an agent with pipeline_skip set: no alert is opened on what the
+-- organization chose not to have scanned.
 SELECT v.* FROM agent_versions v
 JOIN agent_version_mcp_servers m ON m.version_id = v.id
 JOIN agents a ON a.id = v.agent_id
