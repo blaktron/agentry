@@ -9,7 +9,7 @@ import (
 )
 
 // TestAnUploadKeepsItsClaimedDraftAsAClaim: an upload may name the hosted
-// draft it was published from (plan drafter-revisions.md §6; agentry#794).
+// draft it was published from.
 // The registry keeps the id as a claim and nothing more: the version is a
 // cli-upload, and a core registry, which has no DraftProvenance, never
 // makes it a drafter-revision. A draftRun that is not an id is refused

@@ -28,8 +28,8 @@ type InsertRedTeamReportParams struct {
 	Report        []byte    `json:"report"`
 }
 
-// §17.5 red-team reports (agentry#67): written by the scheduled job, read
-// by the staff console. Report-only; nothing on the publish path reads it.
+// Red-team reports: written by the scheduled job, read by the staff console.
+// Report-only; nothing on the publish path reads it.
 func (q *Queries) InsertRedTeamReport(ctx context.Context, arg InsertRedTeamReportParams) (RedteamReport, error) {
 	row := q.db.QueryRow(ctx, insertRedTeamReport,
 		arg.ID,

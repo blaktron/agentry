@@ -1,6 +1,6 @@
 package scan
 
-// Outcome is the gate decision (§8.5).
+// Outcome is the gate decision.
 type Outcome string
 
 // Gate outcomes map onto registry state-machine targets.
@@ -17,22 +17,22 @@ type GateInput struct {
 	// Policy is the effective (merged) policy.
 	Policy Policy
 	// JudgeForcesReview is true when the judge provider requires human
-	// review regardless of scores (the `none` provider, §8.4.6) or a stage
+	// review regardless of scores (the `none` provider) or a stage
 	// failed closed.
 	JudgeForcesReview bool
 	// DeclaredCapabilities are the manifest's declared capability tokens
 	// (for policy whenCapabilities and wildcard-egress checks).
 	DeclaredCapabilities map[string]bool
 	// WildcardEgress is true when the manifest asks for the network
-	// without naming where: "*" egress, or since agentry#1134 a browser
+	// without naming where: "*" egress, or a browser
 	// whose scope is any public site (unrestrictedNetwork).
 	WildcardEgress bool
-	// Public marks a public agent (platform review queue for high, §8.6).
+	// Public marks a public agent (platform review queue for high).
 	Public bool
 	// NamespaceIsOrg marks an agent in an ORG namespace. Only those have an
 	// org queue and an org security_reviewer to staff it; a personal-namespace
 	// agent routed to "org" produces a review item with no org, which no
-	// listing shows and no principal can decide (§8.6).
+	// listing shows and no principal can decide.
 	NamespaceIsOrg bool
 }
 
@@ -64,12 +64,12 @@ const (
 	branchOverThreshold        = "over-threshold"
 )
 
-// Evaluate applies the §8.5 gate under the effective policy (§8.6). Pure
+// Evaluate applies the gate under the effective policy. Pure
 // function: findings + policy → decision. This is the fail-closed heart of
 // the pipeline; the property tests pin that nothing reaches Publish that
 // shouldn't.
 func Evaluate(in GateInput) GateDecision {
-	// Worst finding at confidence ≥ medium gates (§8.5: low-confidence
+	// Worst finding at confidence ≥ medium gates (low-confidence
 	// findings never gate alone; they surface to reviewers).
 	worst := SevInfo
 	var worstFinding *Finding
@@ -84,13 +84,13 @@ func Evaluate(in GateInput) GateDecision {
 		}
 	}
 
-	// Critical (or S1 structural) ⇒ auto-reject (§8.5).
+	// Critical (or S1 structural) ⇒ auto-reject.
 	if worst == SevCritical {
 		return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst, branch: branchCritical,
 			Reason: "The gate rejected this version for a critical finding (" + titleOf(worstFinding) + ")."}
 	}
 
-	// Wildcard egress policy (§8.6).
+	// Wildcard egress policy.
 	if in.WildcardEgress {
 		switch in.Policy.WildcardEgress {
 		case "reject":
@@ -101,13 +101,13 @@ func Evaluate(in GateInput) GateDecision {
 		}
 	}
 
-	// Judge/stage forced review (§8.4.6, fail-closed).
+	// Judge/stage forced review (fail-closed).
 	if in.JudgeForcesReview {
 		return review(in, maxSev(worst, SevMedium), branchForcedReview, "No automated judge ran, or a stage failed closed, so the gate sent this version to human review.")
 	}
 
 	// Content a stage could not read forces review whatever the threshold
-	// (§7 fail toward review): the finding is medium, and a threshold at
+	// (fail toward review): the finding is medium, and a threshold at
 	// medium would otherwise publish what no scanner examined.
 	if f := couldNotScan(in.Findings); f != nil {
 		return review(in, maxSev(worst, SevMedium), branchCouldNotScan, "Part of this version could not be scanned ("+f.Title+"), so the gate sent it to human review.")
@@ -125,9 +125,9 @@ func Evaluate(in GateInput) GateDecision {
 		}
 	}
 
-	// Severity table (§8.5), tightened by maxAutoPublishSeverity. A policy
-	// that names no threshold gets the ruleset's baseline (medium since
-	// 0.3.0): low and medium publish with their findings shown, high goes
+	// Severity table, tightened by maxAutoPublishSeverity. A policy
+	// that names no threshold gets the ruleset's baseline (medium):
+	// low and medium publish with their findings shown, high goes
 	// to a person.
 	maxAuto, _ := severityByName(baselineMaxAuto())
 	if s, ok := severityByName(in.Policy.MaxAutoPublishSeverity); ok {
@@ -142,11 +142,10 @@ func Evaluate(in GateInput) GateDecision {
 }
 
 // couldNotScanScanners are the findings that say a stage could not read
-// part of the package (D5 of plans/scan-and-run-tweaks.md). They keep their
+// part of the package. They keep their
 // medium severity and force review as a stage error does. S7/osv-no-data,
 // a declared server the advisory scan has no data for, is not one of them:
-// the operator decided that a lookup with no answer is reported and
-// publishes (D3).
+// a lookup with no answer is reported and publishes.
 var couldNotScanScanners = map[string]bool{
 	scannerUnreadableFile:                   true,
 	scannerTextTruncated:                    true,
@@ -166,7 +165,7 @@ func couldNotScan(findings []Finding) *Finding {
 	return nil
 }
 
-// review routes a needs_review decision to a queue (§8.6): the org queue for
+// review routes a needs_review decision to a queue: the org queue for
 // org-namespace agents, the platform queue for everything else — public
 // agents with high findings, all T&S matters, and every personal-namespace
 // agent, which has no org reviewer to hand it to.

@@ -25,7 +25,7 @@ type ConsumeSAMLAssertionParams struct {
 }
 
 // SAML shared state: the consumed-assertion replay set and the
-// outstanding-AuthnRequest tracker, shared by every API replica (agentry#414).
+// outstanding-AuthnRequest tracker, shared by every API replica.
 // Records the assertion id, or renews a row whose recorded expiry has
 // passed; a live row stays as it is, and the zero rows affected then say
 // the assertion was seen before. Two replicas presenting one id

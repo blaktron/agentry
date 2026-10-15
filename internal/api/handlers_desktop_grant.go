@@ -14,13 +14,13 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// The desktop app's browser sign-in, hardened (agentry#19, DEV-058 / D-015).
+// The desktop app's browser sign-in, hardened.
 //
-// Before: the site's authorize form minted a PAT and 303'd it to the
-// app's loopback listener as ?token=…, which left the token in the browser's
-// history. Now the form records a GRANT — a single-use code bound to the
-// app's state nonce, valid for desktopGrantTTL — and the app exchanges the
-// code from its own process. The PAT is minted at exchange time, so nothing
+// The site's authorize form records a GRANT — a single-use code bound to
+// the app's state nonce, valid for desktopGrantTTL — and the app exchanges
+// the code from its own process. Handing the PAT itself to the app's
+// loopback listener as ?token=… would leave the token in the browser's
+// history. The PAT is minted at exchange time, so nothing
 // token-shaped is ever stored or placed in a URL, and a code read from
 // history later is already consumed or expired. This is the RFC 8252 §7.3
 // loopback shape with a code exchange in place of the implicit token.

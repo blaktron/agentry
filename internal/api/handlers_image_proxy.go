@@ -22,8 +22,8 @@ import (
 	"github.com/blaktron/agentry/internal/webhook"
 )
 
-// Camo-style image proxy (§10.3 "images proxied and re-encoded so no visitor
-// browser makes a third-party request"; DEV-049.1 → agentry#64).
+// Camo-style image proxy: images are proxied and re-encoded so no visitor
+// browser makes a third-party request.
 //
 //   - The renderer rewrites absolute image URLs in READMEs to
 //     /api/v1/img/<sig>/<ref>: ref is the base64url URL, sig an HMAC over it
@@ -44,11 +44,11 @@ const (
 
 // newImgProxyKey derives the proxy's signing key. The signature is the
 // route's only gate, so the key must never be a value the open-source tree
-// gives away: with a sealing key it is derived from that, as before; with
+// gives away: with a sealing key it is derived from that; with
 // none — which only dev mode permits, the sealer having refused to start
-// otherwise — it is a random per-process key. It used to be
-// sha256("img-proxy:") in that case, and anyone could sign any destination
-// (security review 2026-09-20 §5.1). Signatures are minted at render time
+// otherwise — it is a random per-process key, because a fixed key such as
+// sha256("img-proxy:") would let anyone sign any destination. Signatures
+// are minted at render time
 // and never stored, so a key that changes at restart costs at most a
 // cached page's images until the edge revalidates.
 func newImgProxyKey(sealingKey string) []byte {
@@ -186,11 +186,11 @@ var (
 
 // reencodeRaster decodes body with the standard library and encodes it
 // again from the decoded pixels, so the bytes a browser receives were
-// written by this process and never by whoever supplied the upload
-// (§10.3; DEV-049.1). The image proxy and the organization logo
-// (agentry#367) share it: one path, one set of refusals. The format is
+// written by this process and never by whoever supplied the upload.
+// The image proxy and the organization logo share it: one path, one set
+// of refusals. The format is
 // what the bytes are, not what a header or a file name claimed. The report
-// design's logo (agentry#1025) has its own, pkg/reportdesign's
+// design's logo has its own, pkg/reportdesign's
 // NormalizeLogo, which the CLI and the desktop import too and which always
 // writes PNG, scaled to fit.
 func reencodeRaster(body []byte, admit rasterFormats) ([]byte, string, error) {

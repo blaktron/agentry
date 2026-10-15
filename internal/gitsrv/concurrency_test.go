@@ -1,11 +1,11 @@
 package gitsrv_test
 
-// §19's per-address budget of concurrent git operations, through the real
+// The per-address budget of concurrent git operations, through the real
 // smart-HTTP transport and the api middleware that resolves the client
-// address (agentry#454). The finding was starvation of *other* callers, so
-// each test holds one address at its budget and asks what a second address
-// gets; and a budget keyed on a header the client writes would be worse than
-// none, so the untrusted case checks that X-Forwarded-For buys nothing.
+// address. The risk is starvation of *other* callers, so each test holds
+// one address at its budget and asks what a second address gets; and a
+// budget keyed on a header the client writes would be worse than none, so
+// the untrusted case checks that X-Forwarded-For buys nothing.
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 // It waits on the server's own count rather than on a request from the same
 // address: such a probe holds that address's slot while it runs, so with a
 // budget of one it could refuse the operation being held, after which every
-// probe was served and the test failed on a correct server (agentry#562).
+// probe was served and the test failed on a correct server.
 func (e *gitEnv) holdUploadPack(t *testing.T, repo, addr, key string) (release func()) {
 	t.Helper()
 	pr, pw := io.Pipe()

@@ -2,10 +2,9 @@
 
 Two registry routes serve work that feeds a model text from outside: the
 Drafter (the built-in package that drafts a QuickAgent from a person's
-description) and, since agentry-cli#321, a hosted run's input files
+description) and a hosted run's input files
 ([AI Review of a run's inputs](hosted-runs.md#ai-review-of-a-runs-inputs)). Both push text to
-the registry rather than holding a key of their own (agentry#608; plan
-`builder-rework.md` D20–D25):
+the registry rather than holding a key of their own:
 
 - `POST /api/v1/model-input/scan` asks the deployment's judge whether a
   text an AI agent is about to read tries to steer it, and answers with a
@@ -15,8 +14,7 @@ the registry rather than holding a key of their own (agentry#608; plan
   the same way before returning it.
 - `POST /api/v1/model-input/check` reads a finished draft's package the
   way AI Review will at publish, and asks whether the draft does the task
-  it was drafted for, so the person knows before Submit (agentry#708; plan
-  `builder-simplify.md` D6). See [the check of a finished draft](#the-check-of-a-finished-draft).
+  it was drafted for, so the person knows before Submit. See [the check of a finished draft](#the-check-of-a-finished-draft).
 
 This is not the publication scan. A release is still scanned at
 publication, by the pipeline (S1–S10), whatever these routes said about
@@ -89,8 +87,7 @@ A flag wins over a chunk that was not scanned. The answer carries each
 chunk's scores (or its failure, `timeout` or `judge-error`), the flagged
 questions, the pinned model, the question set's hash and `usage`, the
 judge's requests and input tokens. `usage` is for the record. It is never
-a price: AI Review is charged per operation, however many scans it makes
-(DEV-150).
+a price: AI Review is charged per operation, however many scans it makes.
 
 The question set was benched before anything used it, on hostile pages
 (instructions in comments, hidden text, encoded, invisible and
@@ -98,8 +95,7 @@ tag-character payloads, fake tool calls, exfiltration through links) and
 benign ones (install guides, API references with example keys, an article
 that quotes an injection, an `AGENTS.md`, an `llms.txt`). The corpus is
 `pkg/judge/testdata/model-input-bench`, the bench is `TestModelInputBench`
-(it needs `AGENTRY_JUDGE_BENCH=1` and a Jev key), and the readings are in
-the engineering record's `measurements/model-input-bench.md`. A bench
+(it needs `AGENTRY_JUDGE_BENCH=1` and a Jev key). A bench
 bounds what it measured, not what it did not: a sufficiently novel
 injection can pass this scan as it can pass the publication scan.
 
@@ -161,8 +157,7 @@ The check has two halves, both asked of the deployment's Jev with its key:
   score of 2 or more is a flag. The question was benched on the Drafter's
   ten fixture drafts and fifty broken variants of them before anything
   used it (`pkg/draftcheck` `TestDraftBench`, which needs
-  `AGENTRY_JUDGE_BENCH=1` and a Jev key; the readings are the engineering
-  record's `measurements/draft-check-bench.md`). A draft made for another
+  `AGENTRY_JUDGE_BENCH=1` and a Jev key). A draft made for another
   task scored 0.96 or more and a good draft 0.18 at most. It also flags
   only three or four in ten drafts that leave out one part of the task, so
   a pass does not mean the draft does all of it. Two more questions were
@@ -175,8 +170,7 @@ what the runner gives every run, so an instruction that reads its own
 inputs and writes its report is not read as needing more than it
 declares. On the Drafter's ten fixture drafts it draws no finding, a
 result of wordings tuned on those same drafts and checked against the
-attack corpus (agentry#731; the readings are the engineering record's
-`measurements/draft-check-bench.md`). A draft that is flagged goes to
+attack corpus. A draft that is flagged goes to
 review at publish, not to refusal.
 
 Each half answers `pass`, `flagged` or `not_scanned` on its own. A half
@@ -188,7 +182,7 @@ nothing of the package is rendered into them.
 This is not the publication scan. A submitted version is scanned in full
 by the pipeline, S1 to S10, whatever the check said. `usage` counts both
 halves' requests and tokens for the record; AI Review is still one credit
-for a whole draft (DEV-150). `pkg/draftcheck` is the check as a package,
+for a whole draft. `pkg/draftcheck` is the check as a package,
 so the CLI checks a local draft with the person's own key and asks what
 the registry asks.
 
@@ -206,7 +200,7 @@ The search needs a provider:
 
 | Variable | Meaning |
 |---|---|
-| `AGENTRY_WEB_SEARCH_PROVIDER` | `none` (the default: `503 web-search-unavailable`), `youcom` (You.com's Web Search API), `brave` (Brave's LLM Context API: page chunks extracted for a model, read from its `grounding.generic` results; a query past Brave's 75 words or 600 bytes is searched on its opening words), `tavily` (Tavily's Search API at its basic depth), `exa` (Exa's search, each result's highlights as its snippet) or `perplexity` (Perplexity's Search API, not its chat completions). These three are there for a person's own key (agentry#783): Tavily's and Exa's terms keep a right to use queries, and Perplexity's published no-training statement covers its chat completions, not this endpoint, so none meets the terms the registry's own choice was held to (DEV-185) |
+| `AGENTRY_WEB_SEARCH_PROVIDER` | `none` (the default: `503 web-search-unavailable`), `youcom` (You.com's Web Search API), `brave` (Brave's LLM Context API: page chunks extracted for a model, read from its `grounding.generic` results; a query past Brave's 75 words or 600 bytes is searched on its opening words), `tavily` (Tavily's Search API at its basic depth), `exa` (Exa's search, each result's highlights as its snippet) or `perplexity` (Perplexity's Search API, not its chat completions). These three are there for a person's own key: Tavily's and Exa's terms keep a right to use queries, and Perplexity's published no-training statement covers its chat completions, not this endpoint, so none meets the terms the registry's own choice was held to |
 | `AGENTRY_WEB_SEARCH_API_KEY` | the provider's key; required with a provider, never logged |
 | `AGENTRY_WEB_SEARCH_BASE_URL` | the provider's API root, for a test double; empty is the provider's own |
 
@@ -254,5 +248,5 @@ reason with the query.
 
 `pkg/judge` is the same client and the same question set, exported, so the
 CLI and the desktop can scan a local draft's inputs with the person's own
-Jev key and ask exactly what the registry asks (D25). `pkg/websearch` is
+Jev key and ask exactly what the registry asks. `pkg/websearch` is
 the provider client, for a person's own search key.

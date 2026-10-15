@@ -1,4 +1,4 @@
--- Append-only audit log (M1/WG-B, §12.6).
+-- Append-only audit log.
 
 -- name: InsertAuditEvent :exec
 INSERT INTO audit_events (id, occurred_at, actor_id, actor_kind, org_id, action, target_kind, target_id, ip, user_agent, detail)
@@ -23,8 +23,8 @@ LIMIT $2;
 SELECT count(*) FROM audit_events WHERE action = $1 AND (org_id = $2 OR $2 IS NULL);
 
 -- name: ListPlatformAuditEvents :many
--- The platform-staff slice: every org plus un-scoped events (§12.6). Same
--- keyset cursor as the org view so one decoder serves both.
+-- The platform-staff slice: every org plus un-scoped events. Same keyset
+-- cursor as the org view so one decoder serves both.
 SELECT a.*, h.handle AS actor_handle
 FROM audit_events a
 LEFT JOIN handles h ON h.id = a.actor_id
@@ -37,10 +37,10 @@ ORDER BY a.occurred_at DESC, a.id DESC
 LIMIT $1;
 
 -- name: ListAgentActivity :many
--- GET /agents/{ns}/{name}/activity (§9.2). Entries targeting the agent
--- itself, plus entries targeting any of its versions (joined so the version
--- string can be surfaced). public_actions, when non-empty, restricts the
--- result to the public-safe subset.
+-- GET /agents/{ns}/{name}/activity. Entries targeting the agent itself, plus
+-- entries targeting any of its versions (joined so the version string can be
+-- surfaced). public_actions, when non-empty, restricts the result to the
+-- public-safe subset.
 SELECT a.id, a.occurred_at, a.action, a.detail, a.target_kind, a.target_id,
        h.handle AS actor_handle, v.version AS version
 FROM audit_events a
@@ -59,17 +59,17 @@ ORDER BY a.occurred_at DESC, a.id DESC
 LIMIT $1;
 
 -- name: PruneAuditPartitions :one
--- §4.3 retention: drop whole monthly partitions older than the cutoff rather
--- than DELETE rows (the append-only trigger refuses row deletes, and dropping
--- a partition is O(1)). Returns the number of partitions dropped.
+-- Retention: drop whole monthly partitions older than the cutoff rather than
+-- DELETE rows (the append-only trigger refuses row deletes, and dropping a
+-- partition is O(1)). Returns the number of partitions dropped.
 SELECT audit_prune_partitions($1::date)::int AS dropped;
 
 -- name: ListUserActivity :many
--- GET /user/activity (agentry#192): the audit events the caller performed —
--- sign-ins, tokens and keys, profile changes, publishes, reviews — newest
--- first, keyset-paged like the agent feed.
--- ip is NULL for an event no request built (an extension's audited action,
--- agentry#324), which the feed shows as no address rather than failing.
+-- GET /user/activity: the audit events the caller performed — sign-ins,
+-- tokens and keys, profile changes, publishes, reviews — newest first,
+-- keyset-paged like the agent feed. ip is NULL for an event no request built
+-- (an extension's audited action), which the feed shows as no address rather
+-- than failing.
 SELECT a.id, a.occurred_at, a.action, a.detail, a.target_kind, a.target_id, a.actor_kind,
        coalesce(host(a.ip), '')::text AS ip, a.user_agent, v.version AS version
 FROM audit_events a
@@ -82,8 +82,8 @@ ORDER BY a.occurred_at DESC, a.id DESC
 LIMIT $1;
 
 -- name: CountAuditActionsByActorSince :one
--- How many times an actor took one action since a moment: the record is
--- the rate limit for an act a person may take once a day (agentry#363,
--- the request for access to their domain's organization).
+-- How many times an actor took one action since a moment: the record is the
+-- rate limit for an act a person may take once a day (the request for access
+-- to their domain's organization).
 SELECT count(*)::bigint FROM audit_events
 WHERE actor_id = $1 AND action = $2 AND occurred_at >= $3;

@@ -1,12 +1,12 @@
 package api_test
 
-// Advisories reach the people who held a QuickAgent (agentry#949): an
+// Advisories reach the people who held a QuickAgent: an
 // advisory published after the agent went private, was retired or was
 // deleted as a tombstone is served by GET /advisories?affecting= to a
 // caller whose account install names the agent, and to any caller who
 // presents the archive digest of a release of it. Everyone else still gets
-// the missing name's 404, and the feed and the permalink stay public-only
-// (DEV-101).
+// the missing name's 404, and the feed and the permalink stay
+// public-only.
 
 import (
 	"context"
@@ -114,7 +114,7 @@ func TestAnAdvisoryReachesWhoeverHeldTheAgentAfterItWentPrivate(t *testing.T) {
 				t.Fatalf("%s: %s: got %d %+v, want the missing name's 404", state, who.label, code, got)
 			}
 		}
-		// The feed and the permalink name no private agent (DEV-101).
+		// The feed and the permalink name no private agent.
 		var feed []struct {
 			Id string `json:"id"`
 		}
@@ -179,7 +179,7 @@ func TestAnAdvisoryReachesWhoeverHeldTheAgentAfterItWentPrivate(t *testing.T) {
 }
 
 // A holder learns nothing a suspended organization's namespace would not
-// tell anyone (agentry#363): the organization's gate answers before the
+// tell anyone: the organization's gate answers before the
 // holder's door.
 func TestASuspendedOrganizationsAgentAnswersHoldersAsAbsent(t *testing.T) {
 	env := newTestEnv(t)

@@ -13,7 +13,7 @@ import (
 	"github.com/blaktron/agentry/pkg/attest"
 )
 
-// Re-attestation (§8.8, agentry#350). A rotation retires the key that
+// Re-attestation. A rotation retires the key that
 // signed every attestation so far; the private key is gone and cannot
 // re-verify anything. What the registry CAN do is vouch for its own record
 // again: each attestation's in-toto statement is the registry's own
@@ -22,7 +22,7 @@ import (
 // design and pkg/attest's VerifyEnvelope accepts any one valid signature, so
 // a client pinning only the new key verifies, and one that pinned the old
 // key keeps verifying — the old signature is never touched. One attestation
-// per version stays true (§7): the statement is signed once, at publish;
+// per version stays true: the statement is signed once, at publish;
 // later signatures are countersignatures over it, not new attestations.
 
 // ReattestSummary reports what a sweep did.

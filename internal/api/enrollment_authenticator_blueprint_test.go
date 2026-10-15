@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Sign-up may skip the authenticator setup (agentry#894, DEV-211): a choice
+// Sign-up may skip the authenticator setup: a choice
 // at order 35, after the account is written, and a policy on the setup's
 // binding at 40 that skips it only on an explicit "later". These pin the
 // settings that decide which way it fails, since a binding policy that fails

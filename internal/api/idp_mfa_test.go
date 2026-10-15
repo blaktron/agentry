@@ -1,7 +1,7 @@
 package api_test
 
-// The directory's `amr` claim is evidence for the §12.1 public-publish gate
-// (agentry#23): a sign-in whose ID token names a second factor stamps
+// The directory's `amr` claim is evidence for the public-publish gate:
+// a sign-in whose ID token names a second factor stamps
 // users.idp_mfa_at; one that names only a password does not; and the gate,
 // when on, accepts the stamp in place of native TOTP.
 

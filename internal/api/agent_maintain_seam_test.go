@@ -9,9 +9,9 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 )
 
-// The agent-maintain seam (agentry#833): an extension asks the core whether
-// a principal may maintain an agent — the hosted revision admits only a
-// maintainer (drafter-revisions R3) — and gets the answer the core's own
+// The agent-maintain seam: an extension asks the core whether
+// a principal may maintain an agent (the hosted revision admits only a
+// maintainer) and gets the answer the core's own
 // routes give: the maintain role over the namespace or a grant, a PAT's
 // org:admin, and the organization's gate for a write. Absent, unreadable,
 // readable-but-not-maintainable and gated are one answer. A probe

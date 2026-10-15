@@ -19,7 +19,7 @@ import (
 
 // archiveArgs are the `git` arguments that make `git archive` ignore every
 // gitattributes source, so a pushed `export-ignore` cannot drop files from a
-// release (§6.5: the manifest allowlist is the only filter).
+// release (the manifest allowlist is the only filter).
 //
 // `git archive` deliberately reads attributes from the tree it is archiving
 // (it unpacks that tree into an in-memory index and points the attribute
@@ -46,12 +46,12 @@ var archiveArgs = []string{
 // archiveEnv is the environment for archive invocations.
 func archiveEnv() []string { return append(os.Environ(), "GIT_ATTR_NOSYSTEM=1") }
 
-// ArchiveTag implements the tar half of §6.5 step 1: `git archive {tag}` from
-// the bare repo — never a working-tree checkout, no hook execution, no
-// gitattributes filtering. The tar is streamed to a temp file (a release tree
-// may be as large as the repo quota; buffering it in RAM would let a push
-// size the server's heap) and the returned ReadCloser removes that file on
-// Close. The second return value is the peeled commit id.
+// ArchiveTag implements the tar half of release publication: `git archive
+// {tag}` from the bare repo — never a working-tree checkout, no hook
+// execution, no gitattributes filtering. The tar is streamed to a temp
+// file (a release tree may be as large as the repo quota; buffering it in
+// RAM would let a push size the server's heap) and the returned ReadCloser
+// removes that file on Close. The second return value is the peeled commit id.
 func (s *RepoStore) ArchiveTag(ctx context.Context, repoID uuid.UUID, tag string) (io.ReadCloser, string, error) {
 	dir := s.Path(repoID)
 	if err := checkNoInfoAttributes(dir); err != nil {
@@ -62,8 +62,7 @@ func (s *RepoStore) ArchiveTag(ctx context.Context, repoID uuid.UUID, tag string
 	// over; git reads a leading dash as an option. Qualified to
 	// refs/tags/<tag> it cannot start with one, and safeRefName keeps it a
 	// plain name — no whitespace, globs or revision syntax — so what
-	// reaches git is a literal ref and nothing else (security review
-	// 2026-09-20 §5.6).
+	// reaches git is a literal ref and nothing else.
 	ref, err := tagRef(tag)
 	if err != nil {
 		return nil, "", err
@@ -90,7 +89,7 @@ var reCommitID = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 // ArchiveCommit is ArchiveTag for a commit already resolved: the worker
 // rebuilds a tag's archive from the commit the git role recorded, so a tag
-// moved in between cannot change what is stored (agentry#508). The commit
+// moved in between cannot change what is stored. The commit
 // must be a full object id naming a commit in the repository.
 func (s *RepoStore) ArchiveCommit(ctx context.Context, repoID uuid.UUID, commit string) (io.ReadCloser, error) {
 	dir := s.Path(repoID)
@@ -153,7 +152,7 @@ func (t *tempFile) Close() error {
 // git offers no way to disable that source, and nothing in agentry writes it
 // (the file is unreachable over the git wire protocol), so its presence means
 // an operator placed attribute rules under the release path — rules that
-// could silently filter the archive §6.5 says only the manifest may filter.
+// could silently filter the archive, which only the manifest may filter.
 func checkNoInfoAttributes(dir string) error {
 	p := filepath.Join(dir, "info", "attributes")
 	st, err := os.Stat(p)
@@ -164,7 +163,7 @@ func checkNoInfoAttributes(dir string) error {
 }
 
 // verifyArchiveComplete asserts the tar holds every blob of the archived
-// commit: the §6.5 invariant ("the manifest allowlist is the only filter")
+// commit: the invariant ("the manifest allowlist is the only filter")
 // checked against the tree itself rather than trusted from git's flags.
 // Submodules are excluded — git archive never descends into a gitlink.
 func (s *RepoStore) verifyArchiveComplete(ctx context.Context, dir, commit string, tarFile *os.File) error {
@@ -230,7 +229,7 @@ var archiveSelfTest sync.Map // gitBin → error
 // installed, that archiveArgs defeat `export-ignore`. It builds a throwaway
 // bare repo whose tree marks a file export-ignore and asserts the file still
 // lands in the tar. Called from NewRepoStore so an unsupported git stops the
-// process at startup instead of silently shipping filtered releases (§6.5).
+// process at startup instead of silently shipping filtered releases.
 func verifyArchiveNeutralizesAttributes(gitBin string) error {
 	if cached, ok := archiveSelfTest.Load(gitBin); ok {
 		err, _ := cached.(error) // stored as a nil interface on success
@@ -305,7 +304,7 @@ func probeArchiveAttributes(gitBin string) error {
 		}
 	}
 	version, _ := run("", "--version")
-	return fmt.Errorf("gitsrv: %s honours export-ignore in `git archive` (%s); §6.5 requires release archives to be filtered by the manifest allowlist only — refusing to start",
+	return fmt.Errorf("gitsrv: %s honours export-ignore in `git archive` (%s); release archives must be filtered by the manifest allowlist only — refusing to start",
 		gitBin, version)
 }
 

@@ -37,7 +37,7 @@ app.kubernetes.io/name: {{ include "agentry.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-{{/* The roles that run under a ServiceAccount of their own (agentry#627):
+{{/* The roles that run under a ServiceAccount of their own:
 serviceaccount.yaml makes one for each, and a Deployment may name no other. */}}
 {{- define "agentry.serviceAccountRoles" -}}
 api worker git
@@ -47,7 +47,7 @@ api worker git
 With serviceAccount.create (the default) each role has its own,
 <fullname>-<role>, so a pod's token names the role presenting it (OpenBao's
 Kubernetes auth binds the encrypt policy to the api's and the decrypt policy
-to the worker's; plan hosted-credentials-vault.md D6). With create: false,
+to the worker's). With create: false,
 every role runs under the one existing account serviceAccount.name. */}}
 {{- define "agentry.serviceAccountName" -}}
 {{- $ctx := .ctx -}}
@@ -83,7 +83,7 @@ truncation never makes two roles' names one. */ -}}
 
 {{/*
   The env of one role's agentryd container: non-secret AGENTRY_* from config
-  plus the secret references that role uses, and nothing more (agentry#744).
+  plus the secret references that role uses, and nothing more.
   Every role holds the database URL and the auth sealing key (config
   validation requires the key outside dev, and git keys its tag-push hash from
   it). The api and the worker also send mail, run account erasure and unwrap
@@ -172,7 +172,7 @@ truncation never makes two roles' names one. */ -}}
 
 {{/*
   One role's extra pod annotations: the chart-wide podAnnotations with the
-  role's own over them (agentry#745), less the chart's checksum/config.
+  role's own over them, less the chart's checksum/config.
   Empty renders nothing, so the pod template is unchanged when neither is set.
   Include with: {{- with include "agentry.podAnnotations" (dict "ctx" . "role" "api") }}{{ . | nindent 8 }}{{ end }}
 */}}
@@ -215,7 +215,7 @@ change; an operator's copy would render the key twice. */ -}}
   /etc/agentry, never under it: the config mount is read-only and a mount
   nested inside it cannot be created.
 
-  The key is the worker's alone (agentry#479, PLAN §13.3): the api and git
+  The key is the worker's alone: the api and git
   roles start without it and never sign, so the pods that terminate
   untrusted traffic hold no private key.
 */}}

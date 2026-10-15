@@ -1,4 +1,4 @@
-"""Terms of Service step acceptance, the directory's half (agentry#788).
+"""Terms of Service step acceptance, the directory's half.
 
 Run by directory-terms.sh inside a container on the same private network as
 a throwaway directory. Stdlib only. It plays the browser through the flow
@@ -10,20 +10,19 @@ test token, which the blueprint's default test keys accept.
            after the form comes the terms step, the file's text and an
            unticked agreement; an unticked submission is refused in the
            policy's words; a ticked one reaches the choice to set up an
-           authenticator now or later, with no mail step (agentry#861), and
-           "now" reaches the setup while "later" skips it to the session
-           (agentry#894). Makes
+           authenticator now or later, with no mail step, and
+           "now" reaches the setup while "later" skips it to the session. Makes
            one account with a blank display name and a mixed-case username,
            and one with a name and a promo code. A username differing from
            an existing one only by case, and a reserved name in capitals,
-           are refused (agentry#856). The form fills in ?username= and
-           ?email= from its page's query (agentry#860). Prints them as JSON.
+           are refused. The form fills in ?username= and
+           ?email= from its page's query. Prints them as JSON.
   missing  the file is gone: the step says the terms could not be loaded,
            and a ticked submission is still refused.
   off      the server names no terms file and registry activation is off:
-           the form leads straight to the confirmation mail (agentry#861).
+           the form leads straight to the confirmation mail.
 
-The accounts are written active but unactivated (agentry#861) and are left
+The accounts are written active but unactivated and are left
 there: the blank-name sign-up stops at the authenticator setup and the
 named one skips it and is signed in. directory-terms.sh reads what was
 written with ak shell.
@@ -43,9 +42,9 @@ VERSION = os.environ.get("TERMS_VERSION", "")
 TEXT = "agentry_terms_text"
 AGREE = "attributes_agentry_terms_accepted"
 CAPTCHA_TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
-# Where sign-up goes after the write since agentry#861, the confirmation
-# mail having left the flow: the choice to set up an authenticator now or
-# later (agentry#894), then the setup unless the answer is later.
+# Where sign-up goes after the write, the confirmation mail having left
+# the flow: the choice to set up an authenticator now or later, then the
+# setup unless the answer is later.
 CHOICE = "agentry_authenticator_choice"
 TOTP = "ak-stage-authenticator-totp"
 
@@ -129,7 +128,7 @@ def on():
         fail(f"the display name's help text is {name.get('sub_text')!r}")
     ok(f"the display name is optional, labelled {name.get('label')!r}, with the help text")
 
-    # The sign-in's "Sign up." links carry what was typed (agentry#860): the
+    # The sign-in's "Sign up." links carry what was typed: the
     # page's ?username= and ?email= fill the form; anything that could not
     # be one is dropped.
     for query, want in (("next=%2Fapplication%2Fo%2Fauthorize%2F&username=ChrisY", ("ChrisY", "")),
@@ -142,7 +141,7 @@ def on():
     ok("the form fills in a username or an address from the page's query, and drops one that could not be either")
 
     made = {}
-    # A mixed-case username (agentry#856): accepted, written lower-cased.
+    # A mixed-case username: accepted, written lower-cased.
     typed = "Dt-" + secrets.token_hex(4).upper()
     user, c = flow.submit_form("", user=typed)
     text, agree = terms_step(c, "a blank display name")
@@ -183,7 +182,7 @@ def on():
     ok("choosing now reaches the authenticator setup, with no mail step to wait at")
 
     # The account above exists now; the same name in another case is taken,
-    # and a reserved name is reserved in capitals too (agentry#856).
+    # and a reserved name is reserved in capitals too.
     for clash, words in ((user.upper(), "already taken"), ("Admin", "reserved")):
         f = Flow()
         f.to_form()
@@ -199,7 +198,7 @@ def on():
     c = flow.step({"component": "ak-stage-prompt", AGREE: "on"})
     choice_step(c, "the named sign-up")
     ok("a sign-up with a display name and a promo code goes through the terms too")
-    # Skipped (agentry#894): no setup, straight through the login to the
+    # Skipped: no setup, straight through the login to the
     # flow's redirect, signed in.
     c = flow.step({"component": "ak-stage-prompt", CHOICE: "later"})
     if c.get("component") != "xak-flow-redirect":

@@ -15,7 +15,7 @@ const deleteUserNotificationSettings = `-- name: DeleteUserNotificationSettings 
 DELETE FROM user_notification_settings WHERE user_id = $1
 `
 
-// Clear-data (agentry#498): no row reads as the defaults.
+// Clear-data: no row reads as the defaults.
 func (q *Queries) DeleteUserNotificationSettings(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteUserNotificationSettings, userID)
 	if err != nil {
@@ -29,7 +29,7 @@ const getUserNotificationSettings = `-- name: GetUserNotificationSettings :one
 SELECT user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, web_dependency_alerts, updated_at, email_billing, email_schedules, email_bug_reports FROM user_notification_settings WHERE user_id = $1
 `
 
-// Notification settings (agentry#190).
+// Notification settings.
 func (q *Queries) GetUserNotificationSettings(ctx context.Context, userID uuid.UUID) (UserNotificationSetting, error) {
 	row := q.db.QueryRow(ctx, getUserNotificationSettings, userID)
 	var i UserNotificationSetting
@@ -56,12 +56,11 @@ WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'a
 ORDER BY m.created_at
 `
 
-// The active administrators of an organization, for a message an
-// extension addresses to "the admins" (agentry#366): active memberships
-// of active accounts only, the same two conditions ListOrgAdminsForMail
-// and the last-admin guard carry — a pending admin holds nothing yet, a
-// suspended one holds nothing any more, and neither is told the
-// organization's business.
+// The active administrators of an organization, for a message an extension
+// addresses to "the admins": active memberships of active accounts only, the
+// same two conditions ListOrgAdminsForMail and the last-admin guard carry — a
+// pending admin holds nothing yet, a suspended one holds nothing any more,
+// and neither is told the organization's business.
 func (q *Queries) ListOrgAdminIDs(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listOrgAdminIDs, orgID)
 	if err != nil {
@@ -112,11 +111,10 @@ type UpsertUserNotificationSettingsParams struct {
 	EmailBugReports       *bool     `json:"email_bug_reports"`
 }
 
-// The billing, schedules and bug-report switches are nullable on the way
-// in (agentry#366, agentry#1002, agentry#1113): a client that predates
-// one omits it, and an omitted switch keeps the row's value — or the
-// default on a first write — in the same statement, so two clients
-// writing at once cannot resurrect a value neither sent.
+// The billing, schedules and bug-report switches are nullable on the way in:
+// a client that predates one omits it, and an omitted switch keeps the row's
+// value — or the default on a first write — in the same statement, so two
+// clients writing at once cannot resurrect a value neither sent.
 func (q *Queries) UpsertUserNotificationSettings(ctx context.Context, arg UpsertUserNotificationSettingsParams) (UserNotificationSetting, error) {
 	row := q.db.QueryRow(ctx, upsertUserNotificationSettings,
 		arg.UserID,

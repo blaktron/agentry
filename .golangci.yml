@@ -1,5 +1,5 @@
-# golangci-lint config (M0 CI gate). Kept intentionally standard; additions
-# need a deviations-register note (agentry-notes) if they relax anything.
+# golangci-lint config (CI gate). Kept intentionally standard; additions
+# should say why if they relax anything.
 version: "2"
 linters:
   default: standard

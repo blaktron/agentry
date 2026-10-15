@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestReadmeRouteCarriesACSP (agentry#413): the README route serves
+// TestReadmeRouteCarriesACSP: the README route serves
 // sanitised HTML as text/html on the API origin, where a session cookie
 // lives. It carries the same policy the image proxy does — nothing loads,
 // nothing runs, sandboxed — so a hole in the sanitiser would have nowhere

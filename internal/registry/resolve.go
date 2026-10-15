@@ -12,13 +12,13 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// Resolution semantics (§5.5, §9.4): ranges resolve over PUBLISHED versions
+// Resolution semantics: ranges resolve over PUBLISHED versions
 // of the requested channel; yanked versions resolve only by exact pin (with
 // a warning flag); quarantined versions never resolve; blocked agents 410
 // at download.
 
-// Ref and ParseRef were promoted to pkg/manifest so the CLI (a separate
-// module) parses references identically; aliases keep internal call sites.
+// Ref and ParseRef live in pkg/manifest so the CLI (a separate module)
+// parses references identically; aliases keep internal call sites.
 type Ref = manifest.Ref
 
 // ParseRef parses "ns/name[@range]" (see manifest.ParseRef).
@@ -33,10 +33,10 @@ type Resolved struct {
 	Yanked  bool
 }
 
-// ErrBlocked reports that trust & safety has disabled the agent (§7).
+// ErrBlocked reports that trust & safety has disabled the agent.
 var ErrBlocked = errors.New("registry: agent blocked by trust & safety")
 
-// ResolveVersion picks the version for a ref within an agent (§9.4 step 1).
+// ResolveVersion picks the version for a ref within an agent.
 func (s *Service) ResolveVersion(ctx context.Context, a Agent, rangeStr, channel string) (Resolved, error) {
 	// A blocked agent resolves to nothing, whatever its version rows say.
 	// Blocking walks the versions too, but this is the check that holds if a
@@ -52,7 +52,7 @@ func (s *Service) ResolveVersion(ctx context.Context, a Agent, rangeStr, channel
 		return Resolved{}, err
 	}
 
-	// Exact pin? Yanked versions stay pinnable with a warning (§5.5).
+	// Exact pin? Yanked versions stay pinnable with a warning.
 	if exact, err := semver.StrictNewVersion(strings.TrimPrefix(rangeStr, "v")); err == nil {
 		for _, row := range rows {
 			if row.Version == exact.String() {

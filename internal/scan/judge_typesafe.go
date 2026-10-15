@@ -10,21 +10,21 @@ import (
 	"github.com/blaktron/agentry/pkg/judge"
 )
 
-// TypeSafeJudge is the `typesafe` provider (plan judge-jev-provider.md,
-// agentry#387, DEV-113): TypeSafe AI's Jev, a typed-decision model behind
+// TypeSafeJudge is the `typesafe` provider:
+// TypeSafe AI's Jev, a typed-decision model behind
 // POST /v1/systemone, asked the six rubric axes as yes/no questions ("Nouls")
 // that answer with a probability. It reads the manifest and every text file
 // of the version, one chunk of one file per request, and takes the highest
 // probability over the chunks as the version's score on each axis.
 //
 // It is not an LLM judge: it returns numbers, no text, so there is nothing
-// in which a manipulated-judge symptom (§8.4.3) could show, and it has no
+// in which a manipulated-judge symptom could show, and it has no
 // temperature or seed, so two identical requests may answer differently.
-// The record compensates (plan D4): the model id is pinned in configuration,
+// The record compensates: the model id is pinned in configuration,
 // checked against every response and in the rubric hash with everything
 // else that changes a verdict; an answer in the borderline band is asked
-// twice more and the maximum is taken, never the mean (PLAN §8.3 S5:
-// disagreement escalates, never averages away), with every sample on the
+// twice more and the maximum is taken, never the mean (disagreement
+// escalates, never averages away), with every sample on the
 // finding for an appeal to read.
 //
 // The question texts are constants. Nothing from the version — not the
@@ -32,9 +32,9 @@ import (
 // the content and the manifest's declared capabilities travel in the
 // request's `state`, the data the questions are asked about, so an
 // attacker-authored manifest can no more rewrite the question than a
-// SKILL.md can (§8.4.1, content is data).
+// SKILL.md can (content is data).
 type TypeSafeJudge struct {
-	// client is the estate's one Jev client (pkg/judge, agentry#608): the
+	// client is the one Jev client (pkg/judge): the
 	// registry's model-input scan and a person's local scan ask through the
 	// same code, so the transport, the retry, the model pin and the key's
 	// redaction are one implementation.
@@ -48,7 +48,7 @@ type TypeSafeJudge struct {
 	// for one chunk — 1 (all six together, the shipped shape), 2 (the
 	// reader-directed axes C1/C3/C5 and the behaviour axes C2/C4/C6) or 6
 	// (one each). Named in the hash; the by-hand corpus check compares the
-	// three (plan D3).
+	// three.
 	batch int
 }
 
@@ -99,11 +99,11 @@ func newTypeSafeJudge(cfg JudgeConfig, retryWait time.Duration) *TypeSafeJudge {
 // PinnedJudgeModel reports whether a judge model id names one version — it
 // carries a dotted number — rather than a moving alias (`jev-latest`,
 // `jev-preview`, a bare family name). Thresholds are calibrated per version
-// and the vendor's aliases move without a changelog (plan D7), so the
+// and the vendor's aliases move without a changelog, so the
 // factory refuses anything else.
 func PinnedJudgeModel(model string) bool { return judge.PinnedModel(model) }
 
-// hash is the rubric hash (§8.4.4) over everything that changes a verdict:
+// hash is the rubric hash over everything that changes a verdict:
 // the model, the axes and their wording, the request shape, the chunk size,
 // the capability bound, the runner's grants, the thresholds, the band and
 // the sample count. It is pkg/judge's (RubricScanner.Hash), which a draft's
@@ -129,12 +129,12 @@ func (j *TypeSafeJudge) Name() string { return "typesafe" }
 func (j *TypeSafeJudge) ModelID() string { return j.model }
 
 // InputLimit implements JudgeProvider: about 50 KB, what Jev's documented
-// 32k-token window takes with the questions and the state around it (plan
-// knowledge.md §4.4). A call is still asked in typesafeChunk pieces.
+// 32k-token window takes with the questions and the state around it.
+// A call is still asked in typesafeChunk pieces.
 func (j *TypeSafeJudge) InputLimit() int { return typesafeInputLimit }
 
 // RequiresHumanReview implements JudgeProvider: the six axes are the rubric,
-// so the verdict follows the §8.5 table like an LLM judge's (plan D3).
+// so the verdict follows the gate's severity table like an LLM judge's.
 func (j *TypeSafeJudge) RequiresHumanReview() bool { return false }
 
 // typesafeAxisResult is one axis's best evidence over the whole version:
@@ -150,7 +150,7 @@ type typesafeAxisResult struct {
 func (j *TypeSafeJudge) Judge(ctx context.Context, content JudgeContent) (JudgeVerdict, error) {
 	axes, usage, err := j.judgeAxes(ctx, content)
 	if err != nil {
-		return JudgeVerdict{}, err // fail closed (§8.4.6)
+		return JudgeVerdict{}, err // fail closed
 	}
 	v := JudgeVerdict{
 		Scores:     map[JudgeCategory]int{},

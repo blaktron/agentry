@@ -10,7 +10,7 @@ import (
 )
 
 // TestAuthentikGroupsAgainstALiveDirectory runs the mirror's directory
-// calls against a real authentik (agentry#598), which the fake in
+// calls against a real authentik, which the fake in
 // staff_mirror_test.go only imitates: the group lookup and its creation,
 // the member listing by group name, the exact address match over
 // authentik's substring filter, add_user and remove_user. It needs a

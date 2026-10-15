@@ -11,7 +11,7 @@ import (
 	"github.com/blaktron/agentry/internal/auth/social"
 )
 
-// The directory reads activation from the registry (agentry#869). The
+// The directory reads activation from the registry. The
 // subject binds the answer to the signed-in identity, and the address must
 // still match: confirmation of an old address never confirms a replacement.
 func (s *Server) directoryEmailVerification(w http.ResponseWriter, r *http.Request) {

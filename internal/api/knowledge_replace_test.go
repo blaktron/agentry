@@ -15,8 +15,8 @@ import (
 	"github.com/blaktron/agentry/pkg/packseal"
 )
 
-// What an extension may do with the store (agentry#624, pkg/extension's
-// Knowledge seam): make a pack under a key the registry makes, read its
+// What an extension may do with the store (pkg/extension's Knowledge
+// seam): make a pack under a key the registry makes, read its
 // tree, and put a tree back — sealed under the pack's own key, through the
 // upload's own path — only while the pack still holds the tree it read.
 

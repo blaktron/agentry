@@ -1,9 +1,9 @@
 package api_test
 
-// The split roles hand a submitted version to the worker (agentry#507,
-// ARCHITECTURE §4, PLAN §8.2): the api and git roles enqueue scan.version
-// on the sandbox queue and never scan untrusted content themselves; the
-// worker's handler runs the pipeline, gates and signs.
+// The api and git roles hand a submitted version to the worker: they
+// enqueue scan.version on the sandbox queue and never scan untrusted
+// content themselves; the worker's handler runs the pipeline, gates and
+// signs.
 
 import (
 	"context"

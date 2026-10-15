@@ -8,52 +8,51 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-// The browser (plan browser-testing.md §5, D1, D6, D9, D12, D13;
-// agentry#1134). A release that tests websites declares
-// capabilities.browser, and its runs get a headless Chromium driven through
-// the runner's browser tools, whose only route out is a per-run browse
-// proxy that holds the line's scope. The line names where the browser may
-// go, never an address the person owns: the site is the answer to a url
-// intake question, given when the run starts, and the release may add
-// fixed hosts its pages pull from (a CDN, a font host, a sign-in
-// provider), each an exact name or a "*." suffix. scope: public lets the
-// browser reach any public site instead, which the publication policy
-// treats as it treats "*" egress (D1, D12).
+// The browser. A release that tests websites declares
+// capabilities.browser, and its runs get a headless Chromium driven
+// through the runner's browser tools, whose only route out is a per-run
+// browse proxy that holds the line's scope. The line names where the
+// browser may go, never an address the person owns: the site is the
+// answer to a url intake question, given when the run starts, and the
+// release may add fixed hosts its pages pull from (a CDN, a font host,
+// a sign-in provider), each an exact name or a "*." suffix. scope:
+// public lets the browser reach any public site instead, which the
+// publication policy treats as it treats "*" egress.
 //
-// A test can sign in (D9): secrets names declared secrets the browser may
-// type into the site's forms, by name, the server substituting the value.
-// Such a release cannot take public scope, so the only pages that can
-// receive a secret are the run-time site, its subdomains and the declared
-// hosts (invariant 9).
+// A test can sign in: secrets names declared secrets the browser may
+// type into the site's forms, by name, the server substituting the
+// value. Such a release cannot take public scope, so the only pages
+// that can receive a secret are the run-time site, its subdomains and
+// the declared hosts.
 //
-// The line is inside the contract, as a target host is: consent shows it,
-// an upgrade that widens it asks again, AI Review sees it among the
-// declared capabilities (RunnerGrants says nothing of it: benched, DEV-247),
-// and search can filter on it. It is not
-// network egress: the tools container's fetch still follows
-// network.egress, and a script the release ships that reaches a host
-// itself is still the release's own network (S6).
+// The line is inside the contract, as a target host is: consent shows
+// it, an upgrade that widens it asks again, AI Review sees it among the
+// declared capabilities (RunnerGrants says nothing of it), and search
+// can filter on it. It is not network egress: the tools container's
+// fetch still follows network.egress, and a script the release ships
+// that reaches a host itself is still the release's own network (S6).
 
 // Browser is capabilities.browser (v2, V15).
 type Browser struct {
 	// Sites names url intake questions: the person's answer to each is a
 	// site the browser may open, with its subdomains.
 	Sites []string `yaml:"sites,omitempty" json:"sites,omitempty"`
-	// Hosts are fixed hosts the browser may also reach, each an exact DNS
-	// name or a "*." suffix (D13); no address, no port.
+	// Hosts are fixed hosts the browser may also reach, each an exact
+	// DNS name or a "*." suffix; no address, no port.
 	Hosts []string `yaml:"hosts,omitempty" json:"hosts,omitempty"`
 	// Scope is BrowserScopeSite (the default when empty) or
 	// BrowserScopePublic.
 	Scope BrowserScope `yaml:"scope,omitempty" json:"scope,omitempty"`
-	// Secrets names declared secrets the browser may type into the site's
-	// forms (D9); each is also in capabilities.secrets or optionalSecrets.
+	// Secrets names declared secrets the browser may type into the
+	// site's forms; each is also in capabilities.secrets or
+	// optionalSecrets.
 	Secrets []string `yaml:"secrets,omitempty" json:"secrets,omitempty"`
 }
 
 // BrowserScope says how far the browser may go.
 type BrowserScope string
 
-// Browser scopes (D1).
+// Browser scopes.
 const (
 	// BrowserScopeSite admits the run-time sites, their subdomains and the
 	// declared hosts. It is the default.
@@ -64,12 +63,12 @@ const (
 	BrowserScopePublic BrowserScope = "public"
 )
 
-// MaxBrowserSites bounds the run-time sites one release may name (plan §5).
+// MaxBrowserSites bounds the run-time sites one release may name.
 const MaxBrowserSites = 4
 
-// MaxBrowserHosts bounds the fixed hosts one browser line may add. The
-// plan names no bound; 32 is room for a site's CDNs, font hosts and sign-in
-// providers, and keeps the consent list readable.
+// MaxBrowserHosts bounds the fixed hosts one browser line may add: 32
+// is room for a site's CDNs, font hosts and sign-in providers, and
+// keeps the consent list readable.
 const MaxBrowserHosts = 32
 
 // IsPublic reports whether the browser may reach any public site.
@@ -110,9 +109,9 @@ func isPublicSuffixWildcard(h string) bool {
 }
 
 // validateBrowser is V15: the browser line names url questions, at most
-// MaxBrowserSites, each once; its hosts are DNS names or "*." suffixes; its
-// scope is site or public; it says where the browser may go; and each
-// secret it may type is declared, never with public scope (D9).
+// MaxBrowserSites, each once; its hosts are DNS names or "*." suffixes;
+// its scope is site or public; it says where the browser may go; and
+// each secret it may type is declared, never with public scope.
 func validateBrowser(s *issues, m *Manifest) {
 	b := m.Capabilities.Browser
 	if b == nil {

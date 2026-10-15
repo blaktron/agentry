@@ -1,7 +1,6 @@
 package api_test
 
-// The owner actions under the sign-in grant's agent:manage (agentry#993;
-// plan forks-and-publisher.md M6): a token with the grant's scopes makes
+// The owner actions under the sign-in grant's agent:manage: a token with the grant's scopes makes
 // its namespace's QuickAgent private and public, retires, restores and
 // deletes it, at the administrators' rung only, and reaches none of the
 // agent's other settings.

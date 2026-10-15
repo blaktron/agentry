@@ -20,8 +20,7 @@ import (
 	"github.com/blaktron/agentry/pkg/packseal"
 )
 
-// An organization's shared knowledge (agentry#646; plan knowledge.md §4.7,
-// D13, D26) through its routes: an admin writes a pack wrapped for the
+// An organization's shared knowledge through its routes: an admin writes a pack wrapped for the
 // organization, every active member reads it and has its key unwrapped,
 // membership is checked at every call, and anyone outside the organization
 // is answered 404.
@@ -156,7 +155,7 @@ func TestSharedKnowledgeThroughTheAPI(t *testing.T) {
 		t.Fatalf("a member's upload: %d %s", st, body)
 	}
 
-	// Export unencrypted is the admins' until they mark the pack (D26).
+	// Export unencrypted is the admins' until they mark the pack.
 	st, _, body := env.raw(o.member.pat, http.MethodGet, o.path("/packs/"+p.ID+"/export"), nil)
 	if st != http.StatusForbidden || problemTypeOf(body) != "knowledge-not-exportable" {
 		t.Fatalf("a member's export of an unmarked pack: %d %s", st, body)
@@ -206,7 +205,7 @@ func TestSharedKnowledgeThroughTheAPI(t *testing.T) {
 	}
 }
 
-// TestARemovedMemberCannotUnwrap is D13's rule: a member who is removed
+// TestARemovedMemberCannotUnwrap: a member who is removed
 // keeps the sealed bytes they downloaded and can no longer have the key
 // that opens them unwrapped, over a token or a session.
 func TestARemovedMemberCannotUnwrap(t *testing.T) {
@@ -362,7 +361,7 @@ func TestHiddenFromOutsidersIsOnlyOnMemberRoutes(t *testing.T) {
 
 // TestSharedKnowledgeInTheDecommissionHold: while an organization is held
 // for its decommission its members still read its shared packs and have
-// their keys unwrapped (D23: members keep read and export), and nothing is
+// their keys unwrapped (members keep read and export), and nothing is
 // written.
 func TestSharedKnowledgeInTheDecommissionHold(t *testing.T) {
 	env := newTestEnv(t)

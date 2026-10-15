@@ -1,6 +1,6 @@
 package api_test
 
-// The account-erasure seam (agentry#638): an extension's eraser runs inside
+// The account-erasure seam: an extension's eraser runs inside
 // the erasure's and the data clear's own transaction, so its delete commits
 // with the core's and an eraser that fails rolls the whole thing back.
 

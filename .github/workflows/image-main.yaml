@@ -1,9 +1,8 @@
-# The agentryd image of the current main and dev (DEV-091, plan core-web-split
-# §3.5; the branch model of agentry-notes#156): every merge publishes
+# The agentryd image of the current main and dev: every merge publishes
 # ghcr.io/blaktron/agentry/agentryd:<branch> — :main for production, :dev for
-# the integration branch — and :sha-<short>, so the site's and the enterprise
-# build's CI can boot a real API without building Go, against the branch they
-# are on. Releases keep publishing the tagged images from release.yaml; these
+# the integration branch — and :sha-<short>, so the hosted site's and the
+# enterprise build's CI can boot a real API without building Go, against the
+# branch they are on. Releases keep publishing the tagged images from release.yaml; these
 # are the moving tags in between.
 name: image-main
 on:
@@ -46,7 +45,7 @@ jobs:
       - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
       - name: Sign the image
         run: cosign sign --yes "ghcr.io/${{ github.repository }}/agentryd@${{ steps.build.outputs.digest }}"
-      # The chart beside the image (agentry#450): a prerelease version per
+      # The chart beside the image: a prerelease version per
       # branch whose appVersion is the image tag this run built, so
       # `helm install … oci://ghcr.io/blaktron/agentry/charts/agentry --version
       # 0.1.0-dev.<run>.g<sha>` runs agentryd:sha-<sha> by default (the g

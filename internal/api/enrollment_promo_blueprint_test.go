@@ -12,8 +12,8 @@ import (
 	"github.com/blaktron/agentry/internal/auth/oidc"
 )
 
-// The directory's sign-up form carries an optional promo code (plan
-// promo-codes.md §5.1, agentry#759). These hold the blueprint to what the
+// The directory's sign-up form carries an optional promo code. These hold
+// the blueprint to what the
 // probe on the pinned image established, since a wrong tag here fails the
 // whole blueprint at apply time, on a deployment, and nowhere in CI but
 // directory-promo.sh.
@@ -100,7 +100,7 @@ func TestEnrollmentPromoFieldIsOptIn(t *testing.T) {
 		}
 	}
 	if strings.Contains(string(raw), "!ParseJSON [!Env") {
-		t.Error("!ParseJSON over !Env fails the blueprint on 2026.8 (agentry#759's probe)")
+		t.Error("!ParseJSON over !Env fails the blueprint on 2026.8")
 	}
 }
 

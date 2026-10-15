@@ -9,8 +9,7 @@ import (
 // recordingMux records every pattern it is handed and registers it
 // underneath. The recording is what the completeness gate reads: a mount
 // added tomorrow is in it whether or not its author declared anything,
-// which is the point — the gate used to walk the OpenAPI spec, and the spec
-// has never mentioned the root mounts (agentry#415).
+// which is the point — the OpenAPI spec does not mention the root mounts.
 //
 // Registration is single-threaded: it all happens inside NewHandlerWithGit,
 // before the handler serves a request, so the list needs no lock.

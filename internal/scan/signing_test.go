@@ -2,7 +2,7 @@ package scan
 
 import "testing"
 
-// TestAttestationRoundTrip pins §8.8: a signed DSSE envelope verifies offline
+// TestAttestationRoundTrip pins that a signed DSSE envelope verifies offline
 // against the served public key, and tampering breaks verification (this is
 // what the CLI's `verify` does).
 func TestAttestationRoundTrip(t *testing.T) {
@@ -48,7 +48,7 @@ func TestAttestationRoundTrip(t *testing.T) {
 
 func TestNoneProviderForcesReview(t *testing.T) {
 	if !(NoneProvider{}).RequiresHumanReview() {
-		t.Fatal("none provider must force review (§8.4.6)")
+		t.Fatal("none provider must force review")
 	}
 	if (StaticProvider{}).RequiresHumanReview() {
 		t.Fatal("static provider must not force review by itself")

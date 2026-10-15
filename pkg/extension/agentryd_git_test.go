@@ -13,10 +13,10 @@ import (
 	"github.com/blaktron/agentry/internal/store"
 )
 
-// TestGitRoleServesHealthAndReadiness pins what the chart's git Deployment
-// probes: /healthz (liveness) and /readyz (readiness, the database ping) on
-// the git role's own mux. The first live install (agentry#450) had a git pod
-// that never became Ready because only /healthz was mounted there.
+// TestGitRoleServesHealthAndReadiness pins what the chart's git
+// Deployment probes: /healthz (liveness) and /readyz (readiness, the
+// database ping) on the git role's own mux. A git pod with only
+// /healthz mounted never becomes Ready.
 func TestGitRoleServesHealthAndReadiness(t *testing.T) {
 	url := os.Getenv("AGENTRY_TEST_DATABASE_URL")
 	if url == "" {

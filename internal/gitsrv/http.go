@@ -30,8 +30,8 @@ import (
 	"github.com/blaktron/agentry/internal/store"
 )
 
-// Handler serves the git smart-HTTP surface (§6.1): info/refs,
-// git-upload-pack, git-receive-pack. Auth is PAT-only Basic; sessions are
+// Handler serves the git smart-HTTP surface: info/refs, git-upload-pack,
+// git-receive-pack. Auth is PAT-only Basic; sessions are
 // never accepted on git endpoints (CSRF hygiene).
 type Handler struct {
 	cfg   config.Config
@@ -41,9 +41,8 @@ type Handler struct {
 	aud   *audit.Writer
 	log   *slog.Logger
 	// sem bounds concurrent git subprocesses instance-wide, perRepo bounds
-	// them per repository (§6.2: a semaphore per repo and global), and
-	// perClient per trusted client address (§19, agentry#454). nil perClient
-	// (tests) leaves only the first two.
+	// them per repository, and perClient per trusted client address.
+	// nil perClient (tests) leaves only the first two.
 	sem       chan struct{}
 	perRepo   *repoSemaphores
 	perClient *clientSemaphores
@@ -54,30 +53,30 @@ type Handler struct {
 	// diskUsage measures a repo; a field so tests can force its failure path.
 	diskUsage func(uuid.UUID) (int64, error)
 	// queue, when set, receives one repo.pushed job per accepted push and
-	// the bookkeeping runs from the queue (agentry#43). nil keeps the
+	// the bookkeeping runs from the queue. nil keeps the
 	// inline path.
 	queue queue.Client
 	// PostReceive is invoked after a successful push with the updated refs
-	// (M3 wires tag→submission here).
+	// (the registry wires tag→submission here).
 	PostReceive func(ctx context.Context, agent registry.Agent, refs []RefUpdate, pusher *auth.Principal)
-	// pushes enforces the §19 60-pushes-per-hour-per-repo budget on both
+	// pushes enforces the 60-pushes-per-hour-per-repo budget on both
 	// transports; keyOffers bounds the public keys one source address may
 	// offer the SSH listener (ssh.go). Per process, so an N-replica git
-	// fleet allows roughly N× each (D-06: Redis replaces this on
-	// multi-node SaaS). Two stores because their windows differ by two
+	// fleet allows roughly N× each (holding the budget across replicas
+	// needs a shared store). Two stores because their windows differ by two
 	// orders of magnitude and the idle TTL must exceed the window: a
 	// stranger's address is forgotten two minutes after it stops offering
 	// keys, a repository's budget only two hours after its last push.
 	pushes    *ratelimit.Buckets
 	keyOffers *ratelimit.Buckets
-	// mx records §16.2 git op counts, durations, concurrency and the §16.1
-	// clone first-byte SLI. nil is a working no-op.
+	// mx records git op counts, durations, concurrency and the clone
+	// first-byte SLI. nil is a working no-op.
 	mx *metrics.Metrics
 	// inflight is the live count behind the GitOpConcurrency gauge.
 	inflight atomic.Int64
 }
 
-// SetMetrics wires the §16.2 instrument set.
+// SetMetrics wires the git instrument set.
 func (h *Handler) SetMetrics(m *metrics.Metrics) { h.mx = m }
 
 // Close releases the two bucket stores' collector goroutines.
@@ -88,10 +87,10 @@ func (h *Handler) Close() error {
 	return errors.Join(h.pushes.Close(), h.keyOffers.Close())
 }
 
-// NewHandler assembles the git HTTP layer.
-// SetQueue makes push bookkeeping a durable repo.pushed job (agentry#43).
+// SetQueue makes push bookkeeping a durable repo.pushed job.
 func (h *Handler) SetQueue(q queue.Client) { h.queue = q }
 
+// NewHandler assembles the git HTTP layer.
 func NewHandler(cfg config.Config, st *store.Store, repos *RepoStore, reg *registry.Service, aud *audit.Writer, log *slog.Logger) *Handler {
 	if log == nil {
 		log = slog.Default()
@@ -112,7 +111,7 @@ func NewHandler(cfg config.Config, st *store.Store, repos *RepoStore, reg *regis
 	}
 }
 
-// gitConcurrentPerIP is the §19 per-address budget of concurrent git
+// gitConcurrentPerIP is the per-address budget of concurrent git
 // operations from config, with the shipped default when unset.
 func gitConcurrentPerIP(cfg config.Config) int {
 	if n := cfg.Limits.GitConcurrentPerIP; n > 0 {
@@ -123,7 +122,7 @@ func gitConcurrentPerIP(cfg config.Config) int {
 
 // gitClient is the address a git operation over smart HTTP is budgeted to:
 // the one the middleware resolved after the trusted-proxy decision
-// (http.trustedProxyCIDRs, agentry#429), so a client cannot pick its own
+// (http.trustedProxyCIDRs), so a client cannot pick its own
 // by sending X-Forwarded-For. A handler reached without that middleware
 // (tests) falls back to the peer.
 func gitClient(r *http.Request) string {
@@ -140,7 +139,7 @@ func refuseClientBusy(w http.ResponseWriter) {
 	http.Error(w, errClientBusy.Error(), http.StatusTooManyRequests)
 }
 
-// pushesPerHour is the §19 per-repo push budget from config, with the shipped
+// pushesPerHour is the per-repo push budget from config, with the shipped
 // default when unset.
 func (h *Handler) pushesPerHour() int {
 	if n := h.cfg.Limits.GitPushesPerHour; n > 0 {
@@ -152,8 +151,8 @@ func (h *Handler) pushesPerHour() int {
 // Mount registers the git routes on a mux (shared in `all`, alone in `git`).
 // The mux is an interface so the api role can hand over one that records what
 // it was given: that recording is what its authorization completeness gate
-// reads, and these routes are not part of the OpenAPI surface the gate used
-// to walk (agentry#415).
+// reads, and these routes are not part of the OpenAPI surface the gate
+// walks.
 func (h *Handler) Mount(mux httpmux.Mux) {
 	mux.HandleFunc("GET /{ns}/{repo}/info/refs", h.infoRefs)
 	mux.HandleFunc("POST /{ns}/{repo}/git-upload-pack", h.uploadPack)
@@ -201,15 +200,15 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request, act auth.Actio
 }
 
 // gitDenial is why a git operation is refused, in HTTP terms so the two
-// transports (smart HTTP, SSH — agentry#70) report the same decision.
+// transports (smart HTTP, SSH) report the same decision.
 type gitDenial struct {
 	status  int
 	message string
 }
 
 // authorizeGit resolves ns/name, lazily initializes the bare repo, and
-// applies §6.4 (agent permission by effective role, existence privacy for
-// private repos) and §12.4 (enforced SSO needs an org-bound token for
+// applies agent permission by effective role, existence privacy for
+// private repos, and enforced SSO (which needs an org-bound token for
 // mutations). Transport-independent: HTTP and SSH both call it.
 func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *auth.Principal, act auth.Action) (registry.Agent, auth.AgentRole, *gitDenial) {
 	agent, err := h.reg.Resolve(ctx, ns, name)
@@ -222,7 +221,7 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	if agent.ID == [16]byte{} {
 		// Unknown path. An anonymous client gets the same 401 a private
 		// repo gives it (below), so the two cannot be told apart by
-		// probing (agentry#313) — and a git client that does hold
+		// probing — and a git client that does hold
 		// credentials sends them on that 401 and gets its real answer. A
 		// signed-in caller gets 404: nothing to leak, the path is not there.
 		if principal.Anonymous {
@@ -231,8 +230,7 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
 	}
 
-	// The owning organization's state (agentry#363): the same gate the
-	// API consults. Suspended is an unknown path — anonymous gets the
+	// The owning organization's state: the same gate the API consults. Suspended is an unknown path — anonymous gets the
 	// credential prompt, a signed-in caller 404 — and the decommission
 	// hold takes reads only.
 	if err := h.reg.OrgGateFor(ctx, agent, act); err != nil {
@@ -251,8 +249,8 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 		}
 	}
 
-	// Lazy bare-repo init (§13.3: only the git role mounts repo storage).
-	// Not for a fork still being copied (agentry#943): its repository is
+	// Lazy bare-repo init (only the git role mounts repo storage).
+	// Not for a fork still being copied: its repository is
 	// the worker's to make, and is refused below until it has.
 	copying := agent.ForkState != nil && *agent.ForkState == registry.ForkCopying
 	if _, statErr := os.Stat(h.repos.Path(agent.RepoID)); statErr != nil && !copying {
@@ -274,29 +272,29 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
 		}
 		// A signed-in caller who cannot read the repo gets a missing
-		// path's 404 whatever they tried (existence privacy, §6.4;
-		// agentry#313); a write denied on a repo they can read is a 403.
+		// path's 404 whatever they tried (existence privacy); a
+		// write denied on a repo they can read is a 403.
 		if auth.CheckAgent(principal, res, auth.ActAgentRepoRead) != nil {
 			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
 		}
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden"}
 	}
 
-	// A fork's repository is the worker's until its copy is done
-	// (agentry#943): a push now would be wiped by the copy, or a tag would
+	// A fork's repository is the worker's until its copy is done:
+	// a push now would be wiped by the copy, or a tag would
 	// be submitted in place of the origin's content. Said only to a caller
 	// who may read it, so it names no fork to anyone else.
 	if copying {
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusConflict, "this fork is still being copied; try again in a minute"}
 	}
 
-	// An unactivated account reads but does not write (agentry#861, plan
-	// unactivated-accounts.md D2): the API's gate does not see git.
+	// An unactivated account reads but does not write: the API's gate does
+	// not see git.
 	if act == auth.ActAgentRepoWrite && principal.Unactivated && h.cfg.Auth.ExternalOnly {
 		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden: activate your account first, from the link we emailed you"}
 	}
 
-	// §6.4 + §12.4: in an org that enforces SSO, mutating git operations
+	// In an org that enforces SSO, mutating git operations
 	// additionally require an org-bound PAT.
 	allowed, err := h.ssoAllows(ctx, principal, agent, act)
 	if err != nil {
@@ -309,9 +307,9 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	return agent, role, nil
 }
 
-// ssoAllows applies an org's enforced-SSO policy to a git operation (§12.4).
-// It is deliberately narrower than the API chokepoint: §6.4's table attaches
-// the org-bound-token requirement to push (and to the publish permission that
+// ssoAllows applies an org's enforced-SSO policy to a git operation.
+// It is deliberately narrower than the API chokepoint: the org-bound-token
+// requirement attaches to push (and to the publish permission that
 // creates v* tags), so clone/fetch — including anonymous reads of public org
 // repos and granted reads of private ones — is unaffected. Sessions are never
 // accepted on git endpoints, so in practice this resolves to "the PAT must be
@@ -341,7 +339,7 @@ func (h *Handler) unauthorized(w http.ResponseWriter) {
 	http.Error(w, "authentication required", http.StatusUnauthorized)
 }
 
-// infoRefs implements GET /{ns}/{name}.git/info/refs?service=… (§6.1).
+// infoRefs implements GET /{ns}/{name}.git/info/refs?service=…
 func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 	service := r.URL.Query().Get("service")
 	var act auth.Action
@@ -351,7 +349,7 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 	case "git-receive-pack":
 		act = auth.ActAgentRepoWrite
 	default:
-		// Dumb protocol disabled (§6.1).
+		// Dumb protocol disabled.
 		http.Error(w, "smart protocol only", http.StatusForbidden)
 		return
 	}
@@ -425,17 +423,17 @@ func (h *Handler) receivePack(w http.ResponseWriter, r *http.Request) {
 	h.rpc(w, r, agent, principal, role, "receive-pack", &cmds)
 }
 
-// admitPush spends one push from the repository's §19 budget (60/h per
+// admitPush spends one push from the repository's push budget (60/h per
 // repo) and reports whether the push may proceed; when it may not, retry
 // is how long until the budget next admits one. It is the one admission
 // point for every transport — smart HTTP and SSH both call it — so the
-// budget is one number wherever the push arrives (agentry#410). It sits
+// budget is one number wherever the push arrives. It sits
 // here rather than in the pre-receive hook because the hook is a fresh
 // process per push with no shared state, so a bucket there would be
 // empty every time; refusing before the git subprocess starts also means
 // a repository being hammered costs nothing but the refusal.
 //
-// Burst is the full hourly budget: §19 says "60 pushes/h", not "one per
+// Burst is the full hourly budget: the limit is "60 pushes/h", not "one per
 // minute", and a developer landing a run of commits should not be paced.
 func (h *Handler) admitPush(ctx context.Context, agent registry.Agent) (retry time.Duration, ok bool) {
 	res := h.pushes.Allow("push", agent.RepoID.String(),
@@ -470,7 +468,7 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 	ctx, cancel := context.WithTimeout(r.Context(), h.opTimeout)
 	defer cancel()
 
-	// §16.2 git op telemetry. outcome is set on the way out of each branch so
+	// Git op telemetry. outcome is set on the way out of each branch so
 	// a refused or failed operation is distinguishable from a served one.
 	start := time.Now()
 	outcome := "ok"
@@ -536,7 +534,7 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		http.Error(w, "git error", http.StatusInternalServerError)
 		return
 	}
-	// §16.1 SLI: p95 first-byte under 2 s for a clone. Measured from the
+	// SLI: p95 first-byte under 2 s for a clone. Measured from the
 	// start of the request, so it includes both the semaphore wait and git's
 	// own startup — which is what a client actually experiences, and the
 	// reason a queued clone must not look fast.
@@ -557,7 +555,7 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 	}
 	// git exits 0 on a push its pre-receive hook declined, and what it says
 	// about why — a hook that could not even start, above all — goes to its
-	// own stderr, which smart HTTP never shows the pusher (agentry#495).
+	// own stderr, which smart HTTP never shows the pusher.
 	if stderr.Len() > 0 {
 		h.log.WarnContext(r.Context(), "git rpc stderr", "service", service, "stderr", stderr.String())
 	}
@@ -588,9 +586,9 @@ func (f *firstByteTimer) Read(p []byte) (int, error) {
 }
 
 // afterReceive updates repo bookkeeping and audit for the ref updates a push
-// actually landed, and hands them to the M3 publication trigger.
+// actually landed, and hands them to the publication trigger.
 //
-// Two properties this function owns (§6.3):
+// Two properties this function owns:
 //
 //   - Only ACCEPTED updates count. receive-pack exits 0 even when the
 //     pre-receive hook rejects the whole push — the refusal is reported per
@@ -621,16 +619,16 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 	if agent.NamespaceKind == "org" {
 		args.OrgID = agent.NamespaceID
 	}
-	// Durable first (§6.3 repo.pushed, agentry#43): one INSERT, and the
-	// size/audit bookkeeping survives a crash of this process. Without a
-	// queue — or if the INSERT itself fails — do it inline as before.
+	// Durable first (repo.pushed): one INSERT, and the size/audit
+	// bookkeeping survives a crash of this process. Without a queue — or if
+	// the INSERT itself fails — do it inline.
 	enqueued := false
 	if h.queue != nil {
 		if _, err := h.queue.Enqueue(ctx, KindRepoPushed, "core", args); err != nil {
 			h.log.ErrorContext(ctx, "post-receive enqueue", "err", err)
 		} else {
 			enqueued = true
-			// Housekeeping later, when the burst is over (agentry#55).
+			// Housekeeping later, when the burst is over.
 			if _, err := h.queue.Enqueue(ctx, KindRepoGC, "core", RepoGCArgs{RepoID: agent.RepoID}, queue.WithDelay(gcDelay)); err != nil {
 				h.log.WarnContext(ctx, "post-receive gc enqueue", "err", err)
 			}
@@ -646,9 +644,9 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 		h.PostReceive(ctx, agent, refs, principal)
 	}
 
-	// §6.3: a new v* tag with auto-publish enabled submits the version: the
+	// A new v* tag with auto-publish enabled submits the version: the
 	// archive is built here and the scan is handed to the worker's sandbox
-	// queue (agentry#507). The push already succeeded; submission failures
+	// queue. The push already succeeded; submission failures
 	// surface via the version (or its absence) in the API, and in logs.
 	if agent.AutoPublishTags && agent.QuarantineState == "none" {
 		for _, ru := range refs {
@@ -661,7 +659,7 @@ func (h *Handler) afterReceive(ctx context.Context, agent registry.Agent, princi
 				// This includes an admission refusal (registry.ErrAdmissionRefused):
 				// receive-pack has already answered the client, so the pusher
 				// learns of it from the absent version, as with every other
-				// submission failure here (agentry#322 would move it earlier).
+				// submission failure here.
 				h.log.WarnContext(ctx, "auto-publish refused", logevent.GitPushRefused.Attr(),
 					"agent", agent.ID, "tag", tag, "err", err)
 			}
@@ -705,19 +703,19 @@ func (h *Handler) acceptedRefs(ctx context.Context, agent registry.Agent, want [
 // gitEnv builds the subprocess environment: protocol v2 plus the hook
 // context (hooks.go) describing the pusher's permissions and quotas.
 // CAN_PUBLISH goes through the chokepoint so PAT scope limits apply: a
-// repo:write-only PAT cannot create v* tags even for an owner (§6.4).
+// repo:write-only PAT cannot create v* tags even for an owner.
 func (h *Handler) gitEnv(r *http.Request, agent registry.Agent, principal *auth.Principal, role auth.AgentRole) []string {
 	return h.gitEnvFor(r.Context(), r.Header.Get("Git-Protocol"), agent, principal, role)
 }
 
-// gitEnvFor is gitEnv for any transport (agentry#70): gitProtocol is the
+// gitEnvFor is gitEnv for any transport: gitProtocol is the
 // client's Git-Protocol header / GIT_PROTOCOL env request.
 func (h *Handler) gitEnvFor(ctx context.Context, gitProtocol string, agent registry.Agent, principal *auth.Principal, role auth.AgentRole) []string {
 	canPublish := auth.CheckAgent(principal,
 		auth.AgentResource{Public: agent.Visibility == "public", EffectiveRole: role},
 		auth.ActAgentPublish) == nil
 	if canPublish && agent.NamespaceKind == "org" {
-		// Enforced SSO gates release just as it gates push (§6.4, §12.4);
+		// Enforced SSO gates release just as it gates push;
 		// a lookup failure denies the stricter permission, never grants it.
 		allowed, err := h.ssoAllows(ctx, principal, agent, auth.ActAgentPublish)
 		if err != nil {
@@ -733,7 +731,7 @@ func (h *Handler) gitEnvFor(ctx context.Context, gitProtocol string, agent regis
 		fmt.Sprintf("AGENTRY_HOOK_MAX_BLOB_BYTES=%d", h.cfg.Limits.RepoMaxBlobBytes),
 		fmt.Sprintf("AGENTRY_HOOK_QUOTA_BYTES=%d", h.cfg.Limits.RepoQuotaBytes),
 		fmt.Sprintf("AGENTRY_HOOK_WARN_BYTES=%d", h.cfg.Limits.RepoWarnBytes),
-		// §6.3 agent setting (agentry#48): maintainers may allow non-fast-forward
+		// Agent setting: maintainers may allow non-fast-forward
 		// pushes to the default branch; deletion stays denied regardless.
 		fmt.Sprintf("AGENTRY_HOOK_ALLOW_FORCE=%t", agent.AllowForcePush),
 	)

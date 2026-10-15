@@ -1,5 +1,5 @@
 {{- if .Values.worker.networkPolicy.enabled }}
-# Default-deny egress for the worker pods (§13.3's no-egress worker): only
+# Default-deny egress for the worker pods (the worker needs no network access of its own): only
 # what is named below is reachable — DNS in kube-system, Services in this
 # namespace (an egress proxy), and the listed addresses and ports.
 apiVersion: networking.k8s.io/v1

@@ -7,8 +7,9 @@ import (
 	"github.com/blaktron/agentry/internal/config"
 )
 
-// The production wiring must reach the sweep, not only S7: on dev the first
-// sweep found "no vulnerability database configured" while S7 had one.
+// The production wiring must reach the sweep, not only S7: a sweep that
+// reports "no vulnerability database configured" while S7 has one is a
+// wiring fault.
 func TestMCPSweepWiringReachesThePipeline(t *testing.T) {
 	var srv *api.Server
 	env := newTestEnvCfg(t, func(c *config.Config) { c.Scan.OSVURL = "https://osv.example.test" }, func(s *api.Server) { srv = s })

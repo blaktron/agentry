@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// normativeYAML is the §5.2 normative example (comment lines trimmed, the
+// normativeYAML is the normative example (comment lines trimmed, the
 // commented-out mcp block omitted).
 const normativeYAML = `schemaVersion: "1"
 name: incident-summarizer

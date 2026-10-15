@@ -1,9 +1,8 @@
 package api_test
 
-// The notifier seam an extension reaches (agentry#366, M15; plan
-// organization-subscriptions.md §5.8, D17): a message the extension
-// composed goes to a person only under the core's rule — DEV-099's
-// verified address, and the person's switch for the kind — through the
+// The notifier seam an extension reaches: a message the extension
+// composed goes to a person only under the core's rule — a verified
+// address, and the person's switch for the kind — through the
 // core's transport, in the core's frame. A probe extension exposes the
 // seam over HTTP so it is exercised the way the billing extension will.
 
@@ -134,7 +133,7 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 		t.Fatalf("sent to %q, want the person's own address", got.ToEmail)
 	}
 
-	// DEV-099: an unverified address gets nothing, and the extension is
+	// An unverified address gets nothing, and the extension is
 	// told only that nothing went — not why.
 	unverifiedH := env.register("ns-unverified")
 	code, out, _ = send(t, env.userID(unverifiedH), "billing", "Your payment failed", "x")
@@ -174,7 +173,7 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 		t.Fatal("a refused kind reached the transport")
 	}
 
-	// The dependency-alert kind (agentry#430, M19): a routed alert goes
+	// The dependency-alert kind: a routed alert goes
 	// under the person's dependency-alert switch — on, it goes as that
 	// kind; off, it does not; and an unverified address gets nothing.
 	code, out, _ = send(t, verifiedID, "dependency_alert", "acme/thing declares a vulnerable server", "npm:left-pad@1.0.0 carries GHSA-x.")
@@ -193,7 +192,7 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 		t.Fatal("the dependency-alert switch off, and a routed alert went anyway")
 	}
 
-	// The schedule kind (agentry#1002, plan quickagent-scheduling D9): a
+	// The schedule kind: a
 	// failed fire or a pause goes under the person's schedules switch —
 	// on (the default, with billing and dependency alerts already off),
 	// it goes as that kind; off, it does not; an unverified address gets
@@ -220,7 +219,7 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 		t.Fatalf("the switch's own name as a kind: %d, want a refusal", code)
 	}
 
-	// The bug-report kind (agentry#1113, plan report-bug.md D5): the
+	// The bug-report kind: the
 	// "Reported bug fixed" mail goes under the person's bug-report switch
 	// — on (the default, with schedules already off), it goes as that
 	// kind; off, it does not; an unverified address gets nothing.
@@ -305,8 +304,7 @@ func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
 // The settings round trip for the switches a client may omit, and the
 // hazard they were built to avoid: a client that predates a switch and
 // writes the other settings back leaves it as it was, rather than turning
-// it off by omission (agentry#344's shape). billing (agentry#366),
-// schedules (agentry#1002) and bugReports (agentry#1113) each, and no
+// it off by omission. billing, schedules and bugReports each, and no
 // write touches another.
 func TestOptionalSwitchesSurviveAnOlderClientsWrite(t *testing.T) {
 	optional := []string{"billing", "schedules", "bugReports"}

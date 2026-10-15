@@ -42,8 +42,8 @@ type CountEmailVerificationsSinceRow struct {
 	Oldest time.Time `json:"oldest"`
 }
 
-// How many links the account was sent since a moment, and the oldest of
-// them (agentry#861's daily cap).
+// How many links the account was sent since a moment, and the oldest of them
+// (for the daily cap).
 func (q *Queries) CountEmailVerificationsSince(ctx context.Context, arg CountEmailVerificationsSinceParams) (CountEmailVerificationsSinceRow, error) {
 	row := q.db.QueryRow(ctx, countEmailVerificationsSince, arg.UserID, arg.CreatedAt)
 	var i CountEmailVerificationsSinceRow
@@ -58,8 +58,8 @@ JOIN handles h ON h.id = a.namespace_id
 WHERE h.id = $1 AND h.kind = 'user' AND a.visibility = 'public' AND av.status = 'published'
 `
 
-// Published public versions under a user's PERSONAL namespace (§12.7: the
-// deletion chooser needs to know whether consumers depend on them).
+// Published public versions under a user's PERSONAL namespace (the deletion
+// chooser needs to know whether consumers depend on them).
 func (q *Queries) CountPublishedVersionsByUser(ctx context.Context, id uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countPublishedVersionsByUser, id)
 	var count int64
@@ -93,7 +93,7 @@ type CreateHandleParams struct {
 	Kind   string    `json:"kind"`
 }
 
-// Users, handles, and email verification (M1/WG-B).
+// Users, handles, and email verification.
 func (q *Queries) CreateHandle(ctx context.Context, arg CreateHandleParams) error {
 	_, err := q.db.Exec(ctx, createHandle, arg.ID, arg.Handle, arg.Kind)
 	return err
@@ -143,8 +143,8 @@ const deleteEmailVerificationsForUser = `-- name: DeleteEmailVerificationsForUse
 DELETE FROM email_verifications WHERE user_id = $1
 `
 
-// An erased account's links go with it: one followed afterwards would
-// confirm an address nobody holds any more (agentry#861).
+// An erased account's links go with it: one followed afterwards would confirm
+// an address nobody holds any more.
 func (q *Queries) DeleteEmailVerificationsForUser(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteEmailVerificationsForUser, userID)
 	return err
@@ -316,8 +316,8 @@ SELECT COALESCE(max(created_at), 'epoch'::timestamptz)::timestamptz AS sent_at
 FROM email_verifications WHERE user_id = $1
 `
 
-// When the account's newest verification link was made, or the epoch when
-// it has none (agentry#861's five-minute limit).
+// When the account's newest verification link was made, or the epoch when it
+// has none (for the five-minute limit).
 func (q *Queries) LatestEmailVerificationAt(ctx context.Context, userID uuid.UUID) (time.Time, error) {
 	row := q.db.QueryRow(ctx, latestEmailVerificationAt, userID)
 	var sent_at time.Time
@@ -383,11 +383,11 @@ type ListStaffMirrorAccountsRow struct {
 	DirectorySubject string    `json:"directory_subject"`
 }
 
-// Every account that is platform staff and active, with its verified
-// address (lower-cased; the directory's match is case-blind) and each
-// directory subject it is linked to by a directory sign-in, "authentik:"
-// stripped (empty when it has none): the set the directory's staff mirror
-// group is kept equal to (agentry#598).
+// Every account that is platform staff and active, with its verified address
+// (lower-cased; the directory's match is case-blind) and each directory
+// subject it is linked to by a directory sign-in, "authentik:" stripped
+// (empty when it has none): the set the directory's staff mirror group is
+// kept equal to.
 func (q *Queries) ListStaffMirrorAccounts(ctx context.Context) ([]ListStaffMirrorAccountsRow, error) {
 	rows, err := q.db.Query(ctx, listStaffMirrorAccounts)
 	if err != nil {
@@ -417,8 +417,8 @@ ORDER BY h.handle
 `
 
 // Active members of the staff organization who are not platform staff: an
-// address outside its domain or unverified, or an account that is not
-// active (agentry#598). Reported at start-up, never removed.
+// address outside its domain or unverified, or an account that is not active.
+// Reported at start-up, never removed.
 func (q *Queries) ListStaffOrgMembersNotStaff(ctx context.Context, orgID uuid.UUID) ([]string, error) {
 	rows, err := q.db.Query(ctx, listStaffOrgMembersNotStaff, orgID)
 	if err != nil {
@@ -446,9 +446,9 @@ WHERE platform_staff
 ORDER BY id
 `
 
-// The accounts whose platform_staff the staff rule could change
-// (agentry#556): every account flagged today, and every active member of
-// the staff organization. The start-up resync recomputes exactly these.
+// The accounts whose platform_staff the staff rule could change: every
+// account flagged today, and every active member of the staff organization.
+// The start-up resync recomputes exactly these.
 func (q *Queries) ListStaffSyncCandidates(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listStaffSyncCandidates, orgID)
 	if err != nil {
@@ -483,12 +483,12 @@ type ListUserDirectoryLinksRow struct {
 	DirectoryAccountID int64  `json:"directory_account_id"`
 }
 
-// The directory accounts the account is linked to by directory sign-ins
-// (agentry#706, agentry#727), oldest first: each one's subject, "authentik:"
-// stripped (the uid the directory reports for it), and the directory's own
-// id for it, learnt at sign-in (0 until the identity signs in under a
-// directory that sends it). The settings page reads the oldest, so its
-// answer does not move while the account keeps one; erasure takes them all.
+// The directory accounts the account is linked to by directory sign-ins,
+// oldest first: each one's subject, "authentik:" stripped (the uid the
+// directory reports for it), and the directory's own id for it, learnt at
+// sign-in (0 until the identity signs in under a directory that sends it).
+// The settings page reads the oldest, so its answer does not move while the
+// account keeps one; erasure takes them all.
 func (q *Queries) ListUserDirectoryLinks(ctx context.Context, userID uuid.UUID) ([]ListUserDirectoryLinksRow, error) {
 	rows, err := q.db.Query(ctx, listUserDirectoryLinks, userID)
 	if err != nil {
@@ -513,9 +513,9 @@ const lockUserRow = `-- name: LockUserRow :one
 SELECT id FROM users WHERE id = $1 FOR UPDATE
 `
 
-// Serializes the activation mail per account (agentry#861): the five-minute
-// limit is read and the new link written under this lock, so two replicas
-// answering at once send one mail, not two.
+// Serializes the activation mail per account: the five-minute limit is read
+// and the new link written under this lock, so two replicas answering at once
+// send one mail, not two.
 func (q *Queries) LockUserRow(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, lockUserRow, id)
 	var id_2 uuid.UUID
@@ -552,10 +552,10 @@ type PseudonymizeUserParams struct {
 	DeletedTombstone []byte    `json:"deleted_tombstone"`
 }
 
-// GDPR erasure (§12.7): PII is purged, the row survives so audit events and
-// immutable published content keep a stable (now opaque) actor id. The
-// tombstone keeps only a salted hash of the email for abuse-recurrence
-// detection — never the address itself.
+// GDPR erasure: PII is purged, the row survives so audit events and immutable
+// published content keep a stable (now opaque) actor id. The tombstone keeps
+// only a salted hash of the email for abuse-recurrence detection — never the
+// address itself.
 func (q *Queries) PseudonymizeUser(ctx context.Context, arg PseudonymizeUserParams) error {
 	_, err := q.db.Exec(ctx, pseudonymizeUser, arg.ID, arg.Email, arg.DeletedTombstone)
 	return err
@@ -589,8 +589,8 @@ type SetSocialIdentityDirectoryAccountParams struct {
 }
 
 // Records the directory's id for the account a directory identity signs in
-// as (agentry#727), from the directory's signed ID token; moves it when the
-// directory reports another.
+// as, from the directory's signed ID token; moves it when the directory
+// reports another.
 func (q *Queries) SetSocialIdentityDirectoryAccount(ctx context.Context, arg SetSocialIdentityDirectoryAccountParams) error {
 	_, err := q.db.Exec(ctx, setSocialIdentityDirectoryAccount, arg.Subject, arg.DirectoryAccountID)
 	return err
@@ -610,7 +610,7 @@ const setUserIdPMFA = `-- name: SetUserIdPMFA :exec
 UPDATE users SET idp_mfa_at = now(), updated_at = now() WHERE id = $1
 `
 
-// The directory asserted a second factor at this sign-in (agentry#23).
+// The directory asserted a second factor at this sign-in.
 func (q *Queries) SetUserIdPMFA(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, setUserIdPMFA, id)
 	return err
@@ -639,7 +639,7 @@ type SetUserPlatformStaffParams struct {
 	PlatformStaff bool      `json:"platform_staff"`
 }
 
-// The staff rule decides platform staff (agentry#556; registry.SyncStaffIn).
+// The staff rule decides platform staff (registry.SyncStaffIn).
 func (q *Queries) SetUserPlatformStaff(ctx context.Context, arg SetUserPlatformStaffParams) error {
 	_, err := q.db.Exec(ctx, setUserPlatformStaff, arg.ID, arg.PlatformStaff)
 	return err

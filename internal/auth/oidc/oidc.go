@@ -1,8 +1,7 @@
 // Package oidc implements the OpenID Connect Relying Party side of enterprise
-// SSO (§12.4): authorization-code flow with PKCE, issuer pinning (the
-// discovery document's issuer must match the configured issuer), and
-// email_verified respected. Built on github.com/coreos/go-oidc/v3 and
-// golang.org/x/oauth2 (Appendix B: both active).
+// SSO: authorization-code flow with PKCE, issuer pinning (the discovery
+// document's issuer must match the configured issuer), and email_verified
+// respected. Built on github.com/coreos/go-oidc/v3 and golang.org/x/oauth2.
 package oidc
 
 import (
@@ -44,38 +43,37 @@ type Claims struct {
 	// AMR is the token's Authentication Methods References (RFC 8176) as
 	// the IdP sent them, e.g. ["pwd","mfa"]; nil when absent. ACR is the
 	// Authentication Context Class Reference, if any. The registry uses
-	// AMR as evidence that a second factor was used (agentry#23).
+	// AMR as evidence that a second factor was used.
 	AMR []string
 	ACR string
 	// Groups is the token's `groups` claim (authentik's profile scope puts
 	// the user's group names there); nil when absent. The registry maps
-	// one configured group onto platform staff (agentry#51).
+	// one configured group onto platform staff.
 	Groups []string
 	// PreferredUsername is the `preferred_username` claim: the name the
 	// person chose at the IdP (authentik's profile scope puts the
 	// directory's username there); "" when absent. It is a seed for a new
 	// account's handle, never an identifier: OIDC Core §5.7 does not make
-	// it unique or stable, so nothing is looked up by it (agentry#517).
+	// it unique or stable, so nothing is looked up by it.
 	PreferredUsername string
-	// RememberDevice is the directory's `agentry_remember_device` claim
-	// (agentry#670, DEV-163): the person ticked "Remember this device for 30
-	// days" on the directory's code page, in the sign-in this token closes.
-	// True only for a JSON true. It asks for a remembered browser; it proves
-	// nothing about a factor, which is AMR's to say.
+	// RememberDevice is the directory's `agentry_remember_device` claim:
+	// the person ticked "Remember this device for 30 days" on the directory's
+	// code page, in the sign-in this token closes. True only for a JSON true.
+	// It asks for a remembered browser; it proves nothing about a factor,
+	// which is AMR's to say.
 	RememberDevice bool
 	// AuthTime is the `auth_time` claim: when the person last actually
 	// authenticated at the IdP, zero when absent. A token minted silently
 	// against a live IdP session carries the original time, which is how
-	// the registry tells a fresh sign-in from a replayed session
-	// (agentry#670).
+	// the registry tells a fresh sign-in from a replayed session.
 	AuthTime time.Time
-	// DirectoryAccountID is the directory's `agentry_directory_id` claim
-	// (agentry#727): the directory's own id for the account signing in, sent
-	// by the same `agentry` scope. It lets the registry read that account
-	// without narrowing by an address the directory does not keep unique.
+	// DirectoryAccountID is the directory's `agentry_directory_id` claim:
+	// the directory's own id for the account signing in, sent by the same
+	// `agentry` scope. It lets the registry read that account without
+	// narrowing by an address the directory does not keep unique.
 	// Zero when absent or not a positive whole number.
 	DirectoryAccountID int64
-	// PromoCode is the directory's `agentry_promo_code` claim (agentry#759):
+	// PromoCode is the directory's `agentry_promo_code` claim:
 	// the promo code typed on its sign-up form, sent by the same `agentry`
 	// scope on every token of that account. Upper-cased and held to the
 	// code grammar; "" when absent, not a string or outside it. What a code
@@ -85,7 +83,7 @@ type Claims struct {
 
 // New builds the RP. coreoidc.NewProvider performs discovery and pins the
 // issuer: it returns an error when the discovery document's issuer differs
-// from cfg.Issuer (issuer pinning, §12.4). Pass a context carrying a custom
+// from cfg.Issuer (issuer pinning). Pass a context carrying a custom
 // *http.Client via coreoidc.ClientContext to reach a private/test IdP.
 func New(ctx context.Context, cfg Config, redirectURL string) (*RP, error) {
 	if cfg.Issuer == "" || cfg.ClientID == "" {
@@ -125,7 +123,7 @@ func New(ctx context.Context, cfg Config, redirectURL string) (*RP, error) {
 // It asks for no offline access: the registry keeps its own sessions and
 // never uses a refresh token, so asking an IdP to mint one (access_type=
 // offline, a Google convention some IdPs honour) would only create a
-// long-lived credential nobody holds on purpose (agentry#494).
+// long-lived credential nobody holds on purpose.
 func (rp *RP) AuthURL(state, nonce, verifier string) string {
 	return rp.oauth.AuthCodeURL(state,
 		oauth2.S256ChallengeOption(verifier),
@@ -136,7 +134,7 @@ func (rp *RP) AuthURL(state, nonce, verifier string) string {
 // Exchange completes the flow: it exchanges the code (sending the PKCE
 // verifier), extracts and verifies the ID token (signature, issuer, audience,
 // expiry), checks the nonce, and returns the claims. email_verified is
-// surfaced verbatim for the JIT decision (§12.4, T-12).
+// surfaced verbatim for the JIT decision.
 func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string) (*Claims, error) {
 	tok, err := rp.oauth.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
@@ -244,8 +242,8 @@ func asBool(v any) bool {
 	}
 }
 
-// Description is what discovery established for a connection test
-// (agentry#50): the issuer that answered and its endpoints.
+// Description is what discovery established for a connection test: the
+// issuer that answered and its endpoints.
 type Description struct {
 	Issuer      string
 	AuthURL     string
@@ -267,14 +265,14 @@ func (rp *RP) Describe() Description {
 	return Description{Issuer: rp.cfg.Issuer, AuthURL: ep.AuthURL, TokenURL: ep.TokenURL, UserInfoURL: claims.UserInfo, JWKSURL: claims.JWKS}
 }
 
-// promoCodeRE is a promo code's grammar, the billing extension's own
-// (agentry-enterprise internal/billing) in either case: an ASCII letter or
+// promoCodeRE is a promo code's grammar, the billing extension's own, in
+// either case: an ASCII letter or
 // digit, then three to thirty-one ASCII letters, digits or hyphens. Read
 // before upper-casing, because strings.ToUpper maps ſ to S and ı to I.
 var promoCodeRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{3,31}$`)
 
 // PromoCodeClaim reads an `agentry_promo_code` claim: a string inside the
-// grammar once trimmed and upper-cased, else "" (agentry#759).
+// grammar once trimmed and upper-cased, else "".
 func PromoCodeClaim(v any) string {
 	s, ok := v.(string)
 	if !ok {

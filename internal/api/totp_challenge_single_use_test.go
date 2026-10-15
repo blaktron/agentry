@@ -13,7 +13,7 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 )
 
-// The second leg of a 2FA social login is single use (agentry#457): its
+// The second leg of a 2FA social login is single use: its
 // challenge is recorded as consumed in the database when it completes, so
 // it cannot open a second session within its five minutes, at this replica
 // or any other, and a store that cannot be reached refuses it.

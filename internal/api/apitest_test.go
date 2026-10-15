@@ -1,7 +1,7 @@
 package api_test
 
-// Test environment for M1 API tests: real Postgres (AGENTRY_TEST_DATABASE_URL,
-// see DEVIATIONS.md DEV-001), real handler stack, seeded users/org fixtures.
+// Test environment for API tests: real Postgres (AGENTRY_TEST_DATABASE_URL),
+// real handler stack, seeded users/org fixtures.
 
 import (
 	"bytes"
@@ -111,7 +111,7 @@ type testEnv struct {
 // tierResolver is the core resolver with a tier's answers laid over it,
 // for a test that needs a subject to hold or not hold a feature. broken
 // fails instead, for the fail-closed cases. One type rather than one per
-// feature: the shape was copied twice before this (seats, then identity).
+// feature.
 type tierResolver struct {
 	entitlements.Resolver
 	// apply mutates the org's features; nil leaves the core's answers.
@@ -168,7 +168,7 @@ func newTestEnv(t *testing.T) *testEnv {
 }
 
 // newTestEnvWith builds a test env, applying opts to the *api.Server before it
-// is wrapped in the HTTP handler (M6 tests inject fake resolvers, OIDC clients,
+// is wrapped in the HTTP handler (tests inject fake resolvers, OIDC clients,
 // and webhook dispatchers).
 func newTestEnvWith(t *testing.T, opts ...func(*api.Server)) *testEnv {
 	return newTestEnvCfg(t, nil, opts...)
@@ -217,9 +217,9 @@ func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.S
 // testConfig is the configuration every test server starts from.
 func testConfig() config.Config {
 	cfg := config.Default()
-	cfg.DevMode = true               // the test server is a dev instance; dev mode is opt-in (DEV-116)
+	cfg.DevMode = true               // the test server is a dev instance; dev mode is opt-in
 	cfg.Scan.OSVURL = "none"         // S7 never dials out of a test; TestS7 installs a fake
-	cfg.Scan.NPMRegistryURL = "none" // nor does its version check (agentry#1036)
+	cfg.Scan.NPMRegistryURL = "none" // nor does its version check
 	cfg.Auth.SessionTTL = time.Hour
 	// Tests hammer auth endpoints from one IP; keep prod defaults out of the way.
 	cfg.Limits.LoginPerMin = 10000
@@ -255,7 +255,7 @@ type caller struct {
 	session string // session cookie value
 	csrf    string
 	pat     string // bearer token
-	// device is a trusted-device cookie value (agentry#461): a browser
+	// device is a trusted-device cookie value: a browser
 	// remembered after it answered the second factor, so a later password
 	// sign-in from it is not asked for the code. Empty means the request
 	// carries none, which is what an unremembered browser looks like.
@@ -310,9 +310,8 @@ func (env *testEnv) doWithHeaders(c caller, method, path string, body any, heade
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	// One helper rather than a second copy of the credential rules: this used
-	// to duplicate authenticate(), which is how a cookie added to one would
-	// have been silently missing from the other.
+	// One helper rather than a second copy of the credential rules, so a
+	// cookie added to one cannot be silently missing from the other.
 	env.authenticate(req, c)
 	for k, v := range headers {
 		req.Header.Set(k, v)
@@ -439,7 +438,7 @@ func (env *testEnv) registerEmail(handle, email string) string {
 
 // verifyOrgDomain records that the organization proved control of a
 // domain, which a DNS-TXT claim does in real life (handlers_domains.go):
-// a verified row in domain_claims (agentry#363). A verified domain belongs
+// a verified row in domain_claims. A verified domain belongs
 // to one organization, and tests in this binary share their database, so a
 // verified claim another test's organization left on the same domain is
 // released first — that organization is done with it.
@@ -461,7 +460,7 @@ func (env *testEnv) verifyOrgDomain(org, domain string) {
 
 // handOverAndLeave makes other an admin of org and removes the admin's own
 // membership: what a person does before creating a second organization,
-// since they belong to one at a time (D26, agentry#363).
+// since they belong to one at a time.
 func (env *testEnv) handOverAndLeave(admin caller, org, otherHandle string) {
 	env.t.Helper()
 	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+org+"/members/"+otherHandle,
@@ -469,12 +468,12 @@ func (env *testEnv) handOverAndLeave(admin caller, org, otherHandle string) {
 	env.doJSON(admin, http.MethodDelete, "/api/v1/orgs/"+org+"/members/"+admin.name, nil, nil, http.StatusNoContent)
 }
 
-// joinOrg makes handle an active member of org through the real doors —
-// since agentry#361 an invitation accepted by the invited account is the
-// only way in, so a fixture that needs a member builds one the way a person
-// would. The account must be registered; its address is verified here
-// because accepting requires it. A fixture that needs another role changes
-// it afterwards, which is what the PUT route is still for.
+// joinOrg makes handle an active member of org through the real doors:
+// an invitation accepted by the invited account is the only way in, so a
+// fixture that needs a member builds one the way a person would. The
+// account must be registered; its address is verified here because
+// accepting requires it. A fixture that needs another role changes it
+// afterwards, which is what the PUT route is still for.
 func (env *testEnv) joinOrg(admin caller, org, handle string) {
 	env.t.Helper()
 	env.verifyEmail(handle)
@@ -508,9 +507,9 @@ func (env *testEnv) login(handle string) caller {
 }
 
 // loginOpts are the optional parts of a password sign-in: a second-factor
-// code, and the opt-in that asks the server to remember this browser
-// (agentry#461). The zero value is today's sign-in — no code, nothing
-// remembered — which is what makes the opt-in's default testable.
+// code, and the opt-in that asks the server to remember this browser.
+// The zero value is the plain sign-in, no code and nothing
+// remembered, which is what makes the opt-in's default testable.
 type loginOpts struct {
 	totpCode       string
 	rememberDevice bool

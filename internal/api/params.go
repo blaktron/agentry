@@ -1,6 +1,6 @@
 package api
 
-// Shared request-parameter handling for the §9.1 conventions: limit/offset
+// Shared request-parameter handling for the API conventions: limit/offset
 // clamping, opaque keyset cursors, and RFC 8288 Link headers. Every list
 // endpoint goes through these so the pagination contract cannot drift
 // per-handler (the same reason problem.go owns every error response).
@@ -17,10 +17,10 @@ import (
 
 // clampLimit resolves a ?limit= into the endpoint's bounds.
 //
-// §9.1 says limits are clamped, not policed: a client asking for 1,000 rows
-// gets the maximum page, and a negative or zero value gets the default. This
-// replaces the "reject with 422" and — worse — the "pass it straight to
-// LIMIT/OFFSET and 500 on a negative value" patterns the audit found.
+// Limits are clamped, not policed: a client asking for 1,000 rows gets the
+// maximum page, and a negative or zero value gets the default. Rejecting
+// with 422, or passing the value straight to LIMIT/OFFSET and failing with
+// a 500 on a negative one, are both avoided.
 func clampLimit(v *int, def, max int) int {
 	if v == nil {
 		return def

@@ -13,7 +13,7 @@ import (
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
-// The EXIF/alt-text half of §8.3 S3, and its benign twin. The images are
+// The EXIF/alt-text half of S3, and its benign twin. The images are
 // generated here rather than committed: the attack corpus is a text-only tree
 // by policy (its README says so), and a binary fixture would be the one file
 // in it nobody could review by reading.
@@ -162,7 +162,7 @@ func TestExtractImageTextRejectsGarbage(t *testing.T) {
 
 // --- Pipeline-level fixture pair ----------------------------------------
 
-// TestImageMetadataInjectionFixture is the §17.3 EXIF fixture pair, run
+// TestImageMetadataInjectionFixture is the EXIF fixture pair, run
 // through the orchestrator: an image carrying an injection directive in its
 // metadata must produce an S3 finding, and an ordinary photograph with
 // ordinary caption metadata must not.
@@ -231,7 +231,7 @@ func TestImageMetadataInjectionFixture(t *testing.T) {
 	})
 }
 
-// TestMarkdownAltTextIsScanned pins the other half of §8.3's "image alt-text/
+// TestMarkdownAltTextIsScanned pins the other half of S3's "image alt-text/
 // EXIF text extraction": alt text needs no extractor because it is literal
 // text in the markdown file. This test exists so a future change that starts
 // stripping markdown syntax before scanning cannot quietly open that gap.

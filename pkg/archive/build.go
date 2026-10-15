@@ -1,9 +1,8 @@
 // Package archive is the public release-archive toolkit: the deterministic
-// tar.zst builder that gives every release its content-addressed identity
-// (D-15, §6.5), the hardened extractor for untrusted archives (§8.2), the
-// trusted unpacker clients use on registry-built archives, and the content
-// sniffers behind the S1 inventory and `agentry validate` parity (D-12).
-// The server and the CLI both build on this package, which is what makes
+// tar.zst builder that gives every release its content-addressed identity,
+// the hardened extractor for untrusted archives, the trusted unpacker
+// clients use on registry-built archives, and the content sniffers behind
+// the S1 inventory and `agentry validate` parity. The server and the CLI both build on this package, which is what makes
 // "the CLI runs the same checks the server runs" true by construction.
 package archive
 
@@ -68,7 +67,7 @@ func WalkWorkspace(root string) ([]manifest.FileInfo, error) {
 
 // BuildArchive writes the deterministic tar.zst of the include-filtered
 // workspace to w and returns its identity: sorted entries, zeroed mtimes,
-// normalized modes, fixed uid/gid (D-15). Callers MUST have validated the
+// normalized modes, fixed uid/gid. Callers MUST have validated the
 // manifest (V4) against the same file list first.
 func BuildArchive(root string, include []manifest.FileInfo, w io.Writer) (ArchiveInfo, error) {
 	hasher := sha256.New()
@@ -107,7 +106,7 @@ func BuildArchive(root string, include []manifest.FileInfo, w io.Writer) (Archiv
 			Typeflag: tar.TypeReg,
 			Uname:    "", Gname: "",
 			Uid: 0, Gid: 0,
-			// ModTime deliberately zero (D-15).
+			// ModTime deliberately zero.
 			Format: tar.FormatPAX,
 		}
 		if err := tw.WriteHeader(hdr); err != nil {
@@ -144,7 +143,7 @@ func BuildArchive(root string, include []manifest.FileInfo, w io.Writer) (Archiv
 // Unpack is for archives the registry itself built and signed — the client
 // side of an install, after digest and signature verification. For UNTRUSTED
 // input use Extract, which adds the file-count cap, the compression-ratio
-// check, and the decoder memory bound (§8.2).
+// check, and the decoder memory bound.
 func Unpack(r io.Reader, dst string, maxFile, maxTotal int64) error {
 	zr, err := zstd.NewReader(r)
 	if err != nil {

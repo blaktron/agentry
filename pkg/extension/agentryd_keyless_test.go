@@ -12,11 +12,11 @@ import (
 	"github.com/blaktron/agentry/internal/store"
 )
 
-// TestOnlyTheKeyHolderNeedsTheSigningKey pins agentry#479 at the role seam:
-// with signing.kind file and no key file on disk, the api and git roles
+// TestOnlyTheKeyHolderNeedsTheSigningKey pins, at the role seam, that
+// with signing.kind file and no key file on disk the api and git roles
 // build their handlers (they hold no key), and `all`, which is also the
-// worker, refuses to start. The worker role builds the same server as `all`
-// for its queue and refuses the same way.
+// worker, refuses to start. The worker role builds the same server as
+// `all` for its queue and refuses the same way.
 func TestOnlyTheKeyHolderNeedsTheSigningKey(t *testing.T) {
 	st := migratedStore(t)
 	ctx := context.Background()

@@ -3,7 +3,7 @@
 # destination: since ruleset 0.4.9 a host below a "*." entry of
 # capabilities.browser.hosts is a host the release declares, so the hit is
 # medium and the release publishes with the finding on the report, as
-# s4-exfiltration-declared-host does for network.egress (agentry#1198). A
+# s4-exfiltration-declared-host does for network.egress. A
 # loosening, so its outcome is asserted.
 technique: "S4 exfiltration directive to a host the manifest's browser may open (rated by declaration)"
 manifest: |

@@ -29,7 +29,7 @@ func s7ctxR(osv OSVClient, cache MCPScanCache, reg PackageRegistries) stageConte
 	return stageContext{ctx: context.Background(), log: slog.Default(), osv: osv, mcpCache: cache, registries: reg}
 }
 
-// agentry#1036: a version its registry does not publish is refused (a
+// A version its registry does not publish is refused (a
 // critical finding, which the gate rejects), OSV is not asked about it, and
 // its registry row says not-found, never safe. The other server goes on as
 // before.
@@ -88,7 +88,7 @@ func TestS7NotCheckedWhenTheRegistryDoesNotAnswer(t *testing.T) {
 	}
 }
 
-// Every version published: no finding of the check's own, and OSV as before.
+// Every version published: no finding of the check's own, and OSV is asked.
 func TestS7PublishedVersionsAddNothing(t *testing.T) {
 	reg := &fakeRegistries{published: map[string]bool{
 		"npm:@modelcontextprotocol/server-github@2026.1.2": true, "pypi:mcp-server-fetch@0.6.2": true}}
@@ -100,7 +100,7 @@ func TestS7PublishedVersionsAddNothing(t *testing.T) {
 }
 
 // Told not to ask (AGENTRY_SCAN_NPM_REGISTRY=none): an info finding that
-// does not gate, and OSV as before.
+// does not gate, and OSV is asked.
 func TestS7OfflineRegistriesAreNotChecked(t *testing.T) {
 	osv := &fakeOSV{}
 	res := S7MCPServers{}.Run(s7ctxR(osv, &MemoryMCPScanCache{}, OfflineRegistries{}), &Input{ManifestJSON: []byte(s7Manifest)})

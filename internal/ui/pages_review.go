@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// The operator surface (DEV-091, plan core-web-split §3.2): the review
+// The operator surface: the review
 // queue and its decisions, abuse triage, quarantine/block/reinstate and
 // ruleset releases — the pages a headless registry needs to publish and to
 // moderate. Every page reads and posts through the API's own handlers, so
@@ -24,8 +24,8 @@ type reviewItem struct {
 	Agent     string     `json:"agent"`
 	Namespace string     `json:"namespace"`
 	CreatedAt *time.Time `json:"createdAt"`
-	// VersionStatus is the version's own status (§7) when the item was
-	// read: what a decision does depends on it (agentry#273).
+	// VersionStatus is the version's own status when the item was read:
+	// what a decision does depends on it.
 	VersionStatus string `json:"versionStatus"`
 }
 
@@ -96,7 +96,7 @@ func (h *handler) reviewQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	path := "/review-queue?limit=100&queue=" + d.Queue
 	// No organization named: platform staff get every organization's
-	// queue (agentry#912); anyone else the API's request to name one.
+	// queue; anyone else the API's request to name one.
 	if d.Queue == "org" && d.Org != "" {
 		path += "&org=" + url.QueryEscape(d.Org)
 	}
@@ -129,10 +129,9 @@ type fileLine struct {
 
 // verdictOption is one finding verdict as the page offers it: the API's value,
 // which is the enum SetFindingVerdict accepts and must not change, and a label
-// a reviewer can read. The select used to print the value as its own label, so
-// a reviewer chose between "dismissed_false_positive" and
+// a reviewer can read, rather than "dismissed_false_positive" and
 // "dismissed_accepted_risk". The accepted-risk label carries the ceiling the
-// API enforces (severity medium and below, §8.5).
+// API enforces (severity medium and below).
 type verdictOption struct {
 	Value string
 	Label string
@@ -261,7 +260,7 @@ func (h *handler) reviewDecide(w http.ResponseWriter, r *http.Request) {
 	}
 	// What a decision does depends on where the version is
 	// (internal/api/handlers_reviews.go DecideReviewItem), so the item's
-	// versionStatus (agentry#273) is read before the decision and the
+	// versionStatus is read before the decision and the
 	// flash names the consequence; a read that failed leaves the flash
 	// with what the decision recorded and nothing it cannot know.
 	c := h.call(r)
@@ -281,11 +280,11 @@ func (h *handler) reviewDecide(w http.ResponseWriter, r *http.Request) {
 }
 
 // decisionDone is the flash for a recorded decision: the consequence the
-// §7 state machine gives it, branched on the version's status before the
+// state machine gives it, branched on the version's status before the
 // decision, or the bare record when that status was not read. An approve
 // publishes and signs in the decision's own transaction where the server
 // holds the signing key, and moments later on the worker where it does not
-// (internal/scan/pipeline.go DecideReview, agentry#479), so the flash says
+// (internal/scan/pipeline.go DecideReview), so the flash says
 // what is true on both; a quarantined version was published, then
 // quarantined (visible, not installable — docs/trust.md), and a reject
 // yanks it rather than the rejected edge that does not exist for it.
@@ -415,8 +414,8 @@ func (h *handler) staffAbuseTriage(w http.ResponseWriter, r *http.Request) {
 // exclude `blocked` and nothing else (internal/store/queries/agents.sql), so a
 // quarantined QuickAgent stays listed with its state on it. Reinstate walks
 // blocked and quarantined versions back to published (internal/scan/worker.go)
-// and never touches a yanked one. The flash used to be built as action + "d.",
-// which said "blockd" and named the action rather than its consequence.
+// and never touches a yanked one. The flash names the consequence, not the
+// action.
 var agentActionDone = map[string]string{
 	"quarantine": "quarantined. A published version under quarantine answers 409 on download; the QuickAgent stays in search, carrying the state.",
 	"block":      "blocked. Every download for it answers 410 Gone.",
@@ -443,7 +442,7 @@ func (h *handler) staffAgentAction(w http.ResponseWriter, r *http.Request) {
 }
 
 // orgLifecycle posts one of platform staff's two acts on an organization
-// (agentry#374) and names its consequence, so the org page and the staff
+// and names its consequence, so the org page and the staff
 // console call and say the same thing. Read out of
 // internal/api/handlers_org_lifecycle.go: suspend hides the organization
 // and everything under it from everyone, staff included, and deletes
@@ -464,14 +463,13 @@ func (c apiCall) orgLifecycle(handle, action, reason string) (res response, ok s
 	return res, ok, err
 }
 
-// staffOrgAction is the console's organization form (agentry#374): a
-// suspended organization answers 404 to everyone, platform staff
-// included, so the reinstate form on its page cannot be reached once the
-// suspend form there has been used. The console carries both actions by
-// handle — the actions, not a listing — over the same POST
-// /orgs/{org}/suspend and /reinstate the org page calls; authorization is
-// the API's, which refuses a caller who is not staff before it looks the
-// handle up.
+// staffOrgAction is the console's organization form: a suspended organization
+// answers 404 to everyone, platform staff included, so the reinstate form on
+// its page cannot be reached once the suspend form there has been used. The
+// console carries both actions by handle — the actions, not a listing — over
+// the same POST /orgs/{org}/suspend and /reinstate the org page calls;
+// authorization is the API's, which refuses a caller who is not staff before
+// it looks the handle up.
 func (h *handler) staffOrgAction(w http.ResponseWriter, r *http.Request) {
 	if !h.acceptForm(w, r) {
 		return
@@ -514,8 +512,8 @@ func (h *handler) staffRulesetRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 201 recorded a release; 200 is the row already on file, which changes
-	// nothing (internal/api/handlers_ruleset.go). One flash for both claimed a
-	// record that had not happened. The sweep is not in either flash: the API
+	// nothing (internal/api/handlers_ruleset.go), so each gets its own flash.
+	// The sweep is not in either flash: the API
 	// enqueues it only when the insert was genuinely new, and a 201 over an
 	// existing row (the upsert's other branch) starts none.
 	if res.Status == http.StatusCreated {

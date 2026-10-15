@@ -10,8 +10,7 @@ import (
 // webPaths answers every browser destination this server writes into a
 // redirect or an email: where a failed sign-in lands, where a signed-in
 // browser goes, where a verification link points, where sign-out ends,
-// where a client opens the device-authorize page (DEV-091, plan
-// core-web-split §3.1).
+// where a client opens the device-authorize page.
 //
 // With web.url set — a site fronts this server — they are that site's
 // pages, absolute. Without it they are the server's own pages under /ui/:
@@ -71,7 +70,7 @@ func (p webPaths) dashboardURL() string {
 
 // settingsURL is the page where a person switches the registry's mails on
 // and off: the site's settings page, or this server's account page, which
-// carries the same switches (agentry#274).
+// carries the same switches.
 func (p webPaths) settingsURL() string {
 	if p.site() {
 		return p.web + "/settings"
@@ -123,7 +122,7 @@ func (p webPaths) accountSettingsURL() string {
 }
 
 // reportCardURL is where an author is sent to read a version's report card
-// from a quarantine or review email (agentry#270). With a site it is the
+// from a quarantine or review email. With a site it is the
 // site's version page, which carries the full report. The server's own
 // pages have no version page, so without a site the link is the API's
 // report resource — JSON, but reachable, which a page that does not exist
@@ -135,8 +134,8 @@ func (p webPaths) reportCardURL(agent, version string) string {
 	return p.abs("/api/v1/agents/" + agent + "/versions/" + url.PathEscape(version) + "/report")
 }
 
-// authorizeURL is the device-authorize page a CLI or the desktop app opens
-// (DR-17, D-018). It is always the server's own page: the site links to it
+// authorizeURL is the device-authorize page a CLI or the desktop app opens.
+// It is always the server's own page: the site links to it
 // rather than serving one. "" when the public origin is not configured.
 func (p webPaths) authorizeURL() string {
 	return p.abs("/ui/authorize")

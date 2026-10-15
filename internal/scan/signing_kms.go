@@ -20,7 +20,7 @@ import (
 )
 
 // KMSAPI is the slice of the KMS client KMSSigner uses. Two calls, so the
-// tests can substitute an in-process fake and never reach AWS (DEV-029).
+// tests can substitute an in-process fake and never reach AWS.
 type KMSAPI interface {
 	Sign(ctx context.Context, in *kms.SignInput, opts ...func(*kms.Options)) (*kms.SignOutput, error)
 	GetPublicKey(ctx context.Context, in *kms.GetPublicKeyInput, opts ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error)
@@ -34,9 +34,9 @@ type KMSOptions struct {
 	Region string
 }
 
-// KMSSigner signs DSSE envelopes with a KMS-held ECDSA P-256 key (D-16, §8.8).
+// KMSSigner signs DSSE envelopes with a KMS-held ECDSA P-256 key.
 // The private key never leaves KMS; only kms:Sign is called, and only from the
-// worker role — which is what makes the T-09 "KMS Sign anomaly" alarm
+// worker role — which is what makes an alarm on anomalous KMS Sign calls
 // meaningful, since any other caller is by definition unexpected.
 type KMSSigner struct {
 	api    KMSAPI
@@ -44,7 +44,7 @@ type KMSSigner struct {
 	// pubPEM is fetched once at construction. Caching it keeps the
 	// well-known endpoint off the KMS API path, so a scrape of
 	// signing-keys.json cannot be turned into KMS request volume — and it
-	// makes the T-09 signal purely about signing.
+	// makes the KMS Sign signal purely about signing.
 	pubPEM string
 	keyID  string
 }
@@ -77,7 +77,7 @@ func NewKMSSignerWithAPI(ctx context.Context, api KMSAPI, keyARN string) (*KMSSi
 		return nil, fmt.Errorf("scan: kms get public key: %w", err)
 	}
 	if out.KeySpec != "" && out.KeySpec != kmstypes.KeySpecEccNistP256 {
-		// §8.8 fixes the algorithm at ECDSA P-256; a key of another spec
+		// The algorithm is fixed at ECDSA P-256; a key of another spec
 		// would produce envelopes the CLI cannot verify.
 		return nil, fmt.Errorf("scan: kms key spec is %s, want %s", out.KeySpec, kmstypes.KeySpecEccNistP256)
 	}
@@ -92,7 +92,7 @@ func NewKMSSignerWithAPI(ctx context.Context, api KMSAPI, keyARN string) (*KMSSi
 	// Same derivation as the file signer, so a key id identifies the key
 	// material rather than the backend that happens to hold it. Rotating from
 	// file to KMS with the same key would keep the id stable, and the CLI's
-	// TOFU pin (§8.8) would not see a discontinuity where there is none.
+	// TOFU pin would not see a discontinuity where there is none.
 	s.keyID = attest.KeyIDFor(pub)
 	return s, nil
 }

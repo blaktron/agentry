@@ -23,7 +23,7 @@ type userDirectoryDevice = struct {
 	Name      string     `json:"name"`
 }
 
-// GetUserDirectory implements GET /user/directory (agentry#113): where the
+// GetUserDirectory implements GET /user/directory: where the
 // caller changes password, enrols MFA or edits profile when the directory
 // service owns the account, plus the authenticators it has enrolled.
 func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
@@ -46,9 +46,9 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 	str := func(v string) *string { return &v }
 	// authentik's default flow slugs (2026.x); the user interface path is
 	// stable across releases.
-	// The Agentry flows (compose blueprint agentry-account-flows.yaml,
-	// agentry#164): each ends with a redirect back to the account settings
-	// (the site's, or the server's own /ui/ page — DEV-091), and no
+	// The Agentry flows (compose blueprint agentry-account-flows.yaml):
+	// each ends with a redirect back to the account settings (the site's,
+	// or the server's own /ui/ page), and no
 	// link ever points at the directory's own panel.
 	out.PasswordChangeUrl = str(origin + "/if/flow/agentry-password-change/")
 	out.TotpSetupUrl = str(origin + "/if/flow/agentry-totp-setup/")
@@ -88,7 +88,7 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 }
 
 // addSignInFacts adds the directory's first social connection and password
-// answer (agentry#706) for the account the caller's directory sign-in is
+// answer for the account the caller's directory sign-in is
 // linked to. Anything the directory does not answer is left out: the page
 // shows nothing rather than a guess.
 func (s *Server) addSignInFacts(r *http.Request, link directoryLink, out *UserDirectory) {
@@ -111,8 +111,8 @@ func (s *Server) addSignInFacts(r *http.Request, link directoryLink, out *UserDi
 	out.HasPassword = f.HasPassword
 }
 
-// DeleteUserDirectoryDevice implements DELETE /user/directory/devices/{kind}/{deviceId}
-// (agentry#164): the caller removes one of their own authenticators from the
+// DeleteUserDirectoryDevice implements DELETE /user/directory/devices/{kind}/{deviceId}:
+// the caller removes one of their own authenticators from the
 // directory without ever seeing the directory's settings panel. The
 // directory admin access does the work; ownership is checked against the
 // account's own device list, so an id that is not the caller's answers 404

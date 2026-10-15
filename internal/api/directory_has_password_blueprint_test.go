@@ -6,7 +6,7 @@ import (
 )
 
 // The registry reads whether a directory account has a password from its
-// agentry_has_password attribute (agentry#706), which only the account-flows
+// agentry_has_password attribute, which only the account-flows
 // blueprint keeps: one policy, run when the step is reached, on every
 // binding that writes a password and on sign-in. A binding that lost it, or
 // that evaluated it at planning (before the password exists), would leave

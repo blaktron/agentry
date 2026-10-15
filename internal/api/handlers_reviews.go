@@ -47,7 +47,7 @@ func findingToAPI(f storegen.Finding) ScanFinding {
 			out.Detail = &d
 		}
 	}
-	// §8.5: dismissals "stay on the public report with rationale". Without
+	// Dismissals stay on the public report with rationale. Without
 	// the rationale a dismissed finding reads as an unexplained disappearance,
 	// which is the opposite of the honesty the report is for.
 	if f.VerdictReason != nil && *f.VerdictReason != "" {
@@ -84,7 +84,7 @@ func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionSt
 	}
 	// What the review cost is the platform's measurement, not part of the
 	// public verdict: staff read it, everyone else sees the same report as
-	// before (plan subscription-tiers §10).
+	// before.
 	if p := principalFrom(r.Context()); p != nil && p.PlatformStaff &&
 		run.JudgePromptTokens != nil && run.JudgeCompletionTokens != nil {
 		rep.JudgeUsage = &JudgeUsage{
@@ -113,7 +113,7 @@ func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionSt
 }
 
 // shippedKnowledgeOf is what a run's scan read of the knowledge packs the
-// release ships, as the SK stage recorded it (plan knowledge.md §4.6):
+// release ships, as the SK stage recorded it:
 // none for a release that ships no pack, or a run whose SK has not
 // finished.
 func shippedKnowledgeOf(ctx context.Context, q *storegen.Queries, runID uuid.UUID) ([]ShippedKnowledgeScan, error) {
@@ -140,7 +140,7 @@ func shippedKnowledgeOf(ctx context.Context, q *storegen.Queries, runID uuid.UUI
 // verdict yet, and one that errored is not called scanned — that would be
 // "scanned with a known gap" wearing the clean word; its scanStatus says
 // error and the gate has sent the version to review. One rule for the
-// version's report and for the account install list (agentry#448).
+// version's report and for the account install list.
 func scanRunStandsBehindReport(status string) bool {
 	return status == "passed" || status == "findings"
 }
@@ -152,7 +152,7 @@ func scanRunStandsBehindReport(status string) bool {
 // rescan sweep does not blank the verdict a published release stands on
 // for as long as it runs, and a rescan that ends in error still becomes the
 // report: an error is never hidden behind the verdict before it. One rule
-// for the report and the account install row (agentry#542, DEV-146).
+// for the report and the account install row.
 // pgx.ErrNoRows means the version has no run at all.
 func reportRun(ctx context.Context, q *storegen.Queries, versionID uuid.UUID) (run storegen.ScanRun, inFlight *storegen.ScanRun, err error) {
 	latest, err := q.LatestScanRunForVersion(ctx, versionID)
@@ -169,7 +169,7 @@ func reportRun(ctx context.Context, q *storegen.Queries, versionID uuid.UUID) (r
 	return finished, &latest, nil
 }
 
-// GetVersionReport implements GET .../versions/{version}/report (§8, public).
+// GetVersionReport implements GET .../versions/{version}/report (public).
 func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString) {
 	if !s.requireDB(w, r) {
 		return
@@ -179,7 +179,7 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 		return
 	}
 	if v.ScanStatus == registry.ScanStatusSkipped {
-		// Admitted without a scan (M21): no run, no findings, no
+		// Admitted without a scan: no run, no findings, no
 		// attestation, and the report says so as its own verdict —
 		// never an empty report a reader could take for a clean one.
 		skipped, unscanned := registry.ScanStatusSkipped, Unscanned
@@ -191,7 +191,7 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 		// No scan yet (still submitted, say) is a legitimately empty report.
 		// A database failure is NOT, and answering 200-with-no-findings to
 		// both told the reader "nothing was found" when the truth was "we
-		// could not look" — the exact claim §1.6.3 forbids.
+		// could not look" — a claim the report must never make.
 		if !errors.Is(err, pgx.ErrNoRows) {
 			s.log.ErrorContext(r.Context(), "version report: load scan run", "version", v.ID, "err", err)
 			problemInternal(w, r)
@@ -212,7 +212,7 @@ func (s *Server) GetVersionReport(w http.ResponseWriter, r *http.Request, ns Nam
 	writeJSON(w, http.StatusOK, rep)
 }
 
-// GetVersionAttestation implements GET .../versions/{version}/attestation (§8.8).
+// GetVersionAttestation implements GET .../versions/{version}/attestation.
 func (s *Server) GetVersionAttestation(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, version VersionString) {
 	if !s.requireDB(w, r) {
 		return
@@ -227,15 +227,15 @@ func (s *Server) GetVersionAttestation(w http.ResponseWriter, r *http.Request, n
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	// Not immutable: a rotation countersigns the envelope with the new key
-	// (agentry#350), and a cache that kept the old bytes for a year would
+	// Not immutable: a rotation countersigns the envelope with the new key,
+	// and a cache that kept the old bytes for a year would
 	// keep serving an envelope a fresh client cannot verify. The statement
 	// inside never changes; the signature list grows.
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_, _ = w.Write(att.DsseEnvelope)
 }
 
-// ListReviewQueue implements GET /review-queue (§8.6).
+// ListReviewQueue implements GET /review-queue.
 func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params ListReviewQueueParams) {
 	if !s.requireDB(w, r) {
 		return
@@ -256,7 +256,7 @@ func (s *Server) ListReviewQueue(w http.ResponseWriter, r *http.Request, params 
 		}
 	case "org":
 		// Platform staff may read any organization's queue, or every
-		// organization's at once by naming none (agentry#912).
+		// organization's at once by naming none.
 		if params.Org == nil {
 			if !p.PlatformStaff {
 				problemValidation(w, r, "Name the organization for the org queue.")
@@ -314,7 +314,7 @@ func (s *Server) reviewItemAccess(w http.ResponseWriter, r *http.Request, id uui
 			return storegen.ReviewItem{}, false
 		}
 	case "org":
-		// Platform staff may review any organization's item (agentry#912).
+		// Platform staff may review any organization's item.
 		if ri.OrgID == nil || (!p.PlatformStaff && !s.isOrgReviewer(p, *ri.OrgID)) {
 			problemForbidden(w, r, "This review item needs the organization's security_reviewer role or higher.")
 			return storegen.ReviewItem{}, false
@@ -322,7 +322,7 @@ func (s *Server) reviewItemAccess(w http.ResponseWriter, r *http.Request, id uui
 	default:
 		// A queue this code does not know is nobody's to read: the DDL's
 		// CHECK names the two queues today, and this switch does not lean
-		// on it staying that way (agentry#413).
+		// on it staying that way.
 		s.log.WarnContext(r.Context(), "review item of an unknown queue", "item", ri.ID, "queue", ri.Queue)
 		problemForbidden(w, r, "This review item belongs to a queue this server does not serve.")
 		return storegen.ReviewItem{}, false
@@ -331,7 +331,7 @@ func (s *Server) reviewItemAccess(w http.ResponseWriter, r *http.Request, id uui
 }
 
 // GetReviewItem implements GET /review-items/{id}. The bundle carries
-// everything the §10.1 reviewer detail renders in one call: the findings,
+// everything the reviewer detail renders in one call: the findings,
 // the submitted manifest and capabilities, and the previous published
 // version as the capability-diff baseline.
 func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
@@ -379,7 +379,7 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 
 	// The report the reviewer decides on is the latest finished run, as on
 	// the version's own report: a new ruleset's redo of the queue rescans a
-	// held version (agentry#772), and its run in progress is a partial list.
+	// held version, and its run in progress is a partial list.
 	run, inFlight, err := reportRun(r.Context(), q, ri.VersionID)
 	switch {
 	case err == nil:
@@ -408,8 +408,8 @@ func (s *Server) GetReviewItem(w http.ResponseWriter, r *http.Request, id openap
 }
 
 // DecideReviewItem implements POST /review-items/{id}/decision. An author
-// cannot decide their own version (§12.2, enforced here), unless they are
-// platform staff (agentry#912, DEV-213): staff may decide any item, and a
+// cannot decide their own version (enforced here), unless they are
+// platform staff: staff may decide any item, and a
 // staff decision on their own version is marked in its audit event.
 func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	if !s.requireDB(w, r) {
@@ -434,8 +434,8 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 	}
 	p := principalFrom(r.Context())
 
-	// Author-cannot-self-approve (§12.2), at every layer, except for
-	// platform staff, who publish the built-in packages (agentry#912).
+	// Author-cannot-self-approve, at every layer, except for
+	// platform staff, who publish the built-in packages.
 	v, err := s.q().GetVersionByID(r.Context(), ri.VersionID)
 	if err != nil {
 		problemInternal(w, r)
@@ -447,10 +447,10 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 		return
 	}
 
-	// Approving a quarantined version republishes it (§7 quarantined →
+	// Approving a quarantined version republishes it (quarantined →
 	// published: "re-review clears"). Rejecting one cannot go to `rejected` —
 	// that edge does not exist and the version is already public — so it
-	// yanks instead; blocking stays a T&S console action (DEV-015).
+	// yanks instead; blocking stays a T&S console action.
 	quarantined := registry.Status(v.Status) == registry.StatusQuarantined
 	target := registry.StatusPublished
 	newState := "approved"
@@ -467,9 +467,9 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 		e.OrgID = *ri.OrgID
 	}
 	// One transaction for the verdict AND the transition: recording them
-	// separately let a transient failure leave the item decided with the
+	// separately could let a transient failure leave the item decided with the
 	// version still in needs_review, which the "already decided" guard above
-	// then made unrecoverable.
+	// would then make unrecoverable.
 	handedOff, err := s.pipeline.DecideReview(r.Context(), scan.ReviewDecision{
 		ItemID: ri.ID, VersionID: ri.VersionID, Target: target, State: newState,
 		Rationale: rationale, DecidedBy: p.UserID, SelfDecision: selfDecision, Audit: e,
@@ -486,7 +486,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 		}
 		return
 	}
-	// A publish handed to the worker (agentry#479) has not happened yet:
+	// A publish handed to the worker has not happened yet:
 	// the author hears that it was approved, not that it is published.
 	outcome := string(target)
 	if handedOff {
@@ -497,7 +497,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 }
 
 // notifyReviewDecided tells the version's author what a reviewer decided
-// (§8.7 author notification). Best-effort: the decision has already been
+// (author notification). Best-effort: the decision has already been
 // committed, and a mail failure must not turn a successful review into a 500
 // the reviewer would retry against an "already decided" item.
 func (s *Server) notifyReviewDecided(ctx context.Context, v storegen.AgentVersion, decision, reviewer, rationale string) {
@@ -515,7 +515,7 @@ func (s *Server) notifyReviewDecided(ctx context.Context, v storegen.AgentVersio
 		return
 	}
 	if !notify.AllowsEmail(ctx, s.q(), s.log, author.ID, notify.KindReviewDecision) {
-		return // unverified address, or the author switched these off (#299, #190)
+		return // unverified address, or the author switched these off
 	}
 	if err := s.notifier.ReviewDecided(ctx, notify.ReviewNotice{
 		ToEmail:   author.Email,
@@ -529,7 +529,7 @@ func (s *Server) notifyReviewDecided(ctx context.Context, v storegen.AgentVersio
 	}
 }
 
-// SetFindingVerdict implements POST /findings/{id}/verdict (§8.5). Only org
+// SetFindingVerdict implements POST /findings/{id}/verdict. Only org
 // security_reviewers may accept-risk, and only up to medium.
 func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	if !s.requireDB(w, r) {
@@ -567,19 +567,19 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 	if !readJSON(w, r, &req) {
 		return
 	}
-	// accepted_risk only by org reviewers, only ≤ medium (§8.5).
+	// accepted_risk only by org reviewers, only ≤ medium.
 	if req.Verdict == "dismissed_accepted_risk" {
 		if scan.SeverityAtLeast(f.Severity, "high") {
 			problemForbidden(w, r, "Accepted-risk dismissal covers severity medium and below.")
 			return
 		}
-		// The actor half of §8.5 (DEV-034): on an org-namespace agent the
+		// The actor half of that rule: on an org-namespace agent the
 		// waiver is the org's call. reviewItemAccess admits any platform
-		// staff member to any item, an org-queue one included since
-		// agentry#912 — right for the protective actions (quarantine,
-		// block, false-positive) but not for accepting risk on someone
-		// else's behalf — so this re-checks the org role regardless of the
-		// staff flag. Personal-namespace agents have no org
+		// staff member to any item, an org-queue one included — right for
+		// the protective actions (quarantine, block, false-positive) but
+		// not for accepting risk on someone else's behalf — so this
+		// re-checks the org role regardless of the staff flag.
+		// Personal-namespace agents have no org
 		// to defer to and keep the platform-queue rule.
 		v, err := s.q().GetVersionByID(r.Context(), run.VersionID)
 		if err != nil {
@@ -617,11 +617,10 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// isOrgReviewer reports whether p may act on the org review queue (§12.2:
-// security_reviewer or higher). The reviewer role exists only inside a
-// first-party organization (D20); in every other organization this is the
-// admins alone — accepting risk on the org's agents included (DEV-034 as
-// amended by agentry#360).
+// isOrgReviewer reports whether p may act on the org review queue:
+// security_reviewer or higher. The reviewer role exists only inside a
+// first-party organization; in every other organization this is the
+// admins alone — accepting risk on the org's agents included.
 func (s *Server) isOrgReviewer(p *auth.Principal, orgID uuid.UUID) bool {
 	switch p.Role(orgID) {
 	case auth.RoleAdmin, auth.RoleSecurityReviewer:

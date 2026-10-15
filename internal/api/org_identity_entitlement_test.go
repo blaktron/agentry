@@ -1,8 +1,7 @@
 package api_test
 
 // SSO and SCIM gated on the tier, and the rule that billing state never
-// loosens identity (agentry#365, M13; plan organization-subscriptions.md
-// §5.7, D11; DEV-114).
+// loosens identity.
 
 import (
 	"context"
@@ -110,7 +109,7 @@ func TestIdentityDoorsFailClosed(t *testing.T) {
 	}
 }
 
-// The rule this milestone exists to keep: a subscription that stops
+// The rule these tests exist to keep: a subscription that stops
 // including SSO takes nothing away and lets nobody in. The connection and
 // the SCIM token keep their rows, `sso_required` is untouched — billing
 // never writes it — and the only change is that enforcement stops, because

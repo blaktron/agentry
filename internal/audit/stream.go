@@ -1,12 +1,11 @@
 package audit
 
-// The continuous audit stream (§12.6): "every … action → audit_events
-// (partitioned) AND streamed to S3 (Firehose on SaaS; file/S3 writer
-// self-host) as NDJSON within ~1 min".
+// The continuous audit stream: every audited action goes to audit_events
+// (partitioned) and is also streamed as NDJSON to an archive sink.
 //
 // Two sinks, one guarantee ordering. audit_events is the system of record: a
 // failed insert fails the mutation (see Writer.Write). The stream is the
-// ARCHIVE — it is what survives partition pruning (§4.3) and what an auditor
+// ARCHIVE — it is what survives partition pruning and what an auditor
 // reads years later — so it is fed best-effort and never blocks a request. A
 // full buffer drops and logs rather than stalling the API, because an audit
 // archive that can wedge the write path is a denial-of-service surface, not a
@@ -65,7 +64,7 @@ type Record struct {
 	RequestID  string          `json:"-"`
 }
 
-// NewStream builds the configured sink (§12.6). An unconfigured or
+// NewStream builds the configured sink. An unconfigured or
 // unsupported kind yields a no-op sink and a log line — a self-host operator
 // who has not set up archival still gets a working registry.
 func NewStream(kind, dir, s3Bucket string, flush time.Duration, log *slog.Logger) Stream {
@@ -97,12 +96,12 @@ func NewStream(kind, dir, s3Bucket string, flush time.Duration, log *slog.Logger
 
 // LogStream mirrors every record as one line on the server's logger —
 // `event=audit.<action>` with the record's fields — so an audit event is
-// searchable wherever the server's lines are shipped (plan log-stack.md §5.4,
-// DEV-020 addendum). It is a mirror: the row in audit_events remains the
-// record, and the file archive keeps its own shape. The write is
-// synchronous — one line on stderr, microseconds — so there is no buffer and
-// therefore no drop path of its own; what happens to the line after that is
-// the log shipping's business, which is best-effort by design.
+// searchable wherever the server's lines are shipped (docs/logging.md). It is
+// a mirror: the row in audit_events remains the record, and the file archive
+// keeps its own shape. The write is synchronous — one line on stderr,
+// microseconds — so there is no buffer and therefore no drop path of its own;
+// what happens to the line after that is the log shipping's business, which
+// is best-effort by design.
 type LogStream struct{ log *slog.Logger }
 
 // NewLogStream builds the mirror on log (nil means the default logger).
@@ -173,10 +172,10 @@ func (NopStream) Flush(context.Context) error { return nil }
 // Close implements Stream.
 func (NopStream) Close() error { return nil }
 
-// NewS3Stream is the SaaS sink (§12.6 "Firehose on SaaS"). Not built here:
-// the deployment that needs it is the same one that provisions the delivery
-// stream, and a half-written client that silently drops records would be
-// worse than an explicit refusal at startup. Recorded as a deviation.
+// NewS3Stream is the hosted-deployment sink (a delivery stream). Not built
+// here: the deployment that needs it is the same one that provisions the
+// delivery stream, and a half-written client that silently drops records
+// would be worse than an explicit refusal at startup.
 func NewS3Stream(bucket string, _ time.Duration, _ *slog.Logger) (Stream, error) {
 	return nil, fmt.Errorf("audit: s3 stream is not configured in this build (bucket %q); "+
 		"use streamKind=file, or the Firehose delivery stream on SaaS", bucket)
@@ -187,7 +186,7 @@ func NewS3Stream(bucket string, _ time.Duration, _ *slog.Logger) (Stream, error)
 // FileStream appends NDJSON to one file per UTC day in a directory.
 type FileStream struct {
 	// OnDrop, when set, is called for every record dropped on a full buffer
-	// (agentry#33: the metrics layer counts it as a fail-open event).
+	// (the metrics layer counts it as a fail-open event).
 	OnDrop func()
 	dir    string
 	log    *slog.Logger

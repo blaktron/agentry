@@ -21,21 +21,20 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// Status is a publication state (§7). The state machine lives on
+// Status is a publication state. The state machine lives on
 // agent_versions.status; every transition is audited and executed under
 // SELECT … FOR UPDATE (single writer).
 type Status string
 
-// Publication states (§7).
+// Publication states.
 const (
 	StatusSubmitted   Status = "submitted"
 	StatusScanning    Status = "scanning"
 	StatusNeedsReview Status = "needs_review"
-	// StatusApproved is RESERVED and never written (DEV-046, agentry#32):
-	// review collapses approval and publication into one
-	// needs_review → published transition so the §7 "no path to published
-	// skips the gate" property is one edge, and no version can be stranded
-	// between the two. It stays in the enum because narrowing it is a
+	// StatusApproved is RESERVED and never written: review collapses
+	// approval and publication into one needs_review → published
+	// transition so the "no path to published skips the gate" property is
+	// one edge, and no version can be stranded between the two. It stays in the enum because narrowing it is a
 	// breaking API change; readers must tolerate it and will not see it.
 	StatusApproved    Status = "approved"
 	StatusPublished   Status = "published"
@@ -45,25 +44,24 @@ const (
 	StatusBlocked     Status = "blocked"
 )
 
-// allowedTransitions encodes the §7 diagram. Keys are from-states.
+// allowedTransitions encodes the state diagram. Keys are from-states.
 //
 // submitted → published is the one edge that does not pass the gate
-// (M21, agentry#368; plan organization-subscriptions §4, D16): it is
 // taken only by a version an organization's administrator chose to have
 // admitted unscanned — scan_status = skipped, which SubmitVersion sets
 // before the edge and TransitionInTx checks under the row lock — and such
 // a version exists only on a private agent of the organization's, which
-// cannot become public while it is published. For public content the §7
+// cannot become public while it is published. For public content the
 // property is unchanged: nothing reaches published except from scanning,
 // needs_review or quarantined (TestNoPathToPublishedSkipsTheGateForAPublicAgent).
 var allowedTransitions = map[Status][]Status{
 	StatusSubmitted:   {StatusScanning, StatusPublished},
 	StatusScanning:    {StatusPublished, StatusNeedsReview, StatusRejected},
 	StatusNeedsReview: {StatusPublished, StatusRejected},
-	// published → blocked is not drawn in the §7 diagram, which reaches
+	// published → blocked is not drawn in the base diagram, which reaches
 	// blocked only via quarantined. T&S confirming a malicious PUBLISHED
 	// package needs one atomic step, not a quarantine it must immediately
-	// supersede — see DEVIATIONS DEV-014.
+	// supersede.
 	StatusPublished:   {StatusQuarantined, StatusYanked, StatusBlocked},
 	StatusQuarantined: {StatusPublished, StatusYanked, StatusBlocked},
 	StatusBlocked:     {StatusQuarantined}, // platform reinstate path
@@ -79,7 +77,7 @@ func transitionAllowed(from, to Status) bool {
 	return false
 }
 
-// The scan statuses a version carries (agent_versions.scan_status, M21):
+// The scan statuses a version carries (agent_versions.scan_status):
 // admitted through the pipeline, or skipped — no run, no findings, no
 // attestation, the verdict "unscanned".
 const (
@@ -97,7 +95,7 @@ func skipsTheGate(from, to Status) bool {
 
 // ErrUnscannedOnPublic reports a version admitted unscanned about to be
 // published on an agent that is not a private one of an organization's —
-// the state DEV-115 rules out at every layer.
+// the state that is ruled out at every layer.
 var ErrUnscannedOnPublic = errors.New("registry: an unscanned version is published only on a private organization agent")
 
 // unscannedMayPublish locks the agent's row and says whether a version
@@ -118,7 +116,7 @@ func unscannedMayPublish(ctx context.Context, q *storegen.Queries, agentID uuid.
 	return nil
 }
 
-// publishUnscanned admits a submitted version without a scan (M21): one
+// publishUnscanned admits a submitted version without a scan: one
 // transaction that marks the version skipped and takes the
 // gate-skipping edge, the agent's row locked and re-read inside it. It
 // reports whether the version was published; false with no error means
@@ -151,21 +149,19 @@ func (s *Service) publishUnscanned(ctx context.Context, versionID uuid.UUID, rea
 	return true, nil
 }
 
-// ErrBadTransition reports a §7 state-machine violation.
+// ErrBadTransition reports a state-machine violation.
 var ErrBadTransition = errors.New("registry: illegal state transition")
 
 // ErrVersionMoved reports that a transition's precondition failed: the
 // version was no longer in the state the caller decided from (a decision
-// reached late, after the watchdog routed the version to review —
-// agentry#343). The caller's decision is stale, not wrong; it stops.
+// reached late, after the watchdog routed the version to review). The caller's decision is stale, not wrong; it stops.
 var ErrVersionMoved = errors.New("registry: version moved before the transition")
 
 // Version aliases the row type.
 type Version = storegen.AgentVersion
 
-// Pipeline is what happens after a version enters the machine. M3 wires the
-// dev-mode auto-approve stub; M4 replaces it with the scan orchestrator.
-// Implementations run AFTER the submission transaction commits.
+// Pipeline is what happens after a version enters the machine: the scan
+// orchestrator. Implementations run AFTER the submission transaction commits.
 //
 // The error return is load-bearing: a hand-off that fails (queue down, scan
 // crashed) leaves the version parked in `scanning`, and a seam that cannot
@@ -179,11 +175,10 @@ func (s *Service) SetPipeline(p Pipeline) { s.pipeline = p }
 
 // ErrScanNotScheduled reports that a version was recorded but its scan could
 // not be started. The version stays in `scanning`; the pipeline watchdog
-// routes it to review once it passes the §7 30-minute cap.
+// routes it to review once it passes the 30-minute cap.
 var ErrScanNotScheduled = errors.New("registry: version recorded but its scan could not be scheduled")
 
-// TransitionResult describes a committed §7 transition. Event is the §9.3
-// webhook name for the edge, or "" when the edge has no external event.
+// TransitionResult describes a committed transition. Event is the webhook name for the edge, or "" when the edge has no external event.
 type TransitionResult struct {
 	AgentID   uuid.UUID
 	VersionID uuid.UUID
@@ -201,13 +196,13 @@ type TransitionResult struct {
 // PipelineError is the platform's own fault — a stage error, a fatal
 // report, a scan that never finished — routing the version to review with
 // an S0/pipeline-error finding; an extension that charged for the
-// submission refunds on it (plan subscription-tiers §5.4).
+// submission refunds on it.
 type TransitionCause struct {
 	PipelineError bool
 	ScanRunID     uuid.UUID
 }
 
-// Transition moves a version to a new status with full §7 enforcement:
+// Transition moves a version to a new status with full state-machine enforcement:
 // row lock, edge validation, audit, and latest-published maintenance.
 func (s *Service) Transition(ctx context.Context, versionID uuid.UUID, to Status, reason string, actorEvent audit.Event) error {
 	return s.TransitionWith(ctx, versionID, to, reason, actorEvent, TransitionCause{})
@@ -222,7 +217,7 @@ func (s *Service) TransitionWith(ctx context.Context, versionID uuid.UUID, to St
 // still be in `from` under the row lock, or nothing moves and
 // ErrVersionMoved says so. A decision made about a version in one state
 // must not be applied to it in another — a scan's verdict reaching a
-// version the watchdog has since handed to a reviewer (agentry#343).
+// version the watchdog has since handed to a reviewer.
 func (s *Service) TransitionFrom(ctx context.Context, versionID uuid.UUID, from, to Status, reason string, actorEvent audit.Event, cause TransitionCause) error {
 	return s.transitionWith(ctx, versionID, from, to, reason, actorEvent, cause)
 }
@@ -280,7 +275,7 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 		// agent of an organization's — on the gate-skipping edge, and on
 		// a reinstate from quarantine alike — read here under the
 		// agent's row lock, so a visibility change racing this transition
-		// cannot put an unscanned version on a public agent (DEV-115).
+		// cannot put an unscanned version on a public agent.
 		if err := unscannedMayPublish(ctx, q, row.AgentID, from); err != nil {
 			return TransitionResult{}, err
 		}
@@ -299,7 +294,7 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 	}
 	// A version that leaves `published` is no longer an installable
 	// dependency risk: its open MCP dependency alerts close with the new
-	// state as the reason (agentry#177, D6).
+	// state as the reason.
 	if from == StatusPublished && to != StatusPublished {
 		r := "version-" + string(to)
 		if _, err := q.ResolveMCPDependencyAlertsForVersion(ctx, storegen.ResolveMCPDependencyAlertsForVersionParams{
@@ -309,15 +304,15 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 		}
 	}
 	// Maintain agents.latest_published_version_id on entry/exit of
-	// published (§4.2 denormalized pointer).
+	// published (a denormalized pointer).
 	if to == StatusPublished || from == StatusPublished {
 		if err := q.RecomputeAgentLatestPublished(ctx, row.AgentID); err != nil {
 			return TransitionResult{}, err
 		}
 	}
-	// A publish is what makes a release's modes true of the agent (DEV-088,
-	// agentry#162): the row's modes follow the manifest just published, the
-	// same denormalisation as the pointer above. Yanks and blocks leave it;
+	// A publish is what makes a release's modes true of the agent: the
+	// row's modes follow the manifest just published, the same
+	// denormalisation as the pointer above. Yanks and blocks leave it;
 	// the next publish sets it again. A snapshot with no modes (the
 	// withdrawn kind) sets nothing.
 	var publishedModes []string
@@ -346,7 +341,7 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 	return res, nil
 }
 
-// EmitTransition fans a committed transition out to the event sink (§9.3).
+// EmitTransition fans a committed transition out to the event sink.
 // Best-effort: the sink logs its own errors and never affects the transition.
 func (s *Service) EmitTransition(ctx context.Context, res TransitionResult) {
 	if s.eventSink == nil || res.Event == "" {
@@ -363,8 +358,8 @@ func (s *Service) EmitTransition(ctx context.Context, res TransitionResult) {
 	s.eventSink(ctx, res.AgentID, res.Event, payload)
 }
 
-// EmitAgentEvent publishes a non-transition agent event (§9.3) — today the
-// advisory the rescan path drafts, which had no way to reach subscribers.
+// EmitAgentEvent publishes a non-transition agent event — today the
+// advisory the rescan path drafts.
 func (s *Service) EmitAgentEvent(ctx context.Context, agentID uuid.UUID, event string, payload map[string]any) {
 	if s.eventSink == nil || event == "" {
 		return
@@ -372,7 +367,7 @@ func (s *Service) EmitAgentEvent(ctx context.Context, agentID uuid.UUID, event s
 	s.eventSink(ctx, agentID, event, payload)
 }
 
-// transitionEvent maps a state-machine edge to the §9.3 webhook event, or ""
+// transitionEvent maps a state-machine edge to the webhook event, or ""
 // when the edge has no external event.
 func transitionEvent(from, to Status) string {
 	switch to {
@@ -394,7 +389,7 @@ func transitionEvent(from, to Status) string {
 	}
 }
 
-// SubmitInput carries one publication submission (§6.5). Workspace is a
+// SubmitInput carries one publication submission. Workspace is a
 // directory holding the exact tree to publish; the handler prepares it from
 // `git archive` (git-tag source) or the uploaded archive (cli-upload).
 type SubmitInput struct {
@@ -403,19 +398,18 @@ type SubmitInput struct {
 	CommitSHA     string
 	Workspace     string
 	ClaimedDigest string // cli-upload: client digest to cross-check (may be empty)
-	// DraftRun is the hosted draft a cli-upload says it was published from
-	// (plan drafter-revisions.md §6; agentry#794). A claim only: the scan
-	// asks the extension's DraftProvenance whether it holds, and the client
-	// is never believed.
+	// DraftRun is the hosted draft a cli-upload says it was published
+	// from. A claim only: the scan asks the extension's DraftProvenance
+	// whether it holds, and the client is never believed.
 	DraftRun *uuid.UUID
 	// pipeline, when set, is where the version goes once recorded, in place
 	// of the service's own: a fork's first version is submitted by a
-	// worker, whose service keeps no hand-off of its own (agentry#943).
+	// worker, whose service keeps no hand-off of its own.
 	pipeline Pipeline
 }
 
 // skipsPipeline says whether a submission to the agent is admitted
-// without a scan (M21): the administrator's flag is set, the agent is a
+// without a scan: the administrator's flag is set, the agent is a
 // private one of an organization's, and the organization's tier includes
 // unscanned agents now. A resolver that cannot answer is "no": the
 // version is scanned.
@@ -431,8 +425,8 @@ func (s *Service) skipsPipeline(ctx context.Context, a Agent) bool {
 	return f.UnscannedAgents
 }
 
-// The §19 publish-velocity quota and the archive quotas both come from the
-// entitlements Resolver (§14.2). subjectFor maps an agent onto the subject
+// The publish-velocity quota and the archive quotas both come from the
+// entitlements Resolver. subjectFor maps an agent onto the subject
 // whose plan governs it: the owning org, or the user whose personal namespace
 // holds it.
 func subjectFor(a Agent) entitlements.Subject {
@@ -454,32 +448,32 @@ func (e *ErrValidation) Error() string {
 }
 
 // SubmitVersion validates, archives, records, and hands the version to the
-// pipeline: §6.5 steps 1–4 then §7 submitted→scanning.
+// pipeline: submitted→scanning.
 func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent, in SubmitInput, actorEvent audit.Event) (Version, error) {
 	if p == nil || p.Anonymous {
 		return Version{}, auth.ErrUnauthorized
 	}
-	// A retired agent takes no submission until it is restored
-	// (agentry#942, D2), whichever door the submission came through.
+	// A retired agent takes no submission until it is restored,
+	// whichever door the submission came through.
 	if a.RetiredAt != nil {
 		return Version{}, ErrRetired
 	}
 	// A git-tag submission on a role that hands the archive write off
-	// (the git role, agentry#508) builds the archive for its digest and
-	// leaves the store to the worker.
+	// (the git role) builds the archive for its digest and leaves the
+	// store to the worker.
 	deferStore := s.archiveHandOff != nil && in.Source == SourceGitTag
 	if s.blobs == nil && !deferStore {
 		return Version{}, errors.New("registry: no blob store configured")
 	}
 
-	// §19 quotas for this agent's owner, resolved once and used for both the
+	// The quotas for this agent's owner, resolved once and used for both the
 	// publish-velocity check and the archive limits below.
 	lim, err := s.Entitlements().Limits(ctx, subjectFor(a))
 	if err != nil {
 		return Version{}, fmt.Errorf("registry: entitlements: %w", err)
 	}
 
-	// Publish-velocity quota (§19).
+	// Publish-velocity quota.
 	today, err := s.st.Queries().CountVersionsToday(ctx, a.ID)
 	if err != nil {
 		return Version{}, err
@@ -537,13 +531,13 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		return Version{}, err
 	}
 
-	// 2FA before public publish (§12.1, §19). Checked here rather than in a
+	// 2FA before public publish. Checked here rather than in a
 	// handler so it covers BOTH sources: the CLI upload and the git-tag
 	// auto-publish that a push triggers without any API call.
 	if err := s.checkPublicPublish2FA(ctx, p, a); err != nil {
 		return Version{}, err
 	}
-	// Policy knobs that reject at V-validation time (§8.6): blocked
+	// Policy knobs that reject at V-validation time: blocked
 	// capabilities, disallowed licenses, missing evals.
 	if s.policyGate != nil {
 		if issues := s.policyGate.CheckSubmission(ctx, PolicySubmission{
@@ -574,7 +568,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		}
 	}()
 
-	// Deterministic archive from the allowlist (§6.5 steps 2–3).
+	// Deterministic archive from the allowlist.
 	include := manifest.ResolveInclude(m.Publish.Include, files)
 	// Stage through a temp buffer file: the key depends on the digest.
 	tmp, err := os.CreateTemp("", "agentry-archive-*")
@@ -587,7 +581,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		return Version{}, err
 	}
 
-	// cli-upload: never trust client packing (§6.5) — the server-built
+	// cli-upload: never trust client packing — the server-built
 	// digest is authoritative; a claimed digest must agree.
 	if in.ClaimedDigest != "" && in.ClaimedDigest != info.Digest {
 		return Version{}, &ErrValidation{Issues: []error{
@@ -605,7 +599,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 
 	// The contract a person consents to: the capabilities and the names of
-	// the knowledge packs the release ships (plan knowledge.md §4.6).
+	// the knowledge packs the release ships.
 	caps, err := json.Marshal(m.Contract())
 	if err != nil {
 		return Version{}, err
@@ -615,7 +609,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		// The agent as it is now, under its row lock: a delete or a retire
 		// that landed after this submission resolved the agent must not
-		// have a version arrive behind it (agentry#942). Tombstone takes
+		// have a version arrive behind it. Tombstone takes
 		// the same lock and counts in-flight versions under it.
 		locked, err := q.GetAgentForUpdate(ctx, a.ID)
 		if err != nil {
@@ -627,7 +621,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		if locked.RetiredAt != nil {
 			return ErrRetired
 		}
-		// The submitting address, keyed and month-rotated (agentry#27):
+		// The submitting address, keyed and month-rotated:
 		// the middleware resolved it once onto the context, for the API
 		// upload and the git push alike.
 		var ipHash *string
@@ -668,14 +662,14 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 	admitted = true // the row is committed; the ticket is spent
 
-	// §9.3 catalog (agentry#56): the submission itself is an event, before
-	// any scan outcome.
+	// The submission itself is an event in the webhook catalog, before any
+	// scan outcome.
 	submitted := map[string]any{
 		"version": m.Version, "source": in.Source, "channel": string(m.EffectiveChannel()),
 	}
 	if ticket.ID != "" {
 		// The admission ticket lets the Admitter tie its debit to the
-		// version the core created for it (plan subscription-tiers §5.1).
+		// version the core created for it.
 		submitted["admissionTicket"] = ticket.ID
 		submitted["versionId"] = versionID.String()
 	}
@@ -717,10 +711,10 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 // went out (a handed-off git-tag submission, emitted where it was
 // recorded).
 func (s *Service) enterPipeline(ctx context.Context, a Agent, versionID uuid.UUID, submitted map[string]any, sysEvent audit.Event, pipeline Pipeline) (Version, error) {
-	// An agent its organization's administrator took off the pipeline
-	// (M21, D16): the version is published as submitted, marked skipped
-	// first so the one gate-skipping edge will take it, with no scan run
-	// and no attestation, and served everywhere as unscanned. Only while
+	// An agent its organization's administrator took off the pipeline:
+	// the version is published as submitted, marked skipped first so the
+	// one gate-skipping edge will take it, with no scan run and no
+	// attestation, and served everywhere as unscanned. Only while
 	// the agent is still private, still an organization's, and the tier
 	// still includes it — each read again here, since the flag was set
 	// earlier and any of them may have changed; otherwise the version
@@ -741,7 +735,7 @@ func (s *Service) enterPipeline(ctx context.Context, a Agent, versionID uuid.UUI
 		// caller's read and the lock: through the pipeline it goes.
 	}
 
-	// Enter the machine (§7): submitted → scanning, then hand off.
+	// Enter the machine: submitted → scanning, then hand off.
 	if err := s.Transition(ctx, versionID, StatusScanning, "archive built", sysEvent); err != nil {
 		return Version{}, err
 	}
@@ -753,7 +747,7 @@ func (s *Service) enterPipeline(ctx context.Context, a Agent, versionID uuid.UUI
 			// The version row is committed and sitting in `scanning`; there is
 			// nothing to roll back. Report it instead of returning a 202 that
 			// promises a scan nobody scheduled — the watchdog will route it to
-			// review at the §7 cap.
+			// review at the 30-minute cap.
 			s.logger().Error("registry: pipeline hand-off failed; version left in scanning",
 				"version", versionID, "agent", a.Namespace+"/"+a.Name, "err", perr)
 			v, gerr := s.st.Queries().GetVersionByID(ctx, versionID)
@@ -767,9 +761,9 @@ func (s *Service) enterPipeline(ctx context.Context, a Agent, versionID uuid.UUI
 	return s.st.Queries().GetVersionByID(ctx, versionID)
 }
 
-// checkPublicPublish2FA enforces §12.1/§19: publishing to a public namespace
-// requires TOTP on the submitting account. Enabled by the api/worker wiring
-// outside dev mode (DEV-016) — a dev instance has no enrollment flow to
+// checkPublicPublish2FA enforces the 2FA gate: publishing to a public
+// namespace requires TOTP on the submitting account. Enabled by the api/worker wiring
+// outside dev mode — a dev instance has no enrollment flow to
 // satisfy, and config validation already forbids devMode in a prod env.
 func (s *Service) checkPublicPublish2FA(ctx context.Context, p *auth.Principal, a Agent) error {
 	if !s.require2FAPublic || a.Visibility != "public" {
@@ -781,7 +775,7 @@ func (s *Service) checkPublicPublish2FA(ctx context.Context, p *auth.Principal, 
 		return fmt.Errorf("registry: verify two-factor enrollment: %w", err)
 	}
 	// Native TOTP, or a second factor the directory service asserted at
-	// sign-in (users.idp_mfa_at, agentry#23): either is evidence.
+	// sign-in (users.idp_mfa_at): either is evidence.
 	if !u.TotpEnabled && u.IdpMfaAt == nil {
 		return fmt.Errorf("%w: a public namespace needs two-factor authentication on the account — native TOTP, or a second factor the sign-in provider asserts", ErrTwoFactorRequired)
 	}
@@ -809,7 +803,7 @@ func stageArchive(root string, include []manifest.FileInfo, dst io.Writer) (Arch
 
 	_, copyErr := io.Copy(dst, pr)
 	// Unblock the builder unconditionally: on a copy failure it is otherwise
-	// asleep in pw.Write with nobody left to read (B-18).
+	// asleep in pw.Write with nobody left to read.
 	if copyErr != nil {
 		_ = pr.CloseWithError(copyErr)
 	} else {
@@ -862,10 +856,6 @@ func (s *Service) existingVersions(ctx context.Context, agentID uuid.UUID) (map[
 	}
 	return out, nil
 }
-
-// (The M3 DevAutoApprovePipeline stub lived here until 2026-08-31: M4's
-// real pipeline is wired in dev mode too, which orphaned it — workspace
-// ANALYSIS.md M7, in blaktron/agentry-notes.)
 
 func isUniqueViolationErr(err error) bool {
 	var pgErr *pgconn.PgError

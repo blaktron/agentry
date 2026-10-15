@@ -58,10 +58,10 @@ SELECT key_id, algorithm, public_key_pem, first_seen_at, last_seen_at, retired_a
 ORDER BY last_seen_at DESC LIMIT 1
 `
 
-// The key the deployment signs with today, for a process that holds no key
-// of its own (the api and git roles, agentry#479): the one registered most
-// recently and not retired. A registration retires every other key, so at
-// most one row qualifies once the signer has started.
+// The key the deployment signs with today, for a process that holds no key of
+// its own (the api and git roles): the one registered most recently and not
+// retired. A registration retires every other key, so at most one row
+// qualifies once the signer has started.
 func (q *Queries) GetActiveSigningKey(ctx context.Context) (SigningKey, error) {
 	row := q.db.QueryRow(ctx, getActiveSigningKey)
 	var i SigningKey
@@ -131,7 +131,7 @@ type InsertRulesetAttestationParams struct {
 }
 
 // The signer stores the ruleset attestation for the bundle it carries at
-// start (agentry#479); a row already there for that digest and key stays.
+// start; a row already there for that digest and key stays.
 func (q *Queries) InsertRulesetAttestation(ctx context.Context, arg InsertRulesetAttestationParams) error {
 	_, err := q.db.Exec(ctx, insertRulesetAttestation, arg.BundleDigest, arg.KeyID, arg.DsseEnvelope)
 	return err
@@ -255,7 +255,7 @@ type RegisterSigningKeyRow struct {
 	Inserted     bool       `json:"inserted"`
 }
 
-// Signing keys and re-attestation (§8.8, agentry#350).
+// Signing keys and re-attestation.
 // A signer registers its public key at start. Seeing a key again keeps it
 // current (a rollback to the previous key file is a legitimate rotation
 // too); `inserted` tells the caller this is a key the registry has never

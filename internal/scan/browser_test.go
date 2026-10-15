@@ -8,8 +8,8 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 )
 
-// The browser in the pipeline (plan browser-testing.md §5, D1, D12;
-// agentry#1134). capabilities.browser is its own capability token, never
+// The browser in the pipeline.
+// capabilities.browser is its own capability token, never
 // network; a site-scoped browser publishes under the baseline as a target
 // host does; a browser on any public site is held as "*" egress is, under
 // the policy's wildcardEgress.
@@ -44,8 +44,8 @@ func TestABrowserIsItsOwnPolicyTokenNotNetwork(t *testing.T) {
 	}
 }
 
-// TestABrowserOfAnOddShapeLeavesTheRestDeclared is agentry#755's lesson
-// for the new line: a browser value that does not decode is still a
+// TestABrowserOfAnOddShapeLeavesTheRestDeclared: a browser value that
+// does not decode is still a
 // browser, and the other capabilities still read.
 func TestABrowserOfAnOddShapeLeavesTheRestDeclared(t *testing.T) {
 	mj := []byte(`{"schemaVersion":"2","name":"x","capabilities":{"browser":{"scope":7},` +

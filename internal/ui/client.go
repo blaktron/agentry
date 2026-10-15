@@ -128,7 +128,7 @@ func forwardCookies(w http.ResponseWriter, from http.Header) {
 }
 
 // setCookieLike sets name=value with the attributes of a Set-Cookie line
-// the API issued (the CSRF cookie mirrors the session cookie's, agentry#77).
+// the API issued (the CSRF cookie mirrors the session cookie's).
 func setCookieLike(w http.ResponseWriter, name, value, like string, secure bool) {
 	c := &http.Cookie{Name: name, Value: value, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure}
 	if like != "" {

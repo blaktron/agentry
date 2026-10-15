@@ -26,7 +26,7 @@ import (
 // JobDeliver is the queue job kind for one webhook delivery attempt.
 const JobDeliver = "webhook.deliver"
 
-// Event types (§9.3). The catalog is closed; endpoints subscribe by name.
+// Event types. The catalog is closed; endpoints subscribe by name.
 const (
 	EventAgentCreated       = "agent.created"
 	EventVersionSubmitted   = "version.submitted"
@@ -38,7 +38,7 @@ const (
 	EventAgentReinstated    = "agent.reinstated"
 	EventAdvisoryPublished  = "advisory.published"
 	// EventAgentDependencyAlert: a published version declares an MCP server
-	// version with a newly known high/critical vulnerability (agentry#177).
+	// version with a newly known high/critical vulnerability.
 	EventAgentDependencyAlert = "agent.dependency_alert"
 	EventScanCompleted        = "scan.completed"
 	EventMemberAdded          = "member.added"
@@ -77,13 +77,13 @@ type Deps struct {
 	Client *http.Client
 	// Now is the delivery clock; nil defaults to time.Now.
 	Now func() time.Time
-	// DeliveriesPerSecond is the §19 per-org delivery rate (default 5).
+	// DeliveriesPerSecond is the per-org delivery rate (default 5).
 	DeliveriesPerSecond float64
 }
 
 // deliveryRateBurst is the token-bucket depth for the per-org delivery rate.
 //
-// Set to one second's worth: §19 says "5 deliveries/s per org", and a deeper
+// Set to one second's worth: the quota is 5 deliveries/s per org, and a deeper
 // bucket would let an org that has been quiet dump a burst on an endpoint that
 // is at best surprised by it. Deferred deliveries are not dropped — they go
 // back on the queue — so smoothing costs latency, not events.
@@ -92,11 +92,11 @@ const deliveryRateBurst = 1
 // Dispatcher records and delivers webhook events for an org.
 type Dispatcher struct {
 	deps Deps
-	// rate enforces the §19 per-org delivery rate. Per-process, so an
+	// rate enforces the per-org delivery rate. Per-process, so an
 	// N-replica worker fleet allows roughly N× the rate — acceptable for a
-	// politeness limit, and the D-06 note applies (Redis on multi-node SaaS).
+	// politeness limit (ratelimit's note on multi-node hosting applies).
 	rate *ratelimit.Buckets
-	// mx counts §16.2 delivery outcomes; nil is a working no-op.
+	// mx counts delivery outcomes; nil is a working no-op.
 	mx *metrics.Metrics
 }
 
@@ -112,12 +112,12 @@ func NewDispatcher(deps Deps) *Dispatcher {
 		deps.Now = time.Now
 	}
 	if deps.DeliveriesPerSecond <= 0 {
-		deps.DeliveriesPerSecond = 5 // §19
+		deps.DeliveriesPerSecond = 5
 	}
 	return &Dispatcher{deps: deps, rate: ratelimit.New(ratelimit.DefaultIdleTTL)}
 }
 
-// SetMetrics wires the §16.2 instrument set.
+// SetMetrics wires the instrument set.
 func (d *Dispatcher) SetMetrics(m *metrics.Metrics) { d.mx = m }
 
 // Close releases the rate-limiter's collector goroutine.
@@ -137,7 +137,7 @@ type wirePayload struct {
 }
 
 // Emit records a delivery per subscribed active endpoint and enqueues a
-// delivery job for each (§9.3). It is best-effort: a webhook failure never
+// delivery job for each. It is best-effort: a webhook failure never
 // rolls back the state change that triggered it, so callers log and continue.
 func (d *Dispatcher) Emit(ctx context.Context, orgID uuid.UUID, eventType string, data any) error {
 	if d.deps.Store == nil || d.deps.Queue == nil {
@@ -220,7 +220,7 @@ func (d *Dispatcher) RegisterHandlers(q queue.Client) {
 }
 
 // deliver performs one delivery attempt. Returning an error tells the queue to
-// retry with exponential backoff (up to 5 attempts, §9.3). The SSRF guard runs
+// retry with exponential backoff (up to 5 attempts). The SSRF guard runs
 // inside the HTTP client's dialer, so re-resolution happens on every attempt.
 func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 	var args deliverArgs
@@ -256,7 +256,7 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 		return nil
 	}
 	if !strings.HasPrefix(strings.ToLower(row.Url), "https://") {
-		record(nil, "non-https url blocked (T-08)", nil, nil)
+		record(nil, "non-https url blocked", nil, nil)
 		return nil
 	}
 	secret, err := d.deps.Sealer.Open(row.SecretEnc)
@@ -265,13 +265,14 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 		return nil
 	}
 
-	// §19: 5 deliveries/s per org. Checked AFTER the permanent-failure branches
-	// above — spending a token on a delivery we are about to drop for a bad
-	// URL would let one misconfigured endpoint eat the org's whole budget.
+	// Quota: 5 deliveries/s per org. Checked AFTER the permanent-failure
+	// branches above — spending a token on a delivery we are about to drop
+	// for a bad URL would let one misconfigured endpoint eat the org's whole
+	// budget.
 	//
 	// Over budget, the delivery is deferred by returning an error: the queue
 	// re-runs it on its 2^attempt backoff. That does consume one of the five
-	// attempts §9.3 allows, so the retry budget is shared between throttling
+	// attempts allowed, so the retry budget is shared between throttling
 	// and real failures; at 5/s against a 5-attempt budget an org would have
 	// to be sustaining a large burst for that to exhaust anything.
 	if res := d.rate.Allow("webhook", row.OrgID.String(),
@@ -296,7 +297,7 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 
 	resp, err := d.deps.Client.Do(req)
 	if err != nil {
-		// Transport error incl. the SSRF guard blocking the address (T-08).
+		// Transport error incl. the SSRF guard blocking the address.
 		d.mx.RecordWebhookDelivery(ctx, "error")
 		var blocked *ErrBlockedAddress
 		if errors.As(err, &blocked) {
@@ -320,7 +321,7 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 	}
 	d.mx.RecordWebhookDelivery(ctx, "error")
 	delivered("error", "status", code)
-	// Non-2xx (incl. a 3xx we refuse to follow, T-08): retry.
+	// Non-2xx (incl. a 3xx we refuse to follow): retry.
 	record(&code, fmt.Sprintf("non-2xx status %d", resp.StatusCode), nil, d.backoff(now, job.Attempt))
 	return fmt.Errorf("webhook: deliver %s: status %d", args.DeliveryID, resp.StatusCode)
 }

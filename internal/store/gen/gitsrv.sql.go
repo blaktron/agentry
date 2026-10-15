@@ -16,11 +16,12 @@ const touchRepoOnPush = `-- name: TouchRepoOnPush :exec
 UPDATE repos SET last_push_at = now() WHERE id = $1
 `
 
-// Git hosting bookkeeping (§6.3). Owned by internal/gitsrv.
-// Records that a push landed when its size could not be measured: last_push_at
-// advances and size_bytes keeps its previous value. UpdateRepoOnPush is the
-// normal path; this one exists so a DiskUsage failure never writes a
-// fabricated size (a 0 would read as "empty repo" everywhere downstream).
+// Git hosting bookkeeping. Owned by internal/gitsrv.
+// Records that a push landed when its size could not be measured:
+// last_push_at advances and size_bytes keeps its previous value.
+// UpdateRepoOnPush is the normal path; this one exists so a DiskUsage failure
+// never writes a fabricated size (a 0 would read as "empty repo" everywhere
+// downstream).
 func (q *Queries) TouchRepoOnPush(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, touchRepoOnPush, id)
 	return err

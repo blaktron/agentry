@@ -3,7 +3,7 @@
 # discovery (mounted at /blueprints/custom); idempotent — every entry is
 # keyed by a stable identifier, so re-applying updates in place.
 #
-# Why one file (DEV-062, DEV-063): enrollment and recovery must enforce the
+# Why one file: enrollment and recovery must enforce the
 # SAME password rules, so the policy and the two password prompt fields are
 # shared objects referenced by both flows. Splitting them across files would
 # mean either duplicating the rules (drift) or a cross-file !Find whose
@@ -16,26 +16,25 @@
 # Recovery:    identification (10) → email link (20) → authenticator (25)
 #              → new password (30) → user write (40) → login (100)
 #
-# The two mails are the core's own templates (agentry#518), mounted at
+# The two mails are the core's own templates, mounted at
 # /templates from deploy/compose/authentik/templates: authentik's stock ones
 # embed its logo and end "Powered by authentik".
 #
-# The registry links an IdP identity to an account by VERIFIED email (T-12),
-# and the agentry-verified-email mapping below is what tells it (DEV-061).
-# Since agentry#861 (plan unactivated-accounts.md, DEV-197), where the
-# deployment sets AGENTRY_DIRECTORY_REGISTRY_ACTIVATION (any non-empty
+# The registry links an IdP identity to an account by VERIFIED email,
+# and the agentry-verified-email mapping below is what tells it.
+# Where the deployment sets AGENTRY_DIRECTORY_REGISTRY_ACTIVATION (any non-empty
 # value, in the server's and the worker's environment), a self-enrolled
 # account is written ACTIVE with the attribute agentry_email_verified:
 # false, so it reaches the site at once, read-only in the registry; the
 # mapping asks the registry whether its emailed activation link confirmed
-# this account and address (agentry#869). The attribute stays false. Unset,
-# sign-up is what it was (DEV-062):
-# the account written inactive and this flow's own mail activating it. An
+# this account and address. The attribute stays false. Unset,
+# sign-up writes the account inactive and this flow's own mail activates
+# it. An
 # account without the attribute counts as confirmed, as every active one
 # was. It is a switch because the claim's honesty depends on two halves
 # moving together: a deployment whose registry provider still uses a
-# mapping that asserts true for everyone (the SecureAgentry chart until
-# agentry-web#972) must not write unconfirmed accounts active.
+# mapping that asserts true for everyone must not write unconfirmed accounts
+# active.
 version: 1
 metadata:
   name: Agentry - Account flows (enrollment, recovery)
@@ -129,14 +128,13 @@ entries:
   # authentik's own event log. That choice is deliberate and was arrived at
   # by measurement, not preference:
   #
-  #   * What it counts is what authentik 2026.8 records (agentry#830). A
+  #   * What it counts is what authentik 2026.8 records. A
   #     flow-made account is a `user_write` event with `created` in its
   #     context and the client's address, not a `model_created` one. A mail
   #     is sent by the worker, so its `email_sent` event carries no address:
   #     the mail stages instead record an event of this budget's own,
   #     `custom_agentry_account_mail`, with the address, when they are
-  #     reached (agentry-account-flow-mail-count, below). Counted the old
-  #     way, the budget had counted nothing since the 2026.8 upgrade.
+  #     reached (agentry-account-flow-mail-count, below).
   #   * A policy bound to a flow is evaluated once when the flow plan is
   #     created, not per submission — so a counter keyed on POSTs never
   #     increments at all (verified: it silently did nothing).
@@ -167,9 +165,9 @@ entries:
     attrs:
       execution_logging: true
       # The per-IP budget is AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR (default 10),
-      # formatted into the expression at apply time (agentry#53). A value
+      # formatted into the expression at apply time. A value
       # that is not an integer falls back to 10 rather than breaking the
-      # policy — the except branch below fails open on purpose (DEV-063).
+      # policy — the except branch below fails open on purpose.
       expression: !Format
         - |
           try:
@@ -211,7 +209,7 @@ entries:
           return True
         - !Env [AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR, "10"]
 
-  # The budget's count of mails (agentry#830). Bound to each account flow's
+  # The budget's count of mails. Bound to each account flow's
   # mail stage and run on each request at the stage, never at the plan: it
   # records `custom_agentry_account_mail` with the client's address for the
   # first mail of the flow (a refresh of the "check your mail" page is not a
@@ -269,7 +267,7 @@ entries:
       required: true
       placeholder: "your registry handle: letters, digits, hyphens"
       placeholder_expression: false
-      # Filled in from the page's ?username= (agentry#860): the sign-in's
+      # Filled in from the page's ?username=: the sign-in's
       # "Sign up." links (templates/if/flow.html, signup-link) carry the name
       # the person typed there. Only a starting value: the form validates it
       # like anything typed. A value that could never be a username is
@@ -291,8 +289,8 @@ entries:
       field_key: name
       label: Display name (optional)
       type: text
-      # Optional (agentry#788): left blank, the account's name is its
-      # username as typed (any case; agentry#856), written at the enrolment
+      # Optional: left blank, the account's name is its
+      # username as typed (any case), written at the enrolment
       # write by agentry-enrollment-write-defaults below.
       required: false
       placeholder: ""
@@ -310,7 +308,7 @@ entries:
       required: true
       placeholder: "where the confirmation link goes"
       placeholder_expression: false
-      # Filled in from the page's ?email= (agentry#860), when the sign-in's
+      # Filled in from the page's ?email=, when the sign-in's
       # field held an address rather than a name. A starting value only.
       initial_value_expression: true
       initial_value: |
@@ -322,18 +320,18 @@ entries:
         return email if len(email) <= 254 and re.fullmatch(r"[^@\s]+@[^@\s]+", email) else ""
       order: 2
 
-  # The username becomes the registry handle (DEV-142, agentry#517): the
+  # The username becomes the registry handle: the
   # first sign-in seeds the handle from preferred_username, which is this
   # field. A username the registry could not take as it is would be mapped
   # to something else without the person knowing, so the form refuses it
-  # here (agentry#590, agentry-web#417). HANDLE is the core's reHandle
+  # here. HANDLE is the core's reHandle
   # (internal/api/handlers_auth.go) and RESERVED is pathHandles plus
   # firstPartyHandles (internal/api/handles.go), byte for byte:
   # TestEnrollmentUsernamePolicyMatchesHandleRules fails when they drift.
   # A handle someone already holds in the registry is not checked: no
   # endpoint answers that without an account.
   #
-  # Any case is accepted (agentry#856): the username is checked lower-cased
+  # Any case is accepted: the username is checked lower-cased
   # here and written lower-cased by agentry-enrollment-write-defaults below,
   # so `ChrisY` becomes the account and handle `chrisy`, never an error.
   # authentik's own "already taken" check compares the username as typed,
@@ -366,14 +364,13 @@ entries:
             return False
         return True
 
-  # The promo code (plan promo-codes.md §5.1, agentry#759): optional, and
-  # present only where the deployment sells subscriptions and sets
-  # AGENTRY_DIRECTORY_PROMO_FIELD=true in the directory's environment (the
-  # SecureAgentry overlay and chart do). Any non-empty value turns it on and
-  # unset or empty leaves it off: a blueprint cannot compare strings, so
-  # "false" would count as on, and !ParseJSON will not take !Env's value
-  # (agentry#759's probe). Off, the field is a hidden input the form never
-  # shows. Its value is written to the account's attributes at the
+  # The promo code: optional, and present only where the deployment sells
+  # subscriptions and sets AGENTRY_DIRECTORY_PROMO_FIELD=true in the
+  # directory's environment (a hosted deployment's overlay and chart do).
+  # Any non-empty value turns it on and unset or empty leaves it off: a
+  # blueprint cannot compare strings, so "false" would count as on, and
+  # !ParseJSON will not take !Env's value. Off, the field is a hidden input
+  # the form never shows. Its value is written to the account's attributes at the
   # enrolment write, so it survives a confirmation link opened on another
   # device, and it reaches the registry as the `agentry` scope's
   # agentry_promo_code claim. The registry forwards it to its extensions only
@@ -421,8 +418,7 @@ entries:
         import re
 
         # The serializer reads the dotted field key as a nested source, so at
-        # validation the value sits under attributes (agentry#759's probe);
-        # the flat key is read too, as the enrolment write names it.
+        # validation the value sits under attributes; the flat key is read too, as the enrolment write names it.
         data = request.context.get("prompt_data") or {}
         code = data.get("attributes.agentry_promo_code")
         if code is None:
@@ -452,13 +448,13 @@ entries:
         - !KeyOf policy-enrollment-username
         - !KeyOf policy-enrollment-promo-code
 
-  # The Terms of Service step (agentry#788): after the form, the deployment's
+  # The Terms of Service step: after the form, the deployment's
   # terms in a scrolling box, and an agreement that cannot be ticked until
   # the box has been read to its end. It is on only where the deployment
   # names its terms: AGENTRY_DIRECTORY_TERMS_FILE in the server's environment,
   # the path of an HTML fragment whose root carries
-  # data-terms-version="<version>" (the SecureAgentry site mounts its own,
-  # agentry-web#858). Unset, the step is skipped and sign-up is what it was;
+  # data-terms-version="<version>" (a hosted site mounts its own).
+  # Unset, the step is skipped and sign-up is what it was;
   # the core ships no terms of its own.
   #
   # The scroll gate is page script, and authentik gives a flow no place for
@@ -588,10 +584,10 @@ entries:
 
         return os.environ.get("AGENTRY_DIRECTORY_TERMS_FILE", "").strip() != ""
 
-  # What the enrolment write adds (agentry#788), bound to that step like
+  # What the enrolment write adds, bound to that step like
   # agentry-record-has-password and for the same reason: a validation policy
   # sees a copy of the form, and only the plan reaches the write. The
-  # username is written lower-cased (agentry#856) and a blank display name
+  # username is written lower-cased and a blank display name
   # becomes the username as it was typed; where the terms step ran, the account
   # records the version it agreed to, read from the text it was shown, and
   # when. Always passes: it exists for its side effect.
@@ -614,14 +610,14 @@ entries:
             return False
         prompt = plan.context.get("prompt_data") or {}
         # Unactivated until the registry's mailed link is followed, where
-        # the deployment turns registry activation on (agentry#861): the
+        # the deployment turns registry activation on: the
         # agentry-verified-email mapping reads this. Off, the flow's own
         # mail confirms the address before the account is active, and the
         # attribute is left absent, which reads as confirmed.
         if os.environ.get("AGENTRY_DIRECTORY_REGISTRY_ACTIVATION", "").strip():
             prompt["attributes.agentry_email_verified"] = False
         typed = str(prompt.get("username") or "").strip()
-        # The username in lower case (agentry#856); a blank display name
+        # The username in lower case; a blank display name
         # keeps the case it was typed in.
         prompt["username"] = typed.lower()
         if not str(prompt.get("name") or "").strip():
@@ -640,19 +636,18 @@ entries:
       name: agentry-enrollment-user-write
     attrs:
       # Active, and unactivated by its attribute, where the deployment
-      # turns registry activation on (agentry#861): see the header and
+      # turns registry activation on: see the header and
       # agentry-enrollment-write-defaults. Inactive otherwise, for the mail.
       create_users_as_inactive: !If [!Condition [AND, !Env [AGENTRY_DIRECTORY_REGISTRY_ACTIVATION, ""]], false, true]
       user_creation_mode: always_create
       user_type: internal
       user_path_template: users/self-enrolled
 
-  # No longer bound into sign-up (agentry#861, below). Kept because the
-  # site's social blueprint (agentry-web, agentry-social.yaml) finds it by
-  # name for its untrusted providers' enrolment, which still writes inactive
-  # and mails this link until those providers adopt the registry's
-  # activation (plan unactivated-accounts.md D12); a missing !Find target
-  # would roll that whole blueprint back.
+  # No longer bound into sign-up (see the header). Kept because the hosted
+  # site's social blueprint finds it by name for its untrusted providers'
+  # enrolment, which still writes inactive and mails this link until those
+  # providers adopt the registry's activation; a missing !Find target would
+  # roll that whole blueprint back.
   - model: authentik_stages_email.emailstage
     id: stage-enrollment-email
     identifiers:
@@ -669,20 +664,20 @@ entries:
     identifiers:
       name: agentry-enrollment-login
     attrs:
-      # No authentik_device cookie (agentry#460): see the sign-in's login
+      # No authentik_device cookie: see the sign-in's login
       # stage below.
       remember_device: seconds=0
       remember_me_offset: seconds=0
 
-  # Authenticator (TOTP) setup inside enrollment (agentry#53, DEV-062),
-  # skippable since agentry#894 (DEV-211): the step before it (order 35)
+  # Authenticator (TOTP) setup inside enrollment,
+  # skippable: the step before it (order 35)
   # asks whether to set one up now or later, and the setup (order 40) runs
   # unless the answer is "later". An account that skips signs in with its
   # password alone, since the sign-in's validation stage skips an account
   # with no authenticator (authentik's shipped not_configured_action: skip),
   # as a social sign-up without one already does. It has no second factor
-  # for the registry's public-publish gate (DEV-080) until it adds one from
-  # Settings, and the site's Dashboard says so (agentry-web#1141). Recovery
+  # for the registry's public-publish gate until it adds one from
+  # Settings, and the site's Dashboard says so. Recovery
   # still makes it set one up before it may choose a new password.
   - model: authentik_stages_authenticator_totp.authenticatortotpstage
     id: stage-totp-setup
@@ -784,14 +779,14 @@ entries:
       stage: !KeyOf stage-enrollment-user-write
       order: 20
     attrs:
-      # Every policy on the write must pass (agentry#788): the terms record
+      # Every policy on the write must pass: the terms record
       # is not optional, so an error in agentry-enrollment-write-defaults
       # skips the write, and the flow then stops with no account, rather
       # than writing one without the version it agreed to. The has-password
       # policy always passes.
       policy_engine_mode: all
   # The confirmation mail: bound where registry activation is off, and
-  # removed where it is on (agentry#861), since the registry then sends the
+  # removed where it is on, since the registry then sends the
   # activation mail at the first sign-in. Absent, so an applied directory
   # loses the binding too, not just this file; and only where the binding
   # exists, because authentik 2026.8 cannot remove a binding that is not
@@ -807,7 +802,7 @@ entries:
       stage: !KeyOf stage-enrollment-email
       order: 30
     attrs:
-      # The mail is counted when the stage is reached (agentry#830).
+      # The mail is counted when the stage is reached.
       evaluate_on_plan: false
       re_evaluate_policies: true
   - model: authentik_policies.policybinding
@@ -856,7 +851,7 @@ entries:
 
   # The terms step runs only where the deployment names its terms; an error
   # in that check shows the step (which then refuses, having no terms)
-  # rather than skipping it. The write's defaults (agentry#788) are above.
+  # rather than skipping it. The write's defaults are above.
   - model: authentik_policies.policybinding
     identifiers:
       policy: !KeyOf policy-enrollment-terms-configured
@@ -970,7 +965,7 @@ entries:
     identifiers:
       name: agentry-recovery-login
     attrs:
-      # No authentik_device cookie (agentry#460): see the sign-in's login
+      # No authentik_device cookie: see the sign-in's login
       # stage below.
       remember_device: seconds=0
       remember_me_offset: seconds=0
@@ -1005,13 +1000,13 @@ entries:
       order: 20
     attrs:
       # Not at the plan: the mail-count policy below runs when the stage is
-      # reached, so opening the page counts nothing (agentry#830).
+      # reached, so opening the page counts nothing.
       evaluate_on_plan: false
       re_evaluate_policies: true
       policy_engine_mode: any
       invalid_response_action: retry
   # Recovery proves the authenticator before the password may change
-  # (agentry#53): a user with one presents it; a user without one is sent
+  #: a user with one presents it; a user without one is sent
   # through the same TOTP setup stage enrollment uses (not_configured_action:
   # configure), so nobody leaves recovery without an authenticator either.
   # Lost-authenticator recovery is an operator action in authentik's admin
@@ -1049,7 +1044,7 @@ entries:
       order: 40
     attrs:
       # When the stage is reached, not when the flow is planned: the
-      # has-password policy below reads the new password (agentry#706).
+      # has-password policy below reads the new password.
       evaluate_on_plan: false
       re_evaluate_policies: true
       policy_engine_mode: any
@@ -1115,7 +1110,7 @@ entries:
       recovery_flow: !KeyOf flow-recovery
 
   # ==========================================================================
-  # Cleanup: objects superseded by the shared ones above (DEV-063)
+  # Cleanup: objects superseded by the shared ones above
   # ==========================================================================
   # These were created by the first version of this blueprint, when the
   # password field and policy lived inside the enrollment flow. They are
@@ -1135,10 +1130,10 @@ entries:
       name: agentry-enrollment-password-policy
 
   # ==========================================================================
-  # Remembered browsers (agentry#671, DEV-163)
+  # Remembered browsers
   # ==========================================================================
   # "Remember this device for 30 days" is offered on the sign-in's code page
-  # and honoured by skipping that page. The record is the registry's (DEV-123):
+  # and honoured by skipping that page. The record is the registry's:
   # it mints one on the OIDC callback and answers whether a browser holds a
   # live one. The directory's part is the four entries below plus the flow
   # page's template (templates/if/flow.html), which draws the unticked box on
@@ -1223,7 +1218,7 @@ entries:
         return True
   # The claim. The login event is where authentik keeps this sign-in's
   # auth_method_args, and the same event gives the token its amr and its
-  # auth_time; the registry mints only when all three agree (agentry#670).
+  # auth_time; the registry mints only when all three agree.
   - model: authentik_providers_oauth2.scopemapping
     id: scope-agentry
     identifiers:
@@ -1236,28 +1231,28 @@ entries:
         event = get_login_event(token.session) if token is not None and getattr(token, "session", None) else None
         args = (event.context.get("auth_method_args") or {}) if event else {}
         claims = {"agentry_remember_device": args.get("agentry_remember_device") is True}
-        # The directory's own id for the account (agentry#727): the registry
+        # The directory's own id for the account: the registry
         # reads the account by it rather than by an address, which the
         # directory does not keep unique.
         account = request.user if request is not None else None
         if account is not None and getattr(account, "pk", None):
             claims["agentry_directory_id"] = account.pk
-            # The promo code typed at sign-up (agentry#759), when there was
+            # The promo code typed at sign-up, when there was
             # one. The registry reads it only on the sign-in that makes the
             # account, so it is harmless on every later token.
             code = str((account.attributes or {}).get("agentry_promo_code") or "").strip()
             if code:
                 claims["agentry_promo_code"] = code
         return claims
-  # The `email` scope (DEV-061, agentry#861). authentik's managed mapping
-  # hard-codes email_verified false (2026.8), which the registry's T-12 rule
-  # treats as unlinkable, so the registry's provider uses this one instead
+  # The `email` scope. authentik's managed mapping
+  # hard-codes email_verified false (2026.8), which the registry's auto-link
+  # rule treats as unlinkable, so the registry's provider uses this one instead
   # (scripts/dev/authentik-bootstrap.sh on compose; the site's chart in
   # production). A literal false marker makes it read registry confirmation
-  # for the linked subject and same address (agentry#869). An account without
-  # that marker predates agentry#861 or was directory/social-confirmed and
+  # for the linked subject and same address. An account without
+  # that marker predates registry activation or was directory/social-confirmed and
   # retains its claim. Activation never writes the directory marker.
-  # Shared with the site's social classify policy (D3): a failed check must
+  # Shared with the hosted site's social classify policy: a failed check must
   # withhold verification AND leave the account alone, never delete it as
   # though a healthy registry had said it was unactivated. The raw result
   # carries availability separately for that caller. No result is cached.
@@ -1334,8 +1329,8 @@ entries:
       failure_result: true
       timeout: 5
   # authentik's own "known device" cookie is off on every login stage
-  # (agentry#460; operator decision 2026-09-25, "do not create unrecoverable
-  # tokens"). A User Login stage's `remember_device` defaults to days=30 and
+  # (the directory should not create unrecoverable tokens). A User Login
+  # stage's `remember_device` defaults to days=30 and
   # writes `authentik_device`, a JWT the directory keeps no record of: it
   # cannot be listed or revoked, and rotating AUTHENTIK_SECRET_KEY does not
   # end it (its key derives from the installation's identifier and the
@@ -1387,11 +1382,11 @@ entries:
       timeout: 5
 
   # ==========================================================================
-  # Seamless integration (agentry#164): every flow ends back in Agentry and
+  # Seamless integration: every flow ends back in Agentry and
   # the directory never shows its own panels
   # ==========================================================================
   # The return paths are read from the container environment so the same
-  # file serves every deployment (DEV-091): AGENTRY_PUBLIC_WEB_URL is where
+  # file serves every deployment: AGENTRY_PUBLIC_WEB_URL is where
   # sign-out lands (the site's home, or the server's own /ui/ page when
   # nothing fronts it) and AGENTRY_ACCOUNT_URL is where a password change or
   # an authenticator enrolment returns (the site's Settings → Authentication,
@@ -1400,7 +1395,7 @@ entries:
   # cannot do this job: authentik only honours a same-host `next`, and the
   # app lives elsewhere.
   #
-  # Two mechanisms carry them, and the difference matters (agentry#441):
+  # Two mechanisms carry them, and the difference matters:
   #
   # - Sign-out keeps a redirect STAGE. The provider's end-session endpoint
   #   appends its own session-end stage after the flow's, so the flow never
@@ -1441,10 +1436,10 @@ entries:
           return True
         - !Env AGENTRY_ACCOUNT_URL
         - "Saved%20in%20the%20directory."
-  # The redirect stage those flows ended on until agentry#441. Deleting it
-  # drops its bindings with it on a deployment that applied the earlier
-  # version; a no-op on a fresh install, removable once every deployment
-  # has applied this once (like the cleanup entries above).
+  # The redirect stage those flows ended on in an earlier version. Deleting it
+  # drops its bindings with it on a deployment that applied that version; a
+  # no-op on a fresh install, removable once every deployment has applied
+  # this once (like the cleanup entries above).
   - model: authentik_stages_redirect.redirectstage
     state: absent
     identifiers:
@@ -1591,10 +1586,9 @@ entries:
       negate: false
       timeout: 30
 
-  # The directory's own user-settings flow is closed to everyone
-  # (agentry#490). The provider asserts `email_verified: true` for whatever
-  # address the directory holds and the registry links accounts by it
-  # (T-12), so a person who could set their own address could sign in as
+  # The directory's own user-settings flow is closed to everyone.
+  # The provider asserts `email_verified: true` for whatever
+  # address the directory holds and the registry links accounts by it, so a person who could set their own address could sign in as
   # whoever owns it. authentik's shipped `default-user-settings-flow` has an
   # email field, and the only thing refusing a change is its validation
   # policy reading the system setting `default_user_change_email` (false on
@@ -1651,7 +1645,7 @@ entries:
       flow_recovery: !KeyOf flow-recovery
 
   # ==========================================================================
-  # Whether an account has a password (agentry#706)
+  # Whether an account has a password
   # ==========================================================================
   # The site's Settings offers "Add a password" to an account that has none,
   # and authentik's API has no such field. The directory therefore keeps the
