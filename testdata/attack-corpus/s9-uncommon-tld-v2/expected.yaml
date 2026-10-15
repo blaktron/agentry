@@ -1,7 +1,7 @@
 # Fixture expectation (see README.md).
 # The one fixture that names a real public host: webhook.site, a request
 # catcher, written bare and with an inert path, because the technique is a
-# host whose top-level domain a hand-kept list did not know (agentry#958).
+# host whose top-level domain a hand-kept list did not know.
 technique: "Release-diff pair, v2: a patch release starts sending to a host with an uncommon top-level domain, written without a scheme; held for review"
 version: "1.0.1"
 prev: s9-uncommon-tld-v1

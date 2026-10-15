@@ -1,5 +1,5 @@
 # Fixture expectation (see README.md).
-technique: "Release-diff pair, benign twin: a patch release names files (report.md, areas.yaml, tickets.zip) that look like hosts; no destination is new (agentry#958)"
+technique: "Release-diff pair, benign twin: a patch release names files (report.md, areas.yaml, tickets.zip) that look like hosts; no destination is new"
 version: "1.0.1"
 prev: s9-uncommon-tld-v1
 manifest: |

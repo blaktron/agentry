@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Resolve (and build if needed) the agentry CLI, which lives in its own repo
-# since the split: github.com/blaktron/agentry-cli. Prints the binary path.
+# Resolve (and build if needed) the agentry CLI, which lives in its own repo,
+# github.com/blaktron/agentry-cli. Prints the binary path.
 #
 # Resolution order:
 #   1. $AGENTRY_CLI_BIN            — an existing binary

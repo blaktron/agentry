@@ -1,9 +1,9 @@
 apiVersion: v2
 name: agentry
 description: |
-  Agentry self-host HA (PLAN §2.4): the same agentryd binary split into api,
+  Agentry self-host HA: the same agentryd binary split into api,
   git (shared RWX volume), and worker roles — the headless registry with its
-  own /ui/ pages (DEV-091). Postgres and object storage are operator-supplied
+  own /ui/ pages. Postgres and object storage are operator-supplied
   (see values.yaml); a site in front is a separate chart.
 type: application
 version: 0.1.0
