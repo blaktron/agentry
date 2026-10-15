@@ -1,10 +1,10 @@
 package api_test
 
-// §10.4 search: the ranking formula and the README's weight-C place in the
-// index. Both were claimed and neither was implemented — the ORDER BY was a
-// lexicographic tie-break chain that never combined its three factors, and
-// readme_text did not exist, so a term appearing only in an agent's README
-// (which is where an agent actually describes itself) found nothing.
+// search: the ranking formula and the README's weight-C place in the
+// index. The ORDER BY combines its three factors rather than chaining
+// them as tie-breaks, and readme_text is indexed, so a term appearing only
+// in an agent's README (which is where an agent actually describes
+// itself) is found.
 
 import (
 	"context"
@@ -28,7 +28,7 @@ type searchResults struct {
 // search runs a query and keeps only the hits in ns, preserving order.
 //
 // The test database is shared and never truncated, so fixtures from earlier
-// runs are still present — and the §10.4 trigram fallback matches on name
+// runs are still present — and the trigram fallback matches on name
 // similarity, which means a term like "rankterm<sfx>" also matches
 // "rankterm<some other sfx>" from a previous run. Filtering to this test's
 // own namespace is what makes the result set closed; the relative order of
@@ -102,10 +102,10 @@ func (env *testEnv) setInstalls(t *testing.T, ns, name string, installs int) {
 	}
 }
 
-// §10.4: relevance × log(1+installs_30d) × recency_decay. With relevance and
+// relevance × log(1+installs_30d) × recency_decay. With relevance and
 // recency effectively equal across agents published seconds apart in one test,
-// installs is what separates them — and under the old lexicographic ORDER BY
-// it could not, because ts_rank was compared first and only ties fell through.
+// installs is what separates them — a lexicographic ORDER BY could not,
+// because ts_rank would be compared first and only ties would fall through.
 func TestSearchRanksByPopularityWhenRelevanceIsEqual(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("rank-o")
@@ -134,7 +134,7 @@ func TestSearchRanksByPopularityWhenRelevanceIsEqual(t *testing.T) {
 }
 
 // The popularity factor is 1+ln(1+installs), not the literal ln(1+installs)
-// §10.4 writes (DEV-030). With no installs the literal expression is 0, and
+// writes. With no installs the literal expression is 0, and
 // since the score is a product it takes relevance and recency with it: every
 // zero-install agent scores exactly 0, ties with every other, and the order
 // falls through to created_at DESC — newest first, relevance ignored.
@@ -176,7 +176,7 @@ func TestZeroInstallAgentsAreRankedByRelevanceNotArrivalOrder(t *testing.T) {
 
 // Popularity is a real factor, not a tie-break: a much more popular agent
 // outranks a slightly better textual match. This is the other half of the
-// DEV-030 balance — the +1 must not flatten popularity into irrelevance.
+// balance — the +1 must not flatten popularity into irrelevance.
 func TestPopularityCanOutweighASmallRelevanceGap(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("pop-o")
@@ -199,8 +199,8 @@ func TestPopularityCanOutweighASmallRelevanceGap(t *testing.T) {
 	}
 }
 
-// §10.4 weight C. The README is where an agent describes itself; before this
-// it was never indexed, so a term appearing only there matched nothing.
+// weight C. The README is where an agent describes itself, so a
+// term appearing only there must match.
 func TestSearchMatchesReadmeTerms(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("readme-o")
@@ -215,13 +215,13 @@ func TestSearchMatchesReadmeTerms(t *testing.T) {
 
 	got := env.search(t, owner, readmeTerm)
 	if len(got) != 1 || got[0].Name != "docsonly" {
-		t.Fatalf("a README-only term matched %v; §10.4 indexes the readme at weight C", names(got))
+		t.Fatalf("a README-only term matched %v; the readme is indexed at weight C", names(got))
 	}
 }
 
 // Searching a namespace handle finds its agents. The handle is not in
-// search_tsv (§10.4 covers name/summary/readme), so this rides the dedicated
-// handle clause — the pre-FTS CLI listed by namespace, and cli.sh looks a
+// search_tsv (covers name/summary/readme), so this rides the dedicated
+// handle clause — the CLI lists by namespace, and cli.sh looks a
 // fresh publish up by its random handle.
 func TestSearchMatchesNamespaceHandle(t *testing.T) {
 	env := newTestEnv(t)
@@ -346,11 +346,10 @@ func TestSearchOrderingIsStableAcrossPages(t *testing.T) {
 	}
 }
 
-// total is the hit count for the predicate before paging (agentry#290):
+// total is the hit count for the predicate before paging:
 // three agents under one handle, limit=2 → two hits and total 3; offset=2 →
 // one hit and total 3; a query matching one → total 1; a filter matching
-// none → total 0. Before this the handler never set it, and the desktop
-// printed "0 results" above a full list.
+// none → total 0. The desktop reads it to print the result count.
 func TestSearchTotalCountsBeforePaging(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("total-o")

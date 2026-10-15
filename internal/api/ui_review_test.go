@@ -92,7 +92,7 @@ func TestCoreUIReviewAndStaff(t *testing.T) {
 }
 
 // uiFlash decodes the notice a UI redirect left in its flash cookie
-// (internal/ui back, agentry#271): the ok and error texts joined.
+// (internal/ui back): the ok and error texts joined.
 func uiFlash(res *http.Response) string {
 	for _, c := range res.Cookies() {
 		if c.Name != "agentry_flash" || c.MaxAge < 0 {

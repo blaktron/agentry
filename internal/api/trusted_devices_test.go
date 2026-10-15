@@ -1,12 +1,11 @@
 package api_test
 
-// Trusted devices (plan trusted-devices.md, agentry#461): a browser that
+// Trusted devices: a browser that
 // answered the second factor may be remembered, so a later password sign-in
 // from it is not asked for the code.
 //
-// These tests are written to be mutation-checked, which is what ARCHITECTURE §9
-// requires of a new invariant row before the row is written. Each names the
-// control it proves, so breaking the control breaks a named test:
+// These tests are written to be mutation-checked. Each names the control
+// it proves, so breaking the control breaks a named test:
 //
 //	mint only after the factor was answered  → TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor
 //	the opt-in defaults to off               → TestTrustedDeviceIsNotMintedUnlessAskedFor
@@ -23,16 +22,13 @@ package api_test
 //	logout leaves the browser remembered     → TestTrustedDeviceSurvivesLogout
 //	so does "sign out everywhere else"       → TestTrustedDeviceSurvivesSignOutEverywhereElse
 //
-// The last three came with agentry#464 on 2026-09-27, and five mutations
-// between them were each caught: a sweep that also deletes revoked rows, one
-// that deletes everything, one that spares revoked rows past their expiry, a
-// logout that revokes, and a "sign out everywhere else" that revokes.
-//
-// The first eleven were mutation-checked on 2026-09-22 before this file was
-// committed, with twelve mutations between them — the dead-credential control
-// takes two, one for expiry and one for revocation. Each control was broken in
-// turn and the named test failed; then the control was restored and the suite
-// went green again. Two results are worth keeping, because each is a trap.
+// Each control was broken in turn and the named test failed; then the
+// control was restored and the suite went green again. The dead-credential
+// control takes two mutations, one for expiry and one for revocation. The
+// last three are caught by a sweep that also deletes revoked rows, one that
+// deletes everything, one that spares revoked rows past their expiry, a
+// logout that revokes, and a "sign out everywhere else" that revokes. Two
+// results are worth keeping, because each is a trap.
 //
 // Deleting "AND user_id = $2" from the lookup does NOT prove the owner scoping.
 // The generated Go still passes two arguments, so pgx rejects the query, the
@@ -42,12 +38,9 @@ package api_test
 // actually exercises it, and the test catches that one with "status 200, want
 // 401".
 //
-// And the first pass here claimed eight controls checked against a list of
-// nine: "the cookie is never itself a credential" and "only the hash is stored"
-// were listed and never broken, which a review caught. Both are checked now —
-// disabling the password comparison, and storing the token in the clear — and
-// each fails its named test. The number is written out rather than implied so
-// that a list and a count cannot drift apart again unnoticed.
+// The controls "the cookie is never itself a credential" and "only the hash
+// is stored" are checked by disabling the password comparison, and by
+// storing the token in the clear, and each fails its named test.
 
 import (
 	"context"
@@ -359,7 +352,7 @@ func TestTrustedDeviceStoreFailureDemandsTheCode(t *testing.T) {
 	env.loginWith(h, loginOpts{totpCode: code})
 }
 
-// TestTrustedDeviceExpiryIsAbsoluteNotSliding proves plan decision D9. Using
+// TestTrustedDeviceExpiryIsAbsoluteNotSliding proves the lifetime is absolute. Using
 // the credential refreshes last_seen_at and must not move expires_at, so a
 // stolen cookie does not become immortal by being used and a person who signs
 // in daily is still asked again on day thirty.
@@ -384,7 +377,7 @@ func TestTrustedDeviceExpiryIsAbsoluteNotSliding(t *testing.T) {
 
 	after := fetchDeviceRow(t, env, h)
 	if !after.expiresAt.Equal(before.expiresAt) {
-		t.Fatalf("using the credential moved its expiry from %s to %s: the lifetime is sliding, and D9 says absolute",
+		t.Fatalf("using the credential moved its expiry from %s to %s: the lifetime is sliding, and it must be absolute",
 			before.expiresAt.Format(time.RFC3339Nano), after.expiresAt.Format(time.RFC3339Nano))
 	}
 	if !after.lastSeenAt.After(before.lastSeenAt) {
@@ -413,7 +406,7 @@ func TestTrustedDeviceExpiryIsAbsoluteNotSliding(t *testing.T) {
 
 // TestTrustedDeviceStoresOnlyTheHash proves the token is not recoverable from
 // the database: only its SHA-256 is stored, so reading the table yields no
-// credential. This is the rule every other token in the estate follows.
+// credential. This is the rule every other token in the registry follows.
 func TestTrustedDeviceStoresOnlyTheHash(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
 	h, _, c := earnTrustedDevice(t, env, "td-hash")
@@ -445,8 +438,7 @@ func TestTrustedDeviceStoresOnlyTheHash(t *testing.T) {
 // TestTrustedDeviceCookieAttributes proves the cookie is issued with the
 // attributes every cookie this server carries, and a Max-Age that comes from
 // the configuration rather than from a literal. HttpOnly is the load-bearing
-// one: DEV-012 forbids auth material reachable by browser JavaScript, and
-// nothing in internal/api asserted a cookie being *set* before agentry#461.
+// one: auth material must not be reachable by browser JavaScript.
 func TestTrustedDeviceCookieAttributes(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
 	_, _, c := earnTrustedDevice(t, env, "td-attrs")
@@ -503,7 +495,7 @@ func deviceState(t *testing.T, env *testEnv, token string) string {
 	return "live"
 }
 
-// TestSCIMDeactivationRevokesTrustedDevices proves §12.5 deactivation takes the
+// TestSCIMDeactivationRevokesTrustedDevices proves deactivation takes the
 // remembered browser away as well as the sessions.
 //
 // Deactivation drops the membership, revokes the org-bound PATs and kills the
@@ -544,7 +536,7 @@ func TestSCIMDeactivationRevokesTrustedDevices(t *testing.T) {
 	}
 }
 
-// TestErasureDeletesTrustedDevices proves §12.7 erasure removes the record
+// TestErasureDeletesTrustedDevices proves erasure removes the record
 // rather than revoking it. PseudonymizeUser purges the account's own PII but
 // leaves child rows alone, so without an explicit delete a remembered browser
 // would survive erasure holding an address and a user agent belonging to a
@@ -565,7 +557,7 @@ func TestErasureDeletesTrustedDevices(t *testing.T) {
 	}
 }
 
-// TestTrustedDeviceSweepDeletesOnlyWhatHasExpired (agentry#464): the sweep
+// TestTrustedDeviceSweepDeletesOnlyWhatHasExpired: the sweep
 // removes records past their own expiry and nothing else. A live record stays,
 // and so does a revoked one that has not expired: no cap of the sweep's
 // decides when a record goes, its own lifetime does.
@@ -623,7 +615,7 @@ func TestTrustedDeviceSweepDeletesOnlyWhatHasExpired(t *testing.T) {
 	}
 }
 
-// TestTrustedDeviceSurvivesLogout (agentry#464): signing out ends the session
+// TestTrustedDeviceSurvivesLogout: signing out ends the session
 // and leaves the remembered browser alone, because surviving it is the point
 // of the feature. A future reader who "fixes" logout to revoke it fails here.
 func TestTrustedDeviceSurvivesLogout(t *testing.T) {
@@ -646,7 +638,7 @@ func TestTrustedDeviceSurvivesLogout(t *testing.T) {
 	}
 }
 
-// TestTrustedDeviceSurvivesSignOutEverywhereElse (agentry#464): "sign out
+// TestTrustedDeviceSurvivesSignOutEverywhereElse: "sign out
 // everywhere else" is a session control. It must not also take away the
 // remembered browsers, silently: that is the clear-all's job
 // (DELETE /user/trusted-devices), which says so.

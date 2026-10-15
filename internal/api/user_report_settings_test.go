@@ -14,11 +14,11 @@ import (
 	"github.com/blaktron/agentry/pkg/reportdesign"
 )
 
-// The report design (agentry#989, agentry#1024): an account that never chose
-// reads back with no design (DEV-227, plan invariant 10); each built-in and
+// The report design: an account that never chose
+// reads back with no design; each built-in and
 // an edited design round-trip as their canonical documents; a design that
 // breaks a rule is refused 422 naming design.<path>, and the saved one
-// stands (invariant 3); the old theme names are gone; a body with no design
+// stands; a theme field is refused; a body with no design
 // clears the choice; and each account reads only its own, a user:profile
 // token included, since the CLI reads it that way.
 func TestReportSettingsRoundTrip(t *testing.T) {
@@ -41,7 +41,7 @@ func TestReportSettingsRoundTrip(t *testing.T) {
 	}
 
 	// Each built-in round-trips: the answer, and a later read, are its
-	// canonical document byte for byte (invariant 8).
+	// canonical document byte for byte.
 	canonical := func(raw json.RawMessage) []byte {
 		t.Helper()
 		d, err := reportdesign.Parse(raw)
@@ -99,7 +99,7 @@ func TestReportSettingsRoundTrip(t *testing.T) {
 		}, "design.footer.text"},
 		{"two-line footer", func(m map[string]any) { m["footer"].(map[string]any)["text"] = "a\nb" }, "design.footer.text"},
 		{"unknown key", func(m map[string]any) { m["watermark"] = "x.png" }, "design"},
-		// A logo is pixels, never a URL (invariant 12; agentry#1025).
+		// A logo is pixels, never a URL.
 		{"a logo by URL", func(m map[string]any) { m["logo"] = "https://x.example/logo.png" }, "design.logo"},
 		{"a logo's URL", func(m map[string]any) { m["logo"] = map[string]any{"png": "https://x.example/logo.png"} }, "design.logo.png"},
 		{"missing field", func(m map[string]any) { delete(m, "quotes") }, "design.quotes"},
@@ -133,7 +133,7 @@ func TestReportSettingsRoundTrip(t *testing.T) {
 		t.Fatalf("a %d-byte design answered %d", len(over), res.StatusCode)
 	}
 	env.doJSON(sess, http.MethodPut, path, map[string]any{"design": "plain"}, nil, http.StatusUnprocessableEntity)
-	// The old setting is no longer a field of the body (D16, D20).
+	// A theme is not a field of the body.
 	env.doJSON(sess, http.MethodPut, path, map[string]any{"theme": "formal"}, nil, http.StatusBadRequest)
 	got = settings{}
 	env.doJSON(sess, http.MethodGet, path, nil, &got, http.StatusOK)
@@ -185,7 +185,7 @@ func TestReportSettingsRoundTrip(t *testing.T) {
 	}
 }
 
-// The openapi's ReportDesign is pkg/reportdesign's schema (D22): the same
+// The openapi's ReportDesign is pkg/reportdesign's schema: the same
 // properties, required lists, enums, bounds and pattern, so the site's
 // editor, which reads the openapi, cannot offer what the core refuses. The
 // openapi's own annotations (descriptions, x-enum-varnames) and the JSON

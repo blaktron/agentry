@@ -1,6 +1,6 @@
 package api_test
 
-// Public archive browsing (§10.2 file browser): the same hardened walk as
+// Public archive browsing (file browser): the same hardened walk as
 // the review viewer, opened under the download gate. Pins what a consumer
 // sees: anonymous listing, text round-trip, binary withheld, path safety,
 // and the block gate.
@@ -78,7 +78,7 @@ publish:
 		t.Fatalf("SKILL.md content wrong: %+v", fc)
 	}
 
-	// Binary files are flagged and withheld (§10.3).
+	// Binary files are flagged and withheld.
 	fc.Content = nil
 	env.doJSON(anonymous, http.MethodGet, base+"/file?path=img.png", nil, &fc, http.StatusOK)
 	if !fc.Binary || fc.Content != nil {
@@ -97,7 +97,7 @@ publish:
 		t.Fatalf("traversal path: got %d want 422", res.StatusCode)
 	}
 
-	// The block gate applies to browsing exactly as it does to downloads (§7).
+	// The block gate applies to browsing exactly as it does to downloads.
 	staff := env.register("vfb-staff")
 	env.verifyEmail(staff)
 	env.makePlatformStaff(t, staff)
@@ -111,6 +111,6 @@ publish:
 	res = env.do(anonymous, http.MethodGet, base+"/files", nil)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusGone {
-		t.Fatalf("blocked listing: got %d want 410 (§7)", res.StatusCode)
+		t.Fatalf("blocked listing: got %d want 410", res.StatusCode)
 	}
 }

@@ -15,7 +15,7 @@ import (
 // The /ui/ surface is dispatched in front of the mux, not registered on it:
 // registered, "/ui/" and git's "GET /{ns}/{repo}/info/refs" are a ServeMux
 // conflict and the process panics at start-up (the gitsrv conformance test
-// found it). Both must route with git mounted.
+// covers it). Both must route with git mounted.
 func TestUIMountsBesideGitPatterns(t *testing.T) {
 	cfg := config.Default()
 	cfg.DevMode = true

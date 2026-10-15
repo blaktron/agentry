@@ -1,6 +1,6 @@
 package api_test
 
-// §12.5 SCIM: the spec-conformant full-resource PUT, and membership-sync
+// SCIM: the spec-conformant full-resource PUT, and membership-sync
 // failures reaching the IdP as 5xx instead of being swallowed.
 
 import (
@@ -26,10 +26,10 @@ func (env *testEnv) scimOrg(t *testing.T, prefix string) (scim caller, orgID str
 	return caller{name: "scim", pat: tok.Token}, orgID
 }
 
-// TestSCIMPutDeactivatesOktaShape is the regression: Okta offboards by PUTing
-// the whole user resource with "active": false. That request used to be
-// handed to the PatchOp decoder, which found zero Operations and answered 200
-// having done nothing — the IdP believed the person was offboarded while
+// TestSCIMPutDeactivatesOktaShape: Okta offboards by PUTing the whole user
+// resource with "active": false. That request must not be handed to the
+// PatchOp decoder, which would find zero Operations and answer 200 having
+// done nothing — the IdP would believe the person was offboarded while
 // their sessions and org-bound tokens still worked.
 func TestSCIMPutDeactivatesOktaShape(t *testing.T) {
 	env := newTestEnv(t)
@@ -65,7 +65,7 @@ func TestSCIMPutDeactivatesOktaShape(t *testing.T) {
 		t.Fatal("PUT active=false must report the user as inactive")
 	}
 
-	// §12.5 deactivation: membership dropped, org-bound PATs revoked,
+	// Deactivation: membership dropped, org-bound PATs revoked,
 	// sessions killed — all within the request.
 	var members int64
 	if err := env.st.Pool().QueryRow(context.Background(),
@@ -157,7 +157,7 @@ func TestSCIMPutUpdatesAndReinstates(t *testing.T) {
 
 // TestSCIMGroupSyncFailurePropagates injects a database failure on the
 // team_members write and asserts the IdP is told, rather than being handed a
-// 200 for a sync that did not happen (the `_ =` the audit flagged).
+// 200 for a sync that did not happen.
 func TestSCIMGroupSyncFailurePropagates(t *testing.T) {
 	env := newTestEnv(t)
 	scim, _ := env.scimOrg(t, "scimgrp")

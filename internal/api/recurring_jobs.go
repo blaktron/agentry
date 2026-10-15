@@ -14,10 +14,10 @@ import (
 // that two seeds doubled folds back to one when its runs come round: the
 // run that finds its twin waiting enqueues nothing.
 //
-// The count is the driver's (queue.Client.CountWaiting). Until agentry#853
-// the seeds counted the pg driver's jobs table whatever the driver, so on
-// a database where the pg driver had left a run waiting, River was never
-// seeded, and on one where it had not, every start seeded another chain.
+// The count is the driver's (queue.Client.CountWaiting). Counting another
+// driver's jobs table would, on a database where that driver had left a
+// run waiting, never seed River, and on one where it had not, seed another
+// chain on every start.
 //
 // The count and the enqueue are not one statement: two processes starting
 // together can each add a run, and the next turn folds them.

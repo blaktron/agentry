@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// The §9.3 catalog events that were declared but never emitted (agentry#56):
+// The catalog events a registry action emits:
 // agent.created, version.submitted, scan.completed, policy.updated. Each
 // lands a delivery row for a subscribed org endpoint.
 func TestWebhookCatalogEventsAreEmitted(t *testing.T) {

@@ -32,8 +32,7 @@ type samlTestIdP struct {
 	certDER  []byte
 	certPEM  string
 	// authnContext is the AuthnStatement's context class (Password when
-	// empty); attrs, when set, become a signed AttributeStatement
-	// (agentry#705).
+	// empty); attrs, when set, become a signed AttributeStatement.
 	authnContext string
 	attrs        map[string][]string
 }
@@ -67,7 +66,7 @@ func (k *samlTestIdP) signedResponse(t *testing.T, audience, recipient, nameID s
 }
 
 // signedResponseFor additionally sets InResponseTo, marking the assertion as
-// the answer to an SP-initiated AuthnRequest (§12.4).
+// the answer to an SP-initiated AuthnRequest.
 func (k *samlTestIdP) signedResponseFor(t *testing.T, audience, recipient, nameID, inResponseTo string, tamper bool) string {
 	t.Helper()
 	doc := etree.NewDocument()
@@ -146,11 +145,11 @@ func randHex() string {
 	return fmt.Sprintf("%x", b)
 }
 
-// TestSAMLACSEndpoint covers §12.4 as agentry#361 leaves it: a signed
+// TestSAMLACSEndpoint covers the ACS endpoint: a signed
 // assertion for an ACTIVE MEMBER establishes an SSO session, a tampered one
 // is rejected, and an assertion for someone the organization has not
 // admitted is refused rather than provisioning them — the organization's
-// SSO recognises its members and is not a door into it (D7, D11).
+// SSO recognises its members and is not a door into it.
 func TestSAMLACSEndpoint(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("saml-owner")
@@ -161,7 +160,7 @@ func TestSAMLACSEndpoint(t *testing.T) {
 
 	// The organization has proved it controls the domain the IdP asserts:
 	// linking an identity to an existing member's account for the first
-	// time needs that proof as well as the membership (T-12, agentry#361).
+	// time needs that proof as well as the membership.
 	env.verifyOrgDomain(orgH, "acme.example")
 	idp := newSAMLTestIdP(t)
 	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://acs-idp.test/sso", idp.certPEM)
@@ -245,7 +244,7 @@ func (env *testEnv) postForm(t *testing.T, u string, form url.Values) *http.Resp
 
 // postFormAs posts a form and captures the response without following
 // redirects. A non-empty host is sent as the request's Host: that is how one
-// public URL reaches whichever replica sits behind it (agentry#414), and the
+// public URL reaches whichever replica sits behind it, and the
 // server derives its own ACS URL from the header, so an assertion addressed
 // to that URL still matches the SP it lands on.
 func (env *testEnv) postFormAs(t *testing.T, u string, form url.Values, host string) *http.Response {
@@ -293,7 +292,7 @@ func (k *samlTestIdP) signedLogoutRequest(t *testing.T, destination, nameID stri
 	return base64.StdEncoding.EncodeToString([]byte(s))
 }
 
-// TestSAMLSingleLogout covers §12.4 SLO (agentry#62): a SAML session
+// TestSAMLSingleLogout covers SLO: a SAML session
 // remembers its NameID; the IdP's signed LogoutRequest revokes it and is
 // answered with a LogoutResponse redirect; a registry logout of such a
 // session hands the browser the IdP's SLO URL; an unsigned request changes
@@ -327,8 +326,8 @@ func TestSAMLSingleLogout(t *testing.T) {
 		t.Fatalf("SP metadata lacks SLO endpoint:\n%s", mb)
 	}
 
-	// The person the IdP will assert is already a member: since agentry#361
-	// the organization's SSO signs in members and admits nobody.
+	// The person the IdP will assert is already a member: the
+	// organization's SSO signs in members and admits nobody.
 	sloNameID := "slo-user-" + env.sfx + "@acme.example"
 	env.verifyOrgDomain(orgH, "acme.example")
 	env.seedMembership(orgH, env.registerEmail("slo-member", sloNameID), "member", "active")
@@ -412,9 +411,9 @@ func TestSAMLSingleLogout(t *testing.T) {
 	}
 }
 
-// TestSAMLReplayIsRefusedAcrossServers (agentry#414): an assertion consumed
+// TestSAMLReplayIsRefusedAcrossServers: an assertion consumed
 // by one API replica is refused by every other. Two servers share the
-// database and, since this test, the record of consumed assertions; the
+// database and the record of consumed assertions; the
 // second is reached with the first's Host, as replicas behind one public
 // URL are.
 func TestSAMLReplayIsRefusedAcrossServers(t *testing.T) {
