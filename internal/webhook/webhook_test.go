@@ -32,7 +32,7 @@ func TestClient_NoRedirectFollowing(t *testing.T) {
 		t.Fatalf("expected 302 (not followed), got %d", resp.StatusCode)
 	}
 	if redirected {
-		t.Fatal("client followed the redirect (T-08 violation)")
+		t.Fatal("client followed the redirect")
 	}
 }
 

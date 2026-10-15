@@ -61,10 +61,7 @@ The registry is one of several repositories that move together:
 [agentry-cli](https://github.com/blaktron/agentry-cli) (the CLI and the
 runner, Go), [agentry-desktop](https://github.com/blaktron/agentry-desktop)
 (Wails: Go plus a React frontend; on Linux it needs the GTK 3 and WebKit2GTK
-4.1 development headers to build), [agentry-docs](https://github.com/blaktron/agentry-docs)
-(the MkDocs and Redoc machinery that builds the docs site from this
-repository's `docs/` and the site's pages, and the developers site from
-`schemas/openapi.yaml`), [agentry-mcp](https://github.com/blaktron/agentry-mcp)
+4.1 development headers to build), [agentry-mcp](https://github.com/blaktron/agentry-mcp)
 (an MCP server that drives the installed `agentry` CLI so Claude Code,
 Codex or any MCP host can search, install, run and hold a session with
 QuickAgents), and [agentry-examples](https://github.com/blaktron/agentry-examples).
