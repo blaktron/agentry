@@ -235,7 +235,8 @@ type KnowledgeAdmission struct {
 // an upload of a pack's tree queues, and may charge for it (pkg/extension
 // AdmitsKnowledge). It is asked once per upload, after the core has read
 // the tree and before anything is stored: an upload the core refuses (it
-// does not read, or it is too large) is never asked about, and one of the
+// does not read, it is too large, or it is past the allocation as the
+// allocation stands) is never asked about, and one of the
 // tree the pack already holds queues no scan and is not asked about either.
 // A pack the extension builds and stores itself is not admitted here. The
 // core has none, and admits every upload.

@@ -160,8 +160,13 @@ organization) and the tree's size, after the registry has read the tree
 and before anything is stored. Its refusal is answered in its own status
 and words (for example 402) and stores nothing; if it cannot answer, the
 upload is 503 `admission-unavailable` and stores nothing. An upload the
-registry refuses itself (413, 422) is never asked about, and one the
-allocation then refuses is admitted and voided. An upload of the tree the
+registry refuses itself (413, 422) is never asked about. That includes
+one past the allocation as the allocation stands when the upload
+arrives, so an account that is both past its allocation and out of
+credits is told 413 `knowledge-allocation`, the refusal that would still
+stand once it paid. One that fits then, but that the allocation refuses
+under its lock because another upload filled it first, is admitted and
+voided. An upload of the tree the
 pack already holds stores nothing and queues no scan, so it is never
 admitted; a pack whose tree could not be read to scan (`failed`) is
 scanned again on the same tree without being admitted. A pack an
