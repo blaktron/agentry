@@ -1,7 +1,7 @@
-// Package ui is the server's own browser surface (DEV-091, plan
-// core-web-split §3.2): the pages a registry needs to be usable without a
-// site in front of it — the device-authorize page the CLI and the desktop
-// app open, sign-in, and the account basics — served by agentryd at /ui/.
+// Package ui is the server's own browser surface: the pages a registry
+// needs to be usable without a site in front of it — the device-authorize
+// page the CLI and the desktop app open, sign-in, and the account basics —
+// served by agentryd at /ui/.
 //
 // It is deliberately plain: server-rendered html/template, no JavaScript,
 // one stylesheet, brand from config. Every page acts through the API's own
@@ -58,7 +58,7 @@ type Options struct {
 	Providers []Provider
 	// ExternalOnly says a directory service owns credentials: no password
 	// form, sign-in goes through a provider, password/MFA live in the
-	// directory (DEV-057).
+	// directory.
 	ExternalOnly bool
 	// IdPLogoutURL, when set, is where sign-out sends the browser after the
 	// session is revoked (the directory's end-session flow).
@@ -168,7 +168,7 @@ func (h *handler) pathHasOtherMethod(r *http.Request) bool {
 }
 
 // refuse answers a request this surface will not act on with the message
-// page inside the layout, at the status the bare http.Error used to send.
+// page inside the layout, at the status the bare http.Error would send.
 // A refusal reaches a signed-in reader as often as a signed-out one — a stale
 // CSRF cookie, a mistyped path — so the page resolves the session like any
 // other and keeps the nav and Sign out where they were. currentUser is an
@@ -213,7 +213,7 @@ func (h *handler) serveCSS(w http.ResponseWriter, _ *http.Request) {
 // buildCSP: the pages carry no scripts; styles are the embedded sheet (plus
 // the brand's, if any); images are self, data: and the brand logo's origin;
 // forms post here and, for the device authorize flow, redirect to the
-// loopback listener (agentry#172: form-action governs the redirect after a
+// loopback listener (form-action governs the redirect after a
 // POST in Chrome), and sign-out may redirect to the directory or the site.
 func (h *handler) buildCSP() string {
 	style := "'self' 'unsafe-inline'"
@@ -299,7 +299,7 @@ func (h *handler) requireUser(w http.ResponseWriter, r *http.Request) *userInfo 
 	return u
 }
 
-// sameOrigin is the same rule the site applies to its form posts (agentry-web, lib/forms.ts):
+// sameOrigin is the same rule the hosted site applies to its form posts:
 // Sec-Fetch-Site when the browser sends it, else Origin against Host.
 func sameOrigin(r *http.Request) bool {
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" {
@@ -349,10 +349,10 @@ func (h *handler) refuseBadForm(w http.ResponseWriter, r *http.Request) {
 
 // back redirects to path with a flash. The flash rides in a short-lived
 // cookie the next render reads and clears, never in the URL: a `?ok=` a
-// page honoured let any address choose the page's notice, on the
-// registry's own domain (agentry#271). The cookie keeps a server-produced
-// message that is not a fixed string — an SSO probe's summary, an IdP's
-// warning — without a whitelist. Rendered as text by the page, never as
+// page honoured would let any address choose the page's notice, on the
+// registry's own domain. The cookie keeps a server-produced message that
+// is not a fixed string — an SSO probe's summary, an IdP's warning —
+// without a whitelist. Rendered as text by the page, never as
 // HTML.
 func (h *handler) back(w http.ResponseWriter, r *http.Request, path string, ok, errMsg string) {
 	h.setFlash(w, ok, errMsg)

@@ -1,8 +1,8 @@
-// Package logx is the mechanism behind the log contract (docs/logging.md,
-// plan log-stack.md §5): the request id carried in a context, the handler
-// that stamps it on every line written under that context, and the
-// sanitiser that keeps tokens and secrets out of a line and keeps a line
-// below the size at which Docker splits it.
+// Package logx is the mechanism behind the log contract (docs/logging.md):
+// the request id carried in a context, the handler that stamps it on every
+// line written under that context, and the sanitiser that keeps tokens and
+// secrets out of a line and keeps a line below the size at which Docker
+// splits it.
 //
 // The vocabulary — the `event` names a line may carry — lives in
 // internal/logevent; this package knows nothing about what is logged, only
@@ -25,7 +25,7 @@ const RequestIDKey = "request_id"
 
 // MaxStringLen bounds any string attribute. Docker splits a log line above
 // 16 KB into 16,384-byte pieces that are no longer JSON and that nothing
-// downstream can reassemble (measured, plan log-stack.md §5.2a); a line
+// downstream can reassemble (measured); a line
 // whose largest value is 4 KB stays well under that with room for the rest
 // of its fields.
 const MaxStringLen = 4096
@@ -89,7 +89,7 @@ func RequestIDFrom(ctx context.Context) string {
 type Options struct {
 	// Level is the minimum level: debug, info (the default), warn, error.
 	Level string
-	// Service, Role and Version are stamped on every line (§5 of the plan):
+	// Service, Role and Version are stamped on every line:
 	// the binary's name, the role it runs, the build.
 	Service, Role, Version string
 	// W is where lines go; nil means os.Stderr.
@@ -123,7 +123,7 @@ func New(o Options) *slog.Logger {
 }
 
 // ParseLevel maps the config's level names onto slog's; anything unknown is
-// info, which is what the config's default has always meant.
+// info, which is what the config's default means.
 func ParseLevel(level string) slog.Level {
 	switch strings.ToLower(level) {
 	case "debug":

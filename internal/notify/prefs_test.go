@@ -39,7 +39,7 @@ func TestEmailPermittedRequiresVerifiedAddress(t *testing.T) {
 	}
 }
 
-// The schedules switch (agentry#1002) governs schedule mail and nothing
+// The schedules switch governs schedule mail and nothing
 // else, and nothing else governs it: billing off leaves it on.
 func TestScheduleSwitchIsItsOwn(t *testing.T) {
 	row := Defaults(uuid.New())
@@ -57,7 +57,7 @@ func TestScheduleSwitchIsItsOwn(t *testing.T) {
 	}
 }
 
-// The bug-report switch (agentry#1113) governs the "Reported bug fixed"
+// The bug-report switch governs the "Reported bug fixed"
 // mail and nothing else, and nothing else governs it.
 func TestBugReportSwitchIsItsOwn(t *testing.T) {
 	row := Defaults(uuid.New())

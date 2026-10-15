@@ -1,7 +1,7 @@
-// Package agentrydeps pins dependencies that upcoming milestones import,
-// so parallel workgroups never mutate go.mod concurrently. Each blank
-// import moves to its real consumer as that code lands, then this file
-// shrinks and finally disappears.
+// Package agentrydeps pins dependencies that code about to land imports,
+// so go.mod does not change concurrently. Each blank import moves to its
+// real consumer as that code lands, then this file shrinks and finally
+// disappears.
 package agentrydeps
 
 import (

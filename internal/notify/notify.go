@@ -3,18 +3,18 @@
 // Two implementations: LogNotifier (the default — a fresh install says what it
 // would have sent rather than pretending to send it) and SMTPNotifier, which
 // speaks to mailpit on :1025 in the compose dev stack and to SES's SMTP
-// endpoint on AWS (§13.4).
+// endpoint on AWS.
 //
 // No notification goes to an address the registry has not verified: every
 // sender asks AllowsEmail (prefs.go) first, which refuses a user without
-// users.email_verified_at before it reads a single preference (agentry#299).
+// users.email_verified_at before it reads a single preference.
 // The verification mail is the one mail that does not ask, because it is
 // how an address becomes verified.
 //
-// Message bodies follow §1.6.3: they say what was found and what happens next.
-// Nothing here calls an agent safe, secure, or verified — scanning reduces
-// risk, it does not prove absence of it, and a notification is exactly where
-// that overclaim would be most tempting and most damaging.
+// Message bodies say what was found and what happens next. Nothing here
+// calls an agent safe, secure, or verified — scanning reduces risk, it
+// does not prove absence of it, and a notification is exactly where that
+// overclaim would be most tempting and most damaging.
 package notify
 
 import (
@@ -35,43 +35,41 @@ type Notifier interface {
 	// for the account named handle. token is the one-time secret the user
 	// posts back to /auth/verify-email. The mail names the account so that
 	// someone who did not choose that name has a reason not to follow the
-	// link: anyone can sign up with another person's address (agentry#861).
+	// link: anyone can sign up with another person's address.
 	EmailVerification(ctx context.Context, toEmail, handle, token string) error
 	// AgentQuarantined tells an author that a version they published has been
-	// pulled by a rescan (§8.7: author notification is one of the three
+	// pulled by a rescan (author notification is one of the three
 	// notification paths, alongside the org webhook and the advisory).
 	AgentQuarantined(ctx context.Context, n QuarantineNotice) error
-	// ReviewDecided tells an author the outcome of a review (§7, §8.7).
+	// ReviewDecided tells an author the outcome of a review.
 	ReviewDecided(ctx context.Context, n ReviewNotice) error
 	// AdvisoryPublished tells an author that an advisory naming their agent
-	// is now public (§8.7).
+	// is now public.
 	AdvisoryPublished(ctx context.Context, n AdvisoryNotice) error
-	// OrgInvite offers someone a place in an organisation (§13.4 lists
-	// invites among the transactional mails). Since agentry#361 it is a
-	// real offer with a link to accept, not a notice that a membership
-	// already exists: nobody joins an organisation uninvited.
+	// OrgInvite offers someone a place in an organisation. It is a real
+	// offer with a link to accept, not a notice that a membership already
+	// exists: nobody joins an organisation uninvited.
 	OrgInvite(ctx context.Context, n InviteOffer) error
 	// MCPDependencyAlert tells an author that a published version of theirs
 	// declares an MCP server version with a newly known high or critical
-	// vulnerability, and that the fix is a new version (agentry#177).
+	// vulnerability, and that the fix is a new version.
 	MCPDependencyAlert(ctx context.Context, n MCPDependencyAlertNotice) error
 	// OrgAccessRequest tells an organisation's admin that a person whose
 	// verified address is at the organisation's domain asks to be added
-	// (agentry#363, D13, D21). One mail per admin, once a day per person.
+	// One mail per admin, once a day per person.
 	OrgAccessRequest(ctx context.Context, n AccessRequestNotice) error
 	// OrgPendingMembers tells an organisation's admin who is waiting to be
-	// approved (agentry#364, D25): the people the domain folded in, and
+	// approved: the people the domain folded in, and
 	// the IdP provisioned, that no digest has named yet. One mail per
 	// admin per organisation, batched daily; a person is named once.
 	OrgPendingMembers(ctx context.Context, n PendingMembersNotice) error
 	// Rendered delivers a message somebody else composed, in this
 	// deployment's frame: the registry's name prefixed to the subject,
 	// the text as the body exactly as given, the registry's footer with
-	// the settings link beneath it. It exists for the extension seam
-	// (agentry#366): the closed build's billing mail is written there and
-	// carried here, so the transport and the frame are the core's and its
-	// copy is not. kind names the mail class in the log line, never the
-	// body.
+	// the settings link beneath it. It exists for the extension seam: an
+	// extension's billing mail is written there and carried here, so the
+	// transport and the frame are the core's and its copy is not. kind
+	// names the mail class in the log line, never the body.
 	Rendered(ctx context.Context, n RenderedNotice) error
 }
 
@@ -175,7 +173,7 @@ type ReviewNotice struct {
 	ToEmail string
 	Agent   string
 	Version string
-	// Decision is the §7 outcome the version reached: published | approved
+	// Decision is the outcome the version reached: published | approved
 	// (published moments later, by the registry's signer) | rejected |
 	// yanked | needs_review. `yanked` arrives when a reviewer rejects an
 	// already-quarantined version, which cannot go to `rejected` because that
@@ -184,7 +182,7 @@ type ReviewNotice struct {
 	// Reviewer is the deciding reviewer's handle, when the decision was made
 	// by a human rather than by the automated gate.
 	Reviewer string
-	// Rationale is the reviewer's stated reason (§1.6.2 transparency).
+	// Rationale is the reviewer's stated reason.
 	Rationale string
 	ReportURL string
 }
@@ -196,16 +194,15 @@ type AdvisoryNotice struct {
 	Severity string
 	Summary  string
 	// AffectedVersions is the range the advisory names, as stored — the
-	// fact a consumer needs first (agentry#274).
+	// fact a consumer needs first.
 	AffectedVersions string
 	// AdvisoryURL is the public advisory page.
 	AdvisoryURL string
 }
 
-// InviteOffer offers a place in an organisation. It replaced InviteNotice
-// with agentry#361: an organisation's membership is offered and accepted,
-// not granted, so the mail carries a link the person acts on and the role
-// it names is not yet in force.
+// InviteOffer offers a place in an organisation. An organisation's
+// membership is offered and accepted, not granted, so the mail carries a
+// link the person acts on and the role it names is not yet in force.
 type InviteOffer struct {
 	ToEmail string
 	Org     string
@@ -232,10 +229,10 @@ type Options struct {
 	Registry string
 	SMTP     SMTPOptions
 	Log      *slog.Logger
-	// Links are the browser destinations this deployment resolved (DEV-091):
+	// Links are the browser destinations this deployment resolved:
 	// Dashboard is where "see your dashboard" points; VerifyEmail builds the
 	// address-verification link for a token; ReportCard builds the link to a
-	// version's report card for "namespace/name" and a version (agentry#270).
+	// version's report card for "namespace/name" and a version.
 	// Unset falls back to the site's own paths under BaseURL.
 	Links Links
 }
@@ -245,8 +242,8 @@ type Links struct {
 	Dashboard   string
 	VerifyEmail func(token string) string
 	ReportCard  func(agent, version string) string
-	// Settings is the page where a person switches these mails on and off
-	// (agentry#274): the footer names it, so a reader knows where to go.
+	// Settings is the page where a person switches these mails on and off:
+	// the footer names it, so a reader knows where to go.
 	Settings string
 }
 
@@ -371,7 +368,7 @@ type renderer struct {
 	baseURL  string
 	// dashboard, verifyEmail and reportCard are the browser destinations the
 	// server resolved for this deployment (a site in front of it, or its own
-	// /ui/ pages — DEV-091); when unset the site's paths under baseURL are
+	// /ui/ pages); when unset the site's paths under baseURL are
 	// used, so a bare renderer still produces links of the same shape.
 	dashboard   string
 	verifyEmail func(token string) string
@@ -381,8 +378,7 @@ type renderer struct {
 
 // reportLink is the report-card link for a version: the caller's explicit
 // URL, else the deployment's resolved one, else the site's route shape under
-// baseURL — the path the site serves, which the old "/agents/…" fallback was
-// not (agentry#270).
+// baseURL — the path the site serves.
 func (r renderer) reportLink(explicit, agent, version string) string {
 	if explicit != "" {
 		return explicit
@@ -412,7 +408,7 @@ func (r renderer) footer() string {
 		"on the account it concerns. Do not reply to this message.\n"
 	// Most of these mails can be switched off; the page that does it is
 	// named on every one, since the reader of a mail they did not want is
-	// the reader who needs the line (agentry#274).
+	// the reader who needs the line.
 	if u := firstNonEmpty(r.settings, r.link("/settings")); u != "" {
 		f += "Which of these mails you receive is set in your settings:\n" + u + "\n"
 	}
@@ -425,13 +421,13 @@ func (r renderer) verification(handle, token string) message {
 		url = r.verifyEmail(token)
 	}
 	body := "Follow this link to confirm this address and activate the " + r.registry + " account " + handle + ".\n\n"
-	// The old close promised "the address will not be used", which nothing in
-	// the server keeps: no job deletes an unconfirmed account, the row keeps
-	// the address, and a later membership grant mails it. What IS true is the
-	// gate: an unconfirmed account cannot publish or create a QuickAgent on
-	// any deployment (§19), and where a directory holds credentials it is
-	// read-only until it activates (agentry#861). "Browse but not publish"
-	// is the sentence true of both.
+	// The mail does not promise "the address will not be used", which
+	// nothing in the server keeps: no job deletes an unconfirmed account,
+	// the row keeps the address, and a later membership grant mails it.
+	// What IS true is the gate: an unconfirmed account cannot publish or
+	// create a QuickAgent on any deployment, and where a directory holds
+	// credentials it is read-only until it activates. "Browse but not
+	// publish" is the sentence true of both.
 	once := "The link works once."
 	if url != "" {
 		body += url + "\n\n"
@@ -447,7 +443,7 @@ func (r renderer) verification(handle, token string) message {
 }
 
 func (r renderer) quarantine(n QuarantineNotice) message {
-	// §8.7: a rescan under a newer ruleset found something in an already
+	// A rescan under a newer ruleset found something in an already
 	// published version. Say what happened and what it means for installs;
 	// do not editorialise about severity beyond the label the scan assigned.
 	body := "A rescan of " + n.Agent + " " + n.Version + " under a newer ruleset produced a\n" +
@@ -460,8 +456,8 @@ func (r renderer) quarantine(n QuarantineNotice) message {
 		"What that means: the version no longer resolves for new installs, not\n" +
 		"even by exact version, and a download of it answers 409. Copies already\n" +
 		// One sweep can quarantine several versions of the same QuickAgent and
-		// send one of these for each, so "your other published versions still
-		// resolve" was a promise this mail cannot keep. Name the mechanism
+		// send one of these for each, so the mail cannot promise that the
+		// other published versions still resolve. It names the mechanism
 		// that would have taken the others instead.
 		"installed elsewhere are not reached by this change. Your other\n" +
 		"published versions resolve unless a rescan quarantined them too.\n\n"
@@ -471,11 +467,10 @@ func (r renderer) quarantine(n QuarantineNotice) message {
 	if u := r.reportLink(n.ReportURL, n.Agent, n.Version); u != "" {
 		body += "Report card (findings, ruleset version, scan date):\n" + u + "\n\n"
 	}
-	// The old close told the author to "reply through the report page", a path
-	// that does not exist: there is no appeal endpoint, and the platform
-	// review queue is staff-only (handlers_reviews.go reviewItemAccess), so
-	// the author cannot even read the item. State the two outcomes a reviewer
-	// can reach from quarantined instead, and state the missing path plainly.
+	// There is no appeal endpoint, and the platform review queue is
+	// staff-only (handlers_reviews.go reviewItemAccess), so the author
+	// cannot even read the item. The mail states the two outcomes a reviewer
+	// can reach from quarantined, and states the missing path plainly.
 	body += "A platform reviewer now has the version and can restore it to\n" +
 		"published or yank it. Their rationale is recorded with the version,\n" +
 		"and there is no way to contest a finding from the report card today.\n"
@@ -489,14 +484,14 @@ func (r renderer) review(n ReviewNotice) message {
 	var headline, detail string
 	switch n.Decision {
 	case "published":
-		// §1.6.3: "scanned, N findings, signed" — never "safe".
+		// "scanned, N findings, signed" — never "safe".
 		headline = "published"
 		detail = "The version is now resolvable and its attestation is signed. The full\n" +
 			"scan report stays public: publication records what was found, it does\n" +
 			"not certify that nothing was missed.\n"
 	case "approved":
 		// A reviewer approved it and the registry's signer publishes it
-		// moments later (agentry#479): said as it is at the time of the mail.
+		// moments later: said as it is at the time of the mail.
 		headline = "approved"
 		detail = "A reviewer approved it, and it is published as soon as the registry\n" +
 			"has signed its attestation, which takes moments. The full scan report\n" +
@@ -514,14 +509,14 @@ func (r renderer) review(n ReviewNotice) message {
 		// Reachable: rejecting a review on a QUARANTINED version cannot go to
 		// `rejected` (the edge does not exist), so the API yanks instead and
 		// passes "yanked" here. Without this branch the author's only
-		// explanation was the headline.
+		// explanation would be the headline.
 		headline = "yanked"
 		detail = "A yanked version still resolves for an exact pin, with a warning, so\n" +
 			"copies pinned to it keep working. It no longer resolves for a range,\n" +
 			"and a yank is permanent: the fix is a new version.\n"
 	case "needs_review":
 		// Reachable: the pipeline sends this when its gate holds a fresh
-		// submission for a human (internal/scan/pipeline.go, agentry#274) —
+		// submission for a human (internal/scan/pipeline.go) —
 		// the one outcome an author would otherwise learn only by looking.
 		headline = "held for review"
 		detail = "The gate did not clear it, so a human reviewer has the version.\n" +
@@ -548,7 +543,7 @@ func (r renderer) review(n ReviewNotice) message {
 }
 
 func (r renderer) advisory(n AdvisoryNotice) message {
-	// Say it, then name it (plan §4.3): this mail is where an author meets
+	// Say it, then name it: this mail is where an author meets
 	// the word "advisory" first.
 	body := "The registry published an advisory naming " + n.Agent + ". An advisory is\n" +
 		"the public record of a security problem in a published QuickAgent.\n\n" +
@@ -562,7 +557,7 @@ func (r renderer) advisory(n AdvisoryNotice) message {
 	if u := firstNonEmpty(n.AdvisoryURL, r.link("/advisories")); u != "" {
 		body += "\n" + u + "\n"
 	}
-	// Same §7 fact as before, load-bearing half first.
+	// The same fact as in the quarantine mail, load-bearing half first.
 	body += "\nNothing in the registry reaches copies that are already installed.\n" +
 		"This advisory and its page are how a consumer finds out.\n"
 	return message{
@@ -698,8 +693,8 @@ func (r renderer) pendingMembers(n PendingMembersNotice) message {
 }
 
 // severityLine renders a severity label, defaulting to something honest when
-// the caller did not set one. The default is a word rather than the old
-// "unspecified-severity" slug so it reads in both places it appears: after
+// the caller did not set one. The default is a word rather than a
+// slug so it reads in both places it appears: after
 // "Severity: " and inside "a finding at … severity".
 func severityLine(s string) string {
 	if s == "" {

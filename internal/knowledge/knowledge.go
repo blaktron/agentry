@@ -1,11 +1,10 @@
-// Package knowledge is the registry's store of knowledge packs (plan
-// knowledge.md §4.3, §4.4; agentry#593): the packs a signed-in person, or
-// later an organization, keeps in Agentry, each held as its tree sealed
-// under a data key of its own (pkg/packseal) with that key wrapped for its
-// owner by a KeyWrapper, scanned when it arrives, and destroyed with its
-// owner. The core carries all of it without certificates: its wrapper is
-// the deployment's knowledge sealing key; an extension (SecureAgentry's
-// certificate wrapper) replaces the wrapper and nothing else.
+// Package knowledge is the registry's store of knowledge packs: the packs
+// a signed-in person, or an organization, keeps in Agentry, each held as
+// its tree sealed under a data key of its own (pkg/packseal) with that key
+// wrapped for its owner by a KeyWrapper, scanned when it arrives, and
+// destroyed with its owner. The core carries all of it without
+// certificates: its wrapper is the deployment's knowledge sealing key; an
+// extension (a certificate wrapper) replaces the wrapper and nothing else.
 package knowledge
 
 import (

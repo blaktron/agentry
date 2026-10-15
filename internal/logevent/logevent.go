@@ -1,9 +1,8 @@
-// Package logevent is the vocabulary of the log contract (docs/logging.md,
-// plan log-stack.md §5.2): the `event` names a line carries when it is a
-// signal rather than narration. A dashboard or an alert keys on these
-// names, never on message text, so every name is a constant here, every
-// constant is documented, and a test keeps the code, this catalog and the
-// docs page in step.
+// Package logevent is the vocabulary of the log contract (docs/logging.md):
+// the `event` names a line carries when it is a signal rather than
+// narration. A dashboard or an alert keys on these names, never on message
+// text, so every name is a constant here, every constant is documented,
+// and a test keeps the code, this catalog and the docs page in step.
 package logevent
 
 import "log/slog"
@@ -24,10 +23,10 @@ const (
 	// AuthSocialRejected is a social or directory sign-in the server rejected.
 	AuthSocialRejected Event = "auth.social_rejected"
 	// SAMLStateUnavailable is a SAML login refused because the shared state
-	// behind it could not be read or written (agentry#414).
+	// behind it could not be read or written.
 	SAMLStateUnavailable Event = "saml.state_unavailable"
 	// TOTPChallengeUnavailable is a 2FA social login's second leg refused
-	// because its challenge could not be recorded as consumed (agentry#457).
+	// because its challenge could not be recorded as consumed.
 	TOTPChallengeUnavailable Event = "auth.totp_challenge_unavailable"
 	// SSRFRefused is an outbound target the private-range guard refused.
 	SSRFRefused Event = "ssrf.refused"
@@ -40,23 +39,22 @@ const (
 	// ScanStage is one scanner stage finishing, with its outcome.
 	ScanStage Event = "scan.stage"
 	// FailOpenAuditStreamDrop is an audit archive record dropped on a full
-	// buffer (DEV-020).
+	// buffer.
 	FailOpenAuditStreamDrop Event = "failopen.audit_stream_drop"
 	// FailOpenHistoryNotScanned is a git history the S2 stage could not
-	// scan (DEV-026.3).
+	// scan.
 	FailOpenHistoryNotScanned Event = "failopen.history_not_scanned"
 	// FailOpenOSVNotChecked is a dependency set S7 did not check against OSV.
 	FailOpenOSVNotChecked Event = "failopen.osv_not_checked"
-	// FailOpenOSVError is an OSV lookup that errored (DEV-026.3).
+	// FailOpenOSVError is an OSV lookup that errored.
 	FailOpenOSVError Event = "failopen.osv_error"
 	// FailOpenVersionNotChecked is a declared MCP server version S7 did not
-	// check against its package registry (agentry#1036).
+	// check against its package registry.
 	FailOpenVersionNotChecked Event = "failopen.version_not_checked"
 	// FailOpenDirectoryErasure is an account erasure whose directory half
-	// did not happen after its retries (agentry#499).
+	// did not happen after its retries.
 	FailOpenDirectoryErasure Event = "failopen.directory_erasure"
-	// GitPushRefused is a submission the git door refused after a tag push
-	// (agentry#322).
+	// GitPushRefused is a submission the git door refused after a tag push.
 	GitPushRefused Event = "git.push_refused"
 	// MailSuppressed is a notification withheld from an unverified address.
 	MailSuppressed Event = "mail.suppressed"

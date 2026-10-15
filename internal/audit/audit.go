@@ -19,7 +19,7 @@ import (
 // ActorKind mirrors audit_events.actor_kind.
 type ActorKind string
 
-// Actor kinds (§4.2 audit_events).
+// Actor kinds.
 const (
 	ActorUser   ActorKind = "user"
 	ActorPAT    ActorKind = "pat"
@@ -28,7 +28,7 @@ const (
 )
 
 // Event is one audit record. OrgID/Target are optional; Detail must not
-// contain secrets or tokens (§16.2 rule — reviewers grep for violations).
+// contain secrets or tokens (reviewers grep for violations).
 type Event struct {
 	Actor      uuid.UUID // zero for system events
 	ActorKind  ActorKind
@@ -60,7 +60,7 @@ func NewWriter(log *slog.Logger) *Writer {
 	return &Writer{log: log, ensuredMonths: map[string]struct{}{}, stream: NopStream{}}
 }
 
-// SetStream attaches the §12.6 NDJSON archive sink. Called once at startup.
+// SetStream attaches the NDJSON archive sink. Called once at startup.
 func (w *Writer) SetStream(s Stream) {
 	if s == nil {
 		s = NopStream{}
@@ -80,7 +80,7 @@ func (w *Writer) Stream() Stream {
 // Write records the event via q (pass the transaction-bound queries when the
 // mutation runs in a tx). Failures are returned AND logged: callers in
 // request paths must fail the mutation if the audit write fails (append-only
-// log is a §1.6 trust property, not telemetry).
+// log is a trust property, not telemetry).
 func (w *Writer) Write(ctx context.Context, q *storegen.Queries, e Event) error {
 	if !Registered(e.Action) {
 		return fmt.Errorf("audit: unregistered action %q", e.Action)
@@ -150,7 +150,7 @@ func (w *Writer) Write(ctx context.Context, q *storegen.Queries, e Event) error 
 		return fmt.Errorf("audit: insert: %w", err)
 	}
 
-	// Archive copy (§12.6). Queued only after the row is written, so the
+	// Archive copy. Queued only after the row is written, so the
 	// stream never gets an event the database refused. Best-effort by
 	// design — see the stream.go package comment.
 	rec := Record{

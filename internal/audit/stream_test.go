@@ -1,6 +1,6 @@
 package audit
 
-// The §12.6 continuous NDJSON archive.
+// The continuous NDJSON archive.
 
 import (
 	"bytes"
@@ -108,7 +108,7 @@ func TestFileStreamDropsWhenBufferFull(t *testing.T) {
 
 	// Archival must never block the request path: past the cap, records are
 	// dropped and logged rather than queued without bound — and every drop
-	// is reported to the hook that counts fail-open events (agentry#33).
+	// is reported to the hook that counts fail-open events.
 	drops := 0
 	st.OnDrop = func() { drops++ }
 	for i := 0; i < fileStreamBufferMax+50; i++ {
@@ -137,7 +137,7 @@ func TestNewStreamKinds(t *testing.T) {
 		t.Fatal("an unknown kind must degrade to the no-op sink, not panic")
 	}
 	// The S3 sink is a declared stub: it must refuse rather than silently
-	// pretend to archive (DEV-020).
+	// pretend to archive.
 	if _, err := NewS3Stream("bucket", time.Second, nil); err == nil {
 		t.Fatal("NewS3Stream must return an error until it is implemented")
 	}
