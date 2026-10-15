@@ -93,6 +93,30 @@ cd my-first-agent && $CLI validate
 `validate` runs the same manifest rules and the same hidden-content and
 injection-signature scanners the server runs at publish time, offline.
 
+A script or CI job that cannot sign in through a browser can give the CLI
+a personal access token in the environment instead. For your own
+registry, name it and set the token:
+
+```bash
+export AGENTRY_REGISTRY=https://agentry.example.com
+export AGENTRY_TOKEN=agy_…   # a personal access token minted on that registry
+$CLI whoami
+```
+
+`AGENTRY_TOKEN` is sent only to the self-hosted registry the CLI is
+configured for: `AGENTRY_REGISTRY`, or, when that is unset, the
+`defaultRegistry` in the CLI's config file (the first registry you signed
+in to). A command aimed at any other registry, with `--registry` or
+otherwise, does not send it and says so; it uses that registry's own
+sign-in if there is one. It is never sent to SecureAgentry
+(`secureagentry.net` and its subdomains), and the CLI refuses it outright
+when no self-hosted registry is configured, so a token meant for one place
+never reaches another. The token for SecureAgentry is a separate
+variable, `SECUREAGENTRY_TOKEN`, which a release build sends only to the
+SecureAgentry registry it was built for ([accounts and
+tokens](https://docs.secureagentry.net/agentry/accounts/)).
+`agentry --help` lists all three variables.
+
 ## Deployment shapes
 
 | Shape | What runs | Who it is for |
