@@ -8,7 +8,7 @@ and sixteen top-level tests in this family.
 
 ## Retained assertions
 
-Every test below is retained. Each row includes the cases inside the test,
+Each row includes the cases inside the test,
 including cases expressed as loops rather than named subtests.
 
 | Test | Retained contract and cases |
@@ -53,14 +53,10 @@ requests still pass through the real session, CSRF and authorization
 middleware. Each test keeps its own server and objects; fixtures are not
 shared between these three permission contracts.
 
-This replaces seventeen registration calls and seventeen ordinary sign-in
-calls. The read test also reuses one real member session for its two PAT
-issuances and its read grid, replacing two more sign-ins. Counting the
-retained sign-in inside each `joinOrg`, these three tests change from
-22 registrations and 27 sign-ins to five registrations and eight sign-ins.
-The seventeen seeded accounts share one real password hash per process with
-other `seedCaller` fixtures. Temporary fixture logging verified these setup counts on both versions.
-They are not a reduction in permission cases or an established runtime gain.
+The read test reuses one real member session for its two PAT issuances and
+its read grid. The seeded accounts share one real password hash per process
+with other `seedCaller` fixtures. Seeding callers saves setup work only; it
+removes no permission case.
 
 Members still register and join through the invitation endpoints. Staff still
 register, receive the staff fixture flag and sign in. Organization creation,
@@ -96,11 +92,11 @@ separate from accepting risk for an organization. `TestReviewItemOfAnUnknownQueu
 forces a row past the database constraint to check the independent application
 refusal and restores the constraint afterwards. Preserve its serialization.
 
-The known author-verdict gap is tracked in core issue #914: the finding route
-does not apply the review decision's non-staff author rule. Retaining decision
-tests does not prove that finding verdicts enforce it. Core issue #397 tracks
-extension adapters exercised through bound `Deps`; the API probe tests here
-exercise the server seam, so they do not replace that adapter boundary.
+A known author-verdict gap remains: the finding route does not apply the
+review decision's non-staff author rule. The decision tests above do not
+prove that finding verdicts enforce it. Extension adapters exercised through
+bound `Deps` are a separate boundary; the API probe tests here exercise the
+server seam, so they do not replace it.
 
 The [coverage guide](testing.md) gives the consolidation and verification
-rules. GitHub issues hold review and implementation status.
+rules.

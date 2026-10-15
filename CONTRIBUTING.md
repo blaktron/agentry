@@ -9,16 +9,12 @@ everything else is ordinary Go work.
 - **Security issues do not go in pull requests.** See [SECURITY.md](SECURITY.md).
 - Large changes: open an issue first. Protocol and manifest changes go through
   an RFC in `docs/rfcs/` (copy the template, open a PR with the RFC alone).
-- The build plan lives in [agentry-notes](https://github.com/blaktron/agentry-notes) and is immutable during the v1 build.
-  Deviations get an entry in the deviations register there — dated, with what/why/impact —
-  rather than an edit to the plan.
 
 ## Which repository
 
 This repository is the open core: the server, the pipeline, auth, the git
 host, the headless deployment and the server's own `/ui/` pages. The hosted
-service's site (`blaktron/agentry-web`) and enterprise build
-(`blaktron/agentry-enterprise`) are closed repositories; a bug in the hosted
+service's site and enterprise build are closed repositories; a bug in the hosted
 site's pages, brand or deployment goes to the service's support address, not
 to an issue here. The CLI, the desktop app, the MCP server, the docs machinery
 and the examples each have their own public repository (see
@@ -30,10 +26,8 @@ Fork, branch from `dev`, open a pull request against `dev`: `dev` is where
 changes land, and `main` takes only its promotions. CI runs on the maintainers'
 own runners once a maintainer approves the run for a first-time contributor.
 Sign off every commit (the DCO, below); keep a change to one concern; say in
-the PR what you verified and how. A change that departs from the recorded
-design gets a dated entry in the deviations register in
-[agentry-notes](https://github.com/blaktron/agentry-notes) — the maintainers
-will write it with you.
+the PR what you verified and how. A change that alters documented behaviour
+updates the page in `docs/` that describes it in the same PR.
 
 ## Development setup
 
@@ -47,10 +41,18 @@ Everyday commands:
 
 | Command | What |
 |---|---|
-| `make check` | the full gate: generated-code drift, lint, tests, build |
+| `make check` | the full gate: generated-code drift, ruleset sync, test inventory, lint, tests, build |
 | `make generate` | regenerate the OpenAPI server and Go client, and sqlc |
 | `make test` | Go tests (DB tests need `AGENTRY_TEST_DATABASE_URL`) |
-| `./scripts/acceptance/mN.sh` | the acceptance script for milestone N |
+| `./scripts/acceptance/smoke.sh` | the stack boots and the generated Go client reaches the API |
+| `./scripts/acceptance/auth.sh` | the authorization matrix, the personal-access-token lifecycle and the audit rows, against a real Postgres |
+| `./scripts/acceptance/git.sh` | the git conformance matrix: oversize pushes, wrong credentials and tag permissions are refused |
+| `./scripts/acceptance/publish-install.sh` | publish and install round trips, byte-reproducible archives, yank semantics, and no path to `published` that skips the gate |
+| `./scripts/acceptance/cli.sh` | the `agentry` CLI against a booted `agentryd`: login, init, validate, publish, install, verify, yank |
+| `./scripts/acceptance/gate.sh` | the attack-corpus gate, the state-machine property, offline attestation verification and tighten-only policy |
+| `./scripts/acceptance/enterprise-sso.sh` | SAML and OIDC sign-in, enforced SSO, SCIM, domain verification, webhooks and audit export |
+| `./scripts/acceptance/helm.sh` | the Helm chart lints and renders, and its production shape holds |
+| `./scripts/acceptance/invariant-test-names.sh` | every test named as evidence for a security invariant still exists under that name |
 | `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages, driven with curl and a cookie jar |
 | `./scripts/acceptance/directory-signout.py` | sign-out against a live directory (needs its URL and the bootstrap token; a throwaway user it deletes) |
 | `./scripts/acceptance/directory-email.sh` | the directory's sign-up and reset mails render as Agentry through authentik's own mail class, in the pinned image (needs docker; no directory) |
@@ -74,8 +76,8 @@ express (platform staff, org reviewer, "not the author"), mark it
 
 A route that is not part of the OpenAPI surface — a root mount, like SCIM,
 the image proxy, git smart HTTP, the SSO landing or a probe — declares in
-`mountAuthz` in the same file instead: its gate (`MountGate`) and the §19
-rate class it draws from, with a `Why` whenever the gate is `GatePublic` or
+`mountAuthz` in the same file instead: its gate (`MountGate`) and the rate
+class it draws from, with a `Why` whenever the gate is `GatePublic` or
 the class is one of the two sentinels. Register it through `api.Mount`,
 which refuses an undeclared pattern at start-up; the completeness test
 enumerates what the mux was actually given rather than what the spec lists,
@@ -122,7 +124,7 @@ Match the file you are editing. Beyond that:
   `refactor:`, `test:`, `ci:`, `chore:`) — release-please turns these into the
   CHANGELOG, so the prefix is what appears (or is hidden) in release notes. It
   does not choose the version: every release is a patch bump, and only the
-  operator moves the minor or the major (see "Releasing"). Mark a breaking
+  maintainers move the minor or the major (see "Releasing"). Mark a breaking
   change with `feat!:` or a `BREAKING CHANGE:` footer all the same, so the
   changelog says so.
 
@@ -135,7 +137,7 @@ surviving equivalent evidence for its removals.
 
 New code needs tests at the level where the behaviour lives: table tests for
 pure logic, real-Postgres integration tests for stores and handlers, and an
-acceptance-script assertion for anything a milestone promises. Fixtures for
+acceptance-script assertion for anything the scripts above cover. Fixtures for
 hostile content are text-only, defanged, and use `*.invalid.example` hosts —
 never functional malware, never real endpoints, never real secrets.
 
@@ -156,9 +158,8 @@ mechanisms.
 
 Hedge where the hedge is the fact: "cannot prove", "reduces" and "today" are
 content, not softening. End a section on a next step or a stated limit rather
-than a recap. Section numbers and register ids stay out of product copy, but
-the docs keep their citations — §-numbers, DEV-nnn, RFC ids — because there
-they are the audit trail.
+than a recap. Section numbers and issue ids stay out of product copy and the docs;
+a citation of an external standard, such as an RFC section, stays.
 
 The words this prose does not use live in `scripts/prose/never.txt`, and the
 check reads them from there. They are reproduced here as data, not as prose:
@@ -198,11 +199,8 @@ Pass `--strict` first or it does nothing. As a fourth argument it is dropped,
 and a run with warnings still exits 0. In the constraints file's place it is
 read as a path, and the script dies with a traceback.
 
-§4 and §6 of `plans/front-end-voice-and-warmth.md` in
-[agentry-notes](https://github.com/blaktron/agentry-notes) carry the full rule.
-They say what counts as a finding, which sentences may not move, and when a
-diff over 40 % or a preservation warning needs a named sign-off in the pull
-request.
+A rewrite whose diff passes 40 % or that raises a preservation warning needs
+a named sign-off in the pull request.
 
 ### The prose check
 
@@ -248,13 +246,13 @@ submit it under the project's license.
 The project license is MIT ([LICENSE](LICENSE)). Do not add dependencies
 under AGPL, and do not import rule content
 whose license restricts competing use — both would contaminate the
-distribution (PLAN §14.4, threat T-13). New dependencies need a line in the PR
+distribution. New dependencies need a line in the PR
 description explaining why an existing one will not do.
 
 ## Releasing
 
-Every build that ships is released under a version, on two channels
-(DEV-148, agentry#597). Nothing is 1.0.0 until the operator says so.
+Every build that ships is released under a version, on two channels.
+No release is 1.x until a maintainer enables it.
 
 - **`main` releases, `vX.Y.Z`**, go to production. They are automated with
   [release-please](https://github.com/googleapis/release-please)
@@ -275,12 +273,12 @@ Every build that ships is released under a version, on two channels
 
 **Versions.** Every release is a patch bump, whatever the commit types
 (`"versioning": "always-bump-patch"`). A `feat:` or a breaking change does not
-move the minor version by itself: the operator moves it, by setting
+move the minor version by itself: a maintainer moves it, by setting
 `release-as` in `release-please-config.json`, which is removed again once that
 version is released (`scripts/release/config-guard.sh` fails the release PR's
 job while a released `release-as` lingers). Nothing reaches 1.x unless the
-repository variable `AGENTRY_ALLOW_V1` is `true`, and only the operator's 1.0
-step sets it (agentry#522). `release.yaml`'s first job
+repository variable `AGENTRY_ALLOW_V1` is `true`, and only the 1.0
+release step sets it. `release.yaml`'s first job
 (`scripts/release/tag-guard.sh`) refuses:
 
 - a tag of any other shape;
