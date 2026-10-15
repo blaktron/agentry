@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blaktron/agentry/pkg/manifest"
 	"github.com/blaktron/agentry/pkg/toolgrant"
@@ -208,5 +209,20 @@ func TestTheTableNamesEachRunnerToolOnce(t *testing.T) {
 		if g.Path() == "" {
 			t.Errorf("%s has no manifest path", g)
 		}
+	}
+}
+
+// A megabyte of instruction in one paragraph, naming a tool fifty thousand
+// times, is read in time linear in its length: the reading runs inside the
+// publication scan, on text an author controls.
+func TestALargeInstructionIsReadInLinearTime(t *testing.T) {
+	instr := strings.Repeat("then use browser_click and ", 40000) + "\n" + strings.Repeat("x", 1<<20)
+	start := time.Now()
+	got := toolgrant.Check(caps(t, ""), instr)
+	if d := time.Since(start); d > 3*time.Second {
+		t.Fatalf("took %s", d)
+	}
+	if !slices.Equal(tools(got), []string{"browser_click"}) {
+		t.Fatalf("got %v", tools(got))
 	}
 }
