@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/knowledge"
+	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/pkg/packseal"
 )
@@ -197,12 +199,109 @@ func (s *Server) uploadKnowledgeTree(w http.ResponseWriter, r *http.Request, own
 		problemBadRequest(w, r, "The upload could not be read.")
 		return
 	}
-	p, err := s.knowledge.Upload(r.Context(), owner, packID, body)
-	if err != nil {
+	p, err := s.knowledge.UploadAdmitted(r.Context(), owner, packID, body, s.admitKnowledgeUpload)
+	var refused *knowledgeRefused
+	var unavailable *knowledgeAdmissionUnavailable
+	switch {
+	case errors.As(err, &refused):
+		problemAdmissionRefused(w, r, refused.refusal)
+		return
+	case errors.As(err, &unavailable):
+		s.log.ErrorContext(r.Context(), "knowledge: admission unavailable", "err", unavailable.err)
+		writeProblem(w, r, http.StatusServiceUnavailable, "admission-unavailable", "Upload not admitted",
+			"The registry could not check whether this account may have the pack scanned. Nothing was stored; retry shortly.")
+		return
+	case err != nil:
 		s.knowledgeProblem(w, r, err, "upload knowledge tree")
 		return
 	}
 	s.writeKnowledgePack(w, r, http.StatusAccepted, p, org)
+}
+
+// KnowledgeAdmission is an upload of a pack's tree that will queue a scan,
+// as an extension admits it: the account uploading, the pack's owner (the
+// account, or an organization) and the tree's size. The payer is the
+// extension's to decide.
+type KnowledgeAdmission struct {
+	User      uuid.UUID
+	OwnerKind string // "user" or "org"
+	OwnerID   uuid.UUID
+	Pack      uuid.UUID
+	Bytes     int64
+	Files     int
+}
+
+// KnowledgeAdmitter is the seam through which an extension admits the scan
+// an upload of a pack's tree queues, and may charge for it (pkg/extension
+// AdmitsKnowledge). It is asked once per upload, after the core has read
+// the tree and before anything is stored: an upload the core refuses (it
+// does not read, or it is too large) is never asked about, and one of the
+// tree the pack already holds queues no scan and is not asked about either.
+// A pack the extension builds and stores itself is not admitted here. The
+// core has none, and admits every upload.
+type KnowledgeAdmitter interface {
+	// AdmitKnowledge returns a ticket, or a Refusal the route answers in its
+	// own status and words. An error is "unknown": the route fails closed
+	// with 503 and stores nothing.
+	AdmitKnowledge(ctx context.Context, a KnowledgeAdmission) (registry.Ticket, *registry.Refusal, error)
+	// VoidKnowledge cancels a ticket for an upload the core then did not
+	// store (the account's allocation, a lost race). It must be idempotent.
+	VoidKnowledge(ctx context.Context, t registry.Ticket) error
+}
+
+type knowledgeAdmission struct {
+	mu       sync.RWMutex
+	admitter KnowledgeAdmitter
+}
+
+// SetKnowledgeAdmitter sets the extension that admits an upload's scan.
+func (s *Server) SetKnowledgeAdmitter(a KnowledgeAdmitter) {
+	s.knowledgeAdmit.mu.Lock()
+	defer s.knowledgeAdmit.mu.Unlock()
+	s.knowledgeAdmit.admitter = a
+}
+
+func (s *Server) knowledgeAdmitter() KnowledgeAdmitter {
+	s.knowledgeAdmit.mu.RLock()
+	defer s.knowledgeAdmit.mu.RUnlock()
+	return s.knowledgeAdmit.admitter
+}
+
+type knowledgeRefused struct{ refusal registry.Refusal }
+
+func (e *knowledgeRefused) Error() string { return "knowledge: upload refused: " + e.refusal.Detail }
+
+type knowledgeAdmissionUnavailable struct{ err error }
+
+func (e *knowledgeAdmissionUnavailable) Error() string {
+	return "knowledge: admission unavailable: " + e.err.Error()
+}
+
+// admitKnowledgeUpload asks the extension, if any, to admit an upload's
+// scan, and voids its ticket when the upload is then not stored.
+func (s *Server) admitKnowledgeUpload(ctx context.Context, a knowledge.UploadAdmission) (func(stored bool), error) {
+	adm := s.knowledgeAdmitter()
+	if adm == nil {
+		return func(bool) {}, nil
+	}
+	t, refusal, err := adm.AdmitKnowledge(ctx, KnowledgeAdmission{
+		User: principalFrom(ctx).UserID, OwnerKind: string(a.Owner.Kind), OwnerID: a.Owner.ID,
+		Pack: a.Pack, Bytes: a.Bytes, Files: a.Files,
+	})
+	switch {
+	case err != nil:
+		return nil, &knowledgeAdmissionUnavailable{err: err}
+	case refusal != nil:
+		return nil, &knowledgeRefused{refusal: *refusal}
+	}
+	return func(stored bool) {
+		if stored || t.ID == "" {
+			return
+		}
+		if err := adm.VoidKnowledge(context.WithoutCancel(ctx), t); err != nil {
+			s.log.ErrorContext(ctx, "knowledge: void an admission", "ticket", t.ID, "err", err)
+		}
+	}, nil
 }
 
 // downloadKnowledgeTree answers the sealed tree as stored.
