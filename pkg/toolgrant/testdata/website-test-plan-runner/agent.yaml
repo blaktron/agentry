@@ -1,0 +1,48 @@
+schemaVersion: "2"
+name: website-test-plan-runner
+namespace: blaktron
+modes: [autonomous]
+version: 0.1.0
+summary: Executes a supplied website test plan step by step and produces a detailed PDF report with results and evidence.
+license: MIT
+tags: [website, testing, test-plan, pdf, quality-assurance]
+
+entrypoints:
+  instruction: AGENT.md
+
+intake:
+  - id: site
+    prompt: The website to test (https://…)
+    type: url
+    required: true
+
+inputs:
+  kinds: [documents, data]
+  view: text
+
+guide:
+  overview: Executes your detailed test plan against the website in a browser and returns a PDF report, its Markdown source and screenshot evidence. Reports each case and step with observed results, defects and reasons for anything it could not test. Supply the plan as attached files or knowledge.
+  prepare: ["Provide a detailed plan with ordered steps, prerequisites, test data and expected results.", Use a staging environment and explicitly identify any permitted disposable-data or test-mode operations., "For existing-account tests, optionally provide SITE_USER and SITE_PASSWORD through the run's key setup.", Run on your own computer when the website is on your private network.]
+  files: Attach the test plan as PDF, Word, Markdown, text or a spreadsheet, unless it is supplied through an attached knowledge pack.
+  task: e.g. Execute release 2.4's regression plan on staging; disposable test records are permitted, but no messages or payments.
+  connect:
+    SITE_PASSWORD: Optional password for the dedicated test account named by SITE_USER. Store it through the run's key setup, not in the plan or task. Without both sign-in keys, cases requiring an existing account are reported as blocked.
+    SITE_USER: Optional sign-in identifier for a dedicated test account on the website. Together with SITE_PASSWORD, enables existing-account cases. Use an account with only the permissions the plan requires; public cases run without it.
+
+capabilities:
+  network:
+    egress: none
+  filesystem:
+    read: none
+    write: none
+  exec: none
+  secrets: [SITE_USER, SITE_PASSWORD]
+  dataAccess: [files, other]
+  optionalSecrets: [SITE_USER, SITE_PASSWORD]
+
+knowledge:
+  accepts:
+    prompt: Optionally attach your website test plan and supporting requirements as knowledge instead of, or alongside, plan files.
+
+publish:
+  include: [agent.yaml, AGENT.md, README.md, LICENSE]

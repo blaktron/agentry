@@ -276,7 +276,11 @@ func mcpServersByIdentity(in []MCPServer) map[string]MCPServer {
 }
 
 // describeNewServer is what a new server brings beside its identity: its
-// env, its auth and scopes, or its OAuth sign-in.
+// env, a package server's own grants (the hosts its container may reach,
+// the secrets it receives, the tools the model may call on it), its auth
+// and scopes, or its OAuth sign-in. A package server's grants are the
+// ones appendPackageServerOwnCaps compares at the same pin, so the line
+// that asks about a new server names what a later widening would.
 func describeNewServer(srv MCPServer) string {
 	var parts []string
 	if len(srv.Env) > 0 {
@@ -292,6 +296,8 @@ func describeNewServer(srv MCPServer) string {
 			a += "; scopes " + strings.Join(srv.Scopes, ", ")
 		}
 		parts = append(parts, a)
+	} else {
+		parts = append(parts, describePackageServerOwnCaps(srv)...)
 	}
 	if srv.OAuth != nil {
 		parts = append(parts, "OAuth sign-in: "+describeOAuth(srv.OAuth))
@@ -300,6 +306,29 @@ func describeNewServer(srv MCPServer) string {
 		return ""
 	}
 	return " (" + strings.Join(parts, "; ") + ")"
+}
+
+// describePackageServerOwnCaps names a package server's own grants for its
+// consent line: "*" is called out as unrestricted, and a server with no
+// tool allowlist is given every tool it serves. Egress and secrets are
+// left out when it declares none.
+func describePackageServerOwnCaps(srv MCPServer) []string {
+	var parts []string
+	switch {
+	case slices.Contains(srv.Egress, "*"):
+		parts = append(parts, "UNRESTRICTED network egress (any host)")
+	case len(srv.Egress) > 0:
+		parts = append(parts, "network egress to "+strings.Join(slices.Sorted(slices.Values(srv.Egress)), ", "))
+	}
+	if len(srv.Secrets) > 0 {
+		parts = append(parts, "secrets "+strings.Join(slices.Sorted(slices.Values(srv.Secrets)), ", "))
+	}
+	if len(srv.Tools) > 0 {
+		parts = append(parts, "tools "+strings.Join(slices.Sorted(slices.Values(srv.Tools)), ", "))
+	} else {
+		parts = append(parts, "every tool it serves")
+	}
+	return parts
 }
 
 func describeOAuth(o *MCPOAuth) string {

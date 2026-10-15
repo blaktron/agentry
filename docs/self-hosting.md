@@ -406,7 +406,9 @@ the report, so "gitleaks did not run" is distinguishable from "no
 secrets". QuickAgents carry no tool code, so there is no code-analysis
 stage; the MCP servers one declares are resolved and pinned by the runner.
 S6 is the support-scripts stage that reads a package's shell, Python and
-JavaScript files against the manifest, and S7 the MCP server lookup above.
+JavaScript files against the manifest, and the runner tools its instruction
+calls for against the grants that give them; S7 is the MCP server lookup
+above.
 
 Generate a signing key:
 

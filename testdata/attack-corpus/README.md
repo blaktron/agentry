@@ -106,6 +106,14 @@ the match, which the paragraph scope must still suppress.
 hashes, the red team's whitespace-noise mutant that 0.3.3 missed; since 0.3.4
 any Unicode space after the hashes makes a heading.
 
+S6 over the instruction (ruleset 0.4.10): `s6-ungranted-browser` is an
+instruction that works a site through the runner's browser tools in a release
+that declares no `capabilities.browser`, so its runs would have none of them;
+S6 reports `S6/ungranted-tool` and the version goes to a person. Its twin
+`s6-ungranted-browser-benign` is the same instruction with the browser line
+declared, and must draw no finding, including for the `browser_evaluate` the
+instruction names only to turn it away.
+
 S2 over the manifest (a declared MCP server's plain `env`):
 `manifest-env-secret` (a prefixed token under a credential-named key:
 the line rule and the name finding),
