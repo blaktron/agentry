@@ -14,18 +14,17 @@ import (
 	"github.com/blaktron/agentry/pkg/judge"
 )
 
-// benchDir is the draft set's bench corpus (plan builder-simplify.md D6,
-// agentry#708): one folder per Drafter fixture (agentry-cli
-// pkg/drafter/fixtures) holding the fixture's description and the draft
-// the Drafter made of it (agent.yaml, AGENT.md, README.md), and
+// benchDir is the draft set's bench corpus: one folder per Drafter fixture
+// (the CLI's pkg/drafter/fixtures) holding the fixture's description and
+// the draft the Drafter made of it (agent.yaml, AGENT.md, README.md), and
 // variants.json, which makes each good draft broken in one known way.
 const benchDir = "testdata/draft-bench"
 
 // The two questions benched beside the shipped one and dropped on the
-// bench's numbers (2026-09-28): "undeclared" flagged two of the ten good
-// drafts, and "redundant_ask" flagged three of its ten targets. The bench
-// still asks them, in the wording benched, so a rerun reproduces the whole
-// record; nothing ships from here.
+// bench's numbers: "undeclared" flagged two of the ten good drafts, and
+// "redundant_ask" flagged three of its ten targets. The bench still asks
+// them, in the wording benched, so a rerun reproduces the whole record;
+// nothing ships from here.
 const (
 	benchIDUndeclared   = "undeclared"
 	benchIDRedundantAsk = "redundant_ask"
@@ -189,9 +188,9 @@ func TestTheDraftBenchCorpusReads(t *testing.T) {
 		}
 	}
 	classes := map[string]int{}
-	// preRaise is the draft set's instruction bound before agentry#789: the
-	// corpus keeps a long instruction past it, the length the Drafter writes
-	// for a run with no network.
+	// preRaise is the draft set's former instruction bound: the corpus
+	// keeps a long instruction past it, the length the Drafter writes for a
+	// run with no network.
 	const preRaise = 24 << 10
 	long := 0
 	for _, v := range readVariants(t) {
@@ -231,13 +230,12 @@ func TestTheDraftBenchCorpusReads(t *testing.T) {
 	}
 }
 
-// TestDraftBench is the by-hand bench of the draft question set (D6): it
-// asks the set about every variant Samples times, one request each, and
-// writes one CSV row per variant × sample × question with the probability,
-// so whether the set is kept is decided on numbers. It also asks the
-// release rubric once about every good draft, to record what AI Review
-// would flag in a draft that is fine. The summary it logs is what
-// agentry-notes measurements/draft-check-bench.md records.
+// TestDraftBench is the by-hand bench of the draft question set: it asks
+// the set about every variant Samples times, one request each, and writes
+// one CSV row per variant × sample × question with the probability, so
+// whether the set is kept is decided on numbers. It also asks the release
+// rubric once about every good draft, to record what AI Review would flag
+// in a draft that is fine. The summary it logs is the record of the bench.
 //
 // It never runs in CI: it needs AGENTRY_JUDGE_BENCH=1 and a key in
 // AGENTRY_JUDGE_API_KEY, and spends real requests. The CSV goes to
@@ -403,11 +401,11 @@ func TestDraftBench(t *testing.T) {
 
 // TestRubricDraftBench asks the release rubric, as S5 asks it, about each
 // of the Drafter's ten good drafts, several times over, and logs every
-// axis's strongest probability per run: the draft half of agentry#731's
-// bench (the attack-corpus half is internal/scan's TestTypeSafeCorpusBench).
-// A good draft should draw no finding. It never runs in CI: it needs
-// AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY; AGENTRY_JUDGE_BENCH_RUNS
-// sets the runs (default 3).
+// axis's strongest probability per run: the draft half of the rubric bench
+// (the attack-corpus half is internal/scan's TestTypeSafeCorpusBench). A
+// good draft should draw no finding. It never runs in CI: it needs
+// AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY;
+// AGENTRY_JUDGE_BENCH_RUNS sets the runs (default 3).
 func TestRubricDraftBench(t *testing.T) {
 	if os.Getenv("AGENTRY_JUDGE_BENCH") != "1" {
 		t.Skip("set AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY to run the live rubric bench")
@@ -528,29 +526,27 @@ func compareWordings(t *testing.T, c *judge.Client) {
 	}
 }
 
-// The wont_run question and the runtime statement it is asked against
-// (plan drafter-knowledge.md §4.7, D15–D16; agentry#909), benched before
-// either ships: the question is asked beside off_task in the one request
-// the check would send, over the draft state with the statement added. Its
-// targets are the wont_run variants, ten drafts each broken one way the
-// runner cannot run (a server on the CLI's Does not run here list, a step
-// needing git, a filesystem-style server over the inputs, a host on a port
-// other than 443, a server needing arguments). The criterion is agentry-notes
-// measurements/draft-check-bench.md's, written before the first full run.
+// The wont_run question and the runtime statement it is asked against,
+// benched before either ships: the question is asked beside off_task in
+// the one request the check would send, over the draft state with the
+// statement added. Its targets are the wont_run variants, ten drafts each
+// broken one way the runner cannot run (a server on the CLI's Does not run
+// here list, a step needing git, a filesystem-style server over the
+// inputs, a host on a port other than 443, a server needing arguments).
+// The criterion was fixed before the first full run.
 //
-// It failed (2026-10-06, two passes, DEV-217): it flagged no good draft but
-// only 2 of its 10 targets (the plain-http fetch and the git clone), while
-// it flagged 8 of the 10 undeclared variants, which are not its targets. So
-// it reads a manifest that does not grant what the instruction needs, not a
-// runtime that cannot give it. Nothing ships from here; the texts stay so a
-// rerun reproduces the record.
+// It failed (two passes): it flagged no good draft but only 2 of its 10
+// targets (the plain-http fetch and the git clone), while it flagged 8 of
+// the 10 undeclared variants, which are not its targets. So it reads a
+// manifest that does not grant what the instruction needs, not a runtime
+// that cannot give it. Nothing ships from here; the texts stay so a rerun
+// reproduces the record.
 const benchIDWontRun = "wont_run"
 
 // benchRuntime states what every run of a QuickAgent gets, from the CLI's
-// runtime facts and its docs (agentry-cli pkg/drafter/knowledge
-// drafting-guide: runtime-facts.md, how-a-run-works.md, mcp-servers.md,
-// exec.md, inputs.md) on 2026-10-06. It is a constant; nothing of a draft is
-// in it.
+// runtime facts and its docs (the CLI's pkg/drafter/knowledge drafting
+// guide: runtime-facts.md, how-a-run-works.md, mcp-servers.md, exec.md,
+// inputs.md). It is a constant; nothing of a draft is in it.
 const benchRuntime = "A run works only through the tools the runner gives it, in a sandbox. " +
 	"Inputs: the files the person adds, read-only at /inputs through list_inputs, read_input and search_inputs " +
 	"(documents are turned into text first and archives unpacked), and the answers to the intake's questions; " +
@@ -583,15 +579,14 @@ var benchWontRun = judge.Question{ID: benchIDWontRun, Text: "The state holds a p
 	"install, start or do its tools' work there? Steps the runtime gives what they need do not count, and neither " +
 	"does a need the instruction meets another way."}
 
-// TestWontRunBench is the by-hand bench of wont_run (agentry#909): it asks
-// off_task and wont_run together about every variant, over the state
-// {description, manifest, instruction, runtime}, Samples times, one request
-// each, and writes one CSV row per variant × sample × question. The
-// summary it logs, per class and banded as the check bands, is what
-// agentry-notes measurements/draft-check-bench.md records. It never runs
-// in CI: it needs AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY, and
-// writes to AGENTRY_JUDGE_BENCH_OUT (default wont-run-bench.csv in the
-// system temp dir).
+// TestWontRunBench is the by-hand bench of wont_run: it asks off_task and
+// wont_run together about every variant, over the state {description,
+// manifest, instruction, runtime}, Samples times, one request each, and
+// writes one CSV row per variant × sample × question. The summary it logs,
+// per class and banded as the check bands, is the record of the bench. It
+// never runs in CI: it needs AGENTRY_JUDGE_BENCH=1 and
+// AGENTRY_JUDGE_API_KEY, and writes to AGENTRY_JUDGE_BENCH_OUT (default
+// wont-run-bench.csv in the system temp dir).
 func TestWontRunBench(t *testing.T) {
 	if os.Getenv("AGENTRY_JUDGE_BENCH") != "1" {
 		t.Skip("set AGENTRY_JUDGE_BENCH=1 and AGENTRY_JUDGE_API_KEY to run the live wont_run bench")

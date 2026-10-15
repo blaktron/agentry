@@ -8,8 +8,7 @@
 // client that restates the gate's rule (the CLI's Examiner, which names the
 // outcome a submission would be expected to reach) runs the same table in its
 // own test; a core pin bump that changes the gate then fails that test until
-// the restatement follows (plan desktop-review-key-and-run-cards.md §6.2,
-// D31; agentry#776).
+// the restatement follows.
 //
 // The table carries no code of the pipeline. Its baseline is the platform
 // baseline compiled into the registry; an operator may store another one,
@@ -59,7 +58,7 @@ type Policy struct {
 	RequireHumanReview json.RawMessage `json:"requireHumanReview,omitempty"`
 	// MaxAutoPublishSeverity is the worst severity that publishes; absent
 	// means the gate's fallback, the registry's baseline (medium since
-	// ruleset 0.3.0, agentry#773).
+	// ruleset 0.3.0).
 	MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity,omitempty"`
 	// WildcardEgress is "review" or "reject"; absent means "review".
 	WildcardEgress string `json:"wildcardEgress,omitempty"`

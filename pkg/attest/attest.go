@@ -1,8 +1,8 @@
-// Package attest is the public attestation format for published versions
-// (§8.8, D-16): the in-toto v1 statement, the publish predicate, the DSSE
-// envelope, and offline verification. It is what the CLI — and any
-// third-party client — needs to verify a release against the registry's
-// well-known signing keys; producing signatures stays server-side.
+// Package attest is the public attestation format for published versions:
+// the in-toto v1 statement, the publish predicate, the DSSE envelope, and
+// offline verification. It is what the CLI — and any third-party client —
+// needs to verify a release against the registry's well-known signing
+// keys; producing signatures stays server-side.
 package attest
 
 import (
@@ -16,16 +16,16 @@ import (
 	"time"
 )
 
-// PredicateType is the Agentry publish attestation predicate (§8.8).
+// PredicateType is the Agentry publish attestation predicate.
 const PredicateType = "https://agentry.dev/attestation/publish/v1"
 
 // PayloadType is the DSSE payload type for in-toto statements.
 const PayloadType = "application/vnd.in-toto+json"
 
-// RulesetPredicateType is the rule-bundle attestation predicate (agentry#25,
-// DEV-024): the registry signs the bundle `validate --rules-update` serves,
-// with the same key that signs releases, so a client pins by signature and
-// not only by the digest the same server advertised.
+// RulesetPredicateType is the rule-bundle attestation predicate: the registry
+// signs the bundle `validate --rules-update` serves, with the same key that
+// signs releases, so a client pins by signature and not only by the digest
+// the same server advertised.
 const RulesetPredicateType = "https://agentry.dev/attestation/ruleset/v1"
 
 // RulesetPredicate describes the signed bundle.
@@ -49,7 +49,7 @@ type Subject struct {
 	Digest map[string]string `json:"digest"`
 }
 
-// PublishPredicate is the §8.8 predicate.
+// PublishPredicate is the publish predicate.
 type PublishPredicate struct {
 	Registry    string     `json:"registry"`
 	Agent       string     `json:"agent"`
@@ -61,7 +61,7 @@ type PublishPredicate struct {
 	PublishedAt string     `json:"publishedAt"`
 }
 
-// ScanRunRef records reproducibility fields (§8.8).
+// ScanRunRef records reproducibility fields.
 type ScanRunRef struct {
 	ID           string `json:"id"`
 	RulesetVer   string `json:"rulesetVersion"`

@@ -1,6 +1,5 @@
-// Package draftcheck is AI Review's check of a finished draft (plan
-// builder-simplify.md §5.2 step 4, D6; agentry#708): before a draft is
-// handed back, AI Review reads its rendered package with the release
+// Package draftcheck is AI Review's check of a finished draft: before a
+// draft is handed back, AI Review reads its rendered package with the release
 // rubric that stage S5 of the pipeline will ask at publish, so the person
 // knows before Submit what AI Review will flag, and asks the draft
 // question set (pkg/judge DraftQuestions) about whether the draft does the
@@ -79,7 +78,7 @@ type Reading struct {
 // its id, its score, the file whose chunk scored highest, and the severity
 // the gate would give it. A high one holds the version for a person; a
 // medium one is a note, shown on the report of a version that publishes
-// (ruleset 0.3.0, agentry#773).
+// (ruleset 0.3.0 or later).
 type Finding struct {
 	ID       string
 	Score    int
@@ -112,7 +111,7 @@ type Result struct {
 	// Model is the pinned model id both answers came from.
 	Model string
 	// Usage is both halves' requests and tokens, for the record; never a
-	// price (DEV-150: AI Review is 1 credit a draft).
+	// price (AI Review is 1 credit a draft).
 	Usage judge.Usage
 }
 
