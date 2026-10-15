@@ -1,13 +1,10 @@
 package registry
 
-// The one place an organization's state is enforced (agentry#363, plan
-// organization-subscriptions §5.4). Before this the API answered 404 for
-// a suspended organization at its own lookup and nothing else read
-// orgs.state — an agent under a suspended organization answered every
-// route as usual, and the git door and the API disagreed on a failed org
-// lookup. Now every door that touches an organization or something under
-// it asks OrgGate: the API's authorize chokepoint for org-scoped routes,
-// the agent resolution for agent-scoped ones, CreateAgent, the membership
+// The one place an organization's state is enforced. Every door that
+// touches an organization or something under it asks OrgGate, so the API
+// and the git door agree on a suspended organization and on a failed org
+// lookup: the API's authorize chokepoint for org-scoped routes, the agent
+// resolution for agent-scoped ones, CreateAgent, the membership
 // chokepoint, the SCIM data plane and the git transport.
 
 import (

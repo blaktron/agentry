@@ -1,6 +1,6 @@
 package gitsrv
 
-// The SSH git transport (§6.1 Q7, agentry#70): ssh://git@host/{ns}/{name}.git
+// The SSH git transport: ssh://git@host/{ns}/{name}.git
 // over a small SSH server that speaks exactly the two git services and
 // nothing else — no shell, no pty, no forwarding, no other commands. The
 // credential is a user's registered SSH public key (user_ssh_keys, looked
@@ -46,7 +46,7 @@ type SSHServer struct {
 	closed          chan struct{}
 	hostFingerprint string
 	// proxyFrom, when non-empty, is where the TCP proxy in front connects
-	// from (git.sshProxyProtocolCIDRs, agentry#492): every connection must
+	// from (git.sshProxyProtocolCIDRs): every connection must
 	// come from there and open with a PROXY header naming the client.
 	proxyFrom []netip.Prefix
 	// resolveKey is the credential lookup, a fingerprint to its principal;
@@ -71,7 +71,7 @@ func (h *Handler) sshKeyOffersPerMin() int {
 // the one service the shipped stack publishes beyond loopback, so what
 // one address can make the registry do before it holds a credential is
 // bounded here, in front of the lookup; MaxAuthTries bounds a
-// connection, not a stranger opening many (agentry#410). Keyed by
+// connection, not a stranger opening many. Keyed by
 // address, not by key, for the same reason.
 func (h *Handler) admitKeyOffer(remote net.Addr) bool {
 	source := remote.String()
@@ -214,8 +214,8 @@ func (s *SSHServer) handleConn(ctx context.Context, nc net.Conn) {
 	defer func() { _ = sconn.Close() }()
 	go ssh.DiscardRequests(reqs)
 	fp := sconn.Permissions.Extensions[sshPermFingerprint]
-	// The client a trusted proxy named (git.sshProxyProtocolCIDRs,
-	// agentry#492), or the peer: what the per-address budget keys on.
+	// The client a trusted proxy named (git.sshProxyProtocolCIDRs),
+	// or the peer: what the per-address budget keys on.
 	client := clientHost(sconn.RemoteAddr().String())
 	for newCh := range chans {
 		if newCh.ChannelType() != "session" {
@@ -358,8 +358,8 @@ func (s *SSHServer) runGit(ctx context.Context, ch ssh.Channel, fp, client, gitP
 		_, _ = fmt.Fprintf(ch.Stderr(), "agentry: %s\n", msg)
 		return 1
 	}
-	// The §19 push budget is the HTTP transport's, spent at the same
-	// admission point, before git runs (agentry#410).
+	// The push budget is the HTTP transport's, spent at the same
+	// admission point, before git runs.
 	if service == "receive-pack" {
 		if retry, ok := h.admitPush(ctx, agent); !ok {
 			_, _ = fmt.Fprintf(ch.Stderr(), "agentry: %s\n", pushBudgetRefusal(retry))
@@ -398,7 +398,7 @@ func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, client, service
 	cmd.Stdout = ch
 	// The pusher reads git's stderr on the channel; the log keeps a copy,
 	// since a refusal git reports only there (a hook that would not start)
-	// is otherwise the pusher's alone (agentry#495).
+	// is otherwise the pusher's alone.
 	var stderr bytes.Buffer
 	cmd.Stderr = io.MultiWriter(ch.Stderr(), &stderr)
 	defer func() {

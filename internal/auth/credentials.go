@@ -41,7 +41,7 @@ func ResolvePAT(ctx context.Context, q *storegen.Queries, token string) (*Princi
 		PATID:         pat.ID,
 	}
 	if pat.OrgID != nil {
-		p.PATOrgID = *pat.OrgID // org-bound PAT (§12.4 enforced SSO)
+		p.PATOrgID = *pat.OrgID // org-bound PAT (enforced SSO)
 	}
 	return p, nil
 }

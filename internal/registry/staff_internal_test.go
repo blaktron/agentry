@@ -3,10 +3,10 @@ package registry
 import "testing"
 
 // atStaffDomain compares the address's domain to the staff domain as plain
-// ASCII (agentry#525, kept by agentry#556): strings.ToLower folds the Kelvin
-// sign (U+212A) to "k" and a dotted capital I (U+0130) to "i", so an
-// internationalised look-alike of a staff domain holding a k or an i would
-// otherwise match. A subdomain, a suffix and an unverified address never do.
+// ASCII: strings.ToLower folds the Kelvin sign (U+212A) to "k" and a
+// dotted capital I (U+0130) to "i", so an internationalised look-alike of
+// a staff domain holding a k or an i would otherwise match. A subdomain, a
+// suffix and an unverified address never do.
 func TestAtStaffDomainComparesAsASCII(t *testing.T) {
 	s := &Service{staffOrg: "agentry", staffDomain: "kiln.example"}
 	for _, c := range []struct {

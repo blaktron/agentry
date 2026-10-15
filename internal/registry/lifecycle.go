@@ -1,8 +1,7 @@
 package registry
 
 // Retire, Restore and the tombstone Delete: what a publisher does with a
-// QuickAgent of their own that they no longer want in front of anyone
-// (plan forks-and-publisher.md M1, agentry#942; D1–D4, D13).
+// QuickAgent of their own that they no longer want in front of anyone.
 
 import (
 	"context"
@@ -28,12 +27,12 @@ var ErrNotRetired = errors.New("registry: this QuickAgent is not retired")
 
 // ErrPipelineSkipOnRestore reports a Restore to public of an agent whose
 // pipeline: skip was set while it was retired: a public agent is always
-// scanned (DEV-115). The API answers it as PATCH answers the same state,
+// scanned. The API answers it as PATCH answers the same state,
 // 409 agent-unscanned.
 var ErrPipelineSkipOnRestore = errors.New("registry: this QuickAgent is off the pipeline and cannot be made public")
 
 // UnscannedStandingError reports a Restore to public refused because N
-// versions admitted unscanned still stand (DEV-115).
+// versions admitted unscanned still stand.
 type UnscannedStandingError struct{ N int64 }
 
 func (e *UnscannedStandingError) Error() string {
@@ -50,17 +49,17 @@ const tombstoneYankReason = "The publisher deleted this QuickAgent."
 // taken one once the namespace has admitted the caller. No read a
 // publisher or a consumer makes goes through it, save one: the advisories
 // of an agent the caller holds a release of reach its owning
-// organization's gate through it (agentry#949), after the holder is
+// organization's gate through it, after the holder is
 // proved.
 func (s *Service) ResolveIncludingDeleted(ctx context.Context, namespace, name string) (Agent, error) {
 	return s.resolve(ctx, namespace, name, true)
 }
 
 // Retire makes the agent private and labels it retired, keeping the
-// visibility it had for Restore (D2). It takes no new submission until it
-// is restored. A retired agent holds no place under the private-agent cap
-// (D13), so retiring is never refused by it. Retiring an agent that is
-// already retired changes nothing and is not an error.
+// visibility it had for Restore. It takes no new submission until it
+// is restored. A retired agent holds no place under the private-agent cap,
+// so retiring is never refused by it. Retiring an agent that is already
+// retired changes nothing and is not an error.
 func (s *Service) Retire(ctx context.Context, a Agent, actorEvent audit.Event) error {
 	return s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		locked, err := q.GetAgentForUpdate(ctx, a.ID)
@@ -85,7 +84,7 @@ func (s *Service) Retire(ctx context.Context, a Agent, actorEvent audit.Event) e
 }
 
 // Restore returns a retired agent to the visibility it had. Back to public
-// it meets the rules any agent becoming public meets (DEV-115): not off
+// it meets the rules any agent becoming public meets: not off
 // the pipeline, no unscanned version standing. Back to private it takes a
 // place under the private-agent cap again, so the cap is checked under the
 // namespace's lock.
@@ -130,12 +129,12 @@ func (s *Service) Restore(ctx context.Context, a Agent, actorEvent audit.Event) 
 	})
 }
 
-// Tombstone deletes an agent that has version history (D3). Every
+// Tombstone deletes an agent that has version history. Every
 // published or quarantined version is yanked, the agent becomes private
 // and deleted, and every read by name stops finding it. Nothing is
 // removed: the version rows (which the 00004 trigger keeps), the
 // archives, the receipts and the audit trail all stay, and the row holds
-// the name in its namespace for good (D4). The caller has already refused
+// the name in its namespace for good. The caller has already refused
 // the cases the tombstone does not take: trust & safety records and
 // versions still in flight. The audit event says how many were yanked.
 func (s *Service) Tombstone(ctx context.Context, a Agent, actorEvent audit.Event) error {

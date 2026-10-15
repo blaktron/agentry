@@ -15,7 +15,7 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatalf("expected error for explicit missing file")
 	}
 	// Empty path with no agentry.yaml in cwd yields pure defaults — and the
-	// pure defaults refuse to run: dev mode is opt-in (DEV-116), so with no
+	// pure defaults refuse to run: dev mode is opt-in, so with no
 	// sealing key configured the load fails at the validation, naming it,
 	// rather than starting on a public constant.
 	if _, err = Load(""); err == nil || !strings.Contains(err.Error(), "sealingKey") {
@@ -116,13 +116,13 @@ func TestValidateGuards(t *testing.T) {
 		{"proxyRequestID without a hop", "http.proxyRequestID", func(c *Config) { c.HTTP.ProxyRequestID = true; c.HTTP.TrustedProxies = 0 }},
 		{"bad audit stream kind", "audit.streamKind", func(c *Config) { c.Audit.StreamKind = "kafka" }},
 		// A staff domain that could never match an address would switch the
-		// rule off silently (agentry#525, agentry#556).
+		// rule off silently.
 		{"staff domain with an at", "auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "@secureagentry.net" }},
 		{"staff domain with a leading dot", "auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = ".secureagentry.net" }},
 		{"staff domain in capitals", "auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "SecureAgentry.net" }},
 		{"staff domain of one label", "auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry"; c.Auth.StaffDomain = "localhost" }},
 		// Half a rule is refused: an organization with no domain would admit
-		// anyone, a domain with no organization names nobody (agentry#556).
+		// anyone, a domain with no organization names nobody.
 		{"staff org without a domain", "auth.staffOrg and auth.staffDomain", func(c *Config) { c.Auth.StaffOrg = "agentry" }},
 		{"staff domain without an org", "auth.staffOrg and auth.staffDomain", func(c *Config) { c.Auth.StaffDomain = "secureagentry.net" }},
 		{"staff org that is no handle", "auth.staffOrg must be", func(c *Config) { c.Auth.StaffOrg = "Agentry Staff"; c.Auth.StaffDomain = "secureagentry.net" }},
@@ -138,9 +138,9 @@ func TestValidateGuards(t *testing.T) {
 	}
 }
 
-// The pg queue driver and its jobs table are gone (agentry#244): a
-// configuration that still names it is refused at start with a sentence
-// that says so, not run on a driver that no longer exists.
+// The pg queue driver and its jobs table are gone: a configuration that
+// still names it is refused at start with a sentence that says so, not run
+// on a driver that no longer exists.
 func TestValidateRefusesTheRemovedPGQueueDriver(t *testing.T) {
 	cfg := devDefault()
 	cfg.Queue.Driver = "pg"
@@ -154,7 +154,7 @@ func TestValidateRefusesTheRemovedPGQueueDriver(t *testing.T) {
 	}
 }
 
-// §12.3/§12.4 give hard ceilings on credential lifetimes. They are product
+// Credential lifetimes have hard ceilings. They are product
 // invariants, not tunables: a deployment that raised them would still call
 // itself Agentry while issuing credentials the threat model never priced in.
 func TestValidateCapsCredentialTTLs(t *testing.T) {
@@ -185,12 +185,11 @@ func TestValidateCapsCredentialTTLs(t *testing.T) {
 		{"sso max age at the session cap", func(c *Config) { c.Auth.SSOMaxAge = 24 * time.Hour }, false},
 		{"sso max age past any session's life", func(c *Config) { c.Auth.SSOMaxAge = 24*time.Hour + time.Hour }, true},
 
-		// A trusted device is the second browser credential class (agentry#461,
-		// plan trusted-devices.md D2). It exceeds MaxSessionTTL by design — that
-		// is precisely what makes it its own class rather than a longer session
-		// — so what these cases prove is that its OWN ceiling binds, and that a
-		// deployment cannot price in a credential the threat model never
-		// considered by raising the knob.
+		// A trusted device is the second browser credential class. It
+		// exceeds MaxSessionTTL by design — that is precisely what makes it its
+		// own class rather than a longer session — so what these cases prove is
+		// that its OWN ceiling binds, and that a deployment cannot price in a
+		// credential the threat model never considered by raising the knob.
 		{"trusted device at the 30d cap", func(c *Config) { c.Auth.TrustedDeviceTTL = MaxTrustedDeviceTTL }, false},
 		{"trusted device over the 30d cap", func(c *Config) { c.Auth.TrustedDeviceTTL = MaxTrustedDeviceTTL + time.Hour }, true},
 		{"trusted device zero", func(c *Config) { c.Auth.TrustedDeviceTTL = 0 }, true},
@@ -211,16 +210,15 @@ func TestValidateCapsCredentialTTLs(t *testing.T) {
 	}
 }
 
-// TestTrustedDeviceIsASecondClassNotALongerSession guards the amendment rather
-// than the feature (agentry#461, plan trusted-devices.md D2). Introducing a
-// browser credential that outlives the session cap is only honest if the
-// session cap itself is untouched, so a reader of §12.4 sees one ceiling of two
-// rather than a limit that was quietly raised. If someone later "simplifies"
-// the two constants into one, this fails and the simplification has to be
-// argued rather than slipped in.
+// TestTrustedDeviceIsASecondClassNotALongerSession guards the invariant rather
+// than the feature. Introducing a browser credential that outlives the
+// session cap is only honest if the session cap itself is untouched, so a
+// reader sees one ceiling of two rather than a limit that was quietly
+// raised. If someone later "simplifies" the two constants into one, this
+// fails and the simplification has to be argued rather than slipped in.
 func TestTrustedDeviceIsASecondClassNotALongerSession(t *testing.T) {
 	if MaxSessionTTL != 24*time.Hour {
-		t.Fatalf("MaxSessionTTL is %s, want 24h: §12.4's session cap moved", MaxSessionTTL)
+		t.Fatalf("MaxSessionTTL is %s, want 24h: the session cap moved", MaxSessionTTL)
 	}
 	if MaxTrustedDeviceTTL != 30*24*time.Hour {
 		t.Fatalf("MaxTrustedDeviceTTL is %s, want 30d", MaxTrustedDeviceTTL)
@@ -262,7 +260,7 @@ func TestValidateGuardsTheNewSurfaces(t *testing.T) {
 		{"zero quota", func(c *Config) { c.Limits.GitPushesPerHour = 0 }},
 		{"negative knowledge cap", func(c *Config) { c.Limits.KnowledgeBytesPerAccount = -1 }},
 		{"a short knowledge sealing key", func(c *Config) { c.Knowledge.SealingKey = "c2hvcnQ=" }},
-		// A key of its own (agentry#593): the one that opens TOTP seeds
+		// A key of its own: the one that opens TOTP seeds
 		// must not also open every knowledge pack.
 		{"the knowledge key is the auth key", func(c *Config) {
 			c.Auth.SealingKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
@@ -308,7 +306,7 @@ func TestSMTPWithoutAuthNeedsNoTLS(t *testing.T) {
 	}
 }
 
-// The §19 defaults are the contract the entitlements resolver hands out.
+// The quota defaults are the contract the entitlements resolver hands out.
 func TestDefaultLimitsMatchSection19(t *testing.T) {
 	l := Default().Limits
 	for _, c := range []struct {
@@ -330,7 +328,7 @@ func TestDefaultLimitsMatchSection19(t *testing.T) {
 		{"archive max image bytes", l.ArchiveMaxImageFileBytes, 5 << 20},
 	} {
 		if c.got != c.want {
-			t.Errorf("%s = %d, want %d (§19)", c.name, c.got, c.want)
+			t.Errorf("%s = %d, want %d", c.name, c.got, c.want)
 		}
 	}
 }
@@ -352,7 +350,7 @@ func TestNewEnvOverridesApply(t *testing.T) {
 	t.Setenv("AGENTRY_STORAGE_S3_PREFIX", "staging")
 	t.Setenv("AGENTRY_STORAGE_S3_USE_PATH_STYLE", "true")
 	t.Setenv("AGENTRY_SIGNING_NOT_AFTER", "2027-01-01T00:00:00Z")
-	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-116)
+	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline
 
 	cfg, err := Load("")
 	if err != nil {
@@ -395,7 +393,7 @@ func TestJudgeEnvConfig(t *testing.T) {
 	t.Setenv("AGENTRY_JUDGE_BASE_URL", "https://llm.example.internal")
 	t.Setenv("AGENTRY_JUDGE_API_KEY", "sk-test")
 	t.Setenv("AGENTRY_JUDGE_MODEL", "gpt-test")
-	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-116)
+	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline
 
 	cfg, err := Load("")
 	if err != nil {
@@ -425,7 +423,7 @@ func TestJudgeEnvConfig(t *testing.T) {
 		t.Error("anthropic judge without apiKey must fail validation")
 	}
 
-	// The typesafe judge (plan judge-jev-provider.md, D7): the key is
+	// The typesafe judge: the key is
 	// required and the model id is pinned — an alias is refused at startup.
 	t.Setenv("AGENTRY_JUDGE_TYPE", "typesafe")
 	t.Setenv("AGENTRY_JUDGE_BASE_URL", "")
@@ -445,7 +443,7 @@ func TestJudgeEnvConfig(t *testing.T) {
 	// (scan.PinnedJudgeModel): one rule, where the provider is.
 }
 
-// The brokered web search (agentry#608) wires from three env vars; none is
+// The brokered web search wires from three env vars; none is
 // the default, a provider needs its key, and an unknown name refuses to
 // start. The model-input budget has a default and must stay positive.
 func TestWebSearchEnvConfig(t *testing.T) {
@@ -472,12 +470,12 @@ func TestWebSearchEnvConfig(t *testing.T) {
 	t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", "brave")
 	t.Setenv("AGENTRY_WEB_SEARCH_BASE_URL", "")
 	if cfg, err = Load(""); err != nil || cfg.WebSearch.Provider != "brave" {
-		t.Fatalf("brave (agentry#631): %v %+v", err, cfg.WebSearch)
+		t.Fatalf("brave: %v %+v", err, cfg.WebSearch)
 	}
 	for _, p := range []string{"tavily", "exa", "perplexity"} {
 		t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", p)
 		if cfg, err = Load(""); err != nil || cfg.WebSearch.Provider != p {
-			t.Fatalf("%s (agentry#783): %v %+v", p, err, cfg.WebSearch)
+			t.Fatalf("%s: %v %+v", p, err, cfg.WebSearch)
 		}
 	}
 	t.Setenv("AGENTRY_WEB_SEARCH_PROVIDER", "fake")
@@ -503,7 +501,7 @@ func TestSocialProviderEnv(t *testing.T) {
 	t.Setenv("AGENTRY_SOCIAL_OPENAI_ISSUER", "https://issuer.example/oai")
 	t.Setenv("AGENTRY_SOCIAL_CLAUDE_CLIENT_ID", "claude-id")
 	t.Setenv("AGENTRY_SOCIAL_CLAUDE_ISSUER", "https://issuer.example/claude")
-	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline (DEV-116)
+	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline
 
 	cfg, err := Load("")
 	if err != nil {
@@ -537,10 +535,10 @@ func TestStaffOrgAcceptsAHandleAndABareDomain(t *testing.T) {
 	}
 }
 
-// TestStaffMirrorGroupNeedsItsWriterAndItsSource (agentry#598): the mirror
-// group is written through the directory's admin API and filled from the
-// staff organization, so it is refused without either, and it can never be
-// the retired group that used to be a source of staff.
+// TestStaffMirrorGroupNeedsItsWriterAndItsSource: the mirror group is
+// written through the directory's admin API and filled from the staff
+// organization, so it is refused without either, and it can never be the
+// retired group, which is no longer a source of staff.
 func TestStaffMirrorGroupNeedsItsWriterAndItsSource(t *testing.T) {
 	full := func() Config {
 		cfg := devDefault()
@@ -571,12 +569,12 @@ func TestStaffMirrorGroupNeedsItsWriterAndItsSource(t *testing.T) {
 	}
 }
 
-// TestDirectoryTrustCheckConfiguration (agentry#670, DEV-163): remembered
-// browsers on the directory path need the check's secret, the directory it
-// answers, and a cookie the browser will both accept from the registry's
-// host and send to the directory's. A configuration that cannot give the
-// browser such a cookie is refused at start-up rather than minting cookies
-// the directory never sees.
+// TestDirectoryTrustCheckConfiguration: remembered browsers on the
+// directory path need the check's secret, the directory it answers, and a
+// cookie the browser will both accept from the registry's host and send to
+// the directory's. A configuration that cannot give the browser such a
+// cookie is refused at start-up rather than minting cookies the directory
+// never sees.
 func TestDirectoryTrustCheckConfiguration(t *testing.T) {
 	const token = "0123456789abcdef0123456789abcdef"
 	with := func(base, issuer, domain string) Config {
@@ -648,7 +646,7 @@ func TestDirectoryTrustCheckConfiguration(t *testing.T) {
 	}
 }
 
-// TestRetiredStaffKeysAreNamed (agentry#556): the group and the domain-alone
+// TestRetiredStaffKeysAreNamed: the group and the domain-alone
 // keys still load, grant nothing, and are named for the start-up warning.
 func TestRetiredStaffKeysAreNamed(t *testing.T) {
 	cfg := devDefault()

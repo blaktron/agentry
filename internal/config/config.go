@@ -1,6 +1,6 @@
 // Package config loads agentryd configuration from agentry.yaml plus
-// AGENTRY_* environment overrides (PLAN §0.8, M0). Environment always wins
-// over file values; defaults are safe for local development.
+// AGENTRY_* environment overrides. Environment always wins over file values;
+// defaults are safe for local development.
 package config
 
 import (
@@ -26,13 +26,12 @@ type Config struct {
 	Env string `yaml:"env"`
 	// DevMode enables development conveniences, and is opt-in: false unless
 	// the configuration says otherwise, and refused unless env is dev
-	// (Validate enforces both, DEV-116). One boolean switches five
+	// (Validate enforces both). One boolean switches five
 	// controls off at once — the at-rest sealing key (a public constant
 	// stands in), 2FA before a public publish, release signing (an
 	// ephemeral key at every start), the scan judge (none becomes static)
 	// and the S8 IP-cluster signal (a fixed literal) — so a deployment that
-	// did not ask for it must never get it (security review 2026-09-20
-	// §3.6).
+	// did not ask for it must never get it.
 	DevMode bool `yaml:"devMode"`
 
 	HTTP      HTTP      `yaml:"http"`
@@ -62,12 +61,12 @@ type Config struct {
 	Knowledge Knowledge `yaml:"knowledge"`
 	// MinCLIVersion, when set, is advertised via GET /api/v1/meta so the CLI
 	// can warn (or refuse, on a major gap) before talking to an API it
-	// predates (§11 distribution note). Empty = no minimum advertised.
+	// predates. Empty = no minimum advertised.
 	MinCLIVersion string `yaml:"minCLIVersion"`
 }
 
 // HTTP configures listeners. Git traffic may share Addr (self-host) or use
-// GitAddr (SaaS separate hostname, §6.1).
+// GitAddr (a separate hostname in a hosted deployment).
 type HTTP struct {
 	Addr    string `yaml:"addr"`
 	GitAddr string `yaml:"gitAddr"`
@@ -80,10 +79,10 @@ type HTTP struct {
 	// key on the 2nd-from-last XFF entry, which is the last address a
 	// *trusted* hop wrote. Setting this higher than the real hop count hands
 	// callers the ability to choose their own rate-limit bucket, so it must
-	// match the deployment exactly (§19, §13.5).
+	// match the deployment exactly.
 	TrustedProxies int `yaml:"trustedProxies"`
 	// TrustedProxyCIDRs, when set, names the addresses the trusted hop
-	// connects from (agentry#429). X-Forwarded-For is then read only on a
+	// connects from. X-Forwarded-For is then read only on a
 	// request whose TCP peer is inside one of these ranges; every other
 	// request resolves to its peer, whatever the header says. Without it
 	// the hop count trusts the header's tail from whoever connects, so a
@@ -102,17 +101,17 @@ type HTTP struct {
 	ProxyRequestID bool `yaml:"proxyRequestID"`
 }
 
-// Database configures the PostgreSQL system of record (D-03).
+// Database configures the PostgreSQL system of record.
 type Database struct {
 	URL string `yaml:"url"`
 	// MigrateOnStart runs goose migrations at boot (self-host convenience).
 	MigrateOnStart bool `yaml:"migrateOnStart"`
 }
 
-// Redis is an optional dependency (D-06), and nothing in the core reads the
+// Redis is an optional dependency, and nothing in the core reads the
 // URL today: it is reported as features.redis on GET /api/v1/meta and that is
 // all. The state a replica set must share lives in Postgres — sessions, the
-// queue, and the SAML replay and request sets (agentry#414) — so there is no
+// queue, and the SAML replay and request sets — so there is no
 // in-memory fallback this would replace. The rate-limit buckets stay per
 // process either way (docs/self-hosting.md).
 type Redis struct {
@@ -137,18 +136,17 @@ type Storage struct {
 	S3UsePathStyle bool `yaml:"s3UsePathStyle"`
 }
 
-// Git configures bare-repo hosting (§6.2).
+// Git configures bare-repo hosting.
 type Git struct {
 	DataDir string `yaml:"dataDir"` // bare repos under {dataDir}/{uuid[0:2]}/{uuid}.git
 	BinPath string `yaml:"binPath"` // git binary; defaults to $PATH lookup
 	// HooksDir is where the git role makes the private directory git runs
 	// the pre-receive hook from; it must allow exec and be owned by the
 	// server (or sticky, like /tmp). Empty means the system temp directory.
-	// The repositories' own volume is not used, since it may not allow exec
-	// (agentry#495).
+	// The repositories' own volume is not used, since it may not allow exec.
 	HooksDir string `yaml:"hooksDir"`
 	// SSHAddr, when set, is where the git and all roles listen for the SSH
-	// transport (§6.1 Q7, agentry#70), e.g. ":2222". Empty disables it.
+	// transport, e.g. ":2222". Empty disables it.
 	SSHAddr string `yaml:"sshAddr"`
 	// SSHHostKeyFile is the PEM host key; empty means {dataDir}/ssh_host_ed25519_key,
 	// generated on first start.
@@ -157,11 +155,11 @@ type Git struct {
 	// when set, agent documents carry gitSshUrl.
 	SSHPublicURL string `yaml:"sshPublicUrl"`
 	// SSHProxyProtocolCIDRs, when set, says a TCP proxy fronts the SSH
-	// listener and names the addresses it connects from (agentry#492).
+	// listener and names the addresses it connects from.
 	// Every connection must then come from one of these ranges and open
 	// with a PROXY protocol header (v1 or v2), whose source address becomes
-	// the client's: the key-offer budget (agentry#410) and the log lines
-	// key on it. A connection from any other address is refused, header or
+	// the client's: the key-offer budget and the log lines key on
+	// it. A connection from any other address is refused, header or
 	// not, so a client cannot name its own address. Empty (the default)
 	// reads no header and keys on the TCP peer. CIDRs or bare addresses.
 	SSHProxyProtocolCIDRs []string `yaml:"sshProxyProtocolCIDRs"`
@@ -172,20 +170,20 @@ type Log struct {
 	Level string `yaml:"level"` // debug | info | warn | error
 }
 
-// Auth holds authentication tunables (§12).
+// Auth holds authentication tunables.
 type Auth struct {
-	// SessionTTL is the absolute session lifetime (§12.4 caps at 24h).
+	// SessionTTL is the absolute session lifetime (capped at 24h).
 	SessionTTL time.Duration `yaml:"sessionTTL"`
-	// PATMaxTTL is the maximum PAT lifetime (§12.3: 1y, 90d org-bound).
+	// PATMaxTTL is the maximum PAT lifetime (1y, 90d org-bound).
 	PATMaxTTL time.Duration `yaml:"patMaxTTL"`
 	// PATOrgBoundMaxTTL caps org-bound PAT lifetime under enforced SSO
-	// (§12.3: 90 days).
+	// (90 days).
 	PATOrgBoundMaxTTL time.Duration `yaml:"patOrgBoundMaxTTL"`
 	// SSOMaxAge is how fresh a session's SSO assertion must be to act on an
-	// enforced-SSO org's resources (§12.4, default 8h).
+	// enforced-SSO org's resources (default 8h).
 	SSOMaxAge time.Duration `yaml:"ssoMaxAge"`
 	// TrustedDeviceTTL is how long a browser remembered at sign-in skips the
-	// second factor (agentry#461, plan trusted-devices.md). This is a second
+	// second factor. This is a second
 	// browser credential class and it deliberately outlives the session cap:
 	// a session still has to be earned by password on every sign-in and is
 	// still capped at MaxSessionTTL, so raising this does not lengthen any
@@ -193,7 +191,7 @@ type Auth struct {
 	// the ceiling below is a hard product limit like the others.
 	TrustedDeviceTTL time.Duration `yaml:"trustedDeviceTTL"`
 	// IdPTrustCheckToken turns on remembered browsers on the directory's
-	// sign-in (agentry#670, DEV-163): the directory's sign-in flow presents
+	// sign-in: the directory's sign-in flow presents
 	// it as a bearer secret when it asks the registry whether a browser's
 	// cookie is a live record, and the registry mints records from a
 	// directory sign-in only while it is set. Empty means the directory path
@@ -214,30 +212,30 @@ type Auth struct {
 	// (TOTP seeds). Empty is allowed only in dev (a fixed insecure key).
 	SealingKey string `yaml:"sealingKey"`
 	// ExternalOnly hands credentials and the account directory to an
-	// external IdP (DEV-057: the stack's Authentik instance). When true the
+	// external IdP (the stack's Authentik instance). When true the
 	// native register / password-login / email-verify / TOTP endpoints
 	// answer 410 Gone and sign-in happens only through a configured social
 	// or SSO provider. Sessions, PATs, and RBAC stay native: the IdP owns
-	// who you are, this server owns what you may do. The §12.1 "2FA before
+	// who you are, this server owns what you may do. The "2FA before
 	// public publish" gate is delegated to the IdP as well, since no account
 	// can enrol a native TOTP factor while this is set (see
 	// internal/api/publish_gate.go).
 	ExternalOnly bool `yaml:"externalOnly"`
 	// IdPLogoutURL is the directory's sign-out URL: where sign-out sends the
-	// browser once the session is revoked, so the next sign-in asks again
-	// (DEV-057). For authentik that is the provider's end-session endpoint
-	// behind the cancel view (docs/self-hosting.md, agentry#441). Empty means
-	// sign-out ends on the home page.
+	// browser once the session is revoked, so the next sign-in asks again.
+	// For authentik that is the provider's end-session endpoint behind the
+	// cancel view (docs/self-hosting.md). Empty means sign-out ends on the
+	// home page.
 	IdPLogoutURL string `yaml:"idpLogoutURL"`
-	// IdPAdminURL / IdPAdminToken let account erasure (§12.7) reach into the
+	// IdPAdminURL / IdPAdminToken let account erasure reach into the
 	// directory service and delete the sign-in account there too — authentik's
-	// API, as a bearer token with rights over users (agentry#20). Empty means
+	// API, as a bearer token with rights over users. Empty means
 	// erasure stops at the registry, which docs/self-hosting.md and the
 	// privacy policy then have to say. The URL is the API origin as the
 	// server reaches it (compose: http://authentik-server:9000).
 	IdPAdminURL   string `yaml:"idpAdminURL"`
 	IdPAdminToken string `yaml:"idpAdminToken"`
-	// StaffOrg is the handle of the staff organization (agentry#556):
+	// StaffOrg is the handle of the staff organization:
 	// platform staff is exactly an active account with a verified address
 	// at StaffDomain that is an active member of this organization, and
 	// the organization admits nobody else. Membership is granted by the
@@ -251,108 +249,105 @@ type Auth struct {
 	// verified address.
 	StaffDomain string `yaml:"staffDomain"`
 	// IdPStaffMirrorGroup names the directory group the registry keeps equal
-	// to its platform staff (agentry#598): every active account with the
-	// platform_staff flag, and nobody else, matched by verified address. It
-	// is a mirror, written by the registry through IdPAdminURL/IdPAdminToken,
-	// never read back as a source: the flag stays the staff organization's
-	// (agentry#556). A directory application that should admit staff alone,
-	// such as the log stack's Dashboards, reads membership of this group from
-	// its tokens. Empty means no mirror. It needs the admin URL and token and
+	// to its platform staff: every active account with the platform_staff
+	// flag, and nobody else, matched by verified address. It is a mirror,
+	// written by the registry through IdPAdminURL/IdPAdminToken, never read
+	// back as a source: the flag stays the staff organization's. A directory
+	// application that should admit staff alone, such as the log stack's
+	// Dashboards, reads membership of this group from its tokens. Empty means no mirror. It needs the admin URL and token and
 	// the staff organization.
 	IdPStaffMirrorGroup string `yaml:"idpStaffMirrorGroup"`
-	// IdPStaffGroup is retired (agentry#556): the directory group of
-	// DEV-083 no longer grants platform staff. It is still read, so a
+	// IdPStaffGroup is retired: the directory group no longer grants
+	// platform staff. It is still read, so a
 	// configuration that sets it loads, and the server warns at start-up.
 	IdPStaffGroup string `yaml:"idpStaffGroup"`
-	// IdPStaffDomain is retired (agentry#556): being at a domain makes an
-	// account eligible to join the staff organization (StaffDomain), not
-	// staff by itself (DEV-137 superseded). Read and warned about like
+	// IdPStaffDomain is retired: being at a domain makes an account
+	// eligible to join the staff organization (StaffDomain), not staff by
+	// itself. Read and warned about like
 	// IdPStaffGroup.
 	IdPStaffDomain string `yaml:"idpStaffDomain"`
-	// RequireIdPMFA re-enables the §12.1 "2FA before public publish" gate
+	// RequireIdPMFA re-enables the "2FA before public publish" gate
 	// under externalOnly, satisfied by evidence rather than trust: the
 	// account must have signed in at least once with an ID token whose
 	// `amr` names a second factor (users.idp_mfa_at). Off by default because
-	// it is only honest once the directory actually enforces MFA
-	// (agentry#23, DEV-076).
+	// it is only honest once the directory actually enforces MFA.
 	RequireIdPMFA bool `yaml:"requireIdpMFA"`
 }
 
-// Limits tunes the §19 quotas. These are the values internal/entitlements'
-// config-backed default Resolver hands out; the SaaS overlay swaps in a
-// Resolver that reads them per-org instead (§14.2). Nothing in the OSS tree
-// reads a limit except through that Resolver.
-// Queue selects the async job driver (D-05, DEV-005's swap in agentry#39).
+// Queue selects the async job driver.
 type Queue struct {
 	// Driver is "river" (the default and the only driver: River,
-	// Postgres-backed, its tables created by the migrator). "pg", the SELECT
-	// … FOR UPDATE SKIP LOCKED driver the first releases shipped, is refused
-	// since agentry#244 removed it and its jobs table.
+	// Postgres-backed, its tables created by the migrator). "pg", a driver
+	// built on SELECT … FOR UPDATE SKIP LOCKED, is refused: its jobs table
+	// no longer exists.
 	Driver string `yaml:"driver"`
 	// Workers is how many jobs one worker process runs at once per queue.
 	// 1 keeps the serial behaviour.
 	Workers int `yaml:"workers"`
 }
 
+// Limits tunes the quotas. These are the values internal/entitlements'
+// config-backed default Resolver hands out; a hosted overlay swaps in a
+// Resolver that reads them per-org instead. Nothing in the open-source tree
+// reads a limit except through that Resolver.
 type Limits struct {
 	AuthedPerHour     int `yaml:"authedPerHour"`     // sustained authed budget
 	AuthedBurstPerMin int `yaml:"authedBurstPerMin"` // authed burst
 	AnonymousPerMin   int `yaml:"anonymousPerMin"`   // anonymous per-IP
 	LoginPerMin       int `yaml:"loginPerMin"`       // login/register per-IP
 	// SCIMPerMin is the SCIM data plane's budget per organization, per
-	// minute and as its burst (600; agentry#453): a directory syncs from one
-	// place, so the organization, not the address, is what it spends.
+	// minute and as its burst (600): a directory syncs from one place, so the
+	// organization, not the address, is what it spends.
 	SCIMPerMin int `yaml:"scimPerMin"`
 	// ModelInputPerMin is the model-input routes' budget per caller, per
-	// minute and as its burst (120; agentry#608): a platform staff member,
+	// minute and as its burst (120): a platform staff member,
 	// or one hosted job. An address presenting job credentials may spend
 	// ten times that, which bounds guessing at credentials without
 	// starving the sandbox hosts behind one NAT.
 	ModelInputPerMin int `yaml:"modelInputPerMin"`
 
-	// Git/repo quotas (§19): 100 MB hard, 25 MB warn (the pre-receive hook
+	// Git/repo quotas: 100 MB hard, 25 MB warn (the pre-receive hook
 	// tells the pusher), 25 MB single-object cap.
 	RepoQuotaBytes   int `yaml:"repoQuotaBytes"`
 	RepoWarnBytes    int `yaml:"repoWarnBytes"`
 	RepoMaxBlobBytes int `yaml:"repoMaxBlobBytes"`
-	// GitPushesPerHour is the §19 per-repo push budget (60/h), one number
+	// GitPushesPerHour is the per-repo push budget (60/h), one number
 	// on both transports.
 	GitPushesPerHour int `yaml:"gitPushesPerHour"`
 	// SSHKeyOffersPerMin bounds the public keys one source address may
 	// offer the git SSH listener per minute, spent before the key is looked
-	// up (60/min; agentry#410).
+	// up (60/min).
 	SSHKeyOffersPerMin int `yaml:"sshKeyOffersPerMin"`
-	// GitConcurrentPerIP is §19's budget of concurrent git operations per
+	// GitConcurrentPerIP is the budget of concurrent git operations per
 	// client address (20), on both transports, keyed on the trusted client
 	// address (http.trustedProxyCIDRs, git.sshProxyProtocolCIDRs). An
-	// address at it is refused at once rather than queued (agentry#454).
+	// address at it is refused at once rather than queued.
 	GitConcurrentPerIP int `yaml:"gitConcurrentPerIP"`
 
-	// Namespace + publish-velocity quotas (§19).
+	// Namespace + publish-velocity quotas.
 	AgentsPerUserNamespace int `yaml:"agentsPerUserNamespace"` // 200
 	AgentsPerOrgNamespace  int `yaml:"agentsPerOrgNamespace"`  // 500
 	VersionsPerDay         int `yaml:"versionsPerDay"`         // 20 per agent
 
-	// Webhook quotas (§19): 20 endpoints per org, 5 deliveries/s per org.
+	// Webhook quotas: 20 endpoints per org, 5 deliveries/s per org.
 	WebhookEndpointsPerOrg     int `yaml:"webhookEndpointsPerOrg"`
 	WebhookDeliveriesPerSecond int `yaml:"webhookDeliveriesPerSecond"`
 
-	// Release-archive quotas (§19), enforced by manifest validation (V8).
+	// Release-archive quotas, enforced by manifest validation (V8).
 	ArchiveMaxBytes          int64 `yaml:"archiveMaxBytes"`          // 10 MiB
 	ArchiveMaxFiles          int   `yaml:"archiveMaxFiles"`          // 2000
 	ArchiveMaxFileBytes      int64 `yaml:"archiveMaxFileBytes"`      // 2 MiB
 	ArchiveMaxImageFileBytes int64 `yaml:"archiveMaxImageFileBytes"` // 5 MiB
-	ArchiveMaxTextBytes      int64 `yaml:"archiveMaxTextBytes"`      // 1 MiB: the text files in total (§19)
+	ArchiveMaxTextBytes      int64 `yaml:"archiveMaxTextBytes"`      // 1 MiB: the text files in total
 
 	// KnowledgeBytesPerAccount caps the knowledge an account keeps in the
-	// registry, in bytes of its packs' trees (plan knowledge.md §4.4,
-	// agentry#593). 0, the default, is no cap: a self-hoster sets one. A
-	// cap never deletes: over it, no pack is added or grown.
+	// registry, in bytes of its packs' trees. 0, the default, is no cap: a
+	// self-hoster sets one. A cap never deletes: over it, no pack is added or
+	// grown.
 	KnowledgeBytesPerAccount int64 `yaml:"knowledgeBytesPerAccount"`
 }
 
-// Knowledge configures the store of knowledge packs (plan knowledge.md
-// §4.4, agentry#593).
+// Knowledge configures the store of knowledge packs.
 type Knowledge struct {
 	// SealingKey is a base64 32-byte key the core wraps packs' data keys
 	// under (AGENTRY_KNOWLEDGE_SEALING_KEY): a key of its own, refused when
@@ -362,7 +357,7 @@ type Knowledge struct {
 	SealingKey string `yaml:"sealingKey"`
 }
 
-// Signing configures attestation signing (D-16): kms | file | none(dev).
+// Signing configures attestation signing: kms | file | none(dev).
 type Signing struct {
 	Kind      string `yaml:"kind"` // kms | file | none
 	KMSKeyARN string `yaml:"kmsKeyARN"`
@@ -371,15 +366,15 @@ type Signing struct {
 	KMSRegion string `yaml:"kmsRegion"`
 	KeyFile   string `yaml:"keyFile"`
 	// NotBefore/NotAfter bound the ACTIVE key's validity window, RFC3339
-	// (§8.8: the discovery document carries a validity window per key). Both
+	// (the discovery document carries a validity window per key). Both
 	// optional; an empty side is unbounded.
 	NotBefore string `yaml:"notBefore"`
 	NotAfter  string `yaml:"notAfter"`
 	// AdditionalKeys are verification-only public keys published alongside
-	// the active one. §8.8 rotates by OVERLAPPING validity windows, which is
-	// only representable if the endpoint can serve more than one key: during
-	// a rotation the outgoing key stays listed, with a notAfter, until every
-	// attestation it signed has been re-verified or aged out.
+	// the active one. Rotation works by OVERLAPPING validity windows, which
+	// is only representable if the endpoint can serve more than one key:
+	// during a rotation the outgoing key stays listed, with a notAfter, until
+	// every attestation it signed has been re-verified or aged out.
 	//
 	// YAML/file only — a list does not map onto a single env var, and the
 	// values are public keys, not secrets.
@@ -397,7 +392,7 @@ type VerificationKey struct {
 	NotAfter      string `yaml:"notAfter"`  // RFC3339, optional
 }
 
-// Telemetry configures the §16.2 metric exporters (D-25).
+// Telemetry configures the metric exporters.
 type Telemetry struct {
 	// OTLPEndpoint is the collector base URL, e.g. http://localhost:4318 for
 	// the ADOT sidecar. Empty disables OTLP export; /metrics stays on either
@@ -407,12 +402,12 @@ type Telemetry struct {
 	// collector's batch timeout).
 	ExportInterval time.Duration `yaml:"exportInterval"`
 	// QueueSampleInterval is how often the worker publishes queue depth and
-	// oldest-job age. It bounds how stale the §16.3 queue-age page alarm can
+	// oldest-job age. It bounds how stale the queue-age page alarm can
 	// be, so it must stay well under the 15-minute alarm threshold.
 	QueueSampleInterval time.Duration `yaml:"queueSampleInterval"`
 }
 
-// Notify selects the notification transport (§13.4: SES on SaaS, mailpit in
+// Notify selects the notification transport (SES in a hosted deployment, mailpit in
 // the compose dev stack).
 type Notify struct {
 	// Kind is log | smtp. log stays the default so a fresh install never
@@ -420,20 +415,19 @@ type Notify struct {
 	Kind string `yaml:"kind"`
 }
 
-// Web names a front end that fronts this server — the closed site from
-// blaktron/agentry-web, or any other (DEV-091). When URL is set, every browser destination the
-// API writes (where a failed sign-in lands, where a signed-in browser goes,
-// where an email link points, where sign-out ends) is a page of that site.
-// When it is unset the server points at its own pages under /ui/.
+// Web names a front end that fronts this server: the hosted site, or any
+// other. When URL is set, every browser destination the API writes (where a
+// failed sign-in lands, where a signed-in browser goes, where an email link
+// points, where sign-out ends) is a page of that site. When it is unset the server points at its own pages under /ui/.
 type Web struct {
 	// URL is the site's origin, e.g. https://agentry.example (no path).
 	URL string `yaml:"url"`
 }
 
-// UI selects how much of the server's own browser surface (/ui/…,
-// DEV-091) is served: full (device authorize, sign-in, account, review,
-// staff, org admin), authorize (only the device-authorize page — what a
-// deployment with a site in front uses), or off.
+// UI selects how much of the server's own browser surface (/ui/…) is
+// served: full (device authorize, sign-in, account, review, staff, org
+// admin), authorize (only the device-authorize page — what a deployment with
+// a site in front uses), or off.
 type UI struct {
 	Mode string `yaml:"mode"`
 }
@@ -452,8 +446,8 @@ type Brand struct {
 }
 
 // DirectoryTrustCookieDomain says where the remembered-browser cookie of the
-// directory path is set (agentry#670, DEV-163). The registry sets it on the
-// OIDC callback, on its own host, and the browser has to send it to the
+// directory path is set. The registry sets it on the OIDC
+// callback, on its own host, and the browser has to send it to the
 // directory's flow executor, which is where the directory asks the registry
 // about it. Cookies ignore ports, so:
 //
@@ -542,7 +536,7 @@ type SMTP struct {
 	Timeout time.Duration `yaml:"timeout"`
 }
 
-// Judge selects the S5 LLM adjudication provider (D-13).
+// Judge selects the S5 LLM adjudication provider.
 //
 // openai and anthropic talk to any endpoint speaking the matching wire
 // protocol (hosted APIs or self-hosted gateways alike): set BaseURL to the
@@ -558,13 +552,11 @@ type Judge struct {
 }
 
 // WebSearch is the web search provider the registry brokers for the
-// model-input search route (agentry#608; plan builder-rework.md D21): the
-// Drafter's `web_search`, with the key held here beside the judge's so no
-// sandbox host gains one. Provider is none (the default: the route answers
-// 503), youcom (You.com's Web Search API), brave (Brave's LLM Context API,
-// agentry#631), or tavily, exa or perplexity (agentry#783), there for a
-// person's own key and not held to plan D7's terms (DEV-185).
-// AGENTRY_WEB_SEARCH_PROVIDER,
+// model-input search route: the Drafter's `web_search`, with the key held
+// here beside the judge's so no sandbox host gains one. Provider is none
+// (the default: the route answers 503), youcom (You.com's Web Search API),
+// brave (Brave's LLM Context API), or tavily, exa or perplexity, which are
+// there for a person's own key. AGENTRY_WEB_SEARCH_PROVIDER,
 // AGENTRY_WEB_SEARCH_BASE_URL and AGENTRY_WEB_SEARCH_API_KEY set them; the
 // key is never logged.
 type WebSearch struct {
@@ -573,10 +565,8 @@ type WebSearch struct {
 	APIKey   string `yaml:"apiKey"`
 }
 
-// Scan configures the external scanner tools behind the §8.3 seams
-// (DEV-006, agentry#40). Every field is optional: unset, the native Go
-// scanners run alone. The OSV and opengrep seams went with the code kinds
-// (DEV-088): nothing code-bearing is published any more.
+// Scan configures the external scanner tools behind the scanner seams.
+// Every field is optional: unset, the native Go scanners run alone.
 type Scan struct {
 	// GitleaksBin is the path of a gitleaks binary S2 execs in addition to
 	// its native ruleset. "auto" resolves it from PATH; empty disables.
@@ -584,11 +574,11 @@ type Scan struct {
 	// ToolTimeout bounds one external tool invocation; 0 means two minutes.
 	ToolTimeout time.Duration `yaml:"toolTimeout"`
 	// OSVURL is the vulnerability database S7 asks about declared MCP
-	// servers (agentry#177). Empty means https://api.osv.dev; "none"
+	// servers. Empty means https://api.osv.dev; "none"
 	// switches the lookup off (S7 then reports "not checked").
 	OSVURL string `yaml:"osvUrl"`
 	// NPMRegistryURL and PyPIURL are where S7 asks whether a declared
-	// server's pinned version is published (agentry#1036). Empty means
+	// server's pinned version is published. Empty means
 	// https://registry.npmjs.org and https://pypi.org; "none" in
 	// NPMRegistryURL stops S7 asking either, and the report says it did not
 	// check.
@@ -596,7 +586,7 @@ type Scan struct {
 	PyPIURL        string `yaml:"pypiUrl"`
 }
 
-// Social configures social login for individual accounts (§12.1). A provider
+// Social configures social login for individual accounts. A provider
 // with no client id is simply not offered: the start endpoint 404s, so an
 // unconfigured deployment advertises nothing it cannot complete. Google and
 // Microsoft have built-in OIDC endpoints; OpenAI and Claude publish no fixed
@@ -607,7 +597,7 @@ type Social struct {
 	Microsoft SocialProvider `yaml:"microsoft"`
 	OpenAI    SocialProvider `yaml:"openai"`
 	Claude    SocialProvider `yaml:"claude"`
-	// Authentik is the deployment's own directory service (DEV-057). Like
+	// Authentik is the deployment's own directory service. Like
 	// openai/claude it has no default issuer; the operator points it at the
 	// instance's application (…/application/o/<slug>/).
 	Authentik SocialProvider `yaml:"authentik"`
@@ -628,7 +618,7 @@ type SocialProvider struct {
 // Configured reports whether the provider can be offered.
 func (p SocialProvider) Configured() bool { return p.ClientID != "" && p.ClientSecret != "" }
 
-// RedTeam configures the §17.5 scheduled red-team job (agentry#67): corpus
+// RedTeam configures the scheduled red-team job: corpus
 // rewrites scanned against the S3/S4 bundle, report-only.
 type RedTeam struct {
 	// Interval is how often a worker runs the job; 0 disables it.
@@ -638,24 +628,25 @@ type RedTeam struct {
 	CorpusDir string `yaml:"corpusDir"`
 }
 
-// Audit configures the §12.6 continuous audit stream and §4.3 retention.
+// Audit configures the continuous audit stream and its retention.
 type Audit struct {
 	// StreamKind selects the archive sink: none | file | log | s3.
 	StreamKind string `yaml:"streamKind"`
 	// StreamDir is the directory file-kind streams write daily files into.
 	StreamDir string `yaml:"streamDir"`
-	// StreamFlush bounds how long an event may sit in the buffer. §12.6 says
-	// "within ~1 min"; the default leaves headroom under that.
+	// StreamFlush bounds how long an event may sit in the buffer. The stream
+	// promises delivery within about a minute; the default leaves headroom
+	// under that.
 	StreamFlush time.Duration `yaml:"streamFlush"`
 	// StreamS3Bucket is the destination for s3-kind streams.
 	StreamS3Bucket string `yaml:"streamS3Bucket"`
-	// RetentionDays is how long audit rows stay in the hot table (§4.3:
-	// 400 days on SaaS, configurable self-host). 0 disables pruning.
+	// RetentionDays is how long audit rows stay in the hot table (400
+	// days in a hosted deployment, configurable when self-hosted). 0
+	// disables pruning.
 	RetentionDays int `yaml:"retentionDays"`
 }
 
-// Orgs configures the organization lifecycle (agentry#363, plan
-// organization-subscriptions D23).
+// Orgs configures the organization lifecycle.
 type Orgs struct {
 	// DecommissionHold is how long a decommissioned organization stays
 	// readable — members keep read and export — before the erasure job
@@ -663,18 +654,18 @@ type Orgs struct {
 	// its handle and domain. Zero erases at the next hourly sweep.
 	DecommissionHold time.Duration `yaml:"decommissionHold"`
 	// PendingDigestEvery is how often the worker mails each organization's
-	// admins the pending members they have not been told about
-	// (agentry#364): the domain fold-in and the IdP's provisioning are
-	// batched into one mail per admin, and a person is named once. Zero
-	// keeps the default of a day; the sweep that runs when an organization
-	// gains a domain sends one digest at once regardless.
+	// admins the pending members they have not been told about:
+	// the domain fold-in and the IdP's provisioning are batched into one mail
+	// per admin, and a person is named once. Zero keeps the default of a day;
+	// the sweep that runs when an organization gains a domain sends one
+	// digest at once regardless.
 	PendingDigestEvery time.Duration `yaml:"pendingDigestEvery"`
 }
 
 // Default returns the baseline configuration: a development environment
 // with dev mode OFF. A config that names no sealing key and no signing key
 // therefore fails at boot rather than running on public constants; a
-// throwaway stack opts in with devMode: true (DEV-116).
+// throwaway stack opts in with devMode: true.
 func Default() Config {
 	return Config{
 		Env:     "dev",
@@ -733,7 +724,7 @@ func Default() Config {
 		Queue:   Queue{Driver: "river", Workers: 1},
 		Telemetry: Telemetry{
 			ExportInterval: 30 * time.Second,
-			// Well under the §16.3 15-minute queue-age threshold, so the
+			// Well under the 15-minute queue-age threshold, so the
 			// alarm never fires on a stale sample.
 			QueueSampleInterval: 15 * time.Second,
 		},
@@ -884,7 +875,7 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_WEB_SEARCH_PROVIDER", &c.WebSearch.Provider)
 	str("AGENTRY_WEB_SEARCH_BASE_URL", &c.WebSearch.BaseURL)
 	str("AGENTRY_WEB_SEARCH_API_KEY", &c.WebSearch.APIKey)
-	// External scanner tools (§8.3 seams, agentry#40).
+	// External scanner tools.
 	str("AGENTRY_SCAN_GITLEAKS_BIN", &c.Scan.GitleaksBin)
 	str("AGENTRY_SCAN_OSV_URL", &c.Scan.OSVURL)
 	str("AGENTRY_SCAN_NPM_REGISTRY", &c.Scan.NPMRegistryURL)
@@ -895,7 +886,7 @@ func applyEnv(c *Config) error {
 		}
 	}
 
-	// Social login (§12.1). Listed one variable per field on purpose: the
+	// Social login. Listed one variable per field on purpose: the
 	// same "boring and greppable" rule the rest of this function follows.
 	str("AGENTRY_SOCIAL_GOOGLE_CLIENT_ID", &c.Social.Google.ClientID)
 	str("AGENTRY_SOCIAL_GOOGLE_CLIENT_SECRET", &c.Social.Google.ClientSecret)
@@ -930,7 +921,7 @@ func applyEnv(c *Config) error {
 		return err
 	}
 
-	// Audit stream + retention (§12.6, §4.3).
+	// Audit stream + retention.
 	str("AGENTRY_AUDIT_STREAM_KIND", &c.Audit.StreamKind)
 	str("AGENTRY_AUDIT_STREAM_DIR", &c.Audit.StreamDir)
 	str("AGENTRY_AUDIT_STREAM_S3_BUCKET", &c.Audit.StreamS3Bucket)
@@ -940,14 +931,14 @@ func applyEnv(c *Config) error {
 	if err := integer("AGENTRY_AUDIT_RETENTION_DAYS", &c.Audit.RetentionDays); err != nil {
 		return err
 	}
-	// The organization lifecycle (agentry#363).
+	// The organization lifecycle.
 	if err := dur("AGENTRY_ORGS_DECOMMISSION_HOLD", &c.Orgs.DecommissionHold); err != nil {
 		return err
 	}
 	if err := dur("AGENTRY_ORGS_PENDING_DIGEST_EVERY", &c.Orgs.PendingDigestEvery); err != nil {
 		return err
 	}
-	// §17.5 red-team job (agentry#67).
+	// Red-team job.
 	if err := dur("AGENTRY_REDTEAM_INTERVAL", &c.RedTeam.Interval); err != nil {
 		return err
 	}
@@ -981,7 +972,7 @@ func applyEnv(c *Config) error {
 		return err
 	}
 
-	// Telemetry (§16.2, D-25).
+	// Telemetry.
 	str("AGENTRY_MIN_CLI_VERSION", &c.MinCLIVersion)
 	str("AGENTRY_OTEL_ENDPOINT", &c.Telemetry.OTLPEndpoint)
 	if err := dur("AGENTRY_OTEL_EXPORT_INTERVAL", &c.Telemetry.ExportInterval); err != nil {
@@ -998,7 +989,7 @@ func applyEnv(c *Config) error {
 	}
 	list("AGENTRY_TRUSTED_PROXY_CIDRS", &c.HTTP.TrustedProxyCIDRs)
 
-	// Notifications (§13.4).
+	// Notifications.
 	str("AGENTRY_NOTIFY_KIND", &c.Notify.Kind)
 	str("AGENTRY_SMTP_HOST", &c.SMTP.Host)
 	str("AGENTRY_QUEUE_DRIVER", &c.Queue.Driver)
@@ -1018,7 +1009,7 @@ func applyEnv(c *Config) error {
 		return err
 	}
 
-	// §19 quotas. Exposed as env so a self-host operator can raise them
+	// Quotas. Exposed as env so a self-host operator can raise them
 	// without a config file; the entitlements Resolver is what reads them.
 	for _, m := range []struct {
 		key string
@@ -1083,7 +1074,7 @@ func integer64(key string, dst *int64) error {
 var staffOrgRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,37}[a-z0-9])?$`)
 
 // RetiredStaffKeys names the retired staff keys this configuration still
-// sets (agentry#556), for the start-up warning: they grant nothing now.
+// sets, for the start-up warning: they grant nothing now.
 func (c *Config) RetiredStaffKeys() []string {
 	var out []string
 	if c.Auth.IdPStaffGroup != "" {
@@ -1108,7 +1099,7 @@ func (c Config) Validate() error {
 	switch c.Queue.Driver {
 	case "", "river":
 	case "pg":
-		return fmt.Errorf("config: queue.driver pg was removed with its jobs table (agentry#244); use river, the default")
+		return fmt.Errorf("config: queue.driver pg was removed with its jobs table; use river, the default")
 	default:
 		return fmt.Errorf("config: queue.driver must be river, got %q", c.Queue.Driver)
 	}
@@ -1138,7 +1129,7 @@ func (c Config) Validate() error {
 		}
 	}
 	if c.Auth.IdPTrustCheckToken != "" {
-		// Remembered browsers on the directory path (agentry#670): refused
+		// Remembered browsers on the directory path: refused
 		// here rather than discovered at the first sign-in, where a cookie
 		// the directory never receives would look like a feature that
 		// silently does nothing.
@@ -1199,9 +1190,9 @@ func (c Config) Validate() error {
 		}
 	case "typesafe":
 		// The key is the deployment fact this package can check. The model
-		// id must be a pinned version (plan judge-jev-provider.md D7); that
-		// rule lives with the provider (scan.PinnedJudgeModel), and the
-		// factory refuses an alias at startup.
+		// id must be a pinned version; that rule
+		// lives with the provider (scan.PinnedJudgeModel), and the factory
+		// refuses an alias at startup.
 		if c.Judge.APIKey == "" {
 			return fmt.Errorf("config: judge.apiKey is required when judge.provider is %q", c.Judge.Provider)
 		}
@@ -1277,27 +1268,26 @@ func (c Config) Validate() error {
 	return c.validateLimits()
 }
 
-// TTL ceilings from §12.3/§12.4. These are hard product limits, not tunables:
-// a deployment that raised them would still be an Agentry deployment by name
-// while quietly issuing credentials the threat model never priced in.
+// TTL ceilings. These are hard product limits, not tunables: a deployment
+// that raised them would still be an Agentry deployment by name while quietly
+// issuing credentials the threat model never priced in.
 const (
-	// MaxSessionTTL — §12.4: "sessions capped at 24 h absolute".
+	// MaxSessionTTL — sessions are capped at 24 h absolute.
 	MaxSessionTTL = 24 * time.Hour
-	// MaxPATTTL — §12.3: max token lifetime 1 year.
+	// MaxPATTTL — max token lifetime 1 year.
 	MaxPATTTL = 365 * 24 * time.Hour
-	// MaxPATOrgBoundTTL — §12.3: 90 days if org-bound under enforced SSO.
+	// MaxPATOrgBoundTTL — 90 days if org-bound under enforced SSO.
 	MaxPATOrgBoundTTL = 90 * 24 * time.Hour
 	// MaxTrustedDeviceTTL bounds how long a remembered browser skips the
-	// second factor (agentry#461, plan trusted-devices.md D2). It exceeds
-	// MaxSessionTTL by design and is the second browser credential class
-	// §12.4 names: PATs (1y) and org-bound PATs (90d) already exceed the
-	// session cap the same way. What keeps this honest is that the credential
-	// is narrow — it skips one factor on one sign-in path, mints only after
-	// that factor was actually answered, expires absolutely rather than
-	// sliding, and grants no session and no scope of its own.
+	// second factor. It exceeds MaxSessionTTL by design and is the second
+	// browser credential class: PATs (1y) and org-bound PATs (90d) already
+	// exceed the session cap the same way. What keeps this honest is that the
+	// credential is narrow — it skips one factor on one sign-in path, mints
+	// only after that factor was actually answered, expires absolutely
+	// rather than sliding, and grants no session and no scope of its own.
 	MaxTrustedDeviceTTL = 30 * 24 * time.Hour
-	// MaxSSOMaxAge bounds the enforced-SSO freshness window. §12.4 gives 8 h
-	// as the DEFAULT and leaves the value org-configurable, so the ceiling is
+	// MaxSSOMaxAge bounds the enforced-SSO freshness window. 8 h is
+	// the DEFAULT and the value is org-configurable, so the ceiling is
 	// derived rather than quoted: a freshness requirement longer than the
 	// absolute session cap can never bind, because no session survives long
 	// enough to violate it. Capping at the session cap keeps the knob honest.
@@ -1320,7 +1310,7 @@ func (c Config) validateAuthTTLs() error {
 			return fmt.Errorf("config: %s must be > 0", b.name)
 		}
 		if b.value > b.max {
-			return fmt.Errorf("config: %s is %s; the maximum is %s (§12.3/§12.4)", b.name, b.value, b.max)
+			return fmt.Errorf("config: %s is %s; the maximum is %s", b.name, b.value, b.max)
 		}
 	}
 	// An org-bound PAT is a narrowing of a PAT, so its ceiling cannot exceed
@@ -1359,8 +1349,7 @@ func (c Config) validateNotify() error {
 
 // validateKnowledge refuses a knowledge sealing key that is not 32 bytes of
 // base64, or that is the auth sealing key: a key of its own, so that what
-// opens the TOTP seeds does not also open every pack (plan knowledge.md
-// §4.4), and a negative cap.
+// opens the TOTP seeds does not also open every pack, and a negative cap.
 func (c Config) validateKnowledge() error {
 	if c.Limits.KnowledgeBytesPerAccount < 0 {
 		return fmt.Errorf("config: limits.knowledgeBytesPerAccount must be >= 0 (0 is no cap)")

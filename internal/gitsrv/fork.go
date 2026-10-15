@@ -16,7 +16,7 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 )
 
-// A fork's repository (agentry#943): the origin's copied, then one commit.
+// A fork's repository: the origin's copied, then one commit.
 // RepoStore is the registry's ForkRepos on a role that holds the git
 // volume (the worker, `all`).
 

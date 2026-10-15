@@ -1,4 +1,4 @@
-// Platform staff is membership of the staff organization (agentry#556).
+// Platform staff is membership of the staff organization.
 //
 // A deployment names its staff organization and that organization's domain
 // (config auth.staffOrg, auth.staffDomain). An account is platform staff
@@ -9,8 +9,7 @@
 //   - its address is verified and its domain is exactly the staff domain
 //     (plain ASCII, so an internationalised look-alike never matches); a
 //     stored address changes only at erasure, and signing in to it needs
-//     its mailbox or the directory, where nobody changes their own
-//     (DEV-134);
+//     its mailbox or the directory, where nobody changes their own;
 //   - it is an active member of the staff organization, which only that
 //     organization's admins grant.
 //
@@ -22,8 +21,8 @@
 // recomputed by SyncStaffIn inside the transaction of every membership
 // change, at sign-in, and over every candidate once when the server starts,
 // and each change is audited as user.staff_sync naming the rule. Nothing
-// else writes platform_staff: the directory group (DEV-083) and the
-// domain-alone rule (DEV-137) are retired.
+// else writes platform_staff: neither a directory group nor a domain
+// alone makes anyone staff.
 package registry
 
 import (
@@ -64,7 +63,7 @@ func (s *Service) SetStaffOrg(handle, domain string) {
 // SetStaffChanged names a function to call after a sync changed someone's
 // platform_staff. It runs inside the sync's transaction, before it commits,
 // so it must not read the change back: the directory mirror it serves
-// queues a run for a few seconds later (agentry#598).
+// queues a run for a few seconds later.
 func (s *Service) SetStaffChanged(fn func()) { s.staffChanged = fn }
 
 // StaffConfigured reports whether a staff organization is named.
@@ -90,7 +89,7 @@ func (s *Service) staffOrgIDIn(ctx context.Context, q *storegen.Queries) (uuid.U
 // atStaffDomain reports whether a verified address is at exactly the staff
 // domain. The domain must be plain ASCII before it is compared:
 // strings.ToLower folds the Kelvin sign to "k" and a dotted capital I to
-// "i", so an internationalised look-alike would otherwise match (DEV-137).
+// "i", so an internationalised look-alike would otherwise match.
 func (s *Service) atStaffDomain(email string, verified bool) bool {
 	if !verified || s.staffDomain == "" {
 		return false
@@ -246,7 +245,7 @@ func (s *Service) ResyncStaffIn(ctx context.Context, q *storegen.Queries, reason
 // StaffOrgMembersNotStaff returns the handles of the staff organization's
 // active members who are not platform staff: members from before the
 // organization's door checked the domain, or whose account is no longer
-// active (agentry#598). They are reported, never removed: removing a member
+// active. They are reported, never removed: removing a member
 // is the organization's admins' act.
 func (s *Service) StaffOrgMembersNotStaff(ctx context.Context) ([]string, error) {
 	if !s.StaffConfigured() {

@@ -1,6 +1,6 @@
 package gitsrv_test
 
-// §17.2 git protocol conformance: clone/fetch/push × public/private ×
+// Git protocol conformance: clone/fetch/push × public/private ×
 // correct/wrong/absent PAT × shallow/partial × policy rejections
 // (oversize, protected v* tags, force-push, nested .git), all through the
 // real git CLI against the assembled server.
@@ -128,8 +128,8 @@ func newGitEnvCfg(t *testing.T, cfgFn func(*config.Config)) *gitEnv {
 
 // seedPerson seeds a user with the three PAT shapes. A test that needs a
 // second organization needs a second person to found it: a person belongs
-// to one organization (D26), and since agentry#412 the memberships index
-// refuses a second active membership outright.
+// to one organization, and the memberships index refuses a second active
+// membership outright.
 func (e *gitEnv) seedPerson(handle string) person {
 	e.t.Helper()
 	p := person{handle: handle, id: e.seedUser(handle)}
@@ -154,7 +154,7 @@ func (e *gitEnv) seedUser(handle string) uuid.UUID {
 	if err := q.MarkEmailVerified(ctx, id); err != nil {
 		e.t.Fatal(err)
 	}
-	// Age the account past the §19 new-publisher velocity ramp so routine
+	// Age the account past the new-publisher velocity ramp so routine
 	// multi-publish test flows aren't flagged by S8 (that ramp is exercised
 	// directly in internal/scan tests).
 	if _, err := e.st.Pool().Exec(ctx, `UPDATE users SET created_at = now() - interval '30 days' WHERE id = $1`, id); err != nil {
@@ -196,12 +196,12 @@ func (e *gitEnv) seedAgentModes(name string, modes []string, visibility string) 
 	return a
 }
 
-// cloneURL embeds a PAT as the Basic password (GitHub convention, §6.1).
+// cloneURL embeds a PAT as the Basic password (GitHub convention).
 func (e *gitEnv) cloneURL(agent, pat string) string {
 	return e.cloneURLNS(e.owner.handle, agent, pat)
 }
 
-// cloneURLNS is cloneURL for any namespace (org repos, §6.4).
+// cloneURLNS is cloneURL for any namespace (org repos).
 func (e *gitEnv) cloneURLNS(ns, agent, pat string) string {
 	host := strings.TrimPrefix(e.srv.URL, "http://")
 	if pat == "" {
@@ -210,8 +210,8 @@ func (e *gitEnv) cloneURLNS(ns, agent, pat string) string {
 	return fmt.Sprintf("http://token:%s@%s/%s/%s.git", pat, host, ns, agent)
 }
 
-// seedOrg creates an org the owner founds, optionally enforcing SSO
-// (§12.4). Enforcement is set directly: the API surface for it belongs to
+// seedOrg creates an org the owner founds, optionally enforcing SSO.
+// Enforcement is set directly: the API surface for it belongs to
 // internal/api's org settings, not to the git layer under test.
 func (e *gitEnv) seedOrg(handle string, ssoRequired bool) uuid.UUID {
 	e.t.Helper()
@@ -219,7 +219,7 @@ func (e *gitEnv) seedOrg(handle string, ssoRequired bool) uuid.UUID {
 }
 
 // seedOrgFoundedBy is seedOrg with an explicit founder; one person founds
-// at most one organization (D26, memberships_one_active_per_user).
+// at most one organization (memberships_one_active_per_user).
 func (e *gitEnv) seedOrgFoundedBy(founder person, handle string, ssoRequired bool) uuid.UUID {
 	e.t.Helper()
 	ctx := context.Background()
@@ -263,7 +263,7 @@ func (e *gitEnv) seedOrgAgentBy(admin person, orgHandle string, orgID uuid.UUID,
 }
 
 // seedOrgPAT mints an org-bound PAT (pats.org_id — minted during an SSO-fresh
-// session in production, §12.4).
+// session in production).
 func (e *gitEnv) seedOrgPAT(userID, orgID uuid.UUID, name string, scopes ...string) string {
 	e.t.Helper()
 	tok, err := auth.NewToken(auth.PATPrefix)
@@ -417,7 +417,7 @@ func TestGitConformance(t *testing.T) {
 	})
 
 	t.Run("anonymous cannot tell a private repo from a missing one", func(t *testing.T) {
-		// agentry#313: the info/refs probe is what a scanner would use.
+		// The info/refs probe is what a scanner would use.
 		// Both answers are the credential prompt, byte for byte the same
 		// status, so the name leaks nothing; a reader's credentials on
 		// that 401 get the real answer.
@@ -482,7 +482,7 @@ func TestGitConformance(t *testing.T) {
 		}
 	})
 
-	t.Run("the repository's own hooks do not decide (agentry#495)", func(t *testing.T) {
+	t.Run("the repository's own hooks do not decide", func(t *testing.T) {
 		// The policy hook runs from the store's hooks directory, not the
 		// repository's hooks/ (which a virtiofs volume cannot exec from).
 		// Replace the repository's shim with one that accepts everything:
@@ -497,7 +497,7 @@ func TestGitConformance(t *testing.T) {
 		}
 	})
 
-	t.Run("force-push allowed once the agent setting is on (agentry#48)", func(t *testing.T) {
+	t.Run("force-push allowed once the agent setting is on", func(t *testing.T) {
 		if _, err := env.st.Pool().Exec(context.Background(),
 			`UPDATE agents SET allow_force_push = true WHERE name = 'pub-agent'`); err != nil {
 			t.Fatal(err)
@@ -621,7 +621,7 @@ func (e *gitEnv) pushAudits(agentID uuid.UUID) int {
 	return n
 }
 
-// TestPushRejectionLeavesNoTrace pins the §6.3 bookkeeping contract: a push
+// TestPushRejectionLeavesNoTrace pins the bookkeeping contract: a push
 // the pre-receive hook denies still exits receive-pack 0, and none of the
 // post-push side effects — size, last_push_at, repo.push audit — may fire for
 // the refs it refused.
@@ -692,7 +692,7 @@ func TestPushRejectionLeavesNoTrace(t *testing.T) {
 	}
 }
 
-// TestReleaseArchiveIgnoresExportIgnore pins §6.5's invariant that the
+// TestReleaseArchiveIgnoresExportIgnore pins the invariant that the
 // manifest allowlist is the only filter: a pushed .gitattributes marking
 // manifest-included files export-ignore must not remove them from the
 // materialized workspace or from the published release.
@@ -740,7 +740,7 @@ func TestReleaseArchiveIgnoresExportIgnore(t *testing.T) {
 	}
 }
 
-// TestGitEnforcedSSO pins §6.4's push row under §12.4: in an org with
+// TestGitEnforcedSSO pins enforced SSO for git: in an org with
 // sso_required, git writes and releases need an org-bound PAT; reads and
 // non-enforcing orgs are untouched.
 func TestGitEnforcedSSO(t *testing.T) {
@@ -768,7 +768,7 @@ func TestGitEnforcedSSO(t *testing.T) {
 	})
 
 	t.Run("reads unaffected", func(t *testing.T) {
-		// §6.4 attaches the org-bound requirement to push, not to fetch.
+		// The org-bound requirement attaches to push, not to fetch.
 		dst := t.TempDir()
 		mustGit(t, dst, "clone", env.cloneURLNS(entHandle, "ssoagent", env.owner.patRO), "c")
 	})
@@ -787,7 +787,8 @@ func TestGitEnforcedSSO(t *testing.T) {
 }
 
 // TestPreReceiveHookFailsClosed: the hook must never accept a push whose ref
-// list it could not read in full (§6.3 is a deny-by-default policy point).
+// list it could not read in full (the hook is a deny-by-default policy
+// point).
 func TestPreReceiveHookFailsClosed(t *testing.T) {
 	line := zeroesOID + " " + strings.Repeat("a", 40) + " refs/heads/feature\n"
 
@@ -812,7 +813,7 @@ func TestPreReceiveHookFailsClosed(t *testing.T) {
 
 // TestPreReceiveHookWarnTier: past the warn tier the push goes through and
 // the pusher is told (git relays the hook's stderr as "remote:" lines);
-// past the quota it is refused (§19, agentry#44).
+// past the quota it is refused.
 func TestPreReceiveHookWarnTier(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "objects.pack"), bytes.Repeat([]byte{'x'}, 4096), 0o644); err != nil {
@@ -858,7 +859,7 @@ func newUUID(t *testing.T) uuid.UUID {
 	return id
 }
 
-// TestOrgStateGatesGit (agentry#363): the git transport consults the same
+// TestOrgStateGatesGit: the git transport consults the same
 // organization-state gate the API does. A suspended organization's
 // repository is an unknown path — the credential prompt for anonymous,
 // 404 for a signed-in caller — and one in its decommission hold takes
@@ -924,7 +925,7 @@ func TestOrgStateGatesGit(t *testing.T) {
 // an argv element to git twice, and git reads a leading dash as an option.
 // The archiver qualifies it to refs/tags/<tag> — a name that cannot start
 // with a dash — and refuses anything that is not a plain ref name before
-// git ever sees it (security review 2026-09-20 §5.6, M15).
+// git ever sees it.
 func TestArchiveTagRefusesAnOptionShapedName(t *testing.T) {
 	env := newGitEnv(t)
 	const name = "optiontag"

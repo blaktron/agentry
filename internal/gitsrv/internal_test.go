@@ -1,8 +1,8 @@
 package gitsrv
 
 // White-box conformance for the pieces whose contract is not observable over
-// the git wire: the §6.2 per-repo concurrency semaphore, and the post-receive
-// bookkeeping rules of §6.3 (accepted refs only, survives client
+// the git wire: the per-repo concurrency semaphore, and the post-receive
+// bookkeeping rules (accepted refs only, survives client
 // disconnection, never fabricates a repo size).
 
 import (
@@ -29,9 +29,9 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// TestRepoSemaphoreIsolatesRepos pins §6.2's "semaphore per repo and global":
-// work on one repository queues at its own cap while another repository keeps
-// flowing, and the map does not grow without bound.
+// TestRepoSemaphoreIsolatesRepos pins the "semaphore per repo and global"
+// design: work on one repository queues at its own cap while another
+// repository keeps flowing, and the map does not grow without bound.
 func TestRepoSemaphoreIsolatesRepos(t *testing.T) {
 	sem := newRepoSemaphores(2)
 	hot, cold := uuid.New(), uuid.New()
@@ -358,9 +358,9 @@ func TestAcquireGitOrdersRepoBeforeGlobal(t *testing.T) {
 	}
 }
 
-// TestAcquireGitBudgetsEachClientAddress is §19's "20 concurrent git ops
-// per IP" (agentry#454): one address spread over many repositories used to
-// take every global slot and stall the instance. At its budget an address
+// TestAcquireGitBudgetsEachClientAddress is the "20 concurrent git ops
+// per IP" budget: one address spread over many repositories would take
+// every global slot and stall the instance. At its budget an address
 // is refused at once — it does not queue, so it holds no repository's slot
 // while it waits — and a second address is admitted beside it. The global
 // cap here is larger than the budget, so what refuses the first address is

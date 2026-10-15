@@ -1,14 +1,14 @@
-// Package saml implements the SAML 2.0 Service Provider side of enterprise SSO
-// (§12.4): SP metadata, and Assertion Consumer Service (ACS) validation with a
+// Package saml implements the SAML 2.0 Service Provider side of enterprise SSO:
+// SP metadata, and Assertion Consumer Service (ACS) validation with a
 // signed-assertion requirement, audience/recipient/NotBefore/NotOnOrAfter
 // checks, ±90s clock skew, and an assertion-ID replay cache.
 //
-// Library choice (Appendix B / DEVIATIONS DEV-008): github.com/crewjam/saml.
-// It is the most widely deployed and actively maintained Go SAML library; its
+// Library choice: github.com/crewjam/saml. It is the most widely deployed
+// and actively maintained Go SAML library; its
 // ServiceProvider.ParseXMLResponse validates signature + audience + recipient
 // (SubjectConfirmationData.Recipient) + Conditions timestamps out of the box,
-// and exposes MaxClockSkew as an explicit knob — a direct match to the §12.4
-// requirement list. Its signature core is russellhaering/goxmldsig v1.4.0
+// and exposes MaxClockSkew as an explicit knob, a direct match to the
+// requirements here. Its signature core is russellhaering/goxmldsig v1.4.0
 // (>= 1.3.0, so CVE-2022-41912 is patched). russellhaering/gosaml2 was
 // evaluated as the alternative (smaller SP-only surface) but lacks the
 // built-in recipient check and skew knob and would push more validation into
@@ -33,7 +33,7 @@ import (
 )
 
 func init() {
-	// §12.4: clock skew ±90s (crewjam default is 180s). MaxIssueDelay is
+	// Clock skew is ±90s (crewjam default is 180s). MaxIssueDelay is
 	// already 90s. These are process-global in crewjam; one value for the app.
 	saml.MaxClockSkew = 90 * time.Second
 }
@@ -77,10 +77,10 @@ type Result struct {
 	AssertionID string
 	Attributes  map[string][]string
 	// SessionIndex is the IdP's session handle from the AuthnStatement, the
-	// key a Single Logout request may name (§12.4, agentry#62).
+	// key a Single Logout request may name.
 	SessionIndex string
 	// AuthnContextClassRefs are the signed AuthnStatements' context classes:
-	// how the IdP says it authenticated the person (agentry#705, MFAAsserted).
+	// how the IdP says it authenticated the person (see MFAAsserted).
 	AuthnContextClassRefs []string
 }
 
@@ -111,7 +111,7 @@ func New(cfg Config, metadataURL, acsURL string, replay ReplayCache) (*SP, error
 		MetadataURL:       *mURL,
 		AcsURL:            *aURL,
 		IDPMetadata:       idp,
-		AllowIDPInitiated: true, // IdP-initiated POST to ACS (§12.4)
+		AllowIDPInitiated: true, // IdP-initiated POST to ACS
 	}
 	return &SP{inner: sp, acsURL: *aURL, cfg: cfg, replay: replay}, nil
 }
@@ -125,7 +125,7 @@ func (sp *SP) WithRequestTracker(rt RequestTracker) *SP {
 	return sp
 }
 
-// AuthnRequest starts an SP-initiated login (§12.4). It returns the IdP
+// AuthnRequest starts an SP-initiated login. It returns the IdP
 // redirect URL and records the request id with the tracker so the eventual
 // assertion's InResponseTo can be matched to it.
 func (sp *SP) AuthnRequest(ctx context.Context, relayState string) (string, error) {
@@ -214,7 +214,7 @@ func (sp *SP) ParseAndValidate(ctx context.Context, samlResponseB64 string) (*Re
 	// is not), Issuer, Destination/Recipient == ACS URL, audience restriction,
 	// Conditions NotBefore/NotOnOrAfter and SubjectConfirmationData expiry with
 	// MaxClockSkew. possibleRequestIDs is nil because AllowIDPInitiated makes
-	// crewjam skip the InResponseTo check entirely — §12.4 wants BOTH flows,
+	// crewjam skip the InResponseTo check entirely — both flows are supported,
 	// so we do that check ourselves below rather than give up one of them.
 	assertion, err := sp.inner.ParseXMLResponse(raw, nil, sp.acsURL)
 	if err != nil {
@@ -223,7 +223,7 @@ func (sp *SP) ParseAndValidate(ctx context.Context, samlResponseB64 string) (*Re
 
 	// InResponseTo: an assertion that names a request must name one THIS
 	// server started and has not already consumed. An assertion that names
-	// none is IdP-initiated and stays allowed (§12.4). This is what stops a
+	// none is IdP-initiated and stays allowed. This is what stops a
 	// response to someone else's login from being pasted into our ACS.
 	if inResponseTo := assertionInResponseTo(assertion); inResponseTo != "" {
 		if sp.requests == nil || !sp.requests.Consume(ctx, inResponseTo) {
@@ -231,7 +231,7 @@ func (sp *SP) ParseAndValidate(ctx context.Context, samlResponseB64 string) (*Re
 		}
 	}
 
-	// Replay guard on the assertion ID (§12.4, T-12): consume once.
+	// Replay guard on the assertion ID: consume once.
 	var exp time.Time
 	if assertion.Conditions != nil {
 		exp = assertion.Conditions.NotOnOrAfter
@@ -341,7 +341,7 @@ func BuildIDPMetadataXML(entityID, ssoURL, certPEM string) (string, error) {
 }
 
 // BuildIDPMetadataXMLWithSLO is BuildIDPMetadataXML with an optional
-// HTTP-Redirect Single Logout endpoint (§12.4, agentry#62).
+// HTTP-Redirect Single Logout endpoint.
 func BuildIDPMetadataXMLWithSLO(entityID, ssoURL, sloURL, certPEM string) (string, error) {
 	block, _ := pem.Decode([]byte(certPEM))
 	if block == nil {
@@ -422,7 +422,7 @@ type spMetadata struct {
 	} `xml:"SPSSODescriptor"`
 }
 
-// sloEndpoint advertises the Single Logout endpoint (§12.4, agentry#62).
+// sloEndpoint advertises the Single Logout endpoint.
 type sloEndpoint struct {
 	Binding  string `xml:"Binding,attr"`
 	Location string `xml:"Location,attr"`
@@ -435,7 +435,7 @@ type acsEndpoint struct {
 }
 
 // IDPDescription is what a connection test can say about an IdP from its
-// metadata alone (agentry#50): identity, where sign-in goes, and whether
+// metadata alone: identity, where sign-in goes, and whether
 // the signing certificate is about to expire.
 type IDPDescription struct {
 	EntityID     string

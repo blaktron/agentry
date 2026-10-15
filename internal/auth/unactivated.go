@@ -10,8 +10,7 @@ import (
 // table's NOT NULL/UNIQUE contract and was never anybody's mailbox.
 const SyntheticAddressSuffix = ".social.local"
 
-// Unactivated reports whether an account is unactivated (plan
-// unactivated-accounts.md D2, agentry#861): its address is unconfirmed and
+// Unactivated reports whether an account is unactivated: its address is unconfirmed and
 // is a real address a link can be sent to. An account with only a
 // synthetic placeholder has nothing to activate, so it is never locked
 // into read-only by a mail it cannot receive; the gates that need a
