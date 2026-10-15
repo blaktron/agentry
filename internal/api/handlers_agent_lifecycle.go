@@ -228,6 +228,14 @@ func (s *Server) removeRepoDir(repoID string) {
 	if err := os.RemoveAll(path); err != nil {
 		s.log.Warn("repo dir cleanup", "repo", repoID, "path", path, "err", err)
 	}
+	// The reviewed-only copies the git transport serves to readers with no
+	// role on the agent.
+	views, _ := filepath.Glob(filepath.Join(dir, "views", repoID[:2], repoID+"-*.git"))
+	for _, v := range views {
+		if err := os.RemoveAll(v); err != nil {
+			s.log.Warn("repo view cleanup", "repo", repoID, "path", v, "err", err)
+		}
+	}
 }
 
 // ListAgentActivity implements GET /agents/{ns}/{name}/activity.

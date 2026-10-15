@@ -1929,6 +1929,40 @@ Running your own registry means you own the trust decisions:
 None of that is different from the hosted service; self-hosting makes it
 visible.
 
+## Who reads an agent's repository over git
+
+An agent's own people read and push its whole repository, over smart HTTP
+or SSH: the owner, an organization's administrators and active members,
+and anyone granted a role on the agent. Everyone else reads a public agent
+only as far as review has passed it:
+
+- A clone advertises only the tags that point at the commit of a reviewed
+  version (published, or yanked, which still installs by exact pin), and
+  HEAD at the newest of them. No branch, and no tag of a version that is
+  awaiting review, rejected, quarantined or blocked.
+- It is served from a separate repository that holds those tags and the
+  objects they reach, history included, and nothing else, so no other
+  object can be fetched by its id. The registry keeps one such copy per set
+  of reviewed tags under `git.dataDir/views` and builds a new one when the
+  set changes.
+- A public agent with no reviewed tag, and every agent the platform has
+  quarantined or blocked, answers as a path that is not there: the
+  credential prompt (401) anonymously, 404 when signed in.
+
+A pending member and a security reviewer hold no role on an organization's
+agents and read none of its private ones.
+
+Git sends credentials over HTTPS only when the server asks for them, and a
+public agent does not ask, so an owner who clones their public agent with a
+token in the URL reads it as anyone would. Send the token with the first
+request, or use SSH, to read the whole repository:
+
+```bash
+git -c http.proactiveAuth=basic clone https://<handle>:<token>@registry.example.com/<ns>/<name>.git
+```
+
+`http.proactiveAuth` needs git 2.46 or later.
+
 ## SSH git transport
 
 Besides smart HTTP, the `git` and `all` roles serve `ssh://git@<host>:<port>/<ns>/<name>.git`
