@@ -67,7 +67,11 @@ func CheckSubmissionPolicy(pol Policy, in registry.PolicySubmission) []error {
 		}
 	}
 
-	if in.Public && len(pol.AllowedLicenses) > 0 && !licenseAllowed(pol.AllowedLicenses, in.License) {
+	if in.Public && pol.NoPublicLicense {
+		issues = append(issues, fmt.Errorf(
+			"license %q is not one this namespace allows for public publishes: its policy allows no license (the platform's and the organization's allowedLicenses have none in common, or noPublicLicense is set)",
+			in.License))
+	} else if in.Public && len(pol.AllowedLicenses) > 0 && !licenseAllowed(pol.AllowedLicenses, in.License) {
 		issues = append(issues, fmt.Errorf(
 			"license %q is not one this namespace allows for public publishes (allowedLicenses: %s)",
 			in.License, strings.Join(pol.AllowedLicenses, ", ")))

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -569,6 +570,72 @@ func TestPolicyKnobsRejectSubmissions(t *testing.T) {
 	})
 }
 
+// TestOrgOverlayStaysAboveTheStoredBaseline: an organization's stored
+// overlay narrows the stored platform baseline and never removes one of its
+// refusals. Allowed-license lists with nothing in common refuse every public
+// publish, and the organization's review condition is added to the
+// baseline's at the submission, the gate and the scan run's policy snapshot.
+func TestOrgOverlayStaysAboveTheStoredBaseline(t *testing.T) {
+	e := newPipeEnv(t)
+	ctx := context.Background()
+	e.setBaselinePolicy(`{"allowedLicenses":["MIT"],"requireHumanReview":{"whenCapabilities":["exec"]}}`)
+	org := e.seedOrg("overlay" + suffix())
+	e.setOrgPolicy(org, `{"allowedLicenses":["Apache-2.0"],"requireHumanReview":{"whenCapabilities":["network"]}}`)
+
+	t.Run("no common license refuses a public publish", func(t *testing.T) {
+		err := e.trySubmitOrg(org, "apachepub", "public", benignFiles(org.handle, "apachepub", "1.0.0"))
+		if err == nil {
+			t.Fatal("a public Apache-2.0 publish was accepted under MIT ∩ Apache-2.0")
+		}
+		if !containsAll(err.Error(), "Apache-2.0", "allows no license") {
+			t.Fatalf("unhelpful rejection: %v", err)
+		}
+		files := benignFiles(org.handle, "mitpub", "1.0.0")
+		files["agent.yaml"] = licensedManifest(org.handle, "mitpub", "1.0.0", "MIT")
+		if err := e.trySubmitOrg(org, "mitpub", "public", files); err == nil {
+			t.Fatal("a public MIT publish was accepted under MIT ∩ Apache-2.0")
+		}
+	})
+
+	t.Run("the organization's condition holds", func(t *testing.T) {
+		files := benignFiles(org.handle, "netagent", "1.0.0")
+		files["agent.yaml"] = egressManifest(org.handle, "netagent", "1.0.0", "api.example.com")
+		v := e.publishOrg(org, "netagent", "private", files)
+		if v.Status != string(registry.StatusNeedsReview) {
+			t.Fatalf("network agent status = %s, want needs_review (the organization's condition)", v.Status)
+		}
+		run, err := e.st.Queries().LatestScanRunForVersion(ctx, v.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snap, err := scan.ParsePolicy(run.PolicySnapshot)
+		if err != nil {
+			t.Fatalf("snapshot %s: %v", run.PolicySnapshot, err)
+		}
+		var review struct {
+			WhenCapabilities []string `json:"whenCapabilities"`
+		}
+		_ = json.Unmarshal(snap.RequireHumanReview, &review)
+		if strings.Join(review.WhenCapabilities, ",") != "exec,network" || !snap.NoPublicLicense {
+			t.Fatalf("snapshot = %s, want both conditions and noPublicLicense", run.PolicySnapshot)
+		}
+	})
+
+	t.Run("the baseline's condition holds", func(t *testing.T) {
+		files := benignFiles(org.handle, "execagent", "1.0.0")
+		files["agent.yaml"] = execManifest(org.handle, "execagent", "1.0.0")
+		if v := e.publishOrg(org, "execagent", "private", files); v.Status != string(registry.StatusNeedsReview) {
+			t.Fatalf("exec agent status = %s, want needs_review (the baseline's condition)", v.Status)
+		}
+	})
+
+	t.Run("neither declared publishes", func(t *testing.T) {
+		if v := e.publishOrg(org, "plainagent", "private", benignFiles(org.handle, "plainagent", "1.0.0")); v.Status != "published" {
+			t.Fatalf("plain agent status = %s, want published", v.Status)
+		}
+	})
+}
+
 // ----------------------------------------------------------------- 2FA
 
 // TestPublicPublishRequiresTOTP pins 2FA before public publish.
@@ -802,6 +869,24 @@ publish:
 `
 }
 
+func egressManifest(ns, name, version, host string) string {
+	return `schemaVersion: "2"
+name: ` + name + `
+namespace: ` + ns + `
+modes: [autonomous]
+version: ` + version + `
+summary: "test"
+license: Apache-2.0
+capabilities:
+  network:
+    egress: ["` + host + `"]
+entrypoints:
+  instruction: SKILL.md
+publish:
+  include: [agent.yaml, README.md, SKILL.md, LICENSE]
+`
+}
+
 func execManifest(ns, name, version string) string {
 	return `schemaVersion: "2"
 name: ` + name + `
@@ -882,6 +967,28 @@ func (e *pipeEnv) setOrgPolicy(org testOrg, doc string) {
 	}); err != nil {
 		e.t.Fatal(err)
 	}
+}
+
+// setBaselinePolicy stores the platform baseline for one test and puts the
+// previous one back after it.
+func (e *pipeEnv) setBaselinePolicy(doc string) {
+	e.t.Helper()
+	ctx := context.Background()
+	q := e.st.Queries()
+	prev, err := q.GetBaselinePolicy(ctx)
+	had := err == nil
+	if err := q.UpsertBaselinePolicy(ctx, storegen.UpsertBaselinePolicyParams{
+		ID: mustV7(e.t), Document: json.RawMessage(doc),
+	}); err != nil {
+		e.t.Fatal(err)
+	}
+	e.t.Cleanup(func() {
+		if had {
+			_ = q.UpsertBaselinePolicy(ctx, storegen.UpsertBaselinePolicyParams{ID: mustV7(e.t), Document: prev.Document})
+			return
+		}
+		_, _ = e.st.Pool().Exec(ctx, `DELETE FROM policies WHERE org_id IS NULL`)
+	})
 }
 
 func (e *pipeEnv) orgPrincipal(org testOrg) *auth.Principal {
