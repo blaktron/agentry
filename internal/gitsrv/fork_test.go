@@ -17,10 +17,11 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 )
 
-// A fork's repository: every branch and tag of the origin
-// copied, objects included, then one commit renaming the manifest, with
-// the fork's branch and release tag on it. The origin's own history is the
-// fork's past, and removing the origin afterwards leaves the fork whole.
+// A fork's repository: the forked release's commit and its history copied
+// from the origin, objects included, and nothing else of it, then one
+// commit renaming the manifest, with the fork's branch and release tag on
+// it. The release's history is the fork's past, and removing the origin
+// afterwards leaves the fork whole.
 
 func forkStore(t *testing.T) *gitsrv.RepoStore {
 	t.Helper()
@@ -34,9 +35,12 @@ func forkStore(t *testing.T) *gitsrv.RepoStore {
 	return repos
 }
 
-// originWithHistory makes a bare origin with two commits on main, a v1.0.0
-// tag on the second and an extra branch, pushed from a work tree.
-func originWithHistory(t *testing.T, repos *gitsrv.RepoStore) (id uuid.UUID, first, second string) {
+// originWithHistory makes a bare origin with two commits on main and a
+// v1.0.0 tag on the second, and work past the release that no fork may
+// take: a third commit on main, a v1.1.0 tag on a commit of its own and an
+// experiment branch, each with a file nothing else holds. unreviewed maps
+// each of those commits and files, by name, to its id.
+func originWithHistory(t *testing.T, repos *gitsrv.RepoStore) (id uuid.UUID, first, second string, unreviewed map[string]string) {
 	t.Helper()
 	ctx := context.Background()
 	id = uuid.New()
@@ -63,33 +67,53 @@ func originWithHistory(t *testing.T, repos *gitsrv.RepoStore) (id uuid.UUID, fir
 	histGit(t, work, "commit", "-qm", "second")
 	second = histGit(t, work, "rev-parse", "HEAD")
 	histGit(t, work, "tag", "v1.0.0")
-	histGit(t, work, "branch", "experiment", first)
+	// Work no review has passed, each commit with a file of its own.
+	unreviewed = make(map[string]string)
+	pending := func(file, body string) {
+		write(file, body)
+		histGit(t, work, "add", file)
+		histGit(t, work, "commit", "-qm", file)
+		unreviewed["commit "+file] = histGit(t, work, "rev-parse", "HEAD")
+		unreviewed["file "+file] = histGit(t, work, "rev-parse", "HEAD:"+file)
+	}
+	pending("LATER.md", "main moved on\n")
+	histGit(t, work, "checkout", "-q", "-b", "candidate")
+	pending("CANDIDATE.md", "awaiting review\n")
+	histGit(t, work, "tag", "-a", "-m", "candidate", "v1.1.0")
+	unreviewed["tag v1.1.0"] = histGit(t, work, "rev-parse", "v1.1.0")
+	histGit(t, work, "checkout", "-q", "-b", "experiment", first)
+	pending("EXPERIMENT.md", "a branch\n")
+	histGit(t, work, "checkout", "-q", "main")
+	histGit(t, work, "branch", "-D", "candidate")
 	// Fetched into the bare origin rather than pushed: a fetch runs no
 	// receive hook, and the policy a push meets is not what this test is
 	// about.
 	histGit(t, repos.Path(id), "fetch", "-q", work, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
-	return id, first, second
+	return id, first, second, unreviewed
 }
 
-func TestForkCopiesEveryRefAndWritesOneRenamingCommit(t *testing.T) {
+func TestForkCopiesOnlyTheReleasesHistoryAndWritesOneRenamingCommit(t *testing.T) {
 	repos := forkStore(t)
 	ctx := context.Background()
-	origin, first, second := originWithHistory(t, repos)
+	origin, first, second, unreviewed := originWithHistory(t, repos)
 	fork := uuid.New()
-	if err := repos.CopyRepository(ctx, origin, fork, "main"); err != nil {
+	if err := repos.CopyHistory(ctx, origin, fork, "main", second); err != nil {
 		t.Fatal(err)
 	}
 	refs, err := repos.RefsAt(ctx, fork, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for ref, want := range map[string]string{"refs/heads/main": second, "refs/heads/experiment": first} {
-		if refs[ref] != want {
-			t.Errorf("%s = %q, want the origin's %s", ref, refs[ref], want)
-		}
+	if len(refs) != 1 || refs["refs/heads/main"] != second {
+		t.Fatalf("refs = %v, want main at the release %s and nothing else", refs, second)
 	}
-	if refs["refs/tags/v1.0.0"] == "" {
-		t.Errorf("the origin's tag did not come over: %v", refs)
+	// Nothing past the release came with it: no branch, no tag, and none
+	// of their objects, which a client naming them by id would be served.
+	dir := repos.Path(fork)
+	for what, id := range unreviewed {
+		if objectIn(dir, id) {
+			t.Errorf("the fork holds the %s (%s), which only the origin's unreviewed work reaches", what, id)
+		}
 	}
 
 	has, err := repos.HasCommit(ctx, fork, second)
@@ -109,7 +133,6 @@ func TestForkCopiesEveryRefAndWritesOneRenamingCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := repos.Path(fork)
 	if got := histGit(t, dir, "rev-parse", "refs/heads/main", "refs/tags/v1.0.0"); got != commit+"\n"+commit {
 		t.Fatalf("main and v1.0.0 = %q, want both %s", got, commit)
 	}
@@ -148,7 +171,7 @@ func TestForkFromAnArchiveAndAnOriginNeverPushed(t *testing.T) {
 	ctx := context.Background()
 	fork := uuid.New()
 	// An origin published by upload has no repository on disk.
-	if err := repos.CopyRepository(ctx, uuid.New(), fork, "main"); err != nil {
+	if err := repos.CopyHistory(ctx, uuid.New(), fork, "main", ""); err != nil {
 		t.Fatal(err)
 	}
 	tree := t.TempDir()
@@ -183,7 +206,7 @@ func TestForkRefusesWhatIsNotAnObjectOrARef(t *testing.T) {
 	repos := forkStore(t)
 	ctx := context.Background()
 	fork := uuid.New()
-	if err := repos.CopyRepository(ctx, uuid.New(), fork, "main"); err != nil {
+	if err := repos.CopyHistory(ctx, uuid.New(), fork, "main", ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []registry.ForkCommit{
@@ -214,13 +237,13 @@ func TestForkRefusesWhatIsNotAnObjectOrARef(t *testing.T) {
 func TestForkFromAnArchiveNeverLetsGitReadItAsAWorkTree(t *testing.T) {
 	repos := forkStore(t)
 	ctx := context.Background()
-	other, _, _ := originWithHistory(t, repos)
+	other, _, _, _ := originWithHistory(t, repos)
 	for name, files := range map[string]map[string]string{
 		"a .git file naming another repository": {"agent.yaml": "x\n", "sub/.git": "gitdir: " + repos.Path(other) + "\n"},
 		"a .GIT directory":                      {"agent.yaml": "x\n", "sub/.GIT/config": "[core]\n\thooksPath = /tmp\n"},
 	} {
 		fork := uuid.New()
-		if err := repos.CopyRepository(ctx, uuid.New(), fork, "main"); err != nil {
+		if err := repos.CopyHistory(ctx, uuid.New(), fork, "main", ""); err != nil {
 			t.Fatal(err)
 		}
 		tree := t.TempDir()
@@ -240,7 +263,7 @@ func TestForkFromAnArchiveNeverLetsGitReadItAsAWorkTree(t *testing.T) {
 	}
 
 	fork := uuid.New()
-	if err := repos.CopyRepository(ctx, uuid.New(), fork, "main"); err != nil {
+	if err := repos.CopyHistory(ctx, uuid.New(), fork, "main", ""); err != nil {
 		t.Fatal(err)
 	}
 	tree := t.TempDir()
@@ -264,33 +287,51 @@ func TestForkFromAnArchiveNeverLetsGitReadItAsAWorkTree(t *testing.T) {
 	}
 }
 
-// Keep sets a ref before the fork's refs move, so the origin's later work
-// stays in the fork when its commit continues an older one.
-func TestForkKeepsTheOriginsLaterWork(t *testing.T) {
+// objectIn reports whether the bare repository at dir holds the object id.
+func objectIn(dir, id string) bool {
+	cmd := exec.Command("git", "-C", dir, "cat-file", "-e", id)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+	return cmd.Run() == nil
+}
+
+// A commit no tag of the origin points at is not copied: only a tag is
+// what a reader with no role may clone, so the fork is left empty and its
+// commit is made from the release's archive instead.
+func TestForkCopiesNothingNoTagPointsAt(t *testing.T) {
 	repos := forkStore(t)
 	ctx := context.Background()
-	origin, first, second := originWithHistory(t, repos)
+	origin, first, _, unreviewed := originWithHistory(t, repos)
+	for name, commit := range map[string]string{"an untagged commit": first, "a branch tip": unreviewed["commit EXPERIMENT.md"]} {
+		t.Run(name, func(t *testing.T) {
+			fork := uuid.New()
+			if err := repos.CopyHistory(ctx, origin, fork, "main", commit); err != nil {
+				t.Fatal(err)
+			}
+			refs, err := repos.RefsAt(ctx, fork, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(refs) != 0 || objectIn(repos.Path(fork), commit) {
+				t.Fatalf("the fork took %s, which no tag names: refs %v", commit, refs)
+			}
+		})
+	}
+	if err := repos.CopyHistory(ctx, origin, uuid.New(), "main", "main"); err == nil {
+		t.Fatal("CopyHistory took a ref name for a commit")
+	}
+}
+
+// A tag moved after it was chosen brings history past the commit it was
+// chosen for: the copy is refused and leaves no repository behind.
+func TestForkRefusesATagMovedWhileItWasCopied(t *testing.T) {
+	repos := forkStore(t)
+	ctx := context.Background()
+	origin, first, _, _ := originWithHistory(t, repos)
 	fork := uuid.New()
-	if err := repos.CopyRepository(ctx, origin, fork, "main"); err != nil {
-		t.Fatal(err)
+	if err := repos.CopyHistoryVia(ctx, origin, fork, "main", first, "refs/tags/v1.0.0"); err == nil {
+		t.Fatal("the copy took v1.0.0, which points past the commit it was chosen for")
 	}
-	// Fork from the first commit while main is at the second.
-	commit, err := repos.CommitFork(ctx, fork, registry.ForkCommit{
-		BaseCommit: first, Parent: first, ManifestPath: "agent.yaml", Manifest: []byte("namespace: bob\n"),
-		Message: "Fork\n", Refs: []string{"refs/heads/main"}, Keep: map[string]string{"refs/heads/origin-main": second},
-		AuthorName: "bob", AuthorEmail: "b@x", When: time.Now(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	refs, err := repos.RefsAt(ctx, fork, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if refs["refs/heads/main"] != commit || refs["refs/heads/origin-main"] != second {
-		t.Fatalf("refs = %v, want main at the fork's commit and origin-main at %s", refs, second)
-	}
-	if _, err := repos.CommitFork(ctx, fork, registry.ForkCommit{BaseCommit: first, ManifestPath: "agent.yaml", Keep: map[string]string{"refs/heads/x": "main"}}); err == nil {
-		t.Fatal("Keep took a ref name for a commit")
+	if _, err := os.Stat(repos.Path(fork)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the refused copy left its repository behind: %v", err)
 	}
 }
