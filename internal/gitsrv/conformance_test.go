@@ -308,9 +308,15 @@ func gitRunWithEnv(t *testing.T, dir string, extra []string, args ...string) (st
 		// Apple git compiles in credential-osxkeychain; an empty
 		// credential.helper entry clears the helper list entirely so
 		// tests neither read nor write the user's keychain.
-		"GIT_CONFIG_COUNT=1",
+		// A token in the URL is sent with the first request, so a test
+		// that reads as a person reads as that person: by default git
+		// sends credentials only after a 401, and a public agent answers
+		// an anonymous read with its reviewed versions instead.
+		"GIT_CONFIG_COUNT=2",
 		"GIT_CONFIG_KEY_0=credential.helper",
 		"GIT_CONFIG_VALUE_0=",
+		"GIT_CONFIG_KEY_1=http.proactiveAuth",
+		"GIT_CONFIG_VALUE_1=basic",
 		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.test",
 		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.test",
 	)
@@ -353,7 +359,6 @@ func TestGitConformance(t *testing.T) {
 	env := newGitEnv(t)
 
 	pub := env.seedAgent("pub-agent", "public")
-	_ = pub
 	priv := env.seedAgent("priv-agent", "private")
 	_ = priv
 
@@ -365,6 +370,8 @@ func TestGitConformance(t *testing.T) {
 	t.Run("push public with write PAT", func(t *testing.T) {
 		mustGit(t, work, "remote", "add", "origin", env.cloneURL("pub-agent", env.owner.patRW))
 		mustGit(t, work, "push", "origin", "main")
+		// Anyone may clone a public agent's reviewed versions.
+		env.releaseHead(pub, work, "origin", "v0.1.0")
 	})
 
 	t.Run("anonymous clone public", func(t *testing.T) {
