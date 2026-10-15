@@ -757,6 +757,19 @@
           ]
         },
         {
+          "path": "internal/api/knowledge_admission_test.go",
+          "tests": [
+            "TestAKnowledgeUploadIsAdmittedBeforeAnythingIsStored",
+            "TestAnUploadTheAllocationRefusesIsVoided"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
           "path": "internal/api/knowledge_replace_test.go",
           "tests": [
             "TestKnowledgeReplaceThroughTheSeam",

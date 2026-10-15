@@ -150,6 +150,24 @@ The meter (`GET /knowledge/usage`, and the account page under
 counts against the allocation (`used`, the pool's total when `pooled`),
 and the cap (`max`).
 
+**The scan's admission.** Each upload that stores a new tree queues its
+scan, and a closed build may admit, and charge for, that scan through
+`AdmitsKnowledge` (`pkg/extension`): AI Review costs 1 credit an operation
+where an extension charges for it, whatever the pack's size; the core
+charges nothing and asks nothing. The extension is asked once per upload,
+with the account uploading, the pack's owner (the account or an
+organization) and the tree's size, after the registry has read the tree
+and before anything is stored. Its refusal is answered in its own status
+and words (for example 402) and stores nothing; if it cannot answer, the
+upload is 503 `admission-unavailable` and stores nothing. An upload the
+registry refuses itself (413, 422) is never asked about, and one the
+allocation then refuses is admitted and voided. An upload of the tree the
+pack already holds stores nothing and queues no scan, so it is never
+admitted; a pack whose tree could not be read to scan (`failed`) is
+scanned again on the same tree without being admitted. A pack an
+extension builds and puts back through `Deps.Knowledge` is not admitted
+here: the build's own price covers its scan.
+
 **An extension's door.** A closed build reaches the store through
 `Deps.Knowledge` (`pkg/extension`), the way the hosted build of the
 Creator does in SecureAgentry: it makes a pack under a data key the
