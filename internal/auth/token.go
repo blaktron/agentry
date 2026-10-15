@@ -8,24 +8,24 @@ import (
 	"strings"
 )
 
-// Token kinds and their prefixes. PATs use `agy_` (D-22) — registered with
+// Token kinds and their prefixes. PATs use `agy_`, registered with
 // secret scanners (S2 ships a matching rule). Sessions and verification
 // tokens get distinct prefixes so leaked strings identify themselves.
 const (
 	PATPrefix     = "agy_"
 	SessionPrefix = "agys_"
-	// InvitePrefix marks an organization invitation token (agentry#361).
+	// InvitePrefix marks an organization invitation token.
 	// It is a credential like the others: shown once, stored as its hash.
 	InvitePrefix       = "agyi_"
 	VerificationPrefix = "agyv_"
 	// TrustedDevicePrefix marks the cookie a browser earns by answering the
-	// second factor, so a later password sign-in from it skips the code
-	// (agentry#461). A distinct prefix so a leaked string identifies itself
+	// second factor, so a later password sign-in from it skips the code.
+	// A distinct prefix so a leaked string identifies itself
 	// as a 30-day browser credential rather than a session or a PAT.
 	TrustedDevicePrefix = "agyd_"
 
 	// PATDisplayPrefixLen is how many characters of a PAT are stored and
-	// shown for identification (§4.2 pats.token_prefix).
+	// shown for identification (pats.token_prefix).
 	PATDisplayPrefixLen = 12
 )
 
@@ -42,7 +42,7 @@ func NewToken(prefix string) (string, error) {
 }
 
 // HashToken returns the sha256 of the full token string — the only form
-// stored at rest (D-22).
+// stored at rest.
 func HashToken(token string) []byte {
 	sum := sha256.Sum256([]byte(token))
 	return sum[:]

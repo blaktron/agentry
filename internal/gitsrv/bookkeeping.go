@@ -14,11 +14,11 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// KindRepoPushed is the §6.3 `repo.pushed` queue event (DEV-032 →
-// agentry#43). The git handler enqueues one per accepted push, in the
-// request; the bookkeeping it carries — repo size, last_push_at, the audit
-// row — then runs from the queue, so a git-role crash between receive-pack
-// and bookkeeping no longer loses them. Enqueue is one INSERT and is what
+// KindRepoPushed is the `repo.pushed` queue event. The git handler
+// enqueues one per accepted push, in the request; the bookkeeping it
+// carries — repo size, last_push_at, the audit row — then runs from the
+// queue, so a git-role crash between receive-pack and bookkeeping does not
+// lose them. Enqueue is one INSERT and is what
 // makes the work durable; the handler keeps its inline path only for the
 // no-queue case (tests, a role wired without a queue client).
 const KindRepoPushed = "repo.pushed"

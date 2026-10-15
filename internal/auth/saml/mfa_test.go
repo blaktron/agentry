@@ -2,10 +2,11 @@ package saml
 
 import "testing"
 
-// An assertion is second-factor evidence (agentry#705) when its signed
-// AuthnStatement names a multi-factor context class, or when Entra ID's
-// authnmethodsreferences attribute names multipleauthn. The expected values
-// are the published identifiers, written out, not read from the table.
+// An assertion is second-factor evidence when its signed AuthnStatement
+// names a multi-factor context class, or when Entra ID's
+// authnmethodsreferences attribute names multipleauthn. The expected
+// values are the published identifiers, written out, not read from the
+// table.
 func TestResultMFAAsserted(t *testing.T) {
 	const amrAttr = "http://schemas.microsoft.com/claims/authnmethodsreferences"
 	for _, tc := range []struct {

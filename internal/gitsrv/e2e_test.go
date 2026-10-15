@@ -1,6 +1,6 @@
 package gitsrv_test
 
-// M3 acceptance (§18.2): publish→install round-trip for all 3 kinds × both
+// Acceptance: publish→install round-trip for all 3 kinds × both
 // sources (git-tag, cli-upload), plus yank semantics — against the fully
 // wired server (dev-mode auto-approve pipeline stub).
 
@@ -99,7 +99,7 @@ publish:
 }
 
 // waitPublished polls until the version leaves the pipeline (dev stub is
-// synchronous today, but the M4 orchestrator won't be).
+// synchronous, but the real pipeline orchestrator is not).
 func (e *gitEnv) waitPublished(agent, version string) {
 	e.t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
@@ -189,7 +189,7 @@ func (e *gitEnv) installRoundTrip(agent, rangeStr, wantVersion string, wantFiles
 		e.t.Fatalf("download: %d %s", dl.StatusCode, archive)
 	}
 
-	// Client-side digest verification (§9.4 step 3).
+	// Client-side digest verification.
 	sum := sha256Hex(archive)
 	if "sha256:"+sum != rr.Digest {
 		e.t.Fatalf("digest mismatch: got sha256:%s want %s", sum, rr.Digest)
@@ -207,15 +207,14 @@ func (e *gitEnv) installRoundTrip(agent, rangeStr, wantVersion string, wantFiles
 }
 
 // TestPublishInstallRoundTrip covers the manifest shapes that publish ×
-// 2 sources: the two v1 kinds still accepted, and a v2 manifest (modes,
-// DEV-088).
+// 2 sources: the two v1 kinds still accepted, and a v2 manifest (modes).
 func TestPublishInstallRoundTrip(t *testing.T) {
 	env := newGitEnv(t)
 
 	kinds := []struct {
 		kind      string   // fixture shape
 		seedModes []string // the agent row's modes at creation
-		wantModes []string // the row's modes after the publish (agentry#162)
+		wantModes []string // the row's modes after the publish
 		entryFile string
 	}{
 		{"skill", []string{"autonomous"}, []string{"autonomous"}, "SKILL.md"},
@@ -263,15 +262,14 @@ func TestPublishInstallRoundTrip(t *testing.T) {
 	}
 }
 
-// TestWithdrawnKindIsRefused: kind mcp-server is withdrawn (DEV-088). An
-// agent of that kind can no longer be created (the registry refuses it;
-// the rows that predate the withdrawal are blocked by migration 00023), so
-// the manifest arrives against an instruction agent and is refused on both
-// sources, and nothing resolves. The tag submission runs inline in
-// post-receive and a refused manifest leaves no version row at all
-// (http.go: failures surface as the version's absence), so once the push
-// has returned the absence is the assertion; the CLI upload is refused
-// with 422 naming the withdrawal.
+// TestWithdrawnKindIsRefused: kind mcp-server is withdrawn. An agent of
+// that kind cannot be created (the registry refuses it, and a migration
+// blocks any existing rows of that kind), so the manifest arrives against
+// an instruction agent and is refused on both sources, and nothing
+// resolves. The tag submission runs inline in post-receive and a refused
+// manifest leaves no version row at all (http.go: failures surface as the
+// version's absence), so once the push has returned the absence is the
+// assertion; the CLI upload is refused with 422 naming the withdrawal.
 func TestWithdrawnKindIsRefused(t *testing.T) {
 	env := newGitEnv(t)
 
@@ -373,7 +371,7 @@ func (e *gitEnv) uploadVersion(agent, ws string) (int, string) {
 	return res.StatusCode, string(respBody)
 }
 
-// TestYankSemantics pins §5.5: ranges skip yanked, exact pins resolve
+// TestYankSemantics pins yank semantics: ranges skip yanked, exact pins resolve
 // with a warning, and re-publish of a yanked version string is impossible.
 func TestYankSemantics(t *testing.T) {
 	env := newGitEnv(t)
@@ -431,7 +429,7 @@ func TestYankSemantics(t *testing.T) {
 		t.Fatalf("exact pin of yanked version: %d %s (err %v)", res.StatusCode, body, err)
 	}
 
-	// The version string is burned forever (§5.5): re-upload rejected.
+	// The version string is burned forever: re-upload rejected.
 	ws := t.TempDir()
 	for path, content := range kindFixture("skill", env.owner.handle, name, "1.1.0") {
 		full := filepath.Join(ws, path)

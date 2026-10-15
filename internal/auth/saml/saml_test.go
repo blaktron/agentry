@@ -18,7 +18,7 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
-// testIdP is a self-signed in-process SAML IdP (DEV-009 pattern: no container).
+// testIdP is a self-signed in-process SAML IdP (no container).
 type testIdP struct {
 	entityID string
 	key      *rsa.PrivateKey
@@ -58,7 +58,7 @@ type assertionOpts struct {
 	sign         bool
 	tamper       bool
 	// inResponseTo, when set, marks the assertion as answering an
-	// SP-initiated AuthnRequest with that id (§12.4).
+	// SP-initiated AuthnRequest with that id.
 	inResponseTo string
 }
 

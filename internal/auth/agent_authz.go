@@ -2,7 +2,7 @@ package auth
 
 import "github.com/google/uuid"
 
-// AgentRole is a per-agent level (§12.2): read < write < maintain <
+// AgentRole is a per-agent level: read < write < maintain <
 // publish < admin. AgentRoleNone means no access (private agents deny by
 // default).
 //
@@ -11,10 +11,10 @@ import "github.com/google/uuid"
 // *content* — reading it, pushing to it, releasing it — and can sensibly
 // be handed to a collaborator. AgentRoleAdmin is about the agent's
 // *existence and exposure*: deleting it, changing whether the world can
-// see it, handing out access to it. Since agentry#362 an organization's
-// members hold publish on its agents, so those acts needed a level above
-// publish rather than below it, or every member would have inherited them
-// (D19: only admins change visibility, transfer or delete).
+// see it, handing out access to it. An organization's members hold publish
+// on its agents, so those acts need a level above publish rather than
+// below it, or every member would inherit them: only admins change
+// visibility, transfer or delete.
 type AgentRole string
 
 // Agent roles in ascending order.
@@ -67,16 +67,16 @@ func ValidAgentRole(r AgentRole) bool {
 }
 
 // NamespaceDerivedAgentRole computes the implicit role a caller holds on an
-// agent from its namespace, before explicit grants (§12.2, D6, D19):
+// agent from its namespace, before explicit grants:
 //   - personal namespace: the owning user administers their own agents;
 //   - org namespace: an org admin administers them, and an org **member**
 //     may release them (publish) — a seat buys a share of the
 //     organization's agents, which is what an organization is for, while
-//     what the agent *is* stays the admins' (agentry#362);
+//     what the agent *is* stays the admins';
 //   - everyone else: none (explicit grants only).
 //
 // A pending member holds nothing, and needs no case here: a membership
-// that is not active never reaches Principal.OrgRoles (agentry#361), so
+// that is not active never reaches Principal.OrgRoles, so
 // they arrive as RoleNone like any outsider.
 func NamespaceDerivedAgentRole(p *Principal, namespaceKind string, namespaceID uuid.UUID, orgRole OrgRole) AgentRole {
 	if p == nil || p.Anonymous {
@@ -95,30 +95,29 @@ func NamespaceDerivedAgentRole(p *Principal, namespaceKind string, namespaceID u
 		return AgentRolePublish
 	default:
 		// security_reviewer included: the review surface is its own
-		// regime (§12.2), not a hold on the organization's agents.
+		// regime, not a hold on the organization's agents.
 		return AgentRoleNone
 	}
 }
 
-// Agent-scoped actions (M2+). Declared like every other action. Transport
+// Agent-scoped actions. Declared like every other action. Transport
 // (git) and registry surfaces are distinct actions because they map to
-// different PAT scopes (§12.3: repo:* vs agent:*).
+// different PAT scopes (repo:* vs agent:*).
 const (
 	ActAgentCreate    Action = "agent.create"     // authed; org ns needs admin+
 	ActAgentRead      Action = "agent.read"       // registry metadata/resolve; public agents anonymous
-	ActAgentRepoRead  Action = "agent.repo.read"  // git clone/fetch (§6.4)
-	ActAgentRepoWrite Action = "agent.repo.write" // git push (§6.4)
+	ActAgentRepoRead  Action = "agent.repo.read"  // git clone/fetch
+	ActAgentRepoWrite Action = "agent.repo.write" // git push
 	ActAgentMaintain  Action = "agent.maintain"   // settings
 	ActAgentPublish   Action = "agent.publish"    // v* tags, submit, yank
 	// ActAgentAdminister is what only the namespace's own administrators
 	// may do: delete the agent, change whether the world can see it, hand
-	// out grants on it, and (M21) let it skip the pipeline. Separate from
-	// maintain because an organization's members outrank maintain since
-	// agentry#362 and must not inherit these (D19).
+	// out grants on it, and let it skip the pipeline. Separate from
+	// maintain because an organization's members outrank maintain and
+	// must not inherit these.
 	ActAgentAdminister Action = "agent.administer"
-	// ActAgentManage is the owner actions (agentry#993; plan
-	// forks-and-publisher.md §4.1): making the agent public or private,
-	// retiring, restoring and deleting it. The same rung as
+	// ActAgentManage is the owner actions: making the agent public or
+	// private, retiring, restoring and deleting it. The same rung as
 	// ActAgentAdminister, but a token may take it with agent:manage as
 	// well as org:admin, so the sign-in grant reaches these four and
 	// still none of the agent's settings or grants.
@@ -146,8 +145,7 @@ var minAgentRole = map[Action]AgentRole{
 	ActAgentManage:     AgentRoleAdmin,
 }
 
-// agentScopeFor maps agent actions to the PAT scopes that admit them
-// (§12.3, §6.4): a token needs any one of an action's scopes.
+// agentScopeFor maps agent actions to the PAT scopes that admit them: a token needs any one of an action's scopes.
 var agentScopeFor = map[Action][]Scope{
 	ActAgentCreate:     {ScopeAgentPublish},
 	ActAgentRead:       {ScopeAgentRead},

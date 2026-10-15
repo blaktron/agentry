@@ -1,10 +1,9 @@
 package gitsrv
 
 // White-box: behind a TCP proxy the SSH listener takes the client's address
-// from a PROXY header sent by a trusted peer, so the key-offer budget
-// (agentry#410) is per client, not one budget for everyone the proxy
-// carries (agentry#492). The key lookup is the boundary faked here; the
-// wire is the real one.
+// from a PROXY header sent by a trusted peer, so the key-offer budget is
+// per client, not one budget for everyone the proxy carries. The key lookup
+// is the boundary faked here; the wire is the real one.
 
 import (
 	"context"
@@ -144,7 +143,7 @@ func TestSSHProxyHeaderFromAnUntrustedPeerIsRefused(t *testing.T) {
 }
 
 // Off (the default), a header is never parsed: the budget stays the TCP
-// peer's whatever address a header claims, which is today's behaviour.
+// peer's whatever address a header claims.
 func TestSSHProxyHeaderIsIgnoredWhenOff(t *testing.T) {
 	srv, lookups := proxyTestServer(t, 1, nil)
 	offerVia(t, srv, "127.0.0.1", proxyV1("203.0.113.9"))

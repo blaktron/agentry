@@ -9,8 +9,8 @@ import (
 	"fmt"
 )
 
-// Sealer encrypts small secrets at rest (TOTP seeds today; webhook secrets in
-// M6). AES-256-GCM with a key from configuration; SaaS wraps the key with KMS
+// Sealer encrypts small secrets at rest (for example TOTP seeds and webhook
+// secrets). AES-256-GCM with a key from configuration; SaaS wraps the key with KMS
 // (envelope encryption is an operational concern, not a code path change).
 type Sealer struct {
 	aead cipher.AEAD
