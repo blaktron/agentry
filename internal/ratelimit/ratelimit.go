@@ -1,11 +1,11 @@
-// Package ratelimit is the shared in-memory token-bucket store behind the §19
+// Package ratelimit is the shared in-memory token-bucket store behind the
 // quotas: the API rate classes, the per-org webhook delivery rate, and the
 // per-repo git push budget.
 //
-// This is the D-06 fallback — correct on a single node, approximate across
+// This is the single-node store — correct on one node, approximate across
 // replicas, since each process keeps its own buckets. A Redis-backed store
-// replaces it behind the same Allow signature on multi-node SaaS. Where that
-// approximation matters (an N-replica deployment grants roughly N× the
+// can replace it behind the same Allow signature on multi-node hosting.
+// Where that approximation matters (an N-replica deployment grants roughly N× the
 // budget), the call site says so.
 package ratelimit
 
@@ -25,7 +25,7 @@ import (
 // eviction is harmless, because a bucket idle that long has refilled anyway.
 const DefaultIdleTTL = 2 * time.Hour
 
-// Result is one decision plus the numbers the §9.1 RateLimit-* headers report.
+// Result is one decision plus the numbers the RateLimit-* headers report.
 type Result struct {
 	OK bool
 	// Limit is the burst budget for the class (the quota the headers describe).
@@ -56,8 +56,7 @@ type entry struct {
 
 // New creates a bucket store and starts its garbage collector. Call Close to
 // stop it: the goroutine holds a reference to every bucket, so a store that is
-// created per server and never closed leaks both the goroutine and the map —
-// which is what happened when this ran as a bare `go gcLoop()` with no exit.
+// created per server and never closed leaks both the goroutine and the map.
 func New(idleTTL time.Duration) *Buckets {
 	if idleTTL <= 0 {
 		idleTTL = DefaultIdleTTL

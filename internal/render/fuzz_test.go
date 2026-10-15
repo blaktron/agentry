@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-// FuzzSanitize is the markdown sanitizer round-trip fuzz target §17.5 asks
-// for. It asserts three properties over arbitrary input:
+// FuzzSanitize is the markdown sanitizer round-trip fuzz target. It
+// asserts three properties over arbitrary input:
 //
 //  1. Markdown never panics, whatever bytes it is handed. This package is the
-//     only path by which author content reaches a browser (T-07), and every
+//     only path by which author content reaches a browser, and every
 //     byte of that content is untrusted.
 //
 //  2. The output is a FIXED POINT: sanitizing already-sanitized HTML produces

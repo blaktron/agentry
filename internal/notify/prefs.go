@@ -12,12 +12,12 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Notification settings (agentry#190): which of the registry's mails a
+// Notification settings: which of the registry's mails a
 // person wants. A user with no row has never changed anything, and gets
-// every mail — what every account received before the setting existed.
+// every mail.
 //
 // Before any setting is read, the address itself has to be one the registry
-// confirmed (agentry#299): users.email_verified_at is set by the verify-email
+// confirmed: users.email_verified_at is set by the verify-email
 // link, by an IdP's email_verified claim on SSO/social JIT, and by SCIM, and
 // an address without it gets no mail of any kind. The verification mail is
 // the one exception — it is the mail that does the confirming — and it does
@@ -34,18 +34,18 @@ const (
 	KindAdvisory        Kind = "advisories"
 	KindOrgInvite       Kind = "orgInvites"
 	// KindBilling is the closed build's billing mail, sent through the
-	// extension seam (agentry#366): a checkout confirmed, a payment
+	// extension seam: a checkout confirmed, a payment
 	// failed, an organization restricted, seats reached, "your
 	// organization covers you". The core sends none itself; the kind is
 	// here so the switch, the default and the rule are the core's.
 	KindBilling Kind = "billing"
 	// KindSchedule is the closed build's schedule mail, sent through the
-	// extension seam (agentry#1002, plan quickagent-scheduling.md D9): a
+	// extension seam: a
 	// scheduled run in Agentry failed, or a schedule paused. Never a
 	// success. The core sends none itself, as with billing.
 	KindSchedule Kind = "schedules"
 	// KindBugReport is the closed build's bug-report mail, sent through
-	// the extension seam (agentry#1113, plan report-bug.md D5): platform
+	// the extension seam: platform
 	// staff marked a bug report the person filed complete ("Reported bug
 	// fixed"). The core sends none itself, as with billing.
 	KindBugReport Kind = "bugReports"

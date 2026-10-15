@@ -3,7 +3,7 @@
 // because internal/api cannot import internal/gitsrv — gitsrv's own
 // in-package test builds an api.Server, so the import would be a cycle in
 // the test build — and the api role registers gitsrv's routes on a mux that
-// records what it was given (agentry#415).
+// records what it was given.
 package httpmux
 
 import "net/http"

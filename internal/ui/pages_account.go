@@ -29,16 +29,15 @@ type directoryInfo struct {
 type accountData struct {
 	Directory *directoryInfo
 	// DirectoryError is set when the directory read failed: the page says
-	// it could not look rather than rendering the non-directory account
-	// (agentry#271).
+	// it could not look rather than rendering the non-directory account.
 	DirectoryError string
 	Support        string
-	// Notifications is the person's mail and in-app switches (agentry#190),
-	// shown and set here so the mails' footer has a page to name
-	// (agentry#274); NotificationsError says the read failed.
+	// Notifications is the person's mail and in-app switches, shown and
+	// set here so the mails' footer has a page to name; NotificationsError
+	// says the read failed.
 	Notifications      *notificationSettings
 	NotificationsError string
-	// Knowledge is the knowledge meter (agentry#593): what the person keeps
+	// Knowledge is the knowledge meter: what the person keeps
 	// in the registry against their allocation. KnowledgeOff says the
 	// registry keeps no packs; KnowledgeError that the read failed.
 	Knowledge      *knowledgeUsage
@@ -75,17 +74,17 @@ type notificationSettings struct {
 		ReviewDecisions  bool `json:"reviewDecisions"`
 		Advisories       bool `json:"advisories"`
 		OrgInvites       bool `json:"orgInvites"`
-		// Billing is the hosted product's subscription mail (agentry#366).
+		// Billing is the hosted product's subscription mail.
 		// This page renders every switch it is given and sends every one
 		// back, so it names the field; a registry with no billing sends
 		// none of these and the switch simply governs nothing.
 		Billing bool `json:"billing"`
-		// Schedules is the hosted product's schedule mail (agentry#1002):
+		// Schedules is the hosted product's schedule mail:
 		// a scheduled run in Agentry failed, or a schedule paused. Named
 		// here for the same reason as Billing.
 		Schedules bool `json:"schedules"`
-		// BugReports is the hosted product's bug-report mail
-		// (agentry#1113): a bug report the person filed was marked
+		// BugReports is the hosted product's bug-report mail:
+		// a bug report the person filed was marked
 		// complete. Named here for the same reason as Billing.
 		BugReports bool `json:"bugReports"`
 	} `json:"email"`
@@ -146,8 +145,8 @@ func (h *handler) accountSave(w http.ResponseWriter, r *http.Request) {
 	h.back(w, r, "/ui/account", "Profile saved.", "")
 }
 
-// activationResend asks the registry for a new activation link
-// (agentry#861); the registry says when the last one was too recent.
+// activationResend asks the registry for a new activation link;
+// the registry says when the last one was too recent.
 func (h *handler) activationResend(w http.ResponseWriter, r *http.Request) {
 	if !h.acceptForm(w, r) {
 		return
@@ -186,14 +185,14 @@ type token struct {
 	LastUsedAt *time.Time `json:"lastUsedAt"`
 }
 
-// scopes is the PAT scope set the pages offer (§12.3), in the order shown.
+// scopes is the PAT scope set the pages offer, in the order shown.
 var scopes = []string{"agent:read", "agent:publish", "agent:manage", "repo:read", "repo:write", "user:profile", "org:admin", "review:act", "audit:read", "run:read", "run:write", "knowledge:read", "knowledge:write", "secret:write", "voice:read", "voice:write"}
 
 type tokensData struct {
 	Tokens []token
 	Scopes []string
 	// LoadError is the readFailed notice when the list could not be read;
-	// the empty state is for an answered-empty list only (agentry#271).
+	// the empty state is for an answered-empty list only.
 	LoadError string
 }
 
@@ -416,11 +415,11 @@ func failMsg(res response, err error) string {
 	return res.detail()
 }
 
-// readFailed is the notice a page shows when a read failed: the page
-// could not look, which is not the same as nothing being there
-// (agentry#271). The empty state is rendered only on an answered-empty
-// read. A problem detail is a sentence of its own (internal/api
-// problem.go), so it stands between the lead and the advice.
+// readFailed is the notice a page shows when a read failed: the page could
+// not look, which is not the same as nothing being there. The empty state is
+// rendered only on an answered-empty read. A problem detail is a sentence of
+// its own (internal/api problem.go), so it stands between the lead and the
+// advice.
 func readFailed(what string, res response, err error) string {
 	if err != nil {
 		return "The registry could not fetch " + what + ": the request was not sent. Reload to try again."

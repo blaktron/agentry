@@ -15,7 +15,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// The two halves of AllowsEmail fail in opposite directions (agentry#299):
+// The two halves of AllowsEmail fail in opposite directions:
 // a user that cannot be read gets no mail, a settings row that cannot be
 // read gets the defaults. Both need a database because both are about what
 // the queries return, not about the decision.
