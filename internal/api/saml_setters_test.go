@@ -12,7 +12,7 @@ import (
 	samlsp "github.com/blaktron/agentry/internal/auth/saml"
 )
 
-// TestSAMLSettersReplaceTheSets (agentry#414): SetSAMLReplayCache and
+// TestSAMLSettersReplaceTheSets: SetSAMLReplayCache and
 // SetSAMLRequestTracker are the seam a deployment that keeps the two sets
 // somewhere else — a Redis, a sidecar — uses instead of the database. Both
 // are honoured by the live routes, the landing that issues an AuthnRequest

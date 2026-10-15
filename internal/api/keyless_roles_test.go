@@ -1,6 +1,6 @@
 package api_test
 
-// The signing key is the worker's alone (agentry#479): the api and git roles
+// The signing key is the worker's alone: the api and git roles
 // start without it, serve the key set and the ruleset attestation from what
 // the key holder stored, and hand an approval's publish to the worker, which
 // transitions and signs in one transaction.
@@ -216,9 +216,8 @@ func TestKeylessApprovalIsPublishedAndSignedByTheWorker(t *testing.T) {
 	}
 	attests("1.0.1")
 
-	// An approval that was not handed off (one left from before the hand-off
-	// existed) is never published by the watchdog, whatever its version's
-	// status.
+	// An approval that was not handed off (publish_pending false) is never
+	// published by the watchdog, whatever its version's status.
 	item = toReview("1.0.2")
 	approve(item)
 	if _, err := holder.st.Pool().Exec(ctx, `UPDATE review_items SET publish_pending = false, decided_at = now() - interval '2 minutes' WHERE id = $1`, item); err != nil {

@@ -1,12 +1,11 @@
 package api_test
 
-// Unscanned private agents (plan organization-subscriptions.md §4, §5.10;
-// D16; M21, agentry#368): an organization's administrator may take a
+// Unscanned private agents: an organization's administrator may take a
 // private agent of the organization's off the pipeline, behind the tier's
 // switch; a submission to it is published as submitted — no scan run, no
 // findings, no attestation — and served everywhere as unscanned; and the
 // agent cannot become public while the flag is set or a version published
-// unscanned stands, so the §7 property holds for public content as it
+// unscanned stands, so the property holds for public content as it
 // always did.
 
 import (

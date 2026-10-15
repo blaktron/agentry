@@ -1,7 +1,7 @@
 package api_test
 
-// Social login for individual accounts (§12.1, M-13). The providers are
-// in-process (DEV-009's pattern): a scripted GitHub OAuth app and an OIDC
+// Social login for individual accounts. The providers are
+// in-process: a scripted GitHub OAuth app and an OIDC
 // provider signing real ID tokens, so the handler chain — state cookie, code
 // exchange, identity linking, session issue — runs exactly as in production.
 
@@ -253,7 +253,7 @@ func TestSocialLoginAutoLinksVerifiedEmail(t *testing.T) {
 }
 
 func TestSocialLoginRefusesUnverifiedLink(t *testing.T) {
-	// T-12: an email match is only evidence of ownership when BOTH sides are
+	// An email match is only evidence of ownership when BOTH sides are
 	// verified. Either half missing means an explicit link, not a takeover.
 	t.Run("provider has not verified the address", func(t *testing.T) {
 		gh := newFakeGitHub(t)
@@ -381,7 +381,7 @@ func TestSocialLoginStillRequiresTOTP(t *testing.T) {
 	}
 }
 
-// DEV-061: a login begun from the web app carries `next`; the callback then
+// A login begun from the web app carries `next`; the callback then
 // sets the session cookie and 303s into the app instead of answering JSON.
 // The open-redirect shapes fall back to API mode rather than being followed.
 func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
@@ -439,7 +439,7 @@ func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
 		t.Fatal("browser-mode callback set no session cookie")
 	}
 	if csrf == nil {
-		t.Fatal("browser-mode callback set no CSRF cookie — the web tier cannot echo a token it never received (agentry#77)")
+		t.Fatal("browser-mode callback set no CSRF cookie — the web tier cannot echo a token it never received")
 	}
 	who := env.do(caller{name: "browser", session: sess.Value}, http.MethodGet, "/api/v1/user", nil)
 	defer func() { _ = who.Body.Close() }()
@@ -605,22 +605,22 @@ type fakeOIDC struct {
 	sub      string
 	email    string
 	nonce    string
-	// amr, when set, rides the ID token (agentry#23).
+	// amr, when set, rides the ID token.
 	amr []string
-	// groups, when set, rides the ID token as the `groups` claim (agentry#51).
+	// groups, when set, rides the ID token as the `groups` claim.
 	groups []string
 	// emailUnverified asserts the address without vouching for it
-	// (agentry#364: the fold-in must not fire on one).
+	// (the fold-in must not fire on one).
 	emailUnverified bool
 	// preferredUsername, when set, rides the ID token as the
-	// `preferred_username` claim (agentry#517).
+	// `preferred_username` claim.
 	preferredUsername string
-	// extra claims ride the ID token as given (agentry#670's
+	// extra claims ride the ID token as given (such as
 	// agentry_remember_device).
 	extra map[string]any
 	// base, when set, is the issuer and endpoint origin the fake advertises
 	// instead of its listener's address, so a test can give the IdP a host
-	// name (agentry#670's cookie domain); pair it with hostClient.
+	// name (the trusted-device cookie's domain); pair it with hostClient.
 	base string
 }
 
@@ -790,7 +790,7 @@ func googleFirstSignIn(t *testing.T, env *testEnv, idp *fakeOIDC) string {
 
 // TestSocialLoginHandleFromPreferredUsername: the username chosen at the
 // directory's sign-up names the account, not the email's local part
-// (agentry#517: `blaktron` with chris@… became `chris`).
+// (`blaktron` with chris@… is `blaktron`, not `chris`).
 func TestSocialLoginHandleFromPreferredUsername(t *testing.T) {
 	idp := newFakeOIDC(t)
 	env := newTestEnvCfg(t, func(cfg *config.Config) {
@@ -810,7 +810,7 @@ func TestSocialLoginHandleFromPreferredUsername(t *testing.T) {
 
 // TestSocialLoginTakenUsernameFallsBackDeterministically: a username that
 // is already someone's handle gets a fallback that keeps the name, and the
-// audit event records what was asked for (agentry#517).
+// audit event records what was asked for.
 func TestSocialLoginTakenUsernameFallsBackDeterministically(t *testing.T) {
 	idp := newFakeOIDC(t)
 	env := newTestEnvCfg(t, func(cfg *config.Config) {

@@ -1,12 +1,9 @@
 package api_test
 
-// §8.8: "Verification key discovery: GET /.well-known/agentry/
-// signing-keys.json (key id, alg, PEM, validity window). … key rotation =
-// overlapping validity windows."
-//
-// The document served keyId/algorithm/PEM only, and only ever one key — so an
-// overlapping-window rotation could not be expressed at all: there was no way
-// to say "both of these are legitimate, here is when each applies".
+// Verification key discovery: GET /.well-known/agentry/signing-keys.json
+// (key id, alg, PEM, validity window). Key rotation = overlapping validity
+// windows: the document can list more than one key and say "both of these
+// are legitimate, here is when each applies".
 
 import (
 	"crypto/ecdsa"
@@ -35,7 +32,7 @@ type publishedKey struct {
 
 // signingKeys returns the keys the configuration describes: the active one
 // and the operator's additional keys. Retired keys the registry itself
-// signed with earlier (agentry#350) are left out — the shared test database
+// signed with earlier are left out — the shared test database
 // accumulates one per server the package has started that published
 // something — and read through allSigningKeys by the test that is about them.
 func (env *testEnv) signingKeys(t *testing.T) []publishedKey {
@@ -117,7 +114,7 @@ func TestSigningKeysCarryTheActiveKeyWindow(t *testing.T) {
 	}
 }
 
-// The rotation §8.8 describes: the outgoing key stays listed with a notAfter
+// A rotation: the outgoing key stays listed with a notAfter
 // while the incoming key signs, so attestations from both are verifiable.
 func TestSigningKeysPublishOverlappingWindowsDuringRotation(t *testing.T) {
 	outgoingPEM := generatePublicKeyPEM(t)

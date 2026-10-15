@@ -1,6 +1,6 @@
 package api
 
-// Idempotency-Key support for mutating POSTs (§9.1).
+// Idempotency-Key support for mutating POSTs.
 //
 // The problem it solves is narrow and real: a client that retries a POST it
 // never saw the response to must not create a second org, webhook, or ruleset
@@ -66,7 +66,7 @@ type idempotency struct {
 //	ik            → the guard to finish with ik.complete / ik.abandon.
 //
 // Requests without the header are unguarded and pass straight through, so the
-// header stays opt-in exactly as §9.1 describes.
+// header stays opt-in.
 func (s *Server) beginIdempotent(w http.ResponseWriter, r *http.Request, endpoint string) (ik *idempotency, handled bool) {
 	key := r.Header.Get(idempotencyHeader)
 	if key == "" || s.st == nil {
@@ -167,9 +167,9 @@ func (ik *idempotency) abandon(r *http.Request) {
 }
 
 // idempotencyMaxBody bounds what a guarded request may carry. The largest
-// guarded body is a cli-upload archive (§19: 10 MB post-filter, and the
-// handler's own 12 MiB cap), so this sits above that; the old 1 MiB cap
-// turned every real upload with an Idempotency-Key into a 400 (agentry#22).
+// guarded body is a cli-upload archive (10 MB post-filter, and the
+// handler's own 12 MiB cap), so this sits above that: a smaller cap would
+// turn every real upload with an Idempotency-Key into a 400.
 const idempotencyMaxBody = 16 << 20
 
 // hashRequestBody buffers and hashes the body, leaving r.Body re-readable.
@@ -177,8 +177,8 @@ const idempotencyMaxBody = 16 << 20
 // A multipart body is hashed by its PARTS — each part's field name, file
 // name and bytes, in order — not by its raw bytes: every multipart encoder
 // picks a fresh random boundary, so a byte-for-byte hash would make a
-// client's honest retry of the same upload a 409 "different request body"
-// (agentry#22). JSON and other bodies hash as sent.
+// client's honest retry of the same upload a 409 "different request body".
+// JSON and other bodies hash as sent.
 func hashRequestBody(w http.ResponseWriter, r *http.Request) (string, error) {
 	if r.Body == nil {
 		return hex.EncodeToString(sha256.New().Sum(nil)), nil

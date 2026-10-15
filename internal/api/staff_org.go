@@ -12,8 +12,8 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Platform staff is membership of the staff organization (agentry#556;
-// registry/staff.go holds the rule). These wrap the registry for handlers
+// Platform staff is membership of the staff organization (registry/staff.go
+// holds the rule). These wrap the registry for handlers
 // that may run without one wired.
 
 // syncStaffIn recomputes userID's platform_staff inside the caller's

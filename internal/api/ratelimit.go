@@ -16,7 +16,7 @@ import (
 	"github.com/blaktron/agentry/internal/ratelimit"
 )
 
-// limitClasses holds the computed §19 rate classes from config.
+// limitClasses holds the computed rate classes from config.
 type limitClasses struct {
 	authed      rate.Limit
 	authedBurst int
@@ -41,12 +41,12 @@ func classesFromConfig(l config.Limits) limitClasses {
 	}
 }
 
-// limitResult is one rate-limit decision plus the numbers the §9.1
+// limitResult is one rate-limit decision plus the numbers the
 // RateLimit-* headers report back to the caller.
 type limitResult = ratelimit.Result
 
-// allowLogin applies the §19 login/register class limit (per client IP),
-// writes the §9.1 RateLimit-* headers, and on refusal writes the 429 problem.
+// allowLogin applies the login/register class limit (per client IP),
+// writes the RateLimit-* headers, and on refusal writes the 429 problem.
 // Credential-establishing endpoints — register, login, SSO/social start and
 // callback, the SSO landing — sit outside the chokepoint, so this is the one
 // budget standing between them and a password-spraying client.
@@ -61,7 +61,7 @@ func (s *Server) allowLogin(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// writeRateLimitHeaders emits the §9.1 RateLimit-* trio, plus Retry-After
+// writeRateLimitHeaders emits the RateLimit-* trio, plus Retry-After
 // when the request was refused. Headers are set before the response body so
 // they land on 2xx and 429 alike — a client should not have to be throttled
 // to learn its budget.
@@ -87,7 +87,7 @@ func (s *Server) rateLimited(r *http.Request, class string) {
 }
 
 // clientIP is the caller's address as resolved once by withMiddleware, and
-// the key every per-IP §19 budget and audit record uses. Outside the
+// the key every per-IP budget and audit record uses. Outside the
 // middleware stack (a handler mounted directly on a bare mux) it falls back to
 // the peer address rather than guessing at a header nobody validated.
 func clientIP(r *http.Request) string {
@@ -118,7 +118,7 @@ func newProxyTrust(c config.HTTP) proxyTrust {
 
 // peerTrusted reports whether r's TCP peer is a hop whose forwarded headers
 // this server believes: any peer when a hop count is set without a list (the
-// hop count alone, as before agentry#429), only a listed one when the list
+// hop count alone), only a listed one when the list
 // is set, and none when the hop count is 0.
 func (t proxyTrust) peerTrusted(r *http.Request) bool {
 	if t.hops <= 0 {
@@ -138,7 +138,7 @@ func (t proxyTrust) peerTrusted(r *http.Request) bool {
 // listed ranges resolves to that peer and its header is ignored: the trust
 // is keyed on who connected, as nginx's set_real_ip_from is, so a client
 // that reaches agentryd directly cannot pick its own address whatever the
-// hop count says (agentry#429).
+// hop count says.
 //
 // With http.trustedProxies at 0 (the default, and correct for a directly
 // addressed agentryd) this is the peer address and X-Forwarded-For is ignored
@@ -167,10 +167,9 @@ func clientIPWithProxies(r *http.Request, trust proxyTrust) string {
 		// a hop count set one too high. Whatever is in the header then
 		// was not written by a hop this server trusts, so the peer is
 		// the only address a client cannot have chosen. Falling back to
-		// the oldest entry, as this once did, let a client on a direct
-		// connection name a fresh address per request and land in a
-		// fresh rate-limit bucket each time (security review 2026-09-20
-		// §5.8.2).
+		// the oldest entry would let a client on a direct connection name
+		// a fresh address per request and land in a fresh rate-limit
+		// bucket each time.
 		return peer
 	}
 	return fwd[idx]

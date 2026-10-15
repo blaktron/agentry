@@ -18,7 +18,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// The store-backed sets (agentry#414): what makes them one set across API
+// The store-backed sets: what makes them one set across API
 // replicas is where they live, and what makes them safe is the direction
 // they fail in when that database cannot be reached.
 //
@@ -26,10 +26,9 @@ import (
 // fixture's database, on purpose: the fixture migrates one database and
 // every test in this package shares its pool, while a test in the owning
 // package would make it one more package migrating and querying beside
-// this suite, and four others already do. On the self-hosted runner
-// internal/api runs close to go test's default ten-minute package timeout
-// (agentry#137 is the same contention), so the margin is worth more than
-// the placement.
+// this suite, and four others already do. On a CI runner internal/api
+// runs close to go test's default ten-minute package timeout, so the
+// margin is worth more than the placement.
 
 // TestSAMLStoreSetsAreSharedAndExpire: two instances over one database see
 // one set, which is what makes the sets one across replicas; an id seen
@@ -172,7 +171,7 @@ func TestSAMLReplayRefusalHoldsUnderConcurrentPresentations(t *testing.T) {
 	})
 }
 
-// TestSAMLLoginStartedOnOneReplicaCompletesOnAnother (agentry#414): the
+// TestSAMLLoginStartedOnOneReplicaCompletesOnAnother: the
 // other half of the shared state. The AuthnRequest one replica's landing
 // issues is recorded where every replica reads it, so the assertion
 // answering it is accepted at a replica that never issued it — and, the

@@ -1,6 +1,6 @@
 package api_test
 
-// Platform staff is membership of the staff organization (agentry#556): an
+// Platform staff is membership of the staff organization: an
 // account is staff exactly while it is active, holds a verified address at
 // the staff domain, and is an active member of the staff organization; the
 // organization admits nobody else, at every door. These tests drive the
@@ -281,7 +281,7 @@ func TestStaffEndsWithErasure(t *testing.T) {
 }
 
 // TestStaffFollowsSignInAndStartup: a flag set by any other means — the SQL
-// a seed script writes, the retired directory group — is corrected at the
+// a seed script writes, a directory group — is corrected at the
 // person's next sign-in and by the resync the server runs when it starts.
 func TestStaffFollowsSignInAndStartup(t *testing.T) {
 	f := newStaffFixture(t)
@@ -306,8 +306,8 @@ func TestStaffFollowsSignInAndStartup(t *testing.T) {
 }
 
 // TestStaffUnconfiguredLeavesTheFlag: with no staff organization named,
-// nothing syncs and a seeded flag stands, as before (the default for a
-// deployment that has not moved yet, and for every other test here).
+// nothing syncs and a seeded flag stands (the default for a
+// deployment with no staff organization, and for every other test here).
 func TestStaffUnconfiguredLeavesTheFlag(t *testing.T) {
 	env := newTestEnv(t)
 	h := env.register("unconfigured")
@@ -335,8 +335,8 @@ func (env *testEnv) countStaffSyncs(userID, want string) int {
 }
 
 // TestStaffOrgInvitationAtItsVerifiedDomainVerifiesInTheSameAct: accepting
-// an invitation at the organization's verified domain confirms the address
-// (2026-09-18), and it does so inside the activation, so an invitee whose
+// an invitation at the organization's verified domain confirms the address,
+// and it does so inside the activation, so an invitee whose
 // address was not yet verified is admitted to the staff organization rather
 // than refused as unverified.
 func TestStaffOrgInvitationAtItsVerifiedDomainVerifiesInTheSameAct(t *testing.T) {

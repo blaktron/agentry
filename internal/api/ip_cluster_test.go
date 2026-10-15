@@ -1,6 +1,6 @@
 package api_test
 
-// A submission records the keyed submitting-address hash (agentry#27) —
+// A submission records the keyed submitting-address hash —
 // month-prefixed, never the address — on the shared insert path the upload
 // and git-tag routes both use.
 

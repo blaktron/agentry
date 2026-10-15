@@ -1,8 +1,7 @@
 package api_test
 
-// The webhook seam an extension reaches (agentry#430, for M19's alert
-// routing; plan organization-subscriptions.md §6): an event delivered to
-// one endpoint the organization named, through the core's transport — the
+// The webhook seam an extension reaches (for alert routing): an
+// event delivered to one endpoint the organization named, through the core's transport — the
 // same ledger row and the same queued job a subscribed endpoint gets — and
 // nothing of the endpoint but its id, its URL, its events and its state
 // crossing the seam. A probe extension exposes the seam over HTTP so it is

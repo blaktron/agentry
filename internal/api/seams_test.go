@@ -21,8 +21,7 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 )
 
-// The core seams of plan subscription-tiers §5 (agentry#319): the
-// admission hook before a submission is stored, user.registered for
+// The core seams: the admission hook before a submission is stored, user.registered for
 // directory accounts, Features and the private-agent cap, the pipeline-
 // error flag on scan.completed, the rate-class opt-out. Each test builds
 // the core with a probe extension standing in for the billing one, and
@@ -317,9 +316,9 @@ func TestPrivateAgentCapNeverDeletes(t *testing.T) {
 // TestPrivateAgentCapHoldsUnderConcurrentCreates: the cap is counted
 // inside the creating transaction under the namespace's row lock, so N
 // concurrent creates at the cap admit exactly one — and N concurrent flips
-// to private likewise (security review 2026-09-20 §7.2; agentry#411). The
-// count used to run on the pool before the transaction, and every request
-// saw the same number.
+// to private likewise. A
+// count taken on the pool before the transaction would let every request
+// see the same number.
 func TestPrivateAgentCapHoldsUnderConcurrentCreates(t *testing.T) {
 	env := newTestEnvWith(t, func(s *api.Server) {
 		s.SetEntitlements(cappedResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), max: 1})
@@ -468,7 +467,7 @@ func TestScanCompletedNamesTheVersionAndOutcome(t *testing.T) {
 }
 
 // TestBoundExtensionWritesItsOwnAuditAction: the deps an extension is
-// handed (agentry#324) let it write an audit event under an action of its
+// handed let it write an audit event under an action of its
 // own name, and the person's activity feed shows it like any other; an
 // action outside the extension's name is refused.
 func TestBoundExtensionWritesItsOwnAuditAction(t *testing.T) {
@@ -516,7 +515,7 @@ func TestBoundExtensionWritesItsOwnAuditAction(t *testing.T) {
 	}
 }
 
-// TestRunScopesReachAnExtensionRoute (agentry#348): a PAT minted with the
+// TestRunScopesReachAnExtensionRoute: a PAT minted with the
 // hosted-run scopes carries them on the resolved principal, so an
 // extension route can require one — a token without it is refused, one
 // with it passes, a session passes — while no core route is unlocked by
@@ -583,7 +582,7 @@ func TestRunScopesReachAnExtensionRoute(t *testing.T) {
 	}
 }
 
-// TestDepsBlobsIsTheDeploymentStore (agentry#348): the store the core runs
+// TestDepsBlobsIsTheDeploymentStore: the store the core runs
 // on reaches an extension through Deps, and an object put under the
 // extension's own prefix reads back, exists, and goes away on delete.
 func TestDepsBlobsIsTheDeploymentStore(t *testing.T) {

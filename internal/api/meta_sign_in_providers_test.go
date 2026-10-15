@@ -15,11 +15,10 @@ import (
 )
 
 // /meta names the sign-in providers this registry has configured, so a front
-// end learns them without starting an OIDC flow for each (agentry#694). The
-// site used to call /auth/oidc/{id}/start six times per sign-in page, all from
-// its own address, and once the anonymous class refused one it told every
-// visitor that no identity provider was configured (agentry#680). The list and
-// the start route must agree: listed means start redirects, and unlisted means
+// end learns them without starting an OIDC flow for each. A page that
+// called /auth/oidc/{id}/start once per provider, all from its own address,
+// would tell every visitor that no identity provider was configured once
+// the anonymous class refused one. The list and the start route must agree: listed means start redirects, and unlisted means
 // start answers 404.
 
 // specSignInProviders is the provider enum of /auth/oidc/{provider}/start, so

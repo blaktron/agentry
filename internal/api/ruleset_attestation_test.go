@@ -1,6 +1,6 @@
 package api_test
 
-// The rule bundle is signed (agentry#25): the attestation endpoint serves a
+// The rule bundle is signed: the attestation endpoint serves a
 // DSSE envelope over the served bundle's digest, verifiable with the key the
 // well-known endpoint publishes.
 
