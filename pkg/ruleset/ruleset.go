@@ -1,7 +1,7 @@
-// Package ruleset embeds the versioned S3/S4 rule bundle (rules/) into the
-// server binary so the pipeline ships a self-contained ruleset (§8.3). The
-// same YAML files are the ruleset_releases artifact; the CLI embeds them too
-// (D-12) for offline `agentry validate` parity.
+// Package ruleset embeds the versioned S3/S4 rule bundle (rules/) into
+// the server binary so the pipeline ships a self-contained ruleset. The
+// same YAML files are the ruleset release artifact; the CLI embeds them
+// too for offline `agentry validate` parity.
 package ruleset
 
 import (
@@ -27,11 +27,11 @@ func Load() (*rules.Bundle, error) {
 }
 
 // baselineThresholds is the platform baseline's auto-publish threshold
-// (maxAutoPublishSeverity, §8.5) for every bundle version that has reached a
-// registry. The threshold judges the findings the bundle and the Go stages
-// of its day produce, so it is released with them: a version names one
-// threshold, and a change of threshold is a new version (plan
-// scan-and-run-tweaks §4.1, agentry#773). Entries are only ever added.
+// (maxAutoPublishSeverity) for every bundle version that has reached a
+// registry. The threshold judges the findings the bundle and the Go
+// stages of its day produce, so it is released with them: a version
+// names one threshold, and a change of threshold is a new version.
+// Entries are only ever added.
 //
 // It is kept here, beside the version, and not as a key in bundle.yaml:
 // installed CLIs strict-parse the manifest when `agentry validate

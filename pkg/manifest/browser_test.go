@@ -8,13 +8,12 @@ import (
 	"testing"
 )
 
-// The browser (V15; plan browser-testing.md §5, D1, D6, D9, D12, D13;
-// agentry#1134): capabilities.browser names url questions as the sites the
-// person gives at run time, fixed hosts, a scope and the declared secrets
-// the browser may type. These tests pin V15, that the line is part of the
-// contract (canonical JSON, the capability diff, invariant 8), that a
-// browser that types secrets cannot take public scope (invariant 9), and
-// the schema.
+// The browser (V15): capabilities.browser names url questions as the
+// sites the person gives at run time, fixed hosts, a scope and the
+// declared secrets the browser may type. These tests pin V15, that the
+// line is part of the contract (canonical JSON, the capability diff),
+// that a browser that types secrets cannot take public scope, and the
+// schema.
 
 // browserManifest is v2YAML with a url question and a browser line.
 func browserManifest(t *testing.T) *Manifest {
@@ -152,7 +151,8 @@ func TestV15RefusesWhatTheLineCannotMean(t *testing.T) {
 	}
 }
 
-// TestV15TakesWhatTheLineMeans: the shapes the plan names, each valid.
+// TestV15TakesWhatTheLineMeans: the shapes the browser line allows,
+// each valid.
 func TestV15TakesWhatTheLineMeans(t *testing.T) {
 	urlQ := func(id string) IntakeQuestion { return IntakeQuestion{ID: id, Prompt: "The site", Type: IntakeURL} }
 	for _, c := range []struct {
@@ -226,9 +226,9 @@ func TestBrowserIsInTheContract(t *testing.T) {
 	}
 }
 
-// TestDiffCapabilitiesBrowser is invariant 8: a new line, a new site, a new
-// host, a new secret the browser may type, or site to public widens; the
-// reverse narrows; the same line is no change.
+// TestDiffCapabilitiesBrowser pins that a new line, a new site, a new
+// host, a new secret the browser may type, or site to public widens;
+// the reverse narrows; the same line is no change.
 func TestDiffCapabilitiesBrowser(t *testing.T) {
 	site := &Browser{Sites: []string{"site"}, Hosts: []string{"cdn.example.com"}}
 	for _, c := range []struct {

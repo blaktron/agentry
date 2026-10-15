@@ -59,8 +59,9 @@ func (lm *lineMap) text(n int) string {
 // count returns the number of lines.
 func (lm *lineMap) count() int { return len(lm.starts) }
 
-// proseExtensions are the file extensions the S4 signature engine scans.
-// S4 targets prose and prompt files (§8.3); code is handled by S6, not here.
+// proseExtensions are the file extensions the S4 signature engine
+// scans. S4 targets prose and prompt files; code is handled by S6, not
+// here.
 var proseExtensions = map[string]bool{
 	".md":       true,
 	".markdown": true,
@@ -103,9 +104,10 @@ func isHTMLBearingFile(p string) bool {
 	}
 }
 
-// isTextFile reports whether content looks like decodable text rather than a
-// binary blob. S3 runs on all text files (§8.3); binaries are S1's concern.
-// The heuristic: no NUL byte and valid UTF-8 (empty content counts as text).
+// isTextFile reports whether content looks like decodable text rather
+// than a binary blob. S3 runs on all text files; binaries are S1's
+// concern. The heuristic: no NUL byte and valid UTF-8 (empty content
+// counts as text).
 func isTextFile(content []byte) bool {
 	if bytes.IndexByte(content, 0) >= 0 {
 		return false

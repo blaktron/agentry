@@ -10,7 +10,7 @@ import (
 // lexicographically at every level, and null values, empty objects, and
 // empty arrays pruned so that undeclared optional fields never appear.
 // Two structurally identical manifests always produce byte-identical
-// output; this form is stored as agent_versions.manifest (§4.2).
+// output; this form is stored as agent_versions.manifest.
 //
 // The manifest carries no numeric fields, so no floating-point
 // canonicalization concerns apply.

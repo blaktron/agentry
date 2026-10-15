@@ -1,16 +1,16 @@
-// Package manifest implements the agent.yaml package manifest defined in
-// PLAN §5: strict parsing (closed schema, rule V1), the validation rules
-// V1–V15 (§5.3), the closed capability vocabulary (§5.4), and the canonical
-// JSON form stored as agent_versions.manifest (§4.2).
+// Package manifest implements the agent.yaml package manifest: strict
+// parsing (closed schema, rule V1), the validation rules V1–V15, the
+// closed capability vocabulary, and the canonical JSON form stored as
+// agent_versions.manifest.
 //
-// Two schema majors are read. Major 2 (DEV-088) classifies a QuickAgent by
-// the run modes it supports — autonomous, interactive — and names one
-// instruction entrypoint. Major 1 classified by kind (skill, prompt-agent,
-// mcp-server) and is kept readable for the archives already published under
-// it: SupportedModes and InstructionCandidates answer the v2 questions for
-// either major, so callers need not branch on the version. A v1 document
-// can still be validated for publish, except that kind mcp-server is
-// withdrawn and refused.
+// Two schema majors are read. Major 2 classifies a QuickAgent by the
+// run modes it supports — autonomous, interactive — and names one
+// instruction entrypoint. Major 1 classified by kind (skill,
+// prompt-agent, mcp-server) and is kept readable for the archives
+// already published under it: SupportedModes and InstructionCandidates
+// answer the v2 questions for either major, so callers need not branch
+// on the version. A v1 document can still be validated for publish,
+// except that kind mcp-server is withdrawn and refused.
 //
 // The API splits validation by what it needs:
 //
@@ -40,8 +40,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Mode is a run mode a release supports (DEV-088, plan §2). A release
-// declares the non-empty set it supports; a run happens in exactly one.
+// Mode is a run mode a release supports. A release declares the
+// non-empty set it supports; a run happens in exactly one.
 type Mode string
 
 // Run modes (closed set).
@@ -64,8 +64,8 @@ func (m Mode) Valid() bool {
 	return false
 }
 
-// The v1 kinds (PLAN §1.4). Read for schema major 1 only; SupportedModes
-// maps them. Not exported: no new code should classify by kind.
+// The v1 kinds. Read for schema major 1 only; SupportedModes maps them.
+// Not exported: no new code should classify by kind.
 const (
 	v1KindSkill       = "skill"
 	v1KindPromptAgent = "prompt-agent"
@@ -76,11 +76,11 @@ const (
 // names none.
 const DefaultInstructionFile = "AGENT.md"
 
-// v1PromptAgentInstructionFiles is the closed search order the runner used
-// for a v1 prompt-agent (RUNNER-PLAN §R2); kept for v1 archives only.
+// v1PromptAgentInstructionFiles is the closed search order the runner
+// used for a v1 prompt-agent; kept for v1 archives only.
 var v1PromptAgentInstructionFiles = []string{"AGENT.md", "PROMPT.md"}
 
-// Channel is a release channel per §5.5.
+// Channel is a release channel.
 type Channel string
 
 // Release channels (closed set). An empty channel in the manifest means
@@ -92,8 +92,8 @@ const (
 	ChannelBeta Channel = "beta"
 )
 
-// DataAccess is a semantic data-access category from the closed capability
-// vocabulary of §5.2/§5.4.
+// DataAccess is a semantic data-access category from the closed
+// capability vocabulary.
 type DataAccess string
 
 // DataAccess categories (closed set).
@@ -108,7 +108,7 @@ const (
 	DataAccessOther    DataAccess = "other"
 )
 
-// Transport is an MCP entrypoint transport (§5.2).
+// Transport is an MCP entrypoint transport.
 type Transport string
 
 // MCP transports (closed set).
@@ -119,7 +119,7 @@ const (
 	TransportHTTP Transport = "http"
 )
 
-// Install-target interface names accepted in runtime.interfaces (§5.6).
+// Install-target interface names accepted in runtime.interfaces.
 const (
 	// InterfaceClaudeSkill exports to a Claude skill directory.
 	InterfaceClaudeSkill = "claude-skill"
@@ -129,17 +129,17 @@ const (
 	InterfaceAgentsMD = "agents-md"
 )
 
-// Manifest is the full agent.yaml document per PLAN §5.2. Field comments
-// note the owning validation rules; zero values mean "not declared".
+// Manifest is the full agent.yaml document. Field comments note the
+// owning validation rules; zero values mean "not declared".
 type Manifest struct {
 	// SchemaVersion is the manifest schema major ("1" or "2"); unknown
 	// majors are rejected at Parse time (V1). Major() reads it.
 	SchemaVersion string `yaml:"schemaVersion" json:"schemaVersion"`
-	// Name must match the target repo's agent name (V2) and the agents.name
-	// DDL pattern (§4.2).
+	// Name must match the target repo's agent name (V2) and the
+	// agents.name DDL pattern.
 	Name string `yaml:"name" json:"name"`
-	// Namespace must match the target repo's namespace handle (V2) and the
-	// handles.handle DDL pattern (§4.2).
+	// Namespace must match the target repo's namespace handle (V2) and
+	// the handles.handle DDL pattern.
 	Namespace string `yaml:"namespace" json:"namespace"`
 	// Kind is the v1 classification (skill | prompt-agent | mcp-server),
 	// read for schema major 1 only; a v2 manifest must not carry it (V1).
@@ -162,7 +162,7 @@ type Manifest struct {
 	// Tags carries at most MaxTags lowercase [a-z0-9-]+ tags (V8).
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
 	// Entrypoints names the instruction file (v2) or the v1 per-kind
-	// entrypoints (§5.2).
+	// entrypoints.
 	Entrypoints Entrypoints `yaml:"entrypoints,omitempty" json:"entrypoints,omitempty"`
 	// Intake lists the questions asked before a run starts, in either mode
 	// (v2, V10). Answers are staged read-only for the agent by the runner.
@@ -170,22 +170,22 @@ type Manifest struct {
 	// Interactive carries hints for interactive sessions (v2, V10).
 	// Everything else about a session is runner policy, not manifest.
 	Interactive *InteractiveHints `yaml:"interactive,omitempty" json:"interactive,omitempty"`
-	// Guide is what a person reads before a run: what the QuickAgent does,
-	// what to gather first, what files to bring, a task placeholder, and
-	// help for each declared secret (v2, V10; plan guided-runs.md §6). It is
-	// shown to people only: it never reaches the agent, the run plan, the
-	// capability diff or the consent.
+	// Guide is what a person reads before a run: what the QuickAgent
+	// does, what to gather first, what files to bring, a task
+	// placeholder, and help for each declared secret (v2, V10). It is
+	// shown to people only: it never reaches the agent, the run plan,
+	// the capability diff or the consent.
 	Guide *Guide `yaml:"guide,omitempty" json:"guide,omitempty"`
-	// Knowledge names the knowledge packs the release ships in its archive
-	// under knowledge/<name>/ and what a person may attach of their own
-	// (v2, V11; plan knowledge.md §4.6). The shipped names are part of the
-	// contract (Contract); what is accepted is shown to people only.
+	// Knowledge names the knowledge packs the release ships in its
+	// archive under knowledge/<name>/ and what a person may attach of
+	// their own (v2, V11). The shipped names are part of the contract
+	// (Contract); what is accepted is shown to people only.
 	Knowledge *Knowledge `yaml:"knowledge,omitempty" json:"knowledge,omitempty"`
-	// Inputs says what kinds of file the QuickAgent takes and which view
-	// of them its agent reads by default (v2, V12; plan
-	// quickagents-that-run.md D1). Absent, any kind is taken and each file
-	// keeps its own default view; use TakesKinds and DefaultInputView. It grants
-	// nothing and is outside the contract.
+	// Inputs says what kinds of file the QuickAgent takes and which
+	// view of them its agent reads by default (v2, V12). Absent, any
+	// kind is taken and each file keeps its own default view; use
+	// TakesKinds and DefaultInputView. It grants nothing and is outside
+	// the contract.
 	Inputs *Inputs `yaml:"inputs,omitempty" json:"inputs,omitempty"`
 	// Runtime carries informational runtime hints and install targets.
 	Runtime Runtime `yaml:"runtime,omitempty" json:"runtime,omitempty"`
@@ -322,7 +322,7 @@ const (
 	IntakeURL IntakeType = "url"
 )
 
-// IntakeQuestion is one question asked before a run starts (plan §3.5).
+// IntakeQuestion is one question asked before a run starts.
 type IntakeQuestion struct {
 	// ID names the answer: [a-z0-9_]+, unique within the manifest (V10).
 	ID string `yaml:"id" json:"id"`
@@ -336,9 +336,9 @@ type IntakeQuestion struct {
 	Choices []string `yaml:"choices,omitempty" json:"choices,omitempty"`
 }
 
-// Guide is the author's own words for the run setup (plan guided-runs.md
-// §6): clients show them before a run and derive the same steps from the
-// rest of the manifest when a release carries none.
+// Guide is the author's own words for the run setup: clients show them
+// before a run and derive the same steps from the rest of the manifest
+// when a release carries none.
 type Guide struct {
 	// Overview says what the QuickAgent does and returns, in markdown.
 	Overview string `yaml:"overview,omitempty" json:"overview,omitempty"`
@@ -354,8 +354,8 @@ type Guide struct {
 	Connect map[string]string `yaml:"connect,omitempty" json:"connect,omitempty"`
 }
 
-// InteractiveHints are the manifest's hints for interactive sessions
-// (plan §3.6). Limits here can only tighten what runner policy allows.
+// InteractiveHints are the manifest's hints for interactive sessions.
+// Limits here can only tighten what runner policy allows.
 type InteractiveHints struct {
 	// Opening is the assistant's first message when no task text was given.
 	Opening string `yaml:"opening,omitempty" json:"opening,omitempty"`
@@ -375,17 +375,18 @@ type MCPEntrypoint struct {
 	Transport Transport `yaml:"transport" json:"transport"`
 }
 
-// Runtime carries informational runtime hints (§5.2).
+// Runtime carries informational runtime hints.
 type Runtime struct {
 	// Models are free-form model hint patterns (informational).
 	Models []string `yaml:"models,omitempty" json:"models,omitempty"`
-	// Interfaces lists the install targets §5.6 may emit; each must be one
-	// of InterfaceClaudeSkill, InterfaceMCP, InterfaceAgentsMD.
+	// Interfaces lists the install targets that may be emitted; each
+	// must be one of InterfaceClaudeSkill, InterfaceMCP,
+	// InterfaceAgentsMD.
 	Interfaces []string `yaml:"interfaces,omitempty" json:"interfaces,omitempty"`
 }
 
-// Capabilities is the closed-vocabulary security contract of §5.2/§5.4.
-// It is a declaration to consumers and policy, not runtime enforcement.
+// Capabilities is the closed-vocabulary security contract. It is a
+// declaration to consumers and policy, not runtime enforcement.
 type Capabilities struct {
 	// Network declares network capabilities.
 	Network Network `yaml:"network,omitempty" json:"network,omitempty"`
@@ -397,33 +398,31 @@ type Capabilities struct {
 	// values.
 	Secrets []string `yaml:"secrets,omitempty" json:"secrets,omitempty"`
 	// OptionalSecrets names the declared secrets — the agent's own or a
-	// declared MCP server's — that the author marks as ones a run can do
-	// without (v2, V5; plan optional-secrets.md D1); every other declared
-	// secret is required. It adds no name to the contract: each must
-	// already be declared. The runner and hosted runs honour it from
-	// agentry-cli#651 and agentry-enterprise#424; until then a run still
-	// requires every declared secret.
+	// declared MCP server's — that the author marks as ones a run can
+	// do without (v2, V5); every other declared secret is required. It
+	// adds no name to the contract: each must already be declared. The
+	// runner and hosted runs honour it.
 	OptionalSecrets []string `yaml:"optionalSecrets,omitempty" json:"optionalSecrets,omitempty"`
-	// TargetHosts names the intake questions of type host (v2, V14; plan
-	// runtime-hosts.md D2, D17): each is a target host, a machine the
-	// person names when the run starts, that the agent may run commands on
-	// and administer through the runner's host tools. The release never
-	// names the host, its address, user or port; it declares only that it
-	// takes one, so consent, the judge and search can read it.
+	// TargetHosts names the intake questions of type host (v2, V14):
+	// each is a target host, a machine the person names when the run
+	// starts, that the agent may run commands on and administer through
+	// the runner's host tools. The release never names the host, its
+	// address, user or port; it declares only that it takes one, so
+	// consent, the judge and search can read it.
 	TargetHosts []string `yaml:"targetHosts,omitempty" json:"targetHosts,omitempty"`
-	// Browser declares a headless browser for the run (v2, V15; plan
-	// browser-testing.md §5, D6): the sites the person names at run time,
-	// the fixed hosts its pages need, its scope, and the declared secrets it
-	// may type. Absent, a run has no browser (browser.go).
+	// Browser declares a headless browser for the run (v2, V15): the
+	// sites the person names at run time, the fixed hosts its pages
+	// need, its scope, and the declared secrets it may type. Absent, a
+	// run has no browser (browser.go).
 	Browser *Browser `yaml:"browser,omitempty" json:"browser,omitempty"`
 	// DataAccess lists semantic data categories the agent touches.
 	DataAccess []DataAccess `yaml:"dataAccess,omitempty" json:"dataAccess,omitempty"`
-	// MCPServers lists the MCP servers this agent requires at run time
-	// (RUNNER-PLAN-3). The runner installs each from the operator's trusted
-	// repository — npm and PyPI by default — configured for this exact
-	// release only, and serves them through the per-run gateway. Versions
-	// are EXACT pins (V5): they are part of the release's content, so a new
-	// agent version is a new supply-chain decision by construction.
+	// MCPServers lists the MCP servers this agent requires at run time.
+	// The runner installs each from the operator's trusted repository —
+	// npm and PyPI by default — configured for this exact release only,
+	// and serves them through the per-run gateway. Versions are EXACT
+	// pins (V5): they are part of the release's content, so a new agent
+	// version is a new supply-chain decision by construction.
 	MCPServers []MCPServer `yaml:"mcpServers,omitempty" json:"mcpServers,omitempty"`
 	// Knowledge names the packs the release ships, as the contract a
 	// person consents to records them (Manifest.Contract). It is never
@@ -432,19 +431,17 @@ type Capabilities struct {
 	Knowledge []string `yaml:"-" json:"knowledge,omitempty"`
 }
 
-// IsOptionalSecret reports whether the release marks the declared secret
-// name optional (capabilities.optionalSecrets): one a run may start
-// without, once the runner honours the marking (plan optional-secrets.md
-// §5). Every other declared secret is required.
+// IsOptionalSecret reports whether the release marks the declared
+// secret name optional (capabilities.optionalSecrets): one a run may
+// start without. Every other declared secret is required.
 func (c Capabilities) IsOptionalSecret(name string) bool {
 	return slices.Contains(c.OptionalSecrets, name)
 }
 
-// MCPServer is one declared MCP server requirement (§5.4, RUNNER-PLAN-3).
-// Exactly one of NPM, PyPI or URL names it. A package server (NPM or
-// PyPI) carries an exact Version, never a range; a remote server (URL,
-// v2; plan mcp-oauth-connections.md §4) runs at its vendor and carries
-// none.
+// MCPServer is one declared MCP server requirement. Exactly one of NPM,
+// PyPI or URL names it. A package server (NPM or PyPI) carries an exact
+// Version, never a range; a remote server (URL, v2) runs at its vendor
+// and carries none.
 type MCPServer struct {
 	// NPM is the npm package name (optionally @scope/name).
 	NPM string `yaml:"npm,omitempty" json:"npm,omitempty"`
@@ -474,19 +471,19 @@ type MCPServer struct {
 	// policy-gated at run time like agent egress). Empty means none.
 	Egress []string `yaml:"egress,omitempty" json:"egress,omitempty"`
 	// Env is plain, non-secret configuration the server reads from its
-	// environment (v2, V5, DEV-098). It lives in the manifest so it is in
-	// the diff, the digest and the review, never in a policy file; a name
+	// environment (v2, V5). It lives in the manifest so it is in the
+	// diff, the digest and the review, never in a policy file; a name
 	// that is also a declared secret is refused, so a value is either
 	// configuration in the contract or a secret from the profile.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 	// OAuth gives a package server an OAuth sign-in (v2): the person's
-	// connection's access token reaches the server through Env or Files,
-	// rendered by the runner, and never a refresh token or a client
-	// secret (plan mcp-oauth-connections.md D8, D15).
+	// connection's access token reaches the server through Env or
+	// Files, rendered by the runner, and never a refresh token or a
+	// client secret.
 	OAuth *MCPOAuth `yaml:"oauth,omitempty" json:"oauth,omitempty"`
 }
 
-// MCPAuth is how a remote MCP server is signed in to (v2, agentry#910).
+// MCPAuth is how a remote MCP server is signed in to (v2).
 type MCPAuth string
 
 const (

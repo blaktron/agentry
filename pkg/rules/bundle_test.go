@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// rulesDir is the shipped rule bundle at the repo root, relative to this
-// package. Tests load it via os.DirFS so they exercise the exact bytes that
-// ship as ruleset_releases.
+// rulesDir is the shipped rule bundle at the repo root, relative to
+// this package. Tests load it via os.DirFS so they exercise the exact
+// bytes that ship as ruleset releases.
 const rulesDir = "rules"
 
 // loadShippedBundle loads the repo-root /rules bundle for tests.
@@ -30,11 +30,12 @@ func TestBundleLoads(t *testing.T) {
 	}
 }
 
-// TestEveryFamilyHasRules asserts the §8.3 S4 families are all present with at
-// least two rules each. "destructive" is the seventh: §8.3 names it only via
-// S5's C6 category, but the Amazon Q wiper (Appendix A) was plain English that
-// no other family matches, and an incident with a documented reproduction in
-// the corpus needs a deterministic detector behind it.
+// TestEveryFamilyHasRules asserts the S4 families are all present with
+// at least two rules each. "destructive" is the seventh: the pipeline
+// names it only via S5's C6 category, but the Amazon Q wiper was plain
+// English that no other family matches, and an incident with a
+// documented reproduction in the corpus needs a deterministic detector
+// behind it.
 func TestEveryFamilyHasRules(t *testing.T) {
 	b := loadShippedBundle(t)
 	want := []string{
@@ -67,9 +68,9 @@ func TestEveryFamilyHasRules(t *testing.T) {
 	}
 }
 
-// TestRuleFixtures enforces the §8.3 requirement that every rule ships with
-// tests: each match fixture MUST fire that rule and each nonMatch fixture MUST
-// NOT. This is the guard that keeps the corpus honest and blocks a rule with
+// TestRuleFixtures enforces that every rule ships with tests: each
+// match fixture MUST fire that rule and each nonMatch fixture MUST NOT.
+// This is the guard that keeps the corpus honest and blocks a rule with
 // no precision discipline from landing.
 func TestRuleFixtures(t *testing.T) {
 	b := loadShippedBundle(t)

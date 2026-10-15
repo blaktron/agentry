@@ -1,8 +1,9 @@
 package manifest
 
-// capabilities.mcpServers (V5, RUNNER-PLAN-3): parse + validation pins.
-// The load-bearing rules are the EXACT-version requirement (pins ride the
-// release archive) and the closed source union (exactly one of npm/pypi).
+// capabilities.mcpServers (V5): parse + validation pins. The
+// load-bearing rules are the EXACT-version requirement (pins ride the
+// release archive) and the closed source union (exactly one of
+// npm/pypi).
 
 import (
 	"fmt"
@@ -228,7 +229,7 @@ func TestMCPServerEnvValid(t *testing.T) {
 	}
 }
 
-// TestMCPServerEnvRefusals: one failing fixture per rule of §4.2.
+// TestMCPServerEnvRefusals: one failing fixture per rule.
 func TestMCPServerEnvRefusals(t *testing.T) {
 	var tooMany strings.Builder
 	tooMany.WriteString("    - npm: server-x\n      version: 1.0.0\n      env:\n")
@@ -271,9 +272,9 @@ func TestMCPServerEnvRefusals(t *testing.T) {
       version: 1.0.0
       env: {SHARED_TOKEN: plain}
 `, "configure it as a secret or as env, not both"},
-		// The gateway would expand these against the server's environment
-		// or evaluate them as a template (agentry#291); the path names the
-		// entry and the key.
+		// The gateway would expand these against the server's
+		// environment or evaluate them as a template; the path names
+		// the entry and the key.
 		"dollar name": {
 			`    - npm: server-x
       version: 1.0.0
@@ -306,7 +307,7 @@ func TestMCPServerEnvRefusals(t *testing.T) {
 }
 
 // TestMCPServerEnvLiteralShapes: a `$` that nothing would expand and a
-// single brace pair are literal and pass (agentry#291).
+// single brace pair are literal and pass.
 func TestMCPServerEnvLiteralShapes(t *testing.T) {
 	doc := mcpManifestV2(`    - npm: server-x
       version: 1.0.0

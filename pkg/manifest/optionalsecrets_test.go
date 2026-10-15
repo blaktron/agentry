@@ -8,13 +8,13 @@ import (
 	"testing"
 )
 
-// capabilities.optionalSecrets (V5, V10; plan optional-secrets.md D1, D6,
-// D7; agentry#906): the declared secrets a run can do without. These tests
-// pin that the list names only declared secrets (so it never adds a name
-// outside the contract), that it is a v2 field, that a manifest without it
-// encodes exactly as before, that a flip between optional and required is
-// no capability change, and that a secret intake question's required
-// agrees with the secret that carries it.
+// capabilities.optionalSecrets (V5, V10): the declared secrets a run
+// can do without. These tests pin that the list names only declared
+// secrets (so it never adds a name outside the contract), that it is a
+// v2 field, that a manifest without it encodes exactly as before, that
+// a flip between optional and required is no capability change, and
+// that a secret intake question's required agrees with the secret that
+// carries it.
 
 const optionalSecretsYAML = `schemaVersion: "2"
 name: repo-reader
@@ -47,8 +47,8 @@ func errorIssues(t *testing.T, m *Manifest) []*Issue {
 	return blockingIssues(Validate(m))
 }
 
-// publishIssues is every blocking issue the publish check reports: Validate
-// plus the context rules, D7's among them.
+// publishIssues is every blocking issue the publish check reports:
+// Validate plus the context rules, the secret-intake rule among them.
 func publishIssues(t *testing.T, m *Manifest) []*Issue {
 	t.Helper()
 	return blockingIssues(ValidateInContext(m, Context{
@@ -96,9 +96,9 @@ func TestOptionalSecretsRefusals(t *testing.T) {
 	}
 }
 
-// TestOptionalSecretsAddNothingToTheContract is plan invariant 3: a name
-// may be optional only where the release already declares it, its own or
-// a declared server's, so the list can never widen what a person consents
+// TestOptionalSecretsAddNothingToTheContract pins that a name may be
+// optional only where the release already declares it, its own or a
+// declared server's, so the list can never widen what a person consents
 // to.
 func TestOptionalSecretsAddNothingToTheContract(t *testing.T) {
 	m := mustParse(t, optionalSecretsYAML)
@@ -126,9 +126,9 @@ func TestOptionalSecretsIsAV2Field(t *testing.T) {
 	}
 }
 
-// TestNoOptionalSecretsEncodesAsBefore is plan invariant 2: a manifest
-// that does not use the field has the same canonical JSON, and so the same
-// digest and stored contract, as before the field existed.
+// TestNoOptionalSecretsEncodesAsBefore pins that a manifest that does
+// not use the field has the same canonical JSON, and so the same digest
+// and stored contract.
 func TestNoOptionalSecretsEncodesAsBefore(t *testing.T) {
 	without := mustParse(t, v2YAML)
 	raw, err := CanonicalJSON(without)
@@ -173,10 +173,10 @@ func TestNoOptionalSecretsEncodesAsBefore(t *testing.T) {
 	}
 }
 
-// TestFlippingOptionalChangesNoCapability is D6: the names and how each
-// is scoped are the contract's access, and neither changes when a secret
-// moves between optional and required, in either direction. A newly
-// declared secret is still a widening, optional or not.
+// TestFlippingOptionalChangesNoCapability pins that the names and how
+// each is scoped are the contract's access, and neither changes when a
+// secret moves between optional and required, in either direction. A
+// newly declared secret is still a widening, optional or not.
 func TestFlippingOptionalChangesNoCapability(t *testing.T) {
 	required := mustParse(t, optionalSecretsYAML)
 	required.Capabilities.OptionalSecrets = nil
@@ -197,10 +197,11 @@ func TestFlippingOptionalChangesNoCapability(t *testing.T) {
 	}
 }
 
-// TestSecretIntakeAgreesWithItsSecret is D7: a secret question is carried
-// by the release's own declared secret of its upper-cased id (the runner's
-// rule), and its required must say what that secret's marking says, so
-// the two can never disagree about whether a run may start without it.
+// TestSecretIntakeAgreesWithItsSecret pins that a secret question is
+// carried by the release's own declared secret of its upper-cased id
+// (the runner's rule), and its required must say what that secret's
+// marking says, so the two can never disagree about whether a run may
+// start without it.
 func TestSecretIntakeAgreesWithItsSecret(t *testing.T) {
 	t.Run("optional secret, optional question", func(t *testing.T) {
 		if errs := publishIssues(t, mustParse(t, optionalSecretsYAML)); len(errs) != 0 {
@@ -244,11 +245,12 @@ func TestSecretIntakeAgreesWithItsSecret(t *testing.T) {
 	})
 }
 
-// TestAnInstalledReleaseKeepsRunning: D7's rule is the publish check's
-// alone. A release published before optionalSecrets, whose secret question
-// does not say required over a (then necessarily required) secret, still
-// passes Validate, which the CLI and the desktop run at install and at
-// run, so it keeps running as it did; only its next publish is refused.
+// TestAnInstalledReleaseKeepsRunning: the secret-intake rule is the
+// publish check's alone. A release published without optionalSecrets,
+// whose secret question does not say required over a (then necessarily
+// required) secret, still passes Validate, which the CLI and the
+// desktop run at install and at run, so it keeps running as it did;
+// only its next publish is refused.
 func TestAnInstalledReleaseKeepsRunning(t *testing.T) {
 	m := mustParse(t, optionalSecretsYAML)
 	m.Capabilities.OptionalSecrets = nil
