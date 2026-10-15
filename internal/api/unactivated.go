@@ -7,20 +7,20 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 )
 
-// An unactivated account (plan unactivated-accounts.md D2, agentry#861) is
-// signed in and may read everything a signed-in account may, but it changes
+// An unactivated account is signed in and may read everything a
+// signed-in account may, but it changes
 // nothing until it follows the activation link the registry mailed it: a
 // self-enrolled directory account reaches the site before its address is
 // confirmed, and an address nobody confirmed must not own anything.
 //
-// unactivatedWrites is what it may still do (D8): sign itself in and out,
+// unactivatedWrites is what it may still do: sign itself in and out,
 // ask for another activation mail and follow one, set its display name and
 // cookie choice, delete or clear itself, end its sessions and remove its
 // remembered browsers, authenticators, tokens and SSH keys, sign the
 // desktop app or the CLI in (the grant mints a token, and the token is
 // read-only too), and accept an invitation (which confirms an address at
-// the organization's domain). A removal is housekeeping, not a write D8
-// refuses: "tokens refused" is minting one.
+// the organization's domain). A removal is housekeeping, not a write the
+// gate refuses: minting a token is.
 // Patterns are "METHOD /path" under /api/v1, a {} segment matching one
 // path segment; a trailing /* matches the rest.
 var unactivatedWrites = []string{

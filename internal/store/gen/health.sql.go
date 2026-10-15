@@ -15,7 +15,7 @@ const now = `-- name: Now :one
 SELECT now()::timestamptz AS server_time
 `
 
-// Health/diagnostic queries. Real domain queries land with M1 (WG-B).
+// Health/diagnostic queries.
 func (q *Queries) Now(ctx context.Context) (time.Time, error) {
 	row := q.db.QueryRow(ctx, now)
 	var server_time time.Time

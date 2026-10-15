@@ -8,10 +8,9 @@ import (
 	"time"
 )
 
-// Organization administration (DEV-091, plan core-web-split §3.2): the
-// settings the site's org admin page offers, as plain forms over the same
-// /orgs/{org}/* operations. Authorization is the API's: a member who is
-// not an admin sees the refusal the API gives.
+// Organization administration: the settings the site's org admin page offers,
+// as plain forms over the same /orgs/{org}/* operations. Authorization is the
+// API's: a member who is not an admin sees the refusal the API gives.
 
 type orgInfo struct {
 	Handle          string     `json:"handle"`
@@ -26,8 +25,7 @@ type orgInfo struct {
 }
 
 // Decommissioning reports whether the organization is in its read-only
-// hold (agentry#363): the page says so and offers nothing that would
-// change it.
+// hold: the page says so and offers nothing that would change it.
 func (o orgInfo) Decommissioning() bool { return o.State == "decommissioning" }
 
 // Active reports whether the organization is in its ordinary state: the
@@ -101,7 +99,7 @@ type webhook struct {
 }
 
 var (
-	// The roles the API accepts (agentry#360): admin and member everywhere;
+	// The roles the API accepts: admin and member everywhere;
 	// security_reviewer only inside a first-party organization, which the
 	// API decides — the page offers it and shows the refusal.
 	orgRoles      = []string{"admin", "member", "security_reviewer"}
@@ -116,9 +114,8 @@ type orgData struct {
 	Teams   []team
 	Policy  string
 	SSO     []ssoConnection
-	// The stored state each SSO form reflects on load (agentry#272): before
-	// this the textarea and both Enabled boxes rendered empty, so a save
-	// silently disabled a connection unless the box was re-ticked.
+	// The stored state each SSO form reflects on load, so a save does not
+	// silently disable a connection because a box was rendered empty.
 	SAMLMetadata string
 	SAMLEnabled  bool
 	OIDCEnabled  bool
@@ -150,7 +147,7 @@ func (h *handler) orgPage(w http.ResponseWriter, r *http.Request) {
 			status, msg = res.Status, res.detail()
 		}
 		p := page{Title: "Organization " + org, User: u, Error: msg}
-		// A suspended organization is absent to staff too (agentry#374),
+		// A suspended organization is absent to staff too,
 		// and this page cannot tell suspended from never-existed — that is
 		// the invariant — so staff are pointed at the console, where the
 		// actions live by handle.
@@ -269,7 +266,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 			res, err = c.do(http.MethodDelete, base+"/members/"+url.PathEscape(handle), nil)
 			ok = handle + " removed. Their org-bound tokens stop working."
 		case "approve":
-			// Where the seat is taken (agentry#361): a person the IdP
+			// Where the seat is taken: a person the IdP
 			// provisioned is waiting until an admin says so.
 			res, err = c.do(http.MethodPost, base+"/members/"+url.PathEscape(handle)+"/approve", map[string]string{"role": role})
 			ok = handle + " approved as " + role + "."
@@ -356,7 +353,7 @@ func (h *handler) orgAction(w http.ResponseWriter, r *http.Request) {
 		case "test":
 			// The probe answers 200 whether it passed or failed (ok=false
 			// carries the reason), so the verdict is in the body, not the
-			// status (agentry#272).
+			// status.
 			res, err = c.do(http.MethodPost, base+"/sso/connections/"+kind+"/test", nil)
 			if err == nil && res.OK() {
 				var probe struct {
@@ -536,7 +533,7 @@ func (h *handler) invitationAccept(w http.ResponseWriter, r *http.Request) {
 
 // orgsIndexData is the organizations page: the ones the caller
 // administers, and whether they may create one — a person belongs to one
-// organization at a time (D26), so the form is offered to someone who is
+// organization at a time, so the form is offered to someone who is
 // a member of none.
 type orgsIndexData struct {
 	Admin     []userOrg
@@ -546,8 +543,8 @@ type orgsIndexData struct {
 
 // orgsIndex lists the organizations the caller can administer (from
 // GET /user), each linking to its page, and offers the create form to a
-// caller who belongs to none (agentry#363: every headless registry wants
-// one; the hosted product's sign-up is the site's).
+// caller who belongs to none (every headless registry wants one; the
+// hosted product's sign-up is the site's).
 func (h *handler) orgsIndex(w http.ResponseWriter, r *http.Request) {
 	u := h.requireUser(w, r)
 	if u == nil {

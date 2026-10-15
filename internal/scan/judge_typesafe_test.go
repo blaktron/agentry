@@ -158,7 +158,7 @@ func TestTypeSafeJudgeScoresAllSixAxesFromEveryTextFile(t *testing.T) {
 			t.Fatalf("the state must carry the declared capabilities: %q", c.State.DeclaredCapabilities)
 		}
 		if c.State.RunnerGrants != judge.RunnerGrants {
-			t.Fatalf("the state must say what the runner grants every run (agentry#731): %q", c.State.RunnerGrants)
+			t.Fatalf("the state must say what the runner grants every run : %q", c.State.RunnerGrants)
 		}
 		for id, q := range c.Questions {
 			if q.Instructions != typesafeQuestions[JudgeCategory(id)] {
@@ -202,7 +202,7 @@ func TestTypeSafeJudgeThresholdsAndBorderlineResampling(t *testing.T) {
 
 func TestTypeSafeJudgeBorderlineTakesTheMaxNeverTheMean(t *testing.T) {
 	// The three samples of the borderline axis: 0.45, 0.72, 0.50. The mean
-	// is 0.56 (score 1); the max is 0.72 (score 2). PLAN §8.3 S5: disagreement
+	// is 0.56 (score 1); the max is 0.72 (score 2). Disagreement
 	// escalates, never averages away.
 	samples := []float64{0.45, 0.72, 0.50}
 	var mu sync.Mutex
@@ -300,7 +300,7 @@ func TestTypeSafeJudgeFailsClosed(t *testing.T) {
 }
 
 func TestTypeSafeJudgeRequestShapes(t *testing.T) {
-	// D3: whether the six questions travel in one request, six, or two of
+	// Whether the six questions travel in one request, six, or two of
 	// three is a fixed shape named in the hash; the by-hand corpus check
 	// compares the three. Each shape must ask every axis exactly once per
 	// chunk, score the same, and re-sample a borderline axis inside its own
@@ -361,7 +361,7 @@ func TestTypeSafeJudgeRequestShapes(t *testing.T) {
 }
 
 func TestTypeSafeJudgeKeepsTheVersionOutOfTheQuestion(t *testing.T) {
-	// §8.4.1: content is data. The manifest's capabilities ride in the
+	// Content is data. The manifest's capabilities ride in the
 	// state, bounded, and the question text is the constant whatever the
 	// manifest says — so a manifest cannot rewrite the question.
 	srv, calls := typesafeServer(t, benign)
@@ -386,8 +386,8 @@ func TestTypeSafeJudgeKeepsTheVersionOutOfTheQuestion(t *testing.T) {
 
 // TestTypeSafeJudgeIsToldTheShippedKnowledge: a release's own packs are
 // declared to the judge with where they are mounted, so an instruction
-// that reads /knowledge/<name> is not a capability the release left out
-// (agentry#594); a release that ships none reads as before.
+// that reads /knowledge/<name> is not a capability the release left out;
+// a release that ships none is read without them.
 func TestTypeSafeJudgeIsToldTheShippedKnowledge(t *testing.T) {
 	got := declaredCapabilitiesJSON([]byte(`{"capabilities":{"network":{"egress":["api.example"]}},"knowledge":{"ships":[{"name":"aws-docs"}]}}`))
 	want := `{"knowledge":{"mountedReadOnlyAt":["/knowledge/aws-docs"],"ships":["aws-docs"]},"network":{"egress":["api.example"]}}`
@@ -500,7 +500,7 @@ func TestTypeSafeJudgeIsWiredIntoTheFactory(t *testing.T) {
 	}
 }
 
-// TestS5ReadsEveryTextFile pins D2 of the plan: scripts reach the judge, not
+// TestS5ReadsEveryTextFile pins that scripts reach the judge, not
 // only prose. The `script-exfil` fixture's shell file must be among the
 // states the provider was asked about.
 func TestS5ReadsEveryTextFile(t *testing.T) {
@@ -534,14 +534,7 @@ func TestS5ReadsEveryTextFile(t *testing.T) {
 	}
 }
 
-// The rubric hash each request shape records. The six texts moved into
-// pkg/judge (agentry#608) byte for byte without moving it; it moved when
-// the state began to say what the runner grants every run and C3 to name it
-// (agentry#731, DEV-113's addendum), and when C3 began to ask what the text
-// instructs rather than what it describes (agentry#893, DEV-221), and when
-// the state began to carry the release's purpose and C3 to hold only a
-// dangerous, undeclared capability out of line with it (agentry#1044), and
-// when the grants learnt what a declared target host gives (agentry#1092). A change to anything
+// The rubric hash each request shape records. A change to anything
 // that moves a verdict shows here as a changed pin.
 func TestTypeSafeRubricHashPerShape(t *testing.T) {
 	want := map[int]string{
@@ -567,7 +560,7 @@ func TestTypeSafeJudgeWithoutAKeyFailsClosed(t *testing.T) {
 	}
 }
 
-// A finished draft's check (pkg/draftcheck, agentry#708) asks the rubric
+// A finished draft's check (pkg/draftcheck) asks the rubric
 // exactly as S5 asks it about the same package: the same requests, in the
 // same order, with the same state and questions, under the same rubric
 // hash. The check can then tell a person before Submit what S5 will flag.

@@ -14,7 +14,7 @@ import (
 )
 
 // TestGateCases runs every case of the gate's published table
-// (pkg/gatecases, agentry#776) against Evaluate. A change to the gate that
+// (pkg/gatecases) against Evaluate. A change to the gate that
 // moves an outcome fails here until the table follows, and the table is what
 // a client restating the gate's rule tests itself against.
 func TestGateCases(t *testing.T) {
@@ -66,7 +66,7 @@ func TestGateCasesCoverEveryBranch(t *testing.T) {
 	}
 }
 
-// TestGateCasesCoverTheGrid checks the cases the issue names beyond the
+// TestGateCasesCoverTheGrid checks the cases beyond the
 // branches: each severity against each maxAutoPublishSeverity, a
 // low-confidence finding that does not gate alone, both queues, and every
 // finding that says content could not be scanned.

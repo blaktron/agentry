@@ -1,4 +1,4 @@
-// Package redteam attacks the registry's own S3/S4 gate (PLAN §17.5): it
+// Package redteam attacks the registry's own S3/S4 gate: it
 // takes the golden attack corpus, rewrites each attack fixture with the
 // paraphrase and obfuscation tricks red-team harnesses use (garak/PyRIT-
 // style, without a model in the loop so a run is reproducible), scans the

@@ -15,7 +15,7 @@ import (
 	"github.com/blaktron/agentry/internal/config"
 )
 
-// The README image proxy (agentry#64) serves only URLs it signed, fetches
+// The README image proxy serves only URLs it signed, fetches
 // through the guard, and re-encodes raster images; SVG is refused.
 func TestImageProxy(t *testing.T) {
 	var pngBytes bytes.Buffer

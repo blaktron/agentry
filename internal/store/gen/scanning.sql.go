@@ -56,8 +56,8 @@ type CountIPClusterSubmissionsRow struct {
 	Versions int64 `json:"versions"`
 }
 
-// S8's cluster axis (agentry#27): how many distinct accounts and how many
-// versions share this submitting-address hash in the last 24 hours.
+// S8's cluster axis: how many distinct accounts and how many versions share
+// this submitting-address hash in the last 24 hours.
 func (q *Queries) CountIPClusterSubmissions(ctx context.Context, submitterIpHash *string) (CountIPClusterSubmissionsRow, error) {
 	row := q.db.QueryRow(ctx, countIPClusterSubmissions, submitterIpHash)
 	var i CountIPClusterSubmissionsRow
@@ -277,10 +277,10 @@ type CreateRulesetReleaseRow struct {
 	Inserted     bool      `json:"inserted"`
 }
 
-// Security pipeline persistence (M4/WG-H).
+// Security pipeline persistence.
 // `inserted` distinguishes a brand-new semver from a re-registration of one
-// we already know: a NEW ruleset semver is what triggers the §8.7 rescan
-// sweep, and every process restart re-registers the bundle it embeds.
+// we already know: a NEW ruleset semver is what triggers the rescan sweep,
+// and every process restart re-registers the bundle it embeds.
 func (q *Queries) CreateRulesetRelease(ctx context.Context, arg CreateRulesetReleaseParams) (CreateRulesetReleaseRow, error) {
 	row := q.db.QueryRow(ctx, createRulesetRelease,
 		arg.ID,
@@ -358,8 +358,8 @@ type DecideReviewItemParams struct {
 
 // A decision lands only on a pending item: a second reviewer acting on a
 // stale page gets no row and a conflict, never an overwrite of the first
-// decision (agentry#479 made that reachable: a handed-off approval leaves
-// its version in needs_review for a moment).
+// decision (a handed-off approval leaves its version in needs_review for a
+// moment).
 func (q *Queries) DecideReviewItem(ctx context.Context, arg DecideReviewItemParams) (int64, error) {
 	result, err := q.db.Exec(ctx, decideReviewItem,
 		arg.ID,
@@ -414,12 +414,11 @@ type FinishScanRunParams struct {
 
 // judge_prompt_hash is written here rather than at CreateScanRun: the run row
 // must exist before stages run (stage results reference it), and S5 only
-// reports which rubric version it used once it has run (§8.4.4).
-// The judge's token use is written the same way: known only once S5 ran,
-// NULL when the provider reported none. judge_model is re-stated at finish
-// with the value the report and the attestation carry, so a row created by
-// an earlier binary and resumed after an upgrade ends up agreeing with them
-// (agentry#321).
+// reports which rubric version it used once it has run. The judge's token use
+// is written the same way: known only once S5 ran, NULL when the provider
+// reported none. judge_model is re-stated at finish with the value the report
+// and the attestation carry, so a row created by an earlier binary and
+// resumed after an upgrade ends up agreeing with them.
 func (q *Queries) FinishScanRun(ctx context.Context, arg FinishScanRunParams) error {
 	_, err := q.db.Exec(ctx, finishScanRun,
 		arg.ID,
@@ -476,7 +475,7 @@ type GetAdvisoryPublicRow struct {
 	AgentName        string     `json:"agent_name"`
 }
 
-// Permalink (agentry#24): only advisories against public agents resolve.
+// Permalink: only advisories against public agents resolve.
 func (q *Queries) GetAdvisoryPublic(ctx context.Context, id uuid.UUID) (GetAdvisoryPublicRow, error) {
 	row := q.db.QueryRow(ctx, getAdvisoryPublic, id)
 	var i GetAdvisoryPublicRow
@@ -805,10 +804,9 @@ type HoldsReleaseParams struct {
 	Digest  *string    `json:"digest"`
 }
 
-// agentry#949: whether the caller holds a release of the agent, whatever
-// its visibility, retired or deleted state now: an account install of
-// theirs names it, or a version of it that was ever published has the
-// archive digest they present.
+// Whether the caller holds a release of the agent, whatever its visibility,
+// retired or deleted state now: an account install of theirs names it, or a
+// version of it that was ever published has the archive digest they present.
 func (q *Queries) HoldsRelease(ctx context.Context, arg HoldsReleaseParams) (bool, error) {
 	row := q.db.QueryRow(ctx, holdsRelease, arg.AgentID, arg.UserID, arg.Digest)
 	var holds bool
@@ -876,8 +874,8 @@ const latestFinishedScanRunForVersion = `-- name: LatestFinishedScanRunForVersio
 SELECT id, version_id, trigger, ruleset_release_id, policy_snapshot, judge_model, judge_prompt_hash, status, started_at, finished_at, report_digest, judge_prompt_tokens, judge_completion_tokens FROM scan_runs WHERE version_id = $1 AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1
 `
 
-// The newest run of a version that has finished, whatever its outcome: what
-// a report describes while a later run is still going (agentry#542).
+// The newest run of a version that has finished, whatever its outcome: what a
+// report describes while a later run is still going.
 func (q *Queries) LatestFinishedScanRunForVersion(ctx context.Context, versionID uuid.UUID) (ScanRun, error) {
 	row := q.db.QueryRow(ctx, latestFinishedScanRunForVersion, versionID)
 	var i ScanRun
@@ -1039,9 +1037,9 @@ type ListAdvisoriesFeedRow struct {
 	AgentName        string     `json:"agent_name"`
 }
 
-// The global feed (agentry#24): published advisories against PUBLIC agents,
-// newest first, keyset-paged on (published_at, id) so the cursor is stable
-// while new advisories arrive at the head.
+// The global feed: published advisories against PUBLIC agents, newest first,
+// keyset-paged on (published_at, id) so the cursor is stable while new
+// advisories arrive at the head.
 func (q *Queries) ListAdvisoriesFeed(ctx context.Context, arg ListAdvisoriesFeedParams) ([]ListAdvisoriesFeedRow, error) {
 	rows, err := q.db.Query(ctx, listAdvisoriesFeed, arg.Limit, arg.BeforeTime, arg.BeforeID)
 	if err != nil {
@@ -1115,10 +1113,10 @@ ORDER BY ri.decided_at
 LIMIT 100
 `
 
-// Approvals a keyless role handed to the worker (agentry#479) whose version
-// has not been published yet: marked publish_pending, still approved, the
-// version still in needs_review. The same conditions PublishApproved
-// checks; the watchdog publishes them, so a lost enqueue delays a publish.
+// Approvals a keyless role handed to the worker whose version has not been
+// published yet: marked publish_pending, still approved, the version still in
+// needs_review. The same conditions PublishApproved checks; the watchdog
+// publishes them, so a lost enqueue delays a publish.
 func (q *Queries) ListApprovedReviewsAwaitingPublish(ctx context.Context, grace pgtype.Interval) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listApprovedReviewsAwaitingPublish, grace)
 	if err != nil {
@@ -1163,7 +1161,7 @@ type ListDecidedFindingsRow struct {
 
 // The findings a person has decided on for a version, by scanner, file and
 // line: every finding of a run that finished before the version's latest
-// approved review. None for a version no person approved (agentry#781).
+// approved review. None for a version no person approved.
 func (q *Queries) ListDecidedFindings(ctx context.Context, arg ListDecidedFindingsParams) ([]ListDecidedFindingsRow, error) {
 	rows, err := q.db.Query(ctx, listDecidedFindings, arg.VersionID, arg.ExcludeRunID)
 	if err != nil {
@@ -1245,12 +1243,12 @@ type ListHeldVersionsForRedoParams struct {
 	RowLimit         int32      `json:"row_limit"`
 }
 
-// The review queue a new ruleset redoes (agentry#772): versions in
-// needs_review whose item is still pending (no person has decided), that
-// no finished run of this ruleset has judged yet. The last condition makes
-// the redo idempotent: a redelivered job, or a second start on the same
-// ruleset, finds nothing. Unscanned versions and pipeline_skip agents are
-// left out, as from the catalogue sweep.
+// The review queue a new ruleset redoes: versions in needs_review whose item
+// is still pending (no person has decided), that no finished run of this
+// ruleset has judged yet. The last condition makes the redo idempotent: a
+// redelivered job, or a second start on the same ruleset, finds nothing.
+// Unscanned versions and pipeline_skip agents are left out, as from the
+// catalogue sweep.
 func (q *Queries) ListHeldVersionsForRedo(ctx context.Context, arg ListHeldVersionsForRedoParams) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listHeldVersionsForRedo, arg.RulesetReleaseID, arg.After, arg.RowLimit)
 	if err != nil {
@@ -1344,9 +1342,9 @@ type ListPublishedVersionsForRescanRow struct {
 // version per row it acted on. The cursor is the primary key, which no
 // sweep action changes.
 // A version published without a scan, and every version of an agent whose
-// administrator has set pipeline_skip, is not rescanned (M21): a rescan
-// would put a report on a version whose verdict is "unscanned", and the
-// flag says the organization has taken the pipeline off this agent.
+// administrator has set pipeline_skip, is not rescanned: a rescan would put a
+// report on a version whose verdict is "unscanned", and the flag says the
+// organization has taken the pipeline off this agent.
 func (q *Queries) ListPublishedVersionsForRescan(ctx context.Context, arg ListPublishedVersionsForRescanParams) ([]ListPublishedVersionsForRescanRow, error) {
 	rows, err := q.db.Query(ctx, listPublishedVersionsForRescan, arg.Limit, arg.After)
 	if err != nil {
@@ -1386,11 +1384,11 @@ ORDER BY av.id
 LIMIT $1
 `
 
-// A published version with no attestation row is the shape a signing
-// failure after the transition used to leave (agentry#407); the attest
-// sweep signs each from its latest finished scan run.
-// A version published without a scan (M21) has no attestation to backfill:
-// it attests nothing, and is left out here as it is by every sweep.
+// A published version with no attestation row is the shape a signing failure
+// after the transition leaves; the attest sweep signs each from its latest
+// finished scan run.
+// A version published without a scan has no attestation to backfill: it
+// attests nothing, and is left out here as it is by every sweep.
 func (q *Queries) ListPublishedVersionsWithoutAttestation(ctx context.Context, limit int32) ([]AgentVersion, error) {
 	rows, err := q.db.Query(ctx, listPublishedVersionsWithoutAttestation, limit)
 	if err != nil {
@@ -1510,7 +1508,7 @@ const listRulesetReleases = `-- name: ListRulesetReleases :many
 SELECT id, semver, bundle_digest, notes, published_at FROM ruleset_releases ORDER BY published_at DESC LIMIT 100
 `
 
-// The staff console's release history (agentry#63), newest first.
+// The staff console's release history, newest first.
 func (q *Queries) ListRulesetReleases(ctx context.Context) ([]RulesetRelease, error) {
 	rows, err := q.db.Query(ctx, listRulesetReleases)
 	if err != nil {
@@ -1579,8 +1577,8 @@ type ListStuckScanningVersionsParams struct {
 	Limit     int32     `json:"limit"`
 }
 
-// Versions stuck mid-scan past the §7 30-minute cap. The watchdog routes
-// these to review: a scan job that died terminally must never leave a version
+// Versions stuck mid-scan past the 30-minute cap. The watchdog routes these
+// to review: a scan job that died terminally must never leave a version
 // parked in `scanning` forever.
 func (q *Queries) ListStuckScanningVersions(ctx context.Context, arg ListStuckScanningVersionsParams) ([]AgentVersion, error) {
 	rows, err := q.db.Query(ctx, listStuckScanningVersions, arg.UpdatedAt, arg.Limit)
@@ -1638,9 +1636,9 @@ type ListStuckSubmittedVersionsParams struct {
 	Limit     int32     `json:"limit"`
 }
 
-// A git-tag submission recorded by a role that hands the archive write to
-// a worker (agentry#508) stays `submitted` until the worker stores it; one
-// still there past the cap was never stored.
+// A git-tag submission recorded by a role that hands the archive write to a
+// worker stays `submitted` until the worker stores it; one still there past
+// the cap was never stored.
 func (q *Queries) ListStuckSubmittedVersions(ctx context.Context, arg ListStuckSubmittedVersionsParams) ([]AgentVersion, error) {
 	rows, err := q.db.Query(ctx, listStuckSubmittedVersions, arg.UpdatedAt, arg.Limit)
 	if err != nil {
@@ -1698,10 +1696,10 @@ type RunningScanRunForVersionParams struct {
 	RulesetReleaseID uuid.UUID `json:"ruleset_release_id"`
 }
 
-// An interrupted run is resumed only under the ruleset it was started with:
-// a run of an older ruleset carries that ruleset's findings and policy
-// snapshot, and a new ruleset's scan resuming it would judge a mix of two
-// (agentry#772). Such a run is left as it is; the new scan starts afresh.
+// An interrupted run is resumed only under the ruleset it was started with: a
+// run of an older ruleset carries that ruleset's findings and policy
+// snapshot, and a new ruleset's scan resuming it would judge a mix of two.
+// Such a run is left as it is; the new scan starts afresh.
 func (q *Queries) RunningScanRunForVersion(ctx context.Context, arg RunningScanRunForVersionParams) (ScanRun, error) {
 	row := q.db.QueryRow(ctx, runningScanRunForVersion, arg.VersionID, arg.Trigger, arg.RulesetReleaseID)
 	var i ScanRun
@@ -1769,9 +1767,9 @@ type SupersedePendingReviewItemParams struct {
 	VersionID uuid.UUID `json:"version_id"`
 }
 
-// The gate takes back a pending item whose version a new ruleset published
-// (agentry#772): no person decided, so the item is superseded, not approved.
-// No row when a reviewer decided first.
+// The gate takes back a pending item whose version a new ruleset published:
+// no person decided, so the item is superseded, not approved. No row when a
+// reviewer decided first.
 func (q *Queries) SupersedePendingReviewItem(ctx context.Context, arg SupersedePendingReviewItemParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, supersedePendingReviewItem, arg.Rationale, arg.VersionID)
 	var id uuid.UUID

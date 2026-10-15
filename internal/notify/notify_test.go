@@ -67,7 +67,7 @@ func TestNewSMTPValidatesConfig(t *testing.T) {
 	}
 }
 
-// §1.6.3: the product must never call an agent safe, secure, or verified.
+// The product must never call an agent safe, secure, or verified.
 // Notifications are where that claim would be most tempting.
 func TestNoMessageOverclaimsSafety(t *testing.T) {
 	n, sent := capture(t)
@@ -102,9 +102,9 @@ func TestNoMessageOverclaimsSafety(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// The dependency alert is a rendered email like the rest and was outside
-	// this sweep until now: it is the one that talks about a vulnerability
-	// staying installable, which is the sentence most likely to drift.
+	// The dependency alert is a rendered email like the rest: it is the one
+	// that talks about a vulnerability staying installable, which is the
+	// sentence most likely to drift.
 	if err := n.MCPDependencyAlert(ctx, MCPDependencyAlertNotice{
 		ToEmail: "user@example.test", Agent: "acme/widget", Version: "1.0.0",
 		Server: "npm:server-filesystem@1.2.3", Severity: "high",
@@ -143,7 +143,7 @@ func TestPublishNoticeSaysScannedNotSafe(t *testing.T) {
 		t.Errorf("publish notice does not qualify its claim:\n%s", body)
 	}
 	if !strings.Contains(body, "rev") || !strings.Contains(body, "test fixture") {
-		t.Errorf("reviewer rationale missing (§1.6.2 transparency):\n%s", body)
+		t.Errorf("reviewer rationale missing:\n%s", body)
 	}
 }
 
@@ -183,13 +183,12 @@ func TestQuarantineNoticeIsHonestAboutInstalledCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := (*sent)[0]
-	// §7: quarantine does not reach installed copies. Saying otherwise would
+	// Quarantine does not reach installed copies. Saying otherwise would
 	// leave an author believing a problem was contained when it was not.
 	if !strings.Contains(flatten(body), "are not reached by this change") {
 		t.Errorf("quarantine notice does not say installed copies are unaffected:\n%s", body)
 	}
-	// agentry#270: the bare fallback is the site's route shape; the old
-	// "/agents/…/report" path existed nowhere.
+	// The bare fallback is the site's route shape.
 	if !strings.Contains(body, "https://registry.example/acme/widget/versions/1.0.0") {
 		t.Errorf("report link missing or wrong:\n%s", body)
 	}
@@ -198,9 +197,9 @@ func TestQuarantineNoticeIsHonestAboutInstalledCopies(t *testing.T) {
 	}
 }
 
-// With the deployment's resolved link (Options.Links.ReportCard, the DEV-091
-// seam) the quarantine and review mails carry it, and an explicit ReportURL
-// on the notice still wins.
+// With the deployment's resolved link (Options.Links.ReportCard) the
+// quarantine and review mails carry it, and an explicit ReportURL on the
+// notice still wins.
 func TestReportCardLinkComesFromLinks(t *testing.T) {
 	n, sent := capture(t)
 	n.render.reportCard = func(agent, version string) string {
@@ -353,15 +352,16 @@ func TestVerificationFallsBackToACodeWithoutABaseURL(t *testing.T) {
 	if !strings.Contains(m.Body, "The code works once.") {
 		t.Errorf("code branch describes a link it did not send:\n%s", m.Body)
 	}
-	// The old copy promised "the address will not be used", which nothing in
-	// the server keeps: no job deletes an unconfirmed account, and a later
-	// org grant mails the address anyway. The mail states the gate instead.
+	// The mail must not promise "the address will not be used", which
+	// nothing in the server keeps: no job deletes an unconfirmed account,
+	// and a later org grant mails the address anyway. The mail states the
+	// gate instead.
 	if strings.Contains(m.Body, "will not be used") {
 		t.Errorf("verification mail promises the address goes unused:\n%s", m.Body)
 	}
 }
 
-// TestAdvisoryNamesItsRangeAndTheFooterNamesTheSettingsPage (agentry#274):
+// TestAdvisoryNamesItsRangeAndTheFooterNamesTheSettingsPage:
 // the advisory mail carries the range the advisory names, and every mail's
 // footer names the page where these mails are switched on and off.
 func TestAdvisoryNamesItsRangeAndTheFooterNamesTheSettingsPage(t *testing.T) {

@@ -25,9 +25,9 @@ type CountAuditActionsByActorSinceParams struct {
 	OccurredAt time.Time  `json:"occurred_at"`
 }
 
-// How many times an actor took one action since a moment: the record is
-// the rate limit for an act a person may take once a day (agentry#363,
-// the request for access to their domain's organization).
+// How many times an actor took one action since a moment: the record is the
+// rate limit for an act a person may take once a day (the request for access
+// to their domain's organization).
 func (q *Queries) CountAuditActionsByActorSince(ctx context.Context, arg CountAuditActionsByActorSinceParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countAuditActionsByActorSince, arg.ActorID, arg.Action, arg.OccurredAt)
 	var column_1 int64
@@ -80,7 +80,7 @@ type InsertAuditEventParams struct {
 	Detail     []byte      `json:"detail"`
 }
 
-// Append-only audit log (M1/WG-B, §12.6).
+// Append-only audit log.
 func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error {
 	_, err := q.db.Exec(ctx, insertAuditEvent,
 		arg.ID,
@@ -136,10 +136,10 @@ type ListAgentActivityRow struct {
 	Version     *string    `json:"version"`
 }
 
-// GET /agents/{ns}/{name}/activity (§9.2). Entries targeting the agent
-// itself, plus entries targeting any of its versions (joined so the version
-// string can be surfaced). public_actions, when non-empty, restricts the
-// result to the public-safe subset.
+// GET /agents/{ns}/{name}/activity. Entries targeting the agent itself, plus
+// entries targeting any of its versions (joined so the version string can be
+// surfaced). public_actions, when non-empty, restricts the result to the
+// public-safe subset.
 func (q *Queries) ListAgentActivity(ctx context.Context, arg ListAgentActivityParams) ([]ListAgentActivityRow, error) {
 	rows, err := q.db.Query(ctx, listAgentActivity,
 		arg.Limit,
@@ -286,8 +286,8 @@ type ListPlatformAuditEventsRow struct {
 	ActorHandle *string     `json:"actor_handle"`
 }
 
-// The platform-staff slice: every org plus un-scoped events (§12.6). Same
-// keyset cursor as the org view so one decoder serves both.
+// The platform-staff slice: every org plus un-scoped events. Same keyset
+// cursor as the org view so one decoder serves both.
 func (q *Queries) ListPlatformAuditEvents(ctx context.Context, arg ListPlatformAuditEventsParams) ([]ListPlatformAuditEventsRow, error) {
 	rows, err := q.db.Query(ctx, listPlatformAuditEvents,
 		arg.Limit,
@@ -360,11 +360,11 @@ type ListUserActivityRow struct {
 	Version    *string    `json:"version"`
 }
 
-// GET /user/activity (agentry#192): the audit events the caller performed —
-// sign-ins, tokens and keys, profile changes, publishes, reviews — newest
-// first, keyset-paged like the agent feed.
-// ip is NULL for an event no request built (an extension's audited action,
-// agentry#324), which the feed shows as no address rather than failing.
+// GET /user/activity: the audit events the caller performed — sign-ins,
+// tokens and keys, profile changes, publishes, reviews — newest first,
+// keyset-paged like the agent feed. ip is NULL for an event no request built
+// (an extension's audited action), which the feed shows as no address rather
+// than failing.
 func (q *Queries) ListUserActivity(ctx context.Context, arg ListUserActivityParams) ([]ListUserActivityRow, error) {
 	rows, err := q.db.Query(ctx, listUserActivity,
 		arg.Limit,
@@ -405,9 +405,9 @@ const pruneAuditPartitions = `-- name: PruneAuditPartitions :one
 SELECT audit_prune_partitions($1::date)::int AS dropped
 `
 
-// §4.3 retention: drop whole monthly partitions older than the cutoff rather
-// than DELETE rows (the append-only trigger refuses row deletes, and dropping
-// a partition is O(1)). Returns the number of partitions dropped.
+// Retention: drop whole monthly partitions older than the cutoff rather than
+// DELETE rows (the append-only trigger refuses row deletes, and dropping a
+// partition is O(1)). Returns the number of partitions dropped.
 func (q *Queries) PruneAuditPartitions(ctx context.Context, dollar_1 pgtype.Date) (int32, error) {
 	row := q.db.QueryRow(ctx, pruneAuditPartitions, dollar_1)
 	var dropped int32

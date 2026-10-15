@@ -10,17 +10,17 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// The §8.7 results cache, keyed (digest, scanner, ruleset).
+// The results cache, keyed (digest, scanner, ruleset).
 //
 // A ruleset bump re-runs the deterministic scanners over every published
 // version. Archives are content-addressed, so the same bytes under the same
-// scanner and the same rule bundle can only produce the same findings —
-// "skip unchanged rule↔digest pairs" is exactly that observation. Without it
-// a sweep re-does the entire catalogue's work on every bundle release, and
-// the cost of shipping a rule grows with the size of the registry.
+// scanner and the same rule bundle can only produce the same findings, and
+// a sweep can skip unchanged rule/digest pairs. Without the cache a sweep
+// re-does the entire catalogue's work on every bundle release, and the
+// cost of shipping a rule grows with the size of the registry.
 
 // cacheable reports whether a stage's result is a pure function of the
-// archive bytes and the rule bundle (§8.7: S2–S4, S6–S8).
+// archive bytes and the rule bundle (S2–S4, S6–S8).
 func cacheable(scanner string) bool {
 	for _, s := range CacheableStages() {
 		if s == scanner {

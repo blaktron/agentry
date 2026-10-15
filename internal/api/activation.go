@@ -17,7 +17,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Activation (plan unactivated-accounts.md, agentry#861). A self-enrolled
+// Activation. A self-enrolled
 // directory account reaches the registry before its address is confirmed:
 // the directory writes it active and its token says email_verified false.
 // The registry mails the link that confirms it, at the sign-in that creates
@@ -25,16 +25,15 @@ import (
 // marks the address confirmed here. The directory reads it and then says
 // email_verified true. Until then the account is read-only (unactivated.go).
 const (
-	// activationTTL is how long a link works (D7): a day, since nothing
-	// waits on it any more.
+	// activationTTL is how long a link works: a day.
 	activationTTL = 24 * time.Hour
 	// activationInterval is the least time between two links to one
-	// account (D6), counted from the newest one made, whoever made it.
+	// account, counted from the newest one made, whoever made it.
 	activationInterval = 5 * time.Minute
 	// activationsPerDay caps the links one account can be sent in a day,
-	// on top of D6's interval: anyone can sign up with another person's
+	// on top of the interval: anyone can sign up with another person's
 	// address, and without a cap the resend would let them mail that
-	// person every five minutes for ever (DEV-197).
+	// person every five minutes for ever.
 	activationsPerDay = 10
 )
 
@@ -174,7 +173,7 @@ func (s *Server) signedInDirectoryLinks(ctx context.Context, userID uuid.UUID, e
 }
 
 // directoryPresence tells whether a directory account a link names still
-// exists (D10).
+// exists.
 type directoryPresence interface {
 	// AccountGone reports that the account is no longer in the directory.
 	// False when it cannot tell.
@@ -209,7 +208,7 @@ func (a *authentikEraser) AccountGone(ctx context.Context, link directoryLink) (
 }
 
 // unactivatedSuperseded reports that an unconfirmed registry account's
-// every directory account is gone (D10): the directory removed it for a
+// every directory account is gone: the directory removed it for a
 // provider that proved the address. Only where unactivated accounts are
 // read-only, so the account can have made nothing, and never an
 // organization's last admin. An account with no directory sign-in, a
@@ -240,7 +239,7 @@ func (s *Server) unactivatedSuperseded(ctx context.Context, userID uuid.UUID, em
 	return true
 }
 
-// eraseSuperseded erases an unactivated account D10 found superseded, as
+// eraseSuperseded erases an unactivated account found superseded, as
 // the system, so the verified sign-in in hand can take its address. The
 // directory half is already gone.
 func (s *Server) eraseSuperseded(r *http.Request, userID uuid.UUID, email, provider string) error {

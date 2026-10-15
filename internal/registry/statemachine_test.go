@@ -13,11 +13,11 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// TestStateMachineEdges pins the §7 transition table.
+// TestStateMachineEdges pins the transition table.
 func TestStateMachineEdges(t *testing.T) {
 	allowed := []struct{ from, to Status }{
 		{StatusSubmitted, StatusScanning},
-		{StatusSubmitted, StatusPublished}, // unscanned, a private org agent's only (M21)
+		{StatusSubmitted, StatusPublished}, // unscanned, a private org agent's only
 		{StatusScanning, StatusPublished},
 		{StatusScanning, StatusNeedsReview},
 		{StatusScanning, StatusRejected},
@@ -48,16 +48,16 @@ func TestStateMachineEdges(t *testing.T) {
 	}
 }
 
-// TestNoPathToPublishedSkipsTheGateForAPublicAgent is the §7 property as
-// M21 qualifies it (plan organization-subscriptions §4, D16): every edge
-// into published is the gate's — from scanning, needs_review or
+// TestNoPathToPublishedSkipsTheGateForAPublicAgent is the "no path to
+// published skips the gate" property, qualified for unscanned publishing:
+// every edge into published is the gate's — from scanning, needs_review or
 // quarantined — except one, submitted → published, which skipsTheGate
 // names and TransitionInTx opens only to a version marked skipped. The
 // marking is SubmitVersion's, for an agent whose administrator set the
 // flag, which the API refuses on a public agent and in a personal
 // namespace, and the private → public change is refused while the flag
 // is set or a version published unscanned stands (the api package's
-// tests). So for a public agent the property reads as it always did.
+// tests). So for a public agent the property is unqualified.
 func TestNoPathToPublishedSkipsTheGateForAPublicAgent(t *testing.T) {
 	gated := map[Status]bool{StatusScanning: true, StatusNeedsReview: true, StatusQuarantined: true}
 	skipping := 0
@@ -106,8 +106,8 @@ func (w *failingWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// TestStageArchiveDoesNotLeakOnWriteFailure pins B-18: when the destination
-// write fails, the BuildArchive goroutine is parked in pw.Write and used to
+// TestStageArchiveDoesNotLeakOnWriteFailure pins the failure path: when the destination
+// write fails, the BuildArchive goroutine is parked in pw.Write and would
 // stay there forever — one leaked goroutine (holding the whole archive
 // pipeline) per failed publish. stageArchive must close the reader with an
 // error and wait for the builder to exit.

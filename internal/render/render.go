@@ -1,8 +1,8 @@
-// Package render turns untrusted author markdown into safe HTML (§10.3,
-// D-11). Hostile READMEs are a primary XSS vector (T-07), so this package is
-// the only path by which user content reaches a browser, and it is
-// deliberately strict: goldmark with raw HTML disabled, then a bluemonday
-// allowlist, then invisible/bidi Unicode rendered as visible placeholders.
+// Package render turns untrusted author markdown into safe HTML.
+// Hostile READMEs are a primary XSS vector, so this package is the only
+// path by which user content reaches a browser, and it is deliberately
+// strict: goldmark with raw HTML disabled, then a bluemonday allowlist,
+// then invisible/bidi Unicode rendered as visible placeholders.
 package render
 
 import (
@@ -26,7 +26,7 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-// MaxInputBytes caps rendering input (§19 instruction-file quota is 1 MB;
+// MaxInputBytes caps rendering input (the instruction-file quota is 1 MB;
 // give README the same ceiling).
 const MaxInputBytes = 1 << 20
 
@@ -36,16 +36,16 @@ type Renderer struct {
 	policy *bluemonday.Policy
 }
 
-// New builds the renderer with the §10.3 policy.
 // Options tunes a Renderer. The zero value is the strict default: images
 // become placeholders.
 type Options struct {
 	// ImageProxy maps an absolute http(s) image URL to a same-origin proxy
-	// URL (agentry#64, §10.3 "images proxied"). nil keeps the placeholder;
-	// a returned false keeps the placeholder for that URL.
+	// URL. nil keeps the
+	// placeholder; a returned false keeps the placeholder for that URL.
 	ImageProxy func(dest string) (string, bool)
 }
 
+// New builds the renderer with the strict default policy.
 func New() *Renderer { return NewWithOptions(Options{}) }
 
 // NewWithOptions builds a Renderer with the given options.
@@ -54,7 +54,7 @@ func NewWithOptions(opts Options) *Renderer {
 		goldmark.WithExtensions(
 			extension.GFM, // tables, strikethrough, task lists, autolinks
 			extension.Footnote,
-			// Server-side syntax highlighting (§10.3, DEV-049.2 → agentry#49):
+			// Server-side syntax highlighting:
 			// chroma lexes fenced code and emits <span class="…"> tokens with
 			// CLASSES, never inline styles, so the output stays inside the
 			// page's style-src-elem/attr policy and the sanitizer below can
@@ -77,11 +77,11 @@ func NewWithOptions(opts Options) *Renderer {
 			parser.WithASTTransformers(util.Prioritized(demoteHeadings{}, 100)),
 		),
 		goldmark.WithRendererOptions(
-			// Raw HTML never passes through (§10.3: "no raw HTML pass-through
-			// ever"). Unsafe mode is simply not enabled; goldmark escapes it.
+			// Raw HTML never passes through. Unsafe mode is simply not
+			// enabled; goldmark escapes it.
 			goldmarkhtml.WithXHTML(),
-			// Images become a visible placeholder (agentry#29, DEV-049):
-			// the site's CSP (and the /ui/ pages') refuses every image source but its own, so
+			// Images become a visible placeholder: the site's CSP (and
+			// the /ui/ pages') refuses every image source but its own, so
 			// an <img> would render as nothing and the reader would not
 			// know an image was there.
 			renderer.WithNodeRenderers(util.Prioritized(imagePlaceholder{proxy: opts.ImageProxy}, 100)),
@@ -99,20 +99,19 @@ func NewWithOptions(opts Options) *Renderer {
 		"table", "thead", "tbody", "tfoot", "tr", "th", "td",
 		"section", "span",
 	)
-	// Links: http(s) and mailto only, with rel hardening (§10.3).
+	// Links: http(s) and mailto only, with rel hardening.
 	p.AllowAttrs("href").OnElements("a")
 	p.AllowURLSchemes("http", "https", "mailto")
 	p.RequireNoFollowOnLinks(true)
 	p.RequireNoReferrerOnLinks(true)
 	p.AddTargetBlankToFullyQualifiedLinks(true)
 	p.AllowElements("a")
-	// Images: none. §10.3's camo-style image proxy is NOT built (DEV-049),
-	// and the site's `img-src 'self' data:` CSP would refuse an
+	// Images: the site's `img-src 'self' data:` CSP would refuse an
 	// author's image anyway, which closes the tracking-pixel and
-	// third-party-request hole §10.3 is about. Rather than an <img> that
-	// renders as nothing, the markdown renderer above emits a visible
-	// placeholder naming the alt text and the source (agentry#29); no
-	// <img> element reaches the output at all.
+	// third-party-request hole. Rather than an <img> that renders as
+	// nothing, the markdown renderer above emits a visible placeholder
+	// naming the alt text and the source; only a proxied same-origin
+	// image (below) reaches the output as an <img> element.
 	// Footnote/heading anchors emitted by goldmark itself.
 	p.AllowAttrs("id").Matching(bluemonday.SpaceSeparatedTokens).OnElements("li", "section", "sup", "h1", "h2", "h3", "h4", "h5", "h6")
 	p.AllowAttrs("class").Matching(bluemonday.SpaceSeparatedTokens).OnElements("span", "section", "sup", "li")
@@ -123,7 +122,7 @@ func NewWithOptions(opts Options) *Renderer {
 	p.AllowAttrs("class").Matching(regexp.MustCompile(`^language-[A-Za-z0-9+#._-]{1,32}$`)).OnElements("code")
 	// Tables' alignment attribute is the one layout hint we keep.
 	p.AllowAttrs("align").Matching(bluemonday.Paragraph).OnElements("th", "td")
-	// Proxied images only (agentry#64): an absolute same-origin
+	// Proxied images only: an absolute same-origin
 	// <origin>/api/v1/img/<sig>/<ref> source (bluemonday admits URL
 	// attributes by scheme, so the renderer signs absolute URLs), plain alt
 	// text, lazy loading. Any other <img> is dropped by
@@ -132,7 +131,7 @@ func NewWithOptions(opts Options) *Renderer {
 	p.AllowAttrs("src").Matching(regexp.MustCompile(`^https?://[^/\s"'<>]+/api/v1/img/[A-Za-z0-9_-]{16,64}/[A-Za-z0-9_-]+$`)).OnElements("img")
 	p.AllowAttrs("alt").Matching(bluemonday.Paragraph).OnElements("img")
 	p.AllowAttrs("loading").Matching(regexp.MustCompile(`^lazy$`)).OnElements("img")
-	// NO style/class from users (§10.3) beyond the internal classes above;
+	// NO style/class from users beyond the internal classes above;
 	// bluemonday drops everything not explicitly allowed.
 
 	return &Renderer{md: md, policy: p}
@@ -159,11 +158,11 @@ func (r *Renderer) sanitize(html string) string {
 	return RevealInvisible(addUGC(r.policy.Sanitize(html)))
 }
 
-// relRe finds the rel attribute bluemonday emits on links. The sanitizer
-// sets nofollow/noreferrer/noopener itself but has no switch for "ugc",
-// the §10.3 hint that a link is user-generated content (DEV-039,
-// agentry#34); this post-pass adds it. Attribute values in sanitized output
-// are double-quoted and contain no quotes, so the pattern is exact.
+// relRe finds the rel attribute bluemonday emits on links. The sanitizer sets
+// nofollow/noreferrer/noopener itself but has no switch for "ugc", the hint
+// that a link is user-generated content; this post-pass adds it. Attribute
+// values in sanitized output are double-quoted and contain no quotes, so the
+// pattern is exact.
 var relRe = regexp.MustCompile(`(<a\b[^>]*\brel=")([^"]*)(")`)
 
 func addUGC(html string) string {
@@ -196,7 +195,7 @@ func (demoteHeadings) Transform(doc *ast.Document, _ text.Reader, _ parser.Conte
 }
 
 // invisibleRanges are the codepoint classes that must never render as
-// nothing in user content (§10.3, the GlassWorm lesson): zero-width and
+// nothing in user content (the GlassWorm lesson): zero-width and
 // formatting characters, bidi controls, the Unicode tag block, and
 // private-use areas.
 func isInvisible(r rune) bool {
@@ -268,7 +267,7 @@ func (r *Renderer) PlainText(src []byte) string {
 func htmlUnescape(s string) string { return htmlpkg.UnescapeString(s) }
 
 // imagePlaceholder renders markdown images as a visible note instead of an
-// <img> the browser would refuse (agentry#29). The alt text and the source
+// <img> the browser would refuse. The alt text and the source
 // are shown, HTML-escaped, so the reader can tell what was there and where
 // it lives; the placeholder is a <span class="img-placeholder">, which the
 // sanitizer's allowlist admits and the site (or the /ui/ stylesheet) styles.
@@ -291,7 +290,7 @@ func (p imagePlaceholder) render(w util.BufWriter, source []byte, node ast.Node,
 	alt := strings.TrimSpace(string(imageAltText(source, img)))
 	dest := strings.TrimSpace(string(img.Destination))
 	// Absolute http(s) images go through the same-origin proxy when one is
-	// configured (agentry#64); everything else stays a visible placeholder.
+	// configured; everything else stays a visible placeholder.
 	if p.proxy != nil && (strings.HasPrefix(dest, "https://") || strings.HasPrefix(dest, "http://")) {
 		if src, ok := p.proxy(dest); ok {
 			_, _ = w.WriteString(`<img src="` + htmlpkg.EscapeString(src) + `" alt="` + htmlpkg.EscapeString(alt) + `" loading="lazy">`)

@@ -87,7 +87,7 @@ func TestGuard_DialBlocksNonPublic(t *testing.T) {
 
 // TestGuard_DialPinsTheResolvedAddress exercises the resolve-then-check-then-pin
 // half of DialContext against a resolver the test controls: the "DNS rebinding
-// defeated" claim of ARCHITECTURE §9 is that a hostname's answer is checked
+// defeated" claim is that a hostname's answer is checked
 // per candidate and the dial goes to the checked literal, never back through
 // DNS. A public-looking name that resolves to a private address is refused
 // before any connection; padding the answer with one public address does not

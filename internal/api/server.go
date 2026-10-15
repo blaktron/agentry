@@ -1,6 +1,6 @@
-// Package api is the HTTP layer (§2.1 L2/L3 seam): generated OpenAPI server
+// Package api is the HTTP layer (L2/L3 seam): generated OpenAPI server
 // stubs, middleware, health endpoints, and well-known documents. Route
-// authorization declarations live in authz_routes.go per §12.2.
+// authorization declarations live in authz_routes.go.
 package api
 
 import (
@@ -52,19 +52,19 @@ type Server struct {
 	auditW   *audit.Writer
 	notifier notify.Notifier
 	// paths is where this server sends browsers (a site in front of it, or
-	// its own /ui/ pages — DEV-091).
+	// its own /ui/ pages).
 	paths webPaths
 	// dirEraser deletes the sign-in account in the directory service on
-	// erasure (agentry#20); nil when auth.idpAdminURL is unset.
+	// erasure; nil when auth.idpAdminURL is unset.
 	dirEraser directoryEraser
-	// unactivatedReadOnly makes an unactivated account read-only
-	// (agentry#861): where the directory owns credentials (externalOnly),
+	// unactivatedReadOnly makes an unactivated account read-only:
+	// where the directory owns credentials (externalOnly),
 	// a self-enrolled account reaches the registry before its address is
 	// confirmed. A native deployment keeps its narrower gates on an
 	// unverified address (no publishing, agents or organizations).
 	unactivatedReadOnly bool
 	// dirGroups writes the directory's mirror of platform staff
-	// (staff_mirror.go, agentry#598); nil unless auth.idpStaffMirrorGroup is
+	// (staff_mirror.go); nil unless auth.idpStaffMirrorGroup is
 	// set, which needs the admin URL and token.
 	dirGroups directoryGroups
 	// dirEraseAttempts overrides the directory erasure retry budget
@@ -78,40 +78,40 @@ type Server struct {
 	blobs            registry.BlobStore
 	pipeline         *scan.Pipeline
 	renderer         *render.Renderer
-	// knowledge is the store of accounts' knowledge packs (agentry#593);
+	// knowledge is the store of accounts' knowledge packs;
 	// nil without a database, and off (every route 503) with no wrapper.
 	knowledge *knowledge.Service
-	// voice is the store of people's Writing Voices (agentry#809); nil
+	// voice is the store of people's Writing Voices; nil
 	// without a database, and off (every route 503) with no key wrapper or
 	// no Jev judge to review with. voiceAdmit is the extension that admits
 	// a review a route asks for.
 	voice      *voice.Service
 	voiceAdmit voiceAdmission
 	// modelInput is the model-input routes' scanner, search provider and
-	// the extension that admits hosted jobs (agentry#608).
+	// the extension that admits hosted jobs.
 	modelInput modelInputState
-	// Enterprise (M6/WG-J): webhook fan-out and the DNS resolver for domain
+	// Enterprise: webhook fan-out and the DNS resolver for domain
 	// verification.
 	webhooks *webhook.Dispatcher
 	resolver dnsx.Resolver
 	// samlReplay and samlRequests are the sets every API replica must
 	// see alike: the assertions consumed, the logins started. In the
-	// database whenever there is one; in memory for a server without
-	// (agentry#414). SetSAMLReplayCache and SetSAMLRequestTracker take
+	// database whenever there is one; in memory for a server without.
+	// SetSAMLReplayCache and SetSAMLRequestTracker take
 	// another implementation.
 	samlReplay   samlsp.ReplayCache
 	samlRequests samlsp.RequestTracker
 	// totpConsumeTimeout bounds the write that records a 2FA challenge as
-	// consumed (agentry#457); SetTOTPConsumeTimeout shortens it in a test.
+	// consumed; SetTOTPConsumeTimeout shortens it in a test.
 	totpConsumeTimeout time.Duration
 	// jobs is the enqueue-side queue client (webhook deliveries, audit
 	// exports). The worker role drains it; nil without a database.
 	jobs queue.Client
-	// ents resolves the §19 quotas (§14.2 seam); coreEnts is the
+	// ents resolves the quotas (seam); coreEnts is the
 	// config-driven one, kept for an extension's resolver to wrap.
 	ents     entitlements.Resolver
 	coreEnts entitlements.Resolver
-	// mx is the §16.2 instrument set; nil is a working no-op.
+	// mx is the instrument set; nil is a working no-op.
 	mx *metrics.Metrics
 	// oidcHTTPClient, when set, is the HTTP client OIDC discovery/JWKS/token
 	// calls use (tests point it at an httptest IdP). nil = default client.
@@ -120,8 +120,7 @@ type Server struct {
 	// requests obey when no oidcHTTPClient is injected: the production
 	// guard, loopback allowed in dev mode so a local IdP works. An
 	// organization's issuer is an address any org admin can name, so it is
-	// fetched like a webhook, never with http.DefaultClient (security
-	// review 2026-09-20 §5.8.1).
+	// fetched like a webhook, never with http.DefaultClient.
 	oidcGuard  webhook.Guard
 	oidcEgress *http.Client
 	// imgHTTPClient overrides the image proxy's guarded client (tests).
@@ -132,7 +131,7 @@ type Server struct {
 	extensions []extensionMount
 	eventHooks []func(ctx context.Context, ev Event)
 	// accountErasers delete an extension's rows about an account inside
-	// the erasure and data-clear transactions (agentry#638).
+	// the erasure and data-clear transactions.
 	accountErasers []namedEraser
 	// mounted is every pattern the recorder was given, in registration
 	// order; empty until NewHandler builds the handler.
@@ -141,7 +140,7 @@ type Server struct {
 
 // MountedRoutes returns what the public mux was actually given — the root
 // mounts and the generated surface — which is what the completeness gate
-// enumerates (§12.2, agentry#415).
+// enumerates.
 func (s *Server) MountedRoutes() []string { return append([]string(nil), s.mounted...) }
 
 // Option adjusts how New assembles a server for its role.
@@ -149,7 +148,7 @@ type Option func(*options)
 
 type options struct{ keyless bool }
 
-// WithoutSigningKey builds a server that holds no signing key (agentry#479):
+// WithoutSigningKey builds a server that holds no signing key:
 // the api and git roles, which never sign. New neither loads the key nor
 // registers it; the pipeline hands an approval's publish to the worker, the
 // ruleset attestation and the key set are read from what the key holder
@@ -175,7 +174,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		panic(serr)
 	}
 	aud := audit.NewWriter(log)
-	// §12.6 continuous NDJSON archive (see internal/audit/stream.go).
+	// continuous NDJSON archive (see internal/audit/stream.go).
 	auditStream := audit.NewStream(cfg.Audit.StreamKind, cfg.Audit.StreamDir,
 		cfg.Audit.StreamS3Bucket, cfg.Audit.StreamFlush, log)
 	aud.SetStream(auditStream)
@@ -207,19 +206,19 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 	}
 	srv.coreEnts = srv.ents
 	if fs, ok := auditStream.(*audit.FileStream); ok {
-		// A dropped archive record is a deliberate fail-open (DEV-020);
-		// count it so the choice stays visible (agentry#33). Metrics are
+		// A dropped archive record is a deliberate fail-open;
+		// count it so the choice stays visible. Metrics are
 		// attached later via SetMetrics; RecordFailOpen is nil-safe.
 		fs.OnDrop = func() { srv.mx.RecordFailOpen(context.Background(), metrics.FailOpenAuditStreamDrop) }
 	}
-	// Enterprise defaults, set regardless of database presence (§12.4, §9.3).
+	// Enterprise defaults, set regardless of database presence.
 	srv.resolver = dnsx.NewSystemResolver()
 	srv.samlReplay = samlsp.NewMemoryReplayCache()
 	srv.samlRequests = samlsp.NewMemoryRequestTracker()
 	srv.totpConsumeTimeout = defaultTOTPConsumeTimeout
 	srv.SetOIDCEgressGuard(webhook.Guard{AllowLoopback: cfg.DevMode})
 	srv.imgKey = newImgProxyKey(cfg.Auth.SealingKey)
-	// The model-input routes (agentry#608) need no database: the scanner
+	// The model-input routes need no database: the scanner
 	// asks the deployment's judge when it is Jev, and the search route
 	// brokers the configured provider. Either off leaves its route 503; a
 	// configuration naming one that cannot be built refuses startup.
@@ -241,11 +240,11 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 	if st != nil {
 		// With a database the SAML sets live there, so a second replica
 		// refuses what the first consumed and completes what the first
-		// started (agentry#414).
+		// started.
 		srv.samlReplay = samlsp.NewStoreReplayCache(st.Queries(), srv.log)
 		srv.samlRequests = samlsp.NewStoreRequestTracker(st.Queries(), srv.log)
 		srv.reg = registry.NewService(st, aud)
-		// Webhook fan-out (§9.3): enqueue deliveries onto the Postgres queue;
+		// Webhook fan-out: enqueue deliveries onto the Postgres queue;
 		// the worker role runs the delivery handler. Wired before the blobs
 		// early-return so the event sink is always active.
 		jobs, jerr := queue.Open(cfg.Queue.Driver, cfg.Queue.Workers, st, log)
@@ -256,8 +255,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 			jobs = queue.NewRiverClient(st, log)
 		}
 		srv.jobs = jobs
-		// A fork's copy is a worker's, which holds the repositories
-		// (agentry#943).
+		// A fork's copy is a worker's, which holds the repositories.
 		srv.reg.SetForkHandOff(forkQueue{q: srv.jobs})
 		srv.webhooks = webhook.NewDispatcher(webhook.Deps{
 			Store: st, Sealer: sealer, Queue: srv.jobs, Log: log,
@@ -268,25 +266,23 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		srv.reg.SetEntitlements(srv.ents)
 		srv.reg.SetStaffOrg(cfg.Auth.StaffOrg, cfg.Auth.StaffDomain)
 		// Archive storage. Both kinds are wired here, so the pipeline below is
-		// assembled identically either way — the s3 kind used to fall through
-		// with a nil store and take the whole scan pipeline down with it,
-		// which meant the shipped SaaS default could not scan anything.
+		// assembled identically either way: a nil store would take the whole
+		// scan pipeline down with it.
 		blobs, berr := newBlobStore(cfg)
 		if berr != nil {
 			panic(berr) // startup-time config failure, never mid-request
 		}
 		srv.blobs = blobs
 		srv.reg.SetBlobStore(blobs)
-		// M4 security pipeline (§8): the orchestrator + gate replace the M3
-		// dev stub. Ruleset embedded (§8.3); judge + signer per config.
+		// Security pipeline: the orchestrator and gate. Ruleset embedded; judge + signer per config.
 		bundle, err := ruleset.Load()
 		if err != nil {
 			panic(err)
 		}
-		// Startup-fatal on purpose: the previous code kept a locally generated
-		// uuid when registration failed, and that uuid names no
-		// ruleset_releases row — so every CreateScanRun afterwards failed its
-		// foreign key, silently, until someone restarted the process.
+		// Startup-fatal on purpose: a locally generated uuid kept after a
+		// failed registration would name no ruleset_releases row, so every
+		// CreateScanRun afterwards would fail its foreign key, silently,
+		// until someone restarted the process.
 		rulesetReg, rerr := scan.RegisterRuleset(context.Background(), st, bundle)
 		if rerr != nil {
 			panic(rerr)
@@ -302,7 +298,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 			panic(jerr)
 		}
 		log.Info("scan: judge configured", "provider", judge.Name(), "model", judge.ModelID())
-		// Only the key holder builds a signer (agentry#479). A keyless role
+		// Only the key holder builds a signer. A keyless role
 		// starts with no key file present; the worker, or `all`, refuses to
 		// start without one (NewSigner fails on a missing or bad key).
 		var signer scan.Signer
@@ -321,7 +317,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 			}
 			srv.signer = signer
 			// The signer's public key is recorded so a rotation orphans
-			// nothing (§8.8, agentry#350): retired keys stay advertised, and
+			// nothing: retired keys stay advertised, and
 			// a key some attestation lacks triggers the re-attestation sweep
 			// once the pipeline below exists to run it.
 			var kerr error
@@ -348,18 +344,18 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		})
 		// S7's vulnerability database and the scanned-server registry go on
 		// the pipeline, which hands them to the orchestrator (S7) and keeps
-		// them for the daily sweep (agentry#177); setting them on the
+		// them for the daily sweep; setting them on the
 		// orchestrator alone left the sweep with no database.
 		srv.pipeline.SetMCPScanning(osvClient(cfg.Scan, log), scan.NewStoreMCPScanCache(st))
 		srv.pipeline.SetPackageRegistries(registriesClient(cfg.Scan, log))
 		srv.reg.SetPipeline(srv.pipeline)
-		// The knowledge store (agentry#593) scans with the same
+		// The knowledge store scans with the same
 		// orchestrator, rules and judge as a version.
 		srv.knowledge = knowledge.NewService(knowledge.Deps{
 			Store: st, Blobs: srv.blobs, Wrapper: knowledgeWrapper(cfg, st, log), Scanner: orch, Jobs: srv.jobs,
 			Entitlements: func() entitlements.Resolver { return srv.ents }, Log: log,
 		})
-		// The Writing Voice (agentry#809) seals with the knowledge store's
+		// The Writing Voice seals with the knowledge store's
 		// key wrapper, an extension's once one is set, and reviews with the
 		// rule stages and Jev's voice set.
 		vd := voice.Deps{Store: st, Rules: orch, Jobs: srv.jobs, Log: log,
@@ -368,13 +364,13 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 			vd.Judge = vj
 		}
 		srv.voice = voice.NewService(vd)
-		// §8.6 knobs that reject at submission time, and the §12.1/§19
+		// Knobs that reject at submission time, and the
 		// 2FA-before-public-publish gate. Both sit on the registry so the
 		// git-tag auto-publish path is covered as well as the API.
 		srv.reg.SetPolicyGate(srv.pipeline)
 		srv.reg.SetPublicPublish2FA(publicPublish2FAEnabled(cfg))
 		srv.reg.SetIPClusterSecret(ipClusterSecret(cfg))
-		// README images route through the same-origin proxy (agentry#64);
+		// README images route through the same-origin proxy;
 		// the renderer needs the server's signing key, so it is built here.
 		srv.renderer = render.NewWithOptions(render.Options{ImageProxy: srv.imageProxyURL})
 		if cfg.Auth.IdPAdminURL != "" && cfg.Auth.IdPAdminToken != "" {
@@ -389,7 +385,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		}
 		srv.reg.SetLogger(log)
 		// A ruleset semver we have never seen means the catalogue was judged
-		// by older rules (§8.7).
+		// by older rules.
 		scan.EnqueueNewRulesetWork(context.Background(), srv.jobs, log, rulesetReg)
 		if rulesetReg.New {
 			// …and that the red team has not measured the new rules yet.
@@ -432,7 +428,7 @@ func (s *Server) Close() error {
 	return errors.Join(errs...)
 }
 
-// newBlobStore builds the configured archive store (§13.4: local FS for
+// newBlobStore builds the configured archive store (local FS for
 // self-host and dev, S3 on SaaS).
 func newBlobStore(cfg config.Config) (registry.BlobStore, error) {
 	switch cfg.Storage.Kind {
@@ -462,7 +458,7 @@ func smtpOptions(cfg config.Config) notify.SMTPOptions {
 	}
 }
 
-// entitlements returns the §14.2 resolver, defaulting to the shipped §19
+// entitlements returns the resolver, defaulting to the shipped
 // limits so a partially wired server still enforces quotas.
 func (s *Server) entitlements() entitlements.Resolver {
 	if s.ents == nil {
@@ -472,8 +468,7 @@ func (s *Server) entitlements() entitlements.Resolver {
 }
 
 // CoreEntitlements is the resolver built from configuration, whatever an
-// extension later replaced it with: what an extension's resolver wraps
-// (agentry#326).
+// extension later replaced it with: what an extension's resolver wraps.
 func (s *Server) CoreEntitlements() entitlements.Resolver {
 	if s.coreEnts == nil {
 		return entitlements.Default()
@@ -498,10 +493,10 @@ func (s *Server) SetMCPScanning(client scan.OSVClient) {
 }
 
 // MCPSweepReady reports whether the daily MCP sweep would consult a
-// vulnerability database (the wiring check for agentry#177's sweep).
+// vulnerability database (the wiring check for the sweep).
 func (s *Server) MCPSweepReady() bool { return s.pipeline != nil && s.pipeline.MCPScanningEnabled() }
 
-// SetMetrics wires the §16.2 instrument set. nil leaves every record a no-op.
+// SetMetrics wires the instrument set. nil leaves every record a no-op.
 func (s *Server) SetMetrics(m *metrics.Metrics) {
 	s.mx = m
 	if s.pipeline != nil {
@@ -539,8 +534,7 @@ func (s *Server) Pipeline() *scan.Pipeline { return s.pipeline }
 
 // HandOffScans makes a submitted version the worker's to scan: the registry
 // enqueues scan.version on the sandbox queue instead of running the
-// pipeline in the process that received the submission (ARCHITECTURE §4,
-// PLAN §8.2, agentry#507). The api, git and all roles call it; untrusted
+// pipeline in the process that received the submission. The api, git and all roles call it; untrusted
 // content is then scanned, gated and signed only where a worker drains the
 // sandbox queue. A server with no pipeline or no queue keeps what it has.
 func (s *Server) HandOffScans() {
@@ -553,8 +547,8 @@ func (s *Server) HandOffScans() {
 // DeferTagArchives makes a git-tag submission's archive write a worker's:
 // the registry records the version and enqueues registry.store_tag_archive
 // on the sandbox queue, and the worker, which holds the git volume and the
-// object-store credential, rebuilds, checks and stores the archive
-// (agentry#508). The git role calls it, because the chart gives the git
+// object-store credential, rebuilds, checks and stores the archive.
+// The git role calls it, because the chart gives the git
 // pods no store credential; `all` holds the store and writes it itself.
 func (s *Server) DeferTagArchives() {
 	if s.jobs == nil {
@@ -590,7 +584,7 @@ func (f forkQueue) CopyFork(ctx context.Context, args registry.CopyForkArgs) err
 func (s *Server) Reg() *registry.Service { return s.reg }
 
 // SetResolver overrides the DNS resolver (domain verification; tests inject a
-// fake resolver, §12.4).
+// fake resolver,).
 func (s *Server) SetResolver(r dnsx.Resolver) { s.resolver = r }
 
 // SetWebhookDispatcher overrides the webhook dispatcher (tests inject a
@@ -628,14 +622,14 @@ func (s *Server) SetOIDCEgressGuard(g webhook.Guard) {
 func (s *Server) SetImageProxyClient(c *http.Client) { s.imgHTTPClient = c }
 
 // RegisterQueueHandlers wires this server's async job handlers onto a queue
-// worker (the worker role, and tests): webhook delivery (§9.3) and audit
-// export (§12.6).
+// worker (the worker role, and tests): webhook delivery and audit
+// export.
 func (s *Server) RegisterQueueHandlers(q queue.Client) {
 	if s.webhooks != nil {
 		s.webhooks.RegisterHandlers(q)
 	}
 	q.Register(jobAuditExport, s.runAuditExport)
-	// A git role's tag submission, stored and entered here (agentry#508);
+	// A git role's tag submission, stored and entered here;
 	// the scan it leads to is enqueued like any other submission's.
 	q.Register(registry.JobStoreTagArchive, func(ctx context.Context, job queue.Job) error {
 		var args registry.StoreTagArchiveArgs
@@ -644,7 +638,7 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 		}
 		return s.reg.StoreTagArchive(ctx, args, scan.QueuePipeline{Q: q})
 	})
-	// A fork's repository copy and first submission (agentry#943), as the
+	// A fork's repository copy and first submission, as the
 	// account that forked stands now.
 	q.Register(registry.JobCopyFork, func(ctx context.Context, job queue.Job) error {
 		var args registry.CopyForkArgs
@@ -658,22 +652,22 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 		}
 		return s.reg.CopyFork(ctx, args, p, scan.QueuePipeline{Q: q})
 	})
-	s.registerAuditRetention(q)     // §4.3 hot-table retention (audit_retention.go)
-	s.registerRedTeam(q)            // §17.5 report-only red-team job (handlers_redteam.go)
-	s.registerOrgLifecycle(q)       // the decommission sweep (handlers_org_lifecycle.go, agentry#363)
-	s.registerFoldIn(q)             // the fold-in sweep and the pending members digest (handlers_fold_in.go, agentry#364)
-	s.registerDirectoryErasure(q)   // erasure's directory half, retried (directory_erasure.go, agentry#499)
-	s.registerStaffMirror(q)        // the directory's mirror of platform staff (staff_mirror.go, agentry#598)
-	s.registerTrustedDeviceSweep(q) // remembered browsers past their expiry (trusted_device_sweep.go, agentry#464)
+	s.registerAuditRetention(q)     // hot-table retention (audit_retention.go)
+	s.registerRedTeam(q)            // report-only red-team job (handlers_redteam.go)
+	s.registerOrgLifecycle(q)       // the decommission sweep (handlers_org_lifecycle.go)
+	s.registerFoldIn(q)             // the fold-in sweep and the pending members digest (handlers_fold_in.go)
+	s.registerDirectoryErasure(q)   // erasure's directory half, retried (directory_erasure.go)
+	s.registerStaffMirror(q)        // the directory's mirror of platform staff (staff_mirror.go)
+	s.registerTrustedDeviceSweep(q) // remembered browsers past their expiry (trusted_device_sweep.go)
 	if s.knowledge != nil {
-		s.knowledge.RegisterHandlers(q) // the knowledge pack scan (internal/knowledge, agentry#593)
+		s.knowledge.RegisterHandlers(q) // the knowledge pack scan (internal/knowledge)
 	}
 	if s.voice != nil {
-		s.voice.RegisterHandlers(q) // the Writing Voice's review and its sweep (internal/voice, agentry#809)
+		s.voice.RegisterHandlers(q) // the Writing Voice's review and its sweep (internal/voice)
 	}
 }
 
-// emitAgentEvent is the registry event sink (§9.3): it resolves the agent's
+// emitAgentEvent is the registry event sink: it resolves the agent's
 // owning org and fans the transition out to that org's webhooks. Personal
 // namespaces (no org) and fan-out errors are swallowed — webhooks never affect
 // the state change that triggered them.
@@ -715,7 +709,7 @@ func (s *Server) requireDB(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// GetMeta implements GET /api/v1/meta (§9.2): server version + feature flags.
+// GetMeta implements GET /api/v1/meta: server version + feature flags.
 func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 	features := map[string]bool{
 		"redis":   s.cfg.Redis.URL != "",
@@ -723,18 +717,18 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		"judge":   s.cfg.Judge.Provider != "none",
 		"s3":      s.cfg.Storage.Kind == "s3",
 		// externalOnly tells front ends and clients that accounts live in
-		// a directory service (DEV-057): the native credential surface is
-		// gone, so do not offer password or TOTP forms (agentry#21).
+		// a directory service: the native credential surface is
+		// gone, so do not offer password or TOTP forms.
 		"externalOnly": s.cfg.Auth.ExternalOnly,
-		// publicPublish2FA says whether the §19 second-factor gate on public
+		// publicPublish2FA says whether the second-factor gate on public
 		// publishing is enforced here (publish_gate.go: off in dev mode, and
 		// off under externalOnly unless requireIdpMFA), so a front end states
-		// the requirement only where the server holds it (agentry#269).
+		// the requirement only where the server holds it.
 		"publicPublish2FA": publicPublish2FAEnabled(s.cfg),
-		// knowledge says the store of knowledge packs is on (agentry#593):
+		// knowledge says the store of knowledge packs is on:
 		// a key to wrap with, from the deployment or an extension.
 		"knowledge": s.knowledge.Configured(),
-		// voice says the store of Writing Voices is on (agentry#809): a key
+		// voice says the store of Writing Voices is on: a key
 		// to seal with and a Jev judge to review with.
 		"voice": s.voice.Configured(),
 	}
@@ -743,7 +737,7 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		ApiVersion: "v1",
 		Features:   features,
 	}
-	// brand and ui (DEV-091): what this deployment calls itself and whether
+	// brand and ui: what this deployment calls itself and whether
 	// it serves its own browser pages, so a client can name it and open
 	// the device-authorize page wherever it lives.
 	brand := BrandInfo{Name: s.cfg.DisplayName()}
@@ -773,8 +767,7 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 }
 
 // Readyz is the readiness handler for a role that assembles its own mux —
-// the git role (pkg/extension), whose Deployment probes /readyz like the api's
-// and got a 404 until it was mounted there (agentry#450).
+// the git role (pkg/extension), whose Deployment probes /readyz like the api's.
 func (s *Server) Readyz(w http.ResponseWriter, r *http.Request) { s.readyz(w, r) }
 
 // healthz is liveness (process up); readyz is readiness (dependencies).
@@ -809,7 +802,7 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"ready": ready, "deps": deps})
 }
 
-// wellKnownRegistry serves /.well-known/agentry/registry.json (§9.2):
+// wellKnownRegistry serves /.well-known/agentry/registry.json:
 // API root, version, feature discovery for CLIs pointed at this host.
 func (s *Server) wellKnownRegistry(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -819,10 +812,10 @@ func (s *Server) wellKnownRegistry(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// wellKnownSigningKeys serves /.well-known/agentry/signing-keys.json (§8.8):
+// wellKnownSigningKeys serves /.well-known/agentry/signing-keys.json:
 // the verification key set clients pin on first use (TOFU) and use to verify
 // DSSE attestations offline. Rotation = overlapping validity windows, plus
-// the registry's own record of every key it has signed with (agentry#350).
+// the registry's own record of every key it has signed with.
 func (s *Server) wellKnownSigningKeys(w http.ResponseWriter, r *http.Request) {
 	out := struct {
 		Keys []signingKey `json:"keys"`
@@ -832,13 +825,13 @@ func (s *Server) wellKnownSigningKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 // signingKey is one entry in signing-keys.json. notBefore/notAfter are what
-// make §8.8's "rotation = overlapping validity windows" representable: without
+// make 's "rotation = overlapping validity windows" representable: without
 // them the document can only ever describe one key as current, and an operator
 // rotating a key has no way to say "both of these are legitimate, here is
 // when each applies". Omitted when unset, so an unbounded key is silent rather
 // than claiming a window it does not have.
 //
-// status is the registry's own record (agentry#350): `active` for the key
+// status is the registry's own record: `active` for the key
 // that signs today, `retired` for a key the registry signed with before and
 // no longer does — still listed, with the date, so an attestation it signed
 // verifies and a client can say "signed by a retired key". A verification-only
@@ -885,7 +878,7 @@ func (s *Server) signingKeySet(ctx context.Context) []signingKey {
 		})
 		listed[s.signer.KeyID()] = true
 	} else if s.st != nil {
-		// A keyless role (agentry#479) advertises the key the key holder
+		// A keyless role advertises the key the key holder
 		// registered: the same public key, read from the record.
 		if k, err := s.q().GetActiveSigningKey(ctx); err == nil {
 			keys = append(keys, signingKey{
@@ -980,19 +973,19 @@ func NewHandler(s *Server) http.Handler {
 func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	// Every pattern that reaches the public mux goes through the recorder,
 	// which is what the completeness gate enumerates: what the mux serves,
-	// not what the OpenAPI spec says should (§12.2, agentry#415).
+	// not what the OpenAPI spec says should.
 	mux := newRecordingMux()
 	if mountGit != nil {
 		mountGit(mux)
 	}
 
-	MountFunc(mux, "GET /api/v1/img/{sig}/{ref}", s.serveImageProxy) // agentry#64
+	MountFunc(mux, "GET /api/v1/img/{sig}/{ref}", s.serveImageProxy)
 	MountFunc(mux, "GET /healthz", s.healthz)
 	MountFunc(mux, "GET /readyz", s.readyz)
 	MountFunc(mux, "GET /.well-known/agentry/registry.json", s.wellKnownRegistry)
 	MountFunc(mux, "GET /.well-known/agentry/signing-keys.json", s.wellKnownSigningKeys)
 
-	// Prometheus exposition (D-25). Mounted outside /api/v1 alongside the
+	// Prometheus exposition. Mounted outside /api/v1 alongside the
 	// health endpoints and, like them, unauthenticated: a scraper is
 	// infrastructure, not a principal, and the RBAC chokepoint has no way to
 	// express it. The numbers are operational (request rates, queue depth,
@@ -1001,28 +994,28 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	// public listener at the proxy. docs/ops/deployment.md says so too.
 	Mount(mux, "GET /metrics", s.metricsHandler())
 
-	// SCIM 2.0 data plane (§12.5). Mounted outside the generated /api/v1
+	// SCIM 2.0 data plane. Mounted outside the generated /api/v1
 	// handler: it uses its own base path, application/scim+json media type, and
 	// authenticates by SCIM bearer token (not the RBAC chokepoint), so it is
 	// deliberately not part of the OpenAPI surface (see handlers_scim.go).
 	s.mountSCIM(mux)
 
-	// Org SSO landing (§12.4 endpoint list): `https://…/sso/{org}` starts the
+	// Org SSO landing (endpoint list): `https://…/sso/{org}` starts the
 	// org's configured SAML/OIDC login. Root-mounted for the same reason as
 	// SCIM — it is a browser destination, not part of the JSON API surface.
 	s.mountSSOLanding(mux)
 
-	// The directory's trust check (agentry#670): the directory's sign-in
+	// The directory's trust check: the directory's sign-in
 	// asks whether a browser is remembered. A root mount outside /api/ that
 	// no edge routes to the registry, gated by its own secret.
 	s.mountDirectoryTrust(mux)
 
-	// Extension routes (DEV-091, extensions.go): /api/v1/x/<name>/ behind
+	// Extension routes (extensions.go): /api/v1/x/<name>/ behind
 	// the principal middleware, registered before the generated routes so a
 	// clash with a generated path is a start-up panic, never a shadow.
 	s.mountExtensions(mux)
 
-	// Generated OpenAPI routes under /api/v1 (spec-first, D-09).
+	// Generated OpenAPI routes under /api/v1 (spec-first).
 	apiHandler := HandlerWithOptions(s, StdHTTPServerOptions{
 		BaseURL:    "/api/v1",
 		BaseRouter: mux,
@@ -1033,7 +1026,7 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	})
 	s.mounted = mux.recorded()
 
-	// The server's own browser surface (DEV-091, internal/ui): the device
+	// The server's own browser surface (internal/ui): the device
 	// authorize page, sign-in, the account basics and the operator pages,
 	// served at /ui/ and acting through the same handler chain in-process.
 	// Off by config, or down to the authorize page when a site fronts this
@@ -1072,7 +1065,7 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 
 // WrapMiddleware puts h behind the always-on middleware stack — request id,
 // panic recovery, security headers, the access line, RED metrics — with this
-// server's logger, metrics and trusted-proxy depth. The split `git` role
+// server's logger, metrics and trusted-proxy depth. The `git` role
 // mounts its bare mux through it so a git deployment logs like an api one.
 func (s *Server) WrapMiddleware(h http.Handler) http.Handler {
 	return withMiddleware(h, s.log, s.Metrics, newProxyTrust(s.cfg.HTTP), s.cfg.HTTP.ProxyRequestID)
@@ -1085,9 +1078,9 @@ func (s *Server) uiBrand() ui.Brand {
 
 // socialProviders lists the configured individual-login providers in the
 // order the sign-in page offers them: the directory first when there is
-// one (it is THE way in under externalOnly, agentry#164), then the rest.
+// one (it is THE way in under externalOnly), then the rest.
 // "Configured" is socialProviderConfig's, the start route's own check, as
-// /meta's list is (agentry#694), so the page offers no button that 404s.
+// /meta's list is, so the page offers no button that 404s.
 func (s *Server) socialProviders() []ui.Provider {
 	all := []struct{ id, label string }{
 		{"authentik", "your " + s.cfg.DisplayName() + " account"},
@@ -1115,7 +1108,7 @@ func (s *Server) metricsHandler() http.Handler {
 }
 
 // judgeProviderName picks the judge provider: config value, or "static" in
-// dev so the pipeline is exercisable without a live model (DEV-007).
+// dev so the pipeline is exercisable without a live model.
 func judgeProviderName(cfg config.Config) string {
 	p := cfg.Judge.Provider
 	if p == "" {
@@ -1127,7 +1120,7 @@ func judgeProviderName(cfg config.Config) string {
 	return p
 }
 
-// writeJSON writes a JSON 2xx response with no-store cache semantics (§9.1).
+// writeJSON writes a JSON 2xx response with no-store cache semantics.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -1159,7 +1152,7 @@ func readJSONOptional(r *http.Request, dst any) error {
 	return nil
 }
 
-// ipClusterSecret derives the S8 IP-cluster hash key (agentry#27) from the
+// ipClusterSecret derives the S8 IP-cluster hash key from the
 // sealing key — the one secret every deployment already has. Dev mode with
 // no key uses a fixed value, like the sealer: the signal still works on a
 // dev stack and the docs say it is not a secret there.
@@ -1173,10 +1166,10 @@ func ipClusterSecret(cfg config.Config) []byte {
 	return nil
 }
 
-// externalScanTools builds the §8.3 external-scanner set from config
-// (agentry#40). A configured tool that cannot be resolved is a startup
+// externalScanTools builds the external-scanner set from config.
+// A configured tool that cannot be resolved is a startup
 // error: an operator who asked for gitleaks must not get silent native-only.
-// osvClient builds S7's vulnerability database client (agentry#177):
+// osvClient builds S7's vulnerability database client:
 // api.osv.dev unless the operator points elsewhere, offline when told so.
 func osvClient(c config.Scan, log *slog.Logger) scan.OSVClient {
 	u := strings.TrimSpace(c.OSVURL)
@@ -1192,7 +1185,7 @@ func osvClient(c config.Scan, log *slog.Logger) scan.OSVClient {
 }
 
 // registriesClient builds what S7 asks whether a declared server's pinned
-// version is published (agentry#1036): the public npm registry and PyPI
+// version is published: the public npm registry and PyPI
 // unless the operator points elsewhere, not asked when told so.
 func registriesClient(c config.Scan, log *slog.Logger) scan.PackageRegistries {
 	npm := strings.TrimSpace(c.NPMRegistryURL)

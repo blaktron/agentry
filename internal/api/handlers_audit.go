@@ -48,7 +48,7 @@ func auditRowToAPI(row auditRow) AuditEvent {
 	return e
 }
 
-// ListOrgAudit implements GET /orgs/{org}/audit (admin+, §12.6).
+// ListOrgAudit implements GET /orgs/{org}/audit (admin+).
 func (s *Server) ListOrgAudit(w http.ResponseWriter, r *http.Request, org OrgHandle, params ListOrgAuditParams) {
 	if !s.requireDB(w, r) {
 		return
@@ -99,8 +99,8 @@ func (s *Server) ListOrgAudit(w http.ResponseWriter, r *http.Request, org OrgHan
 	writeJSON(w, http.StatusOK, page)
 }
 
-// ListPlatformAudit implements GET /platform/audit (§12.6): platform staff
-// see every org's slice. §12.6 requires that this access is itself audited,
+// ListPlatformAudit implements GET /platform/audit: platform staff
+// see every org's slice. Platform access is itself audited,
 // so each call writes one audit.platform_read event naming the filters used —
 // reading everyone's log is exactly the action an auditor wants a record of.
 func (s *Server) ListPlatformAudit(w http.ResponseWriter, r *http.Request, params ListPlatformAuditParams) {
@@ -142,8 +142,7 @@ func (s *Server) ListPlatformAudit(w http.ResponseWriter, r *http.Request, param
 	}
 
 	// Audit the staff read BEFORE responding: a read we cannot record is a
-	// read we do not serve (§12.6 "platform staff see all — access itself
-	// audited").
+	// read we do not serve.
 	e := auditEvent(r, audit.ActionAuditPlatformRead)
 	e.TargetKind = "audit_events"
 	e.Detail = detail

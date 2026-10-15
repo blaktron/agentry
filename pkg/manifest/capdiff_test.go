@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// The widening rule the CLI and the desktop apply on an update (§11), now
-// the registry's too (agentry#448): an account install re-asks for the
+// The widening rule the CLI and the desktop apply on an update, and the
+// registry applies to an account install: an install re-asks for the
 // capability acceptance only when the new release's contract widened
 // against the one the person accepted.
 func TestDiffCapabilitiesWidening(t *testing.T) {

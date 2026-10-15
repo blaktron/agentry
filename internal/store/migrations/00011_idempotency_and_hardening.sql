@@ -1,6 +1,6 @@
 -- +goose Up
--- Three additive changes (never edit an applied migration — §4.3):
---   1. idempotency_keys: the §9.1 "mutating POSTs accept Idempotency-Key"
+-- Three additive changes (never edit an applied migration):
+--   1. idempotency_keys: the "mutating POSTs accept Idempotency-Key"
 --      replay store.
 --   2. A stricter agent_versions immutability trigger: the 00004 version let a
 --      row be rolled BACK to 'submitted' and then rewritten, which defeats the
@@ -14,7 +14,7 @@
 -- One row per (user, endpoint, key). request_hash pins the key to the body it
 -- was first used with, so a client reusing a key for a DIFFERENT request gets
 -- a conflict rather than the wrong cached answer. The stored response is
--- replayed verbatim on a retry (§9.1).
+-- replayed verbatim on a retry.
 CREATE TABLE idempotency_keys (
   key text NOT NULL,
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -74,9 +74,9 @@ END;
 $$ LANGUAGE plpgsql;
 -- +goose StatementEnd
 
--- Truncating the partitioned parent cascades to every partition, so the parent
--- trigger is the main gate; truncating a partition DIRECTLY bypasses it, hence
--- the per-partition triggers below and in audit_ensure_partition.
+-- Truncating the partitioned parent cascades to every partition, so the
+-- parent trigger is the main gate; truncating a partition DIRECTLY bypasses
+-- it, hence the per-partition triggers below and in audit_ensure_partition.
 CREATE TRIGGER audit_events_no_truncate
   BEFORE TRUNCATE ON audit_events
   FOR EACH STATEMENT EXECUTE FUNCTION audit_events_block_truncate();
@@ -121,8 +121,8 @@ $$ LANGUAGE plpgsql;
 -- ============================ Audit retention ============================
 
 -- +goose StatementBegin
--- §4.3: 400 days hot, then archive (the NDJSON stream already has the data,
--- §12.6). Rows cannot be DELETEd — the append-only trigger refuses — so
+-- 400 days hot, then archive (the NDJSON audit export already has the data).
+-- Rows cannot be DELETEd — the append-only trigger refuses — so
 -- retention drops whole monthly partitions, which is also O(1). The name
 -- pattern guard keeps audit_events_default (the safety-net partition, which
 -- has no bounded range) out of scope.
@@ -151,12 +151,12 @@ $$ LANGUAGE plpgsql;
 
 -- ============================ Supporting indexes ============================
 
--- GET /agents/{ns}/{name}/activity reads the audit log by target (§9.2).
+-- GET /agents/{ns}/{name}/activity reads the audit log by target.
 CREATE INDEX audit_events_target_idx ON audit_events (target_kind, target_id, occurred_at DESC);
 
--- Social identities (§12.1) carry no sso_connection_id, so the
--- UNIQUE (sso_connection_id, subject) constraint from 00002 does not
--- constrain them (NULLs are distinct). One subject, one identity.
+-- Social identities carry no sso_connection_id, so the UNIQUE
+-- (sso_connection_id, subject) constraint from 00002 does not constrain them
+-- (NULLs are distinct). One subject, one identity.
 CREATE UNIQUE INDEX identities_social_subject_idx
   ON identities (subject) WHERE sso_connection_id IS NULL;
 

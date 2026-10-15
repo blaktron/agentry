@@ -1,7 +1,6 @@
 -- +goose Up
 -- Security pipeline: scan runs, findings, review queue, attestations,
--- policies, ruleset releases, advisories, and the durable job queue
--- (PLAN §4.2, §7, §8; M4/WG-H).
+-- policies, ruleset releases, advisories, and the durable job queue.
 
 CREATE TABLE ruleset_releases (
   id uuid PRIMARY KEY,
@@ -37,7 +36,7 @@ CREATE TABLE scan_runs (
 );
 CREATE INDEX scan_runs_version_idx ON scan_runs(version_id, started_at DESC);
 
--- Stage results, keyed for idempotency (§8.2): (scan_run_id, scanner).
+-- Stage results, keyed for idempotency: (scan_run_id, scanner).
 CREATE TABLE scan_stage_results (
   scan_run_id uuid NOT NULL REFERENCES scan_runs(id) ON DELETE CASCADE,
   scanner text NOT NULL,
@@ -89,7 +88,7 @@ CREATE TABLE attestations (
   dsse_envelope jsonb NOT NULL,
   key_id text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (version_id)                        -- signed exactly once (§7)
+  UNIQUE (version_id)                        -- signed exactly once
 );
 
 CREATE TABLE advisories (
@@ -103,9 +102,8 @@ CREATE TABLE advisories (
 );
 CREATE INDEX advisories_agent_idx ON advisories(agent_id);
 
--- Durable job queue (D-05). A minimal SKIP LOCKED queue behind the
--- internal/queue interface; River slots in later without schema churn for
--- callers (see DEVIATIONS DEV-005). Kept deliberately small.
+-- Durable job queue. A minimal SKIP LOCKED queue behind the internal/queue
+-- interface. Kept deliberately small.
 CREATE TABLE jobs (
   id uuid PRIMARY KEY,
   kind text NOT NULL,

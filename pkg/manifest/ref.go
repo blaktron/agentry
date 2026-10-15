@@ -6,7 +6,7 @@ import (
 )
 
 // Ref is a parsed "ns/name[@range]" reference — the form the CLI, the
-// resolve API (§9.4), and install snippets all speak.
+// resolve API, and install snippets all speak.
 type Ref struct {
 	Namespace string
 	Name      string

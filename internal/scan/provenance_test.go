@@ -1,7 +1,6 @@
 package scan_test
 
-// S9's verified-revision path (plan drafter-revisions.md §6, R5;
-// agentry#794): a version that claims a hosted draft is read with the
+// S9's verified-revision path: a version that claims a hosted draft is read with the
 // benefit of the doubt only when the extension's DraftProvenance, asked by
 // the registry with the registry's own reading of the version, holds a
 // matching record. The fake below is the record an enterprise draft keeps:
@@ -494,7 +493,7 @@ func TestARescanKeepsAProvedRevisionWithoutAskingAgain(t *testing.T) {
 }
 
 // TestTheSourceMovesOnlyOnceAndOnlyWhenProved: the immutability trigger
-// (§4.3) admits one edge more, cli-upload → drafter-revision while
+// admits one edge more, cli-upload → drafter-revision while
 // scanning with the baseline, and nothing else: not on a decided version,
 // not a second time, not without a claim, and never the claim itself.
 func TestTheSourceMovesOnlyOnceAndOnlyWhenProved(t *testing.T) {
@@ -534,7 +533,7 @@ func TestTheSourceMovesOnlyOnceAndOnlyWhenProved(t *testing.T) {
 // TestTheProvenanceAnswerCarriesNoTier: the question DraftProvenance is
 // asked holds the run, the account, the agent, the baseline and the proof,
 // and nothing about what the account pays; the answer is a yes or a no.
-// The verdict never reads a tier or a balance (ARCHITECTURE.md §9).
+// The verdict never reads a tier or a balance.
 func TestTheProvenanceAnswerCarriesNoTier(t *testing.T) {
 	forbidden := []string{"tier", "balance", "credit", "plan", "entitle", "payer", "subscription", "price"}
 	ty := reflect.TypeOf(scan.DraftClaim{})

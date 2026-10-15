@@ -19,7 +19,7 @@ import (
 // agentToAPI maps a resolved agent row to the wire shape. maintain toggles
 // maintainer-only fields.
 // gitSSHURL is the SSH clone URL when the deployment serves the SSH
-// transport (§6.1 Q7, agentry#70); "" otherwise.
+// transport; "" otherwise.
 func (s *Server) gitSSHURL(ns, name string) string {
 	base := strings.TrimSuffix(s.cfg.Git.SSHPublicURL, "/")
 	if base == "" {
@@ -59,13 +59,13 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 }
 
 // agentForAction resolves ns/name and authorizes act for p — the one path
-// every agent route takes, and the extensions' read seam (AgentReadable,
-// agentry#381). registry.ErrNotFound for an agent that does not exist or
+// every agent route takes, and the extensions' read seam (AgentReadable).
+// registry.ErrNotFound for an agent that does not exist or
 // that p may not read: a caller without read on a private agent —
 // anonymous, or signed in without a role on it — gets the answer a
 // missing name gets, before any 401 (which would itself say the name
-// exists), so a private agent's existence is not discoverable by probing
-// (§6.4; agentry#313, operator rule 2026-09-13). auth.ErrUnauthorized or
+// exists), so a private agent's existence is not discoverable by probing.
+// auth.ErrUnauthorized or
 // auth.ErrForbidden for a reader the act refuses; a *registry.OrgGateError
 // for the owning organization's state (suspended: absent to everyone; in
 // its decommission hold: read-only), the agent beside it so the caller
@@ -120,7 +120,7 @@ func (s *Server) agentAccess(w http.ResponseWriter, r *http.Request, ns, name st
 	case errors.Is(err, auth.ErrForbidden):
 		problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
 	case s.orgGateProblem(w, r, a.Namespace, err):
-		// The owning organization's state (agentry#363), written.
+		// The owning organization's state, written.
 	default:
 		s.log.ErrorContext(r.Context(), "agent access", "agent", ns+"/"+name, "err", err)
 		problemInternal(w, r)
@@ -128,7 +128,7 @@ func (s *Server) agentAccess(w http.ResponseWriter, r *http.Request, ns, name st
 	return false
 }
 
-// CreateAgent implements POST /agents (§9.2).
+// CreateAgent implements POST /agents.
 func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActAgentCreate, uuid.Nil) {
 		return
@@ -184,7 +184,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	// §9.3 catalog (agentry#56); org namespaces only — personal namespaces
+	// Webhook events go to org namespaces only — personal namespaces
 	// have no webhook endpoints.
 	s.emitAgentEvent(r.Context(), a.ID, webhook.EventAgentCreated, map[string]any{
 		"namespace": a.Namespace, "name": a.Name, "modes": a.Modes, "visibility": a.Visibility,
@@ -203,14 +203,14 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	p := principalFrom(r.Context())
 	// Private agents appear only for callers the by-name route would let
 	// read them by namespace alone — the owning user, or an active member
-	// of the owning org, who since agentry#362 holds publish on its agents
-	// — so a listing never names an agent its reader could not open
-	// (agentry#313). A pending member holds nothing and sees nothing. Per-
+	// of the owning org, who holds publish on its agents
+	// — so a listing never names an agent its reader could not open.
+	// A pending member holds nothing and sees nothing. Per-
 	// agent grant holders are not in the listing either: conservative.
 	includePrivate := false
 	if h, err := s.q().GetHandle(r.Context(), params.Namespace); err == nil {
 		// A suspended or erased organization's namespace is absent to
-		// everyone (agentry#363); the query says the same on its own.
+		// everyone; the query says the same on its own.
 		if h.Kind == "org" {
 			if err := s.reg.OrgGate(r.Context(), h.ID, auth.ActPublicRead); err != nil {
 				if !s.orgGateProblem(w, r, params.Namespace, err) {
@@ -266,7 +266,7 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 			Installs30d:     &installs,
 			LastSubmittedAt: row.LastSubmittedAt,
 		}
-		// Forks (agentry#943): a fork's origin and copy state, a public
+		// Forks: a fork's origin and copy state, a public
 		// agent's count of forks — a count only.
 		if row.ForkState != nil {
 			st := AgentForkState(*row.ForkState)
@@ -292,7 +292,7 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 }
 
 // nameHeld reports whether ns/name is a deleted agent's tombstone, whose
-// name is never used again (agentry#942, D4) — what a create that collided
+// name is never used again — what a create that collided
 // on the name collided with. A lookup that fails says nothing is held, and
 // the create's own conflict answers.
 func (s *Server) nameHeld(ctx context.Context, ns, name string) bool {
@@ -313,14 +313,14 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, ns Namespace, 
 	res := auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role}
 	maintain := auth.CheckAgent(p, res, auth.ActAgentMaintain) == nil
 	out := s.agentToAPI(a, maintain)
-	// Whether the caller may add a version (agentry#875): the desktop's
+	// Whether the caller may add a version: the desktop's
 	// sign-in token carries agent:publish and never org:admin, so it reads
 	// this where the site reads the maintainer's settings to offer Edit.
 	if auth.CheckAgent(p, res, auth.ActAgentPublish) == nil {
 		yes := true
 		out.CanPublish = &yes
 	}
-	// Open dependency alerts (agentry#177): public on the page, because a
+	// Open dependency alerts: public on the page, because a
 	// consumer deciding whether to install needs them as much as the author.
 	alerts := s.dependencyAlertsForAgent(r, a.ID, a.Namespace+"/"+a.Name)
 	out.DependencyAlerts = &alerts
@@ -329,7 +329,7 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, ns Namespace, 
 }
 
 // visibilityOnly reports whether an update body sets visibility and no
-// other field (agentry#993). It compares the whole body, so a field added
+// other field. It compares the whole body, so a field added
 // to it later counts as a setting, and one that cannot be compared stops
 // the build.
 func visibilityOnly(req UpdateAgentJSONBody) bool {
@@ -349,7 +349,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	// one owner action, visibility, is also open where maintain is not: a
 	// body that sets it alone is decided again as ActAgentManage, the
 	// administrators' rung with a token's agent:manage or org:admin, which
-	// is how the sign-in grant changes it (agentry#993). Every caller
+	// is how the sign-in grant changes it. Every caller
 	// maintain admits is decided as before.
 	p := principalFrom(r.Context())
 	a, role, err := s.agentForAction(r.Context(), p, ns, name, auth.ActAgentMaintain)
@@ -362,7 +362,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	// Two fields in this body are not settings. Changing who can see an
 	// agent, and allowing its history to be rewritten, are the
 	// namespace's administrators' to decide — not everyone who may
-	// release it (D19, agentry#362). An organization's members hold
+	// release it. An organization's members hold
 	// publish, and the line the admin/member split draws is that a member
 	// adds to the organization's agents while the acts that expose or
 	// destroy what is already there stay with the admins. (Yanking a
@@ -379,13 +379,13 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		return
 	}
 	// A retired agent comes back by Restore, which puts back the
-	// visibility it had (agentry#942); making it public here would leave
+	// visibility it had; making it public here would leave
 	// it public and retired at once. Decided again under the row lock.
 	if req.Visibility != nil && string(*req.Visibility) == "public" && a.RetiredAt != nil {
 		problemAgentRetired(w, r)
 		return
 	}
-	// A fork is private for good (agentry#943, D9), whoever asks; the
+	// A fork is private for good, whoever asks; the
 	// database's CHECK is the wall behind this.
 	if req.Visibility != nil && string(*req.Visibility) == "public" && a.ForkedFromAgentID != nil {
 		problemForkStaysPrivate(w, r)
@@ -395,7 +395,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		problemForbidden(w, r, "Allowing force pushes rewrites history everyone else is working from, so it needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
-	// Taking the agent off the pipeline (M21, D16) is the administrators'
+	// Taking the agent off the pipeline is the administrators'
 	// too; whether the agent may be — private, an organization's, the tier
 	// including it — and whether it may become public are decided below,
 	// under the agent's row lock, beside the write.
@@ -403,12 +403,12 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		problemForbidden(w, r, "Taking this QuickAgent off the pipeline needs the "+a.Namespace+" namespace's administrators.")
 		return
 	}
-	// Built-in (agentry#737, DEV-174) is the platform's to say, not the
+	// Built-in is the platform's to say, not the
 	// namespace's: it labels the agent as part of the application, so no
 	// author, and no administrator of the namespace, may set or clear it —
 	// only platform staff, and marking it only in a first-party
-	// organization, where the built-ins are published (agentry-cli#470,
-	// DR-50). Anyone else's value is never written, even when it matches
+	// organization, where the built-ins are published. Anyone else's
+	// value is never written, even when it matches
 	// the row as read here: under a staff change landing between this read
 	// and the write it would undo that change.
 	staff := principalFrom(r.Context()).PlatformStaff
@@ -450,9 +450,8 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if req.Visibility != nil {
 		v := string(*req.Visibility)
 		// Turning an agent private holds one more private agent, which the
-		// namespace's tier may cap (plan subscription-tiers §5.3): counted
-		// inside the transaction below, under the namespace's lock
-		// (agentry#411).
+		// namespace's tier may cap: counted
+		// inside the transaction below, under the namespace's lock.
 		params.Visibility = &v
 		detail["visibility"] = v
 	}
@@ -476,7 +475,7 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 		problemValidation(w, r, "Send at least one field to update.")
 		return
 	}
-	// The two states DEV-115 rules out — the flag on a public agent, and
+	// The two states that are ruled out — the flag on a public agent, and
 	// a public agent holding a version admitted unscanned — are decided
 	// on the row as it is under the lock, not as it was read above, so
 	// two requests cannot each pass on a stale row; the table's CHECK is

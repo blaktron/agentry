@@ -23,7 +23,7 @@ import (
 	"github.com/blaktron/agentry/internal/webhook"
 )
 
-// The extension seam (DEV-091, pkg/extension): a closed build mounts routes
+// The extension seam (pkg/extension): a closed build mounts routes
 // under /api/v1/x/<name>/ behind the same principal middleware, hears the
 // events the core commits, and shows up in GET /meta. Nothing here runs in
 // the core build unless something registers.
@@ -81,7 +81,7 @@ func (s *Server) AddEventHook(h func(ctx context.Context, ev Event)) {
 // audit action that records it.
 type AccountErasureKind string
 
-// The two account clears (agentry#638).
+// The two account clears.
 const (
 	AccountErased      = AccountErasureKind(audit.ActionUserDelete)
 	AccountDataCleared = AccountErasureKind(audit.ActionUserDataClear)
@@ -124,7 +124,7 @@ type namedEraser struct {
 }
 
 // AddAccountEraser registers an extension's eraser (pkg/extension.
-// ErasesAccounts, agentry#638), called in registration order inside the
+// ErasesAccounts), called in registration order inside the
 // transaction of every account erasure and data clear.
 // A name registered twice panics: the counts are keyed by it.
 func (s *Server) AddAccountEraser(name string, fn AccountEraser) {
@@ -167,8 +167,8 @@ func (s *Server) eraseInExtensions(ctx context.Context, tx pgx.Tx, userID uuid.U
 // SetExtensionUnthrottled names the routes of a mounted extension the
 // anonymous rate class does not apply to: "METHOD /path", relative to the
 // mount, exact (no wildcards — the seam is narrow on purpose). Only an
-// extension's own receiver of signed callbacks belongs here (plan
-// subscription-tiers §5.5); the route still passes the principal middleware
+// extension's own receiver of signed callbacks belongs here; the route
+// still passes the principal middleware
 // and declares its own authorization. Panics on a malformed pattern or an
 // unknown extension, at start-up, where it is found.
 func (s *Server) SetExtensionUnthrottled(name string, routes []string) {
@@ -203,8 +203,8 @@ func (s *Server) ExtensionUnthrottled() map[string]bool {
 	return out
 }
 
-// ExtensionDeps is what an extension gets to work with (pkg/extension.Deps,
-// agentry#324): the pool the core uses, the logger, and an audit writer
+// ExtensionDeps is what an extension gets to work with (pkg/extension.Deps):
+// the pool the core uses, the logger, and an audit writer
 // that lands an event in its own transaction. nil pool when the server
 // runs without a database (limited dev mode).
 func (s *Server) ExtensionDeps() (*pgxpool.Pool, *slog.Logger, func(context.Context, audit.Event) error, func(context.Context, pgx.Tx, audit.Event) error) {
@@ -225,7 +225,7 @@ func (s *Server) ExtensionDeps() (*pgxpool.Pool, *slog.Logger, func(context.Cont
 }
 
 // orgsAwaitActivation reports whether an organization created now starts
-// out awaiting activation (agentry#360). It does where an admission
+// out awaiting activation. It does where an admission
 // extension runs — the hosted product, where an organization is a paid
 // thing and the extension that admits submissions is the one that sells
 // it — and not on a registry that admits everything, where nothing would
@@ -251,16 +251,16 @@ func (s *Server) ActivateOrg(ctx context.Context, orgID uuid.UUID) (bool, error)
 }
 
 // BaseURL is the deployment's public origin without a trailing slash, as
-// the core's own links use it, for pkg/extension.Deps (agentry#969).
+// the core's own links use it, for pkg/extension.Deps.
 func (s *Server) BaseURL() string { return strings.TrimRight(s.cfg.BaseURL, "/") }
 
-// Blobs is the deployment's object store for pkg/extension.Deps
-// (agentry#348): nil when the server was built without a database, the
+// Blobs is the deployment's object store for pkg/extension.Deps:
+// nil when the server was built without a database, the
 // way ExtensionDeps' pool is.
 func (s *Server) Blobs() registry.BlobStore { return s.blobs }
 
-// AgentReadable is the core's read of an agent for pkg/extension.Deps.Agents
-// (agentry#381): whether p may read the agent at ns/name exactly as the
+// AgentReadable is the core's read of an agent for pkg/extension.Deps.Agents:
+// whether p may read the agent at ns/name exactly as the
 // core's own routes decide it — the effective role over the namespace and
 // the grants (auth.CheckAgent), a PAT's agent:read, the owning
 // organization's state (suspended: absent; in its hold: readable) — with
@@ -285,8 +285,8 @@ func (s *Server) AgentReadable(ctx context.Context, p *auth.Principal, ns, name 
 	return registry.Agent{}, false, err
 }
 
-// AgentMaintainable is the core's own maintain decision for an extension
-// (agentry#833): agentForAction with the maintain action, the organization
+// AgentMaintainable is the core's own maintain decision for an extension:
+// agentForAction with the maintain action, the organization
 // gate for a write included. Not found, not readable, readable but not
 // maintainable and held by the gate are all false with no error, as a
 // read's are in AgentReadable; anything else is a fault.
@@ -305,8 +305,8 @@ func (s *Server) AgentMaintainable(ctx context.Context, p *auth.Principal, ns, n
 	return registry.Agent{}, false, err
 }
 
-// AgentPublishable is the core's own publish decision for an extension
-// (agentry#875), shaped as AgentMaintainable: agentForAction with the
+// AgentPublishable is the core's own publish decision for an extension,
+// shaped as AgentMaintainable: agentForAction with the
 // publish action (the publish role over the namespace or a grant, a PAT's
 // agent:publish), the organization gate for a write included. Not found,
 // not readable, readable but not publishable and held by the gate are all
@@ -327,7 +327,7 @@ func (s *Server) AgentPublishable(ctx context.Context, p *auth.Principal, ns, na
 }
 
 // PrincipalForUser is the principal the core would hold for userID with no
-// credential presented, for pkg/extension.Deps.Principals (agentry#838): the
+// credential presented, for pkg/extension.Deps.Principals: the
 // account's current standing and memberships as a session would carry them
 // — loaded now, so a role taken away since an earlier request is gone — with
 // Via "user", no scopes and no session. An account that does not exist or
@@ -340,8 +340,8 @@ func (s *Server) PrincipalForUser(ctx context.Context, userID uuid.UUID) (*auth.
 	return s.loadPrincipal(ctx, userID)
 }
 
-// PrincipalForSchedule is pkg/extension.Deps.ScheduleCredentials (agentry#1002,
-// plan quickagent-scheduling.md §6): the credential of one fire of a
+// PrincipalForSchedule is pkg/extension.Deps.ScheduleCredentials: the
+// credential of one fire of a
 // schedule its owner made in the closed build. It is PrincipalForUser's
 // account, standing and roles, loaded now, with Via "schedule", the
 // schedule's id, and auth.ScheduleScopes — every scope gate reads it as a
@@ -451,10 +451,10 @@ func (s *Server) mountExtensions(mux httpmux.Mux) {
 	}
 }
 
-// SendToUser is the core's side of pkg/extension.Deps.Notifier.Send
-// (agentry#366, plan organization-subscriptions §5.8): a message an
+// SendToUser is the core's side of pkg/extension.Deps.Notifier.Send:
+// a message an
 // extension composed goes to the person only under the core's rule —
-// notify.AllowsEmail, which is the verified-address rule of DEV-099 and
+// notify.AllowsEmail, which is the verified-address rule and
 // the person's switch for the kind — and only as a kind the core knows.
 // It reports whether the message went; a suppression is false with no
 // error, and the extension is not told why, because the address is the
@@ -488,24 +488,24 @@ func (s *Server) SendToUser(ctx context.Context, userID uuid.UUID, kind, subject
 // extensionMailKinds is every class an extension may send as. It is the
 // trust boundary, which is why the key is a plain string: what arrives
 // here is the extension's word, and the map is the allowlist that turns
-// it into a kind the core recognises — or refuses. Four today; the core's
+// it into a kind the core recognises — or refuses. The core's
 // own other kinds stay the core's, and a new class is added here with
 // its switch, its default and its column, never by a string an extension
 // chooses.
 var extensionMailKinds = map[string]notify.Kind{
 	"billing": notify.KindBilling,
 	// A dependency alert an extension routes to the person an
-	// organization chose for it (agentry#430, M19) goes under the same
+	// organization chose for it goes under the same
 	// switch as the alert the core mails the author: it is the same
 	// news, and the person's choice about that news holds wherever it
 	// comes from.
 	"dependency_alert": notify.KindDependencyAlert,
 	// A scheduled run in Agentry that failed, or a schedule that paused
-	// (agentry#1002): the schedules extension's mail, under its own
+	// the schedules extension's mail, under its own
 	// switch, so a person can silence it without losing billing mail.
 	"schedule": notify.KindSchedule,
 	// A bug report the person filed, marked complete by platform staff
-	// (agentry#1113, plan report-bug.md D5): the bug-reports extension's
+	// the bug-reports extension's
 	// "Reported bug fixed" mail, under its own switch.
 	"bug_report": notify.KindBugReport,
 }
@@ -555,7 +555,7 @@ func (s *Server) WebhookEndpoints(ctx context.Context, orgID uuid.UUID) ([]Webho
 	return out, nil
 }
 
-// DeliverWebhook is pkg/extension.Deps.Webhooks.Deliver (agentry#430):
+// DeliverWebhook is pkg/extension.Deps.Webhooks.Deliver:
 // one delivery of event to the endpoint an extension named, through the
 // core's transport — the ledger row, the queued job with its signature,
 // its retries and its SSRF guard — so a destination an organization

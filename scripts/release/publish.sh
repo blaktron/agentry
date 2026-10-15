@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# publish.sh — attaches a release's signed assets and only then publishes it
-# (DEV-148, agentry#597). release.yaml's sbom-and-sign job runs it after
+# publish.sh — attaches a release's signed assets and only then publishes it.
+# release.yaml's sbom-and-sign job runs it after
 # signing, so neither channel shows a published release without its assets.
 #
 #   publish.sh <tag> <assets-dir> <notes-file>

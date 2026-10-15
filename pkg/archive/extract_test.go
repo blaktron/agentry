@@ -106,7 +106,7 @@ func goodSeed() []byte {
 	return buf.Bytes()
 }
 
-// FuzzExtract crash-tests the extractor against arbitrary bytes (§17.5):
+// FuzzExtract crash-tests the extractor against arbitrary bytes:
 // it must never panic and never escape the destination directory.
 func FuzzExtract(f *testing.F) {
 	f.Add(goodSeed())

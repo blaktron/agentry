@@ -1,4 +1,4 @@
-# The CI supply chain (agentry#419, the shape of agentry-desktop#128): every
+# The CI supply chain: every
 # action SHA-pinned to the tag its comment names, that tag not moved, and
 # every action and CI tool (ci.yaml's env block) current within its major. A
 # new major is a warning; see scripts/pins-check.sh.

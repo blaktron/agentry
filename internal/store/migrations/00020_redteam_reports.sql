@@ -1,7 +1,7 @@
 -- +goose Up
--- §17.5 red-team reports (agentry#67): each scheduled run of the corpus
--- rewrites against the S3/S4 bundle stores its report here, report-only.
--- Never a gate: nothing reads this table on the publish path.
+-- Red-team reports: each scheduled run of the corpus rewrites against the
+-- S3/S4 bundle stores its report here, report-only. Never a gate: nothing
+-- reads this table on the publish path.
 CREATE TABLE redteam_reports (
   id            uuid PRIMARY KEY,
   ruleset_semver text NOT NULL,

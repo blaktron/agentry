@@ -1,7 +1,6 @@
 package api
 
-// The organization's lifecycle (agentry#363, plan organization-subscriptions
-// §4 "Decommission", §5.4; D14, D23). An admin — or platform staff, or the
+// The organization's lifecycle. An admin — or platform staff, or the
 // hosted product's pending-payment sweep through pkg/extension.Deps.Orgs —
 // decommissions the organization: it enters a read-only hold (members keep
 // read and export; registry.OrgGate refuses every change), and when the
@@ -314,7 +313,7 @@ func (s *Server) RunOrgDecommissionSweep(ctx context.Context) (int, error) {
 // agents private, scrubs the row as decommissioned, releases the handle
 // and audits org.erase. The second phase, which the sweep resumes if it is
 // interrupted, yanks every published or quarantined version and rejects
-// every one under review (version rows are immutable, §4.3, and are never
+// every one under review (version rows are immutable and are never
 // deleted), deletes the archives and the export objects from the blob
 // store and removes the bare repositories. With no member left to derive
 // a role, every grant gone and the handle retired, the agents are
@@ -382,7 +381,7 @@ func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) e
 			}
 			counts[st.name] = n
 		}
-		// The organization's knowledge packs go with it (agentry#593), and
+		// The organization's knowledge packs go with it, and
 		// the key that opens them once the transaction has committed.
 		if knowledgeKeys, err = knowledge.EraseOwner(ctx, tq, knowledge.Org(orgID)); err != nil {
 			return err
@@ -405,8 +404,8 @@ func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) e
 		if err := tq.ReleaseHandle(ctx, storegen.ReleaseHandleParams{ID: orgID, Handle: retired}); err != nil {
 			return err
 		}
-		// Erasing the staff organization ends its members' staff with it
-		// (agentry#556): every flagged account is recomputed in this
+		// Erasing the staff organization ends its members' staff with it:
+		// every flagged account is recomputed in this
 		// transaction. For any other organization nothing changes.
 		if s.reg != nil {
 			if _, err := s.reg.ResyncStaffIn(ctx, tq, registry.StaffSyncMembership, audit.Event{}); err != nil {

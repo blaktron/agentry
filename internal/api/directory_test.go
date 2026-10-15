@@ -21,14 +21,14 @@ type fakeDirectoryUser struct {
 	IsActive    bool   `json:"is_active"`
 	IsSuperuser bool   `json:"is_superuser"`
 	// Attributes is the account's attributes object; a PATCH replaces it
-	// whole, as authentik's does (agentry#861).
+	// whole, as authentik's does.
 	Attributes map[string]any `json:"attributes,omitempty"`
 }
 
 // fakeDirectory is authentik 2026.8's users and authenticators admin API as
-// the directory client uses it, with its filter semantics (measured for
-// agentry#617): email= is exact and case-sensitive, search= is case-blind
-// and matches parts of the username, the name and the address.
+// the directory client uses it, with its filter semantics: email= is
+// exact and case-sensitive, search= is case-blind and matches parts of
+// the username, the name and the address.
 type fakeDirectory struct {
 	mu       sync.Mutex
 	users    []fakeDirectoryUser
@@ -136,10 +136,10 @@ func (d *fakeDirectory) handler() http.Handler {
 
 // fakeAuthentik is a directory holding:
 //
-//	7   alice, held with capitals (agentry#617), with a TOTP and a WebAuthn device
+//	7   alice, held with capitals, with a TOTP and a WebAuthn device
 //	8   bob
-//	11, 13  two accounts at one address (agentry#712)
-//	12  pat, whose registry account has another address (agentry#727)
+//	11, 13  two accounts at one address
+//	12  pat, whose registry account has another address
 //	20  an inactive account
 //	1   an operator's superuser account
 //	77  a service account at alice's address
@@ -160,8 +160,8 @@ func fakeAuthentik(t *testing.T) (*authentikEraser, *fakeDirectory) {
 	return newAuthentikEraser(srv.URL, "tok"), d
 }
 
-// TestDirectoryFindAccount is the rule every directory lookup shares
-// (agentry#727, agentry#617): the directory's id when the registry has
+// TestDirectoryFindAccount is the rule every directory lookup shares: the
+// directory's id when the registry has
 // learnt it, confirmed by the uid; else the linked uid at the address; else
 // the address alone, only when exactly one account holds it.
 func TestDirectoryFindAccount(t *testing.T) {
@@ -237,7 +237,7 @@ func TestDirectoryDevicesCarryIDs(t *testing.T) {
 	}
 }
 
-// TestDirectoryDeleteDeviceOwnOnly (agentry#164): a device is removed only
+// TestDirectoryDeleteDeviceOwnOnly: a device is removed only
 // when the account's own list reports it — somebody else's id, an unknown
 // kind, or a foreign account all answer "not deleted" without touching the
 // directory.
@@ -274,7 +274,7 @@ func TestDirectoryDeleteDeviceOwnOnly(t *testing.T) {
 }
 
 // TestDirectoryEraseAccount: erasure deletes the one account the link
-// names (agentry#617, agentry#727) and never a superuser, whichever rule
+// names and never a superuser, whichever rule
 // found it.
 func TestDirectoryEraseAccount(t *testing.T) {
 	ctx := context.Background()

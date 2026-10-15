@@ -1,4 +1,4 @@
--- Idempotency-Key replay store (§9.1 "Mutating POSTs accept Idempotency-Key").
+-- Idempotency-Key replay store ("Mutating POSTs accept Idempotency-Key").
 
 -- name: ClaimIdempotencyKey :one
 -- Reserves the key for this request. A conflicting row means the key was

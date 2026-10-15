@@ -9,8 +9,7 @@ import (
 	"testing"
 )
 
-// TestPrivateAgentInvisibleToNonReaders pins the rule of agentry#313 (the
-// operator, 2026-09-13): nobody but the private agent's readers can learn
+// TestPrivateAgentInvisibleToNonReaders pins the rule: nobody but the private agent's readers can learn
 // that a registry hosts it. Every by-name route answers a caller who cannot
 // read the agent exactly as it answers a name that does not exist — 404,
 // never the 401 that would say "sign in and this exists" — anonymous or
@@ -111,8 +110,8 @@ func TestPrivateAgentInvisibleToNonReaders(t *testing.T) {
 	}
 }
 
-// TestPrivateOrgAgentReaderSetIsEveryActiveMember: DEV-101's reader set,
-// widened by agentry#362. An organization's private agent is readable by
+// TestPrivateOrgAgentReaderSetIsEveryActiveMember: the reader set of a
+// private organization agent. An organization's private agent is readable by
 // its active members — that is what a seat buys — and by nobody else: a
 // pending member, whom no admin has approved, gets the same 404 an
 // outsider does, and the same one a name that does not exist gets.
@@ -146,7 +145,7 @@ func TestPrivateOrgAgentReaderSetIsEveryActiveMember(t *testing.T) {
 	_, missingBody := get(anonymous, "/api/v1/agents/"+orgH+"/no-such-agent")
 
 	// The member reads it and may release it: a seat buys a share of the
-	// organization's agents (D6, D19).
+	// organization's agents.
 	if st, _ := get(member, "/api/v1/agents/"+orgH+"/hidden"); st != http.StatusOK {
 		t.Fatalf("an active member reading the org's private agent: got %d, want 200", st)
 	}
@@ -168,7 +167,7 @@ func TestPrivateOrgAgentReaderSetIsEveryActiveMember(t *testing.T) {
 }
 
 // TestMembershipConfersPublishButNotTheAgentItself: what a member may do
-// with the organization's agents, and where the line is (D19). A member
+// with the organization's agents, and where the line is. A member
 // creates and releases; only an admin changes visibility, deletes, or
 // hands out a grant — handing someone access to a private agent is a
 // disclosure, so it sits with the acts that decide what the agent is.

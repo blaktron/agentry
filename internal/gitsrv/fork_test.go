@@ -17,7 +17,7 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 )
 
-// A fork's repository (agentry#943): every branch and tag of the origin
+// A fork's repository: every branch and tag of the origin
 // copied, objects included, then one commit renaming the manifest, with
 // the fork's branch and release tag on it. The origin's own history is the
 // fork's past, and removing the origin afterwards leaves the fork whole.
@@ -207,7 +207,7 @@ func TestForkRefusesWhatIsNotAnObjectOrARef(t *testing.T) {
 }
 
 // An uploaded release's files are hashed by path, never added through a
-// work tree (agentry#943's review): a `.git` file pointing at another
+// work tree: a `.git` file pointing at another
 // repository on the host, or a `.git` directory in any case, is refused
 // rather than recorded as a gitlink, and a .gitattributes among the files
 // changes no byte of what is committed.

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// TestLoginMissCostsAsMuchAsAWrongPassword (agentry#413): a login that
+// TestLoginMissCostsAsMuchAsAWrongPassword: a login that
 // finds no password to check — an unknown login, an account without a
 // password, a suspended one — still pays the argon2id comparison, so the
 // time a refusal takes does not say which of those it was. The wrong-

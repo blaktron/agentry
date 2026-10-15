@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The acceptance helper refuses what used to print OK (agentry#420): a -run
+# The acceptance helper refuses what could otherwise print OK: a -run
 # filter that matches nothing, a list with one name that matches nothing, and
-# a test that skips. Runs in CI beside the §9 name check; needs no database.
+# a test that skips. Runs in CI beside the invariant test name check; needs
+# no database.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 

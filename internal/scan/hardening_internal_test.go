@@ -1,9 +1,8 @@
 package scan
 
-// Fail-closed hardening: the places where the pipeline used to lose the
+// Fail-closed hardening: the places where the pipeline must not lose the
 // information that something went wrong. These are internal tests because the
-// behaviour under test is deliberately not reachable from outside — the point
-// is that it can no longer be reached at all.
+// behaviour under test is deliberately not reachable from outside.
 
 import (
 	"context"
@@ -25,9 +24,9 @@ func (s panickingStage) Run(stageContext, *Input) StageResult {
 }
 
 // TestStagePanicKeepsValueAndStack pins that a recovered stage panic carries
-// what actually happened. It used to collapse to the constant string "panic in
-// stage" with the value and stack discarded — leaving a crash reachable from
-// attacker-supplied package content with no way to find it.
+// TestStagePanicKeepsValueAndStack pins that a recovered stage panic carries
+// what actually happened: the value and the stack, not a constant string,
+// so a crash reachable from attacker-supplied package content can be found.
 func TestStagePanicKeepsValueAndStack(t *testing.T) {
 	o := NewOrchestrator(nil, StaticProvider{}, slog.New(slog.DiscardHandler))
 	res := o.runStage(stageContext{ctx: context.Background(), log: o.log}, panickingStage{id: "S3S4"}, &Input{})
@@ -54,8 +53,8 @@ func TestStagePanicKeepsValueAndStack(t *testing.T) {
 }
 
 // TestReportDigestFailsLoudly pins that an unserializable report is an error,
-// not an empty digest. The digest is the subject of the DSSE attestation
-// (§8.8): signing "" asserts nothing while looking exactly like a valid
+// not an empty digest. The digest is the subject of the DSSE attestation:
+// signing "" asserts nothing while looking exactly like a valid
 // attestation, so the run has to end instead.
 func TestReportDigestFailsLoudly(t *testing.T) {
 	good, err := reportDigest(Report{SchemaVersion: "1"})
@@ -67,7 +66,7 @@ func TestReportDigestFailsLoudly(t *testing.T) {
 	}
 
 	// NaN has no JSON representation; a stage that put one in a finding
-	// detail used to silently produce an empty digest.
+	// detail must not silently produce an empty digest.
 	bad := Report{
 		SchemaVersion: "1",
 		Findings: []Finding{{
@@ -85,8 +84,8 @@ func TestReportDigestFailsLoudly(t *testing.T) {
 }
 
 // TestUnreadableFileBecomesFinding pins that a file S1 cannot read is reported
-// rather than treated as an empty one. Silently reading "" meant S3/S4/S5/S6
-// all passed over content that would still ship — an unscanned file cleared as
+// rather than treated as an empty one. Silently reading "" would let S3/S4/S5/S6
+// all pass over content that still ships — an unscanned file cleared as
 // if it were clean.
 func TestUnreadableFileBecomesFinding(t *testing.T) {
 	if os.Geteuid() == 0 {
@@ -143,8 +142,8 @@ func TestResumeNeverSkipsInventory(t *testing.T) {
 	}
 }
 
-// TestCacheableStagesMatchSpec pins the §8.7 set: the deterministic scanners.
-// S5 (the judge) must not be cached — §8.7 re-adjudicates it only on major
+// TestCacheableStagesMatchSpec pins the cacheable set: the deterministic scanners.
+// S5 (the judge) must not be cached: it is re-adjudicated only on major
 // bumps, which is a decision for the sweep, not a cache lookup.
 func TestCacheableStagesMatchSpec(t *testing.T) {
 	got := map[string]bool{}
@@ -153,7 +152,7 @@ func TestCacheableStagesMatchSpec(t *testing.T) {
 	}
 	for _, want := range []string{"S2", "S3S4", "S8"} {
 		if !got[want] {
-			t.Errorf("%s is not cacheable but §8.7 lists it as deterministic", want)
+			t.Errorf("%s is not cacheable but it is a deterministic scanner", want)
 		}
 	}
 	for _, never := range []string{"S1", "S5", "S9"} {
@@ -163,7 +162,7 @@ func TestCacheableStagesMatchSpec(t *testing.T) {
 	}
 }
 
-// TestRubricHashChangesWithRubric pins §8.4.4's purpose: the hash identifies
+// TestRubricHashChangesWithRubric pins the hash's purpose: it identifies
 // the rubric a verdict came from, so two different rubrics cannot share one.
 func TestRubricHashChangesWithRubric(t *testing.T) {
 	a := RubricHash("rubric", "v1")

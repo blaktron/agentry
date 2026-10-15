@@ -24,7 +24,7 @@ import (
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
-// The Writing Voice (agentry#809) through its routes: a version is put,
+// The Writing Voice through its routes: a version is put,
 // reviewed by the worker, made live only on a clean verdict, kept pending
 // when flagged, kept in review when the judge cannot answer, restored,
 // sealed at rest, and the caller's own.
@@ -153,7 +153,7 @@ func getVoice(t *testing.T, env *testEnv, o knowledgeOwner) voiceBody {
 	return v
 }
 
-// Plan §3 invariant 3: a version is live only on a clean verdict; a flag
+// A version is live only on a clean verdict; a flag
 // keeps it pending with its findings and the live one live; a judge that
 // cannot answer leaves it in review, and the sweep asks again.
 func TestAVoiceIsReviewedBeforeItIsLive(t *testing.T) {
@@ -173,7 +173,7 @@ func TestAVoiceIsReviewedBeforeItIsLive(t *testing.T) {
 		t.Fatalf("a clean review did not make the version live: %+v", v)
 	}
 	if !v.AlwaysAttach {
-		t.Fatal("always-attach is on when a voice first goes live (D11)")
+		t.Fatal("always-attach is on when a voice first goes live")
 	}
 
 	// The person turns always-attach off; the next version to go live
@@ -277,7 +277,7 @@ func TestOnlyTheNewestPendingVersionIsReviewed(t *testing.T) {
 	}
 }
 
-// Plan §3 invariant 6: a voice is sealed at rest. No column of either table
+// A voice is sealed at rest. No column of either table
 // holds its words, and the sealed bytes open only with the person's key.
 func TestAVoiceIsSealedAtRest(t *testing.T) {
 	env, _ := newVoiceEnv(t)
@@ -399,7 +399,7 @@ func (a *stubVoiceAdmitter) VoidVoice(_ context.Context, t registry.Ticket) erro
 	return nil
 }
 
-// The review of a version a route stores is admitted first (D8): a refusal
+// The review of a version a route stores is admitted first: a refusal
 // or a failure stores nothing, a text that is not a voice is refused before
 // it is admitted, and a Restore under the same question set, which reviews
 // nothing, is not admitted at all.
@@ -465,8 +465,7 @@ func userID(t *testing.T, env *testEnv, handle string) uuid.UUID {
 }
 
 // eagerQueue runs a job the moment it is enqueued, on another connection,
-// as a worker idle on the queue does: the race dev showed on 2026-10-01,
-// where a review that ran before the put committed found no version and
+// as a worker idle on the queue does: the race where a review that ran before the put committed found no version and
 // left it in review.
 type eagerQueue struct {
 	handlers map[string]queue.Handler

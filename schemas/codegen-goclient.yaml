@@ -1,5 +1,5 @@
 # oapi-codegen config: public Go client (pkg/apiclient) used by the CLI,
-# tests, and third parties (D-09).
+# tests, and third parties.
 package: apiclient
 generate:
   models: true

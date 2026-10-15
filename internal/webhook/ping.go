@@ -1,7 +1,7 @@
 package webhook
 
-// Single-endpoint delivery, used by POST /orgs/{org}/webhooks/{id}/ping
-// (§9.2). Emit fans an event out to every subscribed endpoint; a ping is the
+// Single-endpoint delivery, used by POST /orgs/{org}/webhooks/{id}/ping.
+// Emit fans an event out to every subscribed endpoint; a ping is the
 // other shape — one endpoint, chosen by the operator, regardless of what that
 // endpoint is subscribed to. Everything downstream (envelope, signature,
 // SSRF guard, retry ladder) is the same code path as a real event, which is

@@ -1,7 +1,7 @@
 package api
 
-// The fold-in's three moments (agentry#364, plan organization-subscriptions
-// §5.5): the step at a directory sign-in, the sweep when an organization
+// The fold-in's three moments: the step at a directory sign-in, the sweep
+// when an organization
 // gains a domain, and the daily digest that names the pending members to
 // the organization's admins. The rules live in internal/registry/foldin.go;
 // this file is where they are called from and what runs on the queue.
@@ -146,7 +146,7 @@ func (s *Server) runPendingMembersDigest(ctx context.Context, job queue.Job) err
 // them all, whichever door they came through. Each organization is done
 // in a transaction under its row lock, so two runs at once (several
 // worker replicas each tick) cannot both name the same people. The mail
-// goes through the notifier under the verified-address rule (DEV-099) and
+// goes through the notifier under the verified-address rule and
 // the admin's orgInvites preference, the way the access request does: the
 // digest is the invitation flow seen from the admin's side. The members
 // are marked told when at least one admin was written to, or when no
@@ -233,7 +233,7 @@ func (s *Server) digestOrg(ctx context.Context, orgID uuid.UUID, handle, display
 
 // forEachMailableAdmin calls fn with the address of each of the
 // organization's active admins that notify.AllowsEmail admits — a
-// verified address (DEV-099) and the orgInvites preference, since what
+// verified address and the orgInvites preference, since what
 // reaches an admin about who wants in is the invitation flow seen from
 // their side. The access request and the pending members digest share it.
 func (s *Server) forEachMailableAdmin(ctx context.Context, q *storegen.Queries, orgID uuid.UUID, fn func(email string)) {

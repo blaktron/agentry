@@ -1,5 +1,5 @@
 -- SAML shared state: the consumed-assertion replay set and the
--- outstanding-AuthnRequest tracker, shared by every API replica (agentry#414).
+-- outstanding-AuthnRequest tracker, shared by every API replica.
 
 -- name: ConsumeSAMLAssertion :execrows
 -- Records the assertion id, or renews a row whose recorded expiry has

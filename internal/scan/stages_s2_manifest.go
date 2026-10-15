@@ -15,8 +15,8 @@ import (
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
-// S2's manifest pass (agentry#288). A declared MCP server's plain `env`
-// (DEV-098) is the first manifest field whose values are injected into a
+// S2's manifest pass. A declared MCP server's plain `env`
+// is the first manifest field whose values are injected into a
 // process, and the line rules need a value quoted or prefixed to notice
 // it: an unquoted `OPENAI_API_KEY: sk-proj-…` in YAML gives them nothing.
 // So S2 also reads the values out of the manifest the registry stores —
@@ -155,7 +155,7 @@ func s2ManifestEnv(in *Input, lineSeen map[string]bool) []Finding {
 // a bare word.
 var oauthFieldRE = regexp.MustCompile(`[^\s"',:=;{}\[\]()<>]+`)
 
-// s2ManifestOAuth reads a server's oauth block (agentry#910): every run of
+// s2ManifestOAuth reads a server's oauth block: every run of
 // every env value and template, with the placeholders the runner fills
 // taken out (manifest.StripOAuthPlaceholders, the one grammar), by the same
 // token shape as env. The name rule does not apply: a credential-named

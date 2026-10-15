@@ -18,7 +18,7 @@ import (
 )
 
 // fakeIDP is an in-process OIDC provider: discovery + JWKS + a token endpoint
-// that mints a signed ID token (DEV-009 pattern).
+// that mints a signed ID token.
 type fakeIDP struct {
 	srv            *httptest.Server
 	key            *rsa.PrivateKey
@@ -120,7 +120,7 @@ func TestOIDC_ExchangeCreatesClaims(t *testing.T) {
 	if !strings.Contains(url, "code_challenge=") || !strings.Contains(url, "nonce=") {
 		t.Fatalf("auth url missing pkce/nonce: %s", url)
 	}
-	// No refresh token is ever used, so none is asked for (agentry#494).
+	// No refresh token is ever used, so none is asked for.
 	if strings.Contains(url, "access_type=") || strings.Contains(url, "offline") {
 		t.Fatalf("auth url asks for offline access: %s", url)
 	}
@@ -170,7 +170,7 @@ func TestOIDC_EmailVerifiedSurfaced(t *testing.T) {
 }
 
 // TestOIDC_PreferredUsernameSurfaced: the directory's username reaches the
-// caller, which seeds a new account's handle from it (agentry#517).
+// caller, which seeds a new account's handle from it.
 func TestOIDC_PreferredUsernameSurfaced(t *testing.T) {
 	idp := newFakeIDP(t)
 	idp.preferredUser = " blaktron "
@@ -187,10 +187,10 @@ func TestOIDC_PreferredUsernameSurfaced(t *testing.T) {
 	}
 }
 
-// TestOIDC_RememberDeviceIsOnlyAJSONTrue (agentry#670, DEV-163): the
-// directory's `agentry_remember_device` claim is half of what mints a
-// credential, so only the JSON boolean its scope mapping emits counts. A
-// string, a number or an absent claim is "not asked", never a guess.
+// TestOIDC_RememberDeviceIsOnlyAJSONTrue: the directory's
+// `agentry_remember_device` claim is half of what mints a credential, so
+// only the JSON boolean its scope mapping emits counts. A string, a number
+// or an absent claim is "not asked", never a guess.
 func TestOIDC_RememberDeviceIsOnlyAJSONTrue(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -225,7 +225,7 @@ func TestOIDC_RememberDeviceIsOnlyAJSONTrue(t *testing.T) {
 }
 
 // TestOIDC_AuthTimeSurfaced: the directory's auth_time reaches the caller,
-// which refuses to mint a remembered browser from a stale one (agentry#670).
+// which refuses to mint a remembered browser from a stale one.
 func TestOIDC_AuthTimeSurfaced(t *testing.T) {
 	for name, tc := range map[string]struct {
 		set  bool
@@ -257,7 +257,7 @@ func TestOIDC_AuthTimeSurfaced(t *testing.T) {
 
 // TestPromoCodeClaim: the directory's agentry_promo_code claim is read as a
 // string inside the billing extension's grammar, upper-cased, and as nothing
-// otherwise (agentry#759).
+// otherwise.
 func TestPromoCodeClaim(t *testing.T) {
 	for in, want := range map[any]string{
 		"LAUNCH-2026":           "LAUNCH-2026",

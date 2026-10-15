@@ -10,20 +10,20 @@ type File struct {
 	Content []byte
 }
 
-// Scan runs the S3 deterministic detectors and the S4 signature engine over a
-// set of files and returns all findings, sorted deterministically. It is the
-// convenience entry point used by both the server pipeline and `agentry
-// validate` (D-12).
+// Scan runs the S3 deterministic detectors and the S4 signature engine
+// over a set of files and returns all findings, sorted
+// deterministically. It is the convenience entry point used by both the
+// server pipeline and `agentry validate`.
 //
-// Scanner reach per §8.3:
+// Scanner reach:
 //   - S3 runs on every text file.
 //   - S4 runs only on prose-ish files (.md .markdown .txt .text .yaml .yml
 //     .json and extensionless files).
 //
-// After both scanners run, Scan escalates any S3 HTML-comment finding whose
-// hidden text matches an S4 signature from low to medium severity (§8.3 S3.f):
-// a comment that hides an injection payload is worse than one that merely
-// hides prose.
+// After both scanners run, Scan escalates any S3 HTML-comment finding
+// whose hidden text matches an S4 signature from low to medium
+// severity: a comment that hides an injection payload is worse than one
+// that merely hides prose.
 //
 // bundle may be nil, in which case only S3 runs (useful for tests and for the
 // hidden-content pass in isolation).

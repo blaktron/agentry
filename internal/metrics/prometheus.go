@@ -45,8 +45,7 @@ func (m *Metrics) Gather(ctx context.Context) ([]byte, error) {
 	// hands scopes over in no fixed order). A family any of whose sample
 	// names is already rendered is not rendered: a second TYPE line or a
 	// duplicate sample would make the whole scrape invalid, and the core's
-	// series must not change because an extension chose one of its names
-	// (agentry#777).
+	// series must not change because an extension chose one of its names.
 	sort.SliceStable(rm.ScopeMetrics, func(i, j int) bool {
 		a, b := rm.ScopeMetrics[i].Scope.Name, rm.ScopeMetrics[j].Scope.Name
 		if (a == scopeName) != (b == scopeName) {
@@ -166,7 +165,7 @@ func writeSample(buf *bytes.Buffer, name, suffix string, base, series []label, v
 func writeLabels(buf *bytes.Buffer, base, series []label, extra []label) {
 	// A label name appears once, and the first one wins: a resource label
 	// over a series attribute of the same name (an extension's attribute
-	// cannot relabel the process, agentry#777), a series attribute over a
+	// cannot relabel the process), a series attribute over a
 	// bucket's le. A repeated name would make the scrape invalid.
 	all := make([]label, 0, len(base)+len(series)+len(extra))
 	for _, group := range [][]label{base, series, extra} {

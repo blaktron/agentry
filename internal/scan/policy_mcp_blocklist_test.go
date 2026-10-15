@@ -37,8 +37,8 @@ func TestBlockedMcpServersPolicy(t *testing.T) {
 	}
 }
 
-// A remote MCP server is blocked by its host, `url:<host>`, globs allowed
-// (agentry#910, plan mcp-oauth-connections.md D11), so a platform or an
+// A remote MCP server is blocked by its host, `url:<host>`, globs allowed,
+// so a platform or an
 // organization can block a vendor.
 func TestBlockedMcpServersPolicyMatchesARemoteServersHost(t *testing.T) {
 	manifest := []byte(`{"name":"x","capabilities":{"mcpServers":[

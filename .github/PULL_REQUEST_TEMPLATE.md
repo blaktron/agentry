@@ -16,4 +16,4 @@ Closes #
 - [ ] every new route has a `RouteDecl` in `internal/api/authz_routes.go`
 - [ ] new scanner rules ship match and benign fixtures
 - [ ] product copy never says "safe"
-- [ ] a change that departs from the recorded design carries its register entry (agentry-notes)
+- [ ] a change to documented behaviour updates its page in `docs/`

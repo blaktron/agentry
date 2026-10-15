@@ -1,5 +1,5 @@
-# Release automation (§18.2 M8 OSS hygiene: "release-please, signed releases
-# + SBOM"; DEV-148, agentry#597). release-please watches conventional commits
+# Release automation (release-please, signed releases and an SBOM).
+# release-please watches conventional commits
 # on main and maintains a standing "release PR" that bumps the version and
 # rewrites CHANGELOG.md. Merging that PR tags vX.Y.Z and creates its GitHub
 # release as a draft, with the changelog as its body. This workflow then calls
@@ -8,25 +8,23 @@
 # dev-release.yaml through the same release.yaml.
 #
 # The release PR is the one pull request main takes that is not a promotion
-# from dev (DEV-148 addendum): it carries only CHANGELOG.md and the manifest,
+# from dev: it carries only CHANGELOG.md and the manifest,
 # which release-please reads from main. dev never needs them back, since
 # next-dev-tag.sh reads the tags.
 #
-# The version (release-please-config.json; the operator's decisions of
-# 2026-09-25, release-1.0.md D16):
-#   - release-as pins the next release. It was set to 0.6.0 for the first
-#     release and removed once v0.6.0 existed (agentry#597); the operator
-#     sets it again whenever they move the minor version (or cut 1.0.0,
-#     agentry#522), and it is removed again after that release.
+# The version (release-please-config.json):
+#   - release-as pins the next release. A maintainer sets it whenever the
+#     minor version moves (or for 1.0.0), and removes it again after that
+#     release.
 #   - "versioning": "always-bump-patch" makes every other release a patch
 #     bump, whatever the commit types: a feat: or a feat!: does not move the
-#     minor by itself, because only the operator does.
+#     minor by itself, because only a maintainer moves it.
 #   - "draft" with "force-tag-creation": the tag exists at once, for
 #     release.yaml to build from, and the release stays a draft until its
 #     signed assets are attached.
 #   - initial-version only matters before the first release.
 # scripts/release/config-guard.sh refuses a 1.x manifest or release-as
-# without the operator's AGENTRY_ALLOW_V1, and a release-as that is already
+# without the maintainers' AGENTRY_ALLOW_V1, and a release-as that is already
 # released (which release-please would propose again).
 #
 # TOKEN NOTE: a tag or release created with the default GITHUB_TOKEN does NOT
@@ -35,7 +33,7 @@
 # directly when a release was created, and nothing listens for tag pushes. The
 # release PR opened with GITHUB_TOKEN gets pull_request runs that wait for
 # approval; it is gated by dispatching ci on its branch. A RELEASE_PLEASE_TOKEN
-# the operator might add is still used first: its PR's runs would start by
+# a maintainer might add is still used first: its PR's runs would start by
 # themselves, and its tags start nothing that is not already called here.
 name: release-please
 on:
@@ -66,7 +64,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - name: No 1.x release without the operator
+      - name: No 1.x release without AGENTRY_ALLOW_V1
         env:
           AGENTRY_ALLOW_V1: ${{ vars.AGENTRY_ALLOW_V1 }}
         run: ./scripts/release/config-guard.sh release
@@ -76,7 +74,7 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           # Releases are cut from main (production); dev is the integration
           # branch and may become the repository's default, which this action
-          # would otherwise target (agentry-notes#156).
+          # would otherwise target.
           target-branch: main
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json

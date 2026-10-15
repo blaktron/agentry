@@ -8,7 +8,7 @@ import (
 )
 
 // /meta names the deployment and says whether it serves its own browser
-// pages (DEV-091), so a client can call it by name and open the
+// pages, so a client can call it by name and open the
 // device-authorize page wherever it lives.
 func TestMetaReportsBrandAndUI(t *testing.T) {
 	type meta struct {

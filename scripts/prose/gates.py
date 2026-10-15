@@ -15,12 +15,11 @@ is worse than useless here, because deleting the sentence that contains "safe"
 satisfies it. The two halves are one gate: the protected list says the
 disclaimers must be there, the never list says nothing else may use the word.
 
-This is the core's copy of the site's gate (blaktron/agentry-web
-scripts/prose), with the TSX extractor dropped: the core ships markdown, its
-HTML templates and its Go strings, and only the markdown is gated. The
-templates and the notifier are read by the advisory half in check.sh. It masks
-quoted spans as well, which the site's copy does not; the issue's acceptance
-asked for that. A never-word inside "…" on one line is a mention rather than a
+This is the core's copy of the hosted site's gate, with the TSX extractor
+dropped: the core ships markdown, its HTML templates and its Go strings, and
+only the markdown is gated. The templates and the notifier are read by the
+advisory half in check.sh. It masks quoted spans as well, which the site's
+copy does not. A never-word inside "…" on one line is a mention rather than a
 claim, so it is not a hit, and allow.txt carries the reasons only for the
 occurrences outside quotes.
 
@@ -101,7 +100,7 @@ def check_protected(root: Path, protected: Path) -> int:
                 print(f"              expected, byte for byte: {sentence}")
                 missing += 1
     if missing:
-        print(f"\nprotected: {missing} sentence(s) not found where the plan §4.6 says they must be")
+        print(f"\nprotected: {missing} sentence(s) not found where protected.txt says they must be")
     return 1 if missing else 0
 
 
@@ -231,7 +230,7 @@ def check_never(units: list[Unit], never: Path, allow: Path) -> int:
                 print(f"              …{unit.text[lo:hi]}…")
                 hits += 1
     if hits:
-        print(f"\nnever: {hits} banned word(s) outside an allowlisted span (plan §4.4)")
+        print(f"\nnever: {hits} banned word(s) outside an allowlisted span (never.txt)")
     return 1 if hits else 0
 
 

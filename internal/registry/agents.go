@@ -1,5 +1,5 @@
-// Package registry owns the agent/version domain (§2.1 L3): agent creation,
-// resolution, effective-permission computation, and (from M3) the publication
+// Package registry owns the agent/version domain: agent creation,
+// resolution, effective-permission computation, and the publication
 // state machine.
 package registry
 
@@ -21,61 +21,61 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// AgentNameRe is the §4.2 agent-name grammar.
+// AgentNameRe is the agent-name grammar.
 var AgentNameRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$`)
 
-// Namespace agent quotas come from the entitlements Resolver (§14.2, §19),
+// Namespace agent quotas come from the entitlements Resolver,
 // not from constants here: an org on a larger plan raises the number without
 // this package learning that plans exist.
 
 // Service is the agent-domain service shared by the API and git layers.
 // Bare repositories are NOT created here: the git layer initializes them
-// lazily on first access (§13.3 — only the git role mounts repo storage).
+// lazily on first access (only the git role mounts repo storage).
 type Service struct {
 	st    *store.Store
 	aud   *audit.Writer
 	blobs BlobStore
-	// pipeline receives submitted versions (M3 dev stub / M4 orchestrator).
+	// pipeline receives submitted versions.
 	pipeline Pipeline
 	// gitArchiver produces tag archives for git-tag submissions; nil on
-	// roles without repo storage (SaaS api role — M7 routes via workers).
+	// roles without repo storage (the hosted api role routes via workers).
 	gitArchiver GitArchiver
 	// archiveHandOff, when set, takes the archive write of a git-tag
 	// submission off this process: the git role holds no object-store
 	// credential, so it records the version and a worker stores the
-	// archive (agentry#508, tag_archive.go). nil = write it here.
+	// archive (tag_archive.go). nil = write it here.
 	archiveHandOff ArchiveHandOff
-	// forkHandOff enqueues a fork's copy; forkRepos copies it (agentry#943).
+	// forkHandOff enqueues a fork's copy; forkRepos copies it.
 	forkHandOff ForkHandOff
 	forkRepos   ForkRepos
 	// eventSink receives post-commit state transitions for webhook fan-out
-	// (§9.3, M6). Set by the api layer; nil = no fan-out.
+	// (webhooks). Set by the api layer; nil = no fan-out.
 	eventSink EventSink
 	// orgEventSink is the same fan-out for organization-scoped events
 	// (membership.go). Set by the api layer; nil = no fan-out.
 	orgEventSink OrgEventSink
-	// staffOrg and staffDomain name the staff organization (staff.go,
-	// agentry#556); both empty leaves platform_staff alone.
+	// staffOrg and staffDomain name the staff organization (staff.go);
+	// both empty leaves platform_staff alone.
 	staffOrg, staffDomain string
 	// staffChanged is told when a sync changed someone's platform_staff
-	// (the api layer's directory mirror, agentry#598); nil tells nobody.
+	// (the api layer's directory mirror); nil tells nobody.
 	staffChanged func()
-	// policyGate enforces the §8.6 knobs that reject at V-validation time.
+	// policyGate enforces the policy knobs that reject at V-validation time.
 	// nil = platform baseline only (no submission-time policy rejections).
 	policyGate PolicyGate
-	// require2FAPublic turns on the §12.1/§19 gate for public publishes.
+	// require2FAPublic turns on the 2FA gate for public publishes.
 	require2FAPublic bool
-	// ipClusterSecret keys the S8 IP-cluster hash (agentry#27); empty = off.
+	// ipClusterSecret keys the S8 IP-cluster hash; empty = off.
 	ipClusterSecret []byte
-	// entitlements resolves the §19 quotas (§14.2). nil = shipped defaults.
+	// entitlements resolves the quotas. nil = shipped defaults.
 	entitlements entitlements.Resolver
 	// admitter is the admission seam (admission.go); nil admits everything.
 	admitter Admitter
 	log      *slog.Logger
 }
 
-// PolicyGate evaluates the §8.6 policy knobs that reject a submission before
-// it ever enters the state machine: blockedCapabilities, allowedLicenses and
+// PolicyGate evaluates the policy knobs that reject a submission before it
+// ever enters the state machine: blockedCapabilities, allowedLicenses and
 // requireEvals. It is a seam because resolving the effective policy needs the
 // scan package, which already depends on this one.
 type PolicyGate interface {
@@ -98,10 +98,10 @@ type PolicySubmission struct {
 	Files []manifest.FileInfo
 }
 
-// SetPolicyGate wires submission-time policy enforcement (§8.6).
+// SetPolicyGate wires submission-time policy enforcement.
 func (s *Service) SetPolicyGate(g PolicyGate) { s.policyGate = g }
 
-// SetPublicPublish2FA enables the §12.1/§19 gate: publishing to a public
+// SetPublicPublish2FA enables the 2FA gate: publishing to a public
 // namespace requires TOTP on the submitting account.
 func (s *Service) SetPublicPublish2FA(on bool) { s.require2FAPublic = on }
 
@@ -116,12 +116,12 @@ func (s *Service) logger() *slog.Logger {
 }
 
 // EventSink receives a committed state transition so the caller can fan it out
-// to webhooks (§9.3). It runs after the transition transaction commits, so a
+// to webhooks. It runs after the transition transaction commits, so a
 // webhook failure never affects the state change. agentID lets the sink resolve
 // the owning org; payload carries version/from/to.
 type EventSink func(ctx context.Context, agentID uuid.UUID, event string, payload map[string]any)
 
-// SetEventSink wires the post-commit transition fan-out (M6 webhooks).
+// SetEventSink wires the post-commit transition fan-out (webhooks).
 func (s *Service) SetEventSink(sink EventSink) { s.eventSink = sink }
 
 // NewService assembles the registry service. blobs may be nil for callers
@@ -133,10 +133,10 @@ func NewService(st *store.Store, aud *audit.Writer) *Service {
 // SetBlobStore wires archive storage (required for submissions).
 func (s *Service) SetBlobStore(b BlobStore) { s.blobs = b }
 
-// SetEntitlements wires the §14.2 quota resolver.
+// SetEntitlements wires the quota resolver.
 func (s *Service) SetEntitlements(r entitlements.Resolver) { s.entitlements = r }
 
-// Entitlements returns the wired resolver, or the shipped §19 defaults when
+// Entitlements returns the wired resolver, or the shipped defaults when
 // none was set. Defaulting to the OSS resolver rather than to nil means a
 // half-wired service still enforces quotas — an unwired seam must not read as
 // "no limits".
@@ -151,11 +151,11 @@ func (s *Service) Entitlements() entitlements.Resolver {
 func (s *Service) SetGitArchiver(g GitArchiver) { s.gitArchiver = g }
 
 // GitArchiver materializes the tree of a tag into a workspace directory and
-// returns the peeled commit id (§6.5 step 1: git archive, never a
+// returns the peeled commit id (git archive, never a
 // working-tree checkout; export-ignore disabled — the manifest allowlist is
 // the only filter). MaterializeCommit does the same for a commit already
 // resolved: the worker rebuilds a git-tag submission's archive from the
-// commit the git role recorded (agentry#508).
+// commit the git role recorded.
 type GitArchiver interface {
 	MaterializeTag(ctx context.Context, repoID uuid.UUID, tag, dst string) (commitSHA string, err error)
 	MaterializeCommit(ctx context.Context, repoID uuid.UUID, commit, dst string) error
@@ -167,7 +167,7 @@ var ErrNotFound = errors.New("registry: not found")
 // ErrDenied wraps authorization failures with domain context.
 var ErrDenied = errors.New("registry: denied")
 
-// ErrTwoFactorRequired reports the §12.1/§19 public-publish 2FA gate. It is
+// ErrTwoFactorRequired reports the public-publish 2FA gate. It is
 // distinct from ErrDenied so the API can answer 403 with an actionable
 // message rather than folding it into a validation error.
 var ErrTwoFactorRequired = errors.New("registry: two-factor authentication required")
@@ -177,7 +177,7 @@ type Agent = storegen.GetAgentByPathRow
 
 // Resolve loads an agent by namespace/name path.
 //
-// A deleted agent's tombstone (agentry#942) is not found: every route by
+// A deleted agent's tombstone is not found: every route by
 // name, the git transport, the extensions' read seam and the tag-push
 // submission all resolve through here, so a tombstone answers the 404 a
 // missing name gets on all of them at once.
@@ -196,7 +196,7 @@ func (s *Service) resolve(ctx context.Context, namespace, name string, includeDe
 	return row, nil
 }
 
-// EffectiveRole computes the caller's effective agent role (§12.2):
+// EffectiveRole computes the caller's effective agent role:
 // max(namespace-derived, explicit user grant, explicit team grants).
 func (s *Service) EffectiveRole(ctx context.Context, p *auth.Principal, a Agent) (auth.AgentRole, error) {
 	if p == nil || p.Anonymous {
@@ -226,12 +226,12 @@ type CreateAgentInput struct {
 	Name       string
 	Visibility string
 	Summary    string
-	// Modes are the run modes the agent supports (DEV-088); empty means
+	// Modes are the run modes the agent supports; empty means
 	// [autonomous], the mode every v1 package maps to.
 	Modes []string
 }
 
-// Run modes an agent row may carry (DEV-088). The manifest package owns the
+// Run modes an agent row may carry. The manifest package owns the
 // vocabulary; this mirror keeps the store free of a pkg/manifest import.
 var validModes = map[string]bool{"autonomous": true, "interactive": true}
 
@@ -258,8 +258,8 @@ func normalizeModes(modes []string) ([]string, error) {
 
 // CreateAgent creates the agent row and its bare repository. The caller is
 // authorized here: personal namespace = self; org namespace = any active
-// member (D6, agentry#362 — a seat buys a share of the organization's
-// namespace, and an admin is a member with more). A pending member is not
+// member (a seat buys a share of the organization's namespace, and an
+// admin is a member with more). A pending member is not
 // one: their membership never reaches Principal.OrgRoles.
 func (s *Service) CreateAgent(ctx context.Context, p *auth.Principal, in CreateAgentInput, actorEvent audit.Event) (Agent, error) {
 	if p == nil || p.Anonymous {
@@ -324,8 +324,7 @@ type createTarget struct {
 }
 
 // createTarget authorizes p to create an agent of the given visibility in
-// namespace — the one rule for a create and a fork (agentry#943, the plan's
-// invariant 9): a personal namespace is its owner's; an organization's is
+// namespace — the one rule for a create and a fork: a personal namespace is its owner's; an organization's is
 // any active member's, a public one its administrators' alone; nothing is
 // added to an organization that is suspended or in its decommission hold;
 // the account's address must be verified.
@@ -338,7 +337,7 @@ func (s *Service) createTarget(ctx context.Context, p *auth.Principal, namespace
 		return createTarget{}, fmt.Errorf("registry: namespace: %w", err)
 	}
 
-	// Namespace authorization + quota (§19).
+	// Namespace authorization + quota.
 	subject := entitlements.ForUser(ns.ID)
 	switch ns.Kind {
 	case "user":
@@ -347,7 +346,7 @@ func (s *Service) createTarget(ctx context.Context, p *auth.Principal, namespace
 		}
 	case "org":
 		// Nothing is added to an organization that is suspended or in its
-		// decommission hold (agentry#363) — asked first, so a suspended
+		// decommission hold — asked first, so a suspended
 		// organization is as absent to a stranger as to a member.
 		if err := s.OrgGate(ctx, ns.ID, auth.ActAgentCreate); err != nil {
 			return createTarget{}, err
@@ -360,7 +359,7 @@ func (s *Service) createTarget(ctx context.Context, p *auth.Principal, namespace
 		}
 		// Putting the organization's name on something the world can see
 		// is the same decision as making an existing agent public, and it
-		// belongs to the same people (D19, agentry#362). Enforcing it only
+		// belongs to the same people. Enforcing it only
 		// on the transition would leave "create it public" as the way
 		// round: the state is what matters, not how it was reached.
 		if visibility == "public" && derived != auth.AgentRoleAdmin {
@@ -368,7 +367,7 @@ func (s *Service) createTarget(ctx context.Context, p *auth.Principal, namespace
 		}
 		subject = entitlements.ForOrg(ns.ID)
 	}
-	// Publishing requires verified email (§19); creating an agent is the
+	// Publishing requires verified email; creating an agent is the
 	// first step of that path, so gate here where the journey starts.
 	if !p.EmailVerified {
 		return createTarget{}, fmt.Errorf("%w: verify this account's email address before creating a QuickAgent", ErrDenied)
@@ -384,10 +383,9 @@ func (s *Service) createTarget(ctx context.Context, p *auth.Principal, namespace
 // checkRoomInTx is the namespace's agent quota and, for a private agent,
 // its private-agent cap, inside the transaction that inserts the agent.
 // The counts and the insert commit together, under the namespace's row
-// lock: read on the pool before the transaction, as they were, N
-// concurrent creates at the quota or the cap each saw the same count and
-// every one landed (agentry#411; the seat cap in membership.go has always
-// done it this way).
+// lock: counted on the pool before the transaction, N concurrent creates
+// at the quota or the cap would each see the same count and every one
+// would land (the seat cap in membership.go works the same way).
 func (s *Service) checkRoomInTx(ctx context.Context, q *storegen.Queries, t createTarget, visibility string) error {
 	if err := q.LockNamespace(ctx, t.ns.ID); err != nil {
 		return fmt.Errorf("registry: lock namespace: %w", err)
@@ -414,7 +412,7 @@ func newUUID() uuid.UUID {
 }
 
 // ErrPrivateAgentCap reports that a namespace holds as many private agents
-// as its subscription tier allows (plan subscription-tiers §5.3). The API
+// as its subscription tier allows. The API
 // answers 422 private-agent-cap. A cap never deletes: over it, nothing can
 // be added and nothing already private is touched.
 var ErrPrivateAgentCap = errors.New("registry: this namespace holds as many private agents as its tier allows")
@@ -422,7 +420,7 @@ var ErrPrivateAgentCap = errors.New("registry: this namespace holds as many priv
 // CheckPrivateAgentCapInTx is the private-agent cap for the handler that
 // flips an agent's visibility, inside that handler's transaction: it takes
 // the namespace's row lock first, so the count and the update commit
-// together (agentry#411).
+// together.
 func (s *Service) CheckPrivateAgentCapInTx(ctx context.Context, q *storegen.Queries, a Agent) error {
 	if err := q.LockNamespace(ctx, a.NamespaceID); err != nil {
 		return fmt.Errorf("registry: lock namespace: %w", err)
@@ -438,7 +436,7 @@ func (s *Service) CheckPrivateAgentCap(ctx context.Context, a Agent) error {
 
 // CheckPrivateAgentCapFor refuses adding n more private agents to an
 // organization's namespace at once — an erased account's catalogue moving
-// in (agentry#363: the transfer door respects the cap). n of zero always
+// in (the transfer door respects the cap). n of zero always
 // passes.
 func (s *Service) CheckPrivateAgentCapFor(ctx context.Context, orgID uuid.UUID, n int64) error {
 	if n <= 0 {

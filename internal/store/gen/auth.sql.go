@@ -31,7 +31,7 @@ type CreatePATParams struct {
 	ExpiresAt   time.Time  `json:"expires_at"`
 }
 
-// PATs and sessions (M1/WG-B, D-22, D-23).
+// PATs and sessions.
 func (q *Queries) CreatePAT(ctx context.Context, arg CreatePATParams) (Pat, error) {
 	row := q.db.QueryRow(ctx, createPAT,
 		arg.ID,
@@ -81,7 +81,7 @@ type CreateSAMLSessionParams struct {
 	SamlSessionIndex *string     `json:"saml_session_index"`
 }
 
-// SAML Single Logout (§12.4, agentry#62).
+// SAML Single Logout.
 func (q *Queries) CreateSAMLSession(ctx context.Context, arg CreateSAMLSessionParams) (Session, error) {
 	row := q.db.QueryRow(ctx, createSAMLSession,
 		arg.ID,
@@ -298,8 +298,7 @@ const revokeAllPATsForUser = `-- name: RevokeAllPATsForUser :execrows
 UPDATE pats SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL
 `
 
-// Clear-data (agentry#498): every live token the user holds, org-bound ones
-// included.
+// Clear-data: every live token the user holds, org-bound ones included.
 func (q *Queries) RevokeAllPATsForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeAllPATsForUser, userID)
 	if err != nil {

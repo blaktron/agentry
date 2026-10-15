@@ -10,7 +10,7 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// TestArchiveReproducible pins D-15: identical trees produce byte-identical
+// TestArchiveReproducible pins that identical trees produce byte-identical
 // archives regardless of mtimes, walk order, or when they are built.
 func TestArchiveReproducible(t *testing.T) {
 	build := func(dir string) (ArchiveInfo, []byte) {
@@ -81,7 +81,7 @@ func TestArchiveReproducible(t *testing.T) {
 }
 
 // WalkWorkspace classifies text the way S1 does, so V8's prose total sees
-// the same files the scanners read (agentry#44).
+// the same files the scanners read.
 func TestWalkWorkspaceClassifiesText(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name string, b []byte) {

@@ -1,5 +1,5 @@
 // Package dnsx abstracts DNS TXT lookups behind an interface so domain
-// verification (§12.4) is testable with an injected fake resolver. The
+// verification is testable with an injected fake resolver. The
 // production implementation uses net.Resolver.
 package dnsx
 

@@ -1,4 +1,4 @@
-// §17.6 baseline: search p95 < 300 ms at the 10k-agent seed dataset.
+// Baseline: search p95 < 300 ms at the 10k-agent seed dataset.
 //
 //   BASE_URL=https://staging.agentry.invalid k6 run scripts/perf/search.js
 //
@@ -20,7 +20,7 @@ export const options = {
   },
   thresholds: {
     http_req_failed: ["rate<0.001"],
-    // The §17.6 number. Faceted search gets the same budget: a facet that
+    // The baseline number. Faceted search gets the same budget: a facet that
     // costs 3x is a facet nobody will use.
     search_duration: ["p(95)<300"],
     search_faceted_duration: ["p(95)<300"],

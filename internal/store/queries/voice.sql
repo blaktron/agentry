@@ -1,5 +1,5 @@
--- The Writing Voice (plan writing-voice.md §4, agentry#809). Every read and
--- write names the person: a voice is found only by its owner.
+-- The Writing Voice. Every read and write names the person: a voice is found
+-- only by its owner.
 
 -- name: CreateVoice :one
 -- A person's voice row, made with the first version they put; a second
@@ -28,8 +28,8 @@ SELECT * FROM voice_versions WHERE id = $1;
 DELETE FROM voice_versions WHERE user_id = $1 AND slot = $2;
 
 -- name: InsertPendingVoiceVersion :one
--- A new version for review. The pending one it replaces, if any, is
--- deleted first in the same transaction (one pending a person, D13).
+-- A new version for review. The pending one it replaces, if any, is deleted
+-- first in the same transaction (one pending version per person).
 INSERT INTO voice_versions (user_id, slot, review_state, source, sealed, digest, bytes)
 VALUES ($1, 'pending', 'reviewing', $2, $3, $4, $5)
 RETURNING *;
@@ -50,7 +50,7 @@ RETURNING *;
 
 -- name: FlagVoiceVersion :one
 -- A flagged review: the version stays pending, with its findings, and the
--- live one stays live (D7).
+-- live one stays live.
 UPDATE voice_versions
 SET review_state = 'flagged', review = $2, question_set = $3, reviewed_at = now(), updated_at = now()
 WHERE id = $1 AND slot = 'pending' AND review_state = 'reviewing'
@@ -83,8 +83,8 @@ SET slot = CASE slot WHEN 'live' THEN 'previous' ELSE 'live' END, updated_at = n
 WHERE user_id = $1 AND slot IN ('live', 'previous');
 
 -- name: SetVoiceWentLive :one
--- A version went live. The first time, the account's always-attach flag
--- comes on (D11); after that it stays as the person set it.
+-- A version went live. The first time, the account's always-attach flag comes
+-- on; after that it stays as the person set it.
 UPDATE voices
 SET always_attach = CASE WHEN went_live THEN always_attach ELSE true END, went_live = true, updated_at = now()
 WHERE user_id = $1

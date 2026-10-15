@@ -1,6 +1,6 @@
 // Package store owns PostgreSQL access: the pgx pool, goose migrations, and
-// (from M1) sqlc-generated typed queries. All SQL lives here (D-04); no other
-// package builds SQL strings.
+// sqlc-generated typed queries. All SQL lives here; no other package builds
+// SQL strings.
 package store
 
 import (
@@ -29,7 +29,7 @@ import (
 var migrationsFS embed.FS
 
 // Store wraps the connection pool. Domain packages depend on Store, never on
-// pgx directly, so the tenancy helpers (D-24) have one place to live.
+// pgx directly, so the tenancy helpers have one place to live.
 type Store struct {
 	pool *pgxpool.Pool
 }
@@ -66,7 +66,7 @@ func (s *Store) WithTx(ctx context.Context, fn func(q *storegen.Queries) error) 
 
 // WithPgxTx is WithTx that also hands fn the transaction itself, for a step
 // that is not a generated query: an extension's own writes in the core's
-// erasure (pkg/extension.ErasesAccounts, agentry#638).
+// erasure (pkg/extension.ErasesAccounts).
 func (s *Store) WithPgxTx(ctx context.Context, fn func(tx pgx.Tx, q *storegen.Queries) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -137,9 +137,9 @@ func Migrate(ctx context.Context, databaseURL string) error {
 		return fmt.Errorf("store: migrate: %w", err)
 	}
 	// River's own tables and version table (river_job, river_queue,
-	// river_leader, river_client, river_migration), DEV-005's swap
-	// (agentry#39). Under the same advisory lock; River's migrator runs on
-	// its own pgx connection because it speaks the pgx driver, not database/sql.
+	// river_leader, river_client, river_migration). Under the same
+	// advisory lock; River's migrator runs on its own pgx connection
+	// because it speaks the pgx driver, not database/sql.
 	return migrateRiver(ctx, databaseURL)
 }
 
@@ -159,8 +159,8 @@ func migrateRiver(ctx context.Context, databaseURL string) error {
 	return nil
 }
 
-// MigrateExtension runs an extension's goose migrations (pkg/extension,
-// DEV-091) under the extension's own version table
+// MigrateExtension runs an extension's goose migrations (pkg/extension)
+// under the extension's own version table
 // (ent_<name>_goose_version), so the core's numbering and an extension's
 // never collide; the SQL owns its schema (CREATE SCHEMA IF NOT EXISTS
 // ent_<name>). Same in-process mutex as Migrate and a per-extension

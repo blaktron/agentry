@@ -85,7 +85,7 @@ func TestTOTPRoundTrip(t *testing.T) {
 	}
 }
 
-// TestCheckTruthTable pins the §12.2 role thresholds explicitly, independent
+// TestCheckTruthTable pins the role thresholds explicitly, independent
 // of the matrix test (which reuses Check to derive expectations).
 func TestCheckTruthTable(t *testing.T) {
 	orgID := uuid.New()
@@ -125,8 +125,8 @@ func TestCheckTruthTable(t *testing.T) {
 		{"admin settings", principal(RoleAdmin), ActOrgSettingsManage, orgID, true},
 		{"member no settings", principal(RoleMember), ActOrgSettingsManage, orgID, false},
 		{"security_reviewer no settings", principal(RoleSecurityReviewer), ActOrgSettingsManage, orgID, false},
-		// The retired owner value is nobody: a stale row or token that still
-		// carries it holds no role at all (agentry#360).
+		// The value "owner" is not a role and ranks as nobody: a stale row
+		// or token that still carries it holds no role at all.
 		{"retired owner is nobody", principal(OrgRole("owner")), ActOrgMembersRead, orgID, false},
 	}
 	for _, tc := range cases {
@@ -142,7 +142,7 @@ func TestCheckTruthTable(t *testing.T) {
 	}
 }
 
-// TestCheckPATScopes pins PAT scope gating (§12.3).
+// TestCheckPATScopes pins PAT scope gating.
 func TestCheckPATScopes(t *testing.T) {
 	orgID := uuid.New()
 	pat := func(role OrgRole, scopes ...string) *Principal {
@@ -165,7 +165,7 @@ func TestCheckPATScopes(t *testing.T) {
 	}
 }
 
-// A principal loaded for a user with no credential (agentry#838) is asked
+// A principal loaded for a user with no credential is asked
 // of the agent seams on its role alone and authorizes no route: Check
 // refuses it whatever the role, where the same user's session passes.
 func TestCheckRefusesAPrincipalWithNoCredential(t *testing.T) {
@@ -189,7 +189,7 @@ func TestCheckRefusesAPrincipalWithNoCredential(t *testing.T) {
 	}
 }
 
-// A schedule's credential (agentry#1002) is gated as a token minted with
+// A schedule's credential is gated as a token minted with
 // ScheduleScopes, on top of the role: an admin's schedule reads their
 // private agent and does nothing an admin's session could, from managing
 // the organization to minting a token.
@@ -234,7 +234,7 @@ func TestCheckScheduleCredential(t *testing.T) {
 	}
 }
 
-// The hosted-run scopes (agentry#348): valid, in the enumeration, flat, and
+// The hosted-run scopes: valid, in the enumeration, flat, and
 // mapped to no core action — a token carrying only them unlocks nothing
 // in the core.
 func TestRunScopesAreValidFlatAndUnlockNoCoreAction(t *testing.T) {
@@ -260,9 +260,8 @@ func TestRunScopesAreValidFlatAndUnlockNoCoreAction(t *testing.T) {
 	}
 }
 
-// The vault scope (agentry#676, plan hosted-credentials-vault.md D13):
-// valid, enumerated, flat, and mapped to no core action — only the
-// enterprise build's vault consumes it.
+// The vault scope: valid, enumerated, flat, and mapped to no core action
+// — only the hosted vault consumes it.
 func TestSecretWriteIsValidFlatAndUnlocksNoCoreAction(t *testing.T) {
 	if !ValidScope(ScopeSecretWrite) {
 		t.Fatal("secret:write is not a valid scope")
@@ -285,10 +284,9 @@ func TestSecretWriteIsValidFlatAndUnlocksNoCoreAction(t *testing.T) {
 }
 
 // TestNamespaceDerivedAgentRole pins what a membership confers on an org's
-// agents before any grant (§12.2, D6, D19; agentry#360, agentry#362): an
-// admin administers them, an active member may release them, and everyone
-// else holds nothing until a grant says otherwise. A pending member needs
-// no row here: an inactive membership never reaches OrgRoles, so they
+// agents before any grant: an admin administers them, an active member
+// may release them, and everyone else holds nothing until a grant says
+// otherwise. A pending member needs no row here: an inactive membership never reaches OrgRoles, so they
 // arrive as RoleNone — the "outsider" case is theirs too.
 func TestNamespaceDerivedAgentRole(t *testing.T) {
 	orgID, userID := uuid.New(), uuid.New()
@@ -322,7 +320,7 @@ func TestNamespaceDerivedAgentRole(t *testing.T) {
 
 // TestAgentRoleLadder pins the order the thresholds read, and that the top
 // of it cannot be handed out: a grant must never be a way to acquire the
-// acts that decide what an agent is (agentry#362).
+// acts that decide what an agent is.
 func TestAgentRoleLadder(t *testing.T) {
 	ascending := []AgentRole{AgentRoleNone, AgentRoleRead, AgentRoleWrite, AgentRoleMaintain, AgentRolePublish, AgentRoleAdmin}
 	for i := 1; i < len(ascending); i++ {
@@ -336,7 +334,7 @@ func TestAgentRoleLadder(t *testing.T) {
 	if ValidAgentRole(AgentRoleAdmin) {
 		t.Fatal("AgentRoleAdmin is grantable: a grant on one agent would hand out the organization's own authority")
 	}
-	// The one that matters for D19: publish does not reach the acts that
+	// The one that matters: publish does not reach the acts that
 	// decide what the agent is, so an organization's members do not.
 	publisher := AgentResource{EffectiveRole: AgentRolePublish}
 	if err := CheckAgent(&Principal{UserID: uuid.New(), Via: "session"}, publisher, ActAgentPublish); err != nil {
@@ -348,8 +346,8 @@ func TestAgentRoleLadder(t *testing.T) {
 }
 
 // TestHoldPermits pins what an organization in its decommission hold still
-// permits (agentry#363, D23): the reads, and a member leaving. The list is
-// kept by hand beside minRole, so a change to it is a deliberate one.
+// permits: the reads, and a member leaving. The list is kept by hand
+// beside minRole, so a change to it is a deliberate one.
 func TestHoldPermits(t *testing.T) {
 	permitted := map[Action]bool{
 		ActOrgRead: true, ActOrgMembersRead: true, ActOrgTeamsRead: true, ActOrgAuditRead: true,
@@ -375,7 +373,7 @@ func TestHoldPermits(t *testing.T) {
 	}
 }
 
-// TestAgentManageScope (agentry#993): agent:manage admits the owner
+// TestAgentManageScope: agent:manage admits the owner
 // actions and nothing else of org:admin's, org:admin still admits them,
 // and neither lowers the administrators' rung.
 func TestAgentManageScope(t *testing.T) {

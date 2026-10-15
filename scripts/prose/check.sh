@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# The prose gate (plan front-end-voice-and-warmth §7, agentry#258).
+# The prose gate.
 #
 #   scripts/prose/check.sh              run the gate over the working tree
 #   scripts/prose/check.sh --self-test  prove the gate fails when it should
 #
-# Two strengths, on purpose (D4):
+# Two strengths, on purpose:
 #
-#   BLOCKING  the posture sentences of §4.6 are present byte for byte, with
-#             whitespace normalised, in the files that carry them; and no
-#             never-word of §4.4 appears in the core's markdown outside an
-#             allowlisted span. Both halves are needed: a word ban alone is
+#   BLOCKING  the posture sentences (protected.txt) are present byte for
+#             byte, with whitespace normalised, in the files that carry
+#             them; and no never-word (never.txt) appears in the core's
+#             markdown outside an allowlisted span. Both halves are needed: a word ban alone is
 #             satisfied by deleting the disclaimer, and a presence check alone
 #             lets "safe" spread everywhere else.
 #
 #   ADVISORY  the unslop battery over the markdown, the server's HTML
 #             templates and the notifier's sentences, printed and never fatal.
-#             A scanner hit is a candidate, not a finding: the panel of
-#             2026-09-08 put thirty pairs through these scripts and every
-#             softened disclaimer passed all of them.
+#             A scanner hit is a candidate, not a finding: in a trial of
+#             thirty softened disclaimers, every one passed all of the
+#             unslop scripts.
 #
-# This is the core's copy of the site's gate (blaktron/agentry-web
-# scripts/prose), with the TSX extractor dropped and quoted spans masked as
+# This is the core's copy of the hosted site's gate, with the TSX
+# extractor dropped and quoted spans masked as
 # well as fences and inline code. A never-word inside "…" on one line is a
 # mention rather than a claim, so it is not a hit, and allow.txt carries the
 # reasons only for the occurrences outside quotes. It is stdlib Python 3 and
@@ -294,7 +294,7 @@ fi
 
 status=0
 
-rule "blocking: the posture sentences are where §4.6 says they are"
+rule "blocking: the posture sentences are present"
 if "$PY" "$HERE/gates.py" protected --root "$ROOT"; then
   echo "  OK: every protected sentence is present, byte for byte"
 else

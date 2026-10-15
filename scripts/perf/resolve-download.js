@@ -1,4 +1,4 @@
-// §17.6 baseline: resolve + download, 500 rps sustained.
+// Baseline: resolve + download, 500 rps sustained.
 //
 // The pair is measured together because that is the shape of a real install:
 // the CLI resolves `ns/name@range` to a version, then follows the download
@@ -13,7 +13,7 @@ import { check } from "k6";
 import { Trend } from "k6/metrics";
 
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
-const RATE = Number(__ENV.RATE || 500); // §17.6 target
+const RATE = Number(__ENV.RATE || 500); // target
 const DURATION = __ENV.DURATION || "5m";
 const SEED_PREFIX = __ENV.SEED_PREFIX || "seed";
 const SEED_COUNT = Number(__ENV.SEED_COUNT || 10000);

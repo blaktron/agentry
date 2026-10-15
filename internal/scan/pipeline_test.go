@@ -1,6 +1,6 @@
 package scan_test
 
-// M4 pipeline integration (§8, §7) against real Postgres: a benign version
+// Pipeline integration against real Postgres: a benign version
 // scans clean → published + signed; a malicious version gates → needs_review
 // with a review item and no attestation; the state machine never lands in
 // published without passing the gate.
@@ -83,7 +83,7 @@ func newPipeEnv(t *testing.T, opts ...func(*scan.PipelineDeps)) *pipeEnv {
 	}
 	pipe := scan.NewPipeline(deps)
 	// Synchronous pipeline: submit runs the scan inline. The policy gate is
-	// the same wiring api.New does, so the §8.6 submission-time knobs are
+	// the same wiring api.New does, so the submission-time policy knobs are
 	// exercised here rather than only through HTTP.
 	reg.SetPipeline(pipe)
 	reg.SetPolicyGate(pipe)
@@ -200,7 +200,7 @@ func TestPipelineBenignPublishesAndSigns(t *testing.T) {
 	if v.Status != "published" {
 		t.Fatalf("benign version status = %s, want published", v.Status)
 	}
-	// Attestation must exist and verify (§8.8).
+	// Attestation must exist and verify.
 	att, err := e.st.Queries().GetAttestation(context.Background(), v.ID)
 	if err != nil {
 		t.Fatalf("no attestation for published version: %v", err)
@@ -210,10 +210,10 @@ func TestPipelineBenignPublishesAndSigns(t *testing.T) {
 	}
 }
 
-// The pipeline hands the submitter's platform-staff flag to S8
-// (agentry#563): a new account's fifth version in a week trips
+// The pipeline hands the submitter's platform-staff flag to S8:
+// a new account's fifth version in a week trips
 // S8/publisher-velocity, and the same account as staff does not. The finding
-// is medium, so since ruleset 0.3.0 both publish (agentry#773).
+// is medium, so both publish.
 func TestPipelineStaffSubmitterSkipsPublisherVelocity(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
@@ -275,7 +275,7 @@ func TestPipelineMaliciousGatesToReview(t *testing.T) {
 	if v.Status != "needs_review" && v.Status != "rejected" {
 		t.Fatalf("malicious version status = %s, want needs_review/rejected", v.Status)
 	}
-	// No attestation for an unpublished version (§7: sign once, on publish).
+	// No attestation for an unpublished version (sign once, on publish).
 	if _, err := e.st.Queries().GetAttestation(context.Background(), v.ID); err == nil {
 		t.Fatal("unpublished version must not be signed")
 	}
@@ -305,7 +305,7 @@ func suffix() string {
 	return strconv.FormatInt(time.Now().UnixNano()%1_000_000_000, 36)
 }
 
-// TestPipelineRecordsTheJudgesModelID pins agentry#321 through the pipeline:
+// TestPipelineRecordsTheJudgesModelID pins through the pipeline that
 // the scan run row and the signed attestation carry the model that
 // adjudicated (the configured id of an HTTP judge), not the provider's name;
 // and under the static judge both keep saying "static", so nothing already
@@ -406,11 +406,9 @@ func (f *flakySigner) Sign(stmt scan.InTotoStatement) (scan.DSSEEnvelope, error)
 }
 
 // TestPipelineSigningFailureLeavesNothingPublished: a version is never
-// `published` without its attestation. The transition used to come first
-// and the signature last, so a signing failure left a published,
-// unattested version the retry then swallowed as "moved" (security review
-// 2026-09-20 §5.4, M13). Signing comes first now, and the retry finds a
-// version still in `scanning` and finishes the job.
+// `published` without its attestation. Signing comes before the
+// transition, so a signing failure leaves the version in `scanning`
+// and the retry finishes the job.
 func TestPipelineSigningFailureLeavesNothingPublished(t *testing.T) {
 	var flaky *flakySigner
 	e := newPipeEnv(t, func(d *scan.PipelineDeps) {
@@ -469,7 +467,7 @@ func TestPipelineSigningFailureLeavesNothingPublished(t *testing.T) {
 }
 
 // TestAttestSweepSignsAPublishedVersionWithoutOne: the reconciler for
-// versions that reached `published` unattested before the ordering above
+// versions that reached `published` unattested
 // (or through any path that skips the pipeline's signer).
 func TestAttestSweepSignsAPublishedVersionWithoutOne(t *testing.T) {
 	e := newPipeEnv(t)
@@ -482,7 +480,7 @@ func TestAttestSweepSignsAPublishedVersionWithoutOne(t *testing.T) {
 	if v.Status != "published" {
 		t.Fatalf("status = %s", v.Status)
 	}
-	// Make it the shape the review found: published, no attestation row.
+	// Make it the shape the sweep targets: published, no attestation row.
 	if _, err := e.st.Pool().Exec(ctx, `DELETE FROM attestations WHERE version_id = $1`, v.ID); err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,6 @@
 package api_test
 
-// Browser mode for an organization's SSO (agentry#365, M13; plan
-// organization-subscriptions.md §5.7). An org's IdP is a real door on the
+// Browser mode for an organization's SSO. An org's IdP is a real door on the
 // hosted product: the callback sets the session and returns the browser to
 // where it was going, and a failure lands on the sign-in page with the
 // reason, because a browser cannot read a problem document.
@@ -107,7 +106,7 @@ func TestOrgOIDCBrowserModeReturnsToNext(t *testing.T) {
 		t.Fatal("browser mode set no session cookie")
 	}
 	// The browser has no JSON body to read the CSRF token from, so it must
-	// come as the cookie the web tier's double-submit reads (agentry#77).
+	// come as the cookie the web tier's double-submit reads.
 	if csrf == "" {
 		t.Fatal("browser mode set no CSRF cookie, so every mutation from the browser would be refused")
 	}

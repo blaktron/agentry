@@ -1,20 +1,19 @@
-// Package voice is the registry's store of Writing Voices (plan
-// writing-voice.md §4, §7; agentry#809): the one VOICE.md a person keeps in
-// Agentry, the instructions a run follows for how it writes and nothing
-// else (DR-56). A person has at most three versions of it: the live one, a
-// pending one (in review, or flagged with its findings) and the previous
-// one, for Restore (D13). Each is sealed at rest under a data key of the
-// voice's own, wrapped for the person by the knowledge store's key wrapper
-// (D2), and a version goes live only when AI Review passed it: the pack
-// scan's rule stages over the text and Jev's voice question set (D7). A
-// judge that cannot answer leaves the version in review, retried; nothing
-// goes live unreviewed.
+// Package voice is the registry's store of Writing Voices: the one
+// VOICE.md a person keeps in Agentry, the instructions a run follows for
+// how it writes and nothing else. A person has at most three versions of
+// it: the live one, a pending one (in review, or flagged with its
+// findings) and the previous one, for Restore. Each is sealed at rest
+// under a data key of the voice's own, wrapped for the person by the
+// knowledge store's key wrapper, and a version goes live only when AI
+// Review passed it: the pack scan's rule stages over the text and the
+// judge's voice question set. A judge that cannot answer leaves the
+// version in review, retried; nothing goes live unreviewed.
 //
 // A voice is not a knowledge pack: no name, no tree, no listing, one a
 // person, and it is the one attached text that is instruction-shaped. The
-// open core carries the whole object and its review; the SecureAgentry
-// build adds the hosted Voice Writer, its price and the charge for a
-// review (pkg/extension AdmitsVoice, Voice).
+// open core carries the whole object and its review; an extension adds
+// the hosted Voice Writer, its price and the charge for a review
+// (pkg/extension AdmitsVoice, Voice).
 package voice
 
 import (
@@ -28,7 +27,7 @@ import (
 	"github.com/blaktron/agentry/pkg/judge"
 )
 
-// MaxBytes caps a VOICE.md (D3): the most AI Review reads in its one
+// MaxBytes caps a VOICE.md: the most AI Review reads in its one
 // request, so a voice is never cut. The CLI holds the same cap
 // (agentry-cli pkg/voice).
 const MaxBytes = judge.VoiceMaxBytes
@@ -40,7 +39,7 @@ const File = "VOICE.md"
 // Source is how a version came to be.
 type Source string
 
-// The sources a version can have (§4): the Voice Writer run In Agentry
+// The sources a version can have: the Voice Writer run In Agentry
 // (build: Create or Improve; ai-edit), the person's own text saved on the
 // web (edit) or sent from a client (upload), and the previous version put
 // back under a question set it was not reviewed by (restore).
@@ -64,7 +63,7 @@ func (s Source) Valid() bool {
 // Slot is where a version sits.
 type Slot string
 
-// The three slots (D13).
+// The three slots.
 const (
 	SlotLive     Slot = "live"
 	SlotPending  Slot = "pending"

@@ -1,9 +1,8 @@
 package manifest
 
-// Remote MCP servers and an OAuth sign-in on a declared server (V5, v2;
-// plan mcp-oauth-connections.md §4, agentry#910): parse and validation
-// pins, the placeholder grammar the runner renders with, and the
-// unsupported list.
+// Remote MCP servers and an OAuth sign-in on a declared server (V5,
+// v2): parse and validation pins, the placeholder grammar the runner
+// renders with, and the unsupported list.
 
 import (
 	"encoding/json"
@@ -408,9 +407,9 @@ func TestUnsupportedOAuthPackage(t *testing.T) {
 }
 
 // TestDiffRemoteAndOAuthServers: a remote server, a sign-in, a changed
-// address, auth or issuer, a new scope, and a changed token rendering are
-// each wider than what was consented to; a dropped scope or server narrows
-// (ARCHITECTURE.md §9, the install-contract invariant).
+// address, auth or issuer, a new scope, and a changed token rendering
+// are each wider than what was consented to; a dropped scope or server
+// narrows.
 func TestDiffRemoteAndOAuthServers(t *testing.T) {
 	remote := func(auth MCPAuth, scopes ...string) MCPServer {
 		return MCPServer{URL: "https://mcp.linear.app/mcp", Auth: auth, Scopes: scopes}
@@ -544,8 +543,8 @@ func TestV2SchemaRemoteServerShape(t *testing.T) {
 	}
 }
 
-// A token-folder file is a plain name, which may carry an account's email
-// (agentry#937), and never a path.
+// A token-folder file is a plain name, which may carry an account's
+// email, and never a path.
 func TestOAuthFileNames(t *testing.T) {
 	for name, ok := range map[string]bool{
 		"me.json": true, "me@agentry.invalid.json": true, "credentials_1-a.json": true,
@@ -573,10 +572,9 @@ func TestUnsupportedListIsInTheDocs(t *testing.T) {
 	}
 }
 
-// TestDiffRemoteServerToolsAndSecret: a remote server's tool allowlist and
-// its one bearer secret are part of what consent covered, so a wider
-// allowlist (or none: every tool) and a different secret widen
-// (agentry#910's review; package servers' own fields are agentry#527).
+// TestDiffRemoteServerToolsAndSecret: a remote server's tool allowlist
+// and its one bearer secret are part of what consent covered, so a
+// wider allowlist (or none: every tool) and a different secret widen.
 func TestDiffRemoteServerToolsAndSecret(t *testing.T) {
 	srv := func(tools []string, secrets ...string) Capabilities {
 		return Capabilities{MCPServers: []MCPServer{{URL: "https://api.githubcopilot.com/mcp/", Auth: AuthSecret, Tools: tools, Secrets: secrets}}}

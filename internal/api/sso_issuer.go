@@ -14,8 +14,7 @@ import (
 // validateOIDCIssuer judges an issuer URL an organization admin supplies
 // before it is stored, with the same policy the egress guard applies at dial
 // time: the registry will fetch this address on the admin's say-so, and an
-// org admin is any account with a verified email (security review
-// 2026-09-20 §5.8.1). https to a public host, nothing else in the URL. The
+// org admin is any account with a verified email. https to a public host, nothing else in the URL. The
 // guard's AllowLoopback (dev mode) is the one allowance: a loopback IdP,
 // which may be plain http, for a development stack.
 //

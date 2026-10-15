@@ -1,6 +1,6 @@
 package api
 
-// POST /platform/ruleset-releases (§9.2 platform, §8.3): register the
+// POST /platform/ruleset-releases: register the
 // versioned scanner bundle a deployment is running so scan_runs can point at
 // it. Platform staff only — a ruleset release is the provenance of every
 // verdict the pipeline reaches.
@@ -131,7 +131,7 @@ func (s *Server) CreateRulesetRelease(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
-	// A genuinely new semver is the §8.7 trigger for re-checking the published
+	// A genuinely new semver is the trigger for re-checking the published
 	// catalogue — same rule as boot-time registration in New().
 	if inserted {
 		scan.EnqueueNewRulesetWork(r.Context(), s.jobs, s.log, scan.RulesetRegistration{
@@ -152,7 +152,7 @@ func rulesetReleaseToAPI(row storegen.RulesetRelease) RulesetRelease {
 	return out
 }
 
-// ListRulesetReleases implements GET /platform/ruleset-releases (agentry#63):
+// ListRulesetReleases implements GET /platform/ruleset-releases:
 // the staff console's history, newest first — the head is the bundle new
 // scans are judged under.
 func (s *Server) ListRulesetReleases(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,6 @@
 package api
 
-// The §17.5 red-team job (agentry#67): a worker periodically rewrites the
+// The red-team job: a worker periodically rewrites the
 // golden attack corpus with paraphrase/encoding/unicode/obfuscation
 // mutators, scans the rewrites with the rule bundle in service, and stores
 // a report of what the S3/S4 rules no longer catch. Report-only by
@@ -34,7 +34,7 @@ const redTeamNewRulesetDelay = 2 * time.Minute
 
 // redTeamRulesetAttempts is the retry budget of a run queued for a new
 // ruleset: a worker of the outgoing build hands it back until one of the
-// new build takes it, as the catalogue sweep does (agentry#805). Twelve
+// new build takes it, as the catalogue sweep does. Twelve
 // attempts at 2^n seconds keep it alive for about an hour of a rollout.
 const redTeamRulesetAttempts = 12
 

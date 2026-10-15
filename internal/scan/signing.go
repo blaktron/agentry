@@ -16,14 +16,14 @@ import (
 	"github.com/blaktron/agentry/pkg/attest"
 )
 
-// Provenance & signing (§8.8, D-16). On → published the pipeline builds an
+// Provenance & signing. On → published the pipeline builds an
 // in-toto Statement, wraps it in a DSSE envelope, and signs with an ECDSA
 // P-256 key (KMS on SaaS; file/HSM self-host). The public key is served at a
 // well-known endpoint and the CLI verifies offline.
 //
 // The attestation FORMAT — statement, predicate, envelope, verification — is
 // the public pkg/attest package (the CLI and third parties consume it). The
-// aliases below keep this package's historical names working; producing
+// aliases below keep this package's names working; producing
 // signatures (the Signer implementations) stays server-internal.
 
 // Aliases for the promoted public attestation API (pkg/attest).
@@ -36,18 +36,18 @@ type (
 	DSSESignature    = attest.DSSESignature
 )
 
-// PredicateType is the Agentry publish attestation predicate (§8.8).
+// PredicateType is the Agentry publish attestation predicate.
 const PredicateType = attest.PredicateType
 
 // VerifyEnvelope and BuildStatement live in pkg/attest; re-exported for the
-// server-side call sites and tests that predate the promotion.
+// server-side call sites and tests.
 var (
 	VerifyEnvelope = attest.VerifyEnvelope
 	BuildStatement = attest.BuildStatement
 )
 
 // Signer produces DSSE envelopes. KMS/HSM implement the same interface; the
-// file signer is the self-host/dev default (D-16).
+// file signer is the self-host/dev default.
 type Signer interface {
 	// Sign signs a statement, returning the DSSE envelope.
 	Sign(stmt InTotoStatement) (DSSEEnvelope, error)
@@ -55,7 +55,7 @@ type Signer interface {
 	// signature. Sign is a marshal plus this; the re-attestation sweep uses
 	// it directly, because a countersignature must cover the payload bytes
 	// the envelope already holds — a re-marshalled statement could differ by
-	// a byte and every old signature would stop verifying (agentry#350).
+	// a byte and every old signature would stop verifying.
 	SignPayload(payloadType string, payload []byte) (DSSESignature, error)
 	// KeyID identifies the signing key.
 	KeyID() string
@@ -63,7 +63,7 @@ type Signer interface {
 	PublicKeyPEM() string
 }
 
-// SigningAlgorithm is the one algorithm §8.8 fixes; every key the registry
+// SigningAlgorithm is the one algorithm the registry signs with; every key the registry
 // publishes or records carries it.
 const SigningAlgorithm = "ecdsa-p256-sha256"
 
@@ -143,7 +143,7 @@ func (s *FileSigner) SignPayload(payloadType string, payload []byte) (DSSESignat
 	return DSSESignature{KeyID: s.keyID, Sig: base64.StdEncoding.EncodeToString(sig)}, nil
 }
 
-// SignerOptions selects and configures the signer (D-16: none|file|kms).
+// SignerOptions selects and configures the signer (none|file|kms).
 type SignerOptions struct {
 	Kind string // none | file | kms
 	// KeyFile is the file signer's PEM private key.
@@ -156,7 +156,7 @@ type SignerOptions struct {
 	DevMode bool
 }
 
-// NewSigner builds the configured signer (D-16: none|file|kms).
+// NewSigner builds the configured signer (none|file|kms).
 func NewSigner(ctx context.Context, opt SignerOptions) (Signer, error) {
 	switch opt.Kind {
 	case "file":

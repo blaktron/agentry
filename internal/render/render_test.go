@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The §10.3 / M5 XSS corpus: hostile READMEs are a primary vector (T-07).
+// The XSS corpus: hostile READMEs are a primary vector.
 // Every case asserts the dangerous construct does NOT survive rendering.
 func TestXSSCorpus(t *testing.T) {
 	r := New()
@@ -132,7 +132,7 @@ func TestXSSCorpus(t *testing.T) {
 	}
 }
 
-// TestInvisibleCharactersRevealed pins the §10.3 requirement that the review
+// TestInvisibleCharactersRevealed pins the requirement that the review
 // UI (and every displayed surface) never hides what the scanner saw.
 func TestInvisibleCharactersRevealed(t *testing.T) {
 	r := New()
@@ -202,7 +202,7 @@ func TestOversizedInputTruncated(t *testing.T) {
 // the <h1>, so an author's "# Title" must render as <h2>. Two <h1> elements
 // on one page break the outline for screen readers, and this HTML is served
 // by the API to any embedder — so the fix lives in the renderer, not in one
-// page's stylesheet. Found by the M5 accessibility check on a real agent page.
+// page's stylesheet.
 func TestAuthorHeadingsAreDemoted(t *testing.T) {
 	r := New()
 	out, err := r.Markdown([]byte("# Title\n\n## Section\n\n###### Deepest\n"))
@@ -220,7 +220,7 @@ func TestAuthorHeadingsAreDemoted(t *testing.T) {
 }
 
 // Images render as a visible placeholder, never as an <img> the CSP would
-// refuse silently (agentry#29). The alt text and source are shown, escaped.
+// refuse silently. The alt text and source are shown, escaped.
 func TestImagesBecomeVisiblePlaceholders(t *testing.T) {
 	r := New()
 	out, err := r.Markdown([]byte("Before\n\n![Architecture <diagram>](https://cdn.example/arch.png \"t\")\n\nAfter"))
@@ -246,8 +246,7 @@ func TestImagesBecomeVisiblePlaceholders(t *testing.T) {
 	}
 }
 
-// External links carry rel="nofollow noreferrer noopener ugc" (§10.3;
-// DEV-039 recorded the missing ugc, agentry#34).
+// External links carry rel="nofollow noreferrer noopener ugc".
 func TestLinksCarryUGCRel(t *testing.T) {
 	out, err := New().Markdown([]byte("See [the docs](https://docs.example/x) and [home](/relative)."))
 	if err != nil {

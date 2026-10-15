@@ -28,9 +28,8 @@ const deleteUserReportSettings = `-- name: DeleteUserReportSettings :execrows
 DELETE FROM user_report_settings WHERE user_id = $1
 `
 
-// A PUT that carries no design, clear-data (agentry#498) and the account's
-// erasure (agentry#1025): no row reads as never chosen, and the logo goes
-// with it.
+// A PUT that carries no design, clear-data and the account's erasure: no row
+// reads as never chosen, and the logo goes with it.
 func (q *Queries) DeleteUserReportSettings(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteUserReportSettings, userID)
 	if err != nil {
@@ -44,9 +43,9 @@ const getUserReportSettings = `-- name: GetUserReportSettings :one
 SELECT user_id, updated_at, design, logo FROM user_report_settings WHERE user_id = $1
 `
 
-// The report design, a profile setting (agentry#989; since agentry#1024 the
-// whole theme document version 2, validated by pkg/reportdesign first; since
-// agentry#1025 its logo beside it, a PNG pkg/reportdesign wrote).
+// The report design, a profile setting: the whole theme document version 2,
+// validated by pkg/reportdesign first, with its logo beside it (a PNG
+// pkg/reportdesign wrote).
 func (q *Queries) GetUserReportSettings(ctx context.Context, userID uuid.UUID) (UserReportSetting, error) {
 	row := q.db.QueryRow(ctx, getUserReportSettings, userID)
 	var i UserReportSetting
@@ -95,8 +94,8 @@ type UpsertUserReportSettingsParams struct {
 	Design []byte    `json:"design"`
 }
 
-// The design alone: a logo already stored stays (agentry#1025), so a client
-// that does not know logos cannot drop one by saving.
+// The design alone: a logo already stored stays, so a client that does not
+// know logos cannot drop one by saving.
 func (q *Queries) UpsertUserReportSettings(ctx context.Context, arg UpsertUserReportSettingsParams) (UserReportSetting, error) {
 	row := q.db.QueryRow(ctx, upsertUserReportSettings, arg.UserID, arg.Design)
 	var i UserReportSetting

@@ -1,10 +1,9 @@
 // Package maildomains answers one question: is this mail domain one that
 // no single organization owns? An organization is keyed on the domain of
-// its creator's verified address (plan organization-subscriptions D13,
-// D21; agentry#363), and a person at gmail.com must not be able to claim
-// gmail.com for their organization — nor be told that "gmail.com is
-// registered to Acme" — so an address at a shared domain records no
-// domain at all.
+// its creator's verified address, and a person at gmail.com must not be
+// able to claim gmail.com for their organization — nor be told that
+// "gmail.com is registered to Acme" — so an address at a shared domain
+// records no domain at all.
 //
 // The list is maintained by hand and is deliberately conservative: the
 // large consumer providers, their regional and legacy names, and the names

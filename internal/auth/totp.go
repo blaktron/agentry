@@ -8,7 +8,7 @@ import (
 )
 
 // TOTPIssuer names the service in authenticator apps when the deployment
-// has no name of its own (config brand.name / Config.DisplayName, DEV-091).
+// has no name of its own (config brand.name / Config.DisplayName).
 const TOTPIssuer = "Agentry"
 
 // GenerateTOTP creates a new TOTP secret for enrollment. Returns the base32

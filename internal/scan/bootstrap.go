@@ -14,11 +14,10 @@ import (
 )
 
 // Ruleset registration is startup wiring shared by every role that owns a
-// pipeline (§8.3: "the bundle version is recorded on the scan_run"). It lived
-// in two hand-copied blocks — one in the api server, one in the worker — that
-// had already drifted apart, and both swallowed the error while keeping a
-// locally generated uuid. That uuid names no row, so every subsequent
-// CreateScanRun failed its foreign key for the life of the process, silently.
+// pipeline: the bundle version is recorded on the scan_run. Registration
+// failures are fatal to startup, because a locally generated uuid that
+// names no row would make every subsequent CreateScanRun fail its foreign
+// key for the life of the process, silently.
 
 // RulesetRegistration is the outcome of recording the embedded rule bundle.
 type RulesetRegistration struct {
@@ -27,7 +26,7 @@ type RulesetRegistration struct {
 	// Semver is the bundle version.
 	Semver string
 	// New reports that this semver had never been recorded before. A new
-	// ruleset semver is the §8.7 trigger for re-scanning the whole published
+	// ruleset semver is the trigger for re-scanning the whole published
 	// catalogue; a restart on the same bundle is not.
 	New bool
 }
@@ -59,14 +58,13 @@ func RegisterRuleset(ctx context.Context, st *store.Store, bundle *rules.Bundle)
 // rulesetJobAttempts is the retry budget of the jobs a new ruleset enqueues.
 const rulesetJobAttempts = 12
 
-// EnqueueNewRulesetWork kicks off the §8.7 catalogue sweep when a
-// ruleset semver is recorded for the first time, and the redo of the review
-// queue beside it (agentry#772): the sweep judges published versions again,
-// the redo the versions waiting for a person, and publishes those the gate
-// now passes. Before the sweep was enqueued here, its handler was
-// unreachable and already-published versions were never re-checked against
-// improved rules — the entire point of versioning the bundle. A restart on
-// the same semver enqueues neither.
+// EnqueueNewRulesetWork kicks off the catalogue sweep when a ruleset
+// semver is recorded for the first time, and the redo of the review
+// queue beside it: the sweep judges published versions again, the redo
+// the versions waiting for a person, and publishes those the gate now
+// passes. Together they re-check already-published versions against
+// improved rules, which is the point of versioning the bundle. A restart
+// on the same semver enqueues neither.
 func EnqueueNewRulesetWork(ctx context.Context, q queue.Client, log *slog.Logger, reg RulesetRegistration) {
 	if q == nil || !reg.New {
 		return
@@ -76,8 +74,8 @@ func EnqueueNewRulesetWork(ctx context.Context, q queue.Client, log *slog.Logger
 	}
 	args := RescanSweepArgs{RulesetSemver: reg.Semver}
 	// A worker of the outgoing build hands either job back until a worker
-	// of this build takes it (agentry#805). Twelve attempts at 2^n seconds
-	// keep a job alive for about an hour of a rollout.
+	// of this build takes it. Twelve attempts at 2^n seconds keep a job
+	// alive for about an hour of a rollout.
 	budget := queue.WithMaxAttempts(rulesetJobAttempts)
 	if _, err := q.Enqueue(ctx, JobRescanSweep, "sandbox", args, budget); err != nil {
 		// Not fatal: the sweep is catch-up work, and an operator can re-run it.
@@ -103,19 +101,17 @@ type SigningKeyRegistration struct {
 	KeyID string
 	// New reports that the registry had never signed with this key before:
 	// a rotation, or the first start. A new key is what triggers the
-	// re-attestation sweep (agentry#350); a restart on the same key is not.
+	// re-attestation sweep; a restart on the same key is not.
 	New bool
 	// Retired counts the keys the arrival of this one retired.
 	Retired int64
 }
 
 // RegisterSigningKey records the signer's public key at start and retires
-// every other key (§8.8, agentry#350). The public part is what a verifier
-// needs and what a rotation used to lose: the well-known set only ever named
-// the current key, so every attestation the outgoing key had signed became
-// unverifiable to a client pinning afterwards. Callers treat an error as fatal
-// to startup, as with RegisterRuleset: a registry that signs with a key it
-// cannot record is the failure mode this exists to close.
+// every other key. The public part is what a verifier needs, and the
+// retired keys stay recorded. Callers treat an error as fatal to startup,
+// as with RegisterRuleset: a registry that signs with a key it cannot
+// record would publish attestations nobody can verify.
 func RegisterSigningKey(ctx context.Context, st *store.Store, signer Signer) (SigningKeyRegistration, error) {
 	if st == nil {
 		return SigningKeyRegistration{}, fmt.Errorf("scan: register signing key: no database")
@@ -142,8 +138,8 @@ func RegisterSigningKey(ctx context.Context, st *store.Store, signer Signer) (Si
 }
 
 // EnqueueAttestSweepIfBehind enqueues the attest sweep when any published
-// version has no attestation (agentry#407) — the state of the table is the
-// trigger, as for the re-attestation sweep, so a sweep that failed part way
+// version has no attestation. The state of the table is the trigger, as
+// for the re-attestation sweep, so a sweep that failed part way
 // completes at the next start and a clean table enqueues nothing.
 func EnqueueAttestSweepIfBehind(ctx context.Context, st *store.Store, q queue.Client, log *slog.Logger, signer Signer) {
 	if st == nil || q == nil || signer == nil {
@@ -168,7 +164,7 @@ func EnqueueAttestSweepIfBehind(ctx context.Context, st *store.Store, q queue.Cl
 }
 
 // EnqueueReattestSweepIfBehind enqueues the re-attestation sweep when any
-// attestation lacks the signer's signature (agentry#350): a rotation, a key
+// attestation lacks the signer's signature: a rotation, a key
 // rolled back to, a sweep that failed part way, or an enqueue that was
 // lost — every one completes at the next start, because the trigger is the
 // state of the table, not the memory of having enqueued once. A start on a

@@ -1,6 +1,6 @@
 -- +goose Up
--- Agent versions + publication state machine (PLAN §4.2, §7; M3/WG-E).
--- Scan/review/attestation tables land with the M4 migration.
+-- Agent versions + publication state machine. Scan, review and attestation
+-- tables are created by a later migration.
 
 CREATE TABLE agent_versions (
   id uuid PRIMARY KEY,
@@ -35,8 +35,8 @@ ALTER TABLE agents
   FOREIGN KEY (latest_published_version_id) REFERENCES agent_versions(id);
 
 -- +goose StatementBegin
--- §4.3: version rows are immutable once past 'submitted' except the state
--- machine fields. Enforced with a trigger, not just app code.
+-- Version rows are immutable once past 'submitted' except the state machine
+-- fields. Enforced with a trigger, not just app code.
 CREATE FUNCTION agent_versions_enforce_immutability() RETURNS trigger AS $$
 BEGIN
   IF OLD.status <> 'submitted' THEN
@@ -66,7 +66,7 @@ CREATE TRIGGER agent_versions_immutability
   FOR EACH ROW EXECUTE FUNCTION agent_versions_enforce_immutability();
 
 -- +goose StatementBegin
--- Version rows are never deleted (§4.3): yank hides, block disables.
+-- Version rows are never deleted: yank hides, block disables.
 CREATE FUNCTION agent_versions_block_delete() RETURNS trigger AS $$
 BEGIN
   RAISE EXCEPTION 'agent_versions rows are never deleted (yank or block instead)';

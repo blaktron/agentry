@@ -1,6 +1,6 @@
 package manifest
 
-// Rule is one §5.3 validation rule: the id an Issue carries and what the
+// Rule is one validation rule: the id an Issue carries and what the
 // rule checks, in a phrase.
 type Rule struct {
 	// ID is the rule id an Issue reports, such as "V1".
@@ -9,8 +9,8 @@ type Rule struct {
 	Title string
 }
 
-// rules is every rule this package can report, in order. V6 was withdrawn
-// with the code-carrying kind and reports nothing, so it is not here.
+// rules is every rule this package can report, in order. V6 is
+// unassigned and reports nothing, so it is not here.
 // TestRulesMatchReportedIDs fails when an Issue names an id this list
 // lacks, or the list names one no Issue reports.
 var rules = []Rule{

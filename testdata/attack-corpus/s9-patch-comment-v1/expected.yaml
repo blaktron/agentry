@@ -1,5 +1,5 @@
 # Fixture expectation (see README.md).
-technique: "Release-diff pair, v1: a clean baseline for the patch-release loosenings of agentry#775"
+technique: "Release-diff pair, v1: a clean baseline for the patch-release loosenings of ruleset 0.3.2"
 version: "1.0.0"
 expect: []
 forbid:

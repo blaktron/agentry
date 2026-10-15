@@ -10,7 +10,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// GetSamlMetadata implements GET /orgs/{org}/sso/saml/metadata (§12.4). Public:
+// GetSamlMetadata implements GET /orgs/{org}/sso/saml/metadata. Public:
 // IdP administrators fetch it to configure the connection.
 func (s *Server) GetSamlMetadata(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
@@ -35,7 +35,7 @@ func (s *Server) GetSamlMetadata(w http.ResponseWriter, r *http.Request, org Org
 	_, _ = w.Write(xml)
 }
 
-// SamlAcs implements POST /orgs/{org}/sso/saml/acs (§12.4): the Assertion
+// SamlAcs implements POST /orgs/{org}/sso/saml/acs: the Assertion
 // Consumer Service. It requires a signed assertion and validates
 // audience/recipient/timestamps/replay inside the SP before establishing an
 // SSO session via JIT. No credential is presented by the IdP POST itself, so
@@ -64,7 +64,7 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 	// RelayState is SAML's own way to carry where the browser was going,
 	// and the IdP hands it back untouched — so it is the assertion's least
 	// trustworthy field and passes through safeNextPath, which admits a
-	// same-origin path and nothing else (plan §5.7). Empty is API mode.
+	// same-origin path and nothing else. Empty is API mode.
 	next := safeNextPath(r.PostFormValue("RelayState"))
 	browserFail := func(msg string) bool { return s.browserFail(w, r, next, msg) }
 	sp, connID, err := s.samlSPForOrg(r, orgRow)
@@ -86,16 +86,15 @@ func (s *Server) SamlAcs(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 		problemUnauthorized(w, r, msg)
 		return
 	}
-	// The IdP's displayName was used to name a JIT-created account; since
-	// agentry#361 this path creates nobody, and an existing member's name
-	// is their own to set.
+	// This path creates nobody, so the IdP's displayName is not used: an
+	// existing member's name is their own to set.
 	s.establishSSOSession(w, r, orgRow, connID, "saml", res.Subject, res.Email,
 		&samlSessionLink{NameID: res.NameID, SessionIndex: res.SessionIndex}, next,
 		res.MFAAsserted())
 }
 
 // SamlSloRedirect implements GET /orgs/{org}/sso/saml/slo: the HTTP-Redirect
-// binding of the Single Logout endpoint (§12.4, agentry#62).
+// binding of the Single Logout endpoint.
 func (s *Server) SamlSloRedirect(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	s.samlSlo(w, r, org)
 }
@@ -200,8 +199,8 @@ func (s *Server) samlSlo(w http.ResponseWriter, r *http.Request, org OrgHandle) 
 }
 
 // webHomeURL is where a completed SP-initiated logout lands: the site's
-// home when one fronts this server, else the server's own /ui/ page
-// (DEV-091), on the public origin or, failing that, this request's host.
+// home when one fronts this server, else the server's own /ui/ page,
+// on the public origin or, failing that, this request's host.
 func (s *Server) webHomeURL(r *http.Request) string {
 	if u := s.paths.homeURL(); u != "" {
 		return u
@@ -215,7 +214,7 @@ func (s *Server) webHomeURL(r *http.Request) string {
 
 // samlLogoutURLForSession returns the IdP logout redirect for a session
 // established through a SAML connection whose IdP publishes an SLO
-// endpoint; "" otherwise (SP-initiated SLO, §12.4).
+// endpoint; "" otherwise (SP-initiated SLO).
 func (s *Server) samlLogoutURLForSession(r *http.Request, sessionID uuid.UUID) string {
 	sess, err := s.q().GetSessionByID(r.Context(), sessionID)
 	if err != nil || sess.SsoConnectionID == nil || sess.SamlNameID == nil || *sess.SamlNameID == "" {

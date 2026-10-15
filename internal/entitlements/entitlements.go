@@ -1,14 +1,14 @@
-// Package entitlements is the §14.2 product seam: the one place that answers
+// Package entitlements is the product seam: the one place that answers
 // "how much of this may this subject have?" and "is this feature on?".
 //
-// The OSS default answers "everything on, limits from config" (§14.2). The
-// SaaS overlay swaps in a Resolver backed by the billing plan. Nothing in this
-// repo may branch on "is this cloud?" — §18.1 — so every quota consumer asks
-// the Resolver instead of reading a constant, and the OSS answer happens to be
+// The OSS default answers "everything on, limits from config". The hosted
+// overlay swaps in a Resolver backed by the billing plan. Nothing in this
+// repo may branch on "is this cloud?", so every quota consumer asks the
+// Resolver instead of reading a constant, and the OSS answer happens to be
 // constant.
 //
 // The seam is the deliverable: by design the default Resolver reproduces the
-// §19 numbers exactly, so wiring it changes no behaviour.
+// default quota numbers exactly, so wiring it changes no behaviour.
 package entitlements
 
 import (
@@ -19,8 +19,8 @@ import (
 	"github.com/blaktron/agentry/internal/config"
 )
 
-// NamespaceKind distinguishes the two namespace flavours §19 gives different
-// agent quotas to.
+// NamespaceKind distinguishes the two namespace flavours that get different
+// agent quotas.
 type NamespaceKind string
 
 const (
@@ -33,7 +33,7 @@ const (
 // Resolver may need the user (personal plan) or the org (team plan) depending
 // on which namespace the request touches.
 type Subject struct {
-	// Kind selects the namespace quota row (§19: 200 agents for a user
+	// Kind selects the namespace quota row (200 agents for a user
 	// namespace, 500 for an org). Empty is treated as NamespaceUser — the
 	// stricter of the two, so a caller that forgets to set it is not handed
 	// the larger budget by accident.
@@ -54,7 +54,7 @@ func ForUser(userID uuid.UUID) Subject {
 	return Subject{Kind: NamespaceUser, UserID: userID}
 }
 
-// Limits is the resolved quota set (§19).
+// Limits is the resolved quota set.
 type Limits struct {
 	// AgentsPerNamespace caps agents in one namespace.
 	AgentsPerNamespace int64
@@ -83,25 +83,22 @@ type ArchiveLimits struct {
 	MaxFileBytes      int64
 	MaxImageFileBytes int64
 	// MaxTextBytes caps the total of the text files in the include set
-	// (§19 "instruction-file total", agentry#44).
+	// (the instruction-file total).
 	MaxTextBytes int64
 }
 
 // Cap is a feature with a cap: Enabled says whether the subject may use
-// it at all, Max how many it may hold (0 = no cap). It was Allowance until
-// agentry#360; the word now means only the monthly credit grant (plan
-// organization-subscriptions D15).
+// it at all, Max how many it may hold (0 = no cap).
 type Cap struct {
 	Enabled bool
 	Max     int64
 }
 
 // Features is what a subject may hold, as opposed to how fast it may act
-// (Limits): the caps and switches a subscription tier sets (plans
-// subscription-tiers §5.3, organization-subscriptions §5.1). The core
+// (Limits): the caps and switches a subscription tier sets. The core
 // resolver answers every cap enabled with no maximum and every switch on
-// (§1.6.5, §14.3: a self-hosted registry has no tiers and ships no crippled
-// stub); a closed build's resolver answers by tier. A cap never deletes:
+// (a self-hosted registry has no tiers and ships no crippled stub); a
+// closed build's resolver answers by tier. A cap never deletes:
 // over it, nothing can be added and nothing is lost.
 type Features struct {
 	// PrivateAgents caps the private agents a namespace holds.
@@ -122,12 +119,12 @@ type Features struct {
 	// private agent as skipping the pipeline.
 	UnscannedAgents bool
 	// SSHKeys says whether a person may register an SSH key for the git
-	// transport (user subjects; agentry#820). It gates only the adding: a
+	// transport (user subjects). It gates only the adding: a
 	// key already held keeps working, stays listed and can be removed.
 	SSHKeys bool
 	// KnowledgeBytes caps the bytes of knowledge packs a subject keeps in
-	// the registry (plan knowledge.md §4.4, D5): only what is stored here
-	// counts, and over the cap no pack is added or grown, none deleted.
+	// the registry: only what is stored here counts, and over the cap no
+	// pack is added or grown, none deleted.
 	KnowledgeBytes Cap
 }
 
@@ -148,14 +145,14 @@ type ConfigResolver struct {
 	limits config.Limits
 }
 
-// NewConfigResolver builds the default Resolver from the §19 config block.
+// NewConfigResolver builds the default Resolver from the limits config block.
 func NewConfigResolver(l config.Limits) *ConfigResolver {
 	return &ConfigResolver{limits: l}
 }
 
-// Default is the Resolver used when none has been wired: the shipped §19
-// defaults. It exists so a half-constructed server enforces quotas rather than
-// none at all — an unwired seam must not be an open door.
+// Default is the Resolver used when none has been wired: the shipped
+// defaults. It exists so a half-constructed server enforces quotas rather
+// than none at all — an unwired seam must not be an open door.
 func Default() *ConfigResolver {
 	return NewConfigResolver(config.Default().Limits)
 }

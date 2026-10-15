@@ -1,6 +1,6 @@
 package api_test
 
-// Erasure's directory step is finished, not left behind (agentry#499): a
+// Erasure's directory step is finished, not left behind: a
 // failed or unreachable directory is retried by a job with backoff, every
 // attempt is audited, the erasure's response says where the directory step
 // stands, and an erasure still pending after its retries is recorded as

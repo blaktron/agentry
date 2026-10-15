@@ -13,8 +13,8 @@ import (
 	"time"
 )
 
-// ClassifierJudge is the PromptGuard-class provider (D-13 "classifier";
-// DEV-007/DEV-054 stub, agentry#41): a text-classification endpoint that
+// ClassifierJudge is the PromptGuard-class provider ("classifier"):
+// a text-classification endpoint that
 // returns per-label probabilities for prompt-injection / jailbreak content.
 // It speaks the Hugging Face text-classification wire shape, which the
 // Inference API, TGI/TEI and most self-hosted servers share:
@@ -62,7 +62,7 @@ func (j *ClassifierJudge) RequiresHumanReview() bool { return true }
 
 // ModelID implements JudgeProvider: the classifier's Model is a deployment
 // label ("prompt-guard" by default), not a versioned model id, so the run
-// keeps recording the provider's name (agentry#321).
+// keeps recording the provider's name.
 func (j *ClassifierJudge) ModelID() string { return "" }
 
 // InputLimit implements JudgeProvider: a call is split into requests of
@@ -101,7 +101,7 @@ func (j *ClassifierJudge) Judge(ctx context.Context, content JudgeContent) (Judg
 			}
 			p, err := j.classify(ctx, chunk)
 			if err != nil {
-				return JudgeVerdict{}, err // fail closed (§8.4.6)
+				return JudgeVerdict{}, err // fail closed
 			}
 			if p > best {
 				best = p

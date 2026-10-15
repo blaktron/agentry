@@ -84,9 +84,9 @@ func decodeLogo(t *testing.T, l Logo) image.Image {
 	return img
 }
 
-// An upload is decoded and encoded again from its pixels (D9, invariant
-// 12): what a crafted file carries beside them (a text chunk, bytes after
-// IEND) is gone, and the pixels are kept. A JPEG becomes a PNG.
+// An upload is decoded and encoded again from its pixels: what a
+// crafted file carries beside them (a text chunk, bytes after IEND) is
+// gone, and the pixels are kept. A JPEG becomes a PNG.
 func TestNormalizeLogoKeepsOnlyThePixels(t *testing.T) {
 	src := solid(40, 20, color.NRGBA{R: 0x1f, G: 0x6f, B: 0xeb, A: 0xff})
 	crafted := withChunk(encodePNG(t, src), "tEXt", []byte("Comment\x00<script>alert(1)</script>"))
@@ -231,7 +231,7 @@ func TestDesignWithLogoRoundTrips(t *testing.T) {
 	if mine.SHA256() == plain.SHA256() {
 		t.Fatal("the hash does not cover the logo")
 	}
-	// The 16 KB does not count the logo (D11), but counts everything else.
+	// The 16 KB does not count the logo, but counts everything else.
 	big, err := NormalizeLogo(noise(t, 300, 300))
 	if err != nil {
 		t.Fatal(err)

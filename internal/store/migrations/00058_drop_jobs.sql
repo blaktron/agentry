@@ -1,10 +1,7 @@
 -- +goose Up
--- The jobs table was the SELECT … FOR UPDATE SKIP LOCKED queue's (D-05,
--- 00005). River took over as the queue driver in DEV-095 and the pg driver
--- stayed selectable for one release as a fallback; production has run
--- releases on River since, without a switch back, so the driver and its
--- table go (agentry#244). Nothing writes it: the recurring jobs' seeds count
--- River's table since agentry#853. Any rows left behind are inert.
+-- The jobs table was the SELECT … FOR UPDATE SKIP LOCKED queue's (00005).
+-- River is the queue driver, so the table goes. Nothing writes it: the
+-- recurring jobs' seeds count River's table. Any rows left behind are inert.
 DROP TABLE jobs;
 
 -- +goose Down

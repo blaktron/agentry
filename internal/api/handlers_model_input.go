@@ -20,7 +20,7 @@ import (
 	"github.com/blaktron/agentry/pkg/websearch"
 )
 
-// The model-input routes (agentry#608; plan builder-rework.md D20–D24):
+// The model-input routes:
 // AI Review of text a model is about to read, and web search brokered by
 // the registry with every result scanned before it is returned. They spend
 // the deployment's own judge and search keys, so no account's token reaches
@@ -38,7 +38,7 @@ const (
 	// and the principal middleware never reads it.
 	jobTokenHeader = "X-Agentry-Job-Token"
 	// modelInputMaxBytes is the most text one scan takes: eight chunks. A
-	// page is at most four (D24); a longer input is sent in parts.
+	// page is at most four; a longer input is sent in parts.
 	modelInputMaxBytes = 8 * judge.ChunkSize
 	// modelInputTimeout bounds one call: a chunk the judge has not answered
 	// by then is not scanned, and a caller withholds it.
@@ -72,7 +72,7 @@ type ModelInputOp string
 const (
 	ModelInputOpScan   ModelInputOp = "scan"
 	ModelInputOpSearch ModelInputOp = "search"
-	// ModelInputOpCheck is AI Review of a finished draft (agentry#708):
+	// ModelInputOpCheck is AI Review of a finished draft:
 	// the release rubric and the draft question set over its package.
 	ModelInputOpCheck ModelInputOp = "check"
 )
@@ -91,7 +91,7 @@ type ModelInputCall struct {
 
 // ModelInputUse is what one admitted call spent, for the record against
 // its job. It is a count, never a price: AI Review is 1 credit an
-// operation, however many scans it makes (DEV-150).
+// operation, however many scans it makes.
 type ModelInputUse struct {
 	Op ModelInputOp
 	// Requests and InputTokens are the judge's.
@@ -487,7 +487,7 @@ func (s *Server) SearchModelInput(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, body)
 }
 
-// CheckDraft implements POST /model-input/check (agentry#708): AI Review
+// CheckDraft implements POST /model-input/check: AI Review
 // of a finished draft's package, with the release rubric S5 asks and the
 // draft question set, before the person submits it.
 func (s *Server) CheckDraft(w http.ResponseWriter, r *http.Request) {

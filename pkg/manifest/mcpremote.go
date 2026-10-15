@@ -1,7 +1,7 @@
 package manifest
 
-// Remote MCP servers and an OAuth sign-in on a declared server (V5, v2;
-// plan agentry-notes/plans/mcp-oauth-connections.md §4, agentry#910).
+// Remote MCP servers and an OAuth sign-in on a declared server (V5,
+// v2).
 //
 // A remote server is declared by its HTTPS address and runs at its vendor;
 // the runner reaches it through its bridge behind one relay to the
@@ -35,10 +35,10 @@ const (
 )
 
 // The placeholders a template may use: the access token, and its expiry
-// as RFC 3339 UTC and as Unix milliseconds (the shapes the measured
+// as RFC 3339 UTC and as Unix milliseconds (the shapes the common
 // servers read: workspace-mcp's "expiry", google-auth-library's
-// "expiry_date"). The placeholders an env value may use: the access token,
-// and the token folder's path inside the server's container.
+// "expiry_date"). The placeholders an env value may use: the access
+// token, and the token folder's path inside the server's container.
 var (
 	oauthTemplatePlaceholders = []string{"access_token", "expiry", "expiry_ms"}
 	oauthEnvPlaceholders      = []string{"access_token", "dir"}
@@ -54,9 +54,9 @@ var (
 	doubleBracedRE = regexp.MustCompile(`\{\{[A-Za-z_]+\}\}`)
 )
 
-// oauthFileNameRE is a plain file name in the token folder. `@` is in it
-// because a server may look its token file up by an account's email
-// (workspace-mcp reads `<email>.json`; agentry#937).
+// oauthFileNameRE is a plain file name in the token folder. `@` is in
+// it because a server may look its token file up by an account's email
+// (workspace-mcp reads `<email>.json`).
 var oauthFileNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$`)
 
 // validOAuthFileName reports whether p is a plain file name the token
@@ -67,9 +67,9 @@ func validOAuthFileName(p string) bool {
 
 // unsupportedOAuthPackages are npm/PyPI servers known not to run on an
 // access token alone (they insist on a refresh token, or open a browser
-// at run time), each with the server to declare instead (plan D25). An
-// oauth block on one is refused by name. docs/quickagents.md prints the
-// list, and a test holds the page to it.
+// at run time), each with the server to declare instead. An oauth block
+// on one is refused by name. docs/quickagents.md prints the list, and a
+// test holds the page to it.
 var unsupportedOAuthPackages = map[string]string{
 	// Waits on a browser on port 4100 when it has no credentials of its
 	// own, so a tool call hangs; rewrites its credentials on every call.

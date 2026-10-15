@@ -15,7 +15,7 @@ import (
 // Round trip of the DSSE/in-toto construction this package verifies: PAE
 // over the payload, ASN.1 ECDSA P-256 over its SHA-256, PEM public key.
 // scripts/dev/attest-fixture + cosign in CI prove the same bytes verify
-// with a third-party tool (agentry#26).
+// with a third-party tool.
 func TestEnvelopeRoundTrip(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

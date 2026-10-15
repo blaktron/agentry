@@ -31,9 +31,9 @@ type Worker interface {
 	Drain(ctx context.Context, queues ...string)
 }
 
-// Open returns the driver named by the configuration: River (D-05 as
-// specified, DEV-005's swap), the only one since agentry#244 removed the
-// SELECT … FOR UPDATE SKIP LOCKED "pg" driver. maxWorkers is how many jobs
+// Open returns the driver named by the configuration: River, the only
+// one. The former "pg" driver name is refused with a pointer to river.
+// maxWorkers is how many jobs
 // one process runs at once per queue.
 func Open(driver string, maxWorkers int, st *store.Store, log *slog.Logger) (Worker, error) {
 	switch driver {
@@ -44,7 +44,7 @@ func Open(driver string, maxWorkers int, st *store.Store, log *slog.Logger) (Wor
 		}
 		return c, nil
 	case "pg":
-		return nil, fmt.Errorf("queue: the pg driver was removed (agentry#244); use river, the default")
+		return nil, fmt.Errorf("queue: the pg driver was removed; use river, the default")
 	}
 	return nil, fmt.Errorf("queue: unknown driver %q (river)", driver)
 }
@@ -52,8 +52,8 @@ func Open(driver string, maxWorkers int, st *store.Store, log *slog.Logger) (Wor
 // RiverClient is the River-backed Client. River owns the job table
 // (river_job), fetching, retries, the rescue of jobs a dead worker held and
 // the per-queue concurrency; this type keeps the agentry contract on top of
-// it: kind-string handlers, at-least-once delivery, the §16.2 metrics and the
-// backlog gauges the §16.3 alarm reads.
+// it: kind-string handlers, at-least-once delivery, the metrics and the
+// backlog gauges the queue-age alarm reads.
 type RiverClient struct {
 	st  *store.Store
 	log *slog.Logger
@@ -79,13 +79,13 @@ type RiverClient struct {
 }
 
 // riverJobTimeout is how long one attempt of a job may run before River
-// cancels its context and retries it (agentry#750). It exists for the rescue:
+// cancels its context and retries it. It exists for the rescue:
 // River's rescuer skips a job with no timeout (JobTimeout -1) however long its
 // worker has been gone, so a job whose worker died mid-run (an evicted pod, a
 // lost node) stayed running, and a scan stayed in scanning, for good. River
 // rescues a job only past both its timeout and RescueStuckJobsAfter, and needs
-// the timeout under the rescue cutoff (defaultReclaimAfter, 30 minutes). The
-// longest job either deployment had run by 2026-09-29 took 20 seconds.
+// the timeout under the rescue cutoff (defaultReclaimAfter, 30 minutes). Jobs
+// in practice run for seconds.
 const riverJobTimeout = 25 * time.Minute
 
 // NewRiverClient builds the River queue client. Register handlers, then
@@ -107,7 +107,7 @@ func NewRiverClient(st *store.Store, log *slog.Logger) *RiverClient {
 	}
 }
 
-// SetMetrics wires the §16.2 instrument set and the backlog sample interval.
+// SetMetrics wires the instrument set and the backlog sample interval.
 func (c *RiverClient) SetMetrics(m *metrics.Metrics, sampleEvery time.Duration) {
 	c.mx = m
 	if sampleEvery > 0 {
@@ -121,7 +121,7 @@ func (c *RiverClient) SetTestOnly(on bool) { c.testOnly = on }
 
 // envelope carries one agentry job through River. River keys workers by the
 // kind a JobArgs value reports, and agentry's kinds are strings chosen at
-// Register time (extensions add their own, DEV-091), so one Go type serves
+// Register time (extensions add their own), so one Go type serves
 // every kind: the kind is set per registration and per insert, and the args
 // column holds the handler's own JSON untouched.
 type envelope struct {
@@ -192,7 +192,7 @@ func (c *RiverClient) insertClient() (*river.Client[pgx.Tx], error) {
 }
 
 // Register wires a handler for a job kind (before Work). Registering a kind
-// twice replaces the handler, as the pg driver does.
+// twice replaces the handler.
 func (c *RiverClient) Register(kind string, h Handler) {
 	c.mu.Lock()
 	_, known := c.handlers[kind]
@@ -208,8 +208,7 @@ func (c *RiverClient) Register(kind string, h Handler) {
 }
 
 // CountWaiting counts the kind's jobs in river_job not yet started. It
-// never reads the pg driver's jobs table: a row the pg driver left there is
-// served by nothing once River runs (agentry#853).
+// reads only river_job.
 func (c *RiverClient) CountWaiting(ctx context.Context, kind string) (int64, error) {
 	var n int64
 	err := c.st.Pool().QueryRow(ctx, `
@@ -224,9 +223,9 @@ func (c *RiverClient) handler(kind string) Handler {
 	return c.handlers[kind]
 }
 
-// riverWorker adapts every registered kind to River's Worker: the same
-// backoff the pg driver used (2^attempt seconds), riverJobTimeout as every
-// job's limit, and the §16.2 outcome metrics.
+// riverWorker adapts every registered kind to River's Worker: a backoff of
+// 2^attempt seconds, riverJobTimeout as every job's limit, and the outcome
+// metrics.
 type riverWorker struct {
 	river.WorkerDefaults[envelope]
 	c *RiverClient
@@ -241,8 +240,8 @@ func (w *riverWorker) Work(ctx context.Context, job *river.Job[envelope]) error 
 	h := c.handler(job.Kind)
 	if h == nil {
 		// River only dispatches registered kinds, so this is unreachable
-		// short of a handler map edited after Work; keep the pg driver's
-		// outcome anyway.
+		// short of a handler map edited after Work; the outcome is the same as
+		// for an unknown kind.
 		c.mx.RecordQueueJob(ctx, job.Queue, job.Kind, "no_handler", 0)
 		c.log.Error("queue: no handler", "kind", job.Kind, "job", job.ID)
 		return river.JobCancel(errors.New("no handler registered"))
@@ -281,7 +280,7 @@ func (c *RiverClient) runHandler(ctx context.Context, h Handler, job Job) (err e
 
 // riverErrors is River's ErrorHandler: a job whose kind has no worker in
 // this process is a wiring bug, not a job failure, so it is cancelled at once
-// and counted as no_handler, as the pg driver did; every other error is
+// and counted as no_handler; every other error is
 // River's retry path and is logged by the worker.
 type riverErrors struct{ c *RiverClient }
 
@@ -363,7 +362,7 @@ func (c *RiverClient) Work(ctx context.Context, queues ...string) error {
 
 // Drain works the queues until nothing in them is ready or running, then
 // stops (tests and one-shot drains). A retry scheduled for later is
-// deliberately waiting and does not hold the drain, as with the pg driver.
+// deliberately waiting and does not hold the drain.
 func (c *RiverClient) Drain(ctx context.Context, queues ...string) {
 	if len(queues) == 0 {
 		queues = []string{"core"}
@@ -412,8 +411,7 @@ func (c *RiverClient) pending(ctx context.Context, queues []string) (int64, erro
 }
 
 // sampleBacklog publishes QueueDepth and QueueAgeSeconds per queue: jobs
-// waiting to be picked up now, and the age of the oldest of them — the same
-// definition as the pg driver's QueueBacklog query.
+// waiting to be picked up now, and the age of the oldest of them.
 func (c *RiverClient) sampleBacklog(ctx context.Context, queues []string) {
 	if c.mx == nil {
 		return

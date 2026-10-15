@@ -21,7 +21,7 @@ type ConsumeTOTPChallengeParams struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// The consumed set of the 2FA social login's second leg (agentry#457).
+// The consumed set of the 2FA social login's second leg.
 // Records the challenge's id as consumed. A row already there means it was
 // completed before, and the zero rows affected say so. Two replicas
 // completing one challenge at once cannot both win: the loser of the
