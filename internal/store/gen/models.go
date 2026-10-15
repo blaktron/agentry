@@ -39,6 +39,12 @@ type AccountInstall struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
+type AdmittedStore struct {
+	Ticket   string    `json:"ticket"`
+	Kind     string    `json:"kind"`
+	StoredAt time.Time `json:"stored_at"`
+}
+
 type Advisory struct {
 	ID               uuid.UUID  `json:"id"`
 	AgentID          uuid.UUID  `json:"agent_id"`
