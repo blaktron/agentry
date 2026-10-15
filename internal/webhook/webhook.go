@@ -256,7 +256,7 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 		return nil
 	}
 	if !strings.HasPrefix(strings.ToLower(row.Url), "https://") {
-		record(nil, "non-https url blocked (T-08)", nil, nil)
+		record(nil, "non-https url blocked", nil, nil)
 		return nil
 	}
 	secret, err := d.deps.Sealer.Open(row.SecretEnc)
