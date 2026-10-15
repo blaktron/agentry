@@ -38,9 +38,9 @@ func forkStore(t *testing.T) *gitsrv.RepoStore {
 // originWithHistory makes a bare origin with two commits on main and a
 // v1.0.0 tag on the second, and work past the release that no fork may
 // take: a third commit on main, a v1.1.0 tag on a commit of its own and an
-// experiment branch, each with a file nothing else holds. unreviewed lists
-// the ids of those commits and files.
-func originWithHistory(t *testing.T, repos *gitsrv.RepoStore) (id uuid.UUID, first, second string, unreviewed []string) {
+// experiment branch, each with a file nothing else holds. unreviewed maps
+// each of those commits and files, by name, to its id.
+func originWithHistory(t *testing.T, repos *gitsrv.RepoStore) (id uuid.UUID, first, second string, unreviewed map[string]string) {
 	t.Helper()
 	ctx := context.Background()
 	id = uuid.New()
@@ -68,16 +68,19 @@ func originWithHistory(t *testing.T, repos *gitsrv.RepoStore) (id uuid.UUID, fir
 	second = histGit(t, work, "rev-parse", "HEAD")
 	histGit(t, work, "tag", "v1.0.0")
 	// Work no review has passed, each commit with a file of its own.
+	unreviewed = make(map[string]string)
 	pending := func(file, body string) {
 		write(file, body)
 		histGit(t, work, "add", file)
 		histGit(t, work, "commit", "-qm", file)
-		unreviewed = append(unreviewed, histGit(t, work, "rev-parse", "HEAD"), histGit(t, work, "rev-parse", "HEAD:"+file))
+		unreviewed["commit "+file] = histGit(t, work, "rev-parse", "HEAD")
+		unreviewed["file "+file] = histGit(t, work, "rev-parse", "HEAD:"+file)
 	}
 	pending("LATER.md", "main moved on\n")
 	histGit(t, work, "checkout", "-q", "-b", "candidate")
 	pending("CANDIDATE.md", "awaiting review\n")
 	histGit(t, work, "tag", "-a", "-m", "candidate", "v1.1.0")
+	unreviewed["tag v1.1.0"] = histGit(t, work, "rev-parse", "v1.1.0")
 	histGit(t, work, "checkout", "-q", "-b", "experiment", first)
 	pending("EXPERIMENT.md", "a branch\n")
 	histGit(t, work, "checkout", "-q", "main")
@@ -107,9 +110,9 @@ func TestForkCopiesOnlyTheReleasesHistoryAndWritesOneRenamingCommit(t *testing.T
 	// Nothing past the release came with it: no branch, no tag, and none
 	// of their objects, which a client naming them by id would be served.
 	dir := repos.Path(fork)
-	for _, id := range unreviewed {
+	for what, id := range unreviewed {
 		if objectIn(dir, id) {
-			t.Errorf("the fork holds %s, which only the origin's unreviewed work reaches", id)
+			t.Errorf("the fork holds the %s (%s), which only the origin's unreviewed work reaches", what, id)
 		}
 	}
 
@@ -298,7 +301,7 @@ func TestForkCopiesNothingNoTagPointsAt(t *testing.T) {
 	repos := forkStore(t)
 	ctx := context.Background()
 	origin, first, _, unreviewed := originWithHistory(t, repos)
-	for name, commit := range map[string]string{"an untagged commit": first, "a branch tip": unreviewed[4]} {
+	for name, commit := range map[string]string{"an untagged commit": first, "a branch tip": unreviewed["commit EXPERIMENT.md"]} {
 		t.Run(name, func(t *testing.T) {
 			fork := uuid.New()
 			if err := repos.CopyHistory(ctx, origin, fork, "main", commit); err != nil {
@@ -315,5 +318,20 @@ func TestForkCopiesNothingNoTagPointsAt(t *testing.T) {
 	}
 	if err := repos.CopyHistory(ctx, origin, uuid.New(), "main", "main"); err == nil {
 		t.Fatal("CopyHistory took a ref name for a commit")
+	}
+}
+
+// A tag moved after it was chosen brings history past the commit it was
+// chosen for: the copy is refused and leaves no repository behind.
+func TestForkRefusesATagMovedWhileItWasCopied(t *testing.T) {
+	repos := forkStore(t)
+	ctx := context.Background()
+	origin, first, _, _ := originWithHistory(t, repos)
+	fork := uuid.New()
+	if err := repos.CopyHistoryVia(ctx, origin, fork, "main", first, "refs/tags/v1.0.0"); err == nil {
+		t.Fatal("the copy took v1.0.0, which points past the commit it was chosen for")
+	}
+	if _, err := os.Stat(repos.Path(fork)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the refused copy left its repository behind: %v", err)
 	}
 }
