@@ -1,4 +1,4 @@
-# Agentry dev/self-host stack (M0, §2.4 "Dev / small self-host" shape).
+# Agentry dev/self-host stack (the "dev / small self-host" shape).
 # `docker compose -f deploy/compose/docker-compose.yaml up` gives postgres,
 # minio (S3-compatible archive store), and mailpit (SMTP catcher).
 # agentryd itself runs on the host in dev (`make dev`) or as the `server`
@@ -8,8 +8,8 @@
 # values and are read from .env (AGENTRY_PG_PASSWORD, AGENTRY_MINIO_SECRET)
 # everywhere they appear — the services, the DSN agentryd uses, authentik's
 # database, the bucket bootstrap — so a self-hoster sets them once without
-# editing this tracked file, and rotating after an exposure is a .env edit
-# (agentry#30). Changing them on a stack that already has data: postgres
+# editing this tracked file, and rotating after an exposure is a .env edit.
+# Changing them on a stack that already has data: postgres
 # and minio keep the OLD value in their volumes; run ALTER USER / `mc admin
 # user` first, or start from fresh volumes.
 #
@@ -69,8 +69,8 @@ services:
       # default is 30s). With one drive, offline means every write fails
       # ("Storage resources are insufficient", a 503 SlowDownWrite) until
       # it comes back; on a VM disk shared with builds a write can stall
-      # past 30s under load, which took dev's drive offline 48 times in a
-      # week (agentry#616). A slow write now waits instead of failing.
+      # past 30s under load, which took a drive offline 48 times in a
+      # week. A slow write waits instead of failing.
       MINIO_DRIVE_MAX_TIMEOUT: ${AGENTRY_MINIO_DRIVE_TIMEOUT:-3m}
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:9000:9000"
@@ -91,7 +91,7 @@ services:
       - "${AGENTRY_BIND:-127.0.0.1}:1025:1025"   # SMTP
       - "${AGENTRY_BIND:-127.0.0.1}:8025:8025"   # web UI
 
-  # ── Directory service (DEV-057) ──────────────────────────────────────────
+  # ── Directory service ──────────────────────────────────────────
   # Authentik owns accounts, passwords, and MFA; the registry consumes it as
   # an OIDC provider (social provider id `authentik`) and keeps sessions,
   # PATs, and RBAC native. Bootstrap the OAuth2 provider + application with
@@ -145,43 +145,43 @@ services:
       AUTHENTIK_POSTGRESQL__NAME: authentik
       AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
-      # Where the directory's flows return (agentry#164, DEV-091), read by
+      # Where the directory's flows return, read by
       # the account-flows blueprint via !Env: sign-out to
       # AGENTRY_PUBLIC_WEB_URL (its redirect stage), password/authenticator
-      # changes to AGENTRY_ACCOUNT_URL (the return-to-settings policy,
-      # DEV-118). Both default to the server's own /ui/ pages; a site in
+      # changes to AGENTRY_ACCOUNT_URL (the return-to-settings policy).
+      # Both default to the server's own /ui/ pages; a site in
       # front sets them to its own (its compose overlay does).
       AGENTRY_PUBLIC_WEB_URL: ${AGENTRY_PUBLIC_WEB_URL:-${AGENTRY_PUBLIC_URL:-http://localhost:8080}/ui/}
       AGENTRY_ACCOUNT_URL: ${AGENTRY_ACCOUNT_URL:-${AGENTRY_PUBLIC_URL:-http://localhost:8080}/ui/account/directory}
       # What the flows call this deployment (titles, mail subjects).
       AGENTRY_BRAND_NAME: ${AGENTRY_BRAND_NAME:-Agentry}
       # Per-IP budget for the enrollment/recovery flows (emails sent +
-      # accounts created per hour, agentry#53); formatted into the
+      # accounts created per hour); formatted into the
       # account-flows blueprint's rate-limit policy at apply time.
       AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR: ${AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR:-10}
-      # Remembered browsers (agentry#671, DEV-163): the sign-in's MFA-stage
+      # Remembered browsers: the sign-in's MFA-stage
       # policy asks the registry, at this address and with the same secret
       # the server holds, whether a browser is remembered, before it asks
       # for the code. Read when the policy runs, never written into the
       # directory's database. Unset, the code is always asked.
       AGENTRY_IDP_TRUST_CHECK_TOKEN: ${AGENTRY_IDP_TRUST_CHECK_TOKEN:-}
       AGENTRY_REGISTRY_INTERNAL_URL: ${AGENTRY_REGISTRY_INTERNAL_URL:-http://server:8080}
-      # The sign-up form's optional promo code field (agentry#759): any
+      # The sign-up form's optional promo code field: any
       # non-empty value shows it; unset or empty leaves it a hidden input the
       # form never shows. Only a deployment whose billing extension redeems
-      # codes turns it on (the SecureAgentry overlay does); the core alone
+      # codes turns it on (the hosted site's overlay does); the core alone
       # forwards a code and attaches no meaning to it. Read by the worker when
       # it applies the account-flows blueprint.
       AGENTRY_DIRECTORY_PROMO_FIELD: ${AGENTRY_DIRECTORY_PROMO_FIELD:-}
-      # The sign-up's Terms of Service step (agentry#788): the path, inside
+      # The sign-up's Terms of Service step: the path, inside
       # the server and the worker, of an HTML fragment holding the
       # deployment's terms, its root carrying data-terms-version="…". Set,
       # every sign-up shows it after the form and must agree to it; unset,
       # there is no terms step. The core ships no terms: a deployment mounts
-      # its own (the SecureAgentry overlay mounts the site's). Read by the
+      # its own (the hosted site's overlay mounts the site's). Read by the
       # server when the step is reached.
       AGENTRY_DIRECTORY_TERMS_FILE: ${AGENTRY_DIRECTORY_TERMS_FILE:-}
-      # Registry activation (agentry#861, DEV-197): a self-enrolled account
+      # Registry activation: a self-enrolled account
       # reaches the site at once, unactivated and read-only until the
       # registry's mailed link confirms its address, instead of waiting at
       # the directory's confirmation mail. On by default here, where
@@ -208,7 +208,7 @@ services:
       AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL_PASSWORD:-}
       AUTHENTIK_EMAIL__USE_TLS: ${AUTHENTIK_EMAIL_USE_TLS:-false}
       AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL_FROM:-authentik@agentry.localhost}
-      # Sign-up CAPTCHA (DEV-063). Defaults are Cloudflare's published
+      # Sign-up CAPTCHA. Defaults are Cloudflare's published
       # Turnstile TEST keys, which always pass — fine for dev, useless as a
       # control. Set real keys in .env for anything with public sign-up.
       AUTHENTIK_CAPTCHA_SITE_KEY: ${AUTHENTIK_CAPTCHA_SITE_KEY:-1x00000000000000000000AA}
@@ -217,15 +217,15 @@ services:
       AUTHENTIK_CAPTCHA_API_URL: ${AUTHENTIK_CAPTCHA_API_URL:-https://challenges.cloudflare.com/turnstile/v0/siteverify}
     volumes:
       - authentik-media:/media
-      # The mails the directory sends a person (agentry#518): the account
+      # The mails the directory sends a person: the account
       # flows' email stages name agentry/*.html here, not authentik's stock
       # templates.
       - ./authentik/templates:/templates:ro
-      # The mark the mails show inline (agentry#720): authentik attaches the
+      # The mark the mails show inline: authentik attaches the
       # PNG at this path as cid:logo, so the core's mark replaces authentik's.
       - ./authentik/brand/mail-logo.png:/web/dist/assets/icons/icon_left_brand.png:ro
       # Declarative configuration, applied on boot and re-applied when the
-      # files change (idempotent): the enrollment flow (DEV-062) lives here.
+      # files change (idempotent): the enrollment flow lives here.
       - ./authentik/blueprints:/blueprints/custom:ro
     depends_on:
       postgres:
@@ -246,15 +246,15 @@ services:
     environment: *authentik-env
     volumes:
       - authentik-media:/media
-      # The mails the directory sends a person (agentry#518): the account
+      # The mails the directory sends a person: the account
       # flows' email stages name agentry/*.html here, not authentik's stock
       # templates.
       - ./authentik/templates:/templates:ro
-      # The mark the mails show inline (agentry#720): authentik attaches the
+      # The mark the mails show inline: authentik attaches the
       # PNG at this path as cid:logo, so the core's mark replaces authentik's.
       - ./authentik/brand/mail-logo.png:/web/dist/assets/icons/icon_left_brand.png:ro
       # Declarative configuration, applied on boot and re-applied when the
-      # files change (idempotent): the enrollment flow (DEV-062) lives here.
+      # files change (idempotent): the enrollment flow lives here.
       - ./authentik/blueprints:/blueprints/custom:ro
     depends_on:
       postgres:
@@ -289,7 +289,7 @@ services:
       context: ../..
       dockerfile: deploy/compose/Dockerfile
     environment:
-      # Dev mode is opt-in (DEV-116, security review 2026-09-20 §3.6): off,
+      # Dev mode is opt-in: off,
       # the server needs a sealing key (AGENTRY_AUTH_SEALING_KEY, 32 random
       # bytes base64 — `openssl rand -base64 32`) and a signing key
       # (AGENTRY_SIGNING_KIND=file plus the two lines below it), and refuses
@@ -301,7 +301,7 @@ services:
       AGENTRY_ENV: ${AGENTRY_ENV:-dev}
       AGENTRY_DEV_MODE: ${AGENTRY_DEV_MODE:-false}
       AGENTRY_AUTH_SEALING_KEY: ${AGENTRY_AUTH_SEALING_KEY:-}
-      # The store of knowledge packs (agentry#593) wraps each pack's data key
+      # The store of knowledge packs wraps each pack's data key
       # under a key of its own — 32 random bytes base64, never the sealing
       # key above; unset outside dev mode, the store is off (503) unless an
       # extension wraps keys. The per-account cap, in bytes, is unset: none.
@@ -324,18 +324,17 @@ services:
       # alias such as jev-latest is refused) and AGENTRY_JUDGE_BASE_URL
       # defaults to https://api.typesafe.ai.
       AGENTRY_JUDGE_REGION: ${AGENTRY_JUDGE_REGION:-}
-      # Web search the registry brokers for the model-input search route
-      # (agentry#608): none (the default; the route answers 503), youcom,
-      # brave (agentry#631), tavily, exa or perplexity (agentry#783,
-      # DEV-185), with its key held here and never on a sandbox host. The
+      # Web search the registry brokers for the model-input search route:
+      # none (the default; the route answers 503), youcom, brave, tavily, exa
+      # or perplexity, with its key held here and never on a sandbox host. The
       # model-input scan route itself needs the typesafe judge above.
       AGENTRY_WEB_SEARCH_PROVIDER: ${AGENTRY_WEB_SEARCH_PROVIDER:-}
       AGENTRY_WEB_SEARCH_API_KEY: ${AGENTRY_WEB_SEARCH_API_KEY:-}
       AGENTRY_WEB_SEARCH_BASE_URL: ${AGENTRY_WEB_SEARCH_BASE_URL:-}
-      # External scanner tools (§8.3, agentry#40). gitleaks ships in the
+      # External scanner tools. gitleaks ships in the server image.
       AGENTRY_SCAN_GITLEAKS_BIN: ${AGENTRY_SCAN_GITLEAKS_BIN:-/usr/bin/gitleaks}
       # Real SMTP against mailpit: every message the server sends lands in the
-      # web UI on :8025 instead of the log, so the notification paths (§8.7)
+      # web UI on :8025 instead of the log, so the notification paths
       # can actually be read end to end in dev. No TLS, no auth — mailpit
       # accepts plaintext on 1025, which is why startTLS is off here and must
       # never be off against a real relay.
@@ -353,10 +352,10 @@ services:
       # in deploy/compose/.env (compose reads .env from the compose file's
       # own directory, NOT the cwd) or export it in the shell before `up`.
       AGENTRY_BASE_URL: ${AGENTRY_PUBLIC_URL:-http://localhost:8080}
-      # DEV-091: a site fronting this server, how much of the server's own
+      # A site fronting this server, how much of the server's own
       # /ui/ surface to serve, what it calls itself, and the directory's
       # sign-out URL (the provider's end-session endpoint behind authentik's
-      # cancel view — docs/self-hosting.md, agentry#441). All optional; empty
+      # cancel view — docs/self-hosting.md). All optional; empty
       # = the server on its own.
       AGENTRY_WEB_URL: ${AGENTRY_WEB_URL:-}
       AGENTRY_UI_MODE: ${AGENTRY_UI_MODE:-full}
@@ -368,7 +367,7 @@ services:
       # browsers accept (docs/self-hosting.md "Running behind a proxy").
       AGENTRY_TRUSTED_PROXIES: ${AGENTRY_TRUSTED_PROXIES:-0}
       # ...and X-Forwarded-For is read only from a peer in these ranges
-      # (agentry#429): docker's own address pools, which hold this stack's
+      # docker's own address pools, which hold this stack's
       # network, where the edge (and a site's web container) reach the
       # server. A client that reaches the server's port any other way
       # resolves to its own address, whatever header it sends. Narrow it to
@@ -389,21 +388,21 @@ services:
       # docs/self-hosting.md "Audit archive and retention".
       AGENTRY_LOG_LEVEL: ${AGENTRY_LOG_LEVEL:-info}
       AGENTRY_AUDIT_STREAM_KIND: ${AGENTRY_AUDIT_STREAM_KIND:-none}
-      # Directory service (DEV-057): hand credentials to Authentik. When
+      # Directory service: hand credentials to Authentik. When
       # AGENTRY_AUTH_EXTERNAL_ONLY=true the native register/password/TOTP
       # endpoints answer 410 and sign-in goes through the authentik provider.
       AGENTRY_AUTH_EXTERNAL_ONLY: ${AGENTRY_AUTH_EXTERNAL_ONLY:-false}
       AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID: ${AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID:-}
       AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET: ${AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET:-}
       AGENTRY_SOCIAL_AUTHENTIK_ISSUER: ${AGENTRY_SOCIAL_AUTHENTIK_ISSUER:-}
-      # Account erasure reaches into the directory too (agentry#20): the
+      # Account erasure reaches into the directory too: the
       # server deletes the sign-in account through authentik's API. The
       # bootstrap token works; a dedicated token with rights over users is
       # better. Empty leaves erasure registry-only (the privacy policy then
       # has to say so).
       AGENTRY_IDP_ADMIN_URL: ${AGENTRY_IDP_ADMIN_URL:-}
       AGENTRY_IDP_ADMIN_TOKEN: ${AGENTRY_IDP_ADMIN_TOKEN:-}
-      # Remembered browsers on the directory's sign-in (agentry#670): the
+      # Remembered browsers on the directory's sign-in: the
       # secret the directory's flow presents when it asks the server whether
       # a browser is remembered. At least 32 characters; the directory holds
       # the same value. Empty turns the directory path off. The cookie's
@@ -411,18 +410,18 @@ services:
       # the override below is needed only when the two are sibling hosts.
       AGENTRY_IDP_TRUST_CHECK_TOKEN: ${AGENTRY_IDP_TRUST_CHECK_TOKEN:-}
       AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN: ${AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN:-}
-      # Platform staff is membership of the staff organization (agentry#556):
+      # Platform staff is membership of the staff organization:
       # an active member of AGENTRY_STAFF_ORG whose verified address is at
       # exactly AGENTRY_STAFF_DOMAIN, and the organization admits nobody
       # else. Set both or neither; empty leaves the flag as it is.
       AGENTRY_STAFF_ORG: ${AGENTRY_STAFF_ORG:-}
       AGENTRY_STAFF_DOMAIN: ${AGENTRY_STAFF_DOMAIN:-}
-      # The directory group the registry keeps equal to its platform staff
-      # (agentry#598), written through the admin URL and token above; a
+      # The directory group the registry keeps equal to its platform staff,
+      # written through the admin URL and token above; a
       # directory application that should admit staff alone (the log
       # stack's Dashboards) reads it. Empty means no mirror.
       AGENTRY_IDP_STAFF_MIRROR_GROUP: ${AGENTRY_IDP_STAFF_MIRROR_GROUP:-}
-      # Retired (agentry#556): these grant nothing and the server warns at
+      # Retired: these grant nothing and the server warns at
       # start-up while either is set.
       AGENTRY_IDP_STAFF_GROUP: ${AGENTRY_IDP_STAFF_GROUP:-}
       AGENTRY_IDP_STAFF_DOMAIN: ${AGENTRY_IDP_STAFF_DOMAIN:-}
@@ -439,19 +438,19 @@ services:
       # uid 65532 (see Dockerfile); the default .devdata/git would resolve
       # to an unwritable / in-container.
       AGENTRY_GIT_DATA_DIR: /data/git
-      # SSH git transport (§6.1 Q7, agentry#70): listens in-container on
+      # SSH git transport: listens in-container on
       # 2222; the host key is generated under /data/git on first start.
       # AGENTRY_GIT_SSH_PUBLIC_URL is what agent pages print as the clone
       # URL (e.g. ssh://git@registry.example.test:2222); leave it empty to
       # keep the transport reachable but unadvertised.
       AGENTRY_GIT_SSH_ADDR: ${AGENTRY_GIT_SSH_ADDR:-:2222}
       AGENTRY_GIT_SSH_PUBLIC_URL: ${AGENTRY_GIT_SSH_PUBLIC_URL:-}
-      # A TCP proxy in front of the SSH port (agentry#492): the CIDRs it
+      # A TCP proxy in front of the SSH port: the CIDRs it
       # connects from. When set, every SSH connection must come from them
       # and open with a PROXY header naming the client. The stack publishes
       # the port directly, so it stays empty here.
       AGENTRY_GIT_SSH_PROXY_PROTOCOL_CIDRS: ${AGENTRY_GIT_SSH_PROXY_PROTOCOL_CIDRS:-}
-      # Release signing (agentry#308). With dev mode off (the default) a
+      # Release signing. With dev mode off (the default) a
       # stable key is required: AGENTRY_SIGNING_KIND=file, the key at
       # AGENTRY_SIGNING_KEY_FILE inside the container, and the host
       # directory that holds it in AGENTRY_SIGNING_KEY_DIR (mounted
@@ -481,9 +480,9 @@ services:
 
   # The edge: TLS termination and the one public origin of the server —
   # API, git, the server's own /ui/ pages, the downloads directory — with
-  # the directory service on auth.* (DEV-091: the headless stack; a site in
-  # front is an overlay from its own repository, which replaces this
-  # config with the full-site one). edge/nginx.conf explains why TLS is
+  # the directory service on auth.* (the headless stack; a site in front is
+  # an overlay from its own repository, which replaces this config with the
+  # full-site one). edge/nginx.conf explains why TLS is
   # load-bearing (browsers send no same-origin signal to a plain-http
   # hostname). Certificates come from AGENTRY_EDGE_CERT_DIR as edge.crt +
   # edge.key; on a Tailscale host `tailscale cert` issues a real one,
@@ -497,9 +496,9 @@ services:
     # Two networks: the stack's, to reach the services it fronts, and
     # `ingress`, shared with cloudflared alone. The edge trusts a visitor
     # address from CF-Connecting-IP only when the TCP peer is on `ingress`
-    # (edge/nginx.conf set_real_ip_from) — it used to trust all of
+    # (edge/nginx.conf set_real_ip_from), never from the whole of
     # 172.16.0.0/12, which is every container on every docker network on
-    # the host, run containers included (security review 2026-09-20 §5.7).
+    # the host, run containers included.
     networks: [default, ingress]
     ports:
       - "${AGENTRY_EDGE_BIND:-0.0.0.0}:80:80"
@@ -513,7 +512,7 @@ services:
       # hosted site's build script lives with the site). A host directory
       # when AGENTRY_DOWNLOADS_DIR names one; otherwise the empty named
       # volume below, so a fresh `up` never scaffolds a root-owned
-      # directory into the checkout (agentry#218 removed deploy/compose/downloads).
+      # directory into the checkout.
       - ${AGENTRY_DOWNLOADS_DIR:-downloads}:/srv/downloads:ro
     depends_on:
       - server

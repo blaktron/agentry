@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Directory sign-out acceptance (agentry#441): sign-out ends the directory
+"""Directory sign-out acceptance: sign-out ends the directory
 session whatever the last directory flow left behind.
 
 Authentik's end-session endpoint answers an empty 200 — a blank page, no

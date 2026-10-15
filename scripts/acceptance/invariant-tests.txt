@@ -1,9 +1,8 @@
-# The tests ARCHITECTURE.md §9 (agentry-notes) names as evidence for the
-# core's rows, one per line. scripts/acceptance/invariant-test-names.sh fails when
-# one is not a top-level test of this module under exactly this name
-# (agentry#420). The notes repository is not available to CI, so the list is
-# embedded; when a §9 row changes, run
-#   scripts/acceptance/invariant-test-names.sh --from <path to ARCHITECTURE.md>
+# The tests named as evidence for the core's security invariants, one per
+# line. scripts/acceptance/invariant-test-names.sh fails when one is not a
+# top-level test of this module under exactly this name. To compare the list
+# with a Markdown document that cites tests in a `## 9.` section, run
+#   scripts/acceptance/invariant-test-names.sh --from <path to the document>
 # and bring this file in line with what it reports.
 TestAcceptedRiskOnOrgAgentReservedToOrgReviewers
 TestAccessLineCarriesTheContract

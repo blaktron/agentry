@@ -1,4 +1,4 @@
-# dev's prereleases (DEV-148, agentry#597). Every push to dev that
+# dev's prereleases. Every push to dev that
 # release-please would release on main (a commit of a type the config shows
 # in the changelog: feat, fix, perf, security, deps or revert, since the last
 # dev tag) is tagged vX.Y.Z-dev.N, the Nth prerelease of the version main's
@@ -17,8 +17,7 @@
 # The tag is created with the workflow's own token, whose events never start
 # other workflows, so this workflow calls release.yaml itself (the same
 # reason release-please.yaml does). workflow_dispatch on dev cuts a
-# prerelease of dev's head even without a releasable commit (agents may cut
-# releases, DEV-148), and still refuses a head that is already tagged.
+# prerelease of dev's head even without a releasable commit and still refuses a head that is already tagged.
 name: dev-release
 on:
   push:

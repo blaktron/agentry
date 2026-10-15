@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # selftest.sh — the release scripts against a throwaway repository and a fake
-# GitHub API (agentry#597): the version each channel gets, when a dev push is
+# GitHub API: the version each channel gets, when a dev push is
 # released at all, every tag and configuration the guards refuse, and how
 # publish.sh finds, fills and publishes a release. CI's check job runs it; it
 # needs git, jq and bash, and nothing on the network.
@@ -67,7 +67,7 @@ dev_head=$(git rev-parse HEAD)
 git checkout -q -b main; commit "chore(main): release 0.6.0"; git tag v0.6.0; publish_ref main
 git checkout -q dev
 expect v0.6.1-dev.1 "after v0.6.0 a lingering release-as gives way to a patch bump" "$next"
-config 0.7.0; commit "feat!: the operator moves the minor"; publish_ref dev
+config 0.7.0; commit "feat!: a maintainer moves the minor"; publish_ref dev
 expect v0.7.0-dev.1 "a newer release-as moves the version" "$next"
 config 0.5.0; commit "fix: stale release-as"; publish_ref dev
 expect v0.6.1-dev.1 "a release-as below the newest release is ignored" "$next"
@@ -115,7 +115,7 @@ manifest 0.6.0
 accepts "release: tagging the merged 0.6.0" "$cguard" release
 refuses "pull-request: release-as 0.6.0 once 0.6.0 is released" "$cguard" pull-request
 config; accepts "pull-request: no release-as after the release" "$cguard" pull-request
-config 0.7.0; accepts "pull-request: the operator's newer release-as" "$cguard" pull-request
+config 0.7.0; accepts "pull-request: a maintainer's newer release-as" "$cguard" pull-request
 config 1.0.0; refuses "pull-request: release-as 1.0.0 without AGENTRY_ALLOW_V1" "$cguard" pull-request
 accepts "pull-request: release-as 1.0.0 with AGENTRY_ALLOW_V1=true" env AGENTRY_ALLOW_V1=true "$cguard" pull-request
 config; manifest 1.0.0

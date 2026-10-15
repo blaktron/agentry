@@ -1,7 +1,7 @@
 # The benign twin of s4-heading-framed: review documentation under the same
 # headings, whose descriptive marker ("Watch for instructions…") wraps onto
 # the line before the matched phrase. The paragraph scope must still suppress
-# it once headings stop counting (agentry#845, ruleset 0.3.3).
+# it once headings stop counting (ruleset 0.3.3).
 technique: "Descriptive review prose under a heading (benign lookalike)"
 expect: []
 forbid:

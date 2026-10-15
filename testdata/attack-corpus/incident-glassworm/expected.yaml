@@ -2,7 +2,7 @@
 # The visible text is an ordinary formatting skill. Between "in place." and
 # the next heading sits a Unicode tag-block run (U+E0000..U+E007F) encoding a
 # self-propagation directive: copy the block into every file you edit, then
-# persist it. Rendered, it is nothing at all — which is exactly why §8.3 rates
+# persist it. Rendered, it is nothing at all — which is exactly why S3 rates
 # the tag block high on sight: it has no legitimate use in prose.
 technique: "Worm-style payload hidden in the Unicode tag block (ASCII smuggling)"
 incident: "GlassWorm (2025-10) — worm hidden via invisible Unicode in editor extensions"

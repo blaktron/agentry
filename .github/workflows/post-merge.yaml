@@ -1,8 +1,7 @@
-# A red `ci` run on a merge commit is told to whoever merged it (agentry#452).
-# On 2026-09-21 `main` sat red for over two hours after a merge-commit run
-# failed, because nothing re-ran it and a red push run is easy to miss: the
-# gate judges the pull request's run, and the push run on dev or main lands
-# after the merge. This workflow comments on the pull request(s) that produced
+# A red `ci` run on a merge commit is told to whoever merged it.
+# A red push run is easy to miss: the gate judges the pull request's run, and
+# the push run on dev or main lands after the merge, so a failure there can
+# sit unnoticed. This workflow comments on the pull request(s) that produced
 # the commit, naming the failed jobs, so the merger hears of it where they
 # were last working.
 #
@@ -61,7 +60,7 @@ jobs:
           prs=$(api "https://api.github.com/repos/$REPO/commits/$sha/pulls" | jq -r '.[] | select(.merged_at != null) | .number')
           body="The \`ci\` run on this merge commit (\`${sha:0:7}\` on \`$branch\`) is red: ${failed:-no failed job listed}. $url
 
-          The gate judged this pull request's own run; this is the push run after the merge. Read the failure (\`gh run view $RUN_ID --log-failed\`): a known flake may be re-run once, and anything else is fixed forward on a new branch before the next promotion (agentry#452)."
+          The gate judged this pull request's own run; this is the push run after the merge. Read the failure (\`gh run view $RUN_ID --log-failed\`): a known flake may be re-run once, and anything else is fixed forward on a new branch before the next promotion."
           if [ -z "$prs" ]; then
             echo "no merged pull request found for $sha; nothing to tell"
             exit 0

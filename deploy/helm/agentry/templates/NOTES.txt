@@ -1,4 +1,4 @@
-Agentry {{ .Chart.AppVersion }} — self-host HA (PLAN §2.4) installed as
+Agentry {{ .Chart.AppVersion }} — self-host HA installed as
 release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
 
 Roles deployed:

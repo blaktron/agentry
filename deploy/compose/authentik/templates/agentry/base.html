@@ -1,5 +1,5 @@
 {% comment %}
-The frame of every mail the directory sends a person (agentry#518), in place
+The frame of every mail the directory sends a person, in place
 of authentik's email/base.html, which embeds authentik's logo and ends
 "Powered by authentik". The email stages in the account-flows blueprint name
 the templates that extend this one; authentik reads them from /templates.
@@ -10,7 +10,7 @@ Colours are the light scheme of the core's /ui/ palette and nothing else
 mode.
 
 Everything is inline and table-based because mail clients drop <style> and
-<link>. The header is the Agentry mark and the wordmark (agentry#720): the
+<link>. The header is the Agentry mark and the wordmark: the
 mark is cid:logo, an inline attachment authentik adds to any mail that names
 it, read from its logo path, where the stack mounts the core's
 deploy/compose/authentik/brand/mail-logo.png. Nothing is a remote image, which

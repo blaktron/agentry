@@ -1,7 +1,7 @@
-# Agentry self-host HA values (PLAN §2.4 "Self-host HA").
+# Agentry self-host HA values.
 #
-# OPERATOR-SUPPLIED DEPENDENCIES (NOT bundled by this chart, by design — D-03/
-# §14.1 feature parity but services stay external):
+# OPERATOR-SUPPLIED DEPENDENCIES (NOT bundled by this chart, by design — the
+# services stay external):
 #   * PostgreSQL 16 — set secret.databaseUrl (or existingSecret key
 #     AGENTRY_DATABASE_URL). agentryd runs migrations on start when
 #     config.migrateOnStart=true.
@@ -9,12 +9,12 @@
 #     config.storage.s3Bucket / s3Region and provide credentials via
 #     serviceAccount IRSA (recommended on EKS) or extraEnv (AWS_ACCESS_KEY_ID,
 #     AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3 for non-AWS stores).
-#   * Redis (optional, D-06) — nothing the chart runs requires it, and
+#   * Redis (optional) — nothing the chart runs requires it, and
 #     nothing in the core reads secret.redisUrl today: setting it only
 #     reports features.redis on GET /api/v1/meta. The state a replica set
 #     must share — sessions, the queue, and the SAML replay and request
-#     sets — is in Postgres, so every api replica shares it as it is
-#     (agentry#414). What stays per process is the rate-limit buckets, so N
+#     sets — is in Postgres, so every api replica shares it as it is.
+#     What stays per process is the rate-limit buckets, so N
 #     replicas allow N times the budget behind the edge's own.
 
 nameOverride: ""
@@ -42,7 +42,7 @@ config:
     # CDN → ingress set 2. Setting this HIGHER than the real hop count lets
     # callers pick their own rate-limit bucket, so it must match exactly.
     trustedProxies: 0
-    # Where the hop in front connects from, as CIDRs (agentry#429). When
+    # Where the hop in front connects from, as CIDRs. When
     # set, X-Forwarded-For is read only from a peer in these ranges; any
     # other peer resolves to itself. Set it with trustedProxies: the
     # ingress controller's pod range (or its balancer's subnets). Empty
@@ -60,27 +60,27 @@ config:
     cookieSecure: true
     sessionTTL: 24h
     patMaxTTL: 8760h
-    # Directory service (DEV-057, agentry#51). externalOnly hands passwords,
+    # Directory service. externalOnly hands passwords,
     # MFA, recovery and sign-up to the IdP configured under social.authentik;
     # idpAdminURL (+ secret.idpAdminToken) lets account erasure reach it.
     externalOnly: false
     idpAdminURL: ""
-    # Remembered browsers on the directory's sign-in (agentry#670) are on
+    # Remembered browsers on the directory's sign-in are on
     # while secret.idpTrustCheckToken is set. The cookie is set for the
     # registry's host, which covers a directory on a subdomain of it; for
     # sibling hosts name a parent domain of both here.
     directoryCookieDomain: ""
-    # Platform staff is membership of the staff organization (agentry#556):
+    # Platform staff is membership of the staff organization:
     # an active member of staffOrg whose verified address is at exactly
     # staffDomain; the organization admits nobody else. Set both or neither.
     staffOrg: ""
     staffDomain: ""
-    # The directory group the registry keeps equal to its platform staff
-    # (agentry#598), written through idpAdminURL and secret.idpAdminToken,
+    # The directory group the registry keeps equal to its platform staff,
+    # written through idpAdminURL and secret.idpAdminToken,
     # for a directory application that admits staff alone (the log stack's
     # Dashboards). Needs staffOrg and the admin URL and token. Empty: none.
     idpStaffMirrorGroup: ""
-    # Retired (agentry#556): they grant nothing, and the server warns at
+    # Retired: they grant nothing, and the server warns at
     # start-up while either is set.
     idpStaffGroup: ""
     idpStaffDomain: ""
@@ -93,11 +93,10 @@ config:
       issuer: "" # https://auth.example.com/application/o/agentry/
   idp:
     # Where sign-out sends the browser (the server's own /ui/ sign-out, and a
-    # site's; DEV-082, DEV-091): the provider's end-session endpoint behind
-    # authentik's cancel view, which drops a parked flow plan first
-    # (agentry#441).
+    # site's): the provider's end-session endpoint behind
+    # authentik's cancel view, which drops a parked flow plan first.
     logoutUrl: "" # https://auth.example.com/flows/-/cancel/?next=/application/o/agentry/end-session/
-  # DEV-091: a site fronting this server (its origin; empty = the server's
+  # A site fronting this server (its origin; empty = the server's
   # own /ui/ pages), how much of /ui/ to serve (full | authorize | off), and
   # what the server calls itself.
   web:
@@ -112,17 +111,17 @@ config:
     s3Region: ""
     s3Prefix: "" # optional key prefix, letting one bucket host several envs
     s3Endpoint: "" # set for MinIO/Ceph; empty uses AWS
-    s3UsePathStyle: false # MinIO and Ceph RGW (Vultr Object Storage, verified at M3) need true; AWS does not
+    s3UsePathStyle: false # MinIO and Ceph RGW (Vultr Object Storage) need true; AWS does not
   git:
     dataDir: /data/git
-    # The SSH git transport (DEV-087): the address the git role listens on,
+    # The SSH git transport: the address the git role listens on,
     # e.g. ":2222"; empty (the default) leaves it off. The host key is
     # generated under dataDir on first start, so replicas sharing the RWX
     # volume share one host key. When set, the git Service exposes it as
     # port 22 and sshPublicUrl is what clone URLs advertise.
     sshAddr: ""
     sshPublicUrl: "" # e.g. ssh://git@git.agentry.example:22
-    # A TCP proxy in front of the SSH port (agentry#492): the addresses it
+    # A TCP proxy in front of the SSH port: the addresses it
     # connects from, as CIDRs. When set, every SSH connection must come from
     # one of them and open with a PROXY protocol header (v1 or v2; nginx
     # stream: `proxy_protocol on`), whose source is the client the key-offer
@@ -138,7 +137,7 @@ config:
     # below is mounted at its directory, which must not be under /etc/agentry
     # (the read-only config mount: a mount nested in it cannot be created).
     keyFile: /etc/agentry-signing/signing-key.pem
-    # §8.8 rotation is done with OVERLAPPING validity windows, so the key
+    # Rotation is done with OVERLAPPING validity windows, so the key
     # discovery document must be able to list more than one key. notBefore/
     # notAfter (RFC3339) bound the ACTIVE key; additionalKeys publishes
     # verification-only keys alongside it — the outgoing key stays listed,
@@ -173,8 +172,8 @@ config:
     from: "" # e.g. "Agentry <no-reply@agentry.example>"
     startTLS: true
     username: ""
-  # §19 quotas. Omit to take the shipped defaults; anything set here is what
-  # the entitlements resolver hands out (§14.2).
+  # Quotas. Omit to take the shipped defaults; anything set here is what
+  # the entitlements resolver hands out.
   limits: {}
   # authedPerHour: 5000
   # webhookDeliveriesPerSecond: 5
@@ -187,7 +186,7 @@ config:
 # The attestation signing key for config.signing.kind=file: the Secret and
 # the key in it holding the PEM, projected read-only to config.signing.keyFile
 # (0400, readable through podSecurityContext.fsGroup) in the worker pods
-# only. The api and git roles start without it (agentry#479): they serve the
+# only. The api and git roles start without it: they serve the
 # key set and the ruleset attestation from what the worker stored, and an
 # approval's publish is the worker's, so the pods that terminate untrusted
 # traffic hold no private key.
@@ -214,21 +213,21 @@ databaseCA:
 # external-secrets / sealed-secrets) over inlining here.
 secret:
   create: true
-  # Each role reads only the keys it uses (agentry#744; docs/self-hosting.md):
+  # Each role reads only the keys it uses (docs/self-hosting.md):
   # git the database URL and the sealing key, the worker also knowledge, mail
   # and the directory admin token, the api all of them.
   existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_KNOWLEDGE_SEALING_KEY / AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN / AGENTRY_IDP_TRUST_CHECK_TOKEN
   authentikClientSecret: "" # OIDC client secret for config.social.authentik
   idpAdminToken: "" # directory API token for account erasure (config.auth.idpAdminURL)
-  # The secret the directory's sign-in presents to the registry's trust check
-  # (agentry#670), 32+ characters, the same value on the directory's side.
+  # The secret the directory's sign-in presents to the registry's trust check,
+  # 32+ characters, the same value on the directory's side.
   # Empty: remembered browsers are off on the directory path. The check lives
   # at /internal/directory/trusted-device: exclude /internal/ from any
   # ingress in front of the api, as /metrics must be.
   idpTrustCheckToken: ""
   databaseUrl: "" # postgres://user:pass@host:5432/agentry?sslmode=require
   redisUrl: "" # rediss://:pass@host:6379/0 (optional)
-  sealingKey: "" # base64 32 bytes; required outside dev (§ config Validate)
+  sealingKey: "" # base64 32 bytes; required outside dev (config validation)
   # base64 32 bytes, a key of its own (never the sealingKey above): what the
   # store of knowledge packs wraps their data keys under. Empty leaves the
   # store off (its routes answer 503) unless an extension wraps keys.
@@ -237,7 +236,7 @@ secret:
   smtpPassword: "" # required when config.notify.kind=smtp and smtp.username is set
 
 serviceAccount:
-  # One ServiceAccount per role (agentry#627): <release>-agentry-api, -worker
+  # One ServiceAccount per role: <release>-agentry-api, -worker
   # and -git, so a pod's token names the role presenting it (OpenBao binds
   # the encrypt policy to the api's and the decrypt policy to the worker's).
   create: true
@@ -246,7 +245,7 @@ serviceAccount:
   name: ""
   # Applied to all three. On EKS, annotate with an IRSA role granting S3 +
   # KMS (Sign for worker) access; its trust policy names the three accounts
-  # (or <release>-agentry-*), not the single one of before agentry#627:
+  # (or <release>-agentry-*), not a single shared account:
   # eks.amazonaws.com/role-arn: arn:aws:iam::<acct>:role/agentry
   annotations: {}
 
@@ -256,7 +255,7 @@ serviceAccount:
 extraEnv: []
 
 # Annotations on every role's pods, beside the config checksum; a role's own
-# podAnnotations win on a clash (agentry#745). For a cluster autoscaler that
+# podAnnotations win on a clash. For a cluster autoscaler that
 # will not evict a pod with an emptyDir, cluster-autoscaler.kubernetes.io/
 # safe-to-evict: "true" on a role whose scratch holds nothing that must
 # survive the pod lets it drain that role's nodes.
@@ -316,8 +315,7 @@ git:
   # The rollout strategy. A ReadWriteOnce volume (no RWX class available) needs
   # replicaCount 1 and {type: Recreate}; the default RollingUpdate suits RWX.
   updateStrategy: {}
-  # Shared RWX volume for the bare repos (§2.4 "git ×N (shared RWX volume)",
-  # D-19). Requires a ReadWriteMany StorageClass (EFS CSI, Filestore, NFS, ...).
+  # Shared RWX volume for the bare repos (git ×N). Requires a ReadWriteMany StorageClass (EFS CSI, Filestore, NFS, ...).
   persistence:
     enabled: true
     existingClaim: ""
@@ -341,8 +339,8 @@ git:
 
 worker:
   replicaCount: 2
-  # Empty = run all queues in one deployment (self-host default). To mirror the
-  # SaaS split (§13.3) set queues per an additional worker deployment.
+  # Empty = run all queues in one deployment (self-host default). To mirror a
+  # hosted split, set queues per an additional worker deployment.
   queues: ""
   extraEnv: []
   # Annotations on this role's pods; they win over the chart-wide
@@ -363,7 +361,7 @@ worker:
     httpsProxy: ""
     noProxy: "localhost,127.0.0.1,.svc,.cluster.local"
   # Default-deny egress for the worker pods, with the allows named here
-  # (§13.3's no-egress worker, restated for Kubernetes). dns lets the pods
+  # (the worker needs no network access of its own). dns lets the pods
   # resolve through kube-system; namespace lets them reach Services in this
   # namespace (an egress proxy); egress is a list of {cidr, ports: [{port,
   # protocol}]} for the database and anything else reached by address.
@@ -382,10 +380,10 @@ worker:
     minReplicas: 2
     maxReplicas: 8
     targetCPUUtilizationPercentage: 70
-  # Workers touch untrusted content (§8.2). Keep the root FS read-only. The git
+  # Workers touch untrusted content. Keep the root FS read-only. The git
   # RWX volume is mounted when mountGitData=true: the worker scans a tag's git
   # history (S2) and stores the archive of a tag pushed to the git role, which
-  # holds no object-store credential (agentry#508). Without it a tag push is
+  # holds no object-store credential. Without it a tag push is
   # rejected after two hours, its archive never stored.
   mountGitData: true
   nodeSelector: {}

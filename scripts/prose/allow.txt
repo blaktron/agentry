@@ -20,15 +20,15 @@
 # dropped in the PR that rewrites its sentence: a dead allowance covers a
 # wording nothing carries, and would silently cover it again if it returned.
 
-# The posture sentences themselves (protected.txt §1). The word "safe" is the
+# The posture sentences themselves (protected.txt, section 1). The word "safe" is the
 # content of the claim, in README.md, CONTRIBUTING.md, SECURITY.md and
 # docs/trust.md.
-a protected posture sentence (protected.txt §1) :: cannot prove an agent safe
+a protected posture sentence (protected.txt, section 1) :: cannot prove an agent safe
 
-# The one form of "guarantee" §4.4 keeps, and the trust page heading built on
-# it (protected.txt §5). Deleting the heading would delete the section that
+# The one form of "guarantee" that never.txt keeps, and the trust page
+# heading built on it (protected.txt, section 5). Deleting the heading would delete the section that
 # states the limits.
-the §4.4 exception: the negation is the claim :: does not guarantee
+the never.txt exception: the negation is the claim :: does not guarantee
 
 # Mechanism names that happen to be spelled with a banned word. Each names a
 # thing the code or the ecosystem already calls this, not a claim about a

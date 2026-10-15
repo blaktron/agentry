@@ -1,4 +1,4 @@
-technique: "Support script reaches a server over SSH written user@host, a host the manifest does not declare (S6, agentry#1095)"
+technique: "Support script reaches a server over SSH written user@host, a host the manifest does not declare (S6)"
 version: "1.0.0"
 manifest: |
   {"license":"MIT","capabilities":{"filesystem":{"read":"workspace"},"exec":{"commands":["sh","rsync","ssh"]}}}
