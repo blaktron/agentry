@@ -472,8 +472,11 @@ func TestAMemberForksIntoTheOrganizationWithinItsCap(t *testing.T) {
 
 // TestAForkOfATaggedOriginContinuesItsHistory: an origin published from a
 // git tag has a commit behind its version, so the fork's commit is built on
-// that commit: the origin's history is the fork's past, its other files
-// and branches come over, and the manifest alone changes.
+// that commit: the release's history is the fork's past, its other files
+// come over, and the manifest alone changes. Nothing of the origin that
+// no review passed comes over: not its default branch's later work, not
+// another branch, not a tag awaiting review, nor any object only they
+// reach, since the fork's owner may read every object in its repository.
 func TestAForkOfATaggedOriginContinuesItsHistory(t *testing.T) {
 	env := newForkEnv(t)
 	alice := env.register("fkt-alice")
@@ -526,10 +529,22 @@ func TestAForkOfATaggedOriginContinuesItsHistory(t *testing.T) {
 	git("commit", "-q", "-m", "one point oh")
 	git("tag", "v1.0.0")
 	tagged := git("rev-parse", "HEAD")
-	// The origin's main moves on after its release.
+	// The origin's main moves on after its release, a later tag waits for
+	// review, and another branch holds work of its own.
 	write("NOTES.md", "later work\n")
 	git("commit", "-q", "-am", "later")
 	later := git("rev-parse", "HEAD")
+	write("CANDIDATE.md", "awaiting review\n")
+	git("add", "CANDIDATE.md")
+	git("commit", "-q", "-m", "candidate")
+	git("tag", "-a", "-m", "candidate", "v1.1.0")
+	candidate, candidateBlob := git("rev-parse", "HEAD"), git("rev-parse", "HEAD:CANDIDATE.md")
+	git("checkout", "-q", "-b", "experiment", first)
+	write("EXPERIMENT.md", "a branch\n")
+	git("add", "EXPERIMENT.md")
+	git("commit", "-q", "-m", "experiment")
+	experiment, experimentBlob := git("rev-parse", "HEAD"), git("rev-parse", "HEAD:EXPERIMENT.md")
+	git("checkout", "-q", "main")
 	gitIn(t, env.repos.Path(originRepo), "fetch", "-q", work, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
 	env.doJSON(caller{name: "pat", pat: pat}, http.MethodPost, "/api/v1/agents/"+alice+"/tagged/versions", map[string]any{"tag": "v1.0.0"}, nil, http.StatusAccepted)
 	env.waitStatus(alice, "tagged", "1.0.0", "published")
@@ -548,9 +563,19 @@ func TestAForkOfATaggedOriginContinuesItsHistory(t *testing.T) {
 	if parent := gitIn(t, dir, "rev-parse", "main^"); parent != tagged {
 		t.Fatalf("main's parent %s is not the origin's release %s", parent, tagged)
 	}
-	// The origin's later work is kept beside the fork's branch.
-	if kept := gitIn(t, dir, "rev-parse", "origin-main"); kept != later {
-		t.Fatalf("origin-main = %s, want the origin's later commit %s", kept, later)
+	// The fork's refs are its own branch and release tag, and the origin's
+	// unreviewed work is not in it at all.
+	if refs := gitIn(t, dir, "for-each-ref", "--format=%(refname)"); refs != "refs/heads/main\nrefs/tags/v1.0.0" {
+		t.Fatalf("the fork's refs are\n%s\nwant its main and v1.0.0 alone", refs)
+	}
+	for what, id := range map[string]string{
+		"the origin's later commit on main": later,
+		"the commit tagged v1.1.0":          candidate, "its file": candidateBlob,
+		"the experiment branch's commit": experiment, "the experiment branch's file": experimentBlob,
+	} {
+		if err := exec.Command("git", "-C", dir, "cat-file", "-e", id).Run(); err == nil {
+			t.Errorf("the fork holds %s (%s)", what, id)
+		}
 	}
 	if notes := gitIn(t, dir, "show", "main:NOTES.md"); notes != "not in the release, still in the repository" {
 		t.Fatalf("NOTES.md = %q", notes)
@@ -560,6 +585,27 @@ func TestAForkOfATaggedOriginContinuesItsHistory(t *testing.T) {
 	}
 	if y := gitIn(t, dir, "show", "main:agent.yaml"); !strings.Contains(y, "namespace: "+bob) || !strings.Contains(y, "name: tagged") {
 		t.Fatalf("the renamed manifest:\n%s", y)
+	}
+
+	// A release no scan passed is no reviewed history either: a reader
+	// with no role cannot clone it, so a fork of it is made from its
+	// archive and holds none of the origin's commits.
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE agent_versions SET scan_status = 'skipped' WHERE commit_sha = $1`, tagged); err != nil {
+		t.Fatal(err)
+	}
+	carol := env.register("fkt-carol")
+	env.verifyEmail(carol)
+	env.fork(env.login(carol), alice, "tagged", map[string]any{"namespace": carol})
+	env.runCopies()
+	env.wantPublished(carol, "tagged")
+	unscanned := env.repos.Path(env.repoOf(carol, "tagged"))
+	if parents := gitIn(t, unscanned, "rev-list", "--count", "main"); parents != "1" {
+		t.Fatalf("a fork of an unscanned release has %s commits, want its own one alone", parents)
+	}
+	for _, id := range []string{first, tagged} {
+		if err := exec.Command("git", "-C", unscanned, "cat-file", "-e", id).Run(); err == nil {
+			t.Errorf("a fork of an unscanned release holds the origin's commit %s", id)
+		}
 	}
 }
 

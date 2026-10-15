@@ -2198,10 +2198,13 @@ paths:
         the origin and the published version it was taken from, for good. A
         fork is never public (`PATCH` to public answers `409
         fork-stays-private`). The fork is answered `202` with `forkState:
-        copying`: a worker then copies the origin's repository (every
-        branch and tag, objects copied rather than shared), writes one
-        commit, "Fork of ns/name@version", that renames the manifest into
-        the fork's namespace, tags it with the origin's version and submits
+        copying`: a worker then copies from the origin's repository the
+        forked release's commit and its history, when the release was
+        tagged and scanned, and nothing else (no other branch or tag;
+        objects copied rather than shared), writes one commit, "Fork of
+        ns/name@version", on top of it or, with nothing copied, from the
+        release's archive, that renames the manifest into the fork's
+        namespace, tags it with the origin's version and submits
         it through the pipeline like any submission, charged like one.
         `forkState` is then `ready`, or `failed` with `forkDetail` saying
         why. The origin must be readable, public, neither quarantined nor
