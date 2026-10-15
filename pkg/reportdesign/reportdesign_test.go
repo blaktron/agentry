@@ -12,7 +12,7 @@ import (
 )
 
 // Every built-in validates, its embedded document is exactly its Canonical,
-// and parsing that document gives the same design back (invariant 8, D14).
+// and parsing that document gives the same design back.
 func TestBuiltinsRoundTripByteForByte(t *testing.T) {
 	if got := BuiltinIDs(); !slices.Equal(got, []string{"plain", "classic", "modern", "editorial", "technical"}) {
 		t.Fatalf("built-ins %v", got)
@@ -46,7 +46,7 @@ func TestBuiltinsRoundTripByteForByte(t *testing.T) {
 	}
 }
 
-// Plain stays near-monochrome (D4): its accent is a near-black grey, so
+// Plain stays near-monochrome: its accent is a near-black grey, so
 // nobody's PDFs change colour unless they choose a design.
 func TestPlainIsNearMonochrome(t *testing.T) {
 	c, _ := parseHex(Default().Accent)
@@ -57,7 +57,7 @@ func TestPlainIsNearMonochrome(t *testing.T) {
 }
 
 // The five differ as design languages: no two share faces, accent, title
-// block and heading treatment all at once (plan §4's table).
+// block and heading treatment all at once.
 func TestBuiltinsDiffer(t *testing.T) {
 	seen := map[string]string{}
 	for _, d := range Builtins() {
@@ -98,7 +98,7 @@ var deleteKey = marker{}
 // The validation table: bad colours, unknown fonts and styles, a font in a
 // role it cannot take, an over-long or multi-line footer, unknown keys, a
 // missing field, an earlier document version and an over-size document are
-// each refused with the field named (invariant 2; agentry#1024).
+// each refused with the field named.
 func TestValidationTable(t *testing.T) {
 	cases := []struct {
 		name, path string
@@ -178,7 +178,7 @@ func TestValidationTable(t *testing.T) {
 }
 
 // What a design may hold as text is accepted as text: Typst markup in the
-// footer is data, which the runner's template sets literally (invariant 2),
+// footer is data, which the runner's template sets literally,
 // and characters JSON would escape for HTML are written as they are.
 func TestTextIsData(t *testing.T) {
 	m := modern(t)
@@ -194,7 +194,7 @@ func TestTextIsData(t *testing.T) {
 	}
 }
 
-// The contrast table (invariant 7, D17).
+// The contrast table.
 func TestContrast(t *testing.T) {
 	for _, c := range []struct {
 		a, b string
@@ -253,7 +253,7 @@ func TestContrast(t *testing.T) {
 }
 
 // The nearest passing shade passes, keeps the hue, and is the lightest one
-// that does: one step lighter fails (D17).
+// that does: one step lighter fails.
 func TestNearestPassing(t *testing.T) {
 	if got, _ := NearestPassing("#1f6feb", TextContrast); got != "#1f6feb" {
 		t.Fatalf("a passing colour moved to %s", got)
@@ -297,7 +297,7 @@ func TestTint(t *testing.T) {
 	}
 }
 
-// The families are D13's fourteen, each role takes the right ones, and the
+// There are fourteen families, each role takes the right ones, and the
 // built-ins use only those.
 func TestFamilies(t *testing.T) {
 	if n := len(Families()); n != 14 {
@@ -337,7 +337,7 @@ func TestSchemaFileIsCurrent(t *testing.T) {
 	if err := json.Unmarshal(got, &s); err != nil {
 		t.Fatal(err)
 	}
-	// Every field is required but the logo (agentry#1025).
+	// Every field is required but the logo.
 	if len(s.Required) != 12 || len(s.Properties) != 13 || slices.Contains(s.Required, "logo") {
 		t.Fatalf("the schema has %d properties, %d required", len(s.Properties), len(s.Required))
 	}

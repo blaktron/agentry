@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-// braveAnswer is the LLM Context shape Brave answered on 2026-09-26
+// braveAnswer is the LLM Context shape Brave answers
 // (grounding.generic, read; grounding.map and the sources map, never read),
 // with the grounding.poi its reference documents added, also never read.
 const braveAnswer = `{"grounding":{
