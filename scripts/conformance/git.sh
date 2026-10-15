@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# §17.2 git protocol conformance matrix. The matrix itself lives in
+# Git protocol conformance matrix. The matrix itself lives in
 # internal/gitsrv/conformance_test.go (one implementation, real git CLI);
-# this wrapper is the CI entrypoint required by the plan.
+# this wrapper is the CI entrypoint.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 export PATH=/opt/homebrew/bin:$PATH

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remembered-browser acceptance, the directory's half (agentry#671, DEV-163).
+# Remembered-browser acceptance, the directory's half.
 #
 # "Remember this device for 30 days" lives on the directory's code page, and
 # the directory decides whether to show that page by asking the registry. All
@@ -11,9 +11,9 @@
 #   1. The template is authentik's own flows/templates/if/flow.html except
 #      two reviewed bootstraps that read escaped JSON data, plus one marked
 #      customization block; and the web components and forms the
-#      block's scripts write into (the code page's, and since agentry#860 the
-#      password page's and the first page's) still exist in the image's bundle. An authentik upgrade
-#      that moves either fails here, not silently on the sign-in page.
+#      block's scripts write into (the code page's, the password page's and
+#      the first page's) still exist in the image's bundle. An authentik
+#      upgrade that moves either fails here, not silently on the sign-in page.
 #   2. A throwaway directory, on a private network, with the blueprints and
 #      templates copied in, signs two users in through the real flow executor
 #      (scripts/acceptance/directory-remember.py plays the browser and a
@@ -23,7 +23,7 @@
 #      and a registry that errors, hangs or answers garbage, a revoked record,
 #      and a skip policy that raises all mean the code is asked. And no
 #      sign-in writes authentik's own 30-day `authentik_device` cookie, which
-#      the blueprint turns off on every login stage (agentry#460).
+#      the blueprint turns off on every login stage.
 #
 # Needs docker and the pinned images, nothing else. Files go in with docker
 # cp, not bind mounts: a CI job drives the host's daemon from inside a runner
@@ -77,7 +77,7 @@ for needle in 'name="code"' 'pf-m-action' 'ak-stage-authenticator-validate-code'
   grep -q -- "$needle" "$chunk" || { echo "FAIL: the code stage's bundle no longer contains $needle, which the template's script relies on"; exit 1; }
 done
 echo "ok   the code stage's component, its code field and its action fieldset are in the pinned bundle"
-# The sign-up link's script (agentry#860) reads the password stage's hidden
+# The sign-up link's script reads the password stage's hidden
 # username input and writes into its footer band, and follows the first
 # page's enrolment link and uid field.
 chunk=$(grep -rl '"ak-stage-password"' "$TMP/dist/chunks" --include='*.js' | xargs grep -l 'pf-c-login__main-footer-band' | head -1)
@@ -130,7 +130,7 @@ akshell() { docker exec -i "$@" "$AK" ak shell 2>&1 | grep -vE '^(###|[0-9]+ obj
 # it restates in mode all (the default sign-in flow has to exist first), and
 # the two default provider flows the client below is made with exist too:
 # authentik's worker applies its own default blueprints independently of
-# ours and in no set order, so ours can land first (agentry#763).
+# ours and in no set order, so ours can land first.
 echo "waiting for the directory to boot and apply the blueprints (a few minutes)"
 ready=""
 deadline=$(( $(date +%s) + 600 ))

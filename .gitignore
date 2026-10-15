@@ -35,5 +35,5 @@ coverage.out
 .env
 dist/
 
-# never commit a node_modules symlink: docker treats it as a file and the web image build fails (#105)
+# never commit a node_modules symlink: docker treats it as a file and the web image build fails
 web/node_modules

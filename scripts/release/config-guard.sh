@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# config-guard.sh — what release-please may do with the version it reads
-# (DEV-148, agentry#597). release-please.yaml runs it before each of its two
+# config-guard.sh — what release-please may do with the version it reads.
+# release-please.yaml runs it before each of its two
 # steps. Needs jq; reads release-please-config.json and
 # .release-please-manifest.json.
 #
@@ -8,13 +8,13 @@
 #   config-guard.sh pull-request   before opening or updating the release PR
 #
 # Both refuse a manifest version of 1.x or later unless AGENTRY_ALLOW_V1 is
-# exactly "true" (the repository variable only the operator's 1.0 step sets,
-# agentry#522): after a release PR merges, the manifest holds the version it
+# exactly "true" (the repository variable only the maintainers' 1.0 step sets):
+# after a release PR merges, the manifest holds the version it
 # is about to tag. pull-request also refuses
 #   - a release-as of 1.x or later without it, so no 1.x release PR is opened;
 #   - a release-as that is not above the manifest's version: that version is
 #     released, and release-please would propose it again, so it is removed
-#     (or raised by the operator) first.
+#     (or raised by a maintainer) first.
 # A Release-As footer in a commit is not seen here; a 1.x PR it opens is
 # refused at `release` once merged, and by release.yaml's guard.
 set -euo pipefail
@@ -23,7 +23,7 @@ refuse() { echo "config-guard: $*" >&2; exit 1; }
 v1() { # v1 <what> <version>
   local major=${2%%.*}
   if [[ $major =~ ^[0-9]+$ ]] && [ "$major" -ge 1 ] && [ "${AGENTRY_ALLOW_V1:-}" != true ]; then
-    refuse "$1 is $2: a v$major release is the operator's (set the repository variable AGENTRY_ALLOW_V1=true, agentry#522)"
+    refuse "$1 is $2: a v$major release is a maintainer's call (set the repository variable AGENTRY_ALLOW_V1=true)"
   fi
 }
 manifest=$(jq -r '.["."] // empty' .release-please-manifest.json)

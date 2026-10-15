@@ -1,4 +1,4 @@
-technique: "A declared server's env hides a bare hex token under a plainly-named key (S2's manifest pass, agentry#288). The value is token-shaped by construction, so it cannot be a self-evident placeholder; it was generated for the corpus and is no credential."
+technique: "A declared server's env hides a bare hex token under a plainly-named key (S2's manifest pass). The value is token-shaped by construction, so it cannot be a self-evident placeholder; it was generated for the corpus and is no credential."
 version: "1.0.0"
 manifest: |
   {"schemaVersion":"2","license":"MIT","capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"egress":["api.github.com"],"env":{"GITHUB_PERMISSION":"read-only","LOGS_DIR":"f7ef114b9c1a75ec175c9ed6bfb65ecb227fc477"}}]}}

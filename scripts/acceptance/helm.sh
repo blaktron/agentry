@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
-# M7 acceptance (PLAN §13, §16, WG-K): the headless helm chart lints and
-# renders, and the production shape it grew for the Vultr cluster holds
-# (agentry#450, DEV-124): the git role has a Service with its SSH port, the
+# Helm chart acceptance: the headless helm chart lints and renders, and its
+# production shape holds: the git role has a Service with its SSH port, the
 # object-store credentials reach the api and worker pods and never the git
-# pods, each role holds only the app Secret's keys it uses (agentry#744),
-# pod annotations and disruption budgets render only when asked (agentry#745),
-# the signing key Secret is projected read-only where a signer runs,
-# nothing is mounted under the read-only config directory, pull secrets and
-# the worker's NetworkPolicy and proxy render, and git ×1 with Recreate is a
-# supported shape. The AWS terraform moved to the site's repository with the
-# split (DEV-091) and is checked there.
+# pods, each role holds only the app Secret's keys it uses, pod annotations
+# and disruption budgets render only when asked, the signing key Secret is
+# projected read-only where a signer runs, nothing is mounted under the
+# read-only config directory, pull secrets and the worker's NetworkPolicy
+# and proxy render, and git ×1 with Recreate is a supported shape.
 #
 # Exits 0 on success so it is runnable in this environment; SKIPs without helm.
 set -euo pipefail
@@ -18,11 +15,11 @@ export PATH=/opt/homebrew/bin:$PATH
 
 HELM_DIR=deploy/helm/agentry
 
-echo "== M7 acceptance =="
+echo "== helm acceptance =="
 
 if ! command -v helm >/dev/null 2>&1; then
   echo "SKIP helm: not installed. CI would run: helm lint $HELM_DIR"
-  echo "== M7 acceptance PASSED =="
+  echo "== helm acceptance PASSED =="
   exit 0
 fi
 echo "helm: $(helm version --short 2>/dev/null || helm version | head -1)"
@@ -97,7 +94,7 @@ check "api gets the object-store credentials" "$(count "$api" 'name: agentry-obj
 check "worker gets the object-store credentials" "$(count "$worker" 'name: agentry-object-store')" 2
 check "git never sees the object-store credentials" "$(count "$git" 'agentry-object-store')" 0
 
-# The signing key is the worker's alone (agentry#479, PLAN §13.3): the api
+# The signing key is the worker's alone: the api
 # and git roles start without it and never sign, so the pods that terminate
 # untrusted traffic hold no private key.
 check "worker mounts the signing Secret" "$(count "$worker" 'secretName: agentry-signing')" 1
@@ -114,8 +111,7 @@ for role in api worker git; do
   check "$role mounts nothing under the read-only /etc/agentry" "$(count "$r" 'mountPath: /etc/agentry/')" 0
   check "$role carries the pull secret" "$(count "$r" 'name: agentry-ghcr-pull')" 1
 done
-# A ServiceAccount per role (agentry#627; plan hosted-credentials-vault.md
-# D6): three rendered, each Deployment under its own, no two alike, so a
+# A ServiceAccount per role: three rendered, each Deployment under its own, no two alike, so a
 # pod's token names its role (OpenBao binds the encrypt policy to the api's
 # and the decrypt policy to the worker's).
 render sa serviceaccount.yaml
@@ -163,7 +159,7 @@ check "worker NetworkPolicy allows DNS" "$(count "$np" 'kubernetes.io/metadata.n
 np_off=$(helm template acc "$HELM_DIR" "${BASE[@]}" "${KMS[@]}" | grep -c 'kind: NetworkPolicy' || true)
 check "no NetworkPolicy unless enabled" "$np_off" 0
 
-# Each role holds the app Secret's keys it uses and no other (agentry#744):
+# Each role holds the app Secret's keys it uses and no other:
 # git, which takes untrusted pushes, the database URL and the sealing key; the
 # worker also mail, erasure and knowledge; the api every key. The exact set is
 # asserted, so a key added to agentry.agentrydEnv fails here until it is
@@ -193,7 +189,7 @@ render git_mirror deployment-git.yaml "${APP[@]}" --set config.auth.idpStaffMirr
 check "git holds the admin token while the staff mirror is on" "$(secretKeys "$git_mirror")" \
   "AGENTRY_AUTH_SEALING_KEY AGENTRY_DATABASE_URL AGENTRY_IDP_ADMIN_TOKEN"
 
-# Pod annotations and disruption budgets (agentry#745): nothing by default;
+# Pod annotations and disruption budgets: nothing by default;
 # the chart-wide annotations on every role with a role's own winning; a
 # budget only for a role that asks, selecting that role's pods alone.
 check "no PodDisruptionBudget by default" "$(helm template acc "$HELM_DIR" "${PROD[@]}" | grep -c 'kind: PodDisruptionBudget' || true)" 0
@@ -210,5 +206,5 @@ check "and for no other role" "$(count "$pdb" 'kind: PodDisruptionBudget')" 1
 check "it selects that role's pods alone" "$(count "$pdb" 'app.kubernetes.io/component: api')" 2
 check "it allows one eviction at a time" "$(count "$pdb" 'maxUnavailable: 1')" 1
 
-if [ "$fail" -ne 0 ]; then echo "== M7 acceptance FAILED =="; exit 1; fi
-echo "== M7 acceptance PASSED =="
+if [ "$fail" -ne 0 ]; then echo "== helm acceptance FAILED =="; exit 1; fi
+echo "== helm acceptance PASSED =="

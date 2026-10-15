@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# go test with a verdict a reader can find (agentry#452). It runs
+# go test with a verdict a reader can find. It runs
 # `go test "$@"` unchanged and passes its exit status through; when a
 # package was killed by -timeout it also says so in one line, naming the
 # package and the tests that were running, and whether any test failed. A
-# timeout used to be legible only by reading a goroutine dump that named
-# whatever happened to be running, which looked like a failing test.
+# timeout is otherwise legible only by reading a goroutine dump that names
+# whatever happened to be running, which looks like a failing test.
 set -uo pipefail
 GO=${GO:-go}
 log=$(mktemp)
@@ -25,7 +25,7 @@ if grep -q '^panic: test timed out after' "$log"; then
   else
     failed="No test failed."
   fi
-  msg="${pkg:-a package} overran the go test timeout ($after) and was killed${running:+ while running: ${running%; }}. $failed The goroutine dump above is the kill, not a failure. The timeout's sizing is in the Makefile (agentry#452)."
+  msg="${pkg:-a package} overran the go test timeout ($after) and was killed${running:+ while running: ${running%; }}. $failed The goroutine dump above is the kill, not a failure. The timeout's sizing is in the Makefile."
   if [ -n "${GITHUB_ACTIONS:-}" ]; then
     echo "::error title=go test timeout::$msg"
   fi

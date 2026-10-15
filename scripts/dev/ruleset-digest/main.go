@@ -1,7 +1,7 @@
 // Command ruleset-digest prints the semantic version and the digest of a rule
 // bundle directory, computed by the loader the server records it with, so a
 // ruleset_releases row can be checked against the bundle a ruleset/v<semver>
-// tag holds (agentry#772; pkg/ruleset/README.md). With no argument it reads
+// tag holds (pkg/ruleset/README.md). With no argument it reads
 // ./rules.
 package main
 

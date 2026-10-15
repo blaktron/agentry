@@ -20,7 +20,7 @@ spec:
   {{- end }}
   rules:
     # The registry host: the API, the server's own /ui/ pages, SCIM and
-    # well-known all live on the api role (DEV-091: headless chart; a site
+    # well-known all live on the api role (headless chart; a site
     # in front adds its own ingress rule ahead of this one).
     - host: {{ .Values.ingress.hosts.registry | quote }}
       http:

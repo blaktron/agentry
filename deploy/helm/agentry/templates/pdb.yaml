@@ -1,4 +1,4 @@
-{{- /* A PodDisruptionBudget per role that asks for one (agentry#745): it
+{{- /* A PodDisruptionBudget per role that asks for one: it
 selects that role's pods alone, so a node drain or an autoscaler's
 scale-down evicts at most maxUnavailable of them at a time. */ -}}
 {{- range $role := list "api" "git" "worker" }}

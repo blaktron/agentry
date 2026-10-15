@@ -1,21 +1,19 @@
 #!/usr/bin/env bash
-# The per-IP sign-up budget's acceptance (agentry#830, DEV-063).
+# The per-IP sign-up budget's acceptance.
 #
 # agentry-account-flow-rate-limit caps how much one address can make the
-# directory do in an hour: accounts created plus mails sent. On authentik
-# 2026.8 neither was recorded the way it counted them (a flow-made account
-# is `user_write` with `created`, not `model_created`; the worker sends the
-# mail, so `email_sent` carries no address), and it counted nothing. This
-# proves the budget against the image the compose file pins, on a throwaway
-# directory with the budget at 4 and registry activation off (so the
-# sign-up sends its own confirmation mail):
+# directory do in an hour: accounts created plus mails sent. It counts the
+# events authentik records for them (a flow-made account is `user_write` with
+# `created`, not `model_created`; the worker sends the mail, so `email_sent`
+# carries no address). This proves the budget against the image the compose
+# file pins, on a throwaway directory with the budget at 4 and registry
+# activation off (so the sign-up sends its own confirmation mail):
 #
 #   1. One password sign-up to its confirmation mail, the mail page opened
 #      a second time, one resend from it, then a password reset of that
 #      account to its mail.
 #      authentik records what the budget counts, with the client's address:
-#      one `user_write` created event (the password sign-up's, the case the
-#      issue left unverified) and a `custom_agentry_account_mail` per mail
+#      one `user_write` created event (the password sign-up's) and a `custom_agentry_account_mail` per mail
 #      (three: the sign-up's, its resend and the reset's; the second
 #      opening was not counted again). The mail events name their flow and
 #      carry no prompt data.

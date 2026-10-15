@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# M0 acceptance (PLAN §18.2): stack boots, `make check` is green (run
-# separately in CI), and a smoke test hits the API through the generated
-# Go client (in `make test`); the TS client smoke lives with the site now.
+# Smoke acceptance: the stack boots (migrations, the api role, health and
+# readiness endpoints, the well-known document, the login page) and a smoke
+# test hits the API through the generated Go client. `make check` runs
+# separately in CI.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 . scripts/acceptance/lib.sh
 
-PORT="${AGENTRY_ACCEPT_PORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")}"  # free unless pinned (agentry#133)
+PORT="${AGENTRY_ACCEPT_PORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")}"  # free unless pinned
 export PATH=/opt/homebrew/bin:$PATH
 
-echo "== M0 acceptance =="
+echo "== smoke acceptance =="
 
 # 1. Database: CI provides AGENTRY_TEST_DATABASE_URL; locally use pg.sh.
 if [ -z "${AGENTRY_TEST_DATABASE_URL:-}" ]; then
@@ -22,10 +23,10 @@ echo "db: $AGENTRY_TEST_DATABASE_URL"
 # 2. Build binaries.
 make build >/dev/null
 ./bin/agentryd --version
-# The CLI moved to github.com/blaktron/agentry-cli (built via scripts/dev/cli-bin.sh).
+# The CLI lives in github.com/blaktron/agentry-cli (built via scripts/dev/cli-bin.sh).
 
 # A throwaway server: dev mode, opted in — the default is off and would
-# ask for a sealing key and a signing key (DEV-116).
+# ask for a sealing key and a signing key.
 export AGENTRY_DEV_MODE=true
 
 # 3. Migrations against a clean-ish DB.
@@ -54,4 +55,4 @@ gotest "go client smoke" -timeout 20m ./internal/api -run 'TestSmoke' -count=1
 # 6. The server's own surface answers (the full check is scripts/acceptance/ui.sh).
 curl -fsS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/ui/login" | grep 200 >/dev/null && echo "core UI: OK"
 
-echo "== M0 acceptance PASSED =="
+echo "== smoke acceptance PASSED =="
