@@ -12,12 +12,12 @@ import (
 )
 
 // GET /user/directory tells the settings page where credentials live when a
-// directory service owns them (agentry#113): the directory's flow URLs
+// directory service owns them: the directory's flow URLs
 // derived from the OIDC issuer, and the caller's enrolled authenticators
 // through the same admin access account erasure uses.
 //
-// The directory account is read by the id the directory's sign-in sent
-// (agentry#727), so it is found although its address is not the
+// The directory account is read by the id the directory's sign-in sent,
+// so it is found although its address is not the
 // registry's: no address search is made.
 func TestUserDirectoryLinksAndDevices(t *testing.T) {
 	var deleted, searches atomic.Int32
@@ -128,7 +128,7 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 	}
 	env2.doJSON(sess2, http.MethodGet, "/api/v1/user/directory", nil, &on, http.StatusOK)
 	base := oidc.srv.URL
-	// DEV-089: the directory stays behind the scenes — no account URL, and the
+	// The directory stays behind the scenes — no account URL, and the
 	// flows are Agentry's own, which return to /settings when they finish.
 	if !on.Managed || on.AccountUrl != nil || on.PasswordChangeUrl != base+"/if/flow/agentry-password-change/" || on.TotpSetupUrl != base+"/if/flow/agentry-totp-setup/" || on.WebauthnSetupUrl != base+"/if/flow/agentry-webauthn-setup/" {
 		t.Fatalf("links: %+v", on)
@@ -157,7 +157,7 @@ func TestUserDirectoryLinksAndDevices(t *testing.T) {
 }
 
 // GET /user/directory names the social provider the caller's directory
-// account was first connected to and whether it has a password (agentry#706),
+// account was first connected to and whether it has a password,
 // for the site's Profile and "Add a password". The directory account is the
 // one carrying the caller's linked uid; a directory that fails the read
 // leaves both out and answers the rest as before.

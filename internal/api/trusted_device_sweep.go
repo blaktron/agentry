@@ -6,8 +6,8 @@ import (
 	"github.com/blaktron/agentry/internal/queue"
 )
 
-// JobTrustedDeviceSweep removes remembered browsers past their expiry
-// (agentry#464). The worker role enqueues it hourly and once at start
+// JobTrustedDeviceSweep removes remembered browsers past their expiry.
+// The worker role enqueues it hourly and once at start
 // (pkg/extension/agentryd.go), like the decommission sweep.
 const JobTrustedDeviceSweep = "trusted_device.sweep"
 

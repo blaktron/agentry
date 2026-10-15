@@ -1,9 +1,8 @@
 package api_test
 
-// The §12.4 org SSO landing (`https://…/sso/{org}`) and the SP-initiated SAML
-// flow it starts. Until M-16 the SP only consumed assertions: an employee had
-// to begin at their IdP's app portal, because agentry never issued an
-// AuthnRequest.
+// The org SSO landing (`https://…/sso/{org}`) and the SP-initiated SAML
+// flow it starts. The SP issues an AuthnRequest, so an employee can begin at
+// the landing rather than at their IdP's app portal.
 
 import (
 	"compress/flate"
@@ -68,7 +67,7 @@ func TestSSOLandingStartsSPInitiatedSAML(t *testing.T) {
 
 	// The organization has proved it controls the domain the IdP asserts:
 	// linking an identity to an existing member's account for the first
-	// time needs that proof as well as the membership (T-12, agentry#361).
+	// time needs that proof as well as the membership.
 	env.verifyOrgDomain(orgH, "acme.example")
 	idp := newSAMLTestIdP(t)
 	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://acs-idp.test/sso", idp.certPEM)
@@ -95,7 +94,7 @@ func TestSSOLandingStartsSPInitiatedSAML(t *testing.T) {
 	metadataURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/metadata"
 	acsURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
 	nameID := "spi-user-" + env.sfx + "@acme.example"
-	// The organization's SSO signs in its members (agentry#361).
+	// The organization's SSO signs in its members.
 	env.seedMembership(orgH, env.registerEmail("spi-member", nameID), "member", "active")
 
 	// An assertion naming a DIFFERENT request is refused, even though it is
@@ -133,7 +132,7 @@ func TestSSOLandingStartsSPInitiatedSAML(t *testing.T) {
 		t.Fatalf("reusing a consumed AuthnRequest: got %d want 401", again.StatusCode)
 	}
 
-	// IdP-initiated (no InResponseTo at all) stays supported (§12.4).
+	// IdP-initiated (no InResponseTo at all) stays supported.
 	idpInit := idp.signedResponse(t, metadataURL, acsURL, nameID, false)
 	init := env.postForm(t, acsURL, url.Values{"SAMLResponse": {idpInit}})
 	_ = init.Body.Close()
@@ -178,7 +177,7 @@ func TestSSOLandingFallsBackToOIDCAndRefusesUnconfigured(t *testing.T) {
 	if res2.StatusCode != http.StatusNotFound {
 		t.Fatalf("landing for an unknown org: got %d want 404", res2.StatusCode)
 	}
-	// A handle that cannot exist under the §4.2 grammar is rejected too.
+	// A handle that cannot exist under the grammar is rejected too.
 	res3 := env.getNoRedirect(t, "/sso/NOT_A_HANDLE")
 	_ = res3.Body.Close()
 	if res3.StatusCode != http.StatusNotFound {

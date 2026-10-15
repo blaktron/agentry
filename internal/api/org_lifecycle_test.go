@@ -1,12 +1,10 @@
 package api_test
 
-// The organization's lifecycle and its domain (agentry#363, plan
-// organization-subscriptions §4, §5.4; D13, D14, D21, D23, D26): one
-// organization per domain, the request for access, suspension and the
-// decommission hold enforced in one place, the erasure that ends the
-// hold, and the two doors the milestone closes on the way — creating an
-// organization while a member of another (agentry#370) and erasing the
-// last admin's account.
+// The organization's lifecycle and its domain: one organization per
+// domain, the request for access, suspension and the decommission hold
+// enforced in one place, the erasure that ends the hold, and the two
+// doors closed on the way — creating an organization while a member of
+// another and erasing the last admin's account.
 
 import (
 	"context"
@@ -126,7 +124,7 @@ func TestOneOrgPerDomain(t *testing.T) {
 	}
 }
 
-// TestCreatingAnOrganizationIsTheThirdDoor (agentry#370, D26): POST /orgs
+// TestCreatingAnOrganizationIsTheThirdDoor: POST /orgs
 // refuses a caller who is an active member of another organization, staff
 // and first-party handles included; leaving first opens it; and the last
 // admin cannot leave (409 last-admin).
@@ -306,7 +304,7 @@ func TestDomainOrgLookupAndRequestAccess(t *testing.T) {
 
 // privateCapResolver caps private agents at max for every subject and
 // leaves the rest of the core's answer — seats included — as it is, the
-// way a tier's resolver overrides rather than constructs (DEV-107).
+// way a tier's resolver overrides rather than constructs.
 type privateCapResolver struct {
 	entitlements.Resolver
 	max int64
@@ -596,7 +594,7 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 // extension's Decommission takes the same path. It runs with an admission
 // extension wired, the hosted product's shape, so the organization is
 // created awaiting activation: the erasure must release its founder from
-// the pending rule too, which is what the live check on dev found missing.
+// the pending rule too.
 func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	events := &recordedEvents{}
 	var srv *api.Server
@@ -615,8 +613,8 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	memberH := env.register("er-member")
 	env.joinOrg(admin, orgH, memberH)
 	env.publishUnder(t, admin, orgH, "er-agent")
-	// A member's account install of the organization's QuickAgent
-	// (agentry#448): erased with the organization, as a star is, rather
+	// A member's account install of the organization's QuickAgent:
+	// erased with the organization, as a star is, rather
 	// than left as a bare ref to a retired name.
 	member := env.login(memberH)
 	if code, _, _ := env.putInstall(t, member, orgH+"/er-agent", map[string]any{"version": "1.0.0", "acceptCapabilities": true}); code != http.StatusOK {
@@ -634,9 +632,8 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 		t.Fatalf("archive before erasure: %v %v", ok, err)
 	}
 
-	// An organization's knowledge pack (agentry#593) goes when it is
-	// erased; the routes reach an organization's packs from the shared
-	// knowledge milestone, so this one is put through the store.
+	// An organization's knowledge pack goes when it is
+	// erased; this one is put straight through the store.
 	kn := seedKnowledge(t, env, knowledge.Org(uuid.MustParse(orgID)))
 
 	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/decommission", map[string]any{"confirm": orgH}, nil, http.StatusOK)

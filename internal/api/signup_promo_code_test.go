@@ -1,8 +1,7 @@
 package api_test
 
-// The promo code typed on the directory's sign-up form (plan promo-codes.md
-// §5.1, agentry#759): the directory's agentry scope sends it as
-// agentry_promo_code on every token of the account, and the registry passes
+// The promo code typed on the directory's sign-up form: the directory's
+// agentry scope sends it as agentry_promo_code on every token of the account, and the registry passes
 // it to its extensions as promoCode in user.registered only when that
 // sign-in makes the account, only from the directory, and only inside the
 // code grammar. The core attaches no meaning to it.

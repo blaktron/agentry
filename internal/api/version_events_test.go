@@ -10,7 +10,7 @@ import (
 )
 
 // GET …/versions/{v}/events streams status snapshots until the version
-// reaches a terminal state (agentry#65).
+// reaches a terminal state.
 func TestVersionEventsStream(t *testing.T) {
 	env := newTestEnv(t)
 	user := env.register("sse-owner")

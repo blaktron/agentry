@@ -1,8 +1,8 @@
 package api_test
 
-// Platform staff review any QuickAgent in review (agentry#912, DEV-213):
+// Platform staff review any QuickAgent in review:
 // their own versions, on either queue, and any organization's queue. The
-// author rule (§12.2) still holds for everyone else, an organization's
+// author rule still holds for everyone else, an organization's
 // admin included, and a staff decision on their own version is marked in
 // its audit event.
 
@@ -60,10 +60,10 @@ func TestStaffDecideTheirOwnPlatformItem(t *testing.T) {
 // setupOrgReviewItem files a version of an organization's QuickAgent on its
 // own review queue and returns the organization, its owner (an admin, the
 // version's author), a platform staff member who is not a member, and the
-// item, with the owner's handle. A risky version is private and trips a high finding, which an
-// organization's private QuickAgent takes to its own queue; a clean one is
-// public and waits there because the organization's policy holds every
-// version for a person (§8.6, tighten-only).
+// item, with the owner's handle. A risky version is private and trips a
+// high finding, which an organization's private QuickAgent takes to its
+// own queue; a clean one is public and waits there because the
+// organization's policy holds every version for a person (tighten-only).
 func setupOrgReviewItem(t *testing.T, env *testEnv, prefix string, risky bool) (org, ownerH string, owner, staff caller, itemID string) {
 	t.Helper()
 	ownerH = env.register(prefix + "-own")
@@ -201,8 +201,7 @@ func TestStaffAuthorRejectsTheirOwnOrganizationItem(t *testing.T) {
 
 // TestStaffSetFindingVerdictsOnAnOrganizationItem: reviewItemAccess also
 // admits staff to an organization item's findings, so staff record a
-// false positive on one; accepting risk there stays the organization's
-// (DEV-034).
+// false positive on one; accepting risk there stays the organization's.
 func TestStaffSetFindingVerdictsOnAnOrganizationItem(t *testing.T) {
 	env := newTestEnv(t)
 	_, _, _, staff, itemID := setupOrgReviewItem(t, env, "sfv", true)

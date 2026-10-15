@@ -40,9 +40,8 @@ var inboundRequestIDRE = regexp.MustCompile(`^[A-Za-z0-9-]{8,64}$`)
 // sets it (http.proxyRequestID, which itself needs a trusted hop count), and
 // only when it is well-formed. Anyone can send the header; a hop that merely
 // forwards it would let a client stamp its own id onto the server's lines
-// and audit rows, so the trusted hop count alone is not enough (the review
-// of agentry#328 caught exactly that). Otherwise the server mints its own.
-// (plan log-stack.md §5.1, D19)
+// and audit rows, so the trusted hop count alone is not enough. Otherwise
+// the server mints its own.
 func requestID(r *http.Request, honourInbound bool) string {
 	if honourInbound {
 		if v := r.Header.Get(requestIDHeader); v != "" && inboundRequestIDRE.MatchString(v) {
@@ -62,7 +61,7 @@ var accessLogSkipped = map[string]bool{"/healthz": true, "/readyz": true, "/metr
 // principalMiddleware runs inside the generated handler and derives a new
 // context, which the outer logging middleware never sees; a pointer placed in
 // the outer context is the seam between them. Opaque ids only — never the
-// credential (§16.2), and never the handle: a line carries no name of a
+// credential, and never the handle: a line carries no name of a
 // person (docs/logging.md).
 type actorHolder struct {
 	mu      sync.Mutex
@@ -108,7 +107,7 @@ func recordActor(ctx context.Context, p *auth.Principal) {
 	h.set(p.UserID.String(), p.Via, patID)
 }
 
-// routeClass reduces a request to the low-cardinality label the §16.2 RED
+// routeClass reduces a request to the low-cardinality label the RED
 // metrics are broken down by.
 //
 // Go 1.22 routing exposes the matched pattern on the request, which is exactly
@@ -130,7 +129,7 @@ func routeClass(r *http.Request) string {
 
 // withMiddleware wraps the router with the always-on middleware stack:
 // request id → panic recovery → security headers → access log → RED metrics.
-// AuthN/AuthZ middleware is added per-route-group in M1 (§12).
+// AuthN/AuthZ middleware is applied per route group (principalMiddleware).
 //
 // mx is a getter rather than a value so SetMetrics can be called after the
 // handler is assembled: binding the instrument set at construction time would
@@ -157,7 +156,7 @@ func withMiddleware(next http.Handler, log *slog.Logger, mx func() *metrics.Metr
 		r = r.WithContext(ctx)
 		w.Header().Set(requestIDHeader, reqID)
 
-		// Baseline security headers (§10.3 hardening happens in web; the API
+		// Baseline security headers (page-level hardening is the site's; the API
 		// still never wants sniffing or framing).
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
@@ -175,7 +174,7 @@ func withMiddleware(next http.Handler, log *slog.Logger, mx func() *metrics.Metr
 				}
 			}
 			elapsed := time.Since(start)
-			// §16.2 RED. Recorded in the same defer as the access log so a
+			// RED. Recorded in the same defer as the access log so a
 			// panicking handler is still counted — a 500 that never reaches
 			// the availability metric is the one you most need to see.
 			mx().RecordHTTP(r.Context(), routeClass(r), r.Method, sw.status, elapsed)
@@ -216,7 +215,7 @@ type statusWriter struct {
 }
 
 // Unwrap lets http.NewResponseController reach the underlying writer's
-// Flush (server-sent events, agentry#65) and Hijack through this wrapper.
+// Flush (server-sent events) and Hijack through this wrapper.
 func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (w *statusWriter) WriteHeader(code int) {

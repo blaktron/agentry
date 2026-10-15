@@ -1,7 +1,7 @@
 package api_test
 
-// Session self-management (§12.1) and the rule-bundle endpoint that backs
-// `agentry validate --rules-update` (§11).
+// Session self-management and the rule-bundle endpoint that backs
+// `agentry validate --rules-update`.
 
 import (
 	"archive/tar"

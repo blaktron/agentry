@@ -7,7 +7,7 @@ import (
 
 // Through the real query: a handle nobody holds is 404 on both public
 // lookups, an existing one 200 — so the site's namespace rule can take 404
-// as absence (agentry#261; the 500 path is TestLookupFailedDistinguishes…).
+// as absence (the 500 path is TestLookupFailedDistinguishes…).
 func TestPublicLookupsAnswer404OnlyForAbsence(t *testing.T) {
 	env := newTestEnv(t)
 	h := env.register("look")

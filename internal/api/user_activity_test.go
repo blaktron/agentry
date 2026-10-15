@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The account's own activity feed (agentry#192): the caller's sign-in and
+// The account's own activity feed: the caller's sign-in and
 // token creation are listed with where they came from, and nobody sees
 // anyone else's.
 func TestUserActivityFeed(t *testing.T) {

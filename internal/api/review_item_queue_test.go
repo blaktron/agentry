@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TestReviewItemOfAnUnknownQueueIsRefused (agentry#413): the access switch
+// TestReviewItemOfAnUnknownQueueIsRefused: the access switch
 // over a review item's queue refuses what it does not recognise. The DDL's
 // CHECK admits only platform and org today; the code must not lean on it,
 // because a widened CHECK or an extension-written row would otherwise

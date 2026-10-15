@@ -18,7 +18,7 @@ import (
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
-// The §17.5 red-team job (agentry#67) stores a report of the corpus
+// The red-team job stores a report of the corpus
 // rewrites the S3/S4 bundle no longer catches, a second run within the
 // interval for the same bundle is a no-op, and platform staff read the
 // reports; nothing on the publish path changes.
@@ -81,10 +81,9 @@ func redTeamWaiting(t *testing.T, st *store.Store) int {
 	return n
 }
 
-// TestRedTeamKeepsOneRunWaiting is agentry#853: dev's seed had counted a
-// row the retired pg driver left in its jobs table (dropped since
-// agentry#244), so River was never seeded and no report was stored again.
-// The seed counts River's own table, every start keeps exactly one run
+// TestRedTeamKeepsOneRunWaiting: a row another queue driver left in its
+// own jobs table must not count, or River is never seeded and no report
+// is stored again. The seed counts River's own table, every start keeps exactly one run
 // waiting, and a run keeps one successor waiting without stacking another.
 func TestRedTeamKeepsOneRunWaiting(t *testing.T) {
 	var srvObj *api.Server
@@ -133,7 +132,7 @@ func TestRedTeamKeepsOneRunWaiting(t *testing.T) {
 
 // TestRedTeamRunForAnotherRulesetIsHandedBack: a run queued for a new
 // ruleset that reaches a worker of another build is handed back for a worker
-// that carries it, as the catalogue sweep is (agentry#805), and stores no
+// that carries it, as the catalogue sweep is, and stores no
 // report of the wrong rules; one queued for this worker's ruleset runs.
 func TestRedTeamRunForAnotherRulesetIsHandedBack(t *testing.T) {
 	var srvObj *api.Server

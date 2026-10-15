@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestSCIMProvisionAndDeactivate covers §12.5: create a user, filter by
-// userName, then PATCH active=false and assert the deactivation revokes the
+// TestSCIMProvisionAndDeactivate creates a user, filters by
+// userName, then PATCHes active=false and asserts the deactivation revokes the
 // user's org-bound PATs and kills their sessions within the request.
 func TestSCIMProvisionAndDeactivate(t *testing.T) {
 	env := newTestEnv(t)
@@ -95,7 +95,7 @@ func TestSCIMProvisionAndDeactivate(t *testing.T) {
 	}
 }
 
-// TestSCIMDeleteDeactivates covers DELETE ⇒ same as deactivate (§12.5).
+// TestSCIMDeleteDeactivates covers DELETE ⇒ same as deactivate.
 func TestSCIMDeleteDeactivates(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("scimd-owner")

@@ -16,8 +16,8 @@ import (
 	"github.com/blaktron/agentry/internal/config"
 )
 
-// /meta tells the web tier whether accounts live in a directory service
-// (agentry#21), so it can stop offering TOTP and password forms that 410.
+// /meta tells the web tier whether accounts live in a directory service,
+// so it can stop offering TOTP and password forms that 410.
 func TestMetaReportsExternalOnly(t *testing.T) {
 	for _, ext := range []bool{false, true} {
 		env := newTestEnvCfg(t, func(c *config.Config) { c.Auth.ExternalOnly = ext })
@@ -31,8 +31,8 @@ func TestMetaReportsExternalOnly(t *testing.T) {
 	}
 }
 
-// /meta reports whether the public-publish second-factor gate is enforced
-// (agentry#269): the site says "publishing requires one" only when it is.
+// /meta reports whether the public-publish second-factor gate is enforced:
+// the site says "publishing requires one" only when it is.
 // The gate is off in dev mode, off under externalOnly, and back on under
 // externalOnly with requireIdpMFA.
 func TestMetaReportsPublicPublish2FA(t *testing.T) {

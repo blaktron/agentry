@@ -1,8 +1,8 @@
 package api_test
 
-// SCIM's §19 rate class (agentry#453): one bucket per organization, since a
-// directory syncs from one place and a token is the organization's. The two
-// halves of the fix are both tested: a sync of realistic size goes through
+// SCIM's rate class: one bucket per organization, since a
+// directory syncs from one place and a token is the organization's. Both
+// halves are tested: a sync of realistic size goes through
 // untouched, and a burst beyond the budget is refused, with the headers and
 // the SCIM error body an IdP retries on, while another organization's
 // directory is unaffected.

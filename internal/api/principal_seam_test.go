@@ -13,7 +13,7 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 )
 
-// The principal seam (agentry#838): an extension that holds a user by id —
+// The principal seam: an extension that holds a user by id —
 // a hosted revision's owner, when the sandbox host fetches the release long
 // after the create — asks the core for the principal it would hold for that
 // user now, and puts it to the agent seams. The answer must be the core's:
@@ -216,8 +216,7 @@ func TestPrincipalForUserAnswersTheRoleAsItIsNow(t *testing.T) {
 	}
 }
 
-// The schedule credential (agentry#1002, plan quickagent-scheduling.md
-// §6): what a schedule's fire starts its owner's run with. It is the
+// The schedule credential: what a schedule's fire starts its owner's run with. It is the
 // owner's account as it is now, narrowed to auth.ScheduleScopes — so an
 // organization admin's schedule reads the organization's private agent and
 // cannot maintain or publish it — with no platform-staff standing, no

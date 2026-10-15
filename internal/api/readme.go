@@ -7,7 +7,7 @@ import (
 )
 
 // errNoReadme means the release archive carries no README. Aliased from scan,
-// where the extraction now lives: the search-index path (internal/scan's
+// where the extraction lives: the search-index path (internal/scan's
 // pipeline, on publish) and this rendering path must agree on which file is
 // "the README", or an agent could be indexed under text nobody is shown.
 var errNoReadme = scan.ErrNoReadme
