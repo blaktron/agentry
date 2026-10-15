@@ -2503,11 +2503,12 @@
         {
           "path": "internal/gitsrv/fork_test.go",
           "tests": [
-            "TestForkCopiesEveryRefAndWritesOneRenamingCommit",
+            "TestForkCopiesOnlyTheReleasesHistoryAndWritesOneRenamingCommit",
             "TestForkFromAnArchiveAndAnOriginNeverPushed",
             "TestForkRefusesWhatIsNotAnObjectOrARef",
             "TestForkFromAnArchiveNeverLetsGitReadItAsAWorkTree",
-            "TestForkKeepsTheOriginsLaterWork"
+            "TestForkCopiesNothingNoTagPointsAt",
+            "TestForkRefusesATagMovedWhileItWasCopied"
           ],
           "fuzz": [],
           "benchmarks": [],

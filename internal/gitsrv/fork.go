@@ -16,30 +16,82 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 )
 
-// A fork's repository: the origin's copied, then one commit.
+// A fork's repository: the forked release's history copied from the
+// origin, then one commit.
 // RepoStore is the registry's ForkRepos on a role that holds the git
 // volume (the worker, `all`).
 
 var _ registry.ForkRepos = (*RepoStore)(nil)
 
-// CopyRepository creates dst on defaultBranch and fetches every branch and
-// tag of src into it. A fetch from a local path copies the objects into
-// dst's own packs, never alternates or hard links, so deleting, retiring or
-// rewriting the origin later leaves the fork as it was. An origin that was
-// never pushed to has no repository on disk, and dst stays empty.
-func (s *RepoStore) CopyRepository(ctx context.Context, src, dst uuid.UUID, defaultBranch string) error {
+// CopyHistory creates dst on defaultBranch and copies into it commit and
+// its history from src, and nothing else: no other branch or tag, and no
+// object only they reach. The commit is fetched through a tag of src that
+// points at it, the same tags a reader with no role may clone, so a commit
+// no tag names is not copied and dst stays empty. git serves any object of
+// a repository to a client that names its id, so whoever owns dst can read
+// all of it; it must hold only what they could read of src. A fetch from a
+// local path copies the objects into dst's own packs, never alternates or
+// hard links, so deleting, retiring or rewriting the origin later leaves
+// the fork as it was. An origin that was never pushed to has no repository
+// on disk, and dst stays empty.
+func (s *RepoStore) CopyHistory(ctx context.Context, src, dst uuid.UUID, defaultBranch, commit string) error {
 	if err := s.InitBare(ctx, dst, defaultBranch); err != nil {
 		return err
 	}
-	srcDir := s.Path(src)
-	if _, err := os.Stat(srcDir); errors.Is(err, fs.ErrNotExist) {
+	if commit == "" {
 		return nil
-	} else if err != nil {
+	}
+	if !reCommitID.MatchString(commit) {
+		return fmt.Errorf("gitsrv: %q is not a commit", commit)
+	}
+	tags, err := s.Tags(ctx, src)
+	if err != nil {
 		return err
 	}
-	_, err := s.git(ctx, s.Path(dst), nil, nil,
-		"fetch", "--quiet", "--no-write-fetch-head", "--no-auto-gc", srcDir,
-		"+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
+	var via string
+	for ref, t := range tags {
+		if t.Commit == commit && safeRefName(ref) && (via == "" || ref < via) {
+			via = ref
+		}
+	}
+	if via == "" {
+		return nil
+	}
+	return s.copyVia(ctx, src, dst, defaultBranch, commit, via)
+}
+
+// copyVia fetches the tag via from src into dst and sets defaultBranch to
+// commit. The tag is read again after the fetch: one moved since it was
+// listed brings history past commit, which is refused. Whatever a failed
+// copy fetched may be more than commit's history, so a failure leaves no
+// repository behind.
+func (s *RepoStore) copyVia(ctx context.Context, src, dst uuid.UUID, defaultBranch, commit, via string) error {
+	if err := s.fetchVia(ctx, src, dst, defaultBranch, commit, via); err != nil {
+		_ = s.Remove(dst)
+		return err
+	}
+	return nil
+}
+
+func (s *RepoStore) fetchVia(ctx context.Context, src, dst uuid.UUID, defaultBranch, commit, via string) error {
+	dir := s.Path(dst)
+	const base = "refs/agentry/fork-base"
+	if _, err := s.git(ctx, dir, nil, nil,
+		"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-auto-gc", s.Path(src),
+		"+"+via+":"+base); err != nil {
+		return err
+	}
+	got, err := s.git(ctx, dir, nil, nil, "rev-parse", "--verify", "--quiet", base+"^{commit}")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(string(got)) != commit {
+		return fmt.Errorf("gitsrv: %s moved from %s while it was copied", via, commit)
+	}
+	if _, err := s.git(ctx, dir, nil, nil, "update-ref", "refs/heads/"+defaultBranch, commit); err != nil {
+		return err
+	}
+	_, err = s.git(ctx, dir, nil, nil, "update-ref", "-d", base)
 	return err
 }
 
@@ -90,10 +142,10 @@ func (s *RepoStore) ReadFileAt(ctx context.Context, repoID uuid.UUID, commit, pa
 	return s.git(ctx, dir, nil, nil, "cat-file", "blob", commit+":"+path)
 }
 
-// CommitFork writes the fork's commit and points c.Refs at it, and c.Keep
-// at the commits it names. The tree is built in a private index:
-// c.BaseCommit's tree read into it, or c.Dir's files hashed into it one by
-// one, then c.Manifest written over c.ManifestPath. c.Dir is an uploaded
+// CommitFork writes the fork's commit and points c.Refs at it. The tree is
+// built in a private index: c.BaseCommit's tree read into it, or c.Dir's
+// files hashed into it one by one, then c.Manifest written over
+// c.ManifestPath. c.Dir is an uploaded
 // release's archive, so git never looks at it as a work tree: no
 // `git add`, which would honour a .gitattributes among its files, read a
 // .gitignore, and follow a `.git` file to whatever repository on this host
@@ -111,11 +163,6 @@ func (s *RepoStore) CommitFork(ctx context.Context, repoID uuid.UUID, c registry
 	for _, ref := range c.Refs {
 		if !safeRefName(ref) || strings.Contains(ref, "..") {
 			return "", fmt.Errorf("gitsrv: %q is not a ref name", ref)
-		}
-	}
-	for ref, at := range c.Keep {
-		if !safeRefName(ref) || strings.Contains(ref, "..") || !reCommitID.MatchString(at) {
-			return "", fmt.Errorf("gitsrv: %q → %q is not a ref to keep", ref, at)
 		}
 	}
 	if c.ManifestPath == "" || strings.HasPrefix(c.ManifestPath, "-") || strings.Contains(c.ManifestPath, "..") {
@@ -170,11 +217,6 @@ func (s *RepoStore) CommitFork(ctx context.Context, repoID uuid.UUID, c registry
 		return "", err
 	}
 	commit := strings.TrimSpace(string(out))
-	for ref, at := range c.Keep {
-		if _, err := s.git(ctx, dir, nil, nil, "update-ref", ref, at); err != nil {
-			return "", err
-		}
-	}
 	for _, ref := range c.Refs {
 		if _, err := s.git(ctx, dir, nil, nil, "update-ref", ref, commit); err != nil {
 			return "", err
