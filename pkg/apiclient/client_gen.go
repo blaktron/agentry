@@ -2117,7 +2117,7 @@ type AccountInstallRequest struct {
 	Version string `json:"version"`
 }
 
-// ActivityEvent One agent-scoped entry from the audit log (§9.2 activity).
+// ActivityEvent One agent-scoped entry from the audit log.
 type ActivityEvent struct {
 	// Action Registered action id (internal/audit/actions.go).
 	Action string `json:"action"`
@@ -2173,21 +2173,21 @@ type Advisory struct {
 
 // Agent defines model for Agent.
 type Agent struct {
-	// AllowForcePush Present for callers with maintain; whether force-push to the default branch is allowed (§6.3).
+	// AllowForcePush Present for callers with maintain; whether force-push to the default branch is allowed.
 	AllowForcePush *bool `json:"allowForcePush,omitempty"`
 
-	// AutoPublishTags Present for callers with maintain (§6.3 toggle).
+	// AutoPublishTags Present for callers with maintain.
 	AutoPublishTags *bool `json:"autoPublishTags,omitempty"`
 
-	// Builtin Whether this is a built-in agent: one of the packages the Agentry CLI embeds and runs as part of the application, published here for reading (agentry#737). A client labels it Built-in in place of its run modes. Only platform staff set it, on an agent of a first-party namespace. Not the runner's attestation state `builtin`, which only the CLI's embedded copy of a package runs under; an install of this agent from the registry is an ordinary release.
+	// Builtin Whether this is a built-in agent: one of the packages the Agentry CLI embeds and runs as part of the application, published here for reading. A client labels it Built-in in place of its run modes. Only platform staff set it, on an agent of a first-party namespace. Not the runner's attestation state `builtin`, which only the CLI's embedded copy of a package runs under; an install of this agent from the registry is an ordinary release.
 	Builtin bool `json:"builtin"`
 
-	// CanPublish Present, and true, on GET /agents/{ns}/{name} when the caller may add a version to this agent: the publish role over the namespace or a grant, and a token's `agent:publish` (agentry#875). Absent otherwise. A client offers Edit on it where the caller's token carries no `org:admin` and so never reads `autoPublishTags` (the desktop's sign-in grant). The upload decides again; the organization's gate for a write is not applied here.
+	// CanPublish Present, and true, on GET /agents/{ns}/{name} when the caller may add a version to this agent: the publish role over the namespace or a grant, and a token's `agent:publish`. Absent otherwise. A client offers Edit on it where the caller's token carries no `org:admin` and so never reads `autoPublishTags` (the desktop's sign-in grant). The upload decides again; the organization's gate for a write is not applied here.
 	CanPublish    *bool     `json:"canPublish,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	DefaultBranch string    `json:"defaultBranch"`
 
-	// DependencyAlerts Open dependency alerts on this agent's published versions (agentry#177). Present on GET /agents/{ns}/{name}.
+	// DependencyAlerts Open dependency alerts on this agent's published versions. Present on GET /agents/{ns}/{name}.
 	DependencyAlerts *[]DependencyAlert `json:"dependencyAlerts,omitempty"`
 
 	// ForkCount Present on a public agent: how many forks of it exist. A count only; no read names a fork to the origin's publisher.
@@ -2196,16 +2196,16 @@ type Agent struct {
 	// ForkDetail Present on a fork whose copy failed, saying why in words.
 	ForkDetail *string `json:"forkDetail,omitempty"`
 
-	// ForkState Present on a fork (agentry#943): `copying` until a worker has copied the repository and submitted the first version, `ready` after, `failed` with `forkDetail`.
+	// ForkState Present on a fork: `copying` until a worker has copied the repository and submitted the first version, `ready` after, `failed` with `forkDetail`.
 	ForkState *AgentForkState `json:"forkState,omitempty"`
 
-	// ForkedFrom What a fork was taken from (agentry#943). Kept for good: there is no detach.
+	// ForkedFrom What a fork was taken from. Kept for good: there is no detach.
 	ForkedFrom *ForkOrigin `json:"forkedFrom,omitempty"`
 
-	// GitHttpUrl Clone URL for the hosted repository (§6.1).
+	// GitHttpUrl Clone URL for the hosted repository.
 	GitHttpUrl string `json:"gitHttpUrl"`
 
-	// GitSshUrl SSH clone URL (§6.1 Q7), present when the deployment serves the SSH transport.
+	// GitSshUrl SSH clone URL, present when the deployment serves the SSH transport.
 	GitSshUrl *string            `json:"gitSshUrl,omitempty"`
 	Id        openapi_types.UUID `json:"id"`
 
@@ -2220,17 +2220,17 @@ type Agent struct {
 	Name      string     `json:"name"`
 	Namespace string     `json:"namespace"`
 
-	// PipelineSkip Present for callers with maintain; whether submissions are admitted without a scan (an organization's private agent only, plan organization-subscriptions §4). A version so admitted is served with `scanStatus: skipped` and the report's verdict `unscanned`.
+	// PipelineSkip Present for callers with maintain; whether submissions are admitted without a scan (an organization's private agent only). A version so admitted is served with `scanStatus: skipped` and the report's verdict `unscanned`.
 	PipelineSkip    *bool                `json:"pipelineSkip,omitempty"`
 	QuarantineState AgentQuarantineState `json:"quarantineState"`
 
-	// RetiredAt When the agent was retired (agentry#942): it is private, takes no submission, and `POST …/restore` returns the visibility it had. Absent on an agent that is not retired.
+	// RetiredAt When the agent was retired: it is private, takes no submission, and `POST …/restore` returns the visibility it had. Absent on an agent that is not retired.
 	RetiredAt  *time.Time      `json:"retiredAt,omitempty"`
 	Summary    string          `json:"summary"`
 	Visibility AgentVisibility `json:"visibility"`
 }
 
-// AgentForkState Present on a fork (agentry#943): `copying` until a worker has copied the repository and submitted the first version, `ready` after, `failed` with `forkDetail`.
+// AgentForkState Present on a fork: `copying` until a worker has copied the repository and submitted the first version, `ready` after, `failed` with `forkDetail`.
 type AgentForkState string
 
 // AgentQuarantineState defines model for Agent.QuarantineState.
@@ -2245,20 +2245,20 @@ type AgentGrant struct {
 	Grantee string         `json:"grantee"`
 	Kind    AgentGrantKind `json:"kind"`
 
-	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
+	// Role Per-agent grant levels, read < write < maintain < publish.
 	Role AgentRole `json:"role"`
 }
 
 // AgentGrantKind defines model for AgentGrant.Kind.
 type AgentGrantKind string
 
-// AgentMode A run mode a release supports (DEV-088). `autonomous` runs from its source files, writes its output and receipts, and ends; `interactive` starts from the same plan and controls but the run is a conversation with the user in the CLI or the desktop. A release declares one or both.
+// AgentMode A run mode a release supports. `autonomous` runs from its source files, writes its output and receipts, and ends; `interactive` starts from the same plan and controls but the run is a conversation with the user in the CLI or the desktop. A release declares one or both.
 type AgentMode string
 
 // AgentModes The run modes a release supports; at least one.
 type AgentModes = []AgentMode
 
-// AgentRole Per-agent grant levels (§12.2), read < write < maintain < publish.
+// AgentRole Per-agent grant levels, read < write < maintain < publish.
 type AgentRole string
 
 // AgentStats defines model for AgentStats.
@@ -2273,11 +2273,11 @@ type AgentStats struct {
 
 // AgentVersion defines model for AgentVersion.
 type AgentVersion struct {
-	// ArchiveDigest sha256:<hex>, the release identity (D-15).
+	// ArchiveDigest sha256:<hex>, the release identity.
 	ArchiveDigest *string `json:"archiveDigest,omitempty"`
 	ArchiveSize   *int64  `json:"archiveSize,omitempty"`
 
-	// Capabilities The capability contract (§5.4): the declared capability block, and under `knowledge` the names of the knowledge packs the release ships (the manifest's `knowledge.ships`), so a release shipping one more than an installed one asks for consent again.
+	// Capabilities The capability contract: the declared capability block, and under `knowledge` the names of the knowledge packs the release ships (the manifest's `knowledge.ships`), so a release shipping one more than an installed one asks for consent again.
 	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
 	Channel      AgentVersionChannel     `json:"channel"`
 	CommitSha    *string                 `json:"commitSha,omitempty"`
@@ -2288,13 +2288,13 @@ type AgentVersion struct {
 	ManifestSchemaVersion *AgentVersionManifestSchemaVersion `json:"manifestSchemaVersion,omitempty"`
 	PublishedAt           *time.Time                         `json:"publishedAt,omitempty"`
 
-	// ScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned` (plan organization-subscriptions §4). A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
+	// ScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned`. A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
 	ScanStatus *AgentVersionScanStatus `json:"scanStatus,omitempty"`
 
-	// Source Where the version came from: a repository tag, an uploaded package, or an uploaded package the scan proved was a hosted Drafter revision of the agent's current release (`drafter-revision`, plan drafter-revisions §6), which S9 scans with the benefit of the doubt. The set grows by addition, so it is declared extensible: a client keeps a source it does not know as the string it is rather than failing on it.
+	// Source Where the version came from: a repository tag, an uploaded package, or an uploaded package the scan proved was a hosted Drafter revision of the agent's current release (`drafter-revision`), which S9 scans with the benefit of the doubt. The set grows by addition, so it is declared extensible: a client keeps a source it does not know as the string it is rather than failing on it.
 	Source string `json:"source"`
 
-	// Status Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
+	// Status Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
 	Status       VersionStatus `json:"status"`
 	StatusReason *string       `json:"statusReason,omitempty"`
 	Version      string        `json:"version"`
@@ -2308,7 +2308,7 @@ type AgentVersionChannel string
 // AgentVersionManifestSchemaVersion Schema major of the manifest snapshot this version carries: 1 (kind-classified, read through the v1 mapping) or 2 (modes). Clients that show a version's manifest read it accordingly.
 type AgentVersionManifestSchemaVersion int
 
-// AgentVersionScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned` (plan organization-subscriptions §4). A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
+// AgentVersionScanStatus How the version was admitted: through the pipeline, or skipped — no scan run, no findings, no attestation, the report's verdict `unscanned`. A skipped version is a private organization agent's; a client that installs or runs one asks for consent first.
 type AgentVersionScanStatus string
 
 // AuditEvent defines model for AuditEvent.
@@ -2350,7 +2350,7 @@ type AuditPage struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// BrandInfo What this deployment calls itself (config `brand.*`, DEV-091): the name for prompts and titles, and optional logo and support address.
+// BrandInfo What this deployment calls itself (config `brand.*`): the name for prompts and titles, and optional logo and support address.
 type BrandInfo struct {
 	LogoUrl *string `json:"logoUrl,omitempty"`
 
@@ -2378,7 +2378,7 @@ type CreateAgentRequestVisibility string
 type CreateInvitationRequest struct {
 	Email string `json:"email"`
 
-	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
+	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization. `owner` is accepted by the schema but refused with a 422 that names the roles that exist.
 	Role *OrgRoleAssignment `json:"role,omitempty"`
 }
 
@@ -2401,11 +2401,11 @@ type CreateOrgRequest struct {
 
 // CreateTokenRequest defines model for CreateTokenRequest.
 type CreateTokenRequest struct {
-	// ExpiresAt Defaults to the max PAT lifetime (§12.3); a later value is refused with 422, not clamped.
+	// ExpiresAt Defaults to the max PAT lifetime; a later value is refused with 422, not clamped.
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 	Name      string     `json:"name"`
 
-	// OrgHandle Bind the token to this org (§12.4). Requires the current session to be SSO-fresh for the org; org-bound tokens live at most 90 days (a later expiresAt is refused with 422) and are the only tokens accepted against an enforced-SSO org's resources.
+	// OrgHandle Bind the token to this org. Requires the current session to be SSO-fresh for the org; org-bound tokens live at most 90 days (a later expiresAt is refused with 422) and are the only tokens accepted against an enforced-SSO org's resources.
 	OrgHandle *string `json:"orgHandle,omitempty"`
 	Scopes    []Scope `json:"scopes"`
 }
@@ -2425,17 +2425,17 @@ type CreatedInvitation struct {
 	// InvitedBy The handle of the admin who sent it.
 	InvitedBy *string `json:"invitedBy,omitempty"`
 
-	// Mailed Whether the invitation was mailed. It is not when the address belongs to no account, to an account whose address the registry has not verified, or to someone who has turned organization-invitation mail off — the registry mails no address it has not confirmed (DEV-099).
+	// Mailed Whether the invitation was mailed. It is not when the address belongs to no account, to an account whose address the registry has not verified, or to someone who has turned organization-invitation mail off — the registry mails no address it has not confirmed.
 	Mailed bool `json:"mailed"`
 
-	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role OrgRole `json:"role"`
 
 	// Token The credential, shown once and never again: the registry keeps only its SHA-256. Give it to the person you invited if it was not mailed to them.
 	Token string `json:"token"`
 }
 
-// DependencyAlert A published version declares an MCP server version with a newly known high or critical vulnerability (agentry#177).
+// DependencyAlert A published version declares an MCP server version with a newly known high or critical vulnerability.
 type DependencyAlert struct {
 	AdvisoryIds []string `json:"advisoryIds"`
 
@@ -2520,7 +2520,7 @@ type DraftCheck struct {
 	Model  string           `json:"model"`
 	Rubric DraftRubricCheck `json:"rubric"`
 
-	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation (DEV-150).
+	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation.
 	Usage ModelInputUsage `json:"usage"`
 }
 
@@ -2655,7 +2655,7 @@ type EmailVerificationSent struct {
 	SentTo string `json:"sentTo"`
 }
 
-// ForkOrigin What a fork was taken from (agentry#943). Kept for good: there is no detach.
+// ForkOrigin What a fork was taken from. Kept for good: there is no detach.
 type ForkOrigin struct {
 	// Available Whether the origin is still public, not deleted and not blocked, which is when a client may link it. A quarantined origin is available: its page says it is quarantined.
 	Available bool   `json:"available"`
@@ -2679,7 +2679,7 @@ type Invitation struct {
 	// InvitedBy The handle of the admin who sent it.
 	InvitedBy *string `json:"invitedBy,omitempty"`
 
-	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role OrgRole `json:"role"`
 }
 
@@ -2697,7 +2697,7 @@ type InvitationOffer struct {
 	// Reason Why it cannot be accepted, when it cannot.
 	Reason *string `json:"reason,omitempty"`
 
-	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role OrgRole `json:"role"`
 }
 
@@ -2713,7 +2713,7 @@ type KnowledgeDataKey struct {
 	Key []byte `json:"key"`
 }
 
-// KnowledgePack A knowledge pack the caller keeps in the registry (plan knowledge.md §4.4): what may be read of it without its data key, and the key as the caller's wrapper wrapped it.
+// KnowledgePack A knowledge pack the caller keeps in the registry: what may be read of it without its data key, and the key as the caller's wrapper wrapped it.
 type KnowledgePack struct {
 	// Bytes The tree's files, in bytes, as the CLI counts them.
 	Bytes     int64     `json:"bytes"`
@@ -2722,7 +2722,7 @@ type KnowledgePack struct {
 	// Digest sha256:<hex> of the tree; empty before an upload.
 	Digest string `json:"digest"`
 
-	// Exportable On a shared pack: whether its members may export it, which an admin marks (D26). Its admins export it either way; a person's own pack is theirs to export and carries no flag.
+	// Exportable On a shared pack: whether its members may export it, which an admin marks. Its admins export it either way; a person's own pack is theirs to export and carries no flag.
 	Exportable *bool              `json:"exportable,omitempty"`
 	Files      int                `json:"files"`
 	Id         openapi_types.UUID `json:"id"`
@@ -2734,11 +2734,11 @@ type KnowledgePack struct {
 	// Pages The wiki's pages, the index and the log aside.
 	Pages int `json:"pages"`
 
-	// Scan What a pack's scan read and found (plan knowledge.md §4.4, D19): a record, never a gate (D27). The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
+	// Scan What a pack's scan read and found: a record, never a gate. The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
 	Scan      *KnowledgeScanReport `json:"scan,omitempty"`
 	ScannedAt *time.Time           `json:"scannedAt,omitempty"`
 
-	// Shared An organization's shared pack (agentry#646), read through `/orgs/{org}/knowledge/`; false for the caller's own.
+	// Shared An organization's shared pack, read through `/orgs/{org}/knowledge/`; false for the caller's own.
 	Shared bool `json:"shared"`
 
 	// State `empty` until a tree is uploaded; `scanning` from each upload until its scan ends, when the pack cannot be downloaded or exported (409 `knowledge-scanning`); `ready` after it, findings or not; `failed` when the stored tree could not be read to scan.
@@ -2764,7 +2764,7 @@ type KnowledgePackSize struct {
 // KnowledgePackState `empty` until a tree is uploaded; `scanning` from each upload until its scan ends, when the pack cannot be downloaded or exported (409 `knowledge-scanning`); `ready` after it, findings or not; `failed` when the stored tree could not be read to scan.
 type KnowledgePackState string
 
-// KnowledgeScanReport What a pack's scan read and found (plan knowledge.md §4.4, D19): a record, never a gate (D27). The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
+// KnowledgeScanReport What a pack's scan read and found: a record, never a gate. The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
 type KnowledgeScanReport struct {
 	Findings []struct {
 		Chunk      *int                                `json:"chunk,omitempty"`
@@ -2829,7 +2829,7 @@ type KnowledgeUsage struct {
 	// Packs The packs the caller keeps here.
 	Packs int `json:"packs"`
 
-	// Pooled The allocation is shared with other owners (agentry#612).
+	// Pooled The allocation is shared with other owners.
 	Pooled bool `json:"pooled"`
 
 	// Used What counts against the allocation: `bytes`, or, when `pooled`, the pool's total — every pack of every owner who shares it (a paid organization's, and its members').
@@ -2879,7 +2879,7 @@ type McpAdvisory struct {
 	CvssScore *float64  `json:"cvssScore,omitempty"`
 	FixedIn   *[]string `json:"fixedIn,omitempty"`
 
-	// GateSeverity The severity the gate gives the finding this advisory makes (agentry#774): a Critical advisory is critical and rejects the version; a High one is high from a CVSS base score of 8.5 and medium below it, and high when it carries no usable score; any other is its own severity. Served so the runner can apply the same rule (agentry-cli#501).
+	// GateSeverity The severity the gate gives the finding this advisory makes: a Critical advisory is critical and rejects the version; a High one is high from a CVSS base score of 8.5 and medium below it, and high when it carries no usable score; any other is its own severity. Served so the runner can apply the same rule.
 	GateSeverity McpAdvisoryGateSeverity `json:"gateSeverity"`
 	Id           string                  `json:"id"`
 	References   *[]string               `json:"references,omitempty"`
@@ -2889,7 +2889,7 @@ type McpAdvisory struct {
 	Summary  string              `json:"summary"`
 }
 
-// McpAdvisoryGateSeverity The severity the gate gives the finding this advisory makes (agentry#774): a Critical advisory is critical and rejects the version; a High one is high from a CVSS base score of 8.5 and medium below it, and high when it carries no usable score; any other is its own severity. Served so the runner can apply the same rule (agentry-cli#501).
+// McpAdvisoryGateSeverity The severity the gate gives the finding this advisory makes: a Critical advisory is critical and rejects the version; a High one is high from a CVSS base score of 8.5 and medium below it, and high when it carries no usable score; any other is its own severity. Served so the runner can apply the same rule.
 type McpAdvisoryGateSeverity string
 
 // McpAdvisorySeverity The advisory's own severity: the database's word, else the band of its CVSS base score. Dependency alerts are opened on it.
@@ -2905,7 +2905,7 @@ type McpServerScan struct {
 	MaxSeverity   *McpServerScanMaxSeverity `json:"maxSeverity,omitempty"`
 	Package       string                    `json:"package"`
 
-	// Status safe means no known advisories when last checked (OSV), and nothing else about the server. A version its package registry does not publish is served as error, with lastError saying so (agentry#1036), so no client meets a value the contract lacks.
+	// Status safe means no known advisories when last checked (OSV), and nothing else about the server. A version its package registry does not publish is served as error, with lastError saying so, so no client meets a value the contract lacks.
 	Status  McpServerScanStatus `json:"status"`
 	Version string              `json:"version"`
 }
@@ -2916,12 +2916,12 @@ type McpServerScanEcosystem string
 // McpServerScanMaxSeverity defines model for McpServerScan.MaxSeverity.
 type McpServerScanMaxSeverity string
 
-// McpServerScanStatus safe means no known advisories when last checked (OSV), and nothing else about the server. A version its package registry does not publish is served as error, with lastError saying so (agentry#1036), so no client meets a value the contract lacks.
+// McpServerScanStatus safe means no known advisories when last checked (OSV), and nothing else about the server. A version its package registry does not publish is served as error, with lastError saying so, so no client meets a value the contract lacks.
 type McpServerScanStatus string
 
 // Membership defines model for Membership.
 type Membership struct {
-	// Role An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role OrgRole `json:"role"`
 
 	// State Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member. Declining a pending member removes them, and a decline is remembered: the domain does not fold that person in again unless an admin invites them.
@@ -2943,22 +2943,22 @@ type Meta struct {
 	// Example: v1
 	ApiVersion string `json:"apiVersion"`
 
-	// Brand What this deployment calls itself (config `brand.*`, DEV-091): the name for prompts and titles, and optional logo and support address.
+	// Brand What this deployment calls itself (config `brand.*`): the name for prompts and titles, and optional logo and support address.
 	Brand *BrandInfo `json:"brand,omitempty"`
 
-	// Extensions Names of the extensions this build mounts under `/api/v1/x/<name>/` (DEV-091, pkg/extension); absent on the core build.
+	// Extensions Names of the extensions this build mounts under `/api/v1/x/<name>/` (registered through pkg/extension); absent on the core build.
 	Extensions *[]string `json:"extensions,omitempty"`
 
 	// Features Self-host feature flags: `judge`, `signing`, `redis`, `s3`, `externalOnly` (accounts live in an external directory service; the native register/password/TOTP surface answers 410 — clients should not offer those forms) and `publicPublish2FA` (the server refuses a public publish from an account it holds no second-factor evidence for — an enrolled TOTP, or under `auth.requireIdpMFA` an IdP sign-in whose `amr` named a factor; false in dev mode and under `externalOnly` without `auth.requireIdpMFA` — a client states that requirement only when this is true), and `knowledge` (the store of knowledge packs is on: the registry has a knowledge sealing key or an extension that wraps keys, so `/knowledge/…` answers rather than 503).
 	Features map[string]bool `json:"features"`
 
-	// MinCLIVersion Oldest supported agentry CLI version (§11 distribution note).
+	// MinCLIVersion Oldest supported agentry CLI version.
 	MinCLIVersion *string `json:"minCLIVersion,omitempty"`
 
-	// SignInProviders The individual sign-in providers this registry has configured (the `provider` ids of `/auth/oidc/{provider}/start`, in that enum's order), so a front end can offer them without starting a flow to find out (agentry#694). Empty when none is configured. A provider is listed when its client id and secret are set, and an issuer where it has no default; a listed provider's start redirects and an unlisted one's answers 404. A listed provider whose issuer cannot be reached at that moment also answers 404 there, since its discovery fails.
+	// SignInProviders The individual sign-in providers this registry has configured (the `provider` ids of `/auth/oidc/{provider}/start`, in that enum's order), so a front end can offer them without starting a flow to find out. Empty when none is configured. A provider is listed when its client id and secret are set, and an issuer where it has no default; a listed provider's start redirects and an unlisted one's answers 404. A listed provider whose issuer cannot be reached at that moment also answers 404 there, since its discovery fails.
 	SignInProviders *[]string `json:"signInProviders,omitempty"`
 
-	// Ui The server's own browser surface under `/ui/` (DEV-091). `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
+	// Ui The server's own browser surface under `/ui/`. `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
 	Ui *UIInfo `json:"ui,omitempty"`
 
 	// Version agentryd semantic version (build-stamped).
@@ -3004,7 +3004,7 @@ type ModelInputScan struct {
 	// Scores Per question, 0 to 3 (0.5, 0.7 and 0.9 are 1, 2 and 3).
 	Scores ModelInputScores `json:"scores"`
 
-	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation (DEV-150).
+	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation.
 	Usage ModelInputUsage `json:"usage"`
 
 	// Verdict `pass`: no question scored 2 or more. `withheld`: one did; the model gets the source's address and the reason, never the text. `not_scanned`: the judge could not answer for part of the text; a caller treats it as withheld.
@@ -3034,7 +3034,7 @@ type ModelInputScores struct {
 // ModelInputSource What the text is: a person's description, one web search result, a web page's text, an answer from the registry's public API, or a hosted run's input file as decoded text. It rides beside the text in the judge's state; nothing of the text reaches a question.
 type ModelInputSource string
 
-// ModelInputUsage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation (DEV-150).
+// ModelInputUsage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation.
 type ModelInputUsage struct {
 	InputTokens int `json:"inputTokens"`
 	Requests    int `json:"requests"`
@@ -3084,10 +3084,10 @@ type Org struct {
 	VerifiedDomains *[]string `json:"verifiedDomains,omitempty"`
 }
 
-// OrgRole An organization role, ordered admin > security_reviewer | member (§12.2 as amended by agentry#360). Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; the owner role is retired and every owner became an admin. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+// OrgRole An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 type OrgRole string
 
-// OrgRoleAssignment The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
+// OrgRoleAssignment The role a PUT assigns. security_reviewer is refused outside a first-party organization. `owner` is accepted by the schema but refused with a 422 that names the roles that exist.
 type OrgRoleAssignment string
 
 // OrgState Where the organization is in its life. `active` is the ordinary state. `suspended` (platform staff) makes the organization and everything under it answer as absent — 404 to every caller, git included — until it is reinstated. `decommissioning` is the read-only hold an admin, platform staff or the hosted product's pending-payment sweep started: members still read every agent and export the audit log, nothing under the organization can be changed, pushed or submitted (409 org-decommissioning), and at `decommissionAt` the erasure runs; staff may reinstate it before then. `decommissioned` is the row after the erasure; its handle is released, so no path names it.
@@ -3101,10 +3101,10 @@ type Pat struct {
 	LastUsedAt *time.Time         `json:"lastUsedAt,omitempty"`
 	Name       string             `json:"name"`
 
-	// OrgHandle Set when org-bound (enforced SSO, §12.4).
+	// OrgHandle Set when org-bound (enforced SSO).
 	OrgHandle *string `json:"orgHandle,omitempty"`
 
-	// Prefix First 12 characters, for display and lookup (§4.2 pats).
+	// Prefix First 12 characters, for display and lookup.
 	Prefix string         `json:"prefix"`
 	Scopes []ScopeGranted `json:"scopes"`
 }
@@ -3117,10 +3117,10 @@ type PatCreated struct {
 	LastUsedAt *time.Time         `json:"lastUsedAt,omitempty"`
 	Name       string             `json:"name"`
 
-	// OrgHandle Set when org-bound (enforced SSO, §12.4).
+	// OrgHandle Set when org-bound (enforced SSO).
 	OrgHandle *string `json:"orgHandle,omitempty"`
 
-	// Prefix First 12 characters, for display and lookup (§4.2 pats).
+	// Prefix First 12 characters, for display and lookup.
 	Prefix string         `json:"prefix"`
 	Scopes []ScopeGranted `json:"scopes"`
 
@@ -3140,7 +3140,7 @@ type PendingOrg struct {
 // PendingOrgVia The door — `domain` (their verified address is at the organization's domain) or `scim`.
 type PendingOrgVia string
 
-// Problem RFC 9457 problem details (D-10).
+// Problem RFC 9457 problem details.
 type Problem struct {
 	Detail *string `json:"detail,omitempty"`
 
@@ -3176,7 +3176,7 @@ type PutVoiceRequest struct {
 // PutVoiceRequestSource defines model for PutVoiceRequest.Source.
 type PutVoiceRequestSource string
 
-// RedTeamReport One run of the §17.5 red-team job (agentry#67).
+// RedTeamReport One run of the red-team job.
 type RedTeamReport struct {
 	BundleDigest string `json:"bundleDigest"`
 
@@ -3204,7 +3204,7 @@ type RegisterRequest struct {
 	Password    string              `json:"password"`
 }
 
-// ReportDesign A report design, the theme document version 2 (plan report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB (agentry#1025).
+// ReportDesign A report design, the theme document version 2. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB.
 type ReportDesign struct {
 	// Accent The one colour, lower-case hex.
 	Accent string `json:"accent"`
@@ -3279,9 +3279,9 @@ type ReportDesignQuotes string
 // ReportDesignTitleBlock defines model for ReportDesign.TitleBlock.
 type ReportDesignTitleBlock string
 
-// ReportSettings The caller's report settings, a profile setting (agentry#989). No `design` means the person never chose one.
+// ReportSettings The caller's report settings, a profile setting. No `design` means the person never chose one.
 type ReportSettings struct {
-	// Design A report design, the theme document version 2 (plan report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB (agentry#1025).
+	// Design A report design, the theme document version 2. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB.
 	Design *ReportDesign `json:"design,omitempty"`
 }
 
@@ -3291,7 +3291,7 @@ type ReportSettingsInclude string
 // ReportVerdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
 type ReportVerdict string
 
-// RescanInFlight A later scan of this version still running (a ruleset or MCP rescan sweep, a manual rescan) while the report describes the latest run that finished. Present only when such a run exists: the verdict a release was published on stands until the rescan finishes, and the report says one is under way rather than going blank (agentry#542).
+// RescanInFlight A later scan of this version still running (a ruleset or MCP rescan sweep, a manual rescan) while the report describes the latest run that finished. Present only when such a run exists: the verdict a release was published on stands until the rescan finishes, and the report says one is under way rather than going blank.
 type RescanInFlight struct {
 	ScanRunId openapi_types.UUID `json:"scanRunId"`
 	StartedAt time.Time          `json:"startedAt"`
@@ -3302,22 +3302,22 @@ type ResolveResult struct {
 	// ArchiveUrl Where to fetch the archive (CDN on SaaS; API path self-host).
 	ArchiveUrl string `json:"archiveUrl"`
 
-	// AttestationUrl Where to fetch the DSSE attestation over this release (§8.8, §9.4 step 3). Present whenever the version has been signed: every version published by a signing-enabled deployment. Absent when the deployment runs `signing.kind: none` (dev/self-host opt-out) or the version predates signing.
+	// AttestationUrl Where to fetch the DSSE attestation over this release. Present whenever the version has been signed: every version published by a signing-enabled deployment. Absent when the deployment runs `signing.kind: none` (dev/self-host opt-out) or the version predates signing.
 	AttestationUrl *string                `json:"attestationUrl,omitempty"`
 	Digest         string                 `json:"digest"`
 	Manifest       map[string]interface{} `json:"manifest"`
 	Name           string                 `json:"name"`
 	Namespace      string                 `json:"namespace"`
 
-	// ScanStatus How the resolved version was admitted (plan organization-subscriptions §4): `skipped` is a version published without a scan — no attestation exists for it, which is not the same as an unsigned registry — and a client installs or runs it only with the person's consent.
+	// ScanStatus How the resolved version was admitted: `skipped` is a version published without a scan — no attestation exists for it, which is not the same as an unsigned registry — and a client installs or runs it only with the person's consent.
 	ScanStatus *ResolveResultScanStatus `json:"scanStatus,omitempty"`
 	Version    string                   `json:"version"`
 
-	// Yanked True only for exact pins of yanked versions (§5.5).
+	// Yanked True only for exact pins of yanked versions.
 	Yanked bool `json:"yanked"`
 }
 
-// ResolveResultScanStatus How the resolved version was admitted (plan organization-subscriptions §4): `skipped` is a version published without a scan — no attestation exists for it, which is not the same as an unsigned registry — and a client installs or runs it only with the person's consent.
+// ResolveResultScanStatus How the resolved version was admitted: `skipped` is a version published without a scan — no attestation exists for it, which is not the same as an unsigned registry — and a client installs or runs it only with the person's consent.
 type ResolveResultScanStatus string
 
 // ReviewBundle defines model for ReviewBundle.
@@ -3336,7 +3336,7 @@ type ReviewBundle struct {
 type ReviewFileContent struct {
 	Binary bool `json:"binary"`
 
-	// Content UTF-8 text content; absent for binary files. Rendered by clients with invisible-character escaping (§10.3).
+	// Content UTF-8 text content; absent for binary files. Rendered by clients with invisible-character escaping.
 	Content   *string `json:"content,omitempty"`
 	Path      string  `json:"path"`
 	Size      int64   `json:"size"`
@@ -3362,11 +3362,11 @@ type ReviewItem struct {
 	Namespace string             `json:"namespace"`
 	Queue     ReviewItemQueue    `json:"queue"`
 
-	// State Where the item stands. `superseded`: no person decided; the version was published by the gate when a new ruleset judged the review queue again and it passed (agentry#772). The set grows by addition, so it is declared extensible: a client keeps a state it does not know as the string it is rather than failing on it.
+	// State Where the item stands. `superseded`: no person decided; the version was published by the gate when a new ruleset judged the review queue again and it passed. The set grows by addition, so it is declared extensible: a client keeps a state it does not know as the string it is rather than failing on it.
 	State   string `json:"state"`
 	Version string `json:"version"`
 
-	// VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
+	// VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
 	VersionStatus *VersionStatus `json:"versionStatus,omitempty"`
 }
 
@@ -3396,7 +3396,7 @@ type ScanFinding struct {
 	Title      string                  `json:"title"`
 	Verdict    ScanFindingVerdict      `json:"verdict"`
 
-	// VerdictReason Why a reviewer dismissed or confirmed this finding. Dismissed findings stay on the public report WITH their rationale (PLAN §8.5). A finding that vanishes without explanation is exactly what the report exists to prevent.
+	// VerdictReason Why a reviewer dismissed or confirmed this finding. Dismissed findings stay on the public report WITH their rationale. A finding that vanishes without explanation is exactly what the report exists to prevent.
 	VerdictReason *string `json:"verdictReason,omitempty"`
 }
 
@@ -3423,22 +3423,22 @@ type ScanReport struct {
 	// JudgeUsage The token use the AI Review model's provider reported for this scan run — what the review cost, as measured. Present for platform staff only, and absent when the provider reported none (the static and classifier judges, an endpoint without a usage block); absent means unknown, not zero. Not part of the signed report.
 	JudgeUsage *JudgeUsage `json:"judgeUsage,omitempty"`
 
-	// Knowledge What the scan read of each knowledge pack the release ships (plan knowledge.md §4.6; the manifest's `knowledge.ships`): every rule stage over every page and source, then AI Review over the pack's `sources/` and its `wiki/` in chunks no larger than the judge reads, or "AI Review not configured". The pack's findings are also the version's, in `findings`, under scanner `SK/…` with a file path in `knowledge/<name>/`; the release's own stages, AI Review included, do not read a shipped pack's tree. Absent for a release that ships no pack.
+	// Knowledge What the scan read of each knowledge pack the release ships (the manifest's `knowledge.ships`): every rule stage over every page and source, then AI Review over the pack's `sources/` and its `wiki/` in chunks no larger than the judge reads, or "AI Review not configured". The pack's findings are also the version's, in `findings`, under scanner `SK/…` with a file path in `knowledge/<name>/`; the release's own stages, AI Review included, do not read a shipped pack's tree. Absent for a release that ships no pack.
 	Knowledge    *[]ShippedKnowledgeScan `json:"knowledge,omitempty"`
 	ReportDigest *string                 `json:"reportDigest,omitempty"`
 
-	// RescanInFlight A later scan of this version still running (a ruleset or MCP rescan sweep, a manual rescan) while the report describes the latest run that finished. Present only when such a run exists: the verdict a release was published on stands until the rescan finishes, and the report says one is under way rather than going blank (agentry#542).
+	// RescanInFlight A later scan of this version still running (a ruleset or MCP rescan sweep, a manual rescan) while the report describes the latest run that finished. Present only when such a run exists: the verdict a release was published on stands until the rescan finishes, and the report says one is under way rather than going blank.
 	RescanInFlight *RescanInFlight     `json:"rescanInFlight,omitempty"`
 	RulesetVersion *string             `json:"rulesetVersion,omitempty"`
 	ScanRunId      *openapi_types.UUID `json:"scanRunId,omitempty"`
 
-	// ScanStatus The scan run's status; `skipped` for a version admitted without a scan (M21), which has no run.
+	// ScanStatus The scan run's status; `skipped` for a version admitted without a scan, which has no run.
 	ScanStatus *string `json:"scanStatus,omitempty"`
 
 	// Verdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
 	Verdict *ReportVerdict `json:"verdict,omitempty"`
 
-	// VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
+	// VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
 	VersionStatus VersionStatus `json:"versionStatus"`
 }
 
@@ -3458,14 +3458,14 @@ type ScimTokenCreated struct {
 	Token string `json:"token"`
 }
 
-// Scope PAT scopes (§12.3). A token can do only what its scopes allow; a
+// Scope PAT scopes. A token can do only what its scopes allow; a
 // session acts with the account's full authority. `run:write` lets a
 // token start, feed and cancel a hosted run of a QuickAgent and
 // `run:read` lets it read a run, its log and its artefacts — both are
 // consumed only by a registry that mounts the runs extension, and
 // unlock nothing on one that does not. `agent:manage` takes the owner
 // actions on a QuickAgent the caller administers (make it public or
-// private, retire, restore, delete; agentry#993), which `org:admin`
+// private, retire, restore, delete), which `org:admin`
 // also covers, and reaches none of its other settings. `knowledge:read` and
 // `knowledge:write` read and write the account's knowledge packs.
 // `secret:write` sets and deletes the account's hosted-run secrets and
@@ -3545,7 +3545,7 @@ type ShippedKnowledgeScan struct {
 	// Name The pack's name and its directory under `knowledge/` in the archive.
 	Name string `json:"name"`
 
-	// Report What a pack's scan read and found (plan knowledge.md §4.4, D19): a record, never a gate (D27). The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
+	// Report What a pack's scan read and found: a record, never a gate. The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
 	Report KnowledgeScanReport `json:"report"`
 }
 
@@ -3643,7 +3643,7 @@ type TrustedDevicesCount struct {
 	Count int `json:"count"`
 }
 
-// UIInfo The server's own browser surface under `/ui/` (DEV-091). `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
+// UIInfo The server's own browser surface under `/ui/`. `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
 type UIInfo struct {
 	AuthorizeUrl *string    `json:"authorizeUrl,omitempty"`
 	Mode         UIInfoMode `json:"mode"`
@@ -3665,7 +3665,7 @@ type User struct {
 	DisplayName string     `json:"displayName"`
 	Email       string     `json:"email"`
 
-	// EmailVerificationResendAfter GET /user only, while the address is unconfirmed: the earliest moment `POST /user/email-verification` will send another activation link (agentry#861). Absent when one may be sent now.
+	// EmailVerificationResendAfter GET /user only, while the address is unconfirmed: the earliest moment `POST /user/email-verification` will send another activation link. Absent when one may be sent now.
 	EmailVerificationResendAfter *time.Time         `json:"emailVerificationResendAfter,omitempty"`
 	EmailVerified                bool               `json:"emailVerified"`
 	Handle                       string             `json:"handle"`
@@ -3688,7 +3688,7 @@ type User struct {
 
 // UserDirectory defines model for UserDirectory.
 type UserDirectory struct {
-	// AccountUrl Deprecated and no longer set (agentry#164): the directory's own account page is not offered; every setting lives here.
+	// AccountUrl Deprecated and no longer set: the directory's own account page is not offered; every setting lives here.
 	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	AccountUrl *string `json:"accountUrl,omitempty"`
 
@@ -3707,7 +3707,7 @@ type UserDirectory struct {
 	// DevicesError Set when the authenticator lookup was attempted and failed; the links still work.
 	DevicesError *string `json:"devicesError,omitempty"`
 
-	// FirstSocialProvider The social provider the caller's directory account was first connected to (agentry#706), for the account's profile. Absent when the account has none, the server has no directory admin access, or the directory did not answer.
+	// FirstSocialProvider The social provider the caller's directory account was first connected to, for the account's profile. Absent when the account has none, the server has no directory admin access, or the directory did not answer.
 	FirstSocialProvider *struct {
 		// Id The directory's slug for the provider, e.g. google.
 		Id string `json:"id"`
@@ -3716,7 +3716,7 @@ type UserDirectory struct {
 		Name string `json:"name"`
 	} `json:"firstSocialProvider,omitempty"`
 
-	// HasPassword Whether the caller's directory account has a password (agentry#706): false for an account a social provider created and no password was added to. Absent when the directory did not answer or has not recorded it yet (the account has not signed in or set a password since the directory began keeping it).
+	// HasPassword Whether the caller's directory account has a password: false for an account a social provider created and no password was added to. Absent when the directory did not answer or has not recorded it yet (the account has not signed in or set a password since the directory began recording it).
 	HasPassword *bool `json:"hasPassword,omitempty"`
 
 	// Managed True when a directory service owns credentials for this deployment.
@@ -3726,12 +3726,12 @@ type UserDirectory struct {
 	WebauthnSetupUrl  *string `json:"webauthnSetupUrl,omitempty"`
 }
 
-// VersionStatus Publication state machine states (§7). `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change (DEV-046).
+// VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
 type VersionStatus string
 
-// Voice The caller's Writing Voice (plan writing-voice.md §4, D13): at most a live version (the one runs attach), a pending one (in review, or flagged with its findings) and the previous one, for Restore.
+// Voice The caller's Writing Voice: at most a live version (the one runs attach), a pending one (in review, or flagged with its findings) and the previous one, for Restore.
 type Voice struct {
-	// AlwaysAttach Runs In Agentry attach the live voice by default (D11); on when a voice first goes live.
+	// AlwaysAttach Runs In Agentry attach the live voice by default; on when a voice first goes live.
 	AlwaysAttach bool          `json:"alwaysAttach"`
 	Live         *VoiceVersion `json:"live,omitempty"`
 	Pending      *VoiceVersion `json:"pending,omitempty"`
@@ -3867,7 +3867,7 @@ type WebSearchResults struct {
 	QuestionSet string            `json:"questionSet"`
 	Results     []WebSearchResult `json:"results"`
 
-	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation (DEV-150).
+	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation.
 	Usage ModelInputUsage `json:"usage"`
 
 	// Withheld How many results were withheld or not scanned.
@@ -3910,7 +3910,7 @@ type WebhookEndpointCreated struct {
 type WebhookInput struct {
 	Events []string `json:"events"`
 
-	// Url HTTPS endpoint (§9.3 requires https).
+	// Url HTTPS endpoint (https is required).
 	Url string `json:"url"`
 }
 
@@ -3958,7 +3958,7 @@ type ListAdvisoriesParams struct {
 	// Affecting ns/name. Omit for the global feed.
 	Affecting *string `form:"affecting,omitempty" json:"affecting,omitempty"`
 
-	// Digest With `affecting`: the `archiveDigest` of a release of that agent the caller holds. It proves the caller held the agent, so its advisories are served even when the agent is now private, retired or deleted (agentry#949). Ignored without `affecting` and when the caller can read the agent anyway.
+	// Digest With `affecting`: the `archiveDigest` of a release of that agent the caller holds. It proves the caller held the agent, so its advisories are served even when the agent is now private, retired or deleted. Ignored without `affecting` and when the caller can read the agent anyway.
 	Digest *string `form:"digest,omitempty" json:"digest,omitempty"`
 
 	// Cursor Opaque keyset cursor from the previous page's Link header (feed mode).
@@ -3978,7 +3978,7 @@ type ListAgentsParams struct {
 	// State `active` lists agents that are not retired, `retired` only the retired ones; absent, both.
 	State *ListAgentsParamsState `form:"state,omitempty" json:"state,omitempty"`
 
-	// Forks `only` lists the namespace's forks, `none` the agents that are not forks; absent, both (agentry#943).
+	// Forks `only` lists the namespace's forks, `none` the agents that are not forks; absent, both.
 	Forks *ListAgentsParamsForks `form:"forks,omitempty" json:"forks,omitempty"`
 
 	// Sort `name` (the default), `newest` (created), `installs` (the last 30 days) or `submitted` (the newest submission of any version).
@@ -4002,21 +4002,21 @@ type DeleteAgentParams struct {
 
 // UpdateAgentJSONBody defines parameters for UpdateAgent.
 type UpdateAgentJSONBody struct {
-	// AllowForcePush Allow non-fast-forward pushes to the default branch (§6.3). Off by default; maintain only.
+	// AllowForcePush Allow non-fast-forward pushes to the default branch. Off by default; maintain only.
 	AllowForcePush  *bool `json:"allowForcePush,omitempty"`
 	AutoPublishTags *bool `json:"autoPublishTags,omitempty"`
 
-	// Builtin Mark or unmark the agent as built-in (agentry#737): a package the Agentry CLI embeds, published for reading, which clients label Built-in in place of its run modes. Platform staff only (403 for anyone else, the namespace's administrators included), and setting it only on an agent of a first-party namespace (`builtin-first-party`). Nothing but the label reads it.
+	// Builtin Mark or unmark the agent as built-in: a package the Agentry CLI embeds, published for reading, which clients label Built-in in place of its run modes. Platform staff only (403 for anyone else, the namespace's administrators included), and setting it only on an agent of a first-party namespace (`builtin-first-party`). Nothing but the label reads it.
 	Builtin *bool `json:"builtin,omitempty"`
 
 	// Modes The run modes a release supports; at least one.
 	Modes *AgentModes `json:"modes,omitempty"`
 
-	// PipelineSkip Admit submissions to this agent without a scan (plan organization-subscriptions §4, D16). Settable by the namespace's administrators on a private agent of an organization's whose subscription includes unscanned agents; refused on a public agent (`pipeline-skip-public`) and in a personal namespace (`pipeline-skip-personal`), and with `feature-not-included` where the tier lacks it. While it is set, and while a version published unscanned stands, the agent cannot be made public (`agent-unscanned`). Clearing it changes nothing already published; the next submission goes through the whole pipeline.
+	// PipelineSkip Admit submissions to this agent without a scan. Settable by the namespace's administrators on a private agent of an organization's whose subscription includes unscanned agents; refused on a public agent (`pipeline-skip-public`) and in a personal namespace (`pipeline-skip-personal`), and with `feature-not-included` where the tier lacks it. While it is set, and while a version published unscanned stands, the agent cannot be made public (`agent-unscanned`). Clearing it changes nothing already published; the next submission goes through the whole pipeline.
 	PipelineSkip *bool   `json:"pipelineSkip,omitempty"`
 	Summary      *string `json:"summary,omitempty"`
 
-	// Visibility The namespace's administrators only. A token needs `org:admin`, or `agent:manage` when the body sets visibility and nothing else (agentry#993). `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back. It is refused on a fork for good (`409 fork-stays-private`, agentry#943).
+	// Visibility The namespace's administrators only. A token needs `org:admin`, or `agent:manage` when the body sets visibility and nothing else. `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back. It is refused on a fork for good (`409 fork-stays-private`).
 	Visibility *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
 }
 
@@ -4053,13 +4053,13 @@ type ForkAgentJSONBody struct {
 
 // SetAgentTeamGrantJSONBody defines parameters for SetAgentTeamGrant.
 type SetAgentTeamGrantJSONBody struct {
-	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
+	// Role Per-agent grant levels, read < write < maintain < publish.
 	Role AgentRole `json:"role"`
 }
 
 // SetAgentUserGrantJSONBody defines parameters for SetAgentUserGrant.
 type SetAgentUserGrantJSONBody struct {
-	// Role Per-agent grant levels (§12.2), read < write < maintain < publish.
+	// Role Per-agent grant levels, read < write < maintain < publish.
 	Role AgentRole `json:"role"`
 }
 
@@ -4082,7 +4082,7 @@ type SubmitVersionMultipartBody struct {
 	// Digest Client-computed sha256 digest to cross-check.
 	Digest *string `json:"digest,omitempty"`
 
-	// DraftRun The hosted draft this package was published from (Edit with AI's Publish this version; plan drafter-revisions §6). A claim only: the scan asks the deployment's DraftProvenance whether the submitter ran that draft against the agent's current release and whether its recorded proof matches these files. When it does, the version's source becomes `drafter-revision` and S9 scans its manifest and instruction file as a first release's. Otherwise nothing changes. A core registry has no DraftProvenance and never grants it.
+	// DraftRun The hosted draft this package was published from (Edit with AI's Publish this version). A claim only: the scan asks the deployment's DraftProvenance whether the submitter ran that draft against the agent's current release and whether its recorded proof matches these files. When it does, the version's source becomes `drafter-revision` and S9 scans its manifest and instruction file as a first release's. Otherwise nothing changes. A core registry has no DraftProvenance and never grants it.
 	DraftRun *openapi_types.UUID `json:"draftRun,omitempty"`
 }
 
@@ -4154,7 +4154,7 @@ type GetMcpServerScanParamsEcosystem string
 type UpdateOrgJSONBody struct {
 	DisplayName *string `json:"displayName,omitempty"`
 
-	// SsoRequired Enforce SSO for org resources (§12.4). Admin only.
+	// SsoRequired Enforce SSO for org resources. Admin only.
 	SsoRequired *bool `json:"ssoRequired,omitempty"`
 }
 
@@ -4195,13 +4195,13 @@ type PutOrgLogoMultipartBody struct {
 
 // SetOrgMemberJSONBody defines parameters for SetOrgMember.
 type SetOrgMemberJSONBody struct {
-	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
+	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization. `owner` is accepted by the schema but refused with a 422 that names the roles that exist.
 	Role OrgRoleAssignment `json:"role"`
 }
 
 // ApproveOrgMemberJSONBody defines parameters for ApproveOrgMember.
 type ApproveOrgMemberJSONBody struct {
-	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization, and owner — retired by agentry#360, kept here so an older client's request still parses — is refused with a 422 that names the roles that exist.
+	// Role The role a PUT assigns. security_reviewer is refused outside a first-party organization. `owner` is accepted by the schema but refused with a 422 that names the roles that exist.
 	Role *OrgRoleAssignment `json:"role,omitempty"`
 }
 
@@ -4363,7 +4363,7 @@ type SearchAgentsParams struct {
 	// Mode Only agents that support this run mode.
 	Mode *AgentMode `form:"mode,omitempty" json:"mode,omitempty"`
 
-	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess`, or `targetHosts` (a machine the person names when the run starts), or `browser` (a headless browser for the sites the person names) (§5.4). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent.
+	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess`, or `targetHosts` (a machine the person names when the run starts), or `browser` (a headless browser for the sites the person names). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent.
 	Capability *string `form:"capability,omitempty" json:"capability,omitempty"`
 
 	// License SPDX identifier from the latest published manifest.
@@ -4418,13 +4418,13 @@ type DeleteUserDirectoryDeviceParamsKind string
 
 // GetUserReportSettingsParams defines parameters for GetUserReportSettings.
 type GetUserReportSettingsParams struct {
-	// Include `logo` answers the design with its logo, if the person has one (agentry#1025). Without it the design comes without a `logo` key, so a client built before logos still reads it.
+	// Include `logo` answers the design with its logo, if the person has one. Without it the design comes without a `logo` key, so a client built before logos still reads it.
 	Include *ReportSettingsInclude `form:"include,omitempty" json:"include,omitempty"`
 }
 
 // UpdateUserReportSettingsParams defines parameters for UpdateUserReportSettings.
 type UpdateUserReportSettingsParams struct {
-	// Include `logo` answers the design with its logo, if the person has one (agentry#1025). Without it the design comes without a `logo` key, so a client built before logos still reads it.
+	// Include `logo` answers the design with its logo, if the person has one. Without it the design comes without a `logo` key, so a client built before logos still reads it.
 	Include *ReportSettingsInclude `form:"include,omitempty" json:"include,omitempty"`
 }
 
@@ -4678,28 +4678,28 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
-	// ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
+	// ListAdvisories Published advisories — for one agent, or the global feed.
 	//
-	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). The one exception is a holder of one of its releases (agentry#949): a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here. The one exception is a holder of one of its releases: a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header. Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 	//
 	// Corresponds with GET /advisories (the `ListAdvisories` operationId).
 	ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAdvisory One published advisory (permalink); public agents only.
 	//
-	// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting` (agentry#949).
+	// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting`.
 	//
 	// Corresponds with GET /advisories/{advisoryId} (the `GetAdvisory` operationId).
 	GetAdvisory(ctx context.Context, advisoryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAgents List agents in a namespace (public ones for everyone).
 	//
-	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state`, `forks` (agentry#943) and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
+	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page narrows and orders the list with `q`, `state`, `forks` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
 	//
 	// Corresponds with GET /agents (the `ListAgents` operationId).
 	ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateAgentWithBody Create an agent and its hosted git repository (§9.2).
+	// CreateAgentWithBody Create an agent and its hosted git repository.
 	//
 	// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 	//
@@ -4708,7 +4708,7 @@ type ClientInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateAgent Create an agent and its hosted git repository (§9.2).
+	// CreateAgent Create an agent and its hosted git repository.
 	//
 	// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 	//
@@ -4717,16 +4717,16 @@ type ClientInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgent(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteAgent Delete an agent (the namespace's administrators, §9.2, agentry#942).
+	// DeleteAgent Delete an agent (the namespace's administrators).
 	//
-	// A token needs `agent:manage` or `org:admin` (agentry#993). An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
+	// A token needs `agent:manage` or `org:admin`. An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone: every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — version rows are kept forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 	//
 	// Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
 	DeleteAgent(ctx context.Context, ns Namespace, name AgentName, params *DeleteAgentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgent Agent metadata (public agents readable by anyone).
 	//
-	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
+	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}`.
 	//
 	// Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
 	GetAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4745,28 +4745,28 @@ type ClientInterface interface {
 	// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
 	UpdateAgent(ctx context.Context, ns Namespace, name AgentName, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ReportAbuseWithBody Report malicious or abusive content (authed, rate-limited §8.7).
+	// ReportAbuseWithBody Report malicious or abusive content (authed, rate-limited).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
 	ReportAbuseWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ReportAbuse Report malicious or abusive content (authed, rate-limited §8.7).
+	// ReportAbuse Report malicious or abusive content (authed, rate-limited).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
 	ReportAbuse(ctx context.Context, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListAgentActivity Recent activity for an agent (§9.2).
+	// ListAgentActivity Recent activity for an agent.
 	//
 	// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset: publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
 	//
 	// Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
 	ListAgentActivity(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ForkAgentWithBody Fork a public agent into a namespace the caller may create in (agentry#943).
+	// ForkAgentWithBody Fork a public agent into a namespace the caller may create in.
 	//
 	// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
 	//
@@ -4775,7 +4775,7 @@ type ClientInterface interface {
 	// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
 	ForkAgentWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ForkAgent Fork a public agent into a namespace the caller may create in (agentry#943).
+	// ForkAgent Fork a public agent into a namespace the caller may create in.
 	//
 	// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
 	//
@@ -4827,28 +4827,28 @@ type ClientInterface interface {
 	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
 	SetAgentUserGrant(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetAgentReadme The agent README rendered to sanitized HTML (§10.3, D-11).
+	// GetAgentReadme The agent README rendered to sanitized HTML.
 	//
 	// Markdown is rendered server-side through a strict allowlist: no raw HTML, no user styles, no SVG, external links rewritten, and invisible or bidi Unicode replaced with visible placeholders.
 	//
 	// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
 	GetAgentReadme(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RestoreAgent Restore a retired agent (the namespace's administrators, agentry#942).
+	// RestoreAgent Restore a retired agent (the namespace's administrators).
 	//
-	// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin` (agentry#993). Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+	// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin`. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 	//
 	// Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
 	RestoreAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RetireAgent Retire an agent (the namespace's administrators, agentry#942).
+	// RetireAgent Retire an agent (the namespace's administrators).
 	//
-	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin` (agentry#993). A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin`. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
 	//
 	// Corresponds with POST /agents/{ns}/{name}/retire (the `RetireAgent` operationId).
 	RetireAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetAgentStats Star count and install counts for an agent (§9.2).
+	// GetAgentStats Star count and install counts for an agent.
 	//
 	// Corresponds with GET /agents/{ns}/{name}/stats (the `GetAgentStats` operationId).
 	GetAgentStats(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4858,9 +4858,9 @@ type ClientInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions (the `ListVersions` operationId).
 	ListVersions(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
+	// SubmitVersionWithBody Submit a version for publication.
 	//
-	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes any type of body and a specified content type.
@@ -4868,9 +4868,9 @@ type ClientInterface interface {
 	// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
 	SubmitVersionWithBody(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SubmitVersion Submit a version for publication (§7 state machine entry).
+	// SubmitVersion Submit a version for publication.
 	//
-	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes a body of the `application/json` content type.
@@ -4883,73 +4883,73 @@ type ClientInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version} (the `GetVersionInfo` operationId).
 	GetVersionInfo(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetVersionAttestation The signed DSSE attestation (§8.8), verbatim.
+	// GetVersionAttestation The signed DSSE attestation, verbatim.
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/attestation (the `GetVersionAttestation` operationId).
 	GetVersionAttestation(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DownloadVersion Download the release archive (§9.4; counts an install).
+	// DownloadVersion Download the release archive (counts an install).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
 	DownloadVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// StreamVersionEvents Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+	// StreamVersionEvents Server-sent events for a version's pipeline progress.
 	//
 	// Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/events (the `StreamVersionEvents` operationId).
 	StreamVersionEvents(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetVersionFile Read one file from the version's release archive (§10.2).
+	// GetVersionFile Read one file from the version's release archive.
 	//
-	// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
+	// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes. Same access gate as listVersionFiles.
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/file (the `GetVersionFile` operationId).
 	GetVersionFile(ctx context.Context, ns Namespace, name AgentName, version VersionString, params *GetVersionFileParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListVersionFiles List the files inside the version's release archive (§10.2).
+	// ListVersionFiles List the files inside the version's release archive.
 	//
-	// The same inventory a reviewer sees (§10.1), opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
+	// The same inventory a reviewer sees, opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/files (the `ListVersionFiles` operationId).
 	ListVersionFiles(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetVersionManifest The validated manifest (canonical JSON, §4.2).
+	// GetVersionManifest The validated manifest (canonical JSON).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
 	GetVersionManifest(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetVersionReport The scan report for a version (findings, ruleset, verdict, §8).
+	// GetVersionReport The scan report for a version (findings, ruleset, verdict).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
 	GetVersionReport(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// YankVersionWithBody Yank a published version (§5.5 semantics; publish permission).
+	// YankVersionWithBody Yank a published version (publish permission).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
 	YankVersionWithBody(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// YankVersion Yank a published version (§5.5 semantics; publish permission).
+	// YankVersion Yank a published version (publish permission).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
 	YankVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// TotpChallengeWithBody Complete a pending 2FA challenge and open the session (§12.1).
+	// TotpChallengeWithBody Complete a pending 2FA challenge and open the session.
 	//
-	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
+	// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
 	TotpChallengeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// TotpChallenge Complete a pending 2FA challenge and open the session (§12.1).
+	// TotpChallenge Complete a pending 2FA challenge and open the session.
 	//
-	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
+	// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4958,14 +4958,14 @@ type ClientInterface interface {
 
 	// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
 	TotpSetup(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// TotpVerifyWithBody Confirm TOTP enrollment with a current code.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4974,7 +4974,7 @@ type ClientInterface interface {
 
 	// TotpVerify Confirm TOTP enrollment with a current code.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4983,7 +4983,7 @@ type ClientInterface interface {
 
 	// ExchangeDesktopCodeWithBody Exchange a desktop sign-in code for the PAT it granted.
 	//
-	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4992,7 +4992,7 @@ type ClientInterface interface {
 
 	// ExchangeDesktopCode Exchange a desktop sign-in code for the PAT it granted.
 	//
-	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5001,7 +5001,7 @@ type ClientInterface interface {
 
 	// LoginWithBody Password (+TOTP when enabled) login; sets the session cookie.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5010,7 +5010,7 @@ type ClientInterface interface {
 
 	// Login Password (+TOTP when enabled) login; sets the session cookie.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5019,37 +5019,37 @@ type ClientInterface interface {
 
 	// Logout Revoke the current session.
 	//
-	// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO, §12.4); the registry session is revoked either way.
+	// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
 	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SocialOidcCallback Social login redirect URI: establish a session (§12.1).
+	// SocialOidcCallback Social login redirect URI: establish a session.
 	//
-	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
+	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 	//
 	// Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
 	SocialOidcCallback(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SocialOidcStart Begin social login with a configured provider (§12.1).
+	// SocialOidcStart Begin social login with a configured provider.
 	//
-	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
+	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso.
 	//
 	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 	SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RegisterWithBody Create an individual account (email+password, §12.1).
+	// RegisterWithBody Create an individual account (email+password).
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /auth/register (the `Register` operationId).
 	RegisterWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// Register Create an individual account (email+password, §12.1).
+	// Register Create an individual account (email+password).
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5058,7 +5058,7 @@ type ClientInterface interface {
 
 	// VerifyEmailWithBody Confirm an email address with the mailed token.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5067,21 +5067,21 @@ type ClientInterface interface {
 
 	// VerifyEmail Confirm an email address with the mailed token.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
 	VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetFindingVerdictWithBody Confirm or dismiss a finding (§8.5 dismissals).
+	// SetFindingVerdictWithBody Confirm or dismiss a finding.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
 	SetFindingVerdictWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetFindingVerdict Confirm or dismiss a finding (§8.5 dismissals).
+	// SetFindingVerdict Confirm or dismiss a finding.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5134,7 +5134,7 @@ type ClientInterface interface {
 	// Corresponds with POST /knowledge/keys/wrap (the `WrapKnowledgeKey` operationId).
 	WrapKnowledgeKey(ctx context.Context, body WrapKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListKnowledgePacks The caller's knowledge packs, by name (agentry#593).
+	// ListKnowledgePacks The caller's knowledge packs, by name.
 	//
 	// Corresponds with GET /knowledge/packs (the `ListKnowledgePacks` operationId).
 	ListKnowledgePacks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5193,37 +5193,37 @@ type ClientInterface interface {
 	// Corresponds with GET /knowledge/usage (the `GetKnowledgeUsage` operationId).
 	GetKnowledgeUsage(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetMcpServerScan The registry's last vulnerability check of one MCP server package version (agentry#177).
+	// GetMcpServerScan The registry's last vulnerability check of one MCP server package version.
 	//
 	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. Each advisory carries its own `severity` and the gate's rating of it, `gateSeverity`. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
 	//
 	// Corresponds with GET /mcp-servers/scan (the `GetMcpServerScan` operationId).
 	GetMcpServerScan(ctx context.Context, params *GetMcpServerScanParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetMeta Server version and self-host feature flags (§9.2).
+	// GetMeta Server version and self-host feature flags.
 	//
 	// Corresponds with GET /meta (the `GetMeta` operationId).
 	GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CheckDraftWithBody AI Review of a finished draft before it is submitted (agentry#708).
+	// CheckDraftWithBody AI Review of a finished draft before it is submitted.
 	//
-	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
 	CheckDraftWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CheckDraft AI Review of a finished draft before it is submitted (agentry#708).
+	// CheckDraft AI Review of a finished draft before it is submitted.
 	//
-	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
 	CheckDraft(ctx context.Context, body CheckDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ScanModelInputWithBody AI Review of text a model is about to read (agentry#608).
+	// ScanModelInputWithBody AI Review of text a model is about to read.
 	//
 	// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
@@ -5232,7 +5232,7 @@ type ClientInterface interface {
 	// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
 	ScanModelInputWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ScanModelInput AI Review of text a model is about to read (agentry#608).
+	// ScanModelInput AI Review of text a model is about to read.
 	//
 	// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
@@ -5241,7 +5241,7 @@ type ClientInterface interface {
 	// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
 	ScanModelInput(ctx context.Context, body ScanModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SearchModelInputWithBody Web search through the deployment's provider, every result scanned (agentry#608).
+	// SearchModelInputWithBody Web search through the deployment's provider, every result scanned.
 	//
 	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 	//
@@ -5250,7 +5250,7 @@ type ClientInterface interface {
 	// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
 	SearchModelInputWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SearchModelInput Web search through the deployment's provider, every result scanned (agentry#608).
+	// SearchModelInput Web search through the deployment's provider, every result scanned.
 	//
 	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 	//
@@ -5292,26 +5292,26 @@ type ClientInterface interface {
 	// Corresponds with PATCH /orgs/{org} (the `UpdateOrg` operationId).
 	UpdateOrg(ctx context.Context, org OrgHandle, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListOrgAudit Org audit events, newest first (admin+; cursor paged, §12.6).
+	// ListOrgAudit Org audit events, newest first (admin+; cursor paged).
 	//
 	// Corresponds with GET /orgs/{org}/audit (the `ListOrgAudit` operationId).
 	ListOrgAudit(ctx context.Context, org OrgHandle, params *ListOrgAuditParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateAuditExportWithBody Start an async NDJSON audit export (admin+, §12.6).
+	// CreateAuditExportWithBody Start an async NDJSON audit export (admin+).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
 	CreateAuditExportWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateAuditExport Start an async NDJSON audit export (admin+, §12.6).
+	// CreateAuditExport Start an async NDJSON audit export (admin+).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
 	CreateAuditExport(ctx context.Context, org OrgHandle, body CreateAuditExportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetAuditExport Poll an audit export's status and download reference (admin+, §12.6).
+	// GetAuditExport Poll an audit export's status and download reference (admin+).
 	//
 	// Corresponds with GET /orgs/{org}/audit/exports/{id} (the `GetAuditExport` operationId).
 	GetAuditExport(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5330,33 +5330,33 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
 	DecommissionOrg(ctx context.Context, org OrgHandle, body DecommissionOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListDomainClaims List domain claims (admin+, §12.4).
+	// ListDomainClaims List domain claims (admin+).
 	//
 	// Corresponds with GET /orgs/{org}/domain-claims (the `ListDomainClaims` operationId).
 	ListDomainClaims(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateDomainClaimWithBody Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+	// CreateDomainClaimWithBody Start a domain claim; returns the DNS TXT challenge (admin+).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
 	CreateDomainClaimWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateDomainClaim Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+	// CreateDomainClaim Start a domain claim; returns the DNS TXT challenge (admin+).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
 	CreateDomainClaim(ctx context.Context, org OrgHandle, body CreateDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// VerifyDomainClaimWithBody Check the DNS TXT record and mark verified (admin+, §12.4).
+	// VerifyDomainClaimWithBody Check the DNS TXT record and mark verified (admin+).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
 	VerifyDomainClaimWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// VerifyDomainClaim Check the DNS TXT record and mark verified (admin+, §12.4).
+	// VerifyDomainClaim Check the DNS TXT record and mark verified (admin+).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5509,7 +5509,7 @@ type ClientInterface interface {
 
 	// GetOrgLogo The organization's logo, as this registry re-encoded it.
 	//
-	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
+	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served. The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
 	//
 	// Corresponds with GET /orgs/{org}/logo (the `GetOrgLogo` operationId).
 	GetOrgLogo(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5533,14 +5533,14 @@ type ClientInterface interface {
 	// Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 	RemoveOrgMember(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgMemberWithBody Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
+	// SetOrgMemberWithBody Change a member's role (admin). This route does not add members: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithBody(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgMember Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
+	// SetOrgMember Change a member's role (admin). This route does not add members: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5571,14 +5571,14 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/policy (the `GetOrgPolicy` operationId).
 	GetOrgPolicy(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgPolicyWithBody Set the org policy overlay (admin; tighten-only, §8.6).
+	// SetOrgPolicyWithBody Set the org policy overlay (admin; tighten-only).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicyWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetOrgPolicy Set the org policy overlay (admin; tighten-only, §8.6).
+	// SetOrgPolicy Set the org policy overlay (admin; tighten-only).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5590,12 +5590,12 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
 	ReinstateOrg(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListScimTokens List active SCIM provisioning tokens (admin, §12.5).
+	// ListScimTokens List active SCIM provisioning tokens (admin).
 	//
 	// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
 	ListScimTokens(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateScimTokenWithBody Mint a SCIM bearer token (admin, §12.5).
+	// CreateScimTokenWithBody Mint a SCIM bearer token (admin).
 	//
 	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 	//
@@ -5604,7 +5604,7 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimTokenWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateScimToken Mint a SCIM bearer token (admin, §12.5).
+	// CreateScimToken Mint a SCIM bearer token (admin).
 	//
 	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 	//
@@ -5613,22 +5613,22 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimToken(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RevokeScimToken Revoke a SCIM token (admin, §12.5).
+	// RevokeScimToken Revoke a SCIM token (admin).
 	//
 	// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
 	RevokeScimToken(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListSsoConnections List the org's SSO connections (admin, §12.4).
+	// ListSsoConnections List the org's SSO connections (admin).
 	//
 	// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
 	ListSsoConnections(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteSsoConnection Delete a connection (admin, §12.4).
+	// DeleteSsoConnection Delete a connection (admin).
 	//
 	// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
 	DeleteSsoConnection(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin, §12.4).
+	// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin).
 	//
 	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 	//
@@ -5637,7 +5637,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutSsoConnection Create or update a SAML/OIDC connection (admin, §12.4).
+	// PutSsoConnection Create or update a SAML/OIDC connection (admin).
 	//
 	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 	//
@@ -5646,47 +5646,47 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// TestSsoConnection Probe a stored connection without signing in (admin, §12.4; agentry#50).
+	// TestSsoConnection Probe a stored connection without signing in (admin).
 	//
 	// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
 	//
 	// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
 	TestSsoConnection(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// OidcCallback OIDC redirect URI: exchange the code and establish a session (§12.4).
+	// OidcCallback OIDC redirect URI: exchange the code and establish a session.
 	//
 	// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 	//
 	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
 	OidcCallback(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+	// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP).
 	//
 	// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
 	//
 	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
 	OidcStart(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SamlAcs SAML Assertion Consumer Service: consume a signed assertion (§12.4).
+	// SamlAcs SAML Assertion Consumer Service: consume a signed assertion.
 	//
 	// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 	//
 	// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
 	SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetSamlMetadata SP SAML metadata for this org's connection (§12.4).
+	// GetSamlMetadata SP SAML metadata for this org's connection.
 	//
 	// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
 	GetSamlMetadata(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SamlSloRedirect SAML Single Logout endpoint, HTTP-Redirect binding (§12.4).
+	// SamlSloRedirect SAML Single Logout endpoint, HTTP-Redirect binding.
 	//
 	// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
 	//
 	// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
 	SamlSloRedirect(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SamlSloPost SAML Single Logout endpoint, HTTP-POST binding (§12.4).
+	// SamlSloPost SAML Single Logout endpoint, HTTP-POST binding.
 	//
 	// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
 	SamlSloPost(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5744,55 +5744,55 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 	AddTeamMember(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListWebhooks List webhook endpoints (admin+, §9.3).
+	// ListWebhooks List webhook endpoints (admin+).
 	//
 	// Corresponds with GET /orgs/{org}/webhooks (the `ListWebhooks` operationId).
 	ListWebhooks(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateWebhookWithBody Create a webhook endpoint (admin+, §9.3).
+	// CreateWebhookWithBody Create a webhook endpoint (admin+).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
 	CreateWebhookWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateWebhook Create a webhook endpoint (admin+, §9.3).
+	// CreateWebhook Create a webhook endpoint (admin+).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
 	CreateWebhook(ctx context.Context, org OrgHandle, body CreateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteWebhook Delete a webhook endpoint (admin+, §9.3).
+	// DeleteWebhook Delete a webhook endpoint (admin+).
 	//
 	// Corresponds with DELETE /orgs/{org}/webhooks/{id} (the `DeleteWebhook` operationId).
 	DeleteWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetWebhook Get a webhook endpoint (admin+, §9.3).
+	// GetWebhook Get a webhook endpoint (admin+).
 	//
 	// Corresponds with GET /orgs/{org}/webhooks/{id} (the `GetWebhook` operationId).
 	GetWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateWebhookWithBody Update a webhook endpoint (admin+, §9.3).
+	// UpdateWebhookWithBody Update a webhook endpoint (admin+).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
 	UpdateWebhookWithBody(ctx context.Context, org OrgHandle, id WebhookID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateWebhook Update a webhook endpoint (admin+, §9.3).
+	// UpdateWebhook Update a webhook endpoint (admin+).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
 	UpdateWebhook(ctx context.Context, org OrgHandle, id WebhookID, body UpdateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListWebhookDeliveries Recent delivery attempts for an endpoint (admin+, §9.3).
+	// ListWebhookDeliveries Recent delivery attempts for an endpoint (admin+).
 	//
 	// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
 	ListWebhookDeliveries(ctx context.Context, org OrgHandle, id WebhookID, params *ListWebhookDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PingWebhook Send a test delivery to an endpoint (admin+, §9.2).
+	// PingWebhook Send a test delivery to an endpoint (admin+).
 	//
 	// Enqueues a signed `ping` delivery through the ordinary webhook machinery (same signature header, same SSRF guard, same retry schedule), so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
 	//
@@ -5818,23 +5818,23 @@ type ClientInterface interface {
 	// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
 	TriageAbuseReport(ctx context.Context, id openapi_types.UUID, body TriageAbuseReportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff, §7).
+	// PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
 	PlatformAgentActionWithBody(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff, §7).
+	// PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
 	PlatformAgentAction(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, body PlatformAgentActionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListPlatformAudit Audit events across every org (platform staff, §12.6).
+	// ListPlatformAudit Audit events across every org (platform staff).
 	//
-	// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited (§12.6), one event per call.
+	// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited, one event per call.
 	//
 	// Corresponds with GET /platform/audit (the `ListPlatformAudit` operationId).
 	ListPlatformAudit(ctx context.Context, params *ListPlatformAuditParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5846,42 +5846,42 @@ type ClientInterface interface {
 	// Corresponds with GET /platform/knowledge (the `ListKnowledgePackSizes` operationId).
 	ListKnowledgePackSizes(ctx context.Context, params *ListKnowledgePackSizesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetPlatformPolicy The read-only platform baseline policy (§8.6).
+	// GetPlatformPolicy The read-only platform baseline policy.
 	//
 	// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
 	GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListRedTeamReports Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+	// ListRedTeamReports Reports of the scheduled red-team job against the S3/S4 gate (platform staff).
 	//
 	// Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
 	//
 	// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
 	ListRedTeamReports(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListRulesetReleases Ruleset releases, newest first (platform staff, §10.1 console).
+	// ListRulesetReleases Ruleset releases, newest first (platform staff).
 	//
 	// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
 	ListRulesetReleases(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateRulesetReleaseWithBody Register a ruleset release (platform staff, §9.2).
+	// CreateRulesetReleaseWithBody Register a ruleset release (platform staff).
 	//
-	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle. Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
 	CreateRulesetReleaseWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateRulesetRelease Register a ruleset release (platform staff, §9.2).
+	// CreateRulesetRelease Register a ruleset release (platform staff).
 	//
-	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle. Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
 	CreateRulesetRelease(ctx context.Context, body CreateRulesetReleaseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ResolveRef Resolve ns/name@range to a concrete version (§9.4 step 1).
+	// ResolveRef Resolve ns/name@range to a concrete version.
 	//
 	// Corresponds with GET /resolve (the `ResolveRef` operationId).
 	ResolveRef(ctx context.Context, params *ResolveRefParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5891,7 +5891,7 @@ type ClientInterface interface {
 	// Corresponds with GET /review-items/{id} (the `GetReviewItem` operationId).
 	GetReviewItem(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DecideReviewItemWithBody Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+	// DecideReviewItemWithBody Approve or reject a version under review (not its author, unless platform staff).
 	//
 	// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 	//
@@ -5900,7 +5900,7 @@ type ClientInterface interface {
 	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
 	DecideReviewItemWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DecideReviewItem Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+	// DecideReviewItem Approve or reject a version under review (not its author, unless platform staff).
 	//
 	// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 	//
@@ -5921,14 +5921,14 @@ type ClientInterface interface {
 
 	// ListReviewQueue Pending review items (platform staff, or an org's security_reviewer for its queue).
 	//
-	// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's (agentry#912); staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
+	// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's; staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
 	//
 	// Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 	ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetLatestRulesetAttestation DSSE attestation over the bundle `…/latest/bundle` serves.
 	//
-	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). The worker signs it at start and stores it, so every replica serves the same envelope (agentry#479). 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
+	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised. The worker signs it at start and stores it, so every replica serves the same envelope. 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
 	//
 	// Corresponds with GET /ruleset-releases/latest/attestation (the `GetLatestRulesetAttestation` operationId).
 	GetLatestRulesetAttestation(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5939,17 +5939,17 @@ type ClientInterface interface {
 	//
 	// `X-Agentry-Bundle-Semver`: the ruleset release semver; `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag`: the same digest.
 	//
-	// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+	// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet; this endpoint pins by digest only.
 	//
 	// Corresponds with GET /ruleset-releases/latest/bundle (the `GetLatestRulesetBundle` operationId).
 	GetLatestRulesetBundle(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SearchAgents Full-text search over public agents with facets (§10.4).
+	// SearchAgents Full-text search over public agents with facets.
 	//
 	// Corresponds with GET /search (the `SearchAgents` operationId).
 	SearchAgents(ctx context.Context, params *SearchAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListAgentsByTag Public agents tagged with {tag} (§9.2).
+	// ListAgentsByTag Public agents tagged with {tag}.
 	//
 	// Matches the tag list of each agent's latest published manifest (`manifest.tags`, V8). Blocked agents never appear.
 	//
@@ -5975,7 +5975,7 @@ type ClientInterface interface {
 	// Corresponds with PATCH /user (the `UpdateCurrentUser` operationId).
 	UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListUserActivity The caller's own activity — the audit events they performed (agentry#192).
+	// ListUserActivity The caller's own activity — the audit events they performed.
 	//
 	// Sign-ins, tokens and SSH keys created or revoked, profile and notification changes, publishes and reviews, newest first, with the address and user agent each was performed from. Keyset-paged like the agent activity feed.
 	//
@@ -5989,28 +5989,28 @@ type ClientInterface interface {
 	// Corresponds with POST /user/clear-data (the `ClearCurrentUserData` operationId).
 	ClearCurrentUserData(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
+	// DeleteCurrentUser Erase the caller's account (GDPR flow).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListUserDependencyAlerts Open dependency alerts on published versions the caller submitted (agentry#177).
+	// ListUserDependencyAlerts Open dependency alerts on published versions the caller submitted.
 	//
 	// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. A front end shows these; the site renders them as the banner after sign-in and on the dashboard.
 	//
 	// Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
 	ListUserDependencyAlerts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+	// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account.
 	//
 	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
 	//
 	// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
 	GetUserDirectory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service (agentry#164).
+	// DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service.
 	//
 	// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
 	//
@@ -6027,9 +6027,9 @@ type ClientInterface interface {
 	// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
 	RequestDomainOrgAccess(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SendEmailVerification Send the caller a new activation link (agentry#861).
+	// SendEmailVerification Send the caller a new activation link.
 	//
-	// Mails a new link that confirms the account's address and so activates it (plan unactivated-accounts.md). An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
+	// Mails a new link that confirms the account's address and so activates it. An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
 	//
 	// Corresponds with POST /user/email-verification (the `SendEmailVerification` operationId).
 	SendEmailVerification(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6066,62 +6066,62 @@ type ClientInterface interface {
 	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
 	PutAccountInstall(ctx context.Context, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetUserNotificationSettings How the registry's alerts reach the caller (agentry#190).
+	// GetUserNotificationSettings How the registry's alerts reach the caller.
 	//
 	// Email per kind of notification, and whether the dependency-alert banner shows in a front end (the site reads it). An account that never changed anything reads back with everything on.
 	//
 	// Corresponds with GET /user/notifications (the `GetUserNotificationSettings` operationId).
 	GetUserNotificationSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateUserNotificationSettingsWithBody Replace the caller's notification settings (agentry#190).
+	// UpdateUserNotificationSettingsWithBody Replace the caller's notification settings.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateUserNotificationSettings Replace the caller's notification settings (agentry#190).
+	// UpdateUserNotificationSettings Replace the caller's notification settings.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettings(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetUserReportSettings The report design the caller's PDF reports take (agentry#989, agentry#1024).
+	// GetUserReportSettings The report design the caller's PDF reports take.
 	//
-	// A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
+	// A profile setting: the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain.
 	//
 	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
 	GetUserReportSettings(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989, agentry#1024).
+	// UpdateUserReportSettingsWithBody Replace the caller's report settings.
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
 	UpdateUserReportSettingsWithBody(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateUserReportSettings Replace the caller's report settings (agentry#989, agentry#1024).
+	// UpdateUserReportSettings Replace the caller's report settings.
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
 	UpdateUserReportSettings(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteUserReportLogo Remove the logo from the caller's report design (agentry#1025).
+	// DeleteUserReportLogo Remove the logo from the caller's report design.
 	//
 	// The design stays. Removing a logo that is not there is not an error.
 	//
 	// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
 	DeleteUserReportLogo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutUserReportLogoWithBody Set the logo of the caller's report design (agentry#1025).
+	// PutUserReportLogoWithBody Set the logo of the caller's report design.
 	//
-	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan report-designs.md D9). The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6135,28 +6135,28 @@ type ClientInterface interface {
 	// Corresponds with DELETE /user/sessions (the `RevokeOtherUserSessions` operationId).
 	RevokeOtherUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListUserSessions List the caller's active browser sessions (§12.1).
+	// ListUserSessions List the caller's active browser sessions.
 	//
 	// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error). A PAT is not a way to enumerate someone's browser sessions.
 	//
 	// Corresponds with GET /user/sessions (the `ListUserSessions` operationId).
 	ListUserSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RevokeUserSession Revoke one of the caller's own sessions (§12.1).
+	// RevokeUserSession Revoke one of the caller's own sessions.
 	//
 	// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else. The two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 	//
 	// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
 	RevokeUserSession(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListSshKeys List the caller's SSH public keys for the git transport (§6.1 Q7).
+	// ListSshKeys List the caller's SSH public keys for the git transport.
 	//
 	// Corresponds with GET /user/ssh-keys (the `ListSshKeys` operationId).
 	ListSshKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AddSshKeyWithBody Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 	//
-	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys; a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6165,7 +6165,7 @@ type ClientInterface interface {
 
 	// AddSshKey Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 	//
-	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys; a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6177,12 +6177,12 @@ type ClientInterface interface {
 	// Corresponds with DELETE /user/ssh-keys/{keyId} (the `RemoveSshKey` operationId).
 	RemoveSshKey(ctx context.Context, keyId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UnstarAgent Remove a star (idempotent, §9.2).
+	// UnstarAgent Remove a star (idempotent).
 	//
 	// Corresponds with DELETE /user/stars/{ns}/{name} (the `UnstarAgent` operationId).
 	UnstarAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// StarAgent Star an agent (idempotent, §9.2).
+	// StarAgent Star an agent (idempotent).
 	//
 	// Corresponds with PUT /user/stars/{ns}/{name} (the `StarAgent` operationId).
 	StarAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6192,14 +6192,14 @@ type ClientInterface interface {
 	// Corresponds with GET /user/tokens (the `ListTokens` operationId).
 	ListTokens(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateTokenWithBody Mint a PAT. The secret is returned exactly once (D-22).
+	// CreateTokenWithBody Mint a PAT. The secret is returned exactly once.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /user/tokens (the `CreateToken` operationId).
 	CreateTokenWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateToken Mint a PAT. The secret is returned exactly once (D-22).
+	// CreateToken Mint a PAT. The secret is returned exactly once.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6208,7 +6208,7 @@ type ClientInterface interface {
 
 	// CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6217,28 +6217,28 @@ type ClientInterface interface {
 
 	// CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
 	CreateDesktopGrant(ctx context.Context, body CreateDesktopGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RevokeToken Revoke a PAT immediately (§12.3).
+	// RevokeToken Revoke a PAT immediately.
 	//
 	// Corresponds with DELETE /user/tokens/{tokenId} (the `RevokeToken` operationId).
 	RevokeToken(ctx context.Context, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ClearTrustedDevices Clear every remembered browser of the caller's account (agentry#672).
+	// ClearTrustedDevices Clear every remembered browser of the caller's account.
 	//
 	// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
 	//
 	// Corresponds with DELETE /user/trusted-devices (the `ClearTrustedDevices` operationId).
 	ClearTrustedDevices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CountTrustedDevices How many browsers skip the caller's second factor (agentry#672).
+	// CountTrustedDevices How many browsers skip the caller's second factor.
 	//
-	// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all (DEV-163). A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
+	// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all. A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
 	//
 	// Corresponds with GET /user/trusted-devices (the `CountTrustedDevices` operationId).
 	CountTrustedDevices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6307,9 +6307,9 @@ type ClientInterface interface {
 	UpdateVoiceSettings(ctx context.Context, body UpdateVoiceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-// ListAdvisories Published advisories — for one agent, or the global feed (§8.7).
+// ListAdvisories Published advisories — for one agent, or the global feed.
 //
-// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). The one exception is a holder of one of its releases (agentry#949): a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here. The one exception is a holder of one of its releases: a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header. Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 //
 // Corresponds with GET /advisories (the `ListAdvisories` operationId).
 func (c *Client) ListAdvisories(ctx context.Context, params *ListAdvisoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6326,7 +6326,7 @@ func (c *Client) ListAdvisories(ctx context.Context, params *ListAdvisoriesParam
 
 // GetAdvisory One published advisory (permalink); public agents only.
 //
-// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting` (agentry#949).
+// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting`.
 //
 // Corresponds with GET /advisories/{advisoryId} (the `GetAdvisory` operationId).
 func (c *Client) GetAdvisory(ctx context.Context, advisoryId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6343,7 +6343,7 @@ func (c *Client) GetAdvisory(ctx context.Context, advisoryId openapi_types.UUID,
 
 // ListAgents List agents in a namespace (public ones for everyone).
 //
-// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state`, `forks` (agentry#943) and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
+// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page narrows and orders the list with `q`, `state`, `forks` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
 //
 // Corresponds with GET /agents (the `ListAgents` operationId).
 func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6358,7 +6358,7 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 	return c.Client.Do(req)
 }
 
-// CreateAgentWithBody Create an agent and its hosted git repository (§9.2).
+// CreateAgentWithBody Create an agent and its hosted git repository.
 //
 // A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 //
@@ -6377,7 +6377,7 @@ func (c *Client) CreateAgentWithBody(ctx context.Context, contentType string, bo
 	return c.Client.Do(req)
 }
 
-// CreateAgent Create an agent and its hosted git repository (§9.2).
+// CreateAgent Create an agent and its hosted git repository.
 //
 // A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 //
@@ -6396,9 +6396,9 @@ func (c *Client) CreateAgent(ctx context.Context, body CreateAgentJSONRequestBod
 	return c.Client.Do(req)
 }
 
-// DeleteAgent Delete an agent (the namespace's administrators, §9.2, agentry#942).
+// DeleteAgent Delete an agent (the namespace's administrators).
 //
-// A token needs `agent:manage` or `org:admin` (agentry#993). An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
+// A token needs `agent:manage` or `org:admin`. An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone: every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — version rows are kept forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 //
 // Corresponds with DELETE /agents/{ns}/{name} (the `DeleteAgent` operationId).
 func (c *Client) DeleteAgent(ctx context.Context, ns Namespace, name AgentName, params *DeleteAgentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6415,7 +6415,7 @@ func (c *Client) DeleteAgent(ctx context.Context, ns Namespace, name AgentName, 
 
 // GetAgent Agent metadata (public agents readable by anyone).
 //
-// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
+// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}`.
 //
 // Corresponds with GET /agents/{ns}/{name} (the `GetAgent` operationId).
 func (c *Client) GetAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6464,7 +6464,7 @@ func (c *Client) UpdateAgent(ctx context.Context, ns Namespace, name AgentName, 
 	return c.Client.Do(req)
 }
 
-// ReportAbuseWithBody Report malicious or abusive content (authed, rate-limited §8.7).
+// ReportAbuseWithBody Report malicious or abusive content (authed, rate-limited).
 //
 // Takes any type of body and a specified content type.
 //
@@ -6481,7 +6481,7 @@ func (c *Client) ReportAbuseWithBody(ctx context.Context, ns Namespace, name Age
 	return c.Client.Do(req)
 }
 
-// ReportAbuse Report malicious or abusive content (authed, rate-limited §8.7).
+// ReportAbuse Report malicious or abusive content (authed, rate-limited).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -6498,7 +6498,7 @@ func (c *Client) ReportAbuse(ctx context.Context, ns Namespace, name AgentName, 
 	return c.Client.Do(req)
 }
 
-// ListAgentActivity Recent activity for an agent (§9.2).
+// ListAgentActivity Recent activity for an agent.
 //
 // Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset: publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
 //
@@ -6515,7 +6515,7 @@ func (c *Client) ListAgentActivity(ctx context.Context, ns Namespace, name Agent
 	return c.Client.Do(req)
 }
 
-// ForkAgentWithBody Fork a public agent into a namespace the caller may create in (agentry#943).
+// ForkAgentWithBody Fork a public agent into a namespace the caller may create in.
 //
 // Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
 //
@@ -6534,7 +6534,7 @@ func (c *Client) ForkAgentWithBody(ctx context.Context, ns Namespace, name Agent
 	return c.Client.Do(req)
 }
 
-// ForkAgent Fork a public agent into a namespace the caller may create in (agentry#943).
+// ForkAgent Fork a public agent into a namespace the caller may create in.
 //
 // Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
 //
@@ -6666,7 +6666,7 @@ func (c *Client) SetAgentUserGrant(ctx context.Context, ns Namespace, name Agent
 	return c.Client.Do(req)
 }
 
-// GetAgentReadme The agent README rendered to sanitized HTML (§10.3, D-11).
+// GetAgentReadme The agent README rendered to sanitized HTML.
 //
 // Markdown is rendered server-side through a strict allowlist: no raw HTML, no user styles, no SVG, external links rewritten, and invisible or bidi Unicode replaced with visible placeholders.
 //
@@ -6683,9 +6683,9 @@ func (c *Client) GetAgentReadme(ctx context.Context, ns Namespace, name AgentNam
 	return c.Client.Do(req)
 }
 
-// RestoreAgent Restore a retired agent (the namespace's administrators, agentry#942).
+// RestoreAgent Restore a retired agent (the namespace's administrators).
 //
-// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin` (agentry#993). Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin`. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 //
 // Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
 func (c *Client) RestoreAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6700,9 +6700,9 @@ func (c *Client) RestoreAgent(ctx context.Context, ns Namespace, name AgentName,
 	return c.Client.Do(req)
 }
 
-// RetireAgent Retire an agent (the namespace's administrators, agentry#942).
+// RetireAgent Retire an agent (the namespace's administrators).
 //
-// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin` (agentry#993). A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin`. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
 //
 // Corresponds with POST /agents/{ns}/{name}/retire (the `RetireAgent` operationId).
 func (c *Client) RetireAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6717,7 +6717,7 @@ func (c *Client) RetireAgent(ctx context.Context, ns Namespace, name AgentName, 
 	return c.Client.Do(req)
 }
 
-// GetAgentStats Star count and install counts for an agent (§9.2).
+// GetAgentStats Star count and install counts for an agent.
 //
 // Corresponds with GET /agents/{ns}/{name}/stats (the `GetAgentStats` operationId).
 func (c *Client) GetAgentStats(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6747,9 +6747,9 @@ func (c *Client) ListVersions(ctx context.Context, ns Namespace, name AgentName,
 	return c.Client.Do(req)
 }
 
-// SubmitVersionWithBody Submit a version for publication (§7 state machine entry).
+// SubmitVersionWithBody Submit a version for publication.
 //
-// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 // A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes any type of body and a specified content type.
@@ -6767,9 +6767,9 @@ func (c *Client) SubmitVersionWithBody(ctx context.Context, ns Namespace, name A
 	return c.Client.Do(req)
 }
 
-// SubmitVersion Submit a version for publication (§7 state machine entry).
+// SubmitVersion Submit a version for publication.
 //
-// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 // A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes a body of the `application/json` content type.
@@ -6802,7 +6802,7 @@ func (c *Client) GetVersionInfo(ctx context.Context, ns Namespace, name AgentNam
 	return c.Client.Do(req)
 }
 
-// GetVersionAttestation The signed DSSE attestation (§8.8), verbatim.
+// GetVersionAttestation The signed DSSE attestation, verbatim.
 //
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/attestation (the `GetVersionAttestation` operationId).
 func (c *Client) GetVersionAttestation(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6817,7 +6817,7 @@ func (c *Client) GetVersionAttestation(ctx context.Context, ns Namespace, name A
 	return c.Client.Do(req)
 }
 
-// DownloadVersion Download the release archive (§9.4; counts an install).
+// DownloadVersion Download the release archive (counts an install).
 //
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
 func (c *Client) DownloadVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6832,7 +6832,7 @@ func (c *Client) DownloadVersion(ctx context.Context, ns Namespace, name AgentNa
 	return c.Client.Do(req)
 }
 
-// StreamVersionEvents Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+// StreamVersionEvents Server-sent events for a version's pipeline progress.
 //
 // Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
 //
@@ -6849,9 +6849,9 @@ func (c *Client) StreamVersionEvents(ctx context.Context, ns Namespace, name Age
 	return c.Client.Do(req)
 }
 
-// GetVersionFile Read one file from the version's release archive (§10.2).
+// GetVersionFile Read one file from the version's release archive.
 //
-// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
+// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes. Same access gate as listVersionFiles.
 //
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/file (the `GetVersionFile` operationId).
 func (c *Client) GetVersionFile(ctx context.Context, ns Namespace, name AgentName, version VersionString, params *GetVersionFileParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6866,9 +6866,9 @@ func (c *Client) GetVersionFile(ctx context.Context, ns Namespace, name AgentNam
 	return c.Client.Do(req)
 }
 
-// ListVersionFiles List the files inside the version's release archive (§10.2).
+// ListVersionFiles List the files inside the version's release archive.
 //
-// The same inventory a reviewer sees (§10.1), opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
+// The same inventory a reviewer sees, opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
 //
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/files (the `ListVersionFiles` operationId).
 func (c *Client) ListVersionFiles(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6883,7 +6883,7 @@ func (c *Client) ListVersionFiles(ctx context.Context, ns Namespace, name AgentN
 	return c.Client.Do(req)
 }
 
-// GetVersionManifest The validated manifest (canonical JSON, §4.2).
+// GetVersionManifest The validated manifest (canonical JSON).
 //
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
 func (c *Client) GetVersionManifest(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6898,7 +6898,7 @@ func (c *Client) GetVersionManifest(ctx context.Context, ns Namespace, name Agen
 	return c.Client.Do(req)
 }
 
-// GetVersionReport The scan report for a version (findings, ruleset, verdict, §8).
+// GetVersionReport The scan report for a version (findings, ruleset, verdict).
 //
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
 func (c *Client) GetVersionReport(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6913,7 +6913,7 @@ func (c *Client) GetVersionReport(ctx context.Context, ns Namespace, name AgentN
 	return c.Client.Do(req)
 }
 
-// YankVersionWithBody Yank a published version (§5.5 semantics; publish permission).
+// YankVersionWithBody Yank a published version (publish permission).
 //
 // Takes any type of body and a specified content type.
 //
@@ -6930,7 +6930,7 @@ func (c *Client) YankVersionWithBody(ctx context.Context, ns Namespace, name Age
 	return c.Client.Do(req)
 }
 
-// YankVersion Yank a published version (§5.5 semantics; publish permission).
+// YankVersion Yank a published version (publish permission).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -6947,9 +6947,9 @@ func (c *Client) YankVersion(ctx context.Context, ns Namespace, name AgentName, 
 	return c.Client.Do(req)
 }
 
-// TotpChallengeWithBody Complete a pending 2FA challenge and open the session (§12.1).
+// TotpChallengeWithBody Complete a pending 2FA challenge and open the session.
 //
-// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
+// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 //
 // Takes any type of body and a specified content type.
 //
@@ -6966,9 +6966,9 @@ func (c *Client) TotpChallengeWithBody(ctx context.Context, contentType string, 
 	return c.Client.Do(req)
 }
 
-// TotpChallenge Complete a pending 2FA challenge and open the session (§12.1).
+// TotpChallenge Complete a pending 2FA challenge and open the session.
 //
-// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
+// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -6987,7 +6987,7 @@ func (c *Client) TotpChallenge(ctx context.Context, body TotpChallengeJSONReques
 
 // TotpSetup Begin TOTP enrollment; returns the provisioning secret.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
 func (c *Client) TotpSetup(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7004,7 +7004,7 @@ func (c *Client) TotpSetup(ctx context.Context, reqEditors ...RequestEditorFn) (
 
 // TotpVerifyWithBody Confirm TOTP enrollment with a current code.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7023,7 +7023,7 @@ func (c *Client) TotpVerifyWithBody(ctx context.Context, contentType string, bod
 
 // TotpVerify Confirm TOTP enrollment with a current code.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7042,7 +7042,7 @@ func (c *Client) TotpVerify(ctx context.Context, body TotpVerifyJSONRequestBody,
 
 // ExchangeDesktopCodeWithBody Exchange a desktop sign-in code for the PAT it granted.
 //
-// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7061,7 +7061,7 @@ func (c *Client) ExchangeDesktopCodeWithBody(ctx context.Context, contentType st
 
 // ExchangeDesktopCode Exchange a desktop sign-in code for the PAT it granted.
 //
-// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7080,7 +7080,7 @@ func (c *Client) ExchangeDesktopCode(ctx context.Context, body ExchangeDesktopCo
 
 // LoginWithBody Password (+TOTP when enabled) login; sets the session cookie.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7099,7 +7099,7 @@ func (c *Client) LoginWithBody(ctx context.Context, contentType string, body io.
 
 // Login Password (+TOTP when enabled) login; sets the session cookie.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7118,7 +7118,7 @@ func (c *Client) Login(ctx context.Context, body LoginJSONRequestBody, reqEditor
 
 // Logout Revoke the current session.
 //
-// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO, §12.4); the registry session is revoked either way.
+// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
 //
 // Corresponds with POST /auth/logout (the `Logout` operationId).
 func (c *Client) Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7133,9 +7133,9 @@ func (c *Client) Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*ht
 	return c.Client.Do(req)
 }
 
-// SocialOidcCallback Social login redirect URI: establish a session (§12.1).
+// SocialOidcCallback Social login redirect URI: establish a session.
 //
-// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
+// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 //
 // Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
 func (c *Client) SocialOidcCallback(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7150,9 +7150,9 @@ func (c *Client) SocialOidcCallback(ctx context.Context, provider SocialOidcCall
 	return c.Client.Do(req)
 }
 
-// SocialOidcStart Begin social login with a configured provider (§12.1).
+// SocialOidcStart Begin social login with a configured provider.
 //
-// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
+// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso.
 //
 // Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7167,9 +7167,9 @@ func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartPa
 	return c.Client.Do(req)
 }
 
-// RegisterWithBody Create an individual account (email+password, §12.1).
+// RegisterWithBody Create an individual account (email+password).
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7186,9 +7186,9 @@ func (c *Client) RegisterWithBody(ctx context.Context, contentType string, body 
 	return c.Client.Do(req)
 }
 
-// Register Create an individual account (email+password, §12.1).
+// Register Create an individual account (email+password).
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7207,7 +7207,7 @@ func (c *Client) Register(ctx context.Context, body RegisterJSONRequestBody, req
 
 // VerifyEmailWithBody Confirm an email address with the mailed token.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7226,7 +7226,7 @@ func (c *Client) VerifyEmailWithBody(ctx context.Context, contentType string, bo
 
 // VerifyEmail Confirm an email address with the mailed token.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7243,7 +7243,7 @@ func (c *Client) VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBod
 	return c.Client.Do(req)
 }
 
-// SetFindingVerdictWithBody Confirm or dismiss a finding (§8.5 dismissals).
+// SetFindingVerdictWithBody Confirm or dismiss a finding.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7260,7 +7260,7 @@ func (c *Client) SetFindingVerdictWithBody(ctx context.Context, id openapi_types
 	return c.Client.Do(req)
 }
 
-// SetFindingVerdict Confirm or dismiss a finding (§8.5 dismissals).
+// SetFindingVerdict Confirm or dismiss a finding.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7383,7 +7383,7 @@ func (c *Client) WrapKnowledgeKey(ctx context.Context, body WrapKnowledgeKeyJSON
 	return c.Client.Do(req)
 }
 
-// ListKnowledgePacks The caller's knowledge packs, by name (agentry#593).
+// ListKnowledgePacks The caller's knowledge packs, by name.
 //
 // Corresponds with GET /knowledge/packs (the `ListKnowledgePacks` operationId).
 func (c *Client) ListKnowledgePacks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7532,7 +7532,7 @@ func (c *Client) GetKnowledgeUsage(ctx context.Context, reqEditors ...RequestEdi
 	return c.Client.Do(req)
 }
 
-// GetMcpServerScan The registry's last vulnerability check of one MCP server package version (agentry#177).
+// GetMcpServerScan The registry's last vulnerability check of one MCP server package version.
 //
 // What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. Each advisory carries its own `severity` and the gate's rating of it, `gateSeverity`. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
 //
@@ -7549,7 +7549,7 @@ func (c *Client) GetMcpServerScan(ctx context.Context, params *GetMcpServerScanP
 	return c.Client.Do(req)
 }
 
-// GetMeta Server version and self-host feature flags (§9.2).
+// GetMeta Server version and self-host feature flags.
 //
 // Corresponds with GET /meta (the `GetMeta` operationId).
 func (c *Client) GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7564,9 +7564,9 @@ func (c *Client) GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*h
 	return c.Client.Do(req)
 }
 
-// CheckDraftWithBody AI Review of a finished draft before it is submitted (agentry#708).
+// CheckDraftWithBody AI Review of a finished draft before it is submitted.
 //
-// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7583,9 +7583,9 @@ func (c *Client) CheckDraftWithBody(ctx context.Context, contentType string, bod
 	return c.Client.Do(req)
 }
 
-// CheckDraft AI Review of a finished draft before it is submitted (agentry#708).
+// CheckDraft AI Review of a finished draft before it is submitted.
 //
-// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7602,7 +7602,7 @@ func (c *Client) CheckDraft(ctx context.Context, body CheckDraftJSONRequestBody,
 	return c.Client.Do(req)
 }
 
-// ScanModelInputWithBody AI Review of text a model is about to read (agentry#608).
+// ScanModelInputWithBody AI Review of text a model is about to read.
 //
 // Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
@@ -7621,7 +7621,7 @@ func (c *Client) ScanModelInputWithBody(ctx context.Context, contentType string,
 	return c.Client.Do(req)
 }
 
-// ScanModelInput AI Review of text a model is about to read (agentry#608).
+// ScanModelInput AI Review of text a model is about to read.
 //
 // Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
@@ -7640,7 +7640,7 @@ func (c *Client) ScanModelInput(ctx context.Context, body ScanModelInputJSONRequ
 	return c.Client.Do(req)
 }
 
-// SearchModelInputWithBody Web search through the deployment's provider, every result scanned (agentry#608).
+// SearchModelInputWithBody Web search through the deployment's provider, every result scanned.
 //
 // Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 //
@@ -7659,7 +7659,7 @@ func (c *Client) SearchModelInputWithBody(ctx context.Context, contentType strin
 	return c.Client.Do(req)
 }
 
-// SearchModelInput Web search through the deployment's provider, every result scanned (agentry#608).
+// SearchModelInput Web search through the deployment's provider, every result scanned.
 //
 // Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 //
@@ -7761,7 +7761,7 @@ func (c *Client) UpdateOrg(ctx context.Context, org OrgHandle, body UpdateOrgJSO
 	return c.Client.Do(req)
 }
 
-// ListOrgAudit Org audit events, newest first (admin+; cursor paged, §12.6).
+// ListOrgAudit Org audit events, newest first (admin+; cursor paged).
 //
 // Corresponds with GET /orgs/{org}/audit (the `ListOrgAudit` operationId).
 func (c *Client) ListOrgAudit(ctx context.Context, org OrgHandle, params *ListOrgAuditParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7776,7 +7776,7 @@ func (c *Client) ListOrgAudit(ctx context.Context, org OrgHandle, params *ListOr
 	return c.Client.Do(req)
 }
 
-// CreateAuditExportWithBody Start an async NDJSON audit export (admin+, §12.6).
+// CreateAuditExportWithBody Start an async NDJSON audit export (admin+).
 //
 // Takes any type of body and a specified content type.
 //
@@ -7793,7 +7793,7 @@ func (c *Client) CreateAuditExportWithBody(ctx context.Context, org OrgHandle, c
 	return c.Client.Do(req)
 }
 
-// CreateAuditExport Start an async NDJSON audit export (admin+, §12.6).
+// CreateAuditExport Start an async NDJSON audit export (admin+).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7810,7 +7810,7 @@ func (c *Client) CreateAuditExport(ctx context.Context, org OrgHandle, body Crea
 	return c.Client.Do(req)
 }
 
-// GetAuditExport Poll an audit export's status and download reference (admin+, §12.6).
+// GetAuditExport Poll an audit export's status and download reference (admin+).
 //
 // Corresponds with GET /orgs/{org}/audit/exports/{id} (the `GetAuditExport` operationId).
 func (c *Client) GetAuditExport(ctx context.Context, org OrgHandle, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7859,7 +7859,7 @@ func (c *Client) DecommissionOrg(ctx context.Context, org OrgHandle, body Decomm
 	return c.Client.Do(req)
 }
 
-// ListDomainClaims List domain claims (admin+, §12.4).
+// ListDomainClaims List domain claims (admin+).
 //
 // Corresponds with GET /orgs/{org}/domain-claims (the `ListDomainClaims` operationId).
 func (c *Client) ListDomainClaims(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7874,7 +7874,7 @@ func (c *Client) ListDomainClaims(ctx context.Context, org OrgHandle, reqEditors
 	return c.Client.Do(req)
 }
 
-// CreateDomainClaimWithBody Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+// CreateDomainClaimWithBody Start a domain claim; returns the DNS TXT challenge (admin+).
 //
 // Takes any type of body and a specified content type.
 //
@@ -7891,7 +7891,7 @@ func (c *Client) CreateDomainClaimWithBody(ctx context.Context, org OrgHandle, c
 	return c.Client.Do(req)
 }
 
-// CreateDomainClaim Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+// CreateDomainClaim Start a domain claim; returns the DNS TXT challenge (admin+).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7908,7 +7908,7 @@ func (c *Client) CreateDomainClaim(ctx context.Context, org OrgHandle, body Crea
 	return c.Client.Do(req)
 }
 
-// VerifyDomainClaimWithBody Check the DNS TXT record and mark verified (admin+, §12.4).
+// VerifyDomainClaimWithBody Check the DNS TXT record and mark verified (admin+).
 //
 // Takes any type of body and a specified content type.
 //
@@ -7925,7 +7925,7 @@ func (c *Client) VerifyDomainClaimWithBody(ctx context.Context, org OrgHandle, c
 	return c.Client.Do(req)
 }
 
-// VerifyDomainClaim Check the DNS TXT record and mark verified (admin+, §12.4).
+// VerifyDomainClaim Check the DNS TXT record and mark verified (admin+).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8288,7 +8288,7 @@ func (c *Client) DeleteOrgLogo(ctx context.Context, org OrgHandle, reqEditors ..
 
 // GetOrgLogo The organization's logo, as this registry re-encoded it.
 //
-// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
+// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served. The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
 //
 // Corresponds with GET /orgs/{org}/logo (the `GetOrgLogo` operationId).
 func (c *Client) GetOrgLogo(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8352,7 +8352,7 @@ func (c *Client) RemoveOrgMember(ctx context.Context, org OrgHandle, handle Hand
 	return c.Client.Do(req)
 }
 
-// SetOrgMemberWithBody Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
+// SetOrgMemberWithBody Change a member's role (admin). This route does not add members: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes any type of body and a specified content type.
 //
@@ -8369,7 +8369,7 @@ func (c *Client) SetOrgMemberWithBody(ctx context.Context, org OrgHandle, handle
 	return c.Client.Do(req)
 }
 
-// SetOrgMember Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
+// SetOrgMember Change a member's role (admin). This route does not add members: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8450,7 +8450,7 @@ func (c *Client) GetOrgPolicy(ctx context.Context, org OrgHandle, reqEditors ...
 	return c.Client.Do(req)
 }
 
-// SetOrgPolicyWithBody Set the org policy overlay (admin; tighten-only, §8.6).
+// SetOrgPolicyWithBody Set the org policy overlay (admin; tighten-only).
 //
 // Takes any type of body and a specified content type.
 //
@@ -8467,7 +8467,7 @@ func (c *Client) SetOrgPolicyWithBody(ctx context.Context, org OrgHandle, conten
 	return c.Client.Do(req)
 }
 
-// SetOrgPolicy Set the org policy overlay (admin; tighten-only, §8.6).
+// SetOrgPolicy Set the org policy overlay (admin; tighten-only).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8499,7 +8499,7 @@ func (c *Client) ReinstateOrg(ctx context.Context, org OrgHandle, reqEditors ...
 	return c.Client.Do(req)
 }
 
-// ListScimTokens List active SCIM provisioning tokens (admin, §12.5).
+// ListScimTokens List active SCIM provisioning tokens (admin).
 //
 // Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
 func (c *Client) ListScimTokens(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8514,7 +8514,7 @@ func (c *Client) ListScimTokens(ctx context.Context, org OrgHandle, reqEditors .
 	return c.Client.Do(req)
 }
 
-// CreateScimTokenWithBody Mint a SCIM bearer token (admin, §12.5).
+// CreateScimTokenWithBody Mint a SCIM bearer token (admin).
 //
 // 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 //
@@ -8533,7 +8533,7 @@ func (c *Client) CreateScimTokenWithBody(ctx context.Context, org OrgHandle, con
 	return c.Client.Do(req)
 }
 
-// CreateScimToken Mint a SCIM bearer token (admin, §12.5).
+// CreateScimToken Mint a SCIM bearer token (admin).
 //
 // 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 //
@@ -8552,7 +8552,7 @@ func (c *Client) CreateScimToken(ctx context.Context, org OrgHandle, body Create
 	return c.Client.Do(req)
 }
 
-// RevokeScimToken Revoke a SCIM token (admin, §12.5).
+// RevokeScimToken Revoke a SCIM token (admin).
 //
 // Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
 func (c *Client) RevokeScimToken(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8567,7 +8567,7 @@ func (c *Client) RevokeScimToken(ctx context.Context, org OrgHandle, tokenId ope
 	return c.Client.Do(req)
 }
 
-// ListSsoConnections List the org's SSO connections (admin, §12.4).
+// ListSsoConnections List the org's SSO connections (admin).
 //
 // Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
 func (c *Client) ListSsoConnections(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8582,7 +8582,7 @@ func (c *Client) ListSsoConnections(ctx context.Context, org OrgHandle, reqEdito
 	return c.Client.Do(req)
 }
 
-// DeleteSsoConnection Delete a connection (admin, §12.4).
+// DeleteSsoConnection Delete a connection (admin).
 //
 // Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
 func (c *Client) DeleteSsoConnection(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8597,7 +8597,7 @@ func (c *Client) DeleteSsoConnection(ctx context.Context, org OrgHandle, kind De
 	return c.Client.Do(req)
 }
 
-// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin, §12.4).
+// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin).
 //
 // 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 //
@@ -8616,7 +8616,7 @@ func (c *Client) PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, ki
 	return c.Client.Do(req)
 }
 
-// PutSsoConnection Create or update a SAML/OIDC connection (admin, §12.4).
+// PutSsoConnection Create or update a SAML/OIDC connection (admin).
 //
 // 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 //
@@ -8635,7 +8635,7 @@ func (c *Client) PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSs
 	return c.Client.Do(req)
 }
 
-// TestSsoConnection Probe a stored connection without signing in (admin, §12.4; agentry#50).
+// TestSsoConnection Probe a stored connection without signing in (admin).
 //
 // OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
 //
@@ -8652,7 +8652,7 @@ func (c *Client) TestSsoConnection(ctx context.Context, org OrgHandle, kind Test
 	return c.Client.Do(req)
 }
 
-// OidcCallback OIDC redirect URI: exchange the code and establish a session (§12.4).
+// OidcCallback OIDC redirect URI: exchange the code and establish a session.
 //
 // When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 //
@@ -8669,7 +8669,7 @@ func (c *Client) OidcCallback(ctx context.Context, org OrgHandle, params *OidcCa
 	return c.Client.Do(req)
 }
 
-// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP).
 //
 // 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
 //
@@ -8686,7 +8686,7 @@ func (c *Client) OidcStart(ctx context.Context, org OrgHandle, params *OidcStart
 	return c.Client.Do(req)
 }
 
-// SamlAcs SAML Assertion Consumer Service: consume a signed assertion (§12.4).
+// SamlAcs SAML Assertion Consumer Service: consume a signed assertion.
 //
 // A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 //
@@ -8703,7 +8703,7 @@ func (c *Client) SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...Reque
 	return c.Client.Do(req)
 }
 
-// GetSamlMetadata SP SAML metadata for this org's connection (§12.4).
+// GetSamlMetadata SP SAML metadata for this org's connection.
 //
 // Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
 func (c *Client) GetSamlMetadata(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8718,7 +8718,7 @@ func (c *Client) GetSamlMetadata(ctx context.Context, org OrgHandle, reqEditors 
 	return c.Client.Do(req)
 }
 
-// SamlSloRedirect SAML Single Logout endpoint, HTTP-Redirect binding (§12.4).
+// SamlSloRedirect SAML Single Logout endpoint, HTTP-Redirect binding.
 //
 // Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
 //
@@ -8735,7 +8735,7 @@ func (c *Client) SamlSloRedirect(ctx context.Context, org OrgHandle, reqEditors 
 	return c.Client.Do(req)
 }
 
-// SamlSloPost SAML Single Logout endpoint, HTTP-POST binding (§12.4).
+// SamlSloPost SAML Single Logout endpoint, HTTP-POST binding.
 //
 // Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
 func (c *Client) SamlSloPost(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8893,7 +8893,7 @@ func (c *Client) AddTeamMember(ctx context.Context, org OrgHandle, team TeamSlug
 	return c.Client.Do(req)
 }
 
-// ListWebhooks List webhook endpoints (admin+, §9.3).
+// ListWebhooks List webhook endpoints (admin+).
 //
 // Corresponds with GET /orgs/{org}/webhooks (the `ListWebhooks` operationId).
 func (c *Client) ListWebhooks(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8908,7 +8908,7 @@ func (c *Client) ListWebhooks(ctx context.Context, org OrgHandle, reqEditors ...
 	return c.Client.Do(req)
 }
 
-// CreateWebhookWithBody Create a webhook endpoint (admin+, §9.3).
+// CreateWebhookWithBody Create a webhook endpoint (admin+).
 //
 // Takes any type of body and a specified content type.
 //
@@ -8925,7 +8925,7 @@ func (c *Client) CreateWebhookWithBody(ctx context.Context, org OrgHandle, conte
 	return c.Client.Do(req)
 }
 
-// CreateWebhook Create a webhook endpoint (admin+, §9.3).
+// CreateWebhook Create a webhook endpoint (admin+).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8942,7 +8942,7 @@ func (c *Client) CreateWebhook(ctx context.Context, org OrgHandle, body CreateWe
 	return c.Client.Do(req)
 }
 
-// DeleteWebhook Delete a webhook endpoint (admin+, §9.3).
+// DeleteWebhook Delete a webhook endpoint (admin+).
 //
 // Corresponds with DELETE /orgs/{org}/webhooks/{id} (the `DeleteWebhook` operationId).
 func (c *Client) DeleteWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8957,7 +8957,7 @@ func (c *Client) DeleteWebhook(ctx context.Context, org OrgHandle, id WebhookID,
 	return c.Client.Do(req)
 }
 
-// GetWebhook Get a webhook endpoint (admin+, §9.3).
+// GetWebhook Get a webhook endpoint (admin+).
 //
 // Corresponds with GET /orgs/{org}/webhooks/{id} (the `GetWebhook` operationId).
 func (c *Client) GetWebhook(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8972,7 +8972,7 @@ func (c *Client) GetWebhook(ctx context.Context, org OrgHandle, id WebhookID, re
 	return c.Client.Do(req)
 }
 
-// UpdateWebhookWithBody Update a webhook endpoint (admin+, §9.3).
+// UpdateWebhookWithBody Update a webhook endpoint (admin+).
 //
 // Takes any type of body and a specified content type.
 //
@@ -8989,7 +8989,7 @@ func (c *Client) UpdateWebhookWithBody(ctx context.Context, org OrgHandle, id We
 	return c.Client.Do(req)
 }
 
-// UpdateWebhook Update a webhook endpoint (admin+, §9.3).
+// UpdateWebhook Update a webhook endpoint (admin+).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -9006,7 +9006,7 @@ func (c *Client) UpdateWebhook(ctx context.Context, org OrgHandle, id WebhookID,
 	return c.Client.Do(req)
 }
 
-// ListWebhookDeliveries Recent delivery attempts for an endpoint (admin+, §9.3).
+// ListWebhookDeliveries Recent delivery attempts for an endpoint (admin+).
 //
 // Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
 func (c *Client) ListWebhookDeliveries(ctx context.Context, org OrgHandle, id WebhookID, params *ListWebhookDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9021,7 +9021,7 @@ func (c *Client) ListWebhookDeliveries(ctx context.Context, org OrgHandle, id We
 	return c.Client.Do(req)
 }
 
-// PingWebhook Send a test delivery to an endpoint (admin+, §9.2).
+// PingWebhook Send a test delivery to an endpoint (admin+).
 //
 // Enqueues a signed `ping` delivery through the ordinary webhook machinery (same signature header, same SSRF guard, same retry schedule), so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
 //
@@ -9087,7 +9087,7 @@ func (c *Client) TriageAbuseReport(ctx context.Context, id openapi_types.UUID, b
 	return c.Client.Do(req)
 }
 
-// PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff, §7).
+// PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff).
 //
 // Takes any type of body and a specified content type.
 //
@@ -9104,7 +9104,7 @@ func (c *Client) PlatformAgentActionWithBody(ctx context.Context, ns Namespace, 
 	return c.Client.Do(req)
 }
 
-// PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff, §7).
+// PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -9121,9 +9121,9 @@ func (c *Client) PlatformAgentAction(ctx context.Context, ns Namespace, name Age
 	return c.Client.Do(req)
 }
 
-// ListPlatformAudit Audit events across every org (platform staff, §12.6).
+// ListPlatformAudit Audit events across every org (platform staff).
 //
-// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited (§12.6), one event per call.
+// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited, one event per call.
 //
 // Corresponds with GET /platform/audit (the `ListPlatformAudit` operationId).
 func (c *Client) ListPlatformAudit(ctx context.Context, params *ListPlatformAuditParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9155,7 +9155,7 @@ func (c *Client) ListKnowledgePackSizes(ctx context.Context, params *ListKnowled
 	return c.Client.Do(req)
 }
 
-// GetPlatformPolicy The read-only platform baseline policy (§8.6).
+// GetPlatformPolicy The read-only platform baseline policy.
 //
 // Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
 func (c *Client) GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9170,7 +9170,7 @@ func (c *Client) GetPlatformPolicy(ctx context.Context, reqEditors ...RequestEdi
 	return c.Client.Do(req)
 }
 
-// ListRedTeamReports Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+// ListRedTeamReports Reports of the scheduled red-team job against the S3/S4 gate (platform staff).
 //
 // Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
 //
@@ -9187,7 +9187,7 @@ func (c *Client) ListRedTeamReports(ctx context.Context, params *ListRedTeamRepo
 	return c.Client.Do(req)
 }
 
-// ListRulesetReleases Ruleset releases, newest first (platform staff, §10.1 console).
+// ListRulesetReleases Ruleset releases, newest first (platform staff).
 //
 // Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
 func (c *Client) ListRulesetReleases(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9202,9 +9202,9 @@ func (c *Client) ListRulesetReleases(ctx context.Context, reqEditors ...RequestE
 	return c.Client.Do(req)
 }
 
-// CreateRulesetReleaseWithBody Register a ruleset release (platform staff, §9.2).
+// CreateRulesetReleaseWithBody Register a ruleset release (platform staff).
 //
-// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle. Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
 //
 // Takes any type of body and a specified content type.
 //
@@ -9221,9 +9221,9 @@ func (c *Client) CreateRulesetReleaseWithBody(ctx context.Context, contentType s
 	return c.Client.Do(req)
 }
 
-// CreateRulesetRelease Register a ruleset release (platform staff, §9.2).
+// CreateRulesetRelease Register a ruleset release (platform staff).
 //
-// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle. Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -9240,7 +9240,7 @@ func (c *Client) CreateRulesetRelease(ctx context.Context, body CreateRulesetRel
 	return c.Client.Do(req)
 }
 
-// ResolveRef Resolve ns/name@range to a concrete version (§9.4 step 1).
+// ResolveRef Resolve ns/name@range to a concrete version.
 //
 // Corresponds with GET /resolve (the `ResolveRef` operationId).
 func (c *Client) ResolveRef(ctx context.Context, params *ResolveRefParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9270,7 +9270,7 @@ func (c *Client) GetReviewItem(ctx context.Context, id openapi_types.UUID, reqEd
 	return c.Client.Do(req)
 }
 
-// DecideReviewItemWithBody Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+// DecideReviewItemWithBody Approve or reject a version under review (not its author, unless platform staff).
 //
 // An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 //
@@ -9289,7 +9289,7 @@ func (c *Client) DecideReviewItemWithBody(ctx context.Context, id openapi_types.
 	return c.Client.Do(req)
 }
 
-// DecideReviewItem Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+// DecideReviewItem Approve or reject a version under review (not its author, unless platform staff).
 //
 // An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 //
@@ -9340,7 +9340,7 @@ func (c *Client) ListReviewFiles(ctx context.Context, id openapi_types.UUID, req
 
 // ListReviewQueue Pending review items (platform staff, or an org's security_reviewer for its queue).
 //
-// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's (agentry#912); staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
+// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's; staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
 //
 // Corresponds with GET /review-queue (the `ListReviewQueue` operationId).
 func (c *Client) ListReviewQueue(ctx context.Context, params *ListReviewQueueParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9357,7 +9357,7 @@ func (c *Client) ListReviewQueue(ctx context.Context, params *ListReviewQueuePar
 
 // GetLatestRulesetAttestation DSSE attestation over the bundle `…/latest/bundle` serves.
 //
-// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). The worker signs it at start and stores it, so every replica serves the same envelope (agentry#479). 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
+// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised. The worker signs it at start and stores it, so every replica serves the same envelope. 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
 //
 // Corresponds with GET /ruleset-releases/latest/attestation (the `GetLatestRulesetAttestation` operationId).
 func (c *Client) GetLatestRulesetAttestation(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9378,7 +9378,7 @@ func (c *Client) GetLatestRulesetAttestation(ctx context.Context, reqEditors ...
 //
 // `X-Agentry-Bundle-Semver`: the ruleset release semver; `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag`: the same digest.
 //
-// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet; this endpoint pins by digest only.
 //
 // Corresponds with GET /ruleset-releases/latest/bundle (the `GetLatestRulesetBundle` operationId).
 func (c *Client) GetLatestRulesetBundle(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9393,7 +9393,7 @@ func (c *Client) GetLatestRulesetBundle(ctx context.Context, reqEditors ...Reque
 	return c.Client.Do(req)
 }
 
-// SearchAgents Full-text search over public agents with facets (§10.4).
+// SearchAgents Full-text search over public agents with facets.
 //
 // Corresponds with GET /search (the `SearchAgents` operationId).
 func (c *Client) SearchAgents(ctx context.Context, params *SearchAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9408,7 +9408,7 @@ func (c *Client) SearchAgents(ctx context.Context, params *SearchAgentsParams, r
 	return c.Client.Do(req)
 }
 
-// ListAgentsByTag Public agents tagged with {tag} (§9.2).
+// ListAgentsByTag Public agents tagged with {tag}.
 //
 // Matches the tag list of each agent's latest published manifest (`manifest.tags`, V8). Blocked agents never appear.
 //
@@ -9474,7 +9474,7 @@ func (c *Client) UpdateCurrentUser(ctx context.Context, body UpdateCurrentUserJS
 	return c.Client.Do(req)
 }
 
-// ListUserActivity The caller's own activity — the audit events they performed (agentry#192).
+// ListUserActivity The caller's own activity — the audit events they performed.
 //
 // Sign-ins, tokens and SSH keys created or revoked, profile and notification changes, publishes and reviews, newest first, with the address and user agent each was performed from. Keyset-paged like the agent activity feed.
 //
@@ -9508,9 +9508,9 @@ func (c *Client) ClearCurrentUserData(ctx context.Context, reqEditors ...Request
 	return c.Client.Do(req)
 }
 
-// DeleteCurrentUser Erase the caller's account (GDPR flow, §12.7).
+// DeleteCurrentUser Erase the caller's account (GDPR flow).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 //
 // Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9525,7 +9525,7 @@ func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUse
 	return c.Client.Do(req)
 }
 
-// ListUserDependencyAlerts Open dependency alerts on published versions the caller submitted (agentry#177).
+// ListUserDependencyAlerts Open dependency alerts on published versions the caller submitted.
 //
 // A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. A front end shows these; the site renders them as the banner after sign-in and on the dashboard.
 //
@@ -9542,7 +9542,7 @@ func (c *Client) ListUserDependencyAlerts(ctx context.Context, reqEditors ...Req
 	return c.Client.Do(req)
 }
 
-// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account.
 //
 // With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
 //
@@ -9559,7 +9559,7 @@ func (c *Client) GetUserDirectory(ctx context.Context, reqEditors ...RequestEdit
 	return c.Client.Do(req)
 }
 
-// DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service (agentry#164).
+// DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service.
 //
 // With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
 //
@@ -9606,9 +9606,9 @@ func (c *Client) RequestDomainOrgAccess(ctx context.Context, reqEditors ...Reque
 	return c.Client.Do(req)
 }
 
-// SendEmailVerification Send the caller a new activation link (agentry#861).
+// SendEmailVerification Send the caller a new activation link.
 //
-// Mails a new link that confirms the account's address and so activates it (plan unactivated-accounts.md). An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
+// Mails a new link that confirms the account's address and so activates it. An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
 //
 // Corresponds with POST /user/email-verification (the `SendEmailVerification` operationId).
 func (c *Client) SendEmailVerification(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9695,7 +9695,7 @@ func (c *Client) PutAccountInstall(ctx context.Context, ns Namespace, name Agent
 	return c.Client.Do(req)
 }
 
-// GetUserNotificationSettings How the registry's alerts reach the caller (agentry#190).
+// GetUserNotificationSettings How the registry's alerts reach the caller.
 //
 // Email per kind of notification, and whether the dependency-alert banner shows in a front end (the site reads it). An account that never changed anything reads back with everything on.
 //
@@ -9712,7 +9712,7 @@ func (c *Client) GetUserNotificationSettings(ctx context.Context, reqEditors ...
 	return c.Client.Do(req)
 }
 
-// UpdateUserNotificationSettingsWithBody Replace the caller's notification settings (agentry#190).
+// UpdateUserNotificationSettingsWithBody Replace the caller's notification settings.
 //
 // Takes any type of body and a specified content type.
 //
@@ -9729,7 +9729,7 @@ func (c *Client) UpdateUserNotificationSettingsWithBody(ctx context.Context, con
 	return c.Client.Do(req)
 }
 
-// UpdateUserNotificationSettings Replace the caller's notification settings (agentry#190).
+// UpdateUserNotificationSettings Replace the caller's notification settings.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -9746,9 +9746,9 @@ func (c *Client) UpdateUserNotificationSettings(ctx context.Context, body Update
 	return c.Client.Do(req)
 }
 
-// GetUserReportSettings The report design the caller's PDF reports take (agentry#989, agentry#1024).
+// GetUserReportSettings The report design the caller's PDF reports take.
 //
-// A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
+// A profile setting: the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain.
 //
 // Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
 func (c *Client) GetUserReportSettings(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9763,9 +9763,9 @@ func (c *Client) GetUserReportSettings(ctx context.Context, params *GetUserRepor
 	return c.Client.Do(req)
 }
 
-// UpdateUserReportSettingsWithBody Replace the caller's report settings (agentry#989, agentry#1024).
+// UpdateUserReportSettingsWithBody Replace the caller's report settings.
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
 //
 // Takes any type of body and a specified content type.
 //
@@ -9782,9 +9782,9 @@ func (c *Client) UpdateUserReportSettingsWithBody(ctx context.Context, params *U
 	return c.Client.Do(req)
 }
 
-// UpdateUserReportSettings Replace the caller's report settings (agentry#989, agentry#1024).
+// UpdateUserReportSettings Replace the caller's report settings.
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -9801,7 +9801,7 @@ func (c *Client) UpdateUserReportSettings(ctx context.Context, params *UpdateUse
 	return c.Client.Do(req)
 }
 
-// DeleteUserReportLogo Remove the logo from the caller's report design (agentry#1025).
+// DeleteUserReportLogo Remove the logo from the caller's report design.
 //
 // The design stays. Removing a logo that is not there is not an error.
 //
@@ -9818,9 +9818,9 @@ func (c *Client) DeleteUserReportLogo(ctx context.Context, reqEditors ...Request
 	return c.Client.Do(req)
 }
 
-// PutUserReportLogoWithBody Set the logo of the caller's report design (agentry#1025).
+// PutUserReportLogoWithBody Set the logo of the caller's report design.
 //
-// Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan report-designs.md D9). The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
 //
 // Takes any type of body and a specified content type.
 //
@@ -9854,7 +9854,7 @@ func (c *Client) RevokeOtherUserSessions(ctx context.Context, reqEditors ...Requ
 	return c.Client.Do(req)
 }
 
-// ListUserSessions List the caller's active browser sessions (§12.1).
+// ListUserSessions List the caller's active browser sessions.
 //
 // Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error). A PAT is not a way to enumerate someone's browser sessions.
 //
@@ -9871,7 +9871,7 @@ func (c *Client) ListUserSessions(ctx context.Context, reqEditors ...RequestEdit
 	return c.Client.Do(req)
 }
 
-// RevokeUserSession Revoke one of the caller's own sessions (§12.1).
+// RevokeUserSession Revoke one of the caller's own sessions.
 //
 // Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else. The two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 //
@@ -9888,7 +9888,7 @@ func (c *Client) RevokeUserSession(ctx context.Context, sessionId openapi_types.
 	return c.Client.Do(req)
 }
 
-// ListSshKeys List the caller's SSH public keys for the git transport (§6.1 Q7).
+// ListSshKeys List the caller's SSH public keys for the git transport.
 //
 // Corresponds with GET /user/ssh-keys (the `ListSshKeys` operationId).
 func (c *Client) ListSshKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9905,7 +9905,7 @@ func (c *Client) ListSshKeys(ctx context.Context, reqEditors ...RequestEditorFn)
 
 // AddSshKeyWithBody Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 //
-// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys; a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 //
 // Takes any type of body and a specified content type.
 //
@@ -9924,7 +9924,7 @@ func (c *Client) AddSshKeyWithBody(ctx context.Context, contentType string, body
 
 // AddSshKey Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 //
-// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys; a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -9956,7 +9956,7 @@ func (c *Client) RemoveSshKey(ctx context.Context, keyId openapi_types.UUID, req
 	return c.Client.Do(req)
 }
 
-// UnstarAgent Remove a star (idempotent, §9.2).
+// UnstarAgent Remove a star (idempotent).
 //
 // Corresponds with DELETE /user/stars/{ns}/{name} (the `UnstarAgent` operationId).
 func (c *Client) UnstarAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9971,7 +9971,7 @@ func (c *Client) UnstarAgent(ctx context.Context, ns Namespace, name AgentName, 
 	return c.Client.Do(req)
 }
 
-// StarAgent Star an agent (idempotent, §9.2).
+// StarAgent Star an agent (idempotent).
 //
 // Corresponds with PUT /user/stars/{ns}/{name} (the `StarAgent` operationId).
 func (c *Client) StarAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10001,7 +10001,7 @@ func (c *Client) ListTokens(ctx context.Context, reqEditors ...RequestEditorFn) 
 	return c.Client.Do(req)
 }
 
-// CreateTokenWithBody Mint a PAT. The secret is returned exactly once (D-22).
+// CreateTokenWithBody Mint a PAT. The secret is returned exactly once.
 //
 // Takes any type of body and a specified content type.
 //
@@ -10018,7 +10018,7 @@ func (c *Client) CreateTokenWithBody(ctx context.Context, contentType string, bo
 	return c.Client.Do(req)
 }
 
-// CreateToken Mint a PAT. The secret is returned exactly once (D-22).
+// CreateToken Mint a PAT. The secret is returned exactly once.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -10037,7 +10037,7 @@ func (c *Client) CreateToken(ctx context.Context, body CreateTokenJSONRequestBod
 
 // CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 //
 // Takes any type of body and a specified content type.
 //
@@ -10056,7 +10056,7 @@ func (c *Client) CreateDesktopGrantWithBody(ctx context.Context, contentType str
 
 // CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -10073,7 +10073,7 @@ func (c *Client) CreateDesktopGrant(ctx context.Context, body CreateDesktopGrant
 	return c.Client.Do(req)
 }
 
-// RevokeToken Revoke a PAT immediately (§12.3).
+// RevokeToken Revoke a PAT immediately.
 //
 // Corresponds with DELETE /user/tokens/{tokenId} (the `RevokeToken` operationId).
 func (c *Client) RevokeToken(ctx context.Context, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10088,7 +10088,7 @@ func (c *Client) RevokeToken(ctx context.Context, tokenId openapi_types.UUID, re
 	return c.Client.Do(req)
 }
 
-// ClearTrustedDevices Clear every remembered browser of the caller's account (agentry#672).
+// ClearTrustedDevices Clear every remembered browser of the caller's account.
 //
 // Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
 //
@@ -10105,9 +10105,9 @@ func (c *Client) ClearTrustedDevices(ctx context.Context, reqEditors ...RequestE
 	return c.Client.Do(req)
 }
 
-// CountTrustedDevices How many browsers skip the caller's second factor (agentry#672).
+// CountTrustedDevices How many browsers skip the caller's second factor.
 //
-// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all (DEV-163). A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
+// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all. A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
 //
 // Corresponds with GET /user/trusted-devices (the `CountTrustedDevices` operationId).
 func (c *Client) CountTrustedDevices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -18248,9 +18248,9 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
-	// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
+	// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed.
 	//
-	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). The one exception is a holder of one of its releases (agentry#949): a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
+	// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here. The one exception is a holder of one of its releases: a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header. Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18259,7 +18259,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetAdvisoryWithResponse One published advisory (permalink); public agents only.
 	//
-	// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting` (agentry#949).
+	// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18268,14 +18268,14 @@ type ClientWithResponsesInterface interface {
 
 	// ListAgentsWithResponse List agents in a namespace (public ones for everyone).
 	//
-	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state`, `forks` (agentry#943) and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
+	// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page narrows and orders the list with `q`, `state`, `forks` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /agents (the `ListAgents` operationId).
 	ListAgentsWithResponse(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*ListAgentsResponse, error)
 
-	// CreateAgentWithBodyWithResponse Create an agent and its hosted git repository (§9.2).
+	// CreateAgentWithBodyWithResponse Create an agent and its hosted git repository.
 	//
 	// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 	//
@@ -18284,7 +18284,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentResponse, error)
 
-	// CreateAgentWithResponse Create an agent and its hosted git repository (§9.2).
+	// CreateAgentWithResponse Create an agent and its hosted git repository.
 	//
 	// A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 	//
@@ -18293,9 +18293,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgentWithResponse(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentResponse, error)
 
-	// DeleteAgentWithResponse Delete an agent (the namespace's administrators, §9.2, agentry#942).
+	// DeleteAgentWithResponse Delete an agent (the namespace's administrators).
 	//
-	// A token needs `agent:manage` or `org:admin` (agentry#993). An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
+	// A token needs `agent:manage` or `org:admin`. An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone: every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — version rows are kept forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18304,7 +18304,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetAgentWithResponse Agent metadata (public agents readable by anyone).
 	//
-	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
+	// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18325,21 +18325,21 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /agents/{ns}/{name} (the `UpdateAgent` operationId).
 	UpdateAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentResponse, error)
 
-	// ReportAbuseWithBodyWithResponse Report malicious or abusive content (authed, rate-limited §8.7).
+	// ReportAbuseWithBodyWithResponse Report malicious or abusive content (authed, rate-limited).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
 	ReportAbuseWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportAbuseResponse, error)
 
-	// ReportAbuseWithResponse Report malicious or abusive content (authed, rate-limited §8.7).
+	// ReportAbuseWithResponse Report malicious or abusive content (authed, rate-limited).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agents/{ns}/{name}/abuse-reports (the `ReportAbuse` operationId).
 	ReportAbuseWithResponse(ctx context.Context, ns Namespace, name AgentName, body ReportAbuseJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportAbuseResponse, error)
 
-	// ListAgentActivityWithResponse Recent activity for an agent (§9.2).
+	// ListAgentActivityWithResponse Recent activity for an agent.
 	//
 	// Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset: publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
 	//
@@ -18348,7 +18348,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/activity (the `ListAgentActivity` operationId).
 	ListAgentActivityWithResponse(ctx context.Context, ns Namespace, name AgentName, params *ListAgentActivityParams, reqEditors ...RequestEditorFn) (*ListAgentActivityResponse, error)
 
-	// ForkAgentWithBodyWithResponse Fork a public agent into a namespace the caller may create in (agentry#943).
+	// ForkAgentWithBodyWithResponse Fork a public agent into a namespace the caller may create in.
 	//
 	// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
 	//
@@ -18357,7 +18357,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /agents/{ns}/{name}/fork (the `ForkAgent` operationId).
 	ForkAgentWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ForkAgentResponse, error)
 
-	// ForkAgentWithResponse Fork a public agent into a namespace the caller may create in (agentry#943).
+	// ForkAgentWithResponse Fork a public agent into a namespace the caller may create in.
 	//
 	// Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
 	//
@@ -18415,7 +18415,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /agents/{ns}/{name}/grants/user/{handle} (the `SetAgentUserGrant` operationId).
 	SetAgentUserGrantWithResponse(ctx context.Context, ns Namespace, name AgentName, handle Handle, body SetAgentUserGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAgentUserGrantResponse, error)
 
-	// GetAgentReadmeWithResponse The agent README rendered to sanitized HTML (§10.3, D-11).
+	// GetAgentReadmeWithResponse The agent README rendered to sanitized HTML.
 	//
 	// Markdown is rendered server-side through a strict allowlist: no raw HTML, no user styles, no SVG, external links rewritten, and invisible or bidi Unicode replaced with visible placeholders.
 	//
@@ -18424,25 +18424,25 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/readme (the `GetAgentReadme` operationId).
 	GetAgentReadmeWithResponse(ctx context.Context, ns Namespace, name AgentName, params *GetAgentReadmeParams, reqEditors ...RequestEditorFn) (*GetAgentReadmeResponse, error)
 
-	// RestoreAgentWithResponse Restore a retired agent (the namespace's administrators, agentry#942).
+	// RestoreAgentWithResponse Restore a retired agent (the namespace's administrators).
 	//
-	// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin` (agentry#993). Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+	// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin`. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agents/{ns}/{name}/restore (the `RestoreAgent` operationId).
 	RestoreAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*RestoreAgentResponse, error)
 
-	// RetireAgentWithResponse Retire an agent (the namespace's administrators, agentry#942).
+	// RetireAgentWithResponse Retire an agent (the namespace's administrators).
 	//
-	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin` (agentry#993). A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+	// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin`. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agents/{ns}/{name}/retire (the `RetireAgent` operationId).
 	RetireAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*RetireAgentResponse, error)
 
-	// GetAgentStatsWithResponse Star count and install counts for an agent (§9.2).
+	// GetAgentStatsWithResponse Star count and install counts for an agent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18456,9 +18456,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions (the `ListVersions` operationId).
 	ListVersionsWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*ListVersionsResponse, error)
 
-	// SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
+	// SubmitVersionWithBodyWithResponse Submit a version for publication.
 	//
-	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -18466,9 +18466,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /agents/{ns}/{name}/versions (the `SubmitVersion` operationId).
 	SubmitVersionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitVersionResponse, error)
 
-	// SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
+	// SubmitVersionWithResponse Submit a version for publication.
 	//
-	// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -18483,21 +18483,21 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version} (the `GetVersionInfo` operationId).
 	GetVersionInfoWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionInfoResponse, error)
 
-	// GetVersionAttestationWithResponse The signed DSSE attestation (§8.8), verbatim.
+	// GetVersionAttestationWithResponse The signed DSSE attestation, verbatim.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/attestation (the `GetVersionAttestation` operationId).
 	GetVersionAttestationWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionAttestationResponse, error)
 
-	// DownloadVersionWithResponse Download the release archive (§9.4; counts an install).
+	// DownloadVersionWithResponse Download the release archive (counts an install).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/download (the `DownloadVersion` operationId).
 	DownloadVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*DownloadVersionResponse, error)
 
-	// StreamVersionEventsWithResponse Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+	// StreamVersionEventsWithResponse Server-sent events for a version's pipeline progress.
 	//
 	// Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
 	//
@@ -18506,64 +18506,64 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/events (the `StreamVersionEvents` operationId).
 	StreamVersionEventsWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*StreamVersionEventsResponse, error)
 
-	// GetVersionFileWithResponse Read one file from the version's release archive (§10.2).
+	// GetVersionFileWithResponse Read one file from the version's release archive.
 	//
-	// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
+	// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes. Same access gate as listVersionFiles.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/file (the `GetVersionFile` operationId).
 	GetVersionFileWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, params *GetVersionFileParams, reqEditors ...RequestEditorFn) (*GetVersionFileResponse, error)
 
-	// ListVersionFilesWithResponse List the files inside the version's release archive (§10.2).
+	// ListVersionFilesWithResponse List the files inside the version's release archive.
 	//
-	// The same inventory a reviewer sees (§10.1), opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
+	// The same inventory a reviewer sees, opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/files (the `ListVersionFiles` operationId).
 	ListVersionFilesWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*ListVersionFilesResponse, error)
 
-	// GetVersionManifestWithResponse The validated manifest (canonical JSON, §4.2).
+	// GetVersionManifestWithResponse The validated manifest (canonical JSON).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/manifest (the `GetVersionManifest` operationId).
 	GetVersionManifestWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionManifestResponse, error)
 
-	// GetVersionReportWithResponse The scan report for a version (findings, ruleset, verdict, §8).
+	// GetVersionReportWithResponse The scan report for a version (findings, ruleset, verdict).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
 	GetVersionReportWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionReportResponse, error)
 
-	// YankVersionWithBodyWithResponse Yank a published version (§5.5 semantics; publish permission).
+	// YankVersionWithBodyWithResponse Yank a published version (publish permission).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
 	YankVersionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*YankVersionResponse, error)
 
-	// YankVersionWithResponse Yank a published version (§5.5 semantics; publish permission).
+	// YankVersionWithResponse Yank a published version (publish permission).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
 	YankVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*YankVersionResponse, error)
 
-	// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session (§12.1).
+	// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session.
 	//
-	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
+	// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
 	TotpChallengeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TotpChallengeResponse, error)
 
-	// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session (§12.1).
+	// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session.
 	//
-	// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
+	// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18572,7 +18572,7 @@ type ClientWithResponsesInterface interface {
 
 	// TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18581,7 +18581,7 @@ type ClientWithResponsesInterface interface {
 
 	// TotpVerifyWithBodyWithResponse Confirm TOTP enrollment with a current code.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18590,7 +18590,7 @@ type ClientWithResponsesInterface interface {
 
 	// TotpVerifyWithResponse Confirm TOTP enrollment with a current code.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18599,7 +18599,7 @@ type ClientWithResponsesInterface interface {
 
 	// ExchangeDesktopCodeWithBodyWithResponse Exchange a desktop sign-in code for the PAT it granted.
 	//
-	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18608,7 +18608,7 @@ type ClientWithResponsesInterface interface {
 
 	// ExchangeDesktopCodeWithResponse Exchange a desktop sign-in code for the PAT it granted.
 	//
-	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18617,7 +18617,7 @@ type ClientWithResponsesInterface interface {
 
 	// LoginWithBodyWithResponse Password (+TOTP when enabled) login; sets the session cookie.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18626,7 +18626,7 @@ type ClientWithResponsesInterface interface {
 
 	// LoginWithResponse Password (+TOTP when enabled) login; sets the session cookie.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18635,43 +18635,43 @@ type ClientWithResponsesInterface interface {
 
 	// LogoutWithResponse Revoke the current session.
 	//
-	// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO, §12.4); the registry session is revoked either way.
+	// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	LogoutWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*LogoutResponse, error)
 
-	// SocialOidcCallbackWithResponse Social login redirect URI: establish a session (§12.1).
+	// SocialOidcCallbackWithResponse Social login redirect URI: establish a session.
 	//
-	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
+	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
 	SocialOidcCallbackWithResponse(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*SocialOidcCallbackResponse, error)
 
-	// SocialOidcStartWithResponse Begin social login with a configured provider (§12.1).
+	// SocialOidcStartWithResponse Begin social login with a configured provider.
 	//
-	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
+	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 	SocialOidcStartWithResponse(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*SocialOidcStartResponse, error)
 
-	// RegisterWithBodyWithResponse Create an individual account (email+password, §12.1).
+	// RegisterWithBodyWithResponse Create an individual account (email+password).
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/register (the `Register` operationId).
 	RegisterWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterResponse, error)
 
-	// RegisterWithResponse Create an individual account (email+password, §12.1).
+	// RegisterWithResponse Create an individual account (email+password).
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18680,7 +18680,7 @@ type ClientWithResponsesInterface interface {
 
 	// VerifyEmailWithBodyWithResponse Confirm an email address with the mailed token.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18689,21 +18689,21 @@ type ClientWithResponsesInterface interface {
 
 	// VerifyEmailWithResponse Confirm an email address with the mailed token.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
 	VerifyEmailWithResponse(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyEmailResponse, error)
 
-	// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding (§8.5 dismissals).
+	// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
 	SetFindingVerdictWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetFindingVerdictResponse, error)
 
-	// SetFindingVerdictWithResponse Confirm or dismiss a finding (§8.5 dismissals).
+	// SetFindingVerdictWithResponse Confirm or dismiss a finding.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18760,7 +18760,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /knowledge/keys/wrap (the `WrapKnowledgeKey` operationId).
 	WrapKnowledgeKeyWithResponse(ctx context.Context, body WrapKnowledgeKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*WrapKnowledgeKeyResponse, error)
 
-	// ListKnowledgePacksWithResponse The caller's knowledge packs, by name (agentry#593).
+	// ListKnowledgePacksWithResponse The caller's knowledge packs, by name.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18831,7 +18831,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /knowledge/usage (the `GetKnowledgeUsage` operationId).
 	GetKnowledgeUsageWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetKnowledgeUsageResponse, error)
 
-	// GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version (agentry#177).
+	// GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version.
 	//
 	// What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. Each advisory carries its own `severity` and the gate's rating of it, `gateSeverity`. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
 	//
@@ -18840,32 +18840,32 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /mcp-servers/scan (the `GetMcpServerScan` operationId).
 	GetMcpServerScanWithResponse(ctx context.Context, params *GetMcpServerScanParams, reqEditors ...RequestEditorFn) (*GetMcpServerScanResponse, error)
 
-	// GetMetaWithResponse Server version and self-host feature flags (§9.2).
+	// GetMetaWithResponse Server version and self-host feature flags.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /meta (the `GetMeta` operationId).
 	GetMetaWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMetaResponse, error)
 
-	// CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted (agentry#708).
+	// CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted.
 	//
-	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
 	CheckDraftWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CheckDraftResponse, error)
 
-	// CheckDraftWithResponse AI Review of a finished draft before it is submitted (agentry#708).
+	// CheckDraftWithResponse AI Review of a finished draft before it is submitted.
 	//
-	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /model-input/check (the `CheckDraft` operationId).
 	CheckDraftWithResponse(ctx context.Context, body CheckDraftJSONRequestBody, reqEditors ...RequestEditorFn) (*CheckDraftResponse, error)
 
-	// ScanModelInputWithBodyWithResponse AI Review of text a model is about to read (agentry#608).
+	// ScanModelInputWithBodyWithResponse AI Review of text a model is about to read.
 	//
 	// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
@@ -18874,7 +18874,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
 	ScanModelInputWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ScanModelInputResponse, error)
 
-	// ScanModelInputWithResponse AI Review of text a model is about to read (agentry#608).
+	// ScanModelInputWithResponse AI Review of text a model is about to read.
 	//
 	// Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
@@ -18883,7 +18883,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /model-input/scan (the `ScanModelInput` operationId).
 	ScanModelInputWithResponse(ctx context.Context, body ScanModelInputJSONRequestBody, reqEditors ...RequestEditorFn) (*ScanModelInputResponse, error)
 
-	// SearchModelInputWithBodyWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
+	// SearchModelInputWithBodyWithResponse Web search through the deployment's provider, every result scanned.
 	//
 	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 	//
@@ -18892,7 +18892,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /model-input/search (the `SearchModelInput` operationId).
 	SearchModelInputWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchModelInputResponse, error)
 
-	// SearchModelInputWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
+	// SearchModelInputWithResponse Web search through the deployment's provider, every result scanned.
 	//
 	// Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 	//
@@ -18936,28 +18936,28 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /orgs/{org} (the `UpdateOrg` operationId).
 	UpdateOrgWithResponse(ctx context.Context, org OrgHandle, body UpdateOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgResponse, error)
 
-	// ListOrgAuditWithResponse Org audit events, newest first (admin+; cursor paged, §12.6).
+	// ListOrgAuditWithResponse Org audit events, newest first (admin+; cursor paged).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/audit (the `ListOrgAudit` operationId).
 	ListOrgAuditWithResponse(ctx context.Context, org OrgHandle, params *ListOrgAuditParams, reqEditors ...RequestEditorFn) (*ListOrgAuditResponse, error)
 
-	// CreateAuditExportWithBodyWithResponse Start an async NDJSON audit export (admin+, §12.6).
+	// CreateAuditExportWithBodyWithResponse Start an async NDJSON audit export (admin+).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
 	CreateAuditExportWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAuditExportResponse, error)
 
-	// CreateAuditExportWithResponse Start an async NDJSON audit export (admin+, §12.6).
+	// CreateAuditExportWithResponse Start an async NDJSON audit export (admin+).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/audit/exports (the `CreateAuditExport` operationId).
 	CreateAuditExportWithResponse(ctx context.Context, org OrgHandle, body CreateAuditExportJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAuditExportResponse, error)
 
-	// GetAuditExportWithResponse Poll an audit export's status and download reference (admin+, §12.6).
+	// GetAuditExportWithResponse Poll an audit export's status and download reference (admin+).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18978,35 +18978,35 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/decommission (the `DecommissionOrg` operationId).
 	DecommissionOrgWithResponse(ctx context.Context, org OrgHandle, body DecommissionOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*DecommissionOrgResponse, error)
 
-	// ListDomainClaimsWithResponse List domain claims (admin+, §12.4).
+	// ListDomainClaimsWithResponse List domain claims (admin+).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/domain-claims (the `ListDomainClaims` operationId).
 	ListDomainClaimsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListDomainClaimsResponse, error)
 
-	// CreateDomainClaimWithBodyWithResponse Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+	// CreateDomainClaimWithBodyWithResponse Start a domain claim; returns the DNS TXT challenge (admin+).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
 	CreateDomainClaimWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateDomainClaimResponse, error)
 
-	// CreateDomainClaimWithResponse Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+	// CreateDomainClaimWithResponse Start a domain claim; returns the DNS TXT challenge (admin+).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/domain-claims (the `CreateDomainClaim` operationId).
 	CreateDomainClaimWithResponse(ctx context.Context, org OrgHandle, body CreateDomainClaimJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDomainClaimResponse, error)
 
-	// VerifyDomainClaimWithBodyWithResponse Check the DNS TXT record and mark verified (admin+, §12.4).
+	// VerifyDomainClaimWithBodyWithResponse Check the DNS TXT record and mark verified (admin+).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/domain-claims/verify (the `VerifyDomainClaim` operationId).
 	VerifyDomainClaimWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*VerifyDomainClaimResponse, error)
 
-	// VerifyDomainClaimWithResponse Check the DNS TXT record and mark verified (admin+, §12.4).
+	// VerifyDomainClaimWithResponse Check the DNS TXT record and mark verified (admin+).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19177,7 +19177,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetOrgLogoWithResponse The organization's logo, as this registry re-encoded it.
 	//
-	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
+	// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served. The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19207,14 +19207,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/members/{handle} (the `RemoveOrgMember` operationId).
 	RemoveOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, reqEditors ...RequestEditorFn) (*RemoveOrgMemberResponse, error)
 
-	// SetOrgMemberWithBodyWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
+	// SetOrgMemberWithBodyWithResponse Change a member's role (admin). This route does not add members: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithBodyWithResponse(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOrgMemberResponse, error)
 
-	// SetOrgMemberWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
+	// SetOrgMemberWithResponse Change a member's role (admin). This route does not add members: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19249,14 +19249,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/policy (the `GetOrgPolicy` operationId).
 	GetOrgPolicyWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetOrgPolicyResponse, error)
 
-	// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (admin; tighten-only, §8.6).
+	// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (admin; tighten-only).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /orgs/{org}/policy (the `SetOrgPolicy` operationId).
 	SetOrgPolicyWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOrgPolicyResponse, error)
 
-	// SetOrgPolicyWithResponse Set the org policy overlay (admin; tighten-only, §8.6).
+	// SetOrgPolicyWithResponse Set the org policy overlay (admin; tighten-only).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19270,14 +19270,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
 	ReinstateOrgWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ReinstateOrgResponse, error)
 
-	// ListScimTokensWithResponse List active SCIM provisioning tokens (admin, §12.5).
+	// ListScimTokensWithResponse List active SCIM provisioning tokens (admin).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
 	ListScimTokensWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListScimTokensResponse, error)
 
-	// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin, §12.5).
+	// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin).
 	//
 	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 	//
@@ -19286,7 +19286,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimTokenWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error)
 
-	// CreateScimTokenWithResponse Mint a SCIM bearer token (admin, §12.5).
+	// CreateScimTokenWithResponse Mint a SCIM bearer token (admin).
 	//
 	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 	//
@@ -19295,28 +19295,28 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
 	CreateScimTokenWithResponse(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error)
 
-	// RevokeScimTokenWithResponse Revoke a SCIM token (admin, §12.5).
+	// RevokeScimTokenWithResponse Revoke a SCIM token (admin).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
 	RevokeScimTokenWithResponse(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeScimTokenResponse, error)
 
-	// ListSsoConnectionsWithResponse List the org's SSO connections (admin, §12.4).
+	// ListSsoConnectionsWithResponse List the org's SSO connections (admin).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
 	ListSsoConnectionsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListSsoConnectionsResponse, error)
 
-	// DeleteSsoConnectionWithResponse Delete a connection (admin, §12.4).
+	// DeleteSsoConnectionWithResponse Delete a connection (admin).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
 	DeleteSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*DeleteSsoConnectionResponse, error)
 
-	// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
+	// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin).
 	//
 	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 	//
@@ -19325,7 +19325,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithBodyWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
 
-	// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
+	// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin).
 	//
 	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 	//
@@ -19334,7 +19334,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
 	PutSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
 
-	// TestSsoConnectionWithResponse Probe a stored connection without signing in (admin, §12.4; agentry#50).
+	// TestSsoConnectionWithResponse Probe a stored connection without signing in (admin).
 	//
 	// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
 	//
@@ -19343,7 +19343,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
 	TestSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*TestSsoConnectionResponse, error)
 
-	// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session (§12.4).
+	// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session.
 	//
 	// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 	//
@@ -19352,7 +19352,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
 	OidcCallbackWithResponse(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*OidcCallbackResponse, error)
 
-	// OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+	// OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP).
 	//
 	// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
 	//
@@ -19361,7 +19361,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
 	OidcStartWithResponse(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*OidcStartResponse, error)
 
-	// SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion (§12.4).
+	// SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion.
 	//
 	// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 	//
@@ -19370,14 +19370,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
 	SamlAcsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlAcsResponse, error)
 
-	// GetSamlMetadataWithResponse SP SAML metadata for this org's connection (§12.4).
+	// GetSamlMetadataWithResponse SP SAML metadata for this org's connection.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
 	GetSamlMetadataWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetSamlMetadataResponse, error)
 
-	// SamlSloRedirectWithResponse SAML Single Logout endpoint, HTTP-Redirect binding (§12.4).
+	// SamlSloRedirectWithResponse SAML Single Logout endpoint, HTTP-Redirect binding.
 	//
 	// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
 	//
@@ -19386,7 +19386,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
 	SamlSloRedirectWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloRedirectResponse, error)
 
-	// SamlSloPostWithResponse SAML Single Logout endpoint, HTTP-POST binding (§12.4).
+	// SamlSloPostWithResponse SAML Single Logout endpoint, HTTP-POST binding.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19456,63 +19456,63 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/teams/{team}/members/{handle} (the `AddTeamMember` operationId).
 	AddTeamMemberWithResponse(ctx context.Context, org OrgHandle, team TeamSlug, handle Handle, reqEditors ...RequestEditorFn) (*AddTeamMemberResponse, error)
 
-	// ListWebhooksWithResponse List webhook endpoints (admin+, §9.3).
+	// ListWebhooksWithResponse List webhook endpoints (admin+).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/webhooks (the `ListWebhooks` operationId).
 	ListWebhooksWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListWebhooksResponse, error)
 
-	// CreateWebhookWithBodyWithResponse Create a webhook endpoint (admin+, §9.3).
+	// CreateWebhookWithBodyWithResponse Create a webhook endpoint (admin+).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
 	CreateWebhookWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateWebhookResponse, error)
 
-	// CreateWebhookWithResponse Create a webhook endpoint (admin+, §9.3).
+	// CreateWebhookWithResponse Create a webhook endpoint (admin+).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/webhooks (the `CreateWebhook` operationId).
 	CreateWebhookWithResponse(ctx context.Context, org OrgHandle, body CreateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateWebhookResponse, error)
 
-	// DeleteWebhookWithResponse Delete a webhook endpoint (admin+, §9.3).
+	// DeleteWebhookWithResponse Delete a webhook endpoint (admin+).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/webhooks/{id} (the `DeleteWebhook` operationId).
 	DeleteWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*DeleteWebhookResponse, error)
 
-	// GetWebhookWithResponse Get a webhook endpoint (admin+, §9.3).
+	// GetWebhookWithResponse Get a webhook endpoint (admin+).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/webhooks/{id} (the `GetWebhook` operationId).
 	GetWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, reqEditors ...RequestEditorFn) (*GetWebhookResponse, error)
 
-	// UpdateWebhookWithBodyWithResponse Update a webhook endpoint (admin+, §9.3).
+	// UpdateWebhookWithBodyWithResponse Update a webhook endpoint (admin+).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
 	UpdateWebhookWithBodyWithResponse(ctx context.Context, org OrgHandle, id WebhookID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateWebhookResponse, error)
 
-	// UpdateWebhookWithResponse Update a webhook endpoint (admin+, §9.3).
+	// UpdateWebhookWithResponse Update a webhook endpoint (admin+).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /orgs/{org}/webhooks/{id} (the `UpdateWebhook` operationId).
 	UpdateWebhookWithResponse(ctx context.Context, org OrgHandle, id WebhookID, body UpdateWebhookJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWebhookResponse, error)
 
-	// ListWebhookDeliveriesWithResponse Recent delivery attempts for an endpoint (admin+, §9.3).
+	// ListWebhookDeliveriesWithResponse Recent delivery attempts for an endpoint (admin+).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/webhooks/{id}/deliveries (the `ListWebhookDeliveries` operationId).
 	ListWebhookDeliveriesWithResponse(ctx context.Context, org OrgHandle, id WebhookID, params *ListWebhookDeliveriesParams, reqEditors ...RequestEditorFn) (*ListWebhookDeliveriesResponse, error)
 
-	// PingWebhookWithResponse Send a test delivery to an endpoint (admin+, §9.2).
+	// PingWebhookWithResponse Send a test delivery to an endpoint (admin+).
 	//
 	// Enqueues a signed `ping` delivery through the ordinary webhook machinery (same signature header, same SSRF guard, same retry schedule), so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
 	//
@@ -19542,23 +19542,23 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /platform/abuse-reports/{id} (the `TriageAbuseReport` operationId).
 	TriageAbuseReportWithResponse(ctx context.Context, id openapi_types.UUID, body TriageAbuseReportJSONRequestBody, reqEditors ...RequestEditorFn) (*TriageAbuseReportResponse, error)
 
-	// PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
+	// PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
 	PlatformAgentActionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PlatformAgentActionResponse, error)
 
-	// PlatformAgentActionWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
+	// PlatformAgentActionWithResponse Quarantine, block, or reinstate an agent (platform staff).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
 	PlatformAgentActionWithResponse(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, body PlatformAgentActionJSONRequestBody, reqEditors ...RequestEditorFn) (*PlatformAgentActionResponse, error)
 
-	// ListPlatformAuditWithResponse Audit events across every org (platform staff, §12.6).
+	// ListPlatformAuditWithResponse Audit events across every org (platform staff).
 	//
-	// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited (§12.6), one event per call.
+	// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited, one event per call.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19574,14 +19574,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /platform/knowledge (the `ListKnowledgePackSizes` operationId).
 	ListKnowledgePackSizesWithResponse(ctx context.Context, params *ListKnowledgePackSizesParams, reqEditors ...RequestEditorFn) (*ListKnowledgePackSizesResponse, error)
 
-	// GetPlatformPolicyWithResponse The read-only platform baseline policy (§8.6).
+	// GetPlatformPolicyWithResponse The read-only platform baseline policy.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /platform/policy (the `GetPlatformPolicy` operationId).
 	GetPlatformPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPlatformPolicyResponse, error)
 
-	// ListRedTeamReportsWithResponse Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+	// ListRedTeamReportsWithResponse Reports of the scheduled red-team job against the S3/S4 gate (platform staff).
 	//
 	// Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
 	//
@@ -19590,32 +19590,32 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /platform/redteam/reports (the `ListRedTeamReports` operationId).
 	ListRedTeamReportsWithResponse(ctx context.Context, params *ListRedTeamReportsParams, reqEditors ...RequestEditorFn) (*ListRedTeamReportsResponse, error)
 
-	// ListRulesetReleasesWithResponse Ruleset releases, newest first (platform staff, §10.1 console).
+	// ListRulesetReleasesWithResponse Ruleset releases, newest first (platform staff).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /platform/ruleset-releases (the `ListRulesetReleases` operationId).
 	ListRulesetReleasesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRulesetReleasesResponse, error)
 
-	// CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
+	// CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff).
 	//
-	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle. Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
 	CreateRulesetReleaseWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRulesetReleaseResponse, error)
 
-	// CreateRulesetReleaseWithResponse Register a ruleset release (platform staff, §9.2).
+	// CreateRulesetReleaseWithResponse Register a ruleset release (platform staff).
 	//
-	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+	// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle. Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /platform/ruleset-releases (the `CreateRulesetRelease` operationId).
 	CreateRulesetReleaseWithResponse(ctx context.Context, body CreateRulesetReleaseJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRulesetReleaseResponse, error)
 
-	// ResolveRefWithResponse Resolve ns/name@range to a concrete version (§9.4 step 1).
+	// ResolveRefWithResponse Resolve ns/name@range to a concrete version.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19629,7 +19629,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /review-items/{id} (the `GetReviewItem` operationId).
 	GetReviewItemWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetReviewItemResponse, error)
 
-	// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+	// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, unless platform staff).
 	//
 	// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 	//
@@ -19638,7 +19638,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /review-items/{id}/decision (the `DecideReviewItem` operationId).
 	DecideReviewItemWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecideReviewItemResponse, error)
 
-	// DecideReviewItemWithResponse Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+	// DecideReviewItemWithResponse Approve or reject a version under review (not its author, unless platform staff).
 	//
 	// An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 	//
@@ -19663,7 +19663,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListReviewQueueWithResponse Pending review items (platform staff, or an org's security_reviewer for its queue).
 	//
-	// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's (agentry#912); staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
+	// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's; staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19672,7 +19672,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetLatestRulesetAttestationWithResponse DSSE attestation over the bundle `…/latest/bundle` serves.
 	//
-	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). The worker signs it at start and stores it, so every replica serves the same envelope (agentry#479). 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
+	// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised. The worker signs it at start and stores it, so every replica serves the same envelope. 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19685,21 +19685,21 @@ type ClientWithResponsesInterface interface {
 	//
 	// `X-Agentry-Bundle-Semver`: the ruleset release semver; `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag`: the same digest.
 	//
-	// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+	// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet; this endpoint pins by digest only.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /ruleset-releases/latest/bundle (the `GetLatestRulesetBundle` operationId).
 	GetLatestRulesetBundleWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetLatestRulesetBundleResponse, error)
 
-	// SearchAgentsWithResponse Full-text search over public agents with facets (§10.4).
+	// SearchAgentsWithResponse Full-text search over public agents with facets.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /search (the `SearchAgents` operationId).
 	SearchAgentsWithResponse(ctx context.Context, params *SearchAgentsParams, reqEditors ...RequestEditorFn) (*SearchAgentsResponse, error)
 
-	// ListAgentsByTagWithResponse Public agents tagged with {tag} (§9.2).
+	// ListAgentsByTagWithResponse Public agents tagged with {tag}.
 	//
 	// Matches the tag list of each agent's latest published manifest (`manifest.tags`, V8). Blocked agents never appear.
 	//
@@ -19729,7 +19729,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /user (the `UpdateCurrentUser` operationId).
 	UpdateCurrentUserWithResponse(ctx context.Context, body UpdateCurrentUserJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCurrentUserResponse, error)
 
-	// ListUserActivityWithResponse The caller's own activity — the audit events they performed (agentry#192).
+	// ListUserActivityWithResponse The caller's own activity — the audit events they performed.
 	//
 	// Sign-ins, tokens and SSH keys created or revoked, profile and notification changes, publishes and reviews, newest first, with the address and user agent each was performed from. Keyset-paged like the agent activity feed.
 	//
@@ -19747,16 +19747,16 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /user/clear-data (the `ClearCurrentUserData` operationId).
 	ClearCurrentUserDataWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ClearCurrentUserDataResponse, error)
 
-	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
+	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUserWithResponse(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*DeleteCurrentUserResponse, error)
 
-	// ListUserDependencyAlertsWithResponse Open dependency alerts on published versions the caller submitted (agentry#177).
+	// ListUserDependencyAlertsWithResponse Open dependency alerts on published versions the caller submitted.
 	//
 	// A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. A front end shows these; the site renders them as the banner after sign-in and on the dashboard.
 	//
@@ -19765,7 +19765,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
 	ListUserDependencyAlertsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserDependencyAlertsResponse, error)
 
-	// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+	// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account.
 	//
 	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
 	//
@@ -19774,7 +19774,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
 	GetUserDirectoryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserDirectoryResponse, error)
 
-	// DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service (agentry#164).
+	// DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service.
 	//
 	// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
 	//
@@ -19797,9 +19797,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /user/domain-org/request-access (the `RequestDomainOrgAccess` operationId).
 	RequestDomainOrgAccessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RequestDomainOrgAccessResponse, error)
 
-	// SendEmailVerificationWithResponse Send the caller a new activation link (agentry#861).
+	// SendEmailVerificationWithResponse Send the caller a new activation link.
 	//
-	// Mails a new link that confirms the account's address and so activates it (plan unactivated-accounts.md). An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
+	// Mails a new link that confirms the account's address and so activates it. An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19842,7 +19842,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
 	PutAccountInstallWithResponse(ctx context.Context, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody, reqEditors ...RequestEditorFn) (*PutAccountInstallResponse, error)
 
-	// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
+	// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller.
 	//
 	// Email per kind of notification, and whether the dependency-alert banner shows in a front end (the site reads it). An account that never changed anything reads back with everything on.
 	//
@@ -19851,48 +19851,48 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /user/notifications (the `GetUserNotificationSettings` operationId).
 	GetUserNotificationSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserNotificationSettingsResponse, error)
 
-	// UpdateUserNotificationSettingsWithBodyWithResponse Replace the caller's notification settings (agentry#190).
+	// UpdateUserNotificationSettingsWithBodyWithResponse Replace the caller's notification settings.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error)
 
-	// UpdateUserNotificationSettingsWithResponse Replace the caller's notification settings (agentry#190).
+	// UpdateUserNotificationSettingsWithResponse Replace the caller's notification settings.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettingsWithResponse(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error)
 
-	// GetUserReportSettingsWithResponse The report design the caller's PDF reports take (agentry#989, agentry#1024).
+	// GetUserReportSettingsWithResponse The report design the caller's PDF reports take.
 	//
-	// A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
+	// A profile setting: the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
 	GetUserReportSettingsWithResponse(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error)
 
-	// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
+	// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings.
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
 	UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
 
-	// UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
+	// UpdateUserReportSettingsWithResponse Replace the caller's report settings.
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
+	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
 	UpdateUserReportSettingsWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
 
-	// DeleteUserReportLogoWithResponse Remove the logo from the caller's report design (agentry#1025).
+	// DeleteUserReportLogoWithResponse Remove the logo from the caller's report design.
 	//
 	// The design stays. Removing a logo that is not there is not an error.
 	//
@@ -19901,9 +19901,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
 	DeleteUserReportLogoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteUserReportLogoResponse, error)
 
-	// PutUserReportLogoWithBodyWithResponse Set the logo of the caller's report design (agentry#1025).
+	// PutUserReportLogoWithBodyWithResponse Set the logo of the caller's report design.
 	//
-	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan report-designs.md D9). The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19919,7 +19919,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /user/sessions (the `RevokeOtherUserSessions` operationId).
 	RevokeOtherUserSessionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RevokeOtherUserSessionsResponse, error)
 
-	// ListUserSessionsWithResponse List the caller's active browser sessions (§12.1).
+	// ListUserSessionsWithResponse List the caller's active browser sessions.
 	//
 	// Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error). A PAT is not a way to enumerate someone's browser sessions.
 	//
@@ -19928,7 +19928,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /user/sessions (the `ListUserSessions` operationId).
 	ListUserSessionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserSessionsResponse, error)
 
-	// RevokeUserSessionWithResponse Revoke one of the caller's own sessions (§12.1).
+	// RevokeUserSessionWithResponse Revoke one of the caller's own sessions.
 	//
 	// Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else. The two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 	//
@@ -19937,7 +19937,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /user/sessions/{sessionId} (the `RevokeUserSession` operationId).
 	RevokeUserSessionWithResponse(ctx context.Context, sessionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeUserSessionResponse, error)
 
-	// ListSshKeysWithResponse List the caller's SSH public keys for the git transport (§6.1 Q7).
+	// ListSshKeysWithResponse List the caller's SSH public keys for the git transport.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19946,7 +19946,7 @@ type ClientWithResponsesInterface interface {
 
 	// AddSshKeyWithBodyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 	//
-	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys; a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19955,7 +19955,7 @@ type ClientWithResponsesInterface interface {
 
 	// AddSshKeyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 	//
-	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+	// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys; a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19969,14 +19969,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /user/ssh-keys/{keyId} (the `RemoveSshKey` operationId).
 	RemoveSshKeyWithResponse(ctx context.Context, keyId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveSshKeyResponse, error)
 
-	// UnstarAgentWithResponse Remove a star (idempotent, §9.2).
+	// UnstarAgentWithResponse Remove a star (idempotent).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /user/stars/{ns}/{name} (the `UnstarAgent` operationId).
 	UnstarAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*UnstarAgentResponse, error)
 
-	// StarAgentWithResponse Star an agent (idempotent, §9.2).
+	// StarAgentWithResponse Star an agent (idempotent).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19990,14 +19990,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /user/tokens (the `ListTokens` operationId).
 	ListTokensWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTokensResponse, error)
 
-	// CreateTokenWithBodyWithResponse Mint a PAT. The secret is returned exactly once (D-22).
+	// CreateTokenWithBodyWithResponse Mint a PAT. The secret is returned exactly once.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /user/tokens (the `CreateToken` operationId).
 	CreateTokenWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTokenResponse, error)
 
-	// CreateTokenWithResponse Mint a PAT. The secret is returned exactly once (D-22).
+	// CreateTokenWithResponse Mint a PAT. The secret is returned exactly once.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20006,7 +20006,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20015,21 +20015,21 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /user/tokens/desktop-grant (the `CreateDesktopGrant` operationId).
 	CreateDesktopGrantWithResponse(ctx context.Context, body CreateDesktopGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDesktopGrantResponse, error)
 
-	// RevokeTokenWithResponse Revoke a PAT immediately (§12.3).
+	// RevokeTokenWithResponse Revoke a PAT immediately.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /user/tokens/{tokenId} (the `RevokeToken` operationId).
 	RevokeTokenWithResponse(ctx context.Context, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeTokenResponse, error)
 
-	// ClearTrustedDevicesWithResponse Clear every remembered browser of the caller's account (agentry#672).
+	// ClearTrustedDevicesWithResponse Clear every remembered browser of the caller's account.
 	//
 	// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
 	//
@@ -20038,9 +20038,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /user/trusted-devices (the `ClearTrustedDevices` operationId).
 	ClearTrustedDevicesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ClearTrustedDevicesResponse, error)
 
-	// CountTrustedDevicesWithResponse How many browsers skip the caller's second factor (agentry#672).
+	// CountTrustedDevicesWithResponse How many browsers skip the caller's second factor.
 	//
-	// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all (DEV-163). A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
+	// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all. A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -28531,9 +28531,9 @@ func (r UpdateVoiceSettingsResponse) ContentType() string {
 	return ""
 }
 
-// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed (§8.7).
+// ListAdvisoriesWithResponse Published advisories — for one agent, or the global feed.
 //
-// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here (agentry#313). The one exception is a holder of one of its releases (agentry#949): a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header (§9.1). Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
+// With `affecting`, the advisories against that agent (newest first), under the agent's own read rule: a private agent's advisories are its readers' (the owning user, the owning org's admins, and anyone holding a grant on the agent), and anyone else — anonymous or signed in — gets the 404 a missing name gets, so the agent's existence is not discoverable here. The one exception is a holder of one of its releases: a signed-in caller whose account install names the agent, or any caller presenting with `digest` the archive digest of a version of it that was ever published, gets its advisories whatever its visibility, retired or deleted state now, so the people who installed it while it was public still learn of an advisory published after it went private. Without it, the global feed: every published advisory against a public agent, newest first, keyset-paged with `cursor`/`limit` and a `Link: rel="next"` header. Each item carries `agent` (`ns/name`) so a feed reader can find the affected QuickAgent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28548,7 +28548,7 @@ func (c *ClientWithResponses) ListAdvisoriesWithResponse(ctx context.Context, pa
 
 // GetAdvisoryWithResponse One published advisory (permalink); public agents only.
 //
-// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting` (agentry#949).
+// Only an advisory against a public agent resolves; any other id is a 404, so a private agent's advisory is not discoverable by id. A holder of the agent's release reads it through `affecting`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28563,7 +28563,7 @@ func (c *ClientWithResponses) GetAdvisoryWithResponse(ctx context.Context, advis
 
 // ListAgentsWithResponse List agents in a namespace (public ones for everyone).
 //
-// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page (agentry#942) narrows and orders the list with `q`, `state`, `forks` (agentry#943) and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
+// Public agents for everyone; the private ones too for the namespace's owner and the active members of its organization. A deleted agent is never listed. The publisher's page narrows and orders the list with `q`, `state`, `forks` and `sort`, and each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a public agent, `forkedFrom` and `forkState` on a fork and, when it is retired, `retiredAt`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28576,7 +28576,7 @@ func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params
 	return ParseListAgentsResponse(rsp)
 }
 
-// CreateAgentWithBodyWithResponse Create an agent and its hosted git repository (§9.2).
+// CreateAgentWithBodyWithResponse Create an agent and its hosted git repository.
 //
 // A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 //
@@ -28591,7 +28591,7 @@ func (c *ClientWithResponses) CreateAgentWithBodyWithResponse(ctx context.Contex
 	return ParseCreateAgentResponse(rsp)
 }
 
-// CreateAgentWithResponse Create an agent and its hosted git repository (§9.2).
+// CreateAgentWithResponse Create an agent and its hosted git repository.
 //
 // A private agent counts against the namespace's private-agent cap when the deployment's entitlements set one (the hosted product's subscription tiers): at the cap the answer is `422` with the problem type `private-agent-cap`, and the same on `PATCH` when an agent is turned private. A core registry caps nothing. A cap never deletes or hides an agent that is already private.
 //
@@ -28606,9 +28606,9 @@ func (c *ClientWithResponses) CreateAgentWithResponse(ctx context.Context, body 
 	return ParseCreateAgentResponse(rsp)
 }
 
-// DeleteAgentWithResponse Delete an agent (the namespace's administrators, §9.2, agentry#942).
+// DeleteAgentWithResponse Delete an agent (the namespace's administrators).
 //
-// A token needs `agent:manage` or `org:admin` (agentry#993). An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone (agentry#942): every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — §4.3 keeps version rows forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
+// A token needs `agent:manage` or `org:admin`. An agent with no version row is deleted outright, with its hosted repository. An agent with version history is deleted as a tombstone: every published or quarantined version is yanked, the agent becomes private, and every route by name, the git transport and hosted runs answer the 404 a missing name gets, to everyone. Nothing is removed — version rows are kept forever, and the archives, receipts and audit trail stay — and the name stays held in its namespace: creating it again answers `409 name-held`. It cannot be undone. A tombstone needs `confirm` set to the agent's name (`422 confirm-name` otherwise). Refused with `409` while a version is still in the pipeline or in review, and while the agent carries trust & safety records (advisories, abuse reports, a quarantine or a block), which outlive the publisher's wish to remove it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28623,7 +28623,7 @@ func (c *ClientWithResponses) DeleteAgentWithResponse(ctx context.Context, ns Na
 
 // GetAgentWithResponse Agent metadata (public agents readable by anyone).
 //
-// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}` (agentry#313).
+// A public agent is readable by anyone. A private agent is readable by its owner, the owning org's admins, and anyone holding a grant on it; every other caller, anonymous included, gets the 404 a missing name gets — never a 401 or 403 that would confirm the name exists. The same rule holds on every route under `/agents/{ns}/{name}`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28662,7 +28662,7 @@ func (c *ClientWithResponses) UpdateAgentWithResponse(ctx context.Context, ns Na
 	return ParseUpdateAgentResponse(rsp)
 }
 
-// ReportAbuseWithBodyWithResponse Report malicious or abusive content (authed, rate-limited §8.7).
+// ReportAbuseWithBodyWithResponse Report malicious or abusive content (authed, rate-limited).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28675,7 +28675,7 @@ func (c *ClientWithResponses) ReportAbuseWithBodyWithResponse(ctx context.Contex
 	return ParseReportAbuseResponse(rsp)
 }
 
-// ReportAbuseWithResponse Report malicious or abusive content (authed, rate-limited §8.7).
+// ReportAbuseWithResponse Report malicious or abusive content (authed, rate-limited).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28688,7 +28688,7 @@ func (c *ClientWithResponses) ReportAbuseWithResponse(ctx context.Context, ns Na
 	return ParseReportAbuseResponse(rsp)
 }
 
-// ListAgentActivityWithResponse Recent activity for an agent (§9.2).
+// ListAgentActivityWithResponse Recent activity for an agent.
 //
 // Drawn from the audit log. Anyone who can see a public agent gets the public-safe subset: publishes and yanks; callers with an explicit read grant (or namespace-derived read) see the fuller stream including submissions, settings changes, and grant changes.
 //
@@ -28703,7 +28703,7 @@ func (c *ClientWithResponses) ListAgentActivityWithResponse(ctx context.Context,
 	return ParseListAgentActivityResponse(rsp)
 }
 
-// ForkAgentWithBodyWithResponse Fork a public agent into a namespace the caller may create in (agentry#943).
+// ForkAgentWithBodyWithResponse Fork a public agent into a namespace the caller may create in.
 //
 // Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
 //
@@ -28718,7 +28718,7 @@ func (c *ClientWithResponses) ForkAgentWithBodyWithResponse(ctx context.Context,
 	return ParseForkAgentResponse(rsp)
 }
 
-// ForkAgentWithResponse Fork a public agent into a namespace the caller may create in (agentry#943).
+// ForkAgentWithResponse Fork a public agent into a namespace the caller may create in.
 //
 // Makes a private copy of a public agent: a new agent in `namespace`, under the origin's name unless `name` gives another, that records the origin and the published version it was taken from, for good. A fork is never public (`PATCH` to public answers `409 fork-stays-private`). The fork is answered `202` with `forkState: copying`: a worker then copies the origin's repository (every branch and tag, objects copied rather than shared), writes one commit, "Fork of ns/name@version", that renames the manifest into the fork's namespace, tags it with the origin's version and submits it through the pipeline like any submission, charged like one. `forkState` is then `ready`, or `failed` with `forkDetail` saying why. The origin must be readable, public, neither quarantined nor blocked, and have a published version; the caller must be able to create a private agent in `namespace` (its owner, or an active member of the organization), within its agent quota and private-agent cap. A name the namespace already has answers `409 name-taken`; one a deleted agent holds, `409 name-held`.
 //
@@ -28824,7 +28824,7 @@ func (c *ClientWithResponses) SetAgentUserGrantWithResponse(ctx context.Context,
 	return ParseSetAgentUserGrantResponse(rsp)
 }
 
-// GetAgentReadmeWithResponse The agent README rendered to sanitized HTML (§10.3, D-11).
+// GetAgentReadmeWithResponse The agent README rendered to sanitized HTML.
 //
 // Markdown is rendered server-side through a strict allowlist: no raw HTML, no user styles, no SVG, external links rewritten, and invisible or bidi Unicode replaced with visible placeholders.
 //
@@ -28839,9 +28839,9 @@ func (c *ClientWithResponses) GetAgentReadmeWithResponse(ctx context.Context, ns
 	return ParseGetAgentReadmeResponse(rsp)
 }
 
-// RestoreAgentWithResponse Restore a retired agent (the namespace's administrators, agentry#942).
+// RestoreAgentWithResponse Restore a retired agent (the namespace's administrators).
 //
-// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin` (agentry#993). Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
+// Returns a retired agent to the visibility it had. A token needs `agent:manage` or `org:admin`. Back to public it meets the rules of any agent becoming public (`409 agent-unscanned`, also when pipeline: skip was set while it was retired); back to private it takes a place under the private-agent cap again (`422 private-agent-cap`). `409 agent-not-retired` when it is not retired.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28854,9 +28854,9 @@ func (c *ClientWithResponses) RestoreAgentWithResponse(ctx context.Context, ns N
 	return ParseRestoreAgentResponse(rsp)
 }
 
-// RetireAgentWithResponse Retire an agent (the namespace's administrators, agentry#942).
+// RetireAgentWithResponse Retire an agent (the namespace's administrators).
 //
-// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin` (agentry#993). A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
+// Makes the agent private and labels it retired, keeping the visibility it had for Restore. A token needs `agent:manage` or `org:admin`. A retired agent takes no submission (`409 agent-retired`), is in no public listing, and holds no place under the private-agent cap. Its versions are untouched. Retiring a retired agent changes nothing.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28869,7 +28869,7 @@ func (c *ClientWithResponses) RetireAgentWithResponse(ctx context.Context, ns Na
 	return ParseRetireAgentResponse(rsp)
 }
 
-// GetAgentStatsWithResponse Star count and install counts for an agent (§9.2).
+// GetAgentStatsWithResponse Star count and install counts for an agent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28895,9 +28895,9 @@ func (c *ClientWithResponses) ListVersionsWithResponse(ctx context.Context, ns N
 	return ParseListVersionsResponse(rsp)
 }
 
-// SubmitVersionWithBodyWithResponse Submit a version for publication (§7 state machine entry).
+// SubmitVersionWithBodyWithResponse Submit a version for publication.
 //
-// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 // A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -28911,9 +28911,9 @@ func (c *ClientWithResponses) SubmitVersionWithBodyWithResponse(ctx context.Cont
 	return ParseSubmitVersionResponse(rsp)
 }
 
-// SubmitVersionWithResponse Submit a version for publication (§7 state machine entry).
+// SubmitVersionWithResponse Submit a version for publication.
 //
-// Two sources (§6.5): JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
 // A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -28940,7 +28940,7 @@ func (c *ClientWithResponses) GetVersionInfoWithResponse(ctx context.Context, ns
 	return ParseGetVersionInfoResponse(rsp)
 }
 
-// GetVersionAttestationWithResponse The signed DSSE attestation (§8.8), verbatim.
+// GetVersionAttestationWithResponse The signed DSSE attestation, verbatim.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28953,7 +28953,7 @@ func (c *ClientWithResponses) GetVersionAttestationWithResponse(ctx context.Cont
 	return ParseGetVersionAttestationResponse(rsp)
 }
 
-// DownloadVersionWithResponse Download the release archive (§9.4; counts an install).
+// DownloadVersionWithResponse Download the release archive (counts an install).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28966,7 +28966,7 @@ func (c *ClientWithResponses) DownloadVersionWithResponse(ctx context.Context, n
 	return ParseDownloadVersionResponse(rsp)
 }
 
-// StreamVersionEventsWithResponse Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+// StreamVersionEventsWithResponse Server-sent events for a version's pipeline progress.
 //
 // Streams `event: status` messages (JSON: status, statusReason, the scan stages completed so far, done) whenever something changes, about once a second while a scan runs, and closes after the terminal state — published, rejected, needs_review, quarantined — or after five minutes, whichever comes first. Same visibility rules as the version itself. Clients that cannot consume SSE poll the version resource instead.
 //
@@ -28981,9 +28981,9 @@ func (c *ClientWithResponses) StreamVersionEventsWithResponse(ctx context.Contex
 	return ParseStreamVersionEventsResponse(rsp)
 }
 
-// GetVersionFileWithResponse Read one file from the version's release archive (§10.2).
+// GetVersionFileWithResponse Read one file from the version's release archive.
 //
-// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes (§10.3). Same access gate as listVersionFiles.
+// Text files return UTF-8 content up to the display cap with a truncation flag; binary files return metadata only (binary true), never raw bytes. Same access gate as listVersionFiles.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28996,9 +28996,9 @@ func (c *ClientWithResponses) GetVersionFileWithResponse(ctx context.Context, ns
 	return ParseGetVersionFileResponse(rsp)
 }
 
-// ListVersionFilesWithResponse List the files inside the version's release archive (§10.2).
+// ListVersionFilesWithResponse List the files inside the version's release archive.
 //
-// The same inventory a reviewer sees (§10.1), opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
+// The same inventory a reviewer sees, opened under the download access gate: published and yanked versions list, blocked versions return 410, quarantined versions 409. Browsing does not count an install.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29011,7 +29011,7 @@ func (c *ClientWithResponses) ListVersionFilesWithResponse(ctx context.Context, 
 	return ParseListVersionFilesResponse(rsp)
 }
 
-// GetVersionManifestWithResponse The validated manifest (canonical JSON, §4.2).
+// GetVersionManifestWithResponse The validated manifest (canonical JSON).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29024,7 +29024,7 @@ func (c *ClientWithResponses) GetVersionManifestWithResponse(ctx context.Context
 	return ParseGetVersionManifestResponse(rsp)
 }
 
-// GetVersionReportWithResponse The scan report for a version (findings, ruleset, verdict, §8).
+// GetVersionReportWithResponse The scan report for a version (findings, ruleset, verdict).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29037,7 +29037,7 @@ func (c *ClientWithResponses) GetVersionReportWithResponse(ctx context.Context, 
 	return ParseGetVersionReportResponse(rsp)
 }
 
-// YankVersionWithBodyWithResponse Yank a published version (§5.5 semantics; publish permission).
+// YankVersionWithBodyWithResponse Yank a published version (publish permission).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29050,7 +29050,7 @@ func (c *ClientWithResponses) YankVersionWithBodyWithResponse(ctx context.Contex
 	return ParseYankVersionResponse(rsp)
 }
 
-// YankVersionWithResponse Yank a published version (§5.5 semantics; publish permission).
+// YankVersionWithResponse Yank a published version (publish permission).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29063,9 +29063,9 @@ func (c *ClientWithResponses) YankVersionWithResponse(ctx context.Context, ns Na
 	return ParseYankVersionResponse(rsp)
 }
 
-// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session (§12.1).
+// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session.
 //
-// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
+// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29078,9 +29078,9 @@ func (c *ClientWithResponses) TotpChallengeWithBodyWithResponse(ctx context.Cont
 	return ParseTotpChallengeResponse(rsp)
 }
 
-// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session (§12.1).
+// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session.
 //
-// Second leg of a login that could not carry a TOTP code inline. Today the only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads (agentry#457), so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
+// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29095,7 +29095,7 @@ func (c *ClientWithResponses) TotpChallengeWithResponse(ctx context.Context, bod
 
 // TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29110,7 +29110,7 @@ func (c *ClientWithResponses) TotpSetupWithResponse(ctx context.Context, reqEdit
 
 // TotpVerifyWithBodyWithResponse Confirm TOTP enrollment with a current code.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29125,7 +29125,7 @@ func (c *ClientWithResponses) TotpVerifyWithBodyWithResponse(ctx context.Context
 
 // TotpVerifyWithResponse Confirm TOTP enrollment with a current code.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29140,7 +29140,7 @@ func (c *ClientWithResponses) TotpVerifyWithResponse(ctx context.Context, body T
 
 // ExchangeDesktopCodeWithBodyWithResponse Exchange a desktop sign-in code for the PAT it granted.
 //
-// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29155,7 +29155,7 @@ func (c *ClientWithResponses) ExchangeDesktopCodeWithBodyWithResponse(ctx contex
 
 // ExchangeDesktopCodeWithResponse Exchange a desktop sign-in code for the PAT it granted.
 //
-// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class (§19).
+// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29170,7 +29170,7 @@ func (c *ClientWithResponses) ExchangeDesktopCodeWithResponse(ctx context.Contex
 
 // LoginWithBodyWithResponse Password (+TOTP when enabled) login; sets the session cookie.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29185,7 +29185,7 @@ func (c *ClientWithResponses) LoginWithBodyWithResponse(ctx context.Context, con
 
 // LoginWithResponse Password (+TOTP when enabled) login; sets the session cookie.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29200,7 +29200,7 @@ func (c *ClientWithResponses) LoginWithResponse(ctx context.Context, body LoginJ
 
 // LogoutWithResponse Revoke the current session.
 //
-// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO, §12.4); the registry session is revoked either way.
+// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29213,9 +29213,9 @@ func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, reqEditors
 	return ParseLogoutResponse(rsp)
 }
 
-// SocialOidcCallbackWithResponse Social login redirect URI: establish a session (§12.1).
+// SocialOidcCallbackWithResponse Social login redirect URI: establish a session.
 //
-// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email (T-12); otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
+// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29228,9 +29228,9 @@ func (c *ClientWithResponses) SocialOidcCallbackWithResponse(ctx context.Context
 	return ParseSocialOidcCallbackResponse(rsp)
 }
 
-// SocialOidcStartWithResponse Begin social login with a configured provider (§12.1).
+// SocialOidcStartWithResponse Begin social login with a configured provider.
 //
-// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso (§12.4).
+// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29243,9 +29243,9 @@ func (c *ClientWithResponses) SocialOidcStartWithResponse(ctx context.Context, p
 	return ParseSocialOidcStartResponse(rsp)
 }
 
-// RegisterWithBodyWithResponse Create an individual account (email+password, §12.1).
+// RegisterWithBodyWithResponse Create an individual account (email+password).
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29258,9 +29258,9 @@ func (c *ClientWithResponses) RegisterWithBodyWithResponse(ctx context.Context, 
 	return ParseRegisterResponse(rsp)
 }
 
-// RegisterWithResponse Create an individual account (email+password, §12.1).
+// RegisterWithResponse Create an individual account (email+password).
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29275,7 +29275,7 @@ func (c *ClientWithResponses) RegisterWithResponse(ctx context.Context, body Reg
 
 // VerifyEmailWithBodyWithResponse Confirm an email address with the mailed token.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29290,7 +29290,7 @@ func (c *ClientWithResponses) VerifyEmailWithBodyWithResponse(ctx context.Contex
 
 // VerifyEmailWithResponse Confirm an email address with the mailed token.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29303,7 +29303,7 @@ func (c *ClientWithResponses) VerifyEmailWithResponse(ctx context.Context, body 
 	return ParseVerifyEmailResponse(rsp)
 }
 
-// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding (§8.5 dismissals).
+// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29316,7 +29316,7 @@ func (c *ClientWithResponses) SetFindingVerdictWithBodyWithResponse(ctx context.
 	return ParseSetFindingVerdictResponse(rsp)
 }
 
-// SetFindingVerdictWithResponse Confirm or dismiss a finding (§8.5 dismissals).
+// SetFindingVerdictWithResponse Confirm or dismiss a finding.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29415,7 +29415,7 @@ func (c *ClientWithResponses) WrapKnowledgeKeyWithResponse(ctx context.Context, 
 	return ParseWrapKnowledgeKeyResponse(rsp)
 }
 
-// ListKnowledgePacksWithResponse The caller's knowledge packs, by name (agentry#593).
+// ListKnowledgePacksWithResponse The caller's knowledge packs, by name.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29540,7 +29540,7 @@ func (c *ClientWithResponses) GetKnowledgeUsageWithResponse(ctx context.Context,
 	return ParseGetKnowledgeUsageResponse(rsp)
 }
 
-// GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version (agentry#177).
+// GetMcpServerScanWithResponse The registry's last vulnerability check of one MCP server package version.
 //
 // What S7 recorded for the exact package version: `safe` means no known advisories at `lastCheckedAt`, `vulnerable` lists them, `error` means the last lookup failed and the advisories are the last known. Each advisory carries its own `severity` and the gate's rating of it, `gateSeverity`. 404 when no manifest has ever declared this version. The runner asks here before installing a declared server.
 //
@@ -29555,7 +29555,7 @@ func (c *ClientWithResponses) GetMcpServerScanWithResponse(ctx context.Context, 
 	return ParseGetMcpServerScanResponse(rsp)
 }
 
-// GetMetaWithResponse Server version and self-host feature flags (§9.2).
+// GetMetaWithResponse Server version and self-host feature flags.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29568,9 +29568,9 @@ func (c *ClientWithResponses) GetMetaWithResponse(ctx context.Context, reqEditor
 	return ParseGetMetaResponse(rsp)
 }
 
-// CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted (agentry#708).
+// CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted.
 //
-// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29583,9 +29583,9 @@ func (c *ClientWithResponses) CheckDraftWithBodyWithResponse(ctx context.Context
 	return ParseCheckDraftResponse(rsp)
 }
 
-// CheckDraftWithResponse AI Review of a finished draft before it is submitted (agentry#708).
+// CheckDraftWithResponse AI Review of a finished draft before it is submitted.
 //
-// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft, DEV-150). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29598,7 +29598,7 @@ func (c *ClientWithResponses) CheckDraftWithResponse(ctx context.Context, body C
 	return ParseCheckDraftResponse(rsp)
 }
 
-// ScanModelInputWithBodyWithResponse AI Review of text a model is about to read (agentry#608).
+// ScanModelInputWithBodyWithResponse AI Review of text a model is about to read.
 //
 // Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
@@ -29613,7 +29613,7 @@ func (c *ClientWithResponses) ScanModelInputWithBodyWithResponse(ctx context.Con
 	return ParseScanModelInputResponse(rsp)
 }
 
-// ScanModelInputWithResponse AI Review of text a model is about to read (agentry#608).
+// ScanModelInputWithResponse AI Review of text a model is about to read.
 //
 // Scans pushed text as model input: the deployment's judge is asked the model-input question set (injection, exfiltration, user deception, obfuscation), in 8 KiB chunks asked in parallel, and answers per chunk with scores. The text's score is the highest over its chunks and questions; 2 or more (the gate's medium) is `withheld`, and a chunk the judge could not answer (an error, a timeout, an answer out of shape) makes the text `not_scanned`, which a caller treats as withheld. Nothing of the text is kept or logged. `usage` counts the judge's requests and tokens for the record; it is never a price (AI Review is charged per operation, not per scan). Open to platform staff by session, and to a hosted job's credential in `X-Agentry-Job-Token` where an extension admits it; a token is refused whatever its scopes. 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
@@ -29628,7 +29628,7 @@ func (c *ClientWithResponses) ScanModelInputWithResponse(ctx context.Context, bo
 	return ParseScanModelInputResponse(rsp)
 }
 
-// SearchModelInputWithBodyWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
+// SearchModelInputWithBodyWithResponse Web search through the deployment's provider, every result scanned.
 //
 // Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 //
@@ -29643,7 +29643,7 @@ func (c *ClientWithResponses) SearchModelInputWithBodyWithResponse(ctx context.C
 	return ParseSearchModelInputResponse(rsp)
 }
 
-// SearchModelInputWithResponse Web search through the deployment's provider, every result scanned (agentry#608).
+// SearchModelInputWithResponse Web search through the deployment's provider, every result scanned.
 //
 // Searches the web through the deployment's search provider with the registry's own key, then scans each result (its title, address and snippet) as model input, as `POST /model-input/scan` does. Only scanned results come back: a `withheld` or `not_scanned` result carries its origin (scheme and host), verdict and scores, never its title, its snippet or the rest of its address. The query goes to the search provider and is neither kept nor logged. Callers as for `POST /model-input/scan`. 503 `web-search-unavailable` when no provider is configured, 503 `model-input-unavailable` when there is no judge to scan the results, 502 `web-search-failed` when the provider did not answer.
 //
@@ -29723,7 +29723,7 @@ func (c *ClientWithResponses) UpdateOrgWithResponse(ctx context.Context, org Org
 	return ParseUpdateOrgResponse(rsp)
 }
 
-// ListOrgAuditWithResponse Org audit events, newest first (admin+; cursor paged, §12.6).
+// ListOrgAuditWithResponse Org audit events, newest first (admin+; cursor paged).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29736,7 +29736,7 @@ func (c *ClientWithResponses) ListOrgAuditWithResponse(ctx context.Context, org 
 	return ParseListOrgAuditResponse(rsp)
 }
 
-// CreateAuditExportWithBodyWithResponse Start an async NDJSON audit export (admin+, §12.6).
+// CreateAuditExportWithBodyWithResponse Start an async NDJSON audit export (admin+).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29749,7 +29749,7 @@ func (c *ClientWithResponses) CreateAuditExportWithBodyWithResponse(ctx context.
 	return ParseCreateAuditExportResponse(rsp)
 }
 
-// CreateAuditExportWithResponse Start an async NDJSON audit export (admin+, §12.6).
+// CreateAuditExportWithResponse Start an async NDJSON audit export (admin+).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29762,7 +29762,7 @@ func (c *ClientWithResponses) CreateAuditExportWithResponse(ctx context.Context,
 	return ParseCreateAuditExportResponse(rsp)
 }
 
-// GetAuditExportWithResponse Poll an audit export's status and download reference (admin+, §12.6).
+// GetAuditExportWithResponse Poll an audit export's status and download reference (admin+).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29801,7 +29801,7 @@ func (c *ClientWithResponses) DecommissionOrgWithResponse(ctx context.Context, o
 	return ParseDecommissionOrgResponse(rsp)
 }
 
-// ListDomainClaimsWithResponse List domain claims (admin+, §12.4).
+// ListDomainClaimsWithResponse List domain claims (admin+).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29814,7 +29814,7 @@ func (c *ClientWithResponses) ListDomainClaimsWithResponse(ctx context.Context, 
 	return ParseListDomainClaimsResponse(rsp)
 }
 
-// CreateDomainClaimWithBodyWithResponse Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+// CreateDomainClaimWithBodyWithResponse Start a domain claim; returns the DNS TXT challenge (admin+).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29827,7 +29827,7 @@ func (c *ClientWithResponses) CreateDomainClaimWithBodyWithResponse(ctx context.
 	return ParseCreateDomainClaimResponse(rsp)
 }
 
-// CreateDomainClaimWithResponse Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+// CreateDomainClaimWithResponse Start a domain claim; returns the DNS TXT challenge (admin+).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29840,7 +29840,7 @@ func (c *ClientWithResponses) CreateDomainClaimWithResponse(ctx context.Context,
 	return ParseCreateDomainClaimResponse(rsp)
 }
 
-// VerifyDomainClaimWithBodyWithResponse Check the DNS TXT record and mark verified (admin+, §12.4).
+// VerifyDomainClaimWithBodyWithResponse Check the DNS TXT record and mark verified (admin+).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29853,7 +29853,7 @@ func (c *ClientWithResponses) VerifyDomainClaimWithBodyWithResponse(ctx context.
 	return ParseVerifyDomainClaimResponse(rsp)
 }
 
-// VerifyDomainClaimWithResponse Check the DNS TXT record and mark verified (admin+, §12.4).
+// VerifyDomainClaimWithResponse Check the DNS TXT record and mark verified (admin+).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30150,7 +30150,7 @@ func (c *ClientWithResponses) DeleteOrgLogoWithResponse(ctx context.Context, org
 
 // GetOrgLogoWithResponse The organization's logo, as this registry re-encoded it.
 //
-// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served (§10.3). The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
+// A raster the core decoded and encoded again from the pixels: the bytes an admin uploaded are never what is served. The type is pinned and not sniffed. The URL an organization's resource carries (`logoUrl`) names the content by its `v`, and that URL is served as immutable for a year; the bare path, or one whose `v` is no longer the logo served, answers the current logo with `no-cache`. Clients render `logoUrl` as given and never build the path. 404 when the organization has none, or is not one the caller may see.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30204,7 +30204,7 @@ func (c *ClientWithResponses) RemoveOrgMemberWithResponse(ctx context.Context, o
 	return ParseRemoveOrgMemberResponse(rsp)
 }
 
-// SetOrgMemberWithBodyWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
+// SetOrgMemberWithBodyWithResponse Change a member's role (admin). This route does not add members: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30217,7 +30217,7 @@ func (c *ClientWithResponses) SetOrgMemberWithBodyWithResponse(ctx context.Conte
 	return ParseSetOrgMemberResponse(rsp)
 }
 
-// SetOrgMemberWithResponse Change a member's role (admin). Adding is retired: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
+// SetOrgMemberWithResponse Change a member's role (admin). This route does not add members: an organization is joined by accepting an invitation, or by an admin approving someone the IdP provisioned, and a PUT for a handle that holds no membership answers 422 naming those doors.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30282,7 +30282,7 @@ func (c *ClientWithResponses) GetOrgPolicyWithResponse(ctx context.Context, org 
 	return ParseGetOrgPolicyResponse(rsp)
 }
 
-// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (admin; tighten-only, §8.6).
+// SetOrgPolicyWithBodyWithResponse Set the org policy overlay (admin; tighten-only).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30295,7 +30295,7 @@ func (c *ClientWithResponses) SetOrgPolicyWithBodyWithResponse(ctx context.Conte
 	return ParseSetOrgPolicyResponse(rsp)
 }
 
-// SetOrgPolicyWithResponse Set the org policy overlay (admin; tighten-only, §8.6).
+// SetOrgPolicyWithResponse Set the org policy overlay (admin; tighten-only).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30321,7 +30321,7 @@ func (c *ClientWithResponses) ReinstateOrgWithResponse(ctx context.Context, org 
 	return ParseReinstateOrgResponse(rsp)
 }
 
-// ListScimTokensWithResponse List active SCIM provisioning tokens (admin, §12.5).
+// ListScimTokensWithResponse List active SCIM provisioning tokens (admin).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30334,7 +30334,7 @@ func (c *ClientWithResponses) ListScimTokensWithResponse(ctx context.Context, or
 	return ParseListScimTokensResponse(rsp)
 }
 
-// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin, §12.5).
+// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin).
 //
 // 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 //
@@ -30349,7 +30349,7 @@ func (c *ClientWithResponses) CreateScimTokenWithBodyWithResponse(ctx context.Co
 	return ParseCreateScimTokenResponse(rsp)
 }
 
-// CreateScimTokenWithResponse Mint a SCIM bearer token (admin, §12.5).
+// CreateScimTokenWithResponse Mint a SCIM bearer token (admin).
 //
 // 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
 //
@@ -30364,7 +30364,7 @@ func (c *ClientWithResponses) CreateScimTokenWithResponse(ctx context.Context, o
 	return ParseCreateScimTokenResponse(rsp)
 }
 
-// RevokeScimTokenWithResponse Revoke a SCIM token (admin, §12.5).
+// RevokeScimTokenWithResponse Revoke a SCIM token (admin).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30377,7 +30377,7 @@ func (c *ClientWithResponses) RevokeScimTokenWithResponse(ctx context.Context, o
 	return ParseRevokeScimTokenResponse(rsp)
 }
 
-// ListSsoConnectionsWithResponse List the org's SSO connections (admin, §12.4).
+// ListSsoConnectionsWithResponse List the org's SSO connections (admin).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30390,7 +30390,7 @@ func (c *ClientWithResponses) ListSsoConnectionsWithResponse(ctx context.Context
 	return ParseListSsoConnectionsResponse(rsp)
 }
 
-// DeleteSsoConnectionWithResponse Delete a connection (admin, §12.4).
+// DeleteSsoConnectionWithResponse Delete a connection (admin).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30403,7 +30403,7 @@ func (c *ClientWithResponses) DeleteSsoConnectionWithResponse(ctx context.Contex
 	return ParseDeleteSsoConnectionResponse(rsp)
 }
 
-// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
+// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin).
 //
 // 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 //
@@ -30418,7 +30418,7 @@ func (c *ClientWithResponses) PutSsoConnectionWithBodyWithResponse(ctx context.C
 	return ParsePutSsoConnectionResponse(rsp)
 }
 
-// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin, §12.4).
+// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin).
 //
 // 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
 //
@@ -30433,7 +30433,7 @@ func (c *ClientWithResponses) PutSsoConnectionWithResponse(ctx context.Context, 
 	return ParsePutSsoConnectionResponse(rsp)
 }
 
-// TestSsoConnectionWithResponse Probe a stored connection without signing in (admin, §12.4; agentry#50).
+// TestSsoConnectionWithResponse Probe a stored connection without signing in (admin).
 //
 // OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
 //
@@ -30448,7 +30448,7 @@ func (c *ClientWithResponses) TestSsoConnectionWithResponse(ctx context.Context,
 	return ParseTestSsoConnectionResponse(rsp)
 }
 
-// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session (§12.4).
+// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session.
 //
 // When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 //
@@ -30463,7 +30463,7 @@ func (c *ClientWithResponses) OidcCallbackWithResponse(ctx context.Context, org 
 	return ParseOidcCallbackResponse(rsp)
 }
 
-// OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+// OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP).
 //
 // 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
 //
@@ -30478,7 +30478,7 @@ func (c *ClientWithResponses) OidcStartWithResponse(ctx context.Context, org Org
 	return ParseOidcStartResponse(rsp)
 }
 
-// SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion (§12.4).
+// SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion.
 //
 // A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
 //
@@ -30493,7 +30493,7 @@ func (c *ClientWithResponses) SamlAcsWithResponse(ctx context.Context, org OrgHa
 	return ParseSamlAcsResponse(rsp)
 }
 
-// GetSamlMetadataWithResponse SP SAML metadata for this org's connection (§12.4).
+// GetSamlMetadataWithResponse SP SAML metadata for this org's connection.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30506,7 +30506,7 @@ func (c *ClientWithResponses) GetSamlMetadataWithResponse(ctx context.Context, o
 	return ParseGetSamlMetadataResponse(rsp)
 }
 
-// SamlSloRedirectWithResponse SAML Single Logout endpoint, HTTP-Redirect binding (§12.4).
+// SamlSloRedirectWithResponse SAML Single Logout endpoint, HTTP-Redirect binding.
 //
 // Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
 //
@@ -30521,7 +30521,7 @@ func (c *ClientWithResponses) SamlSloRedirectWithResponse(ctx context.Context, o
 	return ParseSamlSloRedirectResponse(rsp)
 }
 
-// SamlSloPostWithResponse SAML Single Logout endpoint, HTTP-POST binding (§12.4).
+// SamlSloPostWithResponse SAML Single Logout endpoint, HTTP-POST binding.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30651,7 +30651,7 @@ func (c *ClientWithResponses) AddTeamMemberWithResponse(ctx context.Context, org
 	return ParseAddTeamMemberResponse(rsp)
 }
 
-// ListWebhooksWithResponse List webhook endpoints (admin+, §9.3).
+// ListWebhooksWithResponse List webhook endpoints (admin+).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30664,7 +30664,7 @@ func (c *ClientWithResponses) ListWebhooksWithResponse(ctx context.Context, org 
 	return ParseListWebhooksResponse(rsp)
 }
 
-// CreateWebhookWithBodyWithResponse Create a webhook endpoint (admin+, §9.3).
+// CreateWebhookWithBodyWithResponse Create a webhook endpoint (admin+).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30677,7 +30677,7 @@ func (c *ClientWithResponses) CreateWebhookWithBodyWithResponse(ctx context.Cont
 	return ParseCreateWebhookResponse(rsp)
 }
 
-// CreateWebhookWithResponse Create a webhook endpoint (admin+, §9.3).
+// CreateWebhookWithResponse Create a webhook endpoint (admin+).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30690,7 +30690,7 @@ func (c *ClientWithResponses) CreateWebhookWithResponse(ctx context.Context, org
 	return ParseCreateWebhookResponse(rsp)
 }
 
-// DeleteWebhookWithResponse Delete a webhook endpoint (admin+, §9.3).
+// DeleteWebhookWithResponse Delete a webhook endpoint (admin+).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30703,7 +30703,7 @@ func (c *ClientWithResponses) DeleteWebhookWithResponse(ctx context.Context, org
 	return ParseDeleteWebhookResponse(rsp)
 }
 
-// GetWebhookWithResponse Get a webhook endpoint (admin+, §9.3).
+// GetWebhookWithResponse Get a webhook endpoint (admin+).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30716,7 +30716,7 @@ func (c *ClientWithResponses) GetWebhookWithResponse(ctx context.Context, org Or
 	return ParseGetWebhookResponse(rsp)
 }
 
-// UpdateWebhookWithBodyWithResponse Update a webhook endpoint (admin+, §9.3).
+// UpdateWebhookWithBodyWithResponse Update a webhook endpoint (admin+).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30729,7 +30729,7 @@ func (c *ClientWithResponses) UpdateWebhookWithBodyWithResponse(ctx context.Cont
 	return ParseUpdateWebhookResponse(rsp)
 }
 
-// UpdateWebhookWithResponse Update a webhook endpoint (admin+, §9.3).
+// UpdateWebhookWithResponse Update a webhook endpoint (admin+).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30742,7 +30742,7 @@ func (c *ClientWithResponses) UpdateWebhookWithResponse(ctx context.Context, org
 	return ParseUpdateWebhookResponse(rsp)
 }
 
-// ListWebhookDeliveriesWithResponse Recent delivery attempts for an endpoint (admin+, §9.3).
+// ListWebhookDeliveriesWithResponse Recent delivery attempts for an endpoint (admin+).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30755,7 +30755,7 @@ func (c *ClientWithResponses) ListWebhookDeliveriesWithResponse(ctx context.Cont
 	return ParseListWebhookDeliveriesResponse(rsp)
 }
 
-// PingWebhookWithResponse Send a test delivery to an endpoint (admin+, §9.2).
+// PingWebhookWithResponse Send a test delivery to an endpoint (admin+).
 //
 // Enqueues a signed `ping` delivery through the ordinary webhook machinery (same signature header, same SSRF guard, same retry schedule), so the recorded attempt appears in `GET …/{id}/deliveries`. Honours `Idempotency-Key`.
 //
@@ -30809,7 +30809,7 @@ func (c *ClientWithResponses) TriageAbuseReportWithResponse(ctx context.Context,
 	return ParseTriageAbuseReportResponse(rsp)
 }
 
-// PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
+// PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30822,7 +30822,7 @@ func (c *ClientWithResponses) PlatformAgentActionWithBodyWithResponse(ctx contex
 	return ParsePlatformAgentActionResponse(rsp)
 }
 
-// PlatformAgentActionWithResponse Quarantine, block, or reinstate an agent (platform staff, §7).
+// PlatformAgentActionWithResponse Quarantine, block, or reinstate an agent (platform staff).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30835,9 +30835,9 @@ func (c *ClientWithResponses) PlatformAgentActionWithResponse(ctx context.Contex
 	return ParsePlatformAgentActionResponse(rsp)
 }
 
-// ListPlatformAuditWithResponse Audit events across every org (platform staff, §12.6).
+// ListPlatformAuditWithResponse Audit events across every org (platform staff).
 //
-// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited (§12.6), one event per call.
+// The staff-wide slice of the audit log, newest first. Staff access to it is itself audited, one event per call.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30865,7 +30865,7 @@ func (c *ClientWithResponses) ListKnowledgePackSizesWithResponse(ctx context.Con
 	return ParseListKnowledgePackSizesResponse(rsp)
 }
 
-// GetPlatformPolicyWithResponse The read-only platform baseline policy (§8.6).
+// GetPlatformPolicyWithResponse The read-only platform baseline policy.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30878,7 +30878,7 @@ func (c *ClientWithResponses) GetPlatformPolicyWithResponse(ctx context.Context,
 	return ParseGetPlatformPolicyResponse(rsp)
 }
 
-// ListRedTeamReportsWithResponse Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+// ListRedTeamReportsWithResponse Reports of the scheduled red-team job against the S3/S4 gate (platform staff).
 //
 // Newest first. Each report is one run of the attack corpus's rewrites (paraphrase, encoding, unicode and obfuscation mutators) scanned with the rule bundle in service, and lists the rewrites an expected rule no longer caught. Report-only: nothing on the publish path reads these.
 //
@@ -30893,7 +30893,7 @@ func (c *ClientWithResponses) ListRedTeamReportsWithResponse(ctx context.Context
 	return ParseListRedTeamReportsResponse(rsp)
 }
 
-// ListRulesetReleasesWithResponse Ruleset releases, newest first (platform staff, §10.1 console).
+// ListRulesetReleasesWithResponse Ruleset releases, newest first (platform staff).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30906,9 +30906,9 @@ func (c *ClientWithResponses) ListRulesetReleasesWithResponse(ctx context.Contex
 	return ParseListRulesetReleasesResponse(rsp)
 }
 
-// CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff, §9.2).
+// CreateRulesetReleaseWithBodyWithResponse Register a ruleset release (platform staff).
 //
-// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle. Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30921,9 +30921,9 @@ func (c *ClientWithResponses) CreateRulesetReleaseWithBodyWithResponse(ctx conte
 	return ParseCreateRulesetReleaseResponse(rsp)
 }
 
-// CreateRulesetReleaseWithResponse Register a ruleset release (platform staff, §9.2).
+// CreateRulesetReleaseWithResponse Register a ruleset release (platform staff).
 //
-// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
+// Records the versioned scanner bundle a deployment is running, so scan runs can name it. Omitting the body registers the server's own embedded bundle. Honours `Idempotency-Key`; re-registering the same semver returns the existing row.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30936,7 +30936,7 @@ func (c *ClientWithResponses) CreateRulesetReleaseWithResponse(ctx context.Conte
 	return ParseCreateRulesetReleaseResponse(rsp)
 }
 
-// ResolveRefWithResponse Resolve ns/name@range to a concrete version (§9.4 step 1).
+// ResolveRefWithResponse Resolve ns/name@range to a concrete version.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -30962,7 +30962,7 @@ func (c *ClientWithResponses) GetReviewItemWithResponse(ctx context.Context, id 
 	return ParseGetReviewItemResponse(rsp)
 }
 
-// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+// DecideReviewItemWithBodyWithResponse Approve or reject a version under review (not its author, unless platform staff).
 //
 // An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 //
@@ -30977,7 +30977,7 @@ func (c *ClientWithResponses) DecideReviewItemWithBodyWithResponse(ctx context.C
 	return ParseDecideReviewItemResponse(rsp)
 }
 
-// DecideReviewItemWithResponse Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+// DecideReviewItemWithResponse Approve or reject a version under review (not its author, unless platform staff).
 //
 // An author cannot decide their own version (403), whatever their organization role. Platform staff may decide any item, their own versions included; the decision's audit event then carries `self_decision: true`.
 //
@@ -31020,7 +31020,7 @@ func (c *ClientWithResponses) ListReviewFilesWithResponse(ctx context.Context, i
 
 // ListReviewQueueWithResponse Pending review items (platform staff, or an org's security_reviewer for its queue).
 //
-// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's (agentry#912); staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
+// The platform queue is platform staff's. An org queue is that organization's reviewers' and platform staff's; staff may leave `org` out to list every organization's pending items, and anyone else must name it (422).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31035,7 +31035,7 @@ func (c *ClientWithResponses) ListReviewQueueWithResponse(ctx context.Context, p
 
 // GetLatestRulesetAttestationWithResponse DSSE attestation over the bundle `…/latest/bundle` serves.
 //
-// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised (agentry#25). The worker signs it at start and stores it, so every replica serves the same envelope (agentry#479). 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
+// An in-toto statement (predicate `https://agentry.dev/attestation/ruleset/v1`) whose subject digest is the bundle's content digest, signed with the registry's release-signing key (`/.well-known/agentry/signing-keys.json`). Lets `agentry validate --rules-update` verify a fetched bundle by signature rather than only by the digest the same server advertised. The worker signs it at start and stores it, so every replica serves the same envelope. 404 when the registry does not sign (`signing.kind: none`), or when no process holding the signing key has started with this bundle yet (a rolling deploy).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31054,7 +31054,7 @@ func (c *ClientWithResponses) GetLatestRulesetAttestationWithResponse(ctx contex
 //
 // `X-Agentry-Bundle-Semver`: the ruleset release semver; `X-Agentry-Bundle-Digest`: the `sha256:<hex>` content digest recorded on the `ruleset_releases` row; `ETag`: the same digest.
 //
-// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+// The digest is the pin: a client MUST recompute it over the received bundle and refuse a mismatch. Bundle-level *signatures* do not exist yet; this endpoint pins by digest only.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31067,7 +31067,7 @@ func (c *ClientWithResponses) GetLatestRulesetBundleWithResponse(ctx context.Con
 	return ParseGetLatestRulesetBundleResponse(rsp)
 }
 
-// SearchAgentsWithResponse Full-text search over public agents with facets (§10.4).
+// SearchAgentsWithResponse Full-text search over public agents with facets.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31080,7 +31080,7 @@ func (c *ClientWithResponses) SearchAgentsWithResponse(ctx context.Context, para
 	return ParseSearchAgentsResponse(rsp)
 }
 
-// ListAgentsByTagWithResponse Public agents tagged with {tag} (§9.2).
+// ListAgentsByTagWithResponse Public agents tagged with {tag}.
 //
 // Matches the tag list of each agent's latest published manifest (`manifest.tags`, V8). Blocked agents never appear.
 //
@@ -31134,7 +31134,7 @@ func (c *ClientWithResponses) UpdateCurrentUserWithResponse(ctx context.Context,
 	return ParseUpdateCurrentUserResponse(rsp)
 }
 
-// ListUserActivityWithResponse The caller's own activity — the audit events they performed (agentry#192).
+// ListUserActivityWithResponse The caller's own activity — the audit events they performed.
 //
 // Sign-ins, tokens and SSH keys created or revoked, profile and notification changes, publishes and reviews, newest first, with the address and user agent each was performed from. Keyset-paged like the agent activity feed.
 //
@@ -31164,9 +31164,9 @@ func (c *ClientWithResponses) ClearCurrentUserDataWithResponse(ctx context.Conte
 	return ParseClearCurrentUserDataResponse(rsp)
 }
 
-// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow, §12.7).
+// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted (§12.7): they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31179,7 +31179,7 @@ func (c *ClientWithResponses) DeleteCurrentUserWithResponse(ctx context.Context,
 	return ParseDeleteCurrentUserResponse(rsp)
 }
 
-// ListUserDependencyAlertsWithResponse Open dependency alerts on published versions the caller submitted (agentry#177).
+// ListUserDependencyAlertsWithResponse Open dependency alerts on published versions the caller submitted.
 //
 // A dependency alert says a published version declares an MCP server version that the daily sweep found to carry a newly known high or critical vulnerability. It closes on its own when the version is yanked, quarantined or blocked, or when the advisory is withdrawn; publishing a fixed version does not close the old version's alert. A front end shows these; the site renders them as the banner after sign-in and on the dashboard.
 //
@@ -31194,7 +31194,7 @@ func (c *ClientWithResponses) ListUserDependencyAlertsWithResponse(ctx context.C
 	return ParseListUserDependencyAlertsResponse(rsp)
 }
 
-// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account.
 //
 // With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
 //
@@ -31209,7 +31209,7 @@ func (c *ClientWithResponses) GetUserDirectoryWithResponse(ctx context.Context, 
 	return ParseGetUserDirectoryResponse(rsp)
 }
 
-// DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service (agentry#164).
+// DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service.
 //
 // With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
 //
@@ -31250,9 +31250,9 @@ func (c *ClientWithResponses) RequestDomainOrgAccessWithResponse(ctx context.Con
 	return ParseRequestDomainOrgAccessResponse(rsp)
 }
 
-// SendEmailVerificationWithResponse Send the caller a new activation link (agentry#861).
+// SendEmailVerificationWithResponse Send the caller a new activation link.
 //
-// Mails a new link that confirms the account's address and so activates it (plan unactivated-accounts.md). An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
+// Mails a new link that confirms the account's address and so activates it. An unactivated account (an address not yet confirmed) can read but not write; this is one of the few writes it may make. At most one mail per account every five minutes, counted from the last one sent, the one sent at the first sign-in included: sooner is a 429 with `Retry-After` and `resendAfter`. A link works once and for 24 hours, and an earlier unexpired link keeps working. An account whose address is already confirmed, or that has no address a link can reach, is a 409.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31325,7 +31325,7 @@ func (c *ClientWithResponses) PutAccountInstallWithResponse(ctx context.Context,
 	return ParsePutAccountInstallResponse(rsp)
 }
 
-// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller (agentry#190).
+// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller.
 //
 // Email per kind of notification, and whether the dependency-alert banner shows in a front end (the site reads it). An account that never changed anything reads back with everything on.
 //
@@ -31340,7 +31340,7 @@ func (c *ClientWithResponses) GetUserNotificationSettingsWithResponse(ctx contex
 	return ParseGetUserNotificationSettingsResponse(rsp)
 }
 
-// UpdateUserNotificationSettingsWithBodyWithResponse Replace the caller's notification settings (agentry#190).
+// UpdateUserNotificationSettingsWithBodyWithResponse Replace the caller's notification settings.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31353,7 +31353,7 @@ func (c *ClientWithResponses) UpdateUserNotificationSettingsWithBodyWithResponse
 	return ParseUpdateUserNotificationSettingsResponse(rsp)
 }
 
-// UpdateUserNotificationSettingsWithResponse Replace the caller's notification settings (agentry#190).
+// UpdateUserNotificationSettingsWithResponse Replace the caller's notification settings.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31366,9 +31366,9 @@ func (c *ClientWithResponses) UpdateUserNotificationSettingsWithResponse(ctx con
 	return ParseUpdateUserNotificationSettingsResponse(rsp)
 }
 
-// GetUserReportSettingsWithResponse The report design the caller's PDF reports take (agentry#989, agentry#1024).
+// GetUserReportSettingsWithResponse The report design the caller's PDF reports take.
 //
-// A profile setting (plan report-designs.md D11, D12): the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain (DEV-227).
+// A profile setting: the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31381,9 +31381,9 @@ func (c *ClientWithResponses) GetUserReportSettingsWithResponse(ctx context.Cont
 	return ParseGetUserReportSettingsResponse(rsp)
 }
 
-// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
+// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings.
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31396,9 +31396,9 @@ func (c *ClientWithResponses) UpdateUserReportSettingsWithBodyWithResponse(ctx c
 	return ParseUpdateUserReportSettingsResponse(rsp)
 }
 
-// UpdateUserReportSettingsWithResponse Replace the caller's report settings (agentry#989, agentry#1024).
+// UpdateUserReportSettingsWithResponse Replace the caller's report settings.
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving (agentry#1025). A body with no design clears the logo too.
+// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31411,7 +31411,7 @@ func (c *ClientWithResponses) UpdateUserReportSettingsWithResponse(ctx context.C
 	return ParseUpdateUserReportSettingsResponse(rsp)
 }
 
-// DeleteUserReportLogoWithResponse Remove the logo from the caller's report design (agentry#1025).
+// DeleteUserReportLogoWithResponse Remove the logo from the caller's report design.
 //
 // The design stays. Removing a logo that is not there is not an error.
 //
@@ -31426,9 +31426,9 @@ func (c *ClientWithResponses) DeleteUserReportLogoWithResponse(ctx context.Conte
 	return ParseDeleteUserReportLogoResponse(rsp)
 }
 
-// PutUserReportLogoWithBodyWithResponse Set the logo of the caller's report design (agentry#1025).
+// PutUserReportLogoWithBodyWithResponse Set the logo of the caller's report design.
 //
-// Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan report-designs.md D9). The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31456,7 +31456,7 @@ func (c *ClientWithResponses) RevokeOtherUserSessionsWithResponse(ctx context.Co
 	return ParseRevokeOtherUserSessionsResponse(rsp)
 }
 
-// ListUserSessionsWithResponse List the caller's active browser sessions (§12.1).
+// ListUserSessionsWithResponse List the caller's active browser sessions.
 //
 // Sessions are cookie sessions. A PAT-authenticated caller has no sessions of its own, so the list is empty (200, not an error). A PAT is not a way to enumerate someone's browser sessions.
 //
@@ -31471,7 +31471,7 @@ func (c *ClientWithResponses) ListUserSessionsWithResponse(ctx context.Context, 
 	return ParseListUserSessionsResponse(rsp)
 }
 
-// RevokeUserSessionWithResponse Revoke one of the caller's own sessions (§12.1).
+// RevokeUserSessionWithResponse Revoke one of the caller's own sessions.
 //
 // Own sessions only. An id that is not one of the caller's live sessions answers 404 whether it does not exist or belongs to somebody else. The two are deliberately indistinguishable. Session-only: a PAT cannot revoke sessions (403).
 //
@@ -31486,7 +31486,7 @@ func (c *ClientWithResponses) RevokeUserSessionWithResponse(ctx context.Context,
 	return ParseRevokeUserSessionResponse(rsp)
 }
 
-// ListSshKeysWithResponse List the caller's SSH public keys for the git transport (§6.1 Q7).
+// ListSshKeysWithResponse List the caller's SSH public keys for the git transport.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31501,7 +31501,7 @@ func (c *ClientWithResponses) ListSshKeysWithResponse(ctx context.Context, reqEd
 
 // AddSshKeyWithBodyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 //
-// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys; a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31516,7 +31516,7 @@ func (c *ClientWithResponses) AddSshKeyWithBodyWithResponse(ctx context.Context,
 
 // AddSshKeyWithResponse Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
 //
-// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys (agentry#820); a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
+// Refused with `403 feature-not-included` where the caller's subscription does not include adding SSH keys; a self-hosted registry includes it. Keys already held keep working and can be listed and removed on every subscription.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31542,7 +31542,7 @@ func (c *ClientWithResponses) RemoveSshKeyWithResponse(ctx context.Context, keyI
 	return ParseRemoveSshKeyResponse(rsp)
 }
 
-// UnstarAgentWithResponse Remove a star (idempotent, §9.2).
+// UnstarAgentWithResponse Remove a star (idempotent).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31555,7 +31555,7 @@ func (c *ClientWithResponses) UnstarAgentWithResponse(ctx context.Context, ns Na
 	return ParseUnstarAgentResponse(rsp)
 }
 
-// StarAgentWithResponse Star an agent (idempotent, §9.2).
+// StarAgentWithResponse Star an agent (idempotent).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31581,7 +31581,7 @@ func (c *ClientWithResponses) ListTokensWithResponse(ctx context.Context, reqEdi
 	return ParseListTokensResponse(rsp)
 }
 
-// CreateTokenWithBodyWithResponse Mint a PAT. The secret is returned exactly once (D-22).
+// CreateTokenWithBodyWithResponse Mint a PAT. The secret is returned exactly once.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31594,7 +31594,7 @@ func (c *ClientWithResponses) CreateTokenWithBodyWithResponse(ctx context.Contex
 	return ParseCreateTokenResponse(rsp)
 }
 
-// CreateTokenWithResponse Mint a PAT. The secret is returned exactly once (D-22).
+// CreateTokenWithResponse Mint a PAT. The secret is returned exactly once.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31609,7 +31609,7 @@ func (c *ClientWithResponses) CreateTokenWithResponse(ctx context.Context, body 
 
 // CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31624,7 +31624,7 @@ func (c *ClientWithResponses) CreateDesktopGrantWithBodyWithResponse(ctx context
 
 // CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL (DEV-058 hardening, agentry#19). The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31637,7 +31637,7 @@ func (c *ClientWithResponses) CreateDesktopGrantWithResponse(ctx context.Context
 	return ParseCreateDesktopGrantResponse(rsp)
 }
 
-// RevokeTokenWithResponse Revoke a PAT immediately (§12.3).
+// RevokeTokenWithResponse Revoke a PAT immediately.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31650,7 +31650,7 @@ func (c *ClientWithResponses) RevokeTokenWithResponse(ctx context.Context, token
 	return ParseRevokeTokenResponse(rsp)
 }
 
-// ClearTrustedDevicesWithResponse Clear every remembered browser of the caller's account (agentry#672).
+// ClearTrustedDevicesWithResponse Clear every remembered browser of the caller's account.
 //
 // Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
 //
@@ -31665,9 +31665,9 @@ func (c *ClientWithResponses) ClearTrustedDevicesWithResponse(ctx context.Contex
 	return ParseClearTrustedDevicesResponse(rsp)
 }
 
-// CountTrustedDevicesWithResponse How many browsers skip the caller's second factor (agentry#672).
+// CountTrustedDevicesWithResponse How many browsers skip the caller's second factor.
 //
-// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all (DEV-163). A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
+// The number of the caller's live remembered browsers: browsers where "Remember this device for 30 days" was ticked and whose record has not expired or been revoked. There is no list: the account's control is one button that clears them all. A PAT-authenticated caller gets 0, as it gets an empty session list: a token is not a way to take an inventory of someone's browsers.
 //
 // Returns a wrapper object for the known response body format(s).
 //
