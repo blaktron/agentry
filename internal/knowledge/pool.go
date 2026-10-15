@@ -47,6 +47,17 @@ func (p Pool) sumParams(except uuid.UUID) storegen.SumKnowledgeBytesOfPoolParams
 	return arg
 }
 
+// fits is the allocation rule for a pack whose tree of cur bytes is
+// replaced by one of next, beside the others bytes the pool's other packs
+// hold. A cap never deletes: a tree no larger than the one it replaces is
+// always taken; one that grows must fit under an enabled cap.
+func (p Pool) fits(others, cur, next int64) error {
+	if c := p.Cap; next > cur && (!c.Enabled || (c.Max > 0 && others+next > c.Max)) {
+		return &AllocationError{Bytes: others + next, Max: c.Max}
+	}
+	return nil
+}
+
 // pooled says whether the pool counts owners other than owner.
 func (p Pool) pooled(owner Owner) bool {
 	return slices.ContainsFunc(p.Owners, func(o Owner) bool { return o != owner })
