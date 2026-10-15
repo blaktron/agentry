@@ -734,7 +734,9 @@
             "TestTheDraftCheckFlagsOnlyWhatTheGateHolds",
             "TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet",
             "TestTheDraftCheckAnswersStaffAndAdmittedJobsOnly",
-            "TestTheDraftCheckIsOffWithoutAJevJudge"
+            "TestTheDraftCheckIsOffWithoutAJevJudge",
+            "TestTheDraftCheckListsTheToolsTheManifestDoesNotGrant",
+            "TestEveryGrantIsInTheSpec"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3833,6 +3835,19 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/scan/stages_s6_tools_test.go",
+          "tests": [
+            "TestS6ReportsTheBrowserToolsAReleaseDoesNotGrant",
+            "TestS6ReportsEachGrantOnce"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/scan/stages_s7_mcp_test.go",
           "tests": [
             "TestS7NoServersNoFindings",
@@ -4152,7 +4167,8 @@
           "path": "pkg/draftcheck/draftcheck_test.go",
           "tests": [
             "TestReadTakesTheManifestTheInstructionAndEveryFileInOrder",
-            "TestReadRefusesWhatIsNotADraftOrPastItsBounds"
+            "TestReadRefusesWhatIsNotADraftOrPastItsBounds",
+            "TestReadListsTheToolsTheManifestDoesNotGrant"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4974,6 +4990,32 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/toolgrant",
+      "behavior": "Runner tools an instruction calls for against the grants a manifest declares",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/toolgrant/toolgrant_test.go",
+          "tests": [
+            "TestAWebsiteTesterWithoutABrowserLineIsMissingTheBrowser",
+            "TestEachGrantIsReportedWhenMissingAndNotWhenDeclared",
+            "TestToolsTheInstructionTurnsAwayAreNotNeeds",
+            "TestProseWordsAreNotToolNames",
+            "TestAListItemAfterANegationIsJudgedAlone",
+            "TestBrowserEvaluateIsNotGivenToABrowserThatTypesSecrets",
+            "TestADeclaredServerIsMatchedByItsName",
+            "TestTheTableNamesEachRunnerToolOnce"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
         }
       ]
     },
