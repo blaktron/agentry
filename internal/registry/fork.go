@@ -31,8 +31,8 @@ import (
 // chart mounts the git volume on the git and worker roles alone). Fork, in
 // the request, authorizes, counts the namespace's quota and private-agent
 // cap and records the fork, `copying`, then hands the copy to a worker.
-// CopyFork, on the worker, copies the origin's repository object by object
-// and ref by ref, writes one commit on top of the forked version that
+// CopyFork, on the worker, copies the forked release's commit and its
+// history from the origin's repository, writes one commit on top of it that
 // renames the manifest into the fork's namespace, tags it with the same
 // version and submits that tag through SubmitVersion like any submission:
 // the same gates, the same admission (it is charged), the same
@@ -74,19 +74,19 @@ func (s *Service) SetForkHandOff(h ForkHandOff) { s.forkHandOff = h }
 // ForkRepos is what CopyFork needs of the repositories: a role that can
 // read and write them (the worker, `all`) wires it.
 type ForkRepos interface {
-	// CopyRepository creates dst as a bare repository on defaultBranch
-	// and copies into it every branch and tag of src, with their objects
-	// (copied, never shared through alternates, so nothing done to src
-	// later reaches dst). A src that was never pushed to leaves dst empty.
-	CopyRepository(ctx context.Context, src, dst uuid.UUID, defaultBranch string) error
+	// CopyHistory creates dst as a bare repository on defaultBranch and
+	// copies into it commit and its history from src, through a tag of
+	// src that points at it, with defaultBranch at commit; nothing else of
+	// src comes over (copied, never shared through alternates, so nothing
+	// done to src later reaches dst). An empty commit, a commit no tag of
+	// src points at, or a src that was never pushed to leaves dst empty.
+	CopyHistory(ctx context.Context, src, dst uuid.UUID, defaultBranch, commit string) error
 	// RemoveRepository deletes a repository a failed copy left behind.
 	RemoveRepository(repoID uuid.UUID) error
 	// HasCommit reports whether commit is a commit in repo.
 	HasCommit(ctx context.Context, repoID uuid.UUID, commit string) (bool, error)
 	// ReadFileAt reads path's blob at commit.
 	ReadFileAt(ctx context.Context, repoID uuid.UUID, commit, path string) ([]byte, error)
-	// RefsAt reads the current object id of each named ref.
-	RefsAt(ctx context.Context, repoID uuid.UUID, refs []string) (map[string]string, error)
 	// CommitFork writes one commit and points its refs at it.
 	CommitFork(ctx context.Context, repoID uuid.UUID, c ForkCommit) (string, error)
 }
@@ -106,13 +106,9 @@ type ForkCommit struct {
 	Parent  string
 	Message string
 	// Refs are moved to the commit, whatever they held (the fork's default
-	// branch, and its release tag, which may have come over from the
-	// origin pointing at the origin's commit).
+	// branch, which the copy left at the origin's release, and its release
+	// tag).
 	Refs []string
-	// Keep sets refs to the commits they name before Refs move: the
-	// origin's default-branch tip, when the fork's commit continues an
-	// older commit, so the origin's later work stays in the fork.
-	Keep map[string]string
 	// Author is the account that forked, as a commit's identity.
 	AuthorName  string
 	AuthorEmail string
@@ -336,7 +332,18 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 	if err := s.forkRepos.RemoveRepository(fork.RepoID); err != nil {
 		return err
 	}
-	if err := s.forkRepos.CopyRepository(ctx, origin.RepoID, fork.RepoID, fork.DefaultBranch); err != nil {
+	// The fork's owner reads every object in its repository, so it takes
+	// only what a reader with no role may clone from the origin: the
+	// forked release's commit and its history, when a review passed it.
+	// Not the origin's branches, nor its other tags, which may be work
+	// awaiting review, refused or never submitted. A collaborator of the
+	// origin is held to the same: the fork outlives their role, and its
+	// own namespace's members never had one.
+	var history string
+	if ov.CommitSha != "" && ov.ScanStatus == ScanStatusPipeline && origin.QuarantineState == "none" {
+		history = ov.CommitSha
+	}
+	if err := s.forkRepos.CopyHistory(ctx, origin.RepoID, fork.RepoID, fork.DefaultBranch, history); err != nil {
 		return err
 	}
 	if _, err := s.forkCommit(ctx, fork, origin.Namespace+"/"+origin.Name, ov, p); err != nil {
@@ -387,10 +394,10 @@ func (e *forkRefusal) Error() string { return e.detail }
 // forkCommit writes the fork's one commit and points the fork's default
 // branch and its release tag at it. Its tree is the forked version's, with
 // the manifest renamed into the fork's namespace: the version's commit when
-// it has one in the copied history, else the version's archive (a version
-// uploaded rather than tagged has no commit). Its parent is that commit, or
-// the copied default branch's tip, so the fork's history runs back through
-// the origin's either way.
+// the copy brought it over, else the version's archive (a version uploaded
+// rather than tagged has no commit, and one no review passed has none
+// copied). Its parent is that commit, so the fork's history runs back
+// through the origin's release; from an archive it is a root commit.
 func (s *Service) forkCommit(ctx context.Context, fork Agent, originPath string, ov Version, p *auth.Principal) (string, error) {
 	c := ForkCommit{
 		ManifestPath: "agent.yaml",
@@ -408,11 +415,6 @@ func (s *Service) forkCommit(ctx context.Context, fork Agent, originPath string,
 			return "", err
 		}
 	}
-	branch := "refs/heads/" + fork.DefaultBranch
-	tips, err := s.forkRepos.RefsAt(ctx, fork.RepoID, []string{branch})
-	if err != nil {
-		return "", err
-	}
 	if has {
 		c.BaseCommit, c.Parent = ov.CommitSha, ov.CommitSha
 		var err error
@@ -420,12 +422,6 @@ func (s *Service) forkCommit(ctx context.Context, fork Agent, originPath string,
 			return "", &forkRefusal{detail: "The forked version's commit has no agent.yaml, so it could not be renamed."}
 		} else if err != nil {
 			return "", err
-		}
-		// The origin's default branch may have moved on past the release:
-		// its tip is kept as origin-<branch>, so the fork's own branch
-		// starts at the release and the origin's later work stays in it.
-		if tip := tips[branch]; tip != "" && tip != c.Parent {
-			c.Keep = map[string]string{"refs/heads/origin-" + fork.DefaultBranch: tip}
 		}
 	} else {
 		dir, err := os.MkdirTemp("", "agentry-fork-tree-*")
@@ -442,7 +438,6 @@ func (s *Service) forkCommit(ctx context.Context, fork Agent, originPath string,
 		} else if err != nil {
 			return "", err
 		}
-		c.Parent = tips[branch]
 	}
 	renamed, err := manifest.Rename(raw, fork.Namespace, fork.Name)
 	if err != nil {

@@ -388,18 +388,22 @@ fork-source`), and have a published version (`409 nothing-to-fork`). A fork:
   detach, and its name stays on the fork even after the origin is made
   private, retired or deleted;
 - **is answered `202`** with `forkState: copying` (or `failed`, with
-  `forkDetail`, when the copy could not even be started). A worker then copies the
-  origin's repository: every branch and tag, its objects copied rather than
+  `forkDetail`, when the copy could not even be started). A worker then copies
+  from the origin's repository the forked release's commit and its history,
+  and nothing else: none of the origin's branches, none of its other tags,
+  and no object only they reach, since whoever holds the fork can read every
+  object in its repository. The fork holds what anyone could clone from the
+  origin, whatever their role on it. The objects are copied rather than
   shared, so retiring or deleting the origin later changes nothing in the
   fork. It writes one commit, *Fork of ns/name@version*, that renames the
   manifest into the fork's namespace. The fork's default branch and a
-  `v<version>` tag point at it, and the origin's default branch, where it
-  had moved on past the release, is kept as `origin-<branch>`. That tag is
-  submitted through the pipeline like any submission, charged like one; a
-  fork's first version is always scanned. The fork's history runs back
-  through the origin's commits. An origin published by upload has no
-  commits, and the fork's first commit is then built from its release
-  archive's files as they are. `forkState` is then `ready`, or `failed`
+  `v<version>` tag point at it. That tag is submitted through the pipeline
+  like any submission, charged like one; a fork's first version is always
+  scanned. The fork's history runs back through the origin's release. A
+  release the origin published by upload has no commit, and one that was
+  never scanned has none anyone may clone, so the fork's first commit is
+  then built from the release archive's files as they are, with no history
+  before it. `forkState` is then `ready`, or `failed`
   with `forkDetail` saying why. Until then git refuses the fork's
   repository (`409`) to those who may read it. A copy that has not finished
   after two hours is marked failed;
