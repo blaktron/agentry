@@ -1245,6 +1245,20 @@
           ]
         },
         {
+          "path": "internal/api/admitted_stores_test.go",
+          "tests": [
+            "TestAStoredAdmissionIsRecordedWithWhatItPaidFor",
+            "TestAPanicAfterAKnowledgeAdmissionIsReleasedAsNotStored"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/advisory_feed_test.go",
           "tests": [
             "TestAdvisoryFeedAndPermalink"
