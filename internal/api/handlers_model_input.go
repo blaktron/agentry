@@ -549,7 +549,7 @@ func (s *Server) CheckDraft(w http.ResponseWriter, r *http.Request) {
 	use := ModelInputUse{Op: ModelInputOpCheck, Requests: res.Usage.Requests, InputTokens: res.Usage.InputTokens, Scanned: 1}
 	verdict := judge.VerdictPass
 	switch {
-	case res.Rubric.Verdict == judge.VerdictFlagged || res.Draft.Verdict == judge.VerdictFlagged:
+	case res.Rubric.Verdict == judge.VerdictFlagged || res.Draft.Verdict == judge.VerdictFlagged || len(res.Ungranted) > 0:
 		verdict = judge.VerdictFlagged
 	case res.Rubric.Verdict == judge.VerdictNotScanned || res.Draft.Verdict == judge.VerdictNotScanned:
 		verdict = judge.VerdictNotScanned
@@ -604,7 +604,11 @@ func draftCheckBody(res draftcheck.Result) DraftCheck {
 			ds.Flagged = append(ds.Flagged, DraftSetCheckFlagged(id))
 		}
 	}
-	return DraftCheck{Rubric: rb, Draft: ds, Model: res.Model,
+	ug := make([]DraftUngrantedTool, len(res.Ungranted))
+	for i, x := range res.Ungranted {
+		ug[i] = DraftUngrantedTool{Tool: x.Tool, Grant: DraftUngrantedToolGrant(x.Grant), Path: x.Path, Line: x.Line, Reason: x.Reason}
+	}
+	return DraftCheck{Rubric: rb, Draft: ds, Ungranted: ug, Model: res.Model,
 		Usage: ModelInputUsage{Requests: res.Usage.Requests, InputTokens: res.Usage.InputTokens}}
 }
 

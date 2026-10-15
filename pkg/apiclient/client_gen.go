@@ -444,6 +444,39 @@ func (e DraftSetCheckFlagged) Valid() bool {
 	}
 }
 
+// Defines values for DraftUngrantedToolGrant.
+const (
+	Browser         DraftUngrantedToolGrant = "browser"
+	Egress          DraftUngrantedToolGrant = "egress"
+	Exec            DraftUngrantedToolGrant = "exec"
+	FilesystemRead  DraftUngrantedToolGrant = "filesystem.read"
+	FilesystemWrite DraftUngrantedToolGrant = "filesystem.write"
+	McpServers      DraftUngrantedToolGrant = "mcpServers"
+	TargetHosts     DraftUngrantedToolGrant = "targetHosts"
+)
+
+// Valid indicates whether the value is a known member of the DraftUngrantedToolGrant enum.
+func (e DraftUngrantedToolGrant) Valid() bool {
+	switch e {
+	case Browser:
+		return true
+	case Egress:
+		return true
+	case Exec:
+		return true
+	case FilesystemRead:
+		return true
+	case FilesystemWrite:
+		return true
+	case McpServers:
+		return true
+	case TargetHosts:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for KnowledgePackState.
 const (
 	KnowledgePackStateEmpty    KnowledgePackState = "empty"
@@ -2520,6 +2553,9 @@ type DraftCheck struct {
 	Model  string           `json:"model"`
 	Rubric DraftRubricCheck `json:"rubric"`
 
+	// Ungranted Each runner tool the instruction calls for that the manifest does not grant, in the order the instruction first names them, at most 50; empty when every tool it names is granted. A word longer than 80 bytes is not read as a tool name. Any one sends the version to a person at publish (`S6/ungranted-tool`). A tool named only where the instruction turns it away ("not `browser_pdf_save`"), and one in a paragraph that speaks of another package as "a QuickAgent", is not listed. Read with no judge, so it is answered when both halves are `not_scanned`.
+	Ungranted []DraftUngrantedTool `json:"ungranted"`
+
 	// Usage The judge's requests and input tokens, for the record. Never a price: AI Review is charged per operation.
 	Usage ModelInputUsage `json:"usage"`
 }
@@ -2618,6 +2654,27 @@ type DraftSetCheckFlagged string
 type DraftSetScores struct {
 	OffTask int `json:"off_task"`
 }
+
+// DraftUngrantedTool defines model for DraftUngrantedTool.
+type DraftUngrantedTool struct {
+	// Grant The line of the capability contract the tool needs.
+	Grant DraftUngrantedToolGrant `json:"grant"`
+
+	// Line The first line of the instruction that calls for the tool.
+	Line int `json:"line"`
+
+	// Path The manifest path that holds the grant, such as `capabilities.browser`.
+	Path string `json:"path"`
+
+	// Reason One sentence saying why, which quotes nothing of the instruction but the tool's name (and, for a server's tool, the server's).
+	Reason string `json:"reason"`
+
+	// Tool The tool as the instruction names it (`browser_click`, `run_command`, `fetch`), `browser_*` or `host_*` for a whole family, or `<server>__<tool>` for a declared server's tool.
+	Tool string `json:"tool"`
+}
+
+// DraftUngrantedToolGrant The line of the capability contract the tool needs.
+type DraftUngrantedToolGrant string
 
 // EmailNotificationSettings Which of the registry's mails the person receives.
 type EmailNotificationSettings struct {
@@ -5207,7 +5264,7 @@ type ClientInterface interface {
 
 	// CheckDraftWithBody AI Review of a finished draft before it is submitted.
 	//
-	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. Beside them, with no judge, `ungranted` lists each runner tool the instruction calls for that the manifest does not grant (a browser tool with no `capabilities.browser`, `run_command` with no exec commands, `fetch` with no egress host, a host tool with no target host, a workspace file tool with no filesystem access, a `<server>__<tool>` of a server not declared), which stage S6 sends to a person at publish. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5216,7 +5273,7 @@ type ClientInterface interface {
 
 	// CheckDraft AI Review of a finished draft before it is submitted.
 	//
-	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. Beside them, with no judge, `ungranted` lists each runner tool the instruction calls for that the manifest does not grant (a browser tool with no `capabilities.browser`, `run_command` with no exec commands, `fetch` with no egress host, a host tool with no target host, a workspace file tool with no filesystem access, a `<server>__<tool>` of a server not declared), which stage S6 sends to a person at publish. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -7566,7 +7623,7 @@ func (c *Client) GetMeta(ctx context.Context, reqEditors ...RequestEditorFn) (*h
 
 // CheckDraftWithBody AI Review of a finished draft before it is submitted.
 //
-// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. Beside them, with no judge, `ungranted` lists each runner tool the instruction calls for that the manifest does not grant (a browser tool with no `capabilities.browser`, `run_command` with no exec commands, `fetch` with no egress host, a host tool with no target host, a workspace file tool with no filesystem access, a `<server>__<tool>` of a server not declared), which stage S6 sends to a person at publish. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7585,7 +7642,7 @@ func (c *Client) CheckDraftWithBody(ctx context.Context, contentType string, bod
 
 // CheckDraft AI Review of a finished draft before it is submitted.
 //
-// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. Beside them, with no judge, `ungranted` lists each runner tool the instruction calls for that the manifest does not grant (a browser tool with no `capabilities.browser`, `run_command` with no exec commands, `fetch` with no egress host, a host tool with no target host, a workspace file tool with no filesystem access, a `<server>__<tool>` of a server not declared), which stage S6 sends to a person at publish. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -18849,7 +18906,7 @@ type ClientWithResponsesInterface interface {
 
 	// CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted.
 	//
-	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. Beside them, with no judge, `ungranted` lists each runner tool the instruction calls for that the manifest does not grant (a browser tool with no `capabilities.browser`, `run_command` with no exec commands, `fetch` with no egress host, a host tool with no target host, a workspace file tool with no filesystem access, a `<server>__<tool>` of a server not declared), which stage S6 sends to a person at publish. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18858,7 +18915,7 @@ type ClientWithResponsesInterface interface {
 
 	// CheckDraftWithResponse AI Review of a finished draft before it is submitted.
 	//
-	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+	// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. Beside them, with no judge, `ungranted` lists each runner tool the instruction calls for that the manifest does not grant (a browser tool with no `capabilities.browser`, `run_command` with no exec commands, `fetch` with no egress host, a host tool with no target host, a workspace file tool with no filesystem access, a `<server>__<tool>` of a server not declared), which stage S6 sends to a person at publish. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -29570,7 +29627,7 @@ func (c *ClientWithResponses) GetMetaWithResponse(ctx context.Context, reqEditor
 
 // CheckDraftWithBodyWithResponse AI Review of a finished draft before it is submitted.
 //
-// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. Beside them, with no judge, `ungranted` lists each runner tool the instruction calls for that the manifest does not grant (a browser tool with no `capabilities.browser`, `run_command` with no exec commands, `fetch` with no egress host, a host tool with no target host, a workspace file tool with no filesystem access, a `<server>__<tool>` of a server not declared), which stage S6 sends to a person at publish. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29585,7 +29642,7 @@ func (c *ClientWithResponses) CheckDraftWithBodyWithResponse(ctx context.Context
 
 // CheckDraftWithResponse AI Review of a finished draft before it is submitted.
 //
-// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
+// Reads a finished QuickAgent draft's rendered package the two ways AI Review will: with the release rubric that stage S5 of the pipeline asks at publish (the manifest as its canonical JSON and every text file, in the same chunks, state and request shape, under the same rubric hash), so the person knows before Submit what AI Review will flag; and with the draft question set, which asks whether the draft's instruction does the task its description asks for. Beside them, with no judge, `ungranted` lists each runner tool the instruction calls for that the manifest does not grant (a browser tool with no `capabilities.browser`, `run_command` with no exec commands, `fetch` with no egress host, a host tool with no target host, a workspace file tool with no filesystem access, a `<server>__<tool>` of a server not declared), which stage S6 sends to a person at publish. A rubric question at 2 or more (the gate's medium) is a finding and `flagged`; so is a draft question at 2 or more. A half the judge could not answer for is `not_scanned`. This is not the publication scan: a submitted version is scanned in full whatever this said. Nothing of the package is kept or logged. `usage` is for the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422 `draft-unreadable` for a package with no `agent.yaml`, one that does not parse, or no instruction file; 413 `draft-too-large` past 32 files or 65,536 bytes of text; 503 `model-input-unavailable` when the deployment's judge is not TypeSafe's Jev.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

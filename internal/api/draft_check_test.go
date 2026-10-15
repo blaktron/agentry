@@ -12,6 +12,7 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/pkg/draftcheck"
 	"github.com/blaktron/agentry/pkg/judge"
+	"github.com/blaktron/agentry/pkg/toolgrant"
 )
 
 // The check route: AI Review of a finished draft's package,
@@ -97,6 +98,13 @@ type draftCheckBody struct {
 		QuestionSet string         `json:"questionSet"`
 		Failure     string         `json:"failure"`
 	} `json:"draft"`
+	Ungranted []struct {
+		Tool   string `json:"tool"`
+		Grant  string `json:"grant"`
+		Path   string `json:"path"`
+		Line   int    `json:"line"`
+		Reason string `json:"reason"`
+	} `json:"ungranted"`
 	Model string `json:"model"`
 	Usage struct {
 		Requests    int `json:"requests"`
@@ -309,5 +317,45 @@ func TestTheDraftCheckIsOffWithoutAJevJudge(t *testing.T) {
 	st, _, p := checkDraft(t, env, staff, nil, map[string]any{"description": "d", "files": draftFiles("# x\n")})
 	if st != http.StatusServiceUnavailable || !strings.HasSuffix(p.Type, "/model-input-unavailable") {
 		t.Fatalf("no checker: %d %+v", st, p)
+	}
+}
+
+// The check lists the runner tools the instruction calls for that the
+// manifest does not grant, with no judge: the weather draft declares an
+// egress host, so fetch is granted and the browser and run_command are
+// not. A draft naming only granted tools lists none, and the list is
+// present and empty rather than absent.
+func TestTheDraftCheckListsTheToolsTheManifestDoesNotGrant(t *testing.T) {
+	env := newTestEnvWith(t, func(s *api.Server) { s.SetDraftChecker(draftcheck.New(&draftJudge{})) })
+	staff := staffCaller(t, env, "dc-tools")
+	desc := "Give me a three-line weather brief for a city I name."
+
+	st, b, _ := checkDraft(t, env, staff, nil, map[string]any{"description": desc,
+		"files": draftFiles("# Weather\nRead the forecast with the `fetch` tool.\nOpen the map with browser_navigate, then run_command jq.\n")})
+	if st != http.StatusOK || len(b.Ungranted) != 2 {
+		t.Fatalf("%d %+v", st, b.Ungranted)
+	}
+	if u := b.Ungranted[0]; u.Tool != "browser_navigate" || u.Grant != "browser" || u.Path != "capabilities.browser" || u.Line != 3 || u.Reason == "" {
+		t.Fatalf("browser: %+v", u)
+	}
+	if u := b.Ungranted[1]; u.Tool != "run_command" || u.Grant != "exec" || u.Path != "capabilities.exec.commands" {
+		t.Fatalf("exec: %+v", u)
+	}
+
+	res := env.doWithHeaders(staff, http.MethodPost, "/api/v1/model-input/check",
+		map[string]any{"description": desc, "files": draftFiles("# Weather\nRead the forecast with the `fetch` tool.\n")}, nil)
+	var raw map[string]any
+	readBody(t, res, &raw)
+	if u, ok := raw["ungranted"].([]any); res.StatusCode != http.StatusOK || !ok || len(u) != 0 {
+		t.Fatalf("a granted draft: %d %v", res.StatusCode, raw["ungranted"])
+	}
+}
+
+// Every grant the reading can name is a word of the spec's enum.
+func TestEveryGrantIsInTheSpec(t *testing.T) {
+	for _, g := range toolgrant.Grants() {
+		if !api.DraftUngrantedToolGrant(g).Valid() {
+			t.Errorf("grant %q is not in DraftUngrantedTool.grant", g)
+		}
 	}
 }

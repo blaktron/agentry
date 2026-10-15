@@ -53,6 +53,7 @@ PURPOSES = {
     "pkg/reportdesign": "Report design grammar, canonicalization and pixel-only logos",
     "pkg/rules": "Rule loading, matching, declaration rating and malicious/benign fixtures",
     "pkg/ruleset": "Pinned embedded bundle, released thresholds and immutable history",
+    "pkg/toolgrant": "Runner tools an instruction calls for against the grants a manifest declares",
     "pkg/websearch": "External search requests, result bounds, redirects and key secrecy",
 }
 

@@ -3,7 +3,9 @@
 // rubric that stage S5 of the pipeline will ask at publish, so the person
 // knows before Submit what AI Review will flag, and asks the draft
 // question set (pkg/judge DraftQuestions) about whether the draft does the
-// task it was drafted for.
+// task it was drafted for. Beside the two, with no judge, it reads the
+// runner tools the instruction calls for against the grants the manifest
+// declares (pkg/toolgrant), which stage S6 holds a version for at publish.
 //
 // The registry's POST /model-input/check asks through this package with
 // the deployment's key, for a hosted draft's job credential or platform
@@ -25,6 +27,7 @@ import (
 
 	"github.com/blaktron/agentry/pkg/judge"
 	"github.com/blaktron/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/pkg/toolgrant"
 )
 
 // Bounds on a package the check reads: a draft is a manifest, an
@@ -72,6 +75,11 @@ type Reading struct {
 	Instruction string
 	// Files is every file, sorted by path.
 	Files []judge.RubricFile
+	// Ungranted is each runner tool the instruction calls for that the
+	// manifest does not grant, as S6 reads it at publish: one is enough
+	// for S6 to send the version to a person. Empty when every tool it
+	// names is granted.
+	Ungranted []toolgrant.Missing
 }
 
 // Finding is one rubric question S5 would record as a finding at publish:
@@ -113,6 +121,10 @@ type Result struct {
 	// Usage is both halves' requests and tokens, for the record; never a
 	// price (AI Review is 1 credit a draft).
 	Usage judge.Usage
+	// Ungranted is Read's: the tools the instruction calls for that the
+	// manifest does not grant. It needs no judge, so it is answered even
+	// when both halves are not scanned.
+	Ungranted []toolgrant.Missing
 }
 
 // Checker asks both halves of the check. It is safe for concurrent use.
@@ -188,7 +200,10 @@ func Read(p Package) (Reading, error) {
 	for i, p := range paths {
 		files[i] = judge.RubricFile{Path: p, Content: byPath[p]}
 	}
-	return Reading{ManifestJSON: canonical, Ships: manifest.ShippedPacksOf(canonical), Instruction: instruction, Files: files}, nil
+	return Reading{
+		ManifestJSON: canonical, Ships: manifest.ShippedPacksOf(canonical), Instruction: instruction, Files: files,
+		Ungranted: toolgrant.Check(m.Capabilities, instruction),
+	}, nil
 }
 
 // Check reads a finished draft with the release rubric and the draft set.
@@ -200,7 +215,7 @@ func (c *Checker) Check(ctx context.Context, p Package) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	res := Result{Model: c.Model()}
+	res := Result{Model: c.Model(), Ungranted: rd.Ungranted}
 	res.Rubric = c.askRubric(ctx, rd, &res.Usage)
 	res.Draft = c.draft.Scan(ctx, judge.DraftInput{Description: p.Description, ManifestJSON: rd.ManifestJSON, Instruction: rd.Instruction})
 	res.Usage.Add(res.Draft.Usage)
