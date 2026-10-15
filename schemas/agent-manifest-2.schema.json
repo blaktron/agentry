@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentry.example/schemas/agent-manifest-2.schema.json",
   "title": "Agentry agent.yaml manifest (schema major 2)",
-  "description": "Machine form of the QuickAgent manifest after DEV-088: a release declares the run modes it supports (autonomous, interactive) and one instruction entrypoint; the v1 kind classification is gone. Closed schema: unknown keys are invalid everywhere (rule V1). This schema covers the static shape; the context rules V2 (repo identity), V3 (tag equality and channel monotonicity), V4 (include resolution, instruction file present), V7 (public-publish LICENSE/README and SPDX allowlist), V8 (archive quotas) and V9 (frontmatter vs manifest) are enforced by the registry and by pkg/manifest, as are glob validity and the policy-gated \"*\" egress.",
+  "description": "Machine form of the QuickAgent manifest: a release declares the run modes it supports (autonomous, interactive) and one instruction entrypoint. Closed schema: unknown keys are invalid everywhere (rule V1). This schema covers the static shape; the context rules V2 (repo identity), V3 (tag equality and channel monotonicity), V4 (include resolution, instruction file present), V7 (public-publish LICENSE/README and SPDX allowlist), V8 (archive quotas) and V9 (frontmatter vs manifest) are enforced by the registry and by pkg/manifest, as are glob validity and the policy-gated \"*\" egress.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "name", "namespace", "modes", "version", "summary", "publish"],
@@ -14,12 +14,12 @@
     },
     "name": {
       "type": "string",
-      "description": "Agent name; must match the target repo (V2) and the §4.2 DDL pattern.",
+      "description": "Agent name; must match the target repo (V2) and the registry's handle pattern.",
       "pattern": "^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$"
     },
     "namespace": {
       "type": "string",
-      "description": "Namespace handle; must match the target repo (V2) and the §4.2 DDL pattern.",
+      "description": "Namespace handle; must match the target repo (V2) and the registry's handle pattern.",
       "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
     },
     "modes": {
@@ -96,12 +96,12 @@
     },
     "guide": {
       "type": "object",
-      "description": "The author's words for the run setup, shown to people before a run and never to the agent (V10; plan guided-runs.md §6). Clients derive the same steps from the rest of the manifest when it is absent.",
+      "description": "The author's words for the run setup, shown to people before a run and never to the agent (V10). Clients derive the same steps from the rest of the manifest when it is absent.",
       "additionalProperties": false,
       "properties": {
         "overview": {
           "type": "string",
-          "description": "What the QuickAgent does and returns, in markdown. At most 4096 bytes (V10 counts bytes). Newlines and tabs are the only control characters it may carry (agentry#558).",
+          "description": "What the QuickAgent does and returns, in markdown. At most 4096 bytes (V10 counts bytes). Newlines and tabs are the only control characters it may carry.",
           "maxLength": 4096,
           "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f]*$"
         },
@@ -125,14 +125,14 @@
         },
         "connect": {
           "type": "object",
-          "description": "Help per declared secret name: where to create the key and which scopes it needs, in markdown a person reads (never the agent). At most 2,000 characters each; newlines and tabs are the only control characters it may carry (agentry#707). Every key must be a secret the release declares, in capabilities.secrets or a declared MCP server's secrets (V10; JSON schema cannot express that cross-reference).",
+          "description": "Help per declared secret name: where to create the key and which scopes it needs, in markdown a person reads (never the agent). At most 2,000 characters each; newlines and tabs are the only control characters it may carry. Every key must be a secret the release declares, in capabilities.secrets or a declared MCP server's secrets (V10; JSON schema cannot express that cross-reference).",
           "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f]*$" }
         }
       }
     },
     "knowledge": {
       "type": "object",
-      "description": "The knowledge packs the release ships in its archive under knowledge/<name>/, and what a person may attach of their own (V11; plan knowledge.md §4.6). Each shipped pack is the CLI's layout (manifest.json, wiki/ with index.md and log.md, sources/), at most 10 MB and 2,000 files, outside the archive's own quotas (V8), and scanned with the version. A newly shipped name widens the contract; accepts is shown to people only.",
+      "description": "The knowledge packs the release ships in its archive under knowledge/<name>/, and what a person may attach of their own (V11). Each shipped pack is the CLI's layout (manifest.json, wiki/ with index.md and log.md, sources/), at most 10 MB and 2,000 files, outside the archive's own quotas (V8), and scanned with the version. A newly shipped name widens the contract; accepts is shown to people only.",
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
@@ -161,7 +161,7 @@
     },
     "inputs": {
       "type": "object",
-      "description": "What files the QuickAgent takes and which view of them its agent reads by default (V12; plan quickagents-that-run.md D1, DEV-218). Absent, any kind is taken and each file keeps its own default view: the text a decoder made where one made it, anything else as uploaded. It grants nothing: attaching a file is the grant, so the block is outside the contract.",
+      "description": "What files the QuickAgent takes and which view of them its agent reads by default (V12). Absent, any kind is taken and each file keeps its own default view: the text a decoder made where one made it, anything else as uploaded. It grants nothing: attaching a file is the grant, so the block is outside the contract.",
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
@@ -272,7 +272,7 @@
         },
         "mcpServers": {
           "type": "array",
-          "description": "The MCP servers the agent uses to do its job (RUNNER-PLAN-3); unchanged by DEV-088.",
+          "description": "The MCP servers the agent uses to do its job.",
           "maxItems": 8,
           "items": { "$ref": "#/$defs/mcpServer" }
         }
@@ -383,7 +383,7 @@
     "mcpServer": {
       "type": "object",
       "additionalProperties": false,
-      "description": "A declared MCP server: a package (npm or pypi, with an exact version) or, since agentry#910, a remote server (url, with auth). Exactly one of npm, pypi or url; pkg/manifest holds the cross-field rules this schema cannot express.",
+      "description": "A declared MCP server: a package (npm or pypi, with an exact version) or a remote server (url, with auth). Exactly one of npm, pypi or url; pkg/manifest holds the cross-field rules this schema cannot express.",
       "oneOf": [
         { "required": ["npm", "version"], "not": { "anyOf": [ { "required": ["pypi"] }, { "required": ["url"] } ] } },
         { "required": ["pypi", "version"], "not": { "anyOf": [ { "required": ["npm"] }, { "required": ["url"] } ] } },
@@ -401,7 +401,7 @@
         "egress": { "type": "array", "items": { "$ref": "#/$defs/egressHost" } },
         "env": {
           "type": "object",
-          "description": "Plain, non-secret configuration the server reads from its environment (DEV-098). A name that is also a declared secret is refused by pkg/manifest. Values are literal: one the runner's gateway would rewrite — a `$` followed by a name character, `{` or a special shell parameter, or a `{{…}}` template — is refused (agentry#291).",
+          "description": "Plain, non-secret configuration the server reads from its environment. A name that is also a declared secret is refused by pkg/manifest. Values are literal: one the runner's gateway would rewrite — a `$` followed by a name character, `{` or a special shell parameter, or a `{{…}}` template — is refused.",
           "maxProperties": 16,
           "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
           "additionalProperties": {
@@ -424,7 +424,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["issuer"],
-      "description": "A package server's OAuth sign-in (agentry#910): the runner makes or reuses the person's connection with the issuer and renders the access token, and only the access token, into files and env. {access_token} must appear in a template or an env value (pkg/manifest).",
+      "description": "A package server's OAuth sign-in: the runner makes or reuses the person's connection with the issuer and renders the access token, and only the access token, into files and env. {access_token} must appear in a template or an env value (pkg/manifest).",
       "properties": {
         "issuer": { "type": "string", "maxLength": 512, "pattern": "^https://[a-z0-9.-]+(:443)?(/[!#-~]*)?$", "not": { "pattern": "[\"<>\\\\^`{|}$'?#]" }, "description": "The authorization server's https:// issuer." },
         "scopes": { "$ref": "#/$defs/oauthScopes" },

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentry.example/schemas/agent-manifest-1.schema.json",
   "title": "Agentry agent.yaml manifest (schema major 1)",
-  "description": "Machine form of PLAN §5.2. Closed schema: unknown keys are invalid everywhere (rule V1). This schema covers the static shape; the context rules V2 (repo identity), V3 (tag equality and channel monotonicity), V4 (include resolution), V6 (lockfile presence), V7 (public-publish LICENSE/README and SPDX allowlist), and V8 (archive quotas) are enforced by the registry and by pkg/manifest. Glob syntax validity of include patterns and the \"*\"-egress policy flag are likewise checked by pkg/manifest.",
+  "description": "Machine form of the version 1 agent manifest. Closed schema: unknown keys are invalid everywhere (rule V1). This schema covers the static shape; the context rules V2 (repo identity), V3 (tag equality and channel monotonicity), V4 (include resolution), V6 (lockfile presence), V7 (public-publish LICENSE/README and SPDX allowlist), and V8 (archive quotas) are enforced by the registry and by pkg/manifest. Glob syntax validity of include patterns and the \"*\"-egress policy flag are likewise checked by pkg/manifest.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "name", "namespace", "kind", "version", "summary", "publish"],
@@ -14,12 +14,12 @@
     },
     "name": {
       "type": "string",
-      "description": "Agent name; must match the target repo (V2) and the §4.2 DDL pattern.",
+      "description": "Agent name; must match the target repo (V2) and the registry's handle pattern.",
       "pattern": "^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$"
     },
     "namespace": {
       "type": "string",
-      "description": "Namespace handle; must match the target repo (V2) and the §4.2 DDL pattern.",
+      "description": "Namespace handle; must match the target repo (V2) and the registry's handle pattern.",
       "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
     },
     "kind": {
