@@ -2507,7 +2507,8 @@
             "TestForkFromAnArchiveAndAnOriginNeverPushed",
             "TestForkRefusesWhatIsNotAnObjectOrARef",
             "TestForkFromAnArchiveNeverLetsGitReadItAsAWorkTree",
-            "TestForkCopiesNothingNoTagPointsAt"
+            "TestForkCopiesNothingNoTagPointsAt",
+            "TestForkRefusesATagMovedWhileItWasCopied"
           ],
           "fuzz": [],
           "benchmarks": [],

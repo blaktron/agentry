@@ -401,8 +401,8 @@ fork-source`), and have a published version (`409 nothing-to-fork`). A fork:
   like any submission, charged like one; a fork's first version is always
   scanned. The fork's history runs back through the origin's release. A
   release the origin published by upload has no commit, and one that was
-  never scanned has none anyone may clone, so the fork's first commit is
-  then built from the release archive's files as they are, with no history
+  never scanned, or whose origin has since been quarantined, has none anyone
+  may clone, so the fork's first commit is then built from the release archive's files as they are, with no history
   before it. `forkState` is then `ready`, or `failed`
   with `forkDetail` saying why. Until then git refuses the fork's
   repository (`409`) to those who may read it. A copy that has not finished

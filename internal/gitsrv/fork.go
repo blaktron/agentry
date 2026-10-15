@@ -57,6 +57,23 @@ func (s *RepoStore) CopyHistory(ctx context.Context, src, dst uuid.UUID, default
 	if via == "" {
 		return nil
 	}
+	return s.copyVia(ctx, src, dst, defaultBranch, commit, via)
+}
+
+// copyVia fetches the tag via from src into dst and sets defaultBranch to
+// commit. The tag is read again after the fetch: one moved since it was
+// listed brings history past commit, which is refused. Whatever a failed
+// copy fetched may be more than commit's history, so a failure leaves no
+// repository behind.
+func (s *RepoStore) copyVia(ctx context.Context, src, dst uuid.UUID, defaultBranch, commit, via string) error {
+	if err := s.fetchVia(ctx, src, dst, defaultBranch, commit, via); err != nil {
+		_ = s.Remove(dst)
+		return err
+	}
+	return nil
+}
+
+func (s *RepoStore) fetchVia(ctx context.Context, src, dst uuid.UUID, defaultBranch, commit, via string) error {
 	dir := s.Path(dst)
 	const base = "refs/agentry/fork-base"
 	if _, err := s.git(ctx, dir, nil, nil,
@@ -64,8 +81,14 @@ func (s *RepoStore) CopyHistory(ctx context.Context, src, dst uuid.UUID, default
 		"+"+via+":"+base); err != nil {
 		return err
 	}
-	branch := "refs/heads/" + defaultBranch
-	if _, err := s.git(ctx, dir, nil, nil, "update-ref", branch, commit); err != nil {
+	got, err := s.git(ctx, dir, nil, nil, "rev-parse", "--verify", "--quiet", base+"^{commit}")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(string(got)) != commit {
+		return fmt.Errorf("gitsrv: %s moved from %s while it was copied", via, commit)
+	}
+	if _, err := s.git(ctx, dir, nil, nil, "update-ref", "refs/heads/"+defaultBranch, commit); err != nil {
 		return err
 	}
 	_, err = s.git(ctx, dir, nil, nil, "update-ref", "-d", base)
@@ -119,9 +142,10 @@ func (s *RepoStore) ReadFileAt(ctx context.Context, repoID uuid.UUID, commit, pa
 	return s.git(ctx, dir, nil, nil, "cat-file", "blob", commit+":"+path)
 }
 
-// CommitFork writes the fork's commit and points c.Refs at it. The tree is built in a private index:
-// c.BaseCommit's tree read into it, or c.Dir's files hashed into it one by
-// one, then c.Manifest written over c.ManifestPath. c.Dir is an uploaded
+// CommitFork writes the fork's commit and points c.Refs at it. The tree is
+// built in a private index: c.BaseCommit's tree read into it, or c.Dir's
+// files hashed into it one by one, then c.Manifest written over
+// c.ManifestPath. c.Dir is an uploaded
 // release's archive, so git never looks at it as a work tree: no
 // `git add`, which would honour a .gitattributes among its files, read a
 // .gitignore, and follow a `.git` file to whatever repository on this host
