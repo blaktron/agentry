@@ -155,7 +155,10 @@ A closed build reaches the store through `pkg/extension`:
   Review costs 1 credit an operation where an extension charges for it;
   the core charges nothing. A refusal is answered in its own
   status and words before anything is stored, and the ticket is voided
-  when nothing was.
+  when nothing was. A ticket whose version was stored is recorded in the
+  `admitted_stores` table (kind `voice`) in the transaction that stores
+  it, so a ticket with no row stored nothing, even when its void failed
+  or the process stopped before the store.
 - **`Deps.Voice`** reads a person's live voice (never a pending one) for a
   hosted run to attach, reads the whole voice for a Voice Writer run to
   improve or edit, and proposes a Voice Writer run's output as a pending

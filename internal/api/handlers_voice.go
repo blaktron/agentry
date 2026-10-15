@@ -42,7 +42,10 @@ type VoiceAdmitter interface {
 	// with 503 and stores nothing.
 	AdmitVoice(ctx context.Context, a VoiceAdmission) (registry.Ticket, *registry.Refusal, error)
 	// VoidVoice cancels a ticket the core could not honour: nothing was
-	// stored. It must be idempotent.
+	// stored. It must be idempotent. A void can fail or never be called (a
+	// crash between the admission and the store): the core records each
+	// ticket it stored in admitted_stores, in the storing transaction, so a
+	// ticket with no row there stored nothing.
 	VoidVoice(ctx context.Context, t registry.Ticket) error
 }
 
@@ -153,12 +156,13 @@ func (s *Server) writeVoice(w http.ResponseWriter, r *http.Request, status int, 
 }
 
 // admitVoice asks the extension, if any, to admit a review. It writes the
-// refusal or the failure itself and answers false; with true, release
-// voids the ticket when nothing was stored.
-func (s *Server) admitVoice(w http.ResponseWriter, r *http.Request, a VoiceAdmission) (release func(stored bool), ok bool) {
+// refusal or the failure itself and answers false; with true, ticket is
+// the admission the store records with the version, and release voids it
+// when nothing was stored.
+func (s *Server) admitVoice(w http.ResponseWriter, r *http.Request, a VoiceAdmission) (ticket string, release func(stored bool), ok bool) {
 	adm := s.voiceAdmitter()
 	if adm == nil {
-		return func(bool) {}, true
+		return "", func(bool) {}, true
 	}
 	t, refusal, err := adm.AdmitVoice(r.Context(), a)
 	switch {
@@ -166,12 +170,12 @@ func (s *Server) admitVoice(w http.ResponseWriter, r *http.Request, a VoiceAdmis
 		s.log.ErrorContext(r.Context(), "voice: admission unavailable", "err", err)
 		writeProblem(w, r, http.StatusServiceUnavailable, "admission-unavailable", "Review not admitted",
 			"The registry could not check whether this account may have a voice reviewed. Nothing was stored; retry shortly.")
-		return nil, false
+		return "", nil, false
 	case refusal != nil:
 		problemAdmissionRefused(w, r, *refusal)
-		return nil, false
+		return "", nil, false
 	}
-	return func(stored bool) {
+	return t.ID, func(stored bool) {
 		if stored || t.ID == "" {
 			return
 		}
@@ -219,11 +223,11 @@ func (s *Server) PutVoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := principalFrom(r.Context()).UserID
-	release, ok := s.admitVoice(w, r, VoiceAdmission{User: user, Source: src, Bytes: len(text)})
+	ticket, release, ok := s.admitVoice(w, r, VoiceAdmission{User: user, Source: src, Bytes: len(text)})
 	if !ok {
 		return
 	}
-	st, err := s.voice.Put(r.Context(), user, text, src)
+	st, err := s.voice.PutAdmitted(r.Context(), user, text, src, ticket)
 	release(err == nil)
 	if err != nil {
 		s.voiceProblem(w, r, err, "put voice")
@@ -243,14 +247,14 @@ func (s *Server) RestoreVoice(w http.ResponseWriter, r *http.Request) {
 		s.voiceProblem(w, r, err, "restore voice")
 		return
 	}
-	release := func(bool) {}
+	ticket, release := "", func(bool) {}
 	if review {
 		var ok bool
-		if release, ok = s.admitVoice(w, r, VoiceAdmission{User: user, Source: voice.SourceRestore}); !ok {
+		if ticket, release, ok = s.admitVoice(w, r, VoiceAdmission{User: user, Source: voice.SourceRestore}); !ok {
 			return
 		}
 	}
-	st, err := s.voice.Restore(r.Context(), user, review)
+	st, err := s.voice.RestoreAdmitted(r.Context(), user, review, ticket)
 	release(err == nil)
 	if err != nil {
 		s.voiceProblem(w, r, err, "restore voice")
