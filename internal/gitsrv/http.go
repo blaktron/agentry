@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -28,6 +29,7 @@ import (
 	"github.com/blaktron/agentry/internal/ratelimit"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/store"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // Handler serves the git smart-HTTP surface: info/refs, git-upload-pack,
@@ -161,30 +163,30 @@ func (h *Handler) Mount(mux httpmux.Mux) {
 
 // resolve parses {ns}/{name}.git, loads the agent, resolves the principal
 // (Basic PAT only), and authorizes the operation.
-func (h *Handler) resolve(w http.ResponseWriter, r *http.Request, act auth.Action) (registry.Agent, *auth.Principal, auth.AgentRole, bool) {
+func (h *Handler) resolve(w http.ResponseWriter, r *http.Request, act auth.Action) (registry.Agent, *auth.Principal, auth.AgentRole, refView, bool) {
 	ns := r.PathValue("ns")
 	repo := r.PathValue("repo")
 	name, ok := strings.CutSuffix(repo, ".git")
 	if !ok {
 		http.NotFound(w, r)
-		return registry.Agent{}, nil, auth.AgentRoleNone, false
+		return registry.Agent{}, nil, auth.AgentRoleNone, refView{}, false
 	}
 
 	principal := &auth.Principal{Anonymous: true}
 	if _, pass, okBasic := r.BasicAuth(); okBasic && pass != "" {
 		if !auth.IsPAT(pass) {
 			h.unauthorized(w)
-			return registry.Agent{}, nil, auth.AgentRoleNone, false
+			return registry.Agent{}, nil, auth.AgentRoleNone, refView{}, false
 		}
 		p, err := auth.ResolvePAT(r.Context(), h.st.Queries(), pass)
 		if err != nil {
 			h.unauthorized(w)
-			return registry.Agent{}, nil, auth.AgentRoleNone, false
+			return registry.Agent{}, nil, auth.AgentRoleNone, refView{}, false
 		}
 		principal = p
 	}
 
-	agent, role, denial := h.authorizeGit(r.Context(), ns, name, principal, act)
+	agent, role, view, denial := h.authorizeGit(r.Context(), ns, name, principal, act)
 	if denial != nil {
 		switch denial.status {
 		case http.StatusUnauthorized:
@@ -194,9 +196,9 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request, act auth.Actio
 		default:
 			http.Error(w, denial.message, denial.status)
 		}
-		return registry.Agent{}, nil, auth.AgentRoleNone, false
+		return registry.Agent{}, nil, auth.AgentRoleNone, refView{}, false
 	}
-	return agent, principal, role, true
+	return agent, principal, role, view, true
 }
 
 // gitDenial is why a git operation is refused, in HTTP terms so the two
@@ -206,11 +208,33 @@ type gitDenial struct {
 	message string
 }
 
+// refView is the repository a reader is served. The zero value is the
+// agent's own. A reader who holds no role on a public agent (an anonymous
+// caller, or a signed-in one with no grant and no membership) is served a
+// separate repository holding only the tags that point at a reviewed
+// version's commit and the objects they reach: no branch, and no tag or
+// object of a version that is pending, rejected, blocked or quarantined.
+// Hiding refs in the agent's own repository would not do: upload-pack
+// serves an object a client names by id even when no advertised ref
+// reaches it.
+type refView struct {
+	path string // the reviewed-only repository; "" for the agent's own
+}
+
+// repoPath is the repository a git command for this view runs in.
+func (v refView) repoPath(repos *RepoStore, agent registry.Agent) string {
+	if v.path != "" {
+		return v.path
+	}
+	return repos.Path(agent.RepoID)
+}
+
 // authorizeGit resolves ns/name, lazily initializes the bare repo, and
 // applies agent permission by effective role, existence privacy for
-// private repos, and enforced SSO (which needs an org-bound token for
+// private repos, the reviewed-only view of a public agent for a reader
+// with no role on it, and enforced SSO (which needs an org-bound token for
 // mutations). Transport-independent: HTTP and SSH both call it.
-func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *auth.Principal, act auth.Action) (registry.Agent, auth.AgentRole, *gitDenial) {
+func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *auth.Principal, act auth.Action) (registry.Agent, auth.AgentRole, refView, *gitDenial) {
 	agent, err := h.reg.Resolve(ctx, ns, name)
 	if err != nil {
 		// 404 before auth probing for truly unknown paths is fine for
@@ -225,9 +249,9 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 		// credentials sends them on that 401 and gets its real answer. A
 		// signed-in caller gets 404: nothing to leak, the path is not there.
 		if principal.Anonymous {
-			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusUnauthorized, "unauthorized"}
 		}
-		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
+		return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusNotFound, "not found"}
 	}
 
 	// The owning organization's state: the same gate the API consults. Suspended is an unknown path — anonymous gets the
@@ -238,14 +262,14 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 		switch {
 		case errors.As(err, &gate) && gate.Absent():
 			if principal.Anonymous {
-				return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
+				return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusUnauthorized, "unauthorized"}
 			}
-			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusNotFound, "not found"}
 		case errors.As(err, &gate):
-			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden: this organization is being decommissioned and its repositories are read-only"}
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusForbidden, "forbidden: this organization is being decommissioned and its repositories are read-only"}
 		default:
 			h.log.ErrorContext(ctx, "git org gate", "err", err)
-			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusInternalServerError, "internal error"}
 		}
 	}
 
@@ -256,28 +280,51 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	if _, statErr := os.Stat(h.repos.Path(agent.RepoID)); statErr != nil && !copying {
 		if err := h.repos.InitBare(ctx, agent.RepoID, agent.DefaultBranch); err != nil {
 			h.log.ErrorContext(ctx, "lazy repo init", "err", err)
-			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusInternalServerError, "internal error"}
 		}
 	}
 
 	role, err := h.reg.EffectiveRole(ctx, principal, agent)
 	if err != nil {
 		h.log.ErrorContext(ctx, "git effective role", "err", err)
-		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
+		return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusInternalServerError, "internal error"}
 	}
 	res := auth.AgentResource{Public: agent.Visibility == "public", EffectiveRole: role}
 	if err := auth.CheckAgent(principal, res, act); err != nil {
 		if principal.Anonymous {
 			// The credential prompt; the same answer an unknown path gives.
-			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusUnauthorized, "unauthorized"}
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusUnauthorized, "unauthorized"}
 		}
 		// A signed-in caller who cannot read the repo gets a missing
 		// path's 404 whatever they tried (existence privacy); a
 		// write denied on a repo they can read is a 403.
 		if auth.CheckAgent(principal, res, auth.ActAgentRepoRead) != nil {
-			return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusNotFound, "not found"}
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusNotFound, "not found"}
 		}
-		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden"}
+		return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusForbidden, "forbidden"}
+	}
+
+	// A reader with no role on a public agent sees only what passed review,
+	// and an agent with nothing reviewed is, to them, a missing path.
+	var view refView
+	if role == auth.AgentRoleNone && !copying {
+		tags, head, err := h.reviewedTags(ctx, agent)
+		if err != nil {
+			h.log.ErrorContext(ctx, "git reviewed tags", "err", err)
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusInternalServerError, "internal error"}
+		}
+		if len(tags) == 0 {
+			if principal.Anonymous {
+				return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusUnauthorized, "unauthorized"}
+			}
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusNotFound, "not found"}
+		}
+		path, err := h.repos.ReviewedView(ctx, agent.RepoID, tags, head)
+		if err != nil {
+			h.log.ErrorContext(ctx, "git reviewed view", "err", err)
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusInternalServerError, "internal error"}
+		}
+		view = refView{path: path}
 	}
 
 	// A fork's repository is the worker's until its copy is done:
@@ -285,13 +332,13 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	// be submitted in place of the origin's content. Said only to a caller
 	// who may read it, so it names no fork to anyone else.
 	if copying {
-		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusConflict, "this fork is still being copied; try again in a minute"}
+		return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusConflict, "this fork is still being copied; try again in a minute"}
 	}
 
 	// An unactivated account reads but does not write: the API's gate does
 	// not see git.
 	if act == auth.ActAgentRepoWrite && principal.Unactivated && h.cfg.Auth.ExternalOnly {
-		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden: activate your account first, from the link we emailed you"}
+		return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusForbidden, "forbidden: activate your account first, from the link we emailed you"}
 	}
 
 	// In an org that enforces SSO, mutating git operations
@@ -299,12 +346,12 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	allowed, err := h.ssoAllows(ctx, principal, agent, act)
 	if err != nil {
 		h.log.ErrorContext(ctx, "git sso gate", "err", err)
-		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusInternalServerError, "internal error"}
+		return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusInternalServerError, "internal error"}
 	}
 	if !allowed {
-		return registry.Agent{}, auth.AgentRoleNone, &gitDenial{http.StatusForbidden, "forbidden: this organization requires an org-bound token"}
+		return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusForbidden, "forbidden: this organization requires an org-bound token"}
 	}
-	return agent, role, nil
+	return agent, role, view, nil
 }
 
 // ssoAllows applies an org's enforced-SSO policy to a git operation.
@@ -334,6 +381,55 @@ func (h *Handler) ssoAllows(ctx context.Context, p *auth.Principal, agent regist
 	return p.SSOSatisfied(agent.NamespaceID, h.cfg.Auth.SSOMaxAge), nil
 }
 
+// reviewedVersionStatuses are the statuses of a version that passed the
+// gate or a reviewer: published, and yanked, which the registry still
+// serves by exact pin.
+var reviewedVersionStatuses = []string{"published", "yanked"}
+
+// reviewedTags maps each of the agent's tags that points, peeled, at the
+// commit of a reviewed version to the tag's own object id, and names as
+// head the commit of the newest reviewed version that has such a tag. An
+// agent the platform has blocked or quarantined has none, and so has a
+// version admitted without a scan: no review passed it.
+func (h *Handler) reviewedTags(ctx context.Context, agent registry.Agent) (tags map[string]string, head string, err error) {
+	if agent.QuarantineState != "none" {
+		return nil, "", nil
+	}
+	versions, err := h.st.Queries().ListVersionsByStatus(ctx, storegen.ListVersionsByStatusParams{
+		AgentID: agent.ID, Statuses: reviewedVersionStatuses,
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("gitsrv: reviewed versions: %w", err)
+	}
+	var commits []string // newest first
+	for _, v := range versions {
+		if v.CommitSha != "" && v.ScanStatus == "pipeline" {
+			commits = append(commits, v.CommitSha)
+		}
+	}
+	if len(commits) == 0 {
+		return nil, "", nil
+	}
+	all, err := h.repos.Tags(ctx, agent.RepoID)
+	if err != nil {
+		return nil, "", err
+	}
+	tagged := make(map[string]bool)
+	tags = make(map[string]string)
+	for ref, t := range all {
+		if slices.Contains(commits, t.Commit) {
+			tags[ref] = t.Object
+			tagged[t.Commit] = true
+		}
+	}
+	for _, c := range commits {
+		if tagged[c] {
+			return tags, c, nil
+		}
+	}
+	return nil, "", nil
+}
+
 func (h *Handler) unauthorized(w http.ResponseWriter) {
 	w.Header().Set("WWW-Authenticate", `Basic realm="agentry git", charset="UTF-8"`)
 	http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -353,7 +449,7 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "smart protocol only", http.StatusForbidden)
 		return
 	}
-	agent, principal, role, ok := h.resolve(w, r, act)
+	agent, principal, role, view, ok := h.resolve(w, r, act)
 	if !ok {
 		return
 	}
@@ -361,7 +457,7 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.opTimeout)
 	defer cancel()
 
-	cmd, done, err := h.repos.Command(ctx, strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", h.repos.Path(agent.RepoID))
+	cmd, done, err := h.repos.Command(ctx, strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", view.repoPath(h.repos, agent))
 	if err != nil {
 		h.log.ErrorContext(r.Context(), "git hooks unavailable", "service", service, "err", err)
 		http.Error(w, "git error", http.StatusInternalServerError)
@@ -399,18 +495,18 @@ func (h *Handler) infoRefs(w http.ResponseWriter, r *http.Request) {
 
 // uploadPack implements POST git-upload-pack (clone/fetch).
 func (h *Handler) uploadPack(w http.ResponseWriter, r *http.Request) {
-	agent, principal, role, ok := h.resolve(w, r, auth.ActAgentRepoRead)
+	agent, principal, role, view, ok := h.resolve(w, r, auth.ActAgentRepoRead)
 	if !ok {
 		return
 	}
-	h.rpc(w, r, agent, principal, role, "upload-pack", nil)
+	h.rpc(w, r, agent, principal, role, view, "upload-pack", nil)
 }
 
 // receivePack implements POST git-receive-pack (push). Ref policy is
 // enforced by the pre-receive hook (hooks.go) with request context passed
 // via environment; post-push bookkeeping happens here.
 func (h *Handler) receivePack(w http.ResponseWriter, r *http.Request) {
-	agent, principal, role, ok := h.resolve(w, r, auth.ActAgentRepoWrite)
+	agent, principal, role, view, ok := h.resolve(w, r, auth.ActAgentRepoWrite)
 	if !ok {
 		return
 	}
@@ -420,7 +516,7 @@ func (h *Handler) receivePack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var cmds bytes.Buffer
-	h.rpc(w, r, agent, principal, role, "receive-pack", &cmds)
+	h.rpc(w, r, agent, principal, role, view, "receive-pack", &cmds)
 }
 
 // admitPush spends one push from the repository's push budget (60/h per
@@ -464,7 +560,7 @@ func retrySeconds(d time.Duration) int {
 // rpc runs the stateless git service, streaming request→stdin, stdout→response.
 // When cmdCapture is non-nil (receive-pack), the leading pkt-line command
 // section is captured for post-receive processing.
-func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Agent, principal *auth.Principal, role auth.AgentRole, service string, cmdCapture *bytes.Buffer) {
+func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Agent, principal *auth.Principal, role auth.AgentRole, view refView, service string, cmdCapture *bytes.Buffer) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.opTimeout)
 	defer cancel()
 
@@ -494,7 +590,7 @@ func (h *Handler) rpc(w http.ResponseWriter, r *http.Request, agent registry.Age
 		stdin = io.TeeReader(body, newCommandCapture(cmdCapture))
 	}
 
-	cmd, done, err := h.repos.Command(ctx, service, "--stateless-rpc", h.repos.Path(agent.RepoID))
+	cmd, done, err := h.repos.Command(ctx, service, "--stateless-rpc", view.repoPath(h.repos, agent))
 	if err != nil {
 		outcome = "error"
 		h.log.ErrorContext(r.Context(), "git hooks unavailable", "service", service, "err", err)
