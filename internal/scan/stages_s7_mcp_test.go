@@ -119,8 +119,8 @@ func TestS7LooksUpOnceThenReadsTheRegistry(t *testing.T) {
 	}
 }
 
-// A lookup failure is one medium S7/osv-no-data finding (which publishes,
-// the tweaks plan's D3) for servers the registry has never answered for,
+// A lookup failure is one medium S7/osv-no-data finding (which publishes)
+// for servers the registry has never answered for,
 // and silently uses the last known answer otherwise.
 func TestS7LookupErrorIsNoData(t *testing.T) {
 	osv := &fakeOSV{err: errors.New("dial tcp: i/o timeout")}
@@ -137,7 +137,7 @@ func TestS7LookupErrorIsNoData(t *testing.T) {
 		t.Fatalf("reasons: %v", got)
 	}
 	if couldNotScan(errs) != nil {
-		t.Fatal("no advisory data must not force review (D3)")
+		t.Fatal("no advisory data must not force review")
 	}
 	rec, _ := cache.Get(context.Background(), "pypi", "mcp-server-fetch", "0.6.2")
 	if rec == nil || rec.Status != "error" || rec.LastError == "" {
@@ -146,7 +146,7 @@ func TestS7LookupErrorIsNoData(t *testing.T) {
 
 	// A second submission during the same outage finds those error rows.
 	// An error row is no evidence, so the servers still have no data and
-	// the finding is made again (agentry#480: there used to be none).
+	// the finding is made again.
 	res = S7MCPServers{}.Run(s7ctx(osv, cache), &Input{ManifestJSON: []byte(s7Manifest)})
 	errs = findScanner(res.Findings, scannerOSVNoData)
 	if len(errs) != 1 || errs[0].Severity != SevMedium || errs[0].Confidence != ConfHigh {
@@ -196,9 +196,8 @@ func TestDeclaredMCPServersSorted(t *testing.T) {
 	}
 }
 
-// The finding carries the gate's rating (agentry#774, the tweaks plan's D1
-// and D2); the registry row keeps the advisory's own severity, which the
-// scan route, the alerts and their routing read.
+// The finding carries the gate's rating; the registry row keeps the advisory's
+// own severity, which the scan route, the alerts and their routing read.
 func TestS7RatesAdvisoriesForTheGate(t *testing.T) {
 	score := func(f float64) *float64 { return &f }
 	osv := &fakeOSV{vulns: map[string][]OSVVulnerability{
@@ -240,7 +239,7 @@ func TestS7RatesAdvisoriesForTheGate(t *testing.T) {
 		}
 	}
 	// The gate on the result: the worst gating finding is the Critical, so
-	// the version is rejected (D1).
+	// the version is rejected.
 	if d := Evaluate(GateInput{Findings: res.Findings, Policy: DefaultBaseline()}); d.Outcome != OutcomeRejected {
 		t.Fatalf("outcome: %+v", d)
 	}
@@ -281,7 +280,7 @@ func TestS7AsksAgainAboutAnUnscoredRow(t *testing.T) {
 	}
 }
 
-// A declared server S7 cannot look up is no data, not nothing (D3).
+// A declared server S7 cannot look up is no data, not nothing.
 func TestS7NoDataForAServerItCannotLookUp(t *testing.T) {
 	m := `{"schemaVersion":"2","capabilities":{"mcpServers":[
   {"npm":"left-pad","version":""},
@@ -302,13 +301,13 @@ func TestS7NoDataForAServerItCannotLookUp(t *testing.T) {
 		t.Fatalf("reasons: %v", reasons)
 	}
 	if d := Evaluate(GateInput{Findings: res.Findings, Policy: DefaultBaseline()}); d.Outcome != OutcomePublish {
-		t.Fatalf("no data publishes at the baseline (D3): %+v", d)
+		t.Fatalf("no data publishes at the baseline: %+v", d)
 	}
 }
 
 // A remote server has no package to look up: S7 reports it for what it is,
-// low, naming its address, its auth and its scopes, and publishes with it
-// (plan mcp-oauth-connections.md D11, agentry#910). It is never "no data",
+// low, naming its address, its auth and its scopes, and publishes with it.
+// It is never "no data",
 // and it is reported whether or not a vulnerability database is configured.
 func TestS7ReportsARemoteServerWithoutLookingItUp(t *testing.T) {
 	m := `{"schemaVersion":"2","capabilities":{"mcpServers":[
@@ -336,7 +335,7 @@ func TestS7ReportsARemoteServerWithoutLookingItUp(t *testing.T) {
 		t.Fatalf("the registry join records packages only: %+v", got)
 	}
 	if d := Evaluate(GateInput{Findings: res.Findings, Policy: DefaultBaseline()}); d.Outcome != OutcomePublish {
-		t.Fatalf("a remote server publishes with its finding (D11): %+v", d)
+		t.Fatalf("a remote server publishes with its finding: %+v", d)
 	}
 	off := S7MCPServers{}.Run(s7ctx(OfflineOSV{}, &MemoryMCPScanCache{}), &Input{ManifestJSON: []byte(m)})
 	if len(findScanner(off.Findings, scannerRemoteServer)) != 1 {

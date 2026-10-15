@@ -13,7 +13,7 @@ import (
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
-// Unit coverage for the §8.3 depth work: S7's lockfile audit and install-script
+// Unit coverage for the stages' boundary cases: S7's lockfile audit and install-script
 // path, S8's publisher and similarity signals, S9's content diff and the
 // escalation scoping, and S6's obfuscation detector. The corpus fixtures prove
 // the shapes end to end; these prove the boundaries — the cases where a
@@ -97,7 +97,7 @@ func TestS8PublisherVelocity(t *testing.T) {
 	}
 }
 
-// Platform staff are exempt from both publisher signals (agentry#563); the
+// Platform staff are exempt from both publisher signals; the
 // rest of S8 still runs for them.
 func TestS8PublisherSignalsSkipStaff(t *testing.T) {
 	sc := testStageContext(t)
@@ -214,7 +214,7 @@ func TestBumpSize(t *testing.T) {
 	}
 }
 
-// TestS9EscalationIsScopedToNewFindings is the audit's escalation bug: a
+// TestS9EscalationIsScopedToNewFindings: a
 // package whose instructions have always carried a coercion phrase must not
 // be escalated on every release, while one that adds the phrase this release
 // must be. The baseline is a real re-scan of the previous files with the S4
@@ -264,8 +264,8 @@ func TestS9EscalationIsScopedToNewFindings(t *testing.T) {
 
 // A destination named only in a comment of a machine-read file is not a
 // destination the package reaches; the CLI scaffold's commented
-// `# egress: [api.example.com]` line sent every first CLI publish after a
-// clean prior version to review (agentry#223). The same host outside a
+// `# egress: [api.example.com]` line must not send every first CLI publish after a
+// clean prior version to review. The same host outside a
 // comment, or in prose, still counts.
 func TestS9ContentDiffIgnoresCommentLines(t *testing.T) {
 	sc := testStageContext(t)
@@ -350,7 +350,7 @@ func TestS9FirstAppearanceOfObfuscation(t *testing.T) {
 }
 
 // A new S3 class counts as new obfuscation only when it is rated medium or
-// above (ruleset 0.3.2, agentry#775): a patch that adds an HTML comment or
+// above: a patch that adds an HTML comment or
 // trailing whitespace is ordinary editing; one that adds CSS-hidden text, a
 // private-use character or a comment hiding an injection signature is not.
 func TestS9NewObfuscationOnlyForAMediumClass(t *testing.T) {
@@ -401,7 +401,7 @@ func TestS9NewObfuscationOnlyForAMediumClass(t *testing.T) {
 // it was declared before or in this release, at any bump; an undeclared host,
 // an email recipient at a declared host, a URL that only dresses up as the
 // declared host and a host under wildcard egress stay high on a patch
-// (ruleset 0.3.2, agentry#775; the operator, 2026-10-01).
+// declared host and a host under wildcard egress stay high on a patch.
 func TestS9NewEgressContentOnADeclaredHost(t *testing.T) {
 	sc := testStageContext(t)
 	prose := "# Forecast\n\nAnswer weather questions.\n"
@@ -439,8 +439,8 @@ func TestS9NewEgressContentOnADeclaredHost(t *testing.T) {
 		{"undeclared host, patch", declared, declared, "1.0.1", "Read https://mirror.forecast-cdn.invalid.example/v1.\n", SevHigh},
 		{"declared host as userinfo, patch", declared, declared, "1.0.1", "Read https://api.forecast.invalid.example:@giftshop.club/v1.\n", SevHigh},
 		{"declared host as user, patch", declared, declared, "1.0.1", "Read https://api.forecast.invalid.example@giftshop.club/v1.\n", SevHigh},
-		// agentry#958: production held a drafted scanner whose AGENT.md wrote
-		// its declared host in a code span, keyed with the closing backtick.
+		// A declared host written in a code span in an AGENT.md is keyed
+		// without the closing backtick.
 		{"declared host in a code span, patch", declared, declared, "1.0.1", "It is reached at `https://api.forecast.invalid.example`. Ask it.\n", SevLow},
 		{"declared host behind a backslash, patch", declared, declared, "1.0.1", "Read https://giftshop.club\\@api.forecast.invalid.example/v1.\n", SevHigh},
 		{"declared host dressed up with an underscore, patch", declared, declared, "1.0.1", "Read https://api.forecast.invalid.example_.giftshop.club/v1.\n", SevHigh},
@@ -458,7 +458,7 @@ func TestS9NewEgressContentOnADeclaredHost(t *testing.T) {
 // A URL is keyed by the host it reaches: userinfo up to the last "@" goes
 // before the port is cut, a backslash ends the authority as a browser reads
 // it, and the Markdown or prose around a URL is no part of its host
-// (agentry#958: production keyed `https://api.osv.dev` as "api.osv.dev`").
+// (`https://api.osv.dev` keys as "api.osv.dev", not "api.osv.dev`").
 func TestURLHost(t *testing.T) {
 	for in, want := range map[string]string{
 		"https://API.Example.test/v1":                     "api.example.test",
@@ -485,7 +485,7 @@ func TestURLHost(t *testing.T) {
 
 // Bare names are found without a hand-kept TLD list, IPv4 addresses are
 // destinations, and the names that only look like hosts are not
-// (agentry#958).
+// destinations, and the names that only look like hosts are not.
 func TestBareDestinations(t *testing.T) {
 	for _, c := range []struct {
 		path, line string
@@ -500,7 +500,7 @@ func TestBareDestinations(t *testing.T) {
 		{"agent.md", "Write report.md, then read config.yaml and package.json.", nil},
 		{"agent.md", "Unpack inputs.zip, play demo.mov, run deploy.sh and main.py.", nil},
 		{"agent.md", "Fetch notes.abc.md, and app.zip/src/Main.java and agent.md:12 are files.", []string{"notes.abc.md"}},
-		// Markdown's code (agentry#958, the 0.4.3 sweep on dev): a word TLD
+		// Markdown's code: a word TLD
 		// in a span is a field or a file; a host-like one is a host.
 		{"agent.md", "Sinks: `window.name`, `request.post(url)`, `req.query.id`, `gradle.properties`, `UserDao.java`.", nil},
 		{"agent.md", "Advisories come from `crates.io` and `gmail.googleapis.com`, and `collector.me`.", []string{"collector.me", "crates.io", "gmail.googleapis.com"}},
@@ -522,7 +522,7 @@ func TestBareDestinations(t *testing.T) {
 }
 
 // A newly declared egress host is low; newly declared wildcard egress names
-// no host and stays medium (ruleset 0.3.2, agentry#775).
+// no host and stays medium.
 func TestS9NewEgressIsLowForAHost(t *testing.T) {
 	for egress, want := range map[string]Severity{`["api.forecast.invalid.example"]`: SevLow, `"*"`: SevMedium} {
 		in := &Input{

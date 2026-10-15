@@ -3,9 +3,8 @@ package scan
 import "testing"
 
 // Published vector/score pairs from GitHub's advisory database
-// (GET /advisories, cvss_severities), read 2026-10-01. The same check over
-// all 259 pairs of 240 reviewed npm and pip advisories found no mismatch;
-// these are the ones that pin each version and the 8.5 boundary.
+// (GET /advisories, cvss_severities); these are the ones that pin each
+// version and the 8.5 boundary.
 func TestCVSSBaseScoreMatchesPublishedScores(t *testing.T) {
 	for _, c := range []struct {
 		advisory, vector string

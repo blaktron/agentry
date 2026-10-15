@@ -12,17 +12,15 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// S7 — declared MCP servers: known vulnerabilities (§8.3; reinstated for
-// manifest v2 by agentry#177, plan agentry-notes/plans/mcp-vuln-scanning.md,
-// DEV-090). A `capabilities.mcpServers` package entry is an exact npm
-// or PyPI package version; a remote entry (agentry#910) has no package
-// and is reported as S7/remote-server, never looked up. S7 asks the vulnerability database about each one — live
-// the first time a package version is seen, from the mcp_server_scans
-// registry when it was checked within mcpScanTTL — and reports every
-// advisory as a finding at the gate's rating of it (AdvisoryGateSeverity:
-// a Critical rejects, a High holds from CVSS 8.5 and is medium below it;
-// agentry#774). A server it has no data for is one medium finding,
-// S7/osv-no-data, which publishes (the tweaks plan's D3).
+// S7 — declared MCP servers: known vulnerabilities. A `capabilities.mcpServers`
+// package entry is an exact npm or PyPI package version; a remote entry has no
+// package and is reported as S7/remote-server, never looked up. S7 asks the
+// vulnerability database about each one — live the first time a package version
+// is seen, from the mcp_server_scans registry when it was checked within
+// mcpScanTTL — and reports every advisory as a finding at the gate's rating of
+// it (AdvisoryGateSeverity: a Critical rejects, a High holds from CVSS 8.5 and
+// is medium below it). A server it has no data for is one medium finding,
+// S7/osv-no-data, which publishes.
 //
 // The stage depends on the database, not the archive, so its result is
 // never served from the archive-keyed stage cache (NoCache).
@@ -39,7 +37,7 @@ type MCPScanRecord struct {
 	// Status is "safe" (no known advisories at LastChecked), "vulnerable",
 	// "error" (a lookup failed before any answer: no Advisories, and S7
 	// counts it as no answer) or "not-found" (the server's package registry
-	// does not publish this version, agentry#1036: OSV is not asked, and the
+	// does not publish this version: OSV is not asked, and the
 	// daily sweep leaves the row as it is). A lookup that fails after an
 	// answer keeps the answer's Status and only sets LastError.
 	Status      string
@@ -112,32 +110,30 @@ type declaredServer struct {
 // vulnerability data for: the lookup failed with no earlier answer, the
 // ecosystem is not one S7 covers, or the server has no pinned version. It
 // is medium and does not force review, so the version publishes with it on
-// its report (the tweaks plan's D3); the daily sweep asks again about every
+// its report; the daily sweep asks again about every
 // registry row, a failed one included. A package the database knows
-// nothing about is not "no data" (the operator,
-// 2026-09-30: no reported issues yet is not a risk) and is recorded with
-// no advisories.
+// nothing about is not "no data" (no reported issues yet is not a risk)
+// and is recorded with no advisories.
 const scannerOSVNoData = "S7/osv-no-data"
 
-// scannerRemoteServer is the finding for a remote MCP server (agentry#910,
-// plan mcp-oauth-connections.md D11): it runs at its vendor, so there is no
-// package or version to look up and no code the pipeline reads. It is low
-// and publishes; it names the address, the auth and the scopes, which are
-// what the pipeline can state about it, and says nothing of the vendor's
-// code (honest posture).
+// scannerRemoteServer is the finding for a remote MCP server: it runs at its
+// vendor, so there is no package or version to look up and no code the pipeline
+// reads. It is low and publishes; it names the address, the auth and the
+// scopes, which are what the pipeline can state about it, and says nothing of
+// the vendor's code.
 const scannerRemoteServer = "S7/remote-server"
 
 // scannerVersionNotPublished is the finding for a declared server whose
-// package registry does not publish the pinned version (agentry#1036). No
+// package registry does not publish the pinned version. No
 // run can install it, so the version is refused: the finding is critical,
-// which the gate rejects (the operator, 2026-10-10). OSV answers "no
-// advisories" for a version that does not exist, which is how such a
-// release used to publish with its server recorded as safe.
+// which the gate rejects. OSV answers "no
+// advisories" for a version that does not exist, so without this finding
+// such a release would publish with its server recorded as safe.
 const scannerVersionNotPublished = "S7/version-not-published"
 
 // scannerVersionNotChecked is the finding for declared servers whose
 // registry gave no answer: medium, and it publishes, as S7/osv-no-data does
-// (the operator, 2026-10-10: a registry that cannot be reached is "not
+// (a registry that cannot be reached is "not
 // checked", never "safe").
 const scannerVersionNotChecked = "S7/version-not-checked"
 
@@ -148,9 +144,9 @@ const (
 	noDataNoVersion    = "no pinned version"
 )
 
-// scored reports whether every advisory on the row was read since CVSS
-// vectors were scored. A row written before that is asked about again, so
-// a High below 8.5 is not judged high for want of a score (agentry#774).
+// scored reports whether every advisory on the row was read with CVSS
+// scoring. A row written without it is asked about again, so
+// a High below 8.5 is not judged high for want of a score.
 func (r *MCPScanRecord) scored() bool {
 	for _, a := range r.Advisories {
 		if !a.Scored {
@@ -160,7 +156,7 @@ func (r *MCPScanRecord) scored() bool {
 	return true
 }
 
-// scoredAdvisories marks advisories as read since scores were (see
+// scoredAdvisories marks advisories as scored (see
 // OSVVulnerability.Scored), for a registry row about to be written from a
 // lookup's answer.
 func scoredAdvisories(advs []OSVVulnerability) []OSVVulnerability {
@@ -311,9 +307,8 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 			// Registry rows, stale or not, are better evidence than nothing;
 			// a server with no row at all has no data, and neither has one
 			// whose only row is the error row an earlier failed lookup wrote:
-			// that row holds no answer, and counting it as one let the second
-			// submission during an outage pass with no finding at all
-			// (agentry#480).
+			// that row holds no answer, and counting it as one would let the second
+			// submission during an outage pass with no finding at all.
 			lookupErr = err
 			for _, p := range lookup {
 				i := lookupIdx[p.Key()]
@@ -398,7 +393,7 @@ func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
 }
 
 // checkPublished asks each declared server's registry whether it publishes
-// the pinned version (agentry#1036), and answers the servers that remain to
+// the pinned version, and answers the servers that remain to
 // be looked up in OSV and the findings with S7's own added. It asks on every
 // submission, one GET a server, and never answers from the not-found row:
 // that row would stand while the sweep refreshed it, so a version published
@@ -428,7 +423,7 @@ func (s S7MCPServers) checkPublished(sc stageContext, servers []declaredServer, 
 		ref := d.Ecosystem + ":" + d.Package + "@" + d.Version
 		published, err := sc.registries.Published(ctx, d.Ecosystem, d.Package, d.Version)
 		if err != nil {
-			// No answer: the server goes on to OSV as before, and the report
+			// No answer: the server goes on to OSV, and the report
 			// says its version was not checked.
 			unchecked = append(unchecked, ref)
 			lastErr = err

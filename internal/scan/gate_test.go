@@ -11,7 +11,7 @@ func highConfidenceFinding(sev Severity) Finding {
 
 func TestGateJudgeForcesReview(t *testing.T) {
 	// A clean scan with the `none` judge (no automated adjudication) must
-	// still go to review (§8.4.6 fail-toward-review).
+	// still go to review (fail-toward-review).
 	got := Evaluate(GateInput{Policy: DefaultBaseline(), JudgeForcesReview: true})
 	if got.Outcome != OutcomeNeedsReview {
 		t.Fatalf("judge-forced review: got %s", got.Outcome)
@@ -55,9 +55,8 @@ func TestGatePolicyRequireReviewWhenCapabilities(t *testing.T) {
 	}
 }
 
-// TestBaselinePublishesOnMedium pins ruleset 0.3.0 (agentry#773, D8 of plan
-// scan-and-run-tweaks): the baseline's threshold is medium and comes from the
-// ruleset, and every reader of an empty threshold uses it.
+// TestBaselinePublishesOnMedium pins the baseline's threshold: medium, from
+// the ruleset, and every reader of an empty threshold uses it.
 func TestBaselinePublishesOnMedium(t *testing.T) {
 	if got := DefaultBaseline().MaxAutoPublishSeverity; got != "medium" {
 		t.Fatalf("DefaultBaseline threshold = %q, want medium", got)
@@ -80,8 +79,8 @@ func TestBaselinePublishesOnMedium(t *testing.T) {
 	}
 }
 
-// TestAnOrgAtLowStillHoldsMedium pins invariant 3 of plan scan-and-run-tweaks:
-// an organization that wants medium held writes maxAutoPublishSeverity low,
+// TestAnOrgAtLowStillHoldsMedium: an organization that wants medium held
+// writes maxAutoPublishSeverity low,
 // and the gate holds medium for it while the platform publishes it.
 func TestAnOrgAtLowStillHoldsMedium(t *testing.T) {
 	merged := Merge(DefaultBaseline(), Policy{MaxAutoPublishSeverity: "low"})
@@ -101,7 +100,7 @@ func TestAnOrgAtLowStillHoldsMedium(t *testing.T) {
 	}
 }
 
-// TestPolicyTightenOnly pins §8.6: Merge never loosens the baseline.
+// TestPolicyTightenOnly pins that Merge never loosens the baseline.
 func TestPolicyTightenOnly(t *testing.T) {
 	baseline := Policy{
 		RequireHumanReview:     json.RawMessage(`{"whenCapabilities":["exec"]}`),
@@ -141,10 +140,10 @@ func TestPolicyTightenOnly(t *testing.T) {
 	}
 }
 
-// TestGateHoldsWhatCouldNotBeScanned pins D5 of plan scan-and-run-tweaks
-// (agentry#771): content a stage could not read reaches a person whatever
-// the threshold, so raising the baseline to medium cannot publish it. The
-// advisory lookup's failure is the operator's one exception (D3).
+// TestGateHoldsWhatCouldNotBeScanned: content a stage could not read
+// reaches a person whatever the threshold, so raising the baseline to
+// medium cannot publish it. The advisory lookup's failure is the one
+// exception.
 func TestGateHoldsWhatCouldNotBeScanned(t *testing.T) {
 	atMedium := DefaultBaseline()
 	atMedium.MaxAutoPublishSeverity = "medium"
@@ -169,10 +168,10 @@ func TestGateHoldsWhatCouldNotBeScanned(t *testing.T) {
 }
 
 // TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable
-// pins D16 (agentry#771): the classes the operator keeps in front of a
-// person are high at score 2 (deceiving the user too since ruleset 0.4.0);
-// exfiltration and destructive actions are medium at any score since
-// ruleset 0.4.0 (agentry#893), and obfuscation stays medium at 2.
+// pins the classes always kept in front of a
+// person: high at score 2 (deceiving the user too);
+// exfiltration and destructive actions are medium at any score,
+// and obfuscation stays medium at 2.
 func TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable(t *testing.T) {
 	for score, want := range map[int]map[string]Severity{
 		2: {

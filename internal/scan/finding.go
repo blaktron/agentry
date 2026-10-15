@@ -1,6 +1,6 @@
-// Package scan is the security pipeline (§8): orchestrator, scanner stages
+// Package scan is the security pipeline: orchestrator, scanner stages
 // S1–S10, the LLM judge interface, the gate, and provenance signing. It
-// operates on the exact archive bytes that will ship (§6.5), never the repo.
+// operates on the exact archive bytes that will ship, never the repo.
 package scan
 
 import (
@@ -9,7 +9,7 @@ import (
 	"io"
 )
 
-// Severity is a finding severity (§8, ordered).
+// Severity is a finding severity (ordered).
 type Severity string
 
 // Severities, ascending.
@@ -52,7 +52,7 @@ const (
 	ConfHigh   Confidence = "high"
 )
 
-// Finding is one pipeline result (mirrors the findings table, §4.2). It is
+// Finding is one pipeline result (mirrors the findings table). It is
 // the common currency across stages; rules.Finding (S3/S4) converts in.
 type Finding struct {
 	Scanner    string // "S1".."S10", optionally with a rule id: "S4/inj-override-001"
@@ -64,7 +64,7 @@ type Finding struct {
 	LineEnd    int
 	Excerpt    string
 	Detail     map[string]any
-	Taxonomy   []string // OWASP ids (§8.10)
+	Taxonomy   []string // OWASP ids
 }
 
 // fromRules converts a pkg/rules finding (S3/S4) into a pipeline finding.
@@ -92,17 +92,17 @@ type StageResult struct {
 	Scanner  string
 	Findings []Finding
 	// Err is set when the stage could not complete; the orchestrator treats
-	// a stage error as fail-closed (§7 timeout rule, §8.2).
+	// a stage error as fail-closed.
 	Err error
 	// Skipped marks a stage whose result was already known — a completed
-	// stage of an interrupted run, or a §8.7 results-cache hit. Skipped
+	// stage of an interrupted run, or a results-cache hit. Skipped
 	// stages are not re-persisted and not re-cached.
 	Skipped bool
 	// NoCache marks a result that depends on more than the archive bytes
 	// (S2 with a git-history scan) and so must not be reused by digest.
 	NoCache bool
 	// PromptHash is set by S5: the hash of the rubric/prompt version the
-	// judge adjudicated with (§8.4.4, recorded on the scan run).
+	// judge adjudicated with (recorded on the scan run).
 	PromptHash string
 	// JudgeUsage is set by S5 and SK: the token use the provider reported,
 	// nil when it reported none.
@@ -138,18 +138,18 @@ type Input struct {
 	RecentPublishCount int
 	// IPClusterAccounts / IPClusterVersions: distinct submitting accounts and
 	// versions that share this version's submitting-address hash in the last
-	// 24 hours (agentry#27; 0 when the signal is off). Counts include this
+	// 24 hours (0 when the signal is off). Counts include this
 	// submission.
 	IPClusterAccounts int
 	IPClusterVersions int
 	// SubmitterIsStaff: the submitter is platform staff at scan time, which
-	// exempts the version from S8's two publisher signals (agentry#563).
+	// exempts the version from S8's two publisher signals.
 	SubmitterIsStaff bool
 	// Source is the version's publish source ("git-tag" | "cli-upload" |
 	// "drafter-revision").
 	Source string
 	// DraftRevision is set when the version is a Drafter revision of S9's
-	// baseline, proved by the extension's DraftProvenance (agentry#794):
+	// baseline, proved by the extension's DraftProvenance:
 	// S9 leaves the proved files out of its content diff and escalation.
 	DraftRevision *DraftRevision
 	// History streams the git history reachable from the tagged commit as a

@@ -7,8 +7,8 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 )
 
-// A remote MCP server's host is network the release reaches (agentry#910's
-// review): it declares the network capability to the gate and to namespace
+// A remote MCP server's host is network the release reaches: it declares
+// the network capability to the gate and to namespace
 // policy, and an update that adds one is S9's low new-egress finding, as a
 // new network.egress host is.
 func TestARemoteServerIsNetwork(t *testing.T) {

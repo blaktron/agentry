@@ -9,8 +9,8 @@ import (
 )
 
 // tarZst builds a tar.zst from name→content (raw entries, for hostile cases).
-// The extractor and its own fixtures moved to pkg/archive; this copy serves
-// the scan-side tests that still assemble small archives.
+// The extractor and its own fixtures live in pkg/archive; this copy serves
+// the scan-side tests that assemble small archives.
 func tarZst(t *testing.T, entries []tar.Header, bodies [][]byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer

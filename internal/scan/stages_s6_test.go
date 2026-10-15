@@ -35,7 +35,7 @@ func s6Run(t *testing.T, manifest string, files map[string]string) map[string]Fi
 // A shell script that curls an undeclared host, writes a file and reads an
 // undeclared variable, in a package declaring nothing: every check fires,
 // the coverage record names the script, and a commented-out curl|sh is
-// reported low (agentry#239).
+// reported low.
 func TestS6UndeclaredEverything(t *testing.T) {
 	got := s6Run(t, `{"capabilities":{}}`, map[string]string{
 		"AGENT.md": "# x\n\nRun setup.sh first.\n",
@@ -53,8 +53,8 @@ func TestS6UndeclaredEverything(t *testing.T) {
 	if f := got["S6/remote-exec"]; f.Severity != SevLow {
 		t.Errorf("a commented curl|sh should be low, got %s", f.Severity)
 	}
-	// High since ruleset 0.2.2: an undeclared capability reaches a person
-	// whatever the threshold (D16, agentry#771).
+	// High: an undeclared capability reaches a person
+	// whatever the threshold.
 	if f := got["S6/undeclared-env"]; f.Detail["name"] != "API_TOKEN" || f.Severity != SevHigh {
 		t.Errorf("undeclared-env = %s %+v, want high", f.Severity, f.Detail)
 	}
@@ -112,9 +112,9 @@ func TestS6NoScriptsNoFindings(t *testing.T) {
 	}
 }
 
-// An ssh-family destination written user@host is a host the script reaches
-// (agentry#1095). Before it, every user@host was skipped with curl's @file
-// argument, so `ssh admin@prod…` was never undeclared-network whatever the
+// An ssh-family destination written user@host is a host the script reaches.
+// A user@host must not be skipped with curl's @file
+// argument, so `ssh admin@prod…` is undeclared-network whatever the
 // manifest declared.
 func TestS6ReadsAnSSHUserAtHostDestination(t *testing.T) {
 	got := s6Run(t, `{"capabilities":{"exec":{"commands":["ssh"]}}}`, map[string]string{
@@ -210,10 +210,10 @@ func TestS6UserAtHostThatIsNotADestination(t *testing.T) {
 }
 
 // A command written with its path, inside backticks or escaped with a
-// backslash is the same command (agentry#1148): S6 read a command word only
-// after a line start, whitespace, ;, |, & or (, so `/usr/bin/curl …`,
-// “ `ssh …` “ and `\curl …` were never network calls, `/bin/rm` never a
-// write, and `| /bin/sh` never remote execution.
+// backslash is the same command: S6 reads a command word after a line
+// start, whitespace, ;, |, & or (, so `/usr/bin/curl …`,
+// “ `ssh …` “ and `\curl …` are network calls, `/bin/rm` a
+// write, and `| /bin/sh` remote execution.
 func TestS6ReadsAPathQualifiedOrWrappedCommand(t *testing.T) {
 	for _, line := range []string{
 		"/usr/bin/curl -s https://prod.example.test/beacon",
@@ -306,7 +306,7 @@ func TestS6ReadsAPathQualifiedWriteAndShell(t *testing.T) {
 	}
 }
 
-// The host forms S6 did not read before agentry#1149, each to an
+// The host forms S6 reads, each to an
 // undeclared host: IP addresses, URI schemes other than http(s) and a URL's
 // userinfo, dynamic users, the other ssh-family commands, a destination held
 // in a variable, and commands inside a quoted string or an sh -c string.
@@ -385,8 +385,8 @@ func TestS6ReadsAChainedVariable(t *testing.T) {
 	}
 }
 
-// Deep substitutions and thousands of references stay linear: the review
-// of agentry#1149 measured 11 s and 34 s on these shapes before the caps.
+// Deep substitutions and thousands of references stay linear: the caps
+// keep these shapes fast.
 func TestS6CraftedLinesStayFast(t *testing.T) {
 	deep := strings.Repeat("$(echo ", 20000) + "ssh admin@prod.example.org" + strings.Repeat(")", 20000)
 	many := "A=prod.example.org\ncurl -s https://get.example.test/ " + strings.Repeat("$A ", 60000) + "\n"
