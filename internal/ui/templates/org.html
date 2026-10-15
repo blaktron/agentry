@@ -42,8 +42,8 @@
 </section>
 
 <section class="card"><h2>Policy</h2>
-<p class="muted">Organization policy may only tighten the platform baseline. The server refuses a document that loosens <code>maxAutoPublishSeverity</code>, <code>wildcardEgress</code> or <code>requireHumanReview</code>; every other key it keeps at the stricter of the two values. This page does not show the baseline; read it at <code>GET /api/v1/platform/policy</code>.</p>
-<p class="muted">The server reads these keys: <code>requireHumanReview</code>, <code>blockedCapabilities</code>, <code>blockedMcpServers</code>, <code>allowedLicenses</code>, <code>maxAutoPublishSeverity</code>, <code>requireEvals</code>, <code>wildcardEgress</code>. It stores any other key and shows it here, but never enforces it.</p>
+<p class="muted">Organization policy may only tighten the platform baseline. The server refuses a document that loosens <code>maxAutoPublishSeverity</code>, <code>wildcardEgress</code> or <code>requireHumanReview</code>; every other key it keeps at the stricter of the two values, and a <code>whenCapabilities</code> condition is added to the baseline's. This page does not show the baseline; read it at <code>GET /api/v1/platform/policy</code>.</p>
+<p class="muted">The server reads these keys: <code>requireHumanReview</code>, <code>blockedCapabilities</code>, <code>blockedMcpServers</code>, <code>allowedLicenses</code>, <code>noPublicLicense</code>, <code>maxAutoPublishSeverity</code>, <code>requireEvals</code>, <code>wildcardEgress</code>. It stores any other key and shows it here, but never enforces it.</p>
 <form method="post" action="/ui/orgs/{{.Handle}}"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="section" value="policy">
 <label>Policy JSON<textarea name="policy" rows="10" class="mono">{{.Policy}}</textarea></label><button type="submit">Save policy</button></form></section>
 

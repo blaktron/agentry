@@ -1809,7 +1809,13 @@ human look:
 
 Organizations can tighten this for their own namespace but never loosen it:
 `blockedCapabilities` unions, `allowedLicenses` intersects, severity
-thresholds only move down.
+thresholds only move down, and `requireHumanReview` conditions add up (a
+baseline that reviews `exec` and an organization that reviews `network`
+review both; `"always"` wins over any condition). When the baseline's and
+the organization's `allowedLicenses` have no identifier in common, no
+license is left, so the namespace refuses every public publish; the
+effective policy says so with `"noPublicLicense": true`. A policy document
+may set `noPublicLicense` itself to stop public publishes.
 
 Three notes on the knobs:
 
@@ -1827,7 +1833,9 @@ Three notes on the knobs:
   `scripts/dev/spdx-sync.sh`) and accepts expressions — `MIT OR Apache-2.0`,
   `GPL-2.0-or-later WITH Classpath-exception-2.0`. An expression passes the
   policy only when every identifier in it is allowed. Custom `LicenseRef-`
-  identifiers are refused for public publish.
+  identifiers are refused for public publish. The baseline's and the
+  organization's lists are intersected without regard to case. An absent
+  or empty list allows any license.
 
 ## Organizations
 
