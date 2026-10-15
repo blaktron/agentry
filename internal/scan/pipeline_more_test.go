@@ -1,6 +1,6 @@
 package scan_test
 
-// Two properties the plan is emphatic about, verified against a real database.
+// Two properties verified against a real database.
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// TestPrivateAgentsAreScannedToo pins §1.6.1: "There is no flag, plan, or role
-// that lets a public version skip the pipeline" — and §7's corollary that
+// TestPrivateAgentsAreScannedToo pins that no flag, plan, or role
+// lets a public version skip the pipeline, and that
 // privacy does not buy a scan bypass. A private agent runs the same pipeline;
 // only review-queue routing differs.
 func TestPrivateAgentsAreScannedToo(t *testing.T) {
@@ -24,7 +24,7 @@ func TestPrivateAgentsAreScannedToo(t *testing.T) {
 		"LICENSE":    "Apache-2.0\n",
 	})
 	if v.Status == "published" {
-		t.Fatal("a private agent skipped the gate — privacy must not buy a scan bypass (§7)")
+		t.Fatal("a private agent skipped the gate — privacy must not buy a scan bypass ")
 	}
 	if v.Status != "needs_review" && v.Status != "rejected" {
 		t.Fatalf("private version status = %s, want needs_review/rejected", v.Status)
@@ -45,14 +45,14 @@ func TestPrivateAgentsAreScannedToo(t *testing.T) {
 }
 
 // TestReleaseDiffFlagsCapabilityWidening pins the S9 rug-pull defence
-// (§8.3 S9, the postmark-mcp pattern): a clean agent whose next release
+// (the postmark-mcp pattern): a clean agent whose next release
 // newly declares network egress is flagged on its report, whatever its
-// history. S9/capability-widened is medium, and since ruleset 0.3.2 the newly
+// history. S9/capability-widened is medium, and the newly
 // declared host itself is low, in the manifest (S9/new-egress) and in the
-// content (S9/new-egress-content; agentry#775): since ruleset 0.3.0 a newly
-// *declared* capability publishes with the findings shown, as the operator
-// chose for every medium outside undeclared capabilities and attempted
-// injections (D6 of plan scan-and-run-tweaks, agentry#773). An organization
+// content (S9/new-egress-content): a newly
+// *declared* capability publishes with the findings shown, as does every
+// medium outside undeclared capabilities and attempted
+// injections. An organization
 // at threshold low still holds it.
 func TestReleaseDiffFlagsCapabilityWidening(t *testing.T) {
 	e := newPipeEnv(t)

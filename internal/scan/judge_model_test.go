@@ -11,11 +11,11 @@ import (
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
-// TestRunRecordsTheModelIDNotTheProviderName pins agentry#321 at the
-// orchestrator: the report's judgeModel and the run result's JudgeModel name
+// TestRunRecordsTheModelIDNotTheProviderName pins the orchestrator:
+// the report's judgeModel and the run result's JudgeModel name
 // the model that adjudicated when the provider has one, and keep the
 // provider's name when it has none — so a report under the static judge
-// hashes exactly as it did before the distinction existed (§8.4.4).
+// hashes the same whether or not the provider has a model id.
 func TestRunRecordsTheModelIDNotTheProviderName(t *testing.T) {
 	bundle, err := ruleset.Load()
 	if err != nil {

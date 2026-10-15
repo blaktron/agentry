@@ -10,8 +10,8 @@ import (
 	"unicode/utf8"
 )
 
-// Image metadata text extraction for S3 (§8.3: "image alt-text/EXIF text
-// extraction for instruction-bearing strings").
+// Image metadata text extraction for S3 (image alt-text/EXIF text
+// extraction for instruction-bearing strings).
 //
 // Markdown alt-text needs no extraction — it is literal text in the .md file,
 // so S3/S4 already read it (TestAltTextIsScanned pins that). The real blind
@@ -26,8 +26,8 @@ import (
 
 // imageMetaCaps bound the work an image can cause.
 const (
-	// maxImageBytes is the largest image file the extractor will read (§19
-	// caps images at 5 MB).
+	// maxImageBytes is the largest image file the extractor will read (the
+	// release quotas cap images at 5 MB).
 	maxImageBytes = 5 << 20
 	// maxMetaChunkBytes caps one decompressed text chunk.
 	maxMetaChunkBytes = 64 << 10
@@ -171,7 +171,7 @@ func jpegText(data []byte) []metaString {
 	return out
 }
 
-// EXIF tags whose values are human text (§8.3 names UserComment,
+// EXIF tags whose values are human text (UserComment,
 // ImageDescription and XPComment specifically).
 var exifTextTags = map[uint16]string{
 	0x010E: "ImageDescription",

@@ -10,8 +10,8 @@ import (
 
 // TestS3S4RatesCapabilityHitsByDeclaration: the stage reads the release's
 // manifest, so the same exfiltration directive holds a release that does
-// not declare its destination and publishes, at medium, one that does
-// (ruleset 0.4.0, agentry#893). S9 never escalates a rated hit: the
+// not declare its destination and publishes, at medium, one that does.
+// S9 never escalates a rated hit: the
 // capability is the manifest diff's to report.
 func TestS3S4RatesCapabilityHitsByDeclaration(t *testing.T) {
 	b, err := ruleset.Load()

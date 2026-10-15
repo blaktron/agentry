@@ -13,8 +13,7 @@ import (
 )
 
 // SourceDrafterRevision is the source of a version the scan proved was a
-// hosted Drafter revision of its agent's current release (plan
-// drafter-revisions.md §6, R5; agentry#794).
+// hosted Drafter revision of its agent's current release.
 const SourceDrafterRevision = "drafter-revision"
 
 // DraftClaim is what the pipeline asks DraftProvenance about one version:
@@ -22,7 +21,7 @@ const SourceDrafterRevision = "drafter-revision"
 // baseline for it (the version and its archive digest), and the proof of
 // the submitted files (pkg/draftproof). Every field is the registry's own
 // reading; none is taken from the request but the run's id. It carries no
-// tier and no balance: the verdict never reads either (ARCHITECTURE.md §9).
+// tier and no balance: the verdict never reads either.
 type DraftClaim struct {
 	Run            uuid.UUID
 	Account        uuid.UUID

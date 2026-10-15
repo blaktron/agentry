@@ -9,22 +9,20 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// SK — the knowledge packs a release ships (plan knowledge.md §4.6, D12,
-// D19; agentry#594). A pack travels in the archive under knowledge/<name>/
-// and enters the agent's context at run time, so it is scanned with the
-// version, by the same reading the registry gives a pack it stores
-// (ScanPack): S2, S3, S4 and S8's URL reputation over every page and
-// source, then AI Review over sources/ and over wiki/ in chunks no larger
-// than the judge reads. Its findings are the release's, gated like any
-// other; a pack the scan could not read in full fails the stage, which
-// sends the version to a person. The release's own stages read the
-// release's own files and a pack's files that are not text (an image, a
-// PDF source's original), which S1 and S3's image reading cover as
-// anywhere else; a pack's text is this stage's, since S5 would read it in
-// one call past what the judge takes, and S1's 1 MiB text cap would cut a
-// pack's long source short. A pack file S1 took for text that the pack
-// scan cannot read (not UTF-8) is a finding, so nothing in a pack goes
-// unread without one.
+// SK — the knowledge packs a release ships. A pack travels in the archive under
+// knowledge/<name>/ and enters the agent's context at run time, so it is
+// scanned with the version, by the same reading the registry gives a pack it
+// stores (ScanPack): S2, S3, S4 and S8's URL reputation over every page and
+// source, then AI Review over sources/ and over wiki/ in chunks no larger than
+// the judge reads. Its findings are the release's, gated like any other; a pack
+// the scan could not read in full fails the stage, which sends the version to a
+// person. The release's own stages read the release's own files and a pack's
+// files that are not text (an image, a PDF source's original), which S1 and
+// S3's image reading cover as anywhere else; a pack's text is this stage's,
+// since S5 would read it in one call past what the judge takes, and S1's 1 MiB
+// text cap would cut a pack's long source short. A pack file S1 took for text
+// that the pack scan cannot read (not UTF-8) is a finding, so nothing in a pack
+// goes unread without one.
 
 // KnowledgeStageID is the stage's id and its findings' scanner prefix.
 const KnowledgeStageID = "SK"

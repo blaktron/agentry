@@ -1,7 +1,7 @@
 package scan_test
 
-// Regression tests for the §7/§8 lifecycle paths the audit found unreachable,
-// non-terminating or silently swallowed. Each test names the behaviour a user
+// Regression tests for the lifecycle paths that must stay reachable,
+// terminating and loud about failure. Each test names the behaviour a user
 // or reviewer depends on, not the function that implements it.
 
 import (
@@ -25,11 +25,11 @@ import (
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
-// ---------------------------------------------------------------- B-02 block
+// ---------------------------------------------------------------- block
 
-// TestBlockWalksVersionsAndReinstateReverses pins §7 `blocked`: T&S confirming
+// TestBlockWalksVersionsAndReinstateReverses pins `blocked`: T&S confirming
 // a malicious package must actually disable it. Setting agents.quarantine_state
-// alone left every published version downloadable and resolvable, which made
+// alone would leave every published version downloadable and resolvable, and
 // the download handler's 410 branch dead code.
 func TestBlockWalksVersionsAndReinstateReverses(t *testing.T) {
 	e := newPipeEnv(t)
@@ -67,7 +67,7 @@ func TestBlockWalksVersionsAndReinstateReverses(t *testing.T) {
 		t.Fatal("blocked agent still advertises a latest published version")
 	}
 
-	// Reinstate reverses it (§7: only platform staff set/unset).
+	// Reinstate reverses it (only platform staff set/unset).
 	if _, err := e.pipe.Reinstate(ctx, agent.ID, "T&S: appeal upheld", staffEvent()); err != nil {
 		t.Fatalf("reinstate: %v", err)
 	}
@@ -78,20 +78,20 @@ func TestBlockWalksVersionsAndReinstateReverses(t *testing.T) {
 	if back.Status != string(registry.StatusPublished) {
 		t.Fatalf("version status after reinstate = %s, want published", back.Status)
 	}
-	// §7: signing happens exactly once. Reinstating must not mint a second
+	// Signing happens exactly once. Reinstating must not mint a second
 	// attestation or fail trying.
 	if _, err := e.st.Queries().GetAttestation(ctx, v.ID); err != nil {
 		t.Fatalf("reinstated version lost its attestation: %v", err)
 	}
 }
 
-// ------------------------------------------------- B-03 quarantine has an exit
+// ------------------------------------------------- quarantine has an exit
 
-// TestRescanQuarantineIsReviewableAndClearable pins §8.7's full cycle: the
+// TestRescanQuarantineIsReviewableAndClearable pins the full cycle: the
 // rescan that quarantines a version must leave behind the evidence AND a
 // review item, and approving that item must return the version to published.
-// Previously the rescan persisted nothing and filed nothing, so quarantined
-// was a state with no exit.
+// A quarantine that persisted nothing and filed nothing would be a state
+// with no exit.
 func TestRescanQuarantineIsReviewableAndClearable(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
@@ -135,13 +135,13 @@ func TestRescanQuarantineIsReviewableAndClearable(t *testing.T) {
 	// The exit: a platform review item.
 	item, err := e.st.Queries().GetPendingReviewItemForVersion(ctx, v.ID)
 	if err != nil {
-		t.Fatalf("quarantine filed no review item (§8.7 has no way out): %v", err)
+		t.Fatalf("quarantine filed no review item (a quarantine needs a way out): %v", err)
 	}
 	if item.Queue != "platform" {
 		t.Fatalf("quarantine review item queue = %s, want platform", item.Queue)
 	}
 
-	// Approving clears the quarantine (§7: quarantined → published).
+	// Approving clears the quarantine (quarantined → published).
 	reviewer := e.seedUser("rev" + suffix())
 	if _, err := e.pipe.DecideReview(ctx, scan.ReviewDecision{
 		ItemID: item.ID, VersionID: v.ID, Target: registry.StatusPublished,
@@ -157,23 +157,23 @@ func TestRescanQuarantineIsReviewableAndClearable(t *testing.T) {
 	if cleared.Status != string(registry.StatusPublished) {
 		t.Fatalf("status after re-review = %s, want published", cleared.Status)
 	}
-	// §7: signing happens exactly once. Re-review must not re-sign.
+	// Signing happens exactly once. Re-review must not re-sign.
 	var attestations int
 	if err := e.st.Pool().QueryRow(ctx,
 		`SELECT count(*) FROM attestations WHERE version_id = $1`, v.ID).Scan(&attestations); err != nil {
 		t.Fatal(err)
 	}
 	if attestations != 1 {
-		t.Fatalf("attestation count = %d, want exactly 1 (§7 signs once)", attestations)
+		t.Fatalf("attestation count = %d, want exactly 1 (signed once)", attestations)
 	}
 }
 
-// ------------------------------------------------------------ B-04 sweep pages
+// ------------------------------------------------------------ sweep pages
 
-// TestRescanSweepVisitsEveryVersionWhileQuarantining pins the paging fix. The
+// TestRescanSweepVisitsEveryVersionWhileQuarantining pins the paging. The
 // sweep removes rows from `published` as it goes; under LIMIT/OFFSET every
-// version it quarantined shifted an unscanned one into the gap, so the sweep
-// skipped exactly the neighbours of the versions it had just found problems
+// version it quarantined would shift an unscanned one into the gap, so the sweep
+// would skip exactly the neighbours of the versions it had just found problems
 // with. The batch size is 1 here so every page boundary is exercised.
 func TestRescanSweepVisitsEveryVersionWhileQuarantining(t *testing.T) {
 	e := newPipeEnv(t)
@@ -222,13 +222,13 @@ func TestRescanSweepVisitsEveryVersionWhileQuarantining(t *testing.T) {
 	}
 }
 
-// ------------------------------------------------- B-05 decidable review items
+// ------------------------------------------------- decidable review items
 
-// TestPersonalNamespaceReviewGoesToPlatformQueue pins §8.6 routing. A personal
+// TestPersonalNamespaceReviewGoesToPlatformQueue pins review routing. A personal
 // agent has no org and no org security_reviewer, so an "org" review item for
-// one carries a NULL org_id: it appears in neither queue listing and the
-// item-access check denies every caller. It was reachable with nothing more
-// exotic than a wildcard egress declaration under the default policy.
+// one would carry a NULL org_id: it would appear in neither queue listing and the
+// item-access check would deny every caller. A wildcard egress declaration
+// under the default policy is enough to reach this case.
 func TestPersonalNamespaceReviewGoesToPlatformQueue(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
@@ -238,7 +238,7 @@ func TestPersonalNamespaceReviewGoesToPlatformQueue(t *testing.T) {
 	files["agent.yaml"] = wildcardEgressManifest(u.Handle, "wildcard", "1.0.0")
 	v := e.publish("wildcard", "private", files)
 	if v.Status != "needs_review" {
-		t.Fatalf("wildcard egress status = %s, want needs_review (§8.6 wildcardEgress:review)", v.Status)
+		t.Fatalf("wildcard egress status = %s, want needs_review (wildcardEgress:review)", v.Status)
 	}
 
 	item, err := e.st.Queries().GetPendingReviewItemForVersion(ctx, v.ID)
@@ -266,9 +266,9 @@ func TestPersonalNamespaceReviewGoesToPlatformQueue(t *testing.T) {
 	t.Fatal("review item is in no queue listing — nobody can decide it")
 }
 
-// --------------------------------------------- B-06 stuck scans and hand-offs
+// --------------------------------------------- stuck scans and hand-offs
 
-// TestHeldForReviewAndAdvisoryRangeReachTheAuthor (agentry#274): a fresh
+// TestHeldForReviewAndAdvisoryRangeReachTheAuthor: a fresh
 // submission the gate holds sends its author the needs_review notice —
 // the one outcome they would otherwise learn only by looking — and a
 // published advisory's mail carries the range it names.
@@ -304,10 +304,10 @@ func TestHeldForReviewAndAdvisoryRangeReachTheAuthor(t *testing.T) {
 }
 
 // watchdogMidScanJudge does, on the first scan of version 1.0.1 while it
-// is still `scanning`, what the §7 watchdog does to a scan that outlived
+// is still `scanning`, what the watchdog does to a scan that outlived
 // its cap — ages the row and runs ReconcileStuckScans, moving the version
-// to review — then scores nothing, so the scan's own verdict is "publish"
-// (agentry#343). It keys on the version string so it need not be handed
+// to review — then scores nothing, so the scan's own verdict is "publish".
+// It keys on the version string so it need not be handed
 // an id it cannot know before the row exists.
 type watchdogMidScanJudge struct {
 	e     *pipeEnv
@@ -339,7 +339,7 @@ func (j watchdogMidScanJudge) Judge(ctx context.Context, _ scan.JudgeContent) (s
 	return v, nil
 }
 
-// TestLateVerdictDoesNotPublishOverAWatchdogHold (agentry#343): a scan
+// TestLateVerdictDoesNotPublishOverAWatchdogHold: a scan
 // that outlives the watchdog's cap finds its version handed to a
 // reviewer; its late "publish" verdict must not move the version, the
 // review item stays pending, nothing is signed, and the author was told
@@ -380,7 +380,7 @@ func TestLateVerdictDoesNotPublishOverAWatchdogHold(t *testing.T) {
 	}
 }
 
-// TestWatchdogRoutesStuckScanToReview pins the §7 timeout rule: a version whose
+// TestWatchdogRoutesStuckScanToReview pins the timeout rule: a version whose
 // scan job died terminally must not sit in `scanning` forever. It goes to
 // needs_review with an S0/pipeline-error finding — "never silently publish on
 // scanner failure, fail closed".
@@ -390,7 +390,7 @@ func TestWatchdogRoutesStuckScanToReview(t *testing.T) {
 	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
 
 	v := e.publish("stuck", "public", benignFiles(u.Handle, "stuck", "1.0.0"))
-	// Put it back into scanning, aged past the §7 cap, as a dead worker would.
+	// Put it back into scanning, aged past the cap, as a dead worker would.
 	if _, err := e.st.Pool().Exec(ctx,
 		`UPDATE agent_versions SET status = 'scanning', updated_at = now() - interval '2 hours' WHERE id = $1`,
 		v.ID); err != nil {
@@ -441,8 +441,8 @@ func (failingQueue) Work(context.Context, ...string) error               { retur
 func (failingQueue) CountWaiting(context.Context, string) (int64, error) { return 0, nil }
 
 // TestQueuePipelineSurfacesEnqueueFailure pins that a scan that could not be
-// scheduled is reported. The enqueue error used to be discarded, so a queue
-// outage produced versions parked in `scanning` with nothing scanning them and
+// scheduled is reported. A discarded enqueue error would leave versions
+// parked in `scanning` with nothing scanning them and
 // no log line saying so.
 func TestQueuePipelineSurfacesEnqueueFailure(t *testing.T) {
 	qp := scan.QueuePipeline{Q: failingQueue{}}
@@ -455,10 +455,10 @@ func TestQueuePipelineSurfacesEnqueueFailure(t *testing.T) {
 	}
 }
 
-// ------------------------------------------------------ B-20 swallowed errors
+// ------------------------------------------------------ swallowed errors
 
-// TestUnparseableOrgPolicyFailsClosed pins §8.6's tighten-only promise. An org
-// policy document that will not parse used to be skipped, silently falling
+// TestUnparseableOrgPolicyFailsClosed pins the tighten-only promise. An org
+// policy document that will not parse must not be skipped, silently falling
 // back to the LOOSER platform baseline — handing the org the opposite of what
 // it configured. Both the submission gate and the scan must refuse instead.
 func TestUnparseableOrgPolicyFailsClosed(t *testing.T) {
@@ -519,13 +519,13 @@ func TestUnparseableOrgPolicyFailsClosed(t *testing.T) {
 	})
 }
 
-// ------------------------------------------------------------ M-01 policy knobs
+// ------------------------------------------------------------ policy knobs
 
-// TestPolicyKnobsRejectSubmissions pins §8.6: blockedCapabilities,
-// allowedLicenses and requireEvals were parsed, merged and snapshotted onto
-// every scan run, and enforced by nothing. An org could set
-// blockedCapabilities:["exec"], watch it round-trip through the API, and still
-// have exec agents published into its namespace.
+// TestPolicyKnobsRejectSubmissions: blockedCapabilities,
+// allowedLicenses and requireEvals are enforced at submission, not only parsed,
+// merged and snapshotted onto every scan run. An org can set
+// blockedCapabilities:["exec"] and have exec agents rejected from its
+// namespace.
 func TestPolicyKnobsRejectSubmissions(t *testing.T) {
 	e := newPipeEnv(t)
 	org := e.seedOrg("knobs" + suffix())
@@ -569,10 +569,10 @@ func TestPolicyKnobsRejectSubmissions(t *testing.T) {
 	})
 }
 
-// ----------------------------------------------------------------- M-14 2FA
+// ----------------------------------------------------------------- 2FA
 
-// TestPublicPublishRequiresTOTP pins §12.1/§19: 2FA before public publish.
-// SubmitVersion checked only EmailVerified, so the gate existed on paper only.
+// TestPublicPublishRequiresTOTP pins 2FA before public publish.
+// SubmitVersion checks more than EmailVerified.
 // It is enforced in the shared submission path, which is what makes it cover
 // the git-tag auto-publish a push triggers as well as the CLI upload.
 func TestPublicPublishRequiresTOTP(t *testing.T) {
@@ -609,10 +609,10 @@ func TestPublicPublishRequiresTOTP(t *testing.T) {
 	}
 }
 
-// ------------------------------------------ M-06 idempotency, cache, prompt hash
+// ------------------------------------------ idempotency, cache, prompt hash
 
-// TestRetriedScanResumesInsteadOfDuplicating pins §8.2's idempotency promise.
-// The queue is at-least-once, so a retried scan job used to create a second
+// TestRetriedScanResumesInsteadOfDuplicating pins scan idempotency.
+// The queue is at-least-once, so a retried scan job must not create a second
 // run and a second copy of every finding — inflating the report a reviewer
 // reads and the counts the gate is explained by.
 func TestRetriedScanResumesInsteadOfDuplicating(t *testing.T) {
@@ -672,7 +672,7 @@ func TestRetriedScanResumesInsteadOfDuplicating(t *testing.T) {
 	}
 }
 
-// TestRescanUsesResultsCache pins §8.7's "skip unchanged rule↔digest pairs".
+// TestRescanUsesResultsCache pins the cache's "skip unchanged rule↔digest pairs".
 // Without it, every ruleset release re-runs every deterministic scanner over
 // the whole catalogue, so the cost of shipping a rule grows with the registry.
 func TestRescanUsesResultsCache(t *testing.T) {
@@ -718,9 +718,8 @@ func TestRescanUsesResultsCache(t *testing.T) {
 	}
 }
 
-// TestJudgePromptHashIsRecorded pins §8.4.4: the rubric version a verdict came
-// from is recorded per run, for reproducibility and appeals. The column and
-// the struct field existed; nothing ever wrote one.
+// TestJudgePromptHashIsRecorded: the rubric version a verdict came
+// from is recorded per run, for reproducibility and appeals.
 func TestJudgePromptHashIsRecorded(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
@@ -983,13 +982,13 @@ func writeWorkspace(t *testing.T, files map[string]string) string {
 	return ws
 }
 
-// ------------------------------------------- B-11 atomic review decisions
+// ------------------------------------------- atomic review decisions
 
-// TestReviewDecisionRollsBackOnBadTransition pins the atomicity fix. The
-// verdict and the §7 transition used to be two commits: a failure between
-// them left the item marked decided with the version still in needs_review,
-// and the handler's "already decided" guard then rejected every retry. The
-// version could only be freed by editing the database.
+// TestReviewDecisionRollsBackOnBadTransition pins the atomicity. The
+// verdict and the version transition are one commit: a failure between
+// two commits would leave the item marked decided with the version still in
+// needs_review, and the handler's "already decided" guard would then reject
+// every retry. The version could only be freed by editing the database.
 func TestReviewDecisionRollsBackOnBadTransition(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
@@ -1052,7 +1051,7 @@ func TestReviewDecisionRollsBackOnBadTransition(t *testing.T) {
 	}
 }
 
-// TestApprovalRefusesToSignAnEmptyDigest pins §8.8: the attestation's claim is
+// TestApprovalRefusesToSignAnEmptyDigest pins that the attestation's claim is
 // "this report describes these bytes". An empty report digest asserts nothing
 // while looking exactly like a valid attestation, so approval must fail rather
 // than sign one.
@@ -1102,9 +1101,9 @@ func TestApprovalRefusesToSignAnEmptyDigest(t *testing.T) {
 	}
 }
 
-// -------------------------------------- M-07 quarantine notification surfaces
+// -------------------------------------- quarantine notification surfaces
 
-// recordingNotifier captures author notifications (§8.7).
+// recordingNotifier captures author notifications.
 // The embedded LogNotifier supplies the notification kinds this test does not
 // assert on, so adding one to the interface does not break this stub again.
 type recordingNotifier struct {
@@ -1135,10 +1134,10 @@ func (n *recordingNotifier) AdvisoryPublished(_ context.Context, notice notify.A
 	return nil
 }
 
-// TestQuarantineNotifiesAuthorAndEmitsAdvisoryEvent pins §8.7's three
-// notification paths. The advisory was drafted but never announced
-// (advisory.published existed as a constant and nothing emitted it), and the
-// author was never told at all.
+// TestQuarantineNotifiesAuthorAndEmitsAdvisoryEvent pins the three
+// notification paths: the author is told, and the
+// quarantine and the advisory are both announced to subscribers
+// (advisory.published is emitted).
 func TestQuarantineNotifiesAuthorAndEmitsAdvisoryEvent(t *testing.T) {
 	notifier := &recordingNotifier{}
 	e := newPipeEnv(t, func(d *scan.PipelineDeps) { d.Notifier = notifier })
@@ -1196,7 +1195,7 @@ func TestQuarantineNotifiesAuthorAndEmitsAdvisoryEvent(t *testing.T) {
 	}
 }
 
-// An author whose address is not verified hears nothing (agentry#299): the
+// An author whose address is not verified hears nothing: the
 // quarantine and the advisory still land — they are the protective actions —
 // and the mail is the only thing withheld. Verification is cleared after the
 // publish because the publish gate needs it.
@@ -1239,7 +1238,7 @@ func TestQuarantineWithholdsMailFromUnverifiedAuthor(t *testing.T) {
 }
 
 // erroringJudge fails every adjudication, standing in for an unconfigured or
-// unreachable judge provider (§8.4.6: fail toward review, never toward skip).
+// unreachable judge provider (fail toward review, never toward skip).
 type erroringJudge struct{}
 
 func (erroringJudge) Name() string              { return "erroring" }
@@ -1291,8 +1290,8 @@ func TestStageErrorPersistsPipelineErrorFinding(t *testing.T) {
 	}
 }
 
-// TestQuarantineRejectPathIsYank pins the reasoning behind DEV-015. §7 offers
-// a quarantined version two exits besides re-publication, and `rejected` is
+// TestQuarantineRejectPathIsYank: a quarantined version has two exits besides
+// re-publication, and `rejected` is
 // not one of them — so a reviewer's "reject" on a quarantined version has to
 // mean yank, with `blocked` left to the dual-controlled T&S console.
 func TestQuarantineRejectPathIsYank(t *testing.T) {
@@ -1346,12 +1345,12 @@ func TestQuarantineRejectPathIsYank(t *testing.T) {
 	}
 }
 
-// TestRulesetRegistrationDistinguishesNewSemver pins the §8.7 sweep trigger's
+// TestRulesetRegistrationDistinguishesNewSemver pins the sweep trigger's
 // decision point: only a semver the registry has never recorded means the
 // catalogue was judged by older rules. Every process restart re-registers the
 // same embedded bundle, so treating registration itself as "new" would sweep
 // the whole catalogue on every deploy — and never noticing "new" means the
-// sweep is never scheduled at all, which is how the handler ended up dead code.
+// sweep is never scheduled at all.
 func TestRulesetRegistrationDistinguishesNewSemver(t *testing.T) {
 	e := newPipeEnv(t)
 	ctx := context.Background()
@@ -1398,8 +1397,8 @@ func TestRulesetRegistrationDistinguishesNewSemver(t *testing.T) {
 	}
 
 	// Failure must reach the caller. Keeping a locally generated uuid on the
-	// error path gave the pipeline a ruleset id that names no row, so every
-	// CreateScanRun failed its foreign key — silently, for the life of the
+	// error path would give the pipeline a ruleset id that names no row, so every
+	// CreateScanRun would fail its foreign key — silently, for the life of the
 	// process.
 	if _, err := scan.RegisterRuleset(ctx, nil, bundle); err == nil {
 		t.Fatal("registering against no database returned success")
@@ -1410,8 +1409,8 @@ func TestRulesetRegistrationDistinguishesNewSemver(t *testing.T) {
 }
 
 // TestPipelineErrorFlagsTheTransition pins where an extension that charged
-// for a submission learns the platform failed it (plan subscription-tiers
-// §5.4): the transition to review carries pipelineError and the scan run,
+// for a submission learns the platform failed it:
+// the transition to review carries pipelineError and the scan run,
 // whether the pipeline assembled a report with a stage error or gave up
 // before one existed (FailToReview: a fatal report, a scan that never
 // finished). A review the gate ordered on findings carries no flag.

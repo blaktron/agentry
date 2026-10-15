@@ -170,7 +170,7 @@ func (c *HTTPOSV) Query(ctx context.Context, pkgs []OSVPackage) (map[string][]OS
 // prefers the database's own word (GHSA: CRITICAL/HIGH/MODERATE/LOW), then
 // the band of the highest CVSS base score the record carries (a vector or a
 // plain number), else medium: an advisory with no severity is still an
-// advisory (the advisory plan's D2). The score is kept beside it, for the
+// advisory. The score is kept beside it, for the
 // gate's rating of a High (AdvisoryGateSeverity).
 func osvToFinding(v osvVuln, pkg OSVPackage) OSVVulnerability {
 	var score *float64

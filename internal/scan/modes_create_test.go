@@ -1,4 +1,4 @@
-// Agent creation under DEV-088: run modes default to autonomous, explicit
+// Agent creation: run modes default to autonomous, explicit
 // ones are validated and deduplicated, and the mode facet counts what was
 // created. (The withdrawn kind is the manifest validator's business.) DB-backed, like the rest of this package.
 package scan_test

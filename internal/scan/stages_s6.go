@@ -11,10 +11,10 @@ import (
 )
 
 // scannerUndeclaredEnv is S6's finding for an environment read the manifest
-// does not declare; high since ruleset 0.2.2 (reratedToHigh).
+// does not declare; high (see reratedToHigh).
 const scannerUndeclaredEnv = "S6/undeclared-env"
 
-// S6 — Support scripts (§8.3; agentry#239, DEV-094). An instruction package
+// S6 — Support scripts. An instruction package
 // may ship scripts its instructions tell the host to run. This stage reads
 // the shell, Python and JavaScript/TypeScript files in the package and
 // compares what they do with what the manifest declares: network calls
@@ -22,15 +22,15 @@ const scannerUndeclaredEnv = "S6/undeclared-env"
 // documentation URL in a comment or string is not a finding), writes
 // against `filesystem.write`, environment reads against `secrets`, and a
 // script's very presence against `exec` — a package that ships a script
-// under `exec: none` is a high finding by operator decision. Remote and
+// under `exec: none` is a high finding. Remote and
 // obfuscated execution (`curl … | sh`, decoded payloads, eval) is reported
 // regardless of declarations. The stage records what it scanned and what it
 // skipped in an informational finding, so the report never implies coverage
-// it did not have — the reason the withdrawn code-kind S6 was removed rather
-// than left in place (DEV-088, agentry#152).
+// it did not have.
 //
-// Not done here, and said so in trust.md: data-flow analysis, evaluating what
-// a fetch returns, other languages.
+// Not done here, and said so in the trust docs
+// (https://docs.secureagentry.net/trust/): data-flow analysis, evaluating
+// what a fetch returns, other languages.
 type S6Scripts struct{}
 
 func (S6Scripts) ID() string { return "S6" }
@@ -107,8 +107,7 @@ func s6DeclaredFromManifest(manifestJSON []byte) s6Declared {
 }
 
 // s6ShellPath is a path before a pipe's shell target (| /bin/sh); the
-// target must end the word, so | /opt/sh/tool is not a shell
-// (agentry#1148).
+// target must end the word, so | /opt/sh/tool is not a shell.
 const (
 	s6ShellPath    = "[^\\s;|&()<>`'\":\\\\]*/"
 	s6ShellTargets = "sh|bash|zsh|python[0-9.]*|node|perl"
@@ -286,7 +285,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 		return StageResult{Scanner: "S6"}
 	}
 
-	// Findings in a fixed order: the report is hashed and signed (§8.8).
+	// Findings in a fixed order: the report is hashed and signed.
 	if len(scripts) > 0 && !decl.exec {
 		sort.Strings(scripts)
 		findings = append(findings, Finding{
@@ -329,7 +328,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 		hit := envReads[n]
 		findings = append(findings, Finding{
 			// High, not medium: an undeclared capability reaches a person
-			// whatever the auto-publish threshold (D16, ruleset 0.2.2).
+			// whatever the auto-publish threshold.
 			Scanner: scannerUndeclaredEnv, Severity: SevHigh, Confidence: ConfMedium,
 			Title:    "Script reads an environment variable the manifest does not declare as a secret: " + n,
 			FilePath: hit.file, LineStart: hit.line, LineEnd: hit.line,
@@ -372,12 +371,11 @@ var s6Quoted = regexp.MustCompile("[\"'`]([^\"'`]+)[\"'`]")
 // s6UserAtHost is an ssh destination written user@host, with scp's and
 // rsync's :path after it; the user may be a shell variable ($USER,
 // ${SSH_USER}). An e-mail address has the same shape, which is why only
-// an ssh-family command's own destination words are read with it
-// (agentry#1095).
+// an ssh-family command's own destination words are read with it.
 var s6UserAtHost = regexp.MustCompile(`(?i)^(?:[a-z0-9._-]|\$\{[^}]*\}|\$[a-z0-9_]+)+@(` + s6HostRe + `)\.?(?::.*)?$`)
 
 // s6HostRe is a host as an ssh-family command names it: a dotted name, an
-// IPv4 address or a bracketed IPv6 one (agentry#1149). s6DestHost is an ssh
+// IPv4 address or a bracketed IPv6 one. s6DestHost is an ssh
 // destination with no user (ssh 10.1.2.3), s6HostColon an scp, rsync or
 // sshfs operand host:path with no user. A user may be a variable, a
 // parameter expansion (${USER:-root}, $1) or a command substitution, which
@@ -410,13 +408,13 @@ var s6CmdWrappers = map[string]string{
 // sshDestinations reads the hosts a shell line's ssh, scp, sftp and rsync
 // reach when written user@host or user@host:path: bare() skips a host
 // after "@" so that curl's @file argument is not one, and that also
-// skipped the usual way an SSH destination is written (agentry#1095). The
+// skipped the usual way an SSH destination is written. The
 // command must be its segment's own (after assignments and wrappers such
 // as sudo or sshpass), and nothing after an unquoted '#' is read, so an
 // e-mail address in a comment or another command's arguments is never a
 // host. ssh's and sftp's words stop at the destination, so the remote
 // command's arguments are not read; their jump hosts (-J, ProxyJump) are.
-// scp and rsync read every operand. Since agentry#1149 a destination may
+// scp and rsync read every operand. A destination may
 // be an address (10.1.2.3, [2001:db8::1]) or a dotted name with no user,
 // an operand host:path, and the user dynamic ($(whoami)@h, ${USER:-root}@h);
 // autossh, ssh-copy-id and mosh are read like ssh, sshfs like scp, and the
@@ -475,7 +473,7 @@ var s6Shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": tr
 
 // expandSegments is shellSegments plus the segments of the strings a
 // segment hands to a shell to run: sh -c '…' (or a flag cluster holding c,
-// sh -ec '…') and eval's words (agentry#1149). depth bounds the nesting.
+// sh -ec '…') and eval's words. depth bounds the nesting.
 func expandSegments(line string, depth int) [][]shellWord {
 	segs := shellSegments(line)
 	if depth > 3 {
@@ -539,7 +537,7 @@ func segmentCommand(seg []shellWord) (string, []shellWord) {
 		if wrapped == "env" && strings.Contains(w.text, "=") {
 			continue
 		}
-		name := w.text[strings.LastIndexByte(w.text, '/')+1:] // /usr/bin/ssh is ssh (agentry#1148)
+		name := w.text[strings.LastIndexByte(w.text, '/')+1:] // /usr/bin/ssh is ssh
 		if _, ok := s6CmdWrappers[name]; ok && !w.quoted {
 			wrapped = name
 			continue
@@ -566,7 +564,7 @@ var (
 // /usr/bin/curl, `rm …` and \curl are curl, rm and curl, and a word that
 // is an argument (cat docs/mv, test -x /usr/bin/ssh) or sits in a string
 // (printf "a\nc") is not a command. The keyword regexes (s6ShellNet,
-// s6ShellFSW, s6Eval) are kept beside it, so it only adds (agentry#1148).
+// s6ShellFSW, s6Eval) are kept beside it, so it only adds.
 func shellCommands(line string) (net, write, eval bool) {
 	for _, seg := range expandSegments(line, 0) {
 		cmd, args := segmentCommand(seg)
@@ -717,7 +715,7 @@ var s6Declarers = map[string]bool{"export": true, "readonly": true, "local": tru
 
 // s6Assignments collects a shell script's assignments, every value of each
 // name (at most eight), so that a destination held in a variable is read
-// where a network line uses it (agentry#1149). Order is ignored: a value
+// where a network line uses it. Order is ignored: a value
 // assigned anywhere in the file counts.
 func s6Assignments(content string) map[string][]string {
 	vars := map[string][]string{}
@@ -833,7 +831,7 @@ func shellSegments(line string) [][]shellWord { return shellSegmentsAt(line, 0) 
 
 // s6MaxSubst bounds how deep command substitutions are read as their own
 // commands; deeper ones are split flat at their parentheses and
-// backticks, as before agentry#1149, so a crafted line stays linear.
+// backticks, so a crafted line stays linear.
 const s6MaxSubst = 8
 
 func shellSegmentsAt(line string, depth int) [][]shellWord {
@@ -858,8 +856,7 @@ func shellSegmentsAt(line string, depth int) [][]shellWord {
 	}
 	// A command substitution, $(…) or `…`, outside quotes or inside double
 	// quotes, is read as commands of its own, and is $_ in the word around it,
-	// so ssh $(whoami)@h keeps its destination and out="$(ssh h)" runs ssh
-	// (agentry#1149).
+	// so ssh $(whoami)@h keeps its destination and out="$(ssh h)" runs ssh.
 	substitute := func(i int) int {
 		var inner string
 		end := len(line)
@@ -996,7 +993,7 @@ var (
 // s6AddrWords are the addresses a shell line's network commands are given
 // as words of their own (nc 10.1.2.3 80, curl 10.1.2.3:8080/x), so that a
 // version, a header value or another command's argument that only looks
-// like an address is not one (agentry#1149).
+// like an address is not one.
 func s6AddrWords(line string) []string {
 	var out []string
 	for _, seg := range expandSegments(line, 0) {
