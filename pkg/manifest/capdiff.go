@@ -337,6 +337,8 @@ func (d *CapabilityDiff) appendServerDiff(id string, prev, next MCPServer) {
 	d.appendScopeDiff(id, prev.Scopes, next.Scopes)
 	if next.IsRemote() {
 		d.appendRemoteToolsAndSecret(id, prev, next)
+	} else {
+		d.appendPackageServerOwnCaps(id, prev, next)
 	}
 
 	// A package server's OAuth sign-in.
@@ -360,26 +362,60 @@ func (d *CapabilityDiff) appendServerDiff(id string, prev, next MCPServer) {
 // and what it is sent. Its tool allowlist bounds what the model reaches
 // at a vendor that holds the person's account, so a tool added, or the
 // list lifted (every tool the server serves), widens; and its one
-// bearer secret is sent to the vendor, so a different name widens. The
-// same fields of a package server are not compared here.
+// bearer secret is sent to the vendor, so a different name widens. A
+// package server's are compared by appendPackageServerOwnCaps.
 func (d *CapabilityDiff) appendRemoteToolsAndSecret(id string, prev, next MCPServer) {
+	d.appendToolsDiff(id, prev.Tools, next.Tools)
+	added, _ := diffSets(prev.Secrets, next.Secrets)
+	for _, name := range added {
+		d.Widened = append(d.Widened, fmt.Sprintf("sends secret %s to MCP server %s", name, id))
+	}
+}
+
+// appendPackageServerOwnCaps compares what a package server's own
+// container is given at the same pin: the hosts it may reach, the secrets
+// it receives (by name: a secret's optional marking is not a capability)
+// and the tools the model may call on it. The runner builds the server's
+// grants from exactly these fields, so a release that keeps the pin and
+// widens any of them asks again.
+func (d *CapabilityDiff) appendPackageServerOwnCaps(id string, prev, next MCPServer) {
+	added, removed := diffSets(prev.Egress, next.Egress)
+	for _, h := range added {
+		if h == "*" {
+			d.Widened = append(d.Widened, "adds UNRESTRICTED network egress (any host) for MCP server "+id)
+			continue
+		}
+		d.Widened = append(d.Widened, fmt.Sprintf("adds network egress to %s for MCP server %s", h, id))
+	}
+	for _, h := range removed {
+		d.Narrowed = append(d.Narrowed, fmt.Sprintf("drops network egress to %s for MCP server %s", h, id))
+	}
+	added, removed = diffSets(prev.Secrets, next.Secrets)
+	for _, name := range added {
+		d.Widened = append(d.Widened, fmt.Sprintf("gives MCP server %s the secret %s", id, name))
+	}
+	for _, name := range removed {
+		d.Narrowed = append(d.Narrowed, fmt.Sprintf("no longer gives MCP server %s the secret %s", id, name))
+	}
+	d.appendToolsDiff(id, prev.Tools, next.Tools)
+}
+
+// appendToolsDiff compares a server's tool allowlist: a tool added, or the
+// list lifted (every tool the server serves), widens.
+func (d *CapabilityDiff) appendToolsDiff(id string, prev, next []string) {
 	switch {
-	case len(prev.Tools) > 0 && len(next.Tools) == 0:
+	case len(prev) > 0 && len(next) == 0:
 		d.Widened = append(d.Widened, fmt.Sprintf("lifts the tool allowlist of MCP server %s (every tool it serves)", id))
-	case len(prev.Tools) == 0 && len(next.Tools) > 0:
-		d.Narrowed = append(d.Narrowed, fmt.Sprintf("restricts MCP server %s to tools %s", id, strings.Join(next.Tools, ", ")))
+	case len(prev) == 0 && len(next) > 0:
+		d.Narrowed = append(d.Narrowed, fmt.Sprintf("restricts MCP server %s to tools %s", id, strings.Join(next, ", ")))
 	default:
-		added, removed := diffSets(prev.Tools, next.Tools)
+		added, removed := diffSets(prev, next)
 		for _, tool := range added {
 			d.Widened = append(d.Widened, fmt.Sprintf("adds tool %s to MCP server %s", tool, id))
 		}
 		for _, tool := range removed {
 			d.Narrowed = append(d.Narrowed, fmt.Sprintf("drops tool %s of MCP server %s", tool, id))
 		}
-	}
-	added, _ := diffSets(prev.Secrets, next.Secrets)
-	for _, name := range added {
-		d.Widened = append(d.Widened, fmt.Sprintf("sends secret %s to MCP server %s", name, id))
 	}
 }
 
