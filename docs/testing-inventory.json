@@ -2352,7 +2352,7 @@
             "TestTrustedDeviceIsASecondClassNotALongerSession",
             "TestValidateGuardsTheNewSurfaces",
             "TestSMTPWithoutAuthNeedsNoTLS",
-            "TestDefaultLimitsMatchSection19",
+            "TestDefaultLimits",
             "TestNewEnvOverridesApply",
             "TestJudgeEnvConfig",
             "TestWebSearchEnvConfig",

@@ -307,7 +307,7 @@ func TestSMTPWithoutAuthNeedsNoTLS(t *testing.T) {
 }
 
 // The quota defaults are the contract the entitlements resolver hands out.
-func TestDefaultLimitsMatchSection19(t *testing.T) {
+func TestDefaultLimits(t *testing.T) {
 	l := Default().Limits
 	for _, c := range []struct {
 		name string
