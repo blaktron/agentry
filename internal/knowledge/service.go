@@ -437,6 +437,15 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 		case held && State(p.State) != StateFailed:
 			return p, nil
 		case !held:
+			// The allocation first, read without the lock: an upload it
+			// refuses is refused for that, not for whatever the admission
+			// would answer, and nothing is charged for it. The reservation
+			// under the lock below stays the authority, so an upload that
+			// passes here and loses a race to the cap is still refused,
+			// and its ticket voided.
+			if err := s.precheckAllocation(ctx, owner, p, tree.Bytes); err != nil {
+				return p, err
+			}
 			release, aerr := admit(ctx, UploadAdmission{Owner: owner, Pack: id, Bytes: tree.Bytes, Files: len(tree.Files)})
 			if aerr != nil {
 				return p, aerr
@@ -474,10 +483,8 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 		if err != nil {
 			return fmt.Errorf("knowledge: count the allocation: %w", err)
 		}
-		// A cap never deletes: a tree no larger than the one it
-		// replaces is always taken; one that grows must fit.
-		if c := pool.Cap; tree.Bytes > cur.Bytes && (!c.Enabled || (c.Max > 0 && others+tree.Bytes > c.Max)) {
-			return &AllocationError{Bytes: others + tree.Bytes, Max: c.Max}
+		if err := pool.fits(others, cur.Bytes, tree.Bytes); err != nil {
+			return err
 		}
 		if err := q.CreateKnowledgeObject(ctx, storegen.CreateKnowledgeObjectParams{
 			Key: key, PackID: id, OwnerKind: string(owner.Kind), OwnerID: owner.ID, Bytes: int64(len(sealed)),
@@ -516,6 +523,23 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 	}
 	s.deleteBlobs(ctx, replaced...)
 	return p, nil
+}
+
+// precheckAllocation is the allocation rule on the pool as it stands,
+// read without its lock: the pack p's tree of next bytes would replace the
+// one it holds. It answers the AllocationError the locked reservation
+// would, so an upload past the allocation is refused before anything is
+// admitted or charged.
+func (s *Service) precheckAllocation(ctx context.Context, owner Owner, p storegen.KnowledgePack, next int64) error {
+	pool, err := s.pool(ctx, owner)
+	if err != nil {
+		return err
+	}
+	others, err := s.st.Queries().SumKnowledgeBytesOfPool(ctx, pool.sumParams(p.ID))
+	if err != nil {
+		return fmt.Errorf("knowledge: count the allocation: %w", err)
+	}
+	return pool.fits(others, p.Bytes, next)
 }
 
 // open reads a sealed tree of p: the header names the pack's digest, the
