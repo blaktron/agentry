@@ -15,7 +15,7 @@ import (
 const webhookSecretPrefix = "whsec_"
 
 const (
-	// The §19 endpoint cap comes from the entitlements resolver (§14.2).
+	// The endpoint cap comes from the entitlements resolver.
 	deliveryDefaultLimit = 50
 	deliveryMaxLimit     = 100
 )
@@ -26,7 +26,7 @@ func webhookToAPI(row storegen.WebhookEndpoint) WebhookEndpoint {
 	}
 }
 
-// validateWebhookInput checks the URL is https and every event is known (§9.3).
+// validateWebhookInput checks the URL is https and every event is known.
 func validateWebhookInput(url string, events []string) *FieldError {
 	if !strings.HasPrefix(strings.ToLower(url), "https://") {
 		return &FieldError{Field: "url", Message: "Must be an https:// URL."}
@@ -42,7 +42,7 @@ func validateWebhookInput(url string, events []string) *FieldError {
 	return nil
 }
 
-// ListWebhooks implements GET /orgs/{org}/webhooks (admin+, §9.3).
+// ListWebhooks implements GET /orgs/{org}/webhooks (admin+).
 func (s *Server) ListWebhooks(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return
@@ -66,7 +66,7 @@ func (s *Server) ListWebhooks(w http.ResponseWriter, r *http.Request, org OrgHan
 	writeJSON(w, http.StatusOK, out)
 }
 
-// CreateWebhook implements POST /orgs/{org}/webhooks (admin+, §9.3).
+// CreateWebhook implements POST /orgs/{org}/webhooks (admin+).
 func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return
@@ -91,7 +91,7 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		problemValidation(w, r, "The registry rejected the webhook endpoint. Each field error says what to fix.", *fe)
 		return
 	}
-	// §19 endpoint cap. Checked before minting a secret so a refused request
+	// Endpoint cap. Checked before minting a secret so a refused request
 	// never leaves a usable key in memory or the log.
 	lim, err := s.entitlements().Limits(r.Context(), entitlements.ForOrg(orgRow.ID))
 	if err != nil {
@@ -143,14 +143,14 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		Id: created.ID, Url: created.Url, Events: created.Events,
 		Active: created.Active, CreatedAt: created.CreatedAt, Secret: secret,
 	}
-	// The signing secret is shown exactly once (D-22) — including on an
+	// The signing secret is shown exactly once, including on an
 	// idempotent replay, which is the whole point: a client that lost the
 	// original response gets that response back rather than a second endpoint.
 	ik.complete(r, http.StatusCreated, out)
 	writeJSON(w, http.StatusCreated, out)
 }
 
-// GetWebhook implements GET /orgs/{org}/webhooks/{id} (admin+, §9.3).
+// GetWebhook implements GET /orgs/{org}/webhooks/{id} (admin+).
 func (s *Server) GetWebhook(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID) {
 	if !s.requireDB(w, r) {
 		return
@@ -170,7 +170,7 @@ func (s *Server) GetWebhook(w http.ResponseWriter, r *http.Request, org OrgHandl
 	writeJSON(w, http.StatusOK, webhookToAPI(row))
 }
 
-// UpdateWebhook implements PATCH /orgs/{org}/webhooks/{id} (admin+, §9.3).
+// UpdateWebhook implements PATCH /orgs/{org}/webhooks/{id} (admin+).
 func (s *Server) UpdateWebhook(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID) {
 	if !s.requireDB(w, r) {
 		return
@@ -228,7 +228,7 @@ func (s *Server) UpdateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 	writeJSON(w, http.StatusOK, webhookToAPI(updated))
 }
 
-// DeleteWebhook implements DELETE /orgs/{org}/webhooks/{id} (admin+, §9.3).
+// DeleteWebhook implements DELETE /orgs/{org}/webhooks/{id} (admin+).
 func (s *Server) DeleteWebhook(w http.ResponseWriter, r *http.Request, org OrgHandle, id WebhookID) {
 	if !s.requireDB(w, r) {
 		return
@@ -266,7 +266,7 @@ func (s *Server) DeleteWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// PingWebhook implements POST /orgs/{org}/webhooks/{id}/ping (§9.2). It
+// PingWebhook implements POST /orgs/{org}/webhooks/{id}/ping. It
 // enqueues a real delivery through the ordinary machinery — same HMAC
 // signature, same SSRF guard, same retry ladder — so "does my endpoint work"
 // is answered by the code that will actually call it, not by a special path

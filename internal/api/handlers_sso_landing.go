@@ -1,10 +1,10 @@
 package api
 
-// The org SSO landing page, `https://…/sso/{org}` (§12.4 endpoint list), and
+// The org SSO landing page, `https://…/sso/{org}`, and
 // the SP-initiated SAML flow behind it.
 //
-// Until now the SAML SP only ever CONSUMED assertions: an employee had to
-// start at their IdP's app portal, because agentry never generated an
+// Without it the SAML SP only CONSUMES assertions: an employee would have to
+// start at their IdP's app portal, because agentry would never generate an
 // AuthnRequest. The landing endpoint is the "sign in with your company
 // account" entry point — it picks whichever method the org has enabled and
 // hands the browser to the IdP.
@@ -46,8 +46,7 @@ func (s *Server) ssoLanding(w http.ResponseWriter, r *http.Request) {
 	}
 	// A tier that does not include SSO has no door here either, and this
 	// is the door people paste into an address bar — leaving it open would
-	// hand the browser to an IdP for a sign-in the ACS then refuses
-	// (agentry#365, D11).
+	// hand the browser to an IdP for a sign-in the ACS then refuses.
 	if !s.ssoIncluded(r.Context(), orgRow.ID) {
 		problemNotFound(w, r)
 		return
@@ -72,10 +71,10 @@ func (s *Server) ssoLanding(w http.ResponseWriter, r *http.Request) {
 			problemValidation(w, r, "This organization's SAML connection is not usable. Ask an admin to check it.")
 			return
 		}
-		// RelayState carried the org handle, which the ACS never read: it
-		// takes the organization from its own path. A same-origin path
-		// goes there instead when there is one, and the handle stays the
-		// default so an IdP-initiated sign-in looks exactly as it did.
+		// RelayState carries the org handle by default, which the ACS never
+		// reads: it takes the organization from its own path. A same-origin
+		// path goes there instead when there is one, and the handle stays
+		// the default so an IdP-initiated sign-in is unchanged.
 		relay := orgRow.Handle
 		if next != "" {
 			relay = next

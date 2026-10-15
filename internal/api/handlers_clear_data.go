@@ -13,14 +13,14 @@ import (
 	"github.com/blaktron/agentry/internal/voice"
 )
 
-// eventUserDataCleared tells extensions that a user cleared their data
-// (agentry#498), so each clears what it holds for the account — hosted run
+// eventUserDataCleared tells extensions that a user cleared their data,
+// so each clears what it holds for the account — hosted run
 // history lives in an extension the core cannot reach.
 const eventUserDataCleared = "user.data_cleared"
 
-// ClearCurrentUserData implements POST /user/clear-data (agentry#498): the
+// ClearCurrentUserData implements POST /user/clear-data: the
 // account's credentials, installs and settings go, the account stays. The
-// scope is the operator's ("credentials and history only", 2026-09-23):
+// scope is credentials and history only:
 // QuickAgents, memberships, stars, the handle, the email, the sign-in
 // account at the directory, the subscription and credits are untouched.
 // The caller's own session survives, so the person sees the result.
@@ -76,24 +76,24 @@ func (s *Server) ClearCurrentUserData(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		counts["notificationSettingsReset"] = n > 0
-		// The report theme (agentry#989) goes back to never chosen.
+		// The report theme goes back to never chosen.
 		if n, err = tq.DeleteUserReportSettings(r.Context(), p.UserID); err != nil {
 			return err
 		}
 		counts["reportSettingsReset"] = n > 0
-		// The account's knowledge packs and what opens them (agentry#593):
+		// The account's knowledge packs and what opens them:
 		// the rows here, the key and the sealed trees once this commits.
 		if knowledgeKeys, err = knowledge.EraseOwner(r.Context(), tq, knowledge.User(p.UserID)); err != nil {
 			return err
 		}
 		counts["knowledgeObjects"] = len(knowledgeKeys)
-		// The account's Writing Voice (agentry#809): every version; the key
+		// The account's Writing Voice: every version; the key
 		// that opened it went with the knowledge store's erasure above.
 		if n, err = voice.Erase(r.Context(), tq, p.UserID); err != nil {
 			return err
 		}
 		counts["voice"] = n > 0
-		// An extension's credentials and history go too (agentry#638), in
+		// An extension's credentials and history go too, in
 		// this transaction.
 		extRows, err := s.eraseInExtensions(r.Context(), tx, p.UserID, AccountDataCleared)
 		if err != nil {

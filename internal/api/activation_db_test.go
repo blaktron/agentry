@@ -1,12 +1,13 @@
 package api_test
 
-// Unactivated accounts (plan unactivated-accounts.md, agentry#861): a
+// Unactivated accounts: a
 // self-enrolled directory account arrives with email_verified false, is
 // mailed an activation link at the sign-in that creates it, is read-only
 // until it follows the link, may ask for another at most every five
 // minutes, and is confirmed by the link in the registry. The directory
-// reads that confirmation without an activation write (agentry#869). D10: an unactivated account whose directory account
-// is gone gives its address up to a verified sign-in.
+// reads that confirmation without an activation write. An unactivated
+// account whose directory account is gone gives its address up to a
+// verified sign-in.
 
 import (
 	"context"
@@ -46,10 +47,10 @@ func (n *activationMails) sent(to string) []string {
 	return append([]string(nil), n.tokens[to]...)
 }
 
-// fakeDirectoryUsers is authentik's users admin API as activation and D10
-// use it: read one account by id and search by address. PATCH is refused,
-// as the registry's restricted token refuses directory writes. failing makes every
-// call answer 503.
+// fakeDirectoryUsers is authentik's users admin API as activation and the
+// superseded-account check use it: read one account by id and search by
+// address. PATCH is refused, as the registry's restricted token refuses
+// directory writes. failing makes every call answer 503.
 type fakeDirectoryUsers struct {
 	mu       sync.Mutex
 	accounts map[int]map[string]any // pk → the account as the API returns it
@@ -276,14 +277,14 @@ func TestUnactivatedAccountUntilActivated(t *testing.T) {
 		t.Fatalf("GET /user: %+v, want unconfirmed with a resend time", me)
 	}
 
-	// It does not write (I3), outside its own housekeeping.
+	// It does not write, outside its own housekeeping.
 	res := env.do(c, http.MethodPost, "/api/v1/user/tokens", map[string]any{"name": "cli", "scopes": []string{"user:profile"}})
 	if res.StatusCode != http.StatusForbidden || problemType(t, res) != "account-unactivated" {
 		t.Fatalf("token while unactivated: %d", res.StatusCode)
 	}
 	env.doJSON(c, http.MethodPatch, "/api/v1/user", map[string]any{"displayName": "Ada"}, nil, http.StatusOK)
 
-	// Another link: not within five minutes of the last (I4).
+	// Another link: not within five minutes of the last.
 	res = env.do(c, http.MethodPost, "/api/v1/user/email-verification", nil)
 	if res.StatusCode != http.StatusTooManyRequests || res.Header.Get("Retry-After") == "" {
 		t.Fatalf("resend at once: %d, Retry-After %q", res.StatusCode, res.Header.Get("Retry-After"))
@@ -306,7 +307,7 @@ func TestUnactivatedAccountUntilActivated(t *testing.T) {
 	}
 	_ = res.Body.Close()
 
-	// An expired link activates nothing (I5).
+	// An expired link activates nothing.
 	links := mails.sent(email)
 	if _, err := env.st.Pool().Exec(context.Background(),
 		`UPDATE email_verifications SET expires_at = now() - interval '1 minute'
@@ -320,7 +321,7 @@ func TestUnactivatedAccountUntilActivated(t *testing.T) {
 	_ = res.Body.Close()
 
 	// Activation belongs to the registry: it works while the directory is
-	// unavailable, and does not change the directory's attributes (agentry#869).
+	// unavailable, and does not change the directory's attributes.
 	dir.failing = true
 	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/verify-email", map[string]any{"token": links[0]}, nil, http.StatusNoContent)
 	me.EmailVerificationResendAfter = nil
@@ -356,7 +357,7 @@ func TestUnactivatedAccountUntilActivated(t *testing.T) {
 	_ = res.Body.Close()
 }
 
-// TestUnactivatedSupersededByVerifiedSignIn is D10: the directory removed
+// TestUnactivatedSupersededByVerifiedSignIn: the directory removed
 // an unactivated account when a trusted provider proved its address, and
 // the registry account it leaves behind gives the address up.
 func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
@@ -391,7 +392,7 @@ func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
 	}
 	_ = res.Body.Close()
 
-	// The directory removes it (D3); the next verified sign-in takes the
+	// The directory removes it; the next verified sign-in takes the
 	// address, and the squatter's registry account is erased.
 	delete(dir.accounts, 5151)
 	_, owner := signInAs(t, env, idp, "google")
@@ -414,8 +415,8 @@ func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
 }
 
 // TestActivationDailyCap: past ten links in a day an account is sent no
-// more, whatever the interval (DEV-197: anyone can sign up with another
-// person's address, and the cap bounds what they can make it receive).
+// more, whatever the interval (anyone can sign up with another person's
+// address, and the cap bounds what they can make it receive).
 func TestActivationDailyCap(t *testing.T) {
 	mails := &activationMails{Notifier: notify.LogNotifier{}}
 	env := newTestEnvWith(t, func(s *api.Server) { s.SetNotifier(mails) })

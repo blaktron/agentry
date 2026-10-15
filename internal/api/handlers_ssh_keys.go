@@ -1,10 +1,10 @@
 package api
 
-// SSH keys for the git transport (§6.1 Q7, agentry#70): registered here,
+// SSH keys for the git transport: registered here,
 // looked up by fingerprint by the git SSH server. Session-only to add or
 // remove — a PAT must not be able to mint a longer-lived credential than
-// itself (the D-22 rule that governs tokens). Adding one is a feature the
-// subscription may not include (Features.SSHKeys, agentry#820); listing,
+// itself (the rule that governs tokens). Adding one is a feature the
+// subscription may not include (Features.SSHKeys); listing,
 // removing and using a key already held are not gated.
 
 import (

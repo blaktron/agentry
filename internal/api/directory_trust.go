@@ -17,10 +17,10 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// The directory's trust check (agentry#670, DEV-163).
+// The directory's trust check.
 //
-// Dev and production sign in through the directory, so it is the directory
-// that decides whether to show the code page. A policy on its MFA stage reads
+// A deployment that signs in through the directory leaves it to decide
+// whether to show the code page. A policy on its MFA stage reads
 // the remembered-browser cookie (set by the registry on the callback, scoped to
 // the directory's flow executor) and asks here whether that cookie is a live
 // record of the user signing in. Only an explicit trusted:true skips the code:
@@ -29,7 +29,7 @@ import (
 //
 // The route is a root mount outside /api/ and is not in the OpenAPI surface.
 // Its caller is infrastructure holding a shared secret, not a principal, and
-// no edge the estate ships routes /internal/ to the registry. It answers with
+// no edge shipped with the registry routes /internal/ to the registry. It answers with
 // bare status codes rather than problem+json: its only reader is a policy
 // that acts on trusted:true and treats everything else as "ask".
 //
@@ -131,7 +131,7 @@ func (s *Server) directoryTrusts(ctx context.Context, r *http.Request, req direc
 		return false, err
 	}
 	// The use is recorded before the answer is given: a skip nobody could
-	// audit is not granted. last_seen_at moves; expires_at never does (D9).
+	// audit is not granted. last_seen_at moves; expires_at never does.
 	err = s.st.WithTx(ctx, func(tq *storegen.Queries) error {
 		if err := tq.TouchTrustedDevice(ctx, row.ID); err != nil {
 			return err

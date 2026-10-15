@@ -1,12 +1,12 @@
 package api_test
 
-// Forks (plan forks-and-publisher.md M3, agentry#943; D6–D9, D11): a
+// Forks: a
 // private copy of a public QuickAgent, recorded by the request and copied
 // by a worker, whose first version is the origin's renamed and submitted
-// through the pipeline. Each invariant of the plan's §3 this touches is a
-// test here: a fork is never public, nothing becomes installable without
-// the pipeline, private stays invisible, the origin's publisher learns how
-// many forks there are and never whose.
+// through the pipeline. Each invariant this touches is a test here: a
+// fork is never public, nothing becomes installable without the pipeline,
+// private stays invisible, the origin's publisher learns how many forks
+// there are and never whose.
 
 import (
 	"context"
@@ -207,7 +207,7 @@ func TestForkIsAPrivateCopyWhoseFirstVersionGoesThroughThePipeline(t *testing.T)
 		t.Fatalf("forkedFrom = %+v", f.ForkedFrom)
 	}
 	// Nothing is installable yet: the fork has no version until the
-	// pipeline has taken one (invariant 3).
+	// pipeline has taken one.
 	var versions []map[string]any
 	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/summarize/versions", nil, &versions, http.StatusOK)
 	if len(versions) != 0 {
@@ -241,13 +241,13 @@ func TestForkIsAPrivateCopyWhoseFirstVersionGoesThroughThePipeline(t *testing.T)
 		t.Fatalf("main %s and v1.0.0 %s differ", main, tag)
 	}
 
-	// Private stays invisible (invariant 4): a stranger gets a missing
+	// Private stays invisible: a stranger gets a missing
 	// name's 404, and the fork is in no public listing.
 	if code := statusOf(t, env.do(carol, http.MethodGet, "/api/v1/agents/"+bob+"/summarize", nil)); code != http.StatusNotFound {
 		t.Fatalf("a stranger reading the fork: %d, want 404", code)
 	}
 
-	// The origin counts its forks and names none (invariant 5).
+	// The origin counts its forks and names none.
 	res := env.do(aliceS, http.MethodGet, "/api/v1/agents/"+alice+"/summarize", nil)
 	raw, _ := io.ReadAll(res.Body)
 	_ = res.Body.Close()
@@ -288,7 +288,7 @@ func TestForkIsAPrivateCopyWhoseFirstVersionGoesThroughThePipeline(t *testing.T)
 	}
 }
 
-// TestAForkIsNeverPublic (D9, invariant 2): the API's named refusal, under
+// TestAForkIsNeverPublic: the API's named refusal, under
 // whichever role, and the database's CHECK behind it; lineage is permanent.
 func TestAForkIsNeverPublic(t *testing.T) {
 	env := newForkEnv(t)
@@ -382,7 +382,7 @@ func TestForkRefusesWhatCannotBeForkedAndWhereItCannotGo(t *testing.T) {
 	}
 }
 
-// TestAQuarantinedOriginLeavesItsForksAlone (D11): a fork went through its
+// TestAQuarantinedOriginLeavesItsForksAlone: a fork went through its
 // own pipeline, so the origin's quarantine or block does not reach it.
 func TestAQuarantinedOriginLeavesItsForksAlone(t *testing.T) {
 	env := newForkEnv(t)

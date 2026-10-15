@@ -1,6 +1,6 @@
 package api_test
 
-// POST /user/clear-data (agentry#498): the account's credentials, installs
+// POST /user/clear-data: the account's credentials, installs
 // and settings go, the account stays. Seeds one of each class, clears, and
 // checks each is gone while the caller's session, the QuickAgents, the
 // memberships and the stars survive; the audit row carries the counts and
@@ -84,7 +84,7 @@ func TestClearCurrentUserData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A knowledge pack (agentry#593): the clear takes it, the key that
+	// A knowledge pack: the clear takes it, the key that
 	// opens it and its sealed tree.
 	kn := seedKnowledge(t, env, knowledge.User(uuid.MustParse(uid)))
 
@@ -168,8 +168,7 @@ func TestClearCurrentUserData(t *testing.T) {
 	if d["tokens"] != float64(liveTokens) || d["sshKeys"] != float64(1) || d["trustedDevices"] != float64(1) || d["desktopCodes"] != float64(1) || d["otherSessions"] != float64(1) || d["installs"] != float64(1) || d["notificationSettingsReset"] != true || d["reportSettingsReset"] != true {
 		t.Errorf("audit detail = %s", detail)
 	}
-	// No extension erases anything here, so the detail names none
-	// (agentry#638).
+	// No extension erases anything here, so the detail names none.
 	if _, ok := d["extensions"]; ok {
 		t.Errorf("audit detail names extensions with none registered: %s", detail)
 	}

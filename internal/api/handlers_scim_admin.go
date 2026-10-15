@@ -14,7 +14,7 @@ import (
 // scimTokenPrefix identifies SCIM bearer tokens in logs/scanners.
 const scimTokenPrefix = "agyscim_"
 
-// ListScimTokens implements GET /orgs/{org}/scim/tokens (admin, §12.5).
+// ListScimTokens implements GET /orgs/{org}/scim/tokens (admin).
 func (s *Server) ListScimTokens(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return
@@ -42,7 +42,7 @@ func (s *Server) ListScimTokens(w http.ResponseWriter, r *http.Request, org OrgH
 	writeJSON(w, http.StatusOK, out)
 }
 
-// CreateScimToken implements POST /orgs/{org}/scim/tokens (admin, §12.5).
+// CreateScimToken implements POST /orgs/{org}/scim/tokens (admin).
 func (s *Server) CreateScimToken(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return
@@ -55,7 +55,7 @@ func (s *Server) CreateScimToken(w http.ResponseWriter, r *http.Request, org Org
 		return
 	}
 	// The tier decides whether this organization may be provisioned over
-	// SCIM at all (D11). Unknown refuses: an entitlement outage must not
+	// SCIM at all. Unknown refuses: an entitlement outage must not
 	// be a way to mint a directory credential.
 	f, err := s.orgFeatures(r.Context(), orgRow.ID)
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 	"github.com/blaktron/agentry/internal/dnsx"
 )
 
-// ---- shared M6 helpers ----
+// ---- shared helpers ----
 
 func (env *testEnv) selfID(c caller) string {
 	env.t.Helper()
@@ -88,7 +88,7 @@ func randToken(env *testEnv) string {
 	return env.sfx + hex.EncodeToString(b[:])
 }
 
-// TestEnforcedSSO covers §12.4: an sso_required org rejects a non-SSO-fresh
+// TestEnforcedSSO covers enforced SSO: an sso_required org rejects a non-SSO-fresh
 // session and a non-org-bound PAT, and admits an SSO-fresh session and an
 // org-bound PAT.
 func TestEnforcedSSO(t *testing.T) {
@@ -153,7 +153,7 @@ func TestEnforcedSSO(t *testing.T) {
 	}
 }
 
-// TestDomainVerification covers §12.4 with an injected fake resolver: a present
+// TestDomainVerification covers domain verification with an injected fake resolver: a present
 // TXT record verifies (and sets the org verified domain), an absent one does
 // not.
 func TestDomainVerification(t *testing.T) {

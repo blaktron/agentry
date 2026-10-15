@@ -1,6 +1,6 @@
 package api
 
-// Session self-management (§12.1): the endpoints behind the console's
+// Session self-management: the endpoints behind the console's
 // "where am I signed in" panel and the CLI's account view.
 //
 //	GET    /user/sessions           list the caller's live sessions
@@ -166,7 +166,7 @@ func clearSessionCookie(w http.ResponseWriter, secure bool) {
 // clearCookie expires one of this server's cookies with the attributes
 // every one of them is set with. A clear is a Set-Cookie like any other:
 // one written bare carries nothing today and a value the day someone
-// edits it (agentry#413).
+// edits it.
 func clearCookie(w http.ResponseWriter, name string, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name: name, Value: "", Path: "/", HttpOnly: true,

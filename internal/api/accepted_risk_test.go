@@ -1,19 +1,18 @@
 package api_test
 
-// DEV-034 closure: §8.5 scopes `dismissed_accepted_risk` twice — by
-// severity (≤ medium, enforced since M4) and by actor ("only by org security
-// reviewers for org-namespace agents"). The actor half was missing: an
-// org-namespace agent whose findings land in the PLATFORM queue could have
+// The `dismissed_accepted_risk` verdict is scoped twice: by severity
+// (medium or lower) and by actor (only org security reviewers, for
+// org-namespace agents). The actor half needs a pin: an org-namespace
+// agent whose findings land in the PLATFORM queue could otherwise have
 // risk accepted on the org's behalf by any platform staff member, because
 // reviewItemAccess admits all staff to platform items. This pins the rule:
 // staff who are not that org's reviewers get 403 on accepted_risk, an org
 // reviewer succeeds, and the protective false-positive verdict stays
-// available to staff. Since agentry#360 (DEV-034 amended) the security
-// reviewer role exists only inside a first-party organization, so in an
-// ordinary organization "the org's reviewers" are its admins: here the
-// org's admin (its creator, granted the staff flag so the platform item is
-// reachable at all) succeeds where a plain member, staff or not, is
-// refused.
+// available to staff. The security reviewer role exists only inside a
+// first-party organization, so in an ordinary organization "the org's
+// reviewers" are its admins: here the org's admin (its creator, granted
+// the staff flag so the platform item is reachable at all) succeeds where
+// a plain member, staff or not, is refused.
 
 import (
 	"context"
@@ -138,7 +137,7 @@ publish:
 		t.Fatalf("member accepted_risk on an org agent: got %d %s, want 403 naming the org's reviewers", code, body)
 	}
 
-	// The org's admin is an org reviewer (§12.2 as amended); the staff flag
+	// The org's admin is an org reviewer; the staff flag
 	// is what makes the platform-queue item reachable for them at all.
 	env.makePlatformStaff(t, ownerH)
 	owner = env.login(ownerH)

@@ -1,7 +1,7 @@
 package api_test
 
-// Erasure deletes the sign-in account in the directory service too
-// (agentry#20): exactly the person's account (agentry#617, agentry#727),
+// Erasure deletes the sign-in account in the directory service too:
+// exactly the person's account,
 // never a superuser or a service account, and the outcome is audited.
 
 import (
@@ -17,7 +17,7 @@ import (
 )
 
 // erasureDirectory is authentik 2026.8's users API as erasure uses it:
-// search= is case-blind and matches parts of the address (agentry#617),
+// search= is case-blind and matches parts of the address,
 // one account reads by its id, and a delete removes it. at is the erased
 // person's address, which the directory's accounts are built around.
 func erasureDirectory(t *testing.T, accounts func(at string) []map[string]any, at *string) (url string, deleted, searches *[]string) {
@@ -74,7 +74,7 @@ func lastDirectoryErasure(t *testing.T, env *testEnv, userID string) (outcome, l
 }
 
 // TestErasureDeletesDirectoryAccount: erasure deletes exactly the person's
-// directory accounts (agentry#617, agentry#727): the one each directory
+// directory accounts: the one each directory
 // sign-in's recorded id names, whatever address it holds; else, for an
 // account that never signed in through the directory, the one account at
 // its address, case-blind. It never deletes a superuser or a service

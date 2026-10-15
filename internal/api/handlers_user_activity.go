@@ -10,7 +10,7 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// ListUserActivity implements GET /user/activity (agentry#192): the audit
+// ListUserActivity implements GET /user/activity: the audit
 // events the caller performed, newest first, with the address and client
 // each came from — the "was that me?" view of an account.
 func (s *Server) ListUserActivity(w http.ResponseWriter, r *http.Request, params ListUserActivityParams) {

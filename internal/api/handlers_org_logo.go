@@ -1,17 +1,16 @@
 package api
 
-// The organization's logo (agentry#367, M17 of plan
-// organization-subscriptions.md §5.9; D17): a raster an admin uploads,
+// The organization's logo: a raster an admin uploads,
 // which the core decodes and encodes again through the image proxy's own
 // path before it is stored, so the bytes a browser ever receives were
-// written by this process (§10.3). PNG and JPEG only, at most 256 KB;
+// written by this process. PNG and JPEG only, at most 256 KB;
 // never SVG — this repository has no sanitiser for it, and the refusal
 // is what stands in for one. Stored in the deployment's object store
 // under the organization, keyed by the digest of what is served, so the
 // URL a client renders changes when the logo does and a cache may hold
 // that URL as immutable. Behind Features.Branding to set, public to read.
 //
-// M18 (the site) renders `logoUrl` as the resource carries it and never
+// The site renders `logoUrl` as the resource carries it and never
 // builds the path: the version in it is what makes the caching honest.
 
 import (
@@ -190,8 +189,8 @@ func (s *Server) PutOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHandl
 		problemUnavailable(w, r, "This deployment has no object storage configured, so a logo cannot be stored.")
 		return
 	}
-	// The tier decides whether this organization may carry a logo at all
-	// (D17). Unknown refuses, as every entitlement gate on an act does.
+	// The tier decides whether this organization may carry a logo at all.
+	// Unknown refuses, as every entitlement gate on an act does.
 	f, err := s.orgFeatures(r.Context(), row.ID)
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "org logo: entitlements", "org", row.ID, "err", err)
@@ -316,8 +315,8 @@ func (s *Server) DeleteOrgLogo(w http.ResponseWriter, r *http.Request, org OrgHa
 }
 
 // readUploadPart reads the one multipart part named file that a logo
-// upload carries (the organization's, and the report design's since
-// agentry#1025), at most maxBytes, bounded before a byte of it is decoded.
+// upload carries (the organization's, and the report design's), at
+// most maxBytes, bounded before a byte of it is decoded.
 // It streams the parts rather than calling ParseMultipartForm, which would
 // spool anything over its memory limit to disk: a logo is small and never
 // touches one. The part's own declared type and file name are not

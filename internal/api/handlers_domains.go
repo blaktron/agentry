@@ -27,7 +27,7 @@ func domainClaimToAPI(row storegen.DomainClaim) DomainClaim {
 	return dc
 }
 
-// ListDomainClaims implements GET /orgs/{org}/domain-claims (admin+, §12.4).
+// ListDomainClaims implements GET /orgs/{org}/domain-claims (admin+).
 func (s *Server) ListDomainClaims(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return
@@ -51,7 +51,7 @@ func (s *Server) ListDomainClaims(w http.ResponseWriter, r *http.Request, org Or
 	writeJSON(w, http.StatusOK, out)
 }
 
-// CreateDomainClaim implements POST /orgs/{org}/domain-claims (admin+, §12.4).
+// CreateDomainClaim implements POST /orgs/{org}/domain-claims (admin+).
 func (s *Server) CreateDomainClaim(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
 		return
@@ -102,8 +102,8 @@ func (s *Server) CreateDomainClaim(w http.ResponseWriter, r *http.Request, org O
 
 // VerifyDomainClaim implements POST /orgs/{org}/domain-claims/verify: it looks
 // up the DNS TXT record via the injected resolver and, on success, marks the
-// claim verified (the T-12 auto-link basis, §12.4). A domain belongs to one
-// organization (agentry#363, D21, D26): one that another organization was
+// claim verified (the basis for auto-linking). A domain belongs to one
+// organization: one that another organization was
 // created at, or has verified, is 409 domain-claimed here too.
 func (s *Server) VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org OrgHandle) {
 	if !s.requireDB(w, r) {
@@ -178,7 +178,7 @@ func (s *Server) VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org O
 		return
 	}
 	// A verified domain is the organization's like the one it was created
-	// at: the accounts already known there are folded in (agentry#364).
+	// at: the accounts already known there are folded in.
 	s.enqueueFoldInSweep(r.Context(), orgRow.ID, domain)
 	writeJSON(w, http.StatusOK, domainClaimToAPI(refreshed))
 }

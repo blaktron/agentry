@@ -1,7 +1,7 @@
 package api_test
 
-// M4 full review-approval flow: a version that gates to needs_review is
-// approved by a platform reviewer (never its author, §12.2) and becomes
+// Full review-approval flow: a version that gates to needs_review is
+// approved by a platform reviewer (never its author) and becomes
 // published + signed. Exercises the review-item + decision + transition +
 // attestation path end to end through HTTP.
 
@@ -71,7 +71,7 @@ func TestReviewApprovalFlow(t *testing.T) {
 	for _, it := range queue {
 		if it.Namespace == author {
 			itemID = it.Id
-			// The item carries the version's own status (agentry#273), so a
+			// The item carries the version's own status, so a
 			// client can say what a decision will do to it.
 			if it.VersionStatus != "needs_review" {
 				t.Fatalf("queue item versionStatus = %q, want needs_review", it.VersionStatus)
@@ -91,8 +91,8 @@ func TestReviewApprovalFlow(t *testing.T) {
 		t.Fatalf("bundle item versionStatus = %q, want needs_review", bundle.Item.VersionStatus)
 	}
 
-	// An author who is not platform staff cannot decide their own version
-	// (§12.2). Staff may (agentry#912): review_staff_test.go.
+	// An author who is not platform staff cannot decide their own version.
+	// Staff may: review_staff_test.go.
 	res := env.do(authorSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
 		map[string]any{"decision": "approve", "rationale": "mine"})
 	_ = res.Body.Close()

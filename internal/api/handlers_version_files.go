@@ -1,11 +1,10 @@
 package api
 
-// Public browsing of a release archive (§10.2 file browser): the same
-// hardened walk and display rules as the review viewer (§10.1), opened
+// Public browsing of a release archive: the same
 // under the download access gate instead of the review gate. Browsing is
 // not installing: no download stat is bumped. Content is returned as JSON
 // text, never served as a raw page, so nothing inside an archive can
-// execute in a visitor's browser (§10.3); binary files are flagged, not
+// execute in a visitor's browser; binary files are flagged, not
 // returned.
 
 import (

@@ -1,7 +1,7 @@
 package api_test
 
-// The §17.4 matrix extension for the SelfAuthorized routes (DEV-033
-// closure). The twelve routes below opt out of the chokepoint because
+// The matrix extension for the SelfAuthorized routes. The twelve routes
+// below opt out of the chokepoint because
 // their rule — "platform staff, or an org security_reviewer who is not
 // the version's author" — needs the resource in hand. That made them the
 // one part of the trust & safety surface no enumeration covered. This
@@ -14,13 +14,13 @@ package api_test
 //   anonymous     — refused everywhere (401)
 //   plain         — signed-in, no roles anywhere (403 on all staff surfaces)
 //   staff         — platform_staff
-//   author+staff  — the review item's author, ALSO staff: since
-//                   agentry#912 (DEV-213) staff may decide their own
-//                   versions, so this caller is allowed like any staff
+//   author+staff  — the review item's author, ALSO staff: staff may
+//                   decide their own versions, so this caller is
+//                   allowed like any staff
 //   orgOwner      — owner of an unrelated org (an org reviewer for ITS queue,
 //                   nothing on the platform surface)
 //   patScoped     — the staff user's PAT WITH review:act
-//   patUnscoped   — the staff user's PAT WITHOUT review:act (the §12.3
+//   patUnscoped   — the staff user's PAT WITHOUT review:act (the
 //                   scope gate of authz_scope_routes.go)
 
 import (
@@ -47,7 +47,7 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 	// staff session (m8 console fixture; cleans its queue rows up after).
 	author, itemID, staffSess := setupReviewItem(t, env, "sam")
 	authorSess := env.login(author)
-	// The author is staff, and since agentry#912 staff may decide their own
+	// The author is staff, and staff may decide their own
 	// version (a non-staff author is refused: review_staff_test.go).
 	env.makePlatformStaff(t, author)
 
@@ -64,8 +64,8 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		map[string]any{"handle": orgH, "displayName": "SelfAuthz Org"}, nil, http.StatusCreated)
 
 	// An invitation the org's admin sent to `plain`: the token is the
-	// authorization, and who may use it is the per-invitation rule
-	// (agentry#361). A token nobody holds is 404, which is a PASS for the
+	// authorization, and who may use it is the per-invitation rule.
+	// A token nobody holds is 404, which is a PASS for the
 	// matrix — the point is that it is never 401/403 for a session.
 	var invited struct {
 		Token string `json:"token"`
@@ -74,7 +74,7 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		map[string]any{"email": plainH + "@example.test", "role": "member"}, &invited, http.StatusCreated)
 
 	// PATs of the STAFF user: role identical, scope differing — isolates
-	// the §12.3 review:act gate from the role check.
+	// the review:act gate from the role check.
 	_, patScopedTok := env.mintPAT(staffSess, "sam-scoped", "review:act", "user:profile", "agent:read")
 	_, patUnscopedTok := env.mintPAT(staffSess, "sam-unscoped", "user:profile", "agent:read")
 	_, patKnowledgeTok := env.mintPAT(staffSess, "sam-knowledge", "knowledge:read")
@@ -111,8 +111,8 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 	emptyDecision := map[string]any{} // authorized callers stop at 422 (rationale required) — no mutation
 	cases := []sCase{
 		// listReviewQueue — platform queue is staff-only; the org queue
-		// belongs to that org's reviewers and, since agentry#912 (DEV-213),
-		// to platform staff, who may also list every org's at once.
+		// belongs to that org's reviewers and to platform staff, who may
+		// also list every org's at once.
 		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=platform&limit=1", nil, anonymous, deny1},
 		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=platform&limit=1", nil, plain, deny3},
 		{"listReviewQueue", "GET", "/api/v1/review-queue?queue=platform&limit=1", nil, staffSess, pass},
@@ -141,7 +141,7 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 
 		// decideReviewItem — the empty body stops authorized callers at 422
 		// (rationale required) BEFORE any state change; the author case
-		// is staff, and since agentry#912 reaches the same 422 as any staff.
+		// is staff, and reaches the same 422 as any staff.
 		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", emptyDecision, anonymous, deny1},
 		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", emptyDecision, plain, deny3},
 		{"decideReviewItem", "POST", "/api/v1/review-items/" + itemID + "/decision", emptyDecision, patUnscoped, deny3},
@@ -169,7 +169,7 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"platformAgentAction", "POST", "/api/v1/platform/agents/nobody" + env.sfx + "/ghost/quarantine",
 			map[string]any{"reason": "matrix"}, staffSess, pass},
 
-		// suspendOrg / reinstateOrg — staff-only (agentry#363); an absent
+		// suspendOrg / reinstateOrg — staff-only; an absent
 		// organization turns every authorized probe into a 404, nothing
 		// suspended.
 		{"suspendOrg", "POST", "/api/v1/orgs/nobody" + env.sfx + "/suspend", map[string]any{"reason": "matrix"}, anonymous, deny1},
@@ -192,12 +192,12 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"createRulesetRelease", "POST", "/api/v1/platform/ruleset-releases", "not-an-object", anonymous, deny1},
 		{"createRulesetRelease", "POST", "/api/v1/platform/ruleset-releases", "not-an-object", plain, deny3},
 		{"createRulesetRelease", "POST", "/api/v1/platform/ruleset-releases", "not-an-object", staffSess, pass},
-		// listRulesetReleases — the staff console's history (agentry#63).
+		// listRulesetReleases — the staff console's history.
 		{"listRulesetReleases", "GET", "/api/v1/platform/ruleset-releases", nil, anonymous, deny1},
 		{"listRulesetReleases", "GET", "/api/v1/platform/ruleset-releases", nil, plain, deny3},
 		{"listRulesetReleases", "GET", "/api/v1/platform/ruleset-releases", nil, staffSess, pass},
 
-		// listRedTeamReports — §17.5 red-team reports, staff-only (agentry#67).
+		// listRedTeamReports — red-team reports, staff-only.
 		{"listRedTeamReports", "GET", "/api/v1/platform/redteam/reports", nil, anonymous, deny1},
 		{"listRedTeamReports", "GET", "/api/v1/platform/redteam/reports", nil, plain, deny3},
 		{"listRedTeamReports", "GET", "/api/v1/platform/redteam/reports", nil, staffSess, pass},
@@ -209,7 +209,7 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"reportAbuse", "POST", "/api/v1/agents/" + author + "/risky/abuse-reports",
 			map[string]any{"category": "spam", "detail": "matrix self-authz abuse fixture"}, plain, pass},
 
-		// listKnowledgePackSizes — staff-only (agentry#593), and a staff
+		// listKnowledgePackSizes — staff-only, and a staff
 		// token needs knowledge:read; an owner with no packs lists empty.
 		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, anonymous, deny1},
 		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, plain, deny3},
@@ -217,7 +217,7 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, patUnscoped, deny3},
 		{"listKnowledgePackSizes", "GET", "/api/v1/platform/knowledge?owner=" + plainH, nil, patKnowledge, pass},
 
-		// scanModelInput / searchModelInput (agentry#608) — platform staff
+		// scanModelInput / searchModelInput — platform staff
 		// by session, never a token whatever its scopes (the staff PATs
 		// here carry review:act and knowledge:read), and a hosted job's
 		// credential only where an extension admits it (the model-input
@@ -234,7 +234,7 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, staffSess, pass},
 		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, patScoped, deny3},
 		{"searchModelInput", "POST", "/api/v1/model-input/search", map[string]any{"query": "matrix"}, patUnscoped, deny3},
-		// checkDraft (agentry#708) — the same callers: the draft's check
+		// checkDraft — the same callers: the draft's check
 		// spends the deployment's own judge key.
 		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, anonymous, deny1},
 		{"checkDraft", "POST", "/api/v1/model-input/check", matrixDraft, plain, deny3},

@@ -1,10 +1,10 @@
 package api
 
-// Review-archive browsing (§10.1 reviewer detail): the file inventory and
+// Review-archive browsing (reviewer detail): the file inventory and
 // per-file content of the release archive under review. Access is the same
 // reviewItemAccess gate as the rest of the review bundle. Content is returned
 // as JSON text — never served as a raw page — so nothing inside an archive
-// can execute in a reviewer's browser (§10.3); binary files are flagged, not
+// can execute in a reviewer's browser; binary files are flagged, not
 // returned. The web app renders text with invisible-Unicode placeholders so
 // the reviewer sees exactly what the scanner saw.
 
@@ -25,11 +25,11 @@ import (
 
 const (
 	// reviewFileDisplayCap bounds how much of one file the viewer returns;
-	// larger files are truncated with a flag (§19 caps single files at 2 MB,
+	// larger files are truncated with a flag (single files are capped at 2 MB,
 	// so most text files arrive whole).
 	reviewFileDisplayCap = 512 << 10
 	// reviewArchiveReadCap bounds total decompressed bytes walked per request
-	// (defense in depth on top of the submission-time §19/§8.2 caps).
+	// (defense in depth on top of the submission-time caps).
 	reviewArchiveReadCap = 64 << 20
 	// reviewMaxEntries bounds the listing (archives are capped at 2,000 files
 	// at submission; anything past this is hostile).
@@ -84,7 +84,7 @@ func walkReviewArchive(blob io.Reader, fn func(hdr *tar.Header, tr *tar.Reader) 
 		}
 		name := path.Clean(hdr.Name)
 		if name == "" || name == "." || strings.HasPrefix(name, "/") || strings.HasPrefix(name, "..") {
-			continue // unsafe names never listed (mirrors the §8.2 extractor)
+			continue // unsafe names never listed (mirrors the extractor)
 		}
 		count++
 		if count > reviewMaxEntries {

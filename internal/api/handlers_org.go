@@ -21,8 +21,8 @@ import (
 // lookupFailed writes the problem for a handle lookup that did not yield an
 // active row, and reports whether it wrote one. A missing row is 404; a
 // query error is 500, logged — never 404, because a client that takes 404 as
-// "this handle is nobody's" (the site's namespace rule, agentry-web#35) must
-// be able to mean it (agentry#261). The caller decides the inactive case.
+// "this handle is nobody's" (the site's namespace rule) must
+// be able to mean it. The caller decides the inactive case.
 func (s *Server) lookupFailed(w http.ResponseWriter, r *http.Request, what string, err error) bool {
 	if err == nil {
 		return false
@@ -40,7 +40,7 @@ func (s *Server) lookupFailed(w http.ResponseWriter, r *http.Request, what strin
 // handle no active organisation holds, 500 for a lookup that failed. An
 // organization in its decommission hold is found — its members still
 // read it — and the authorize chokepoint refuses every change to it; a
-// suspended or erased one is absent (agentry#363).
+// suspended or erased one is absent.
 func (s *Server) orgOrNotFound(w http.ResponseWriter, r *http.Request, handle string) (storegen.GetOrgByHandleRow, bool) {
 	row, err := s.q().GetOrgByHandle(r.Context(), handle)
 	if s.lookupFailed(w, r, "org", err) {
@@ -108,24 +108,24 @@ func (s *Server) withSeats(r *http.Request, o Org, orgID uuid.UUID) Org {
 	return o
 }
 
-// CreateOrg implements POST /orgs; the caller becomes its first admin
-// (§12.2, agentry#360). Four gates precede the handle rules. The account's
+// CreateOrg implements POST /orgs; the caller becomes its first admin.
+// Four gates precede the handle rules. The account's
 // email must be verified, because an organization is keyed on its
-// creator's domain (plan organization-subscriptions D13, D21): the domain
+// creator's domain: the domain
 // of that address is recorded as the organization's unless the body says
 // `none` or the domain is one nobody owns (a public mail provider), and a
 // domain already registered to an organization — at its creation, or
-// verified over DNS — is 409 domain-claimed naming it (agentry#363). The
-// account may be an active member of no other organization (D26, one
-// organization per person, agentry#370): the creator becomes the org's
+// verified over DNS — is 409 domain-claimed naming it. The
+// account may be an active member of no other organization (one
+// organization per person): the creator becomes the org's
 // first admin, and that is a membership like any other. And the account
 // may have at most one organization awaiting activation: on the hosted
 // product an org is a paid thing that starts out awaiting payment, and
-// the core refuses a second until the first is activated or gone (D5), so
+// the core refuses a second until the first is activated or gone, so
 // nobody squats handles behind organizations that never pay. Where
 // nothing will activate an org later — no admission extension, so no
 // payment — it is activated as it is created, and the rule never bites
-// (§3: the core with no extension is unchanged).
+// (the core with no extension is unchanged).
 func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActOrgCreate, uuid.Nil) {
 		return
@@ -155,8 +155,8 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		problemValidation(w, r, "That org handle is reserved. Choose another.")
 		return
 	}
-	// The staff organization's handle is reserved to platform staff
-	// (agentry#556): founding it makes its first member, and so its first
+	// The staff organization's handle is reserved to platform staff:
+	// founding it makes its first member, and so its first
 	// staff, and nobody may make themselves staff. A deployment's first
 	// staff are seeded by its operator (docs/self-hosting.md).
 	if req.Handle == s.cfg.Auth.StaffOrg && !p.PlatformStaff {
@@ -183,12 +183,12 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// One organization per person (D26): the creator's founding
+	// One organization per person: the creator's founding
 	// membership is a membership, and the rule that refuses an invitation
 	// or an approval for someone active elsewhere refuses this door too.
 	// Platform staff are not exempt — a first-party organization is made
 	// by an account that belongs to no other, and the invariant holds at
-	// every door or it is not one (agentry#370). After the pending rule,
+	// every door or it is not one. After the pending rule,
 	// which names the organization that is in the way.
 	elsewhere, err := s.q().CountActiveMemberships(r.Context(), p.UserID)
 	if err != nil {
@@ -227,7 +227,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		// The one-organization-per-person count again, under the person's
 		// row lock this time: the read above was on the pool, and two
 		// doors for the same person at once must not both count zero
-		// (agentry#412; the index memberships_one_active_per_user is the
+		// (the index memberships_one_active_per_user is the
 		// wall behind this).
 		if err := q.LockUser(r.Context(), p.UserID); err != nil {
 			return err
@@ -251,8 +251,8 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		// The founder of the staff organization is its first member, so the
-		// domain rule holds for them too, and founding it makes them staff
-		// (agentry#556). For any other organization both are no-ops.
+		// domain rule holds for them too, and founding it makes them staff.
+		// For any other organization both are no-ops.
 		if err := s.staffOrgDoorIn(r.Context(), q, orgID, p.UserID); err != nil {
 			return err
 		}
@@ -300,13 +300,13 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := orgToAPI(row, true)
-	// The creator rides on the event (agentry#361): the extension that
+	// The creator rides on the event: the extension that
 	// opens the organization's billing row needs to know whose it is, and
 	// the org's only member at this moment is the person who made it.
 	s.fireEvent(r.Context(), Event{Kind: "org.created", OrgID: out.Id, UserID: p.UserID,
 		Payload: map[string]any{"org": out.Handle, "creator": p.Handle}})
 	// The accounts already known at the domain are folded in now, so the
-	// admins see them at once (agentry#364); the ones that arrive later
+	// admins see them at once; the ones that arrive later
 	// fold in at their sign-in.
 	s.enqueueFoldInSweep(r.Context(), orgID, domain)
 	ik.complete(r, http.StatusCreated, out)
@@ -317,7 +317,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 // writes the refusal and reports false: the creator's verified email
 // domain, unless the body asks for none, and never a domain no single
 // organization owns; a domain already registered is 409 domain-claimed
-// naming its holder (agentry#363, D13, D21, D26). "" is none.
+// naming its holder. "" is none.
 func (s *Server) orgDomainFor(w http.ResponseWriter, r *http.Request, userID uuid.UUID, requested *string) (string, bool) {
 	u, err := s.q().GetUserByID(r.Context(), userID)
 	if err != nil {
@@ -429,7 +429,7 @@ func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, org OrgHandle
 			return
 		}
 	}
-	// Toggling enforced SSO is an SSO setting (§12.2, §12.4): the settings
+	// Toggling enforced SSO is an SSO setting: the settings
 	// action, declared apart from the update so the two can diverge again.
 	if req.SsoRequired != nil {
 		p := principalFrom(r.Context())
@@ -522,7 +522,7 @@ func (s *Server) requireSessionCaller(w http.ResponseWriter, r *http.Request) bo
 
 // assignableOrgRole validates a role an admin is assigning and reports
 // whether it may be. security_reviewer exists only inside a first-party
-// organization (D20); the retired owner is refused by name.
+// organization; the retired owner is refused by name.
 func (s *Server) assignableOrgRole(w http.ResponseWriter, r *http.Request, org storegen.GetOrgByHandleRow, role auth.OrgRole) bool {
 	switch role {
 	case auth.RoleAdmin, auth.RoleMember:
@@ -571,9 +571,9 @@ func (s *Server) seatRefusal(w http.ResponseWriter, r *http.Request, org storege
 	return false
 }
 
-// memberChangeAction picks the §12.2 action for a role change: touching
+// memberChangeAction picks the action for a role change: touching
 // the admin role (either direction) is an elevation. Both actions need an
-// admin since the owner role retired (agentry#360); they stay distinct so
+// admin; they stay distinct so
 // the declaration says which is which.
 func memberChangeAction(current, requested auth.OrgRole) auth.Action {
 	if current == auth.RoleAdmin || requested == auth.RoleAdmin {
@@ -587,7 +587,7 @@ func memberChangeAction(current, requested auth.OrgRole) auth.Action {
 var errLastAdmin = errors.New("api: the organization's last admin")
 
 // guardLastAdmin runs inside a transaction that removes or demotes a
-// membership (agentry#360, D14): it locks the organization's row, so two
+// membership: it locks the organization's row, so two
 // such changes serialise and the second counts what the first committed,
 // then refuses with errLastAdmin when the membership is that of the last
 // admin whose account is active. Erased accounts keep their membership rows
@@ -654,10 +654,9 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 	if !s.authorize(w, r, memberChangeAction(current, requested), orgRow.ID) {
 		return
 	}
-	// Adding by handle is retired (agentry#361, D7, D12): an organization
-	// is joined by accepting an invitation or by an admin approving a
-	// pending member, and both go through the seat chokepoint. This route
-	// keeps only what it was also for — changing the role of someone who
+	// An organization is joined by accepting an invitation or by an admin
+	// approving a pending member, and both go through the seat chokepoint.
+	// This route only changes the role of someone who
 	// is already here.
 	if current == auth.RoleNone {
 		problemValidation(w, r,
@@ -691,7 +690,7 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 			return err
 		}
 		// Any active role in the staff organization is staff; the sync
-		// runs at every membership change all the same (agentry#556).
+		// runs at every membership change all the same.
 		return s.syncStaffIn(r.Context(), q, target.ID, registry.StaffSyncMembership, auditEvent(r, audit.ActionUserStaffSync))
 	})
 	if errors.Is(err, errLastAdmin) {
@@ -815,7 +814,7 @@ func (s *Server) DeclineOrgMember(w http.ResponseWriter, r *http.Request, org Or
 		if _, err := q.DeleteMembership(r.Context(), storegen.DeleteMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err != nil {
 			return err
 		}
-		// The decline is remembered (agentry#364, D25): the domain does
+		// The decline is remembered: the domain does
 		// not fold this person in again; an admin's invitation supersedes
 		// it. Whichever door they came through — declining someone the
 		// IdP provisioned says the same thing about them.
@@ -831,7 +830,7 @@ func (s *Server) DeclineOrgMember(w http.ResponseWriter, r *http.Request, org Or
 		}
 		// A pending member was never staff, but an approval can land
 		// between the pending check above and this delete; the sync keeps
-		// the flag true to the membership either way (agentry#556).
+		// the flag true to the membership either way.
 		return s.syncStaffIn(r.Context(), q, target.ID, registry.StaffSyncMembership, auditEvent(r, audit.ActionUserStaffSync))
 	})
 	if err != nil {
@@ -844,8 +843,8 @@ func (s *Server) DeclineOrgMember(w http.ResponseWriter, r *http.Request, org Or
 
 // RemoveOrgMember implements DELETE /orgs/{org}/members/{handle}: an admin
 // removes a member, or a member leaves. Leaving is any active member's
-// own act (agentry#363): a person belongs to one organization at a time
-// (D26), so they must be able to end the membership they hold, and it
+// own act: a person belongs to one organization at a time,
+// so they must be able to end the membership they hold, and it
 // deletes nothing of theirs. The last admin can do neither (409
 // last-admin) — only a decommission removes them.
 func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org OrgHandle, handle Handle) {
@@ -891,7 +890,7 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 		if _, err := q.DeleteMembership(r.Context(), storegen.DeleteMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err != nil {
 			return err
 		}
-		// Enforced-SSO hygiene (§12.5 semantics): org-bound PATs die with
+		// Enforced-SSO hygiene: org-bound PATs die with
 		// the membership.
 		if _, err := q.RevokeOrgBoundPATsForUser(r.Context(), storegen.RevokeOrgBoundPATsForUserParams{UserID: target.ID, OrgID: &orgRow.ID}); err != nil {
 			return err
@@ -904,7 +903,7 @@ func (s *Server) RemoveOrgMember(w http.ResponseWriter, r *http.Request, org Org
 			return err
 		}
 		// Leaving or being removed from the staff organization ends staff
-		// in the same transaction (agentry#556).
+		// in the same transaction.
 		return s.syncStaffIn(r.Context(), q, target.ID, registry.StaffSyncMembership, auditEvent(r, audit.ActionUserStaffSync))
 	})
 	if errors.Is(err, errLastAdmin) {
@@ -1075,7 +1074,7 @@ func (s *Server) AddTeamMember(w http.ResponseWriter, r *http.Request, org OrgHa
 	if !ok {
 		return
 	}
-	// Team membership requires org membership (§4.1 model).
+	// Team membership requires org membership.
 	if _, err := s.q().GetMembership(r.Context(), storegen.GetMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err != nil {
 		problemValidation(w, r, "Add this user to the organization before adding them to a team.")
 		return

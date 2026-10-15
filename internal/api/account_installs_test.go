@@ -1,6 +1,6 @@
 package api_test
 
-// Account installs (plan web-dashboard-shell §5, D3/D4; agentry#448): the
+// Account installs: the
 // per-account record of a QuickAgent release a person accepted and the
 // contract they consented to, behind GET/PUT/DELETE /user/installs.
 
@@ -410,7 +410,7 @@ func TestAccountInstallUnsignedAndUnscannedConsents(t *testing.T) {
 	}
 }
 
-// The private-agent rule (§9, agentry#313) holds for the install routes: a
+// The private-agent rule holds for the install routes: a
 // PUT by a non-reader answers exactly what a missing name answers; a
 // record whose QuickAgent the caller can no longer read is listed as the
 // bare ref with readable: false and nothing else, under the ref stored
@@ -604,7 +604,7 @@ func TestAccountInstallMovesNoDownloadCounter(t *testing.T) {
 	}
 }
 
-// Optional secrets (plan optional-secrets.md D6, agentry#906): the stored
+// Optional secrets: the stored
 // contract carries capabilities.optionalSecrets through the account install
 // and the version read, and a release that only moves a secret between
 // optional and required asks for no capability acceptance again, in either

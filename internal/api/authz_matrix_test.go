@@ -1,9 +1,9 @@
 package api_test
 
-// The §17.4 authorization matrix: every declared route × every role ×
+// The authorization matrix: every declared route × every role ×
 // anonymous/role/PAT-scope combination, executed as real HTTP requests
 // against one organization. Private and foreign-resource evidence stays in
-// the resource tests (docs/testing-authorization.md; D-24, T-11).
+// the resource tests (docs/testing-authorization.md).
 
 import (
 	"crypto/ed25519"
@@ -24,7 +24,7 @@ import (
 	"github.com/blaktron/agentry/pkg/reportdesign"
 )
 
-// rateClasses is the set of §19 bucket names the code emits, catalogued in
+// rateClasses is the set of rate-limit bucket names the code emits, catalogued in
 // docs/logging.md's http.rate_limited row, plus the two sentinels a
 // declaration uses when no single bucket applies. A declaration naming
 // anything else is a typo that reads as a claim about enforcement.
@@ -34,15 +34,15 @@ var rateClasses = map[string]bool{
 	api.RateNone: true, api.RatePerPrincipal: true,
 }
 
-// TestRouteDeclarationsComplete is the §12.2 completeness gate: every
+// TestRouteDeclarationsComplete is the completeness gate: every
 // pattern the public mux was actually given declares its authorization, and
 // every declaration names a pattern the mux serves. The generated surface
 // declares through RouteDecl, keyed by operationId; a root mount declares
-// through MountDecl, keyed by its pattern. Before agentry#415 this gate
-// walked the spec, so the root mounts — SCIM, the image proxy, git smart
+// through MountDecl, keyed by its pattern. The gate walks the mux rather
+// than the spec, because the root mounts — SCIM, the image proxy, git smart
 // HTTP, the SSO landing, the probes, /metrics, the .well-known documents —
-// were invisible to it, and a new root mount shipped with no declaration and
-// no failure.
+// are not in the spec, and a new one would otherwise ship with no
+// declaration and no failure.
 func TestRouteDeclarationsComplete(t *testing.T) {
 	spec, err := api.GetSwagger()
 	if err != nil {
@@ -97,7 +97,7 @@ func TestRouteDeclarationsComplete(t *testing.T) {
 		}
 		decl, ok := api.MountAuthzDecl(pattern)
 		if !ok {
-			t.Errorf("%s: registered on the public mux and undeclared — name its gate and its §19 rate class in authz_routes.go", pattern)
+			t.Errorf("%s: registered on the public mux and undeclared — name its gate and its rate class in authz_routes.go", pattern)
 			continue
 		}
 		seenMount[pattern] = true
@@ -131,7 +131,7 @@ func TestRouteDeclarationsComplete(t *testing.T) {
 // TestExtensionMountIsDeclaredByPrefix covers the one declaration made at
 // run time: an extension's routes are registered under /api/v1/x/<name>/
 // behind the principal middleware, and the extension's own matrix test
-// declares each route behind it (DEV-091). The core build loads no
+// declares each route behind it. The core build loads no
 // extensions, so without this the prefix rule is dead code here that the
 // closed build depends on.
 func TestExtensionMountIsDeclaredByPrefix(t *testing.T) {
@@ -155,7 +155,7 @@ func TestExtensionMountIsDeclaredByPrefix(t *testing.T) {
 
 // matrixSeed builds one org with every role plus an outsider, sessions for
 // all, and PATs for the admin (right-scope and wrong-scope). The admin is
-// the org's creator (agentry#360: there is no owner). The security
+// the org's creator (there is no owner). The security
 // reviewer row is seeded in the database, not through the API: the role
 // exists only inside a first-party organization and the API refuses to
 // assign it here, but a row can exist (the `agentry` org) and every route
@@ -170,7 +170,7 @@ type matrixSeed struct {
 	// patSignIn is the admin's token with the sign-in grant's scopes
 	// (auth.SignInGrantScopes), as the desktop and the CLI mint it: every
 	// route decides it as the chokepoint predicts, so what the grant
-	// reaches is proven route by route (agentry#993).
+	// reaches is proven route by route.
 	patSignIn caller
 	orgID     uuid.UUID
 }
@@ -191,7 +191,7 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	env.joinOrg(sessions["admin"], orgH, sessions["member"].name)
 	env.seedMembership(orgH, sessions["security_reviewer"].name, "security_reviewer", "active")
 	// A member the IdP provisioned and no admin has approved. They hold
-	// nothing (agentry#361, agentry#362), and the matrix proves it route by
+	// nothing, and the matrix proves it route by
 	// route rather than only where someone thought to look.
 	env.seedMembership(orgH, sessions["pending"].name, "member", "pending")
 	// A pawn member for non-destructive member-set targets.
@@ -212,7 +212,7 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 	// in place: every authorized caller gets 409 instead of actually deleting
 	// it, so the matrix (whose case order is map-random) cannot destroy the
 	// fixture for later cases. The real delete path is covered by
-	// TestDeleteAgent* in the M-10 handler tests.
+	// TestDeleteAgent* in the handler tests.
 	env.doJSON(sessions["admin"], http.MethodPost, "/api/v1/agents", map[string]any{
 		"namespace": orgH, "name": "mx-undeletable", "modes": []string{"autonomous"}, "visibility": "public",
 	}, nil, http.StatusCreated)
@@ -263,7 +263,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			method: "PATCH", path: sPath("/api/v1/user"),
 			body: func(*matrixSeed, string) any { return map[string]any{"displayName": "Matrix Caller"} },
 		},
-		// A new activation link (agentry#861): the matrix's callers are
+		// A new activation link: the matrix's callers are
 		// confirmed, so past the gate it is a 409, which is a PASS here;
 		// activation_db_test.go covers the mail, the limit and the link.
 		"sendEmailVerification": {method: "POST", path: sPath("/api/v1/user/email-verification")},
@@ -357,7 +357,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return map[string]any{"handle": "mo" + nextUniq(), "displayName": "M"}
 			},
 		},
-		// The lifecycle (agentry#363). A wrong confirmation stops an
+		// The lifecycle. A wrong confirmation stops an
 		// authorized caller at 422 before the fixture organization is
 		// touched; the domain routes read, or answer 404 for a caller at a
 		// shared domain, which every matrix caller is.
@@ -386,7 +386,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			prep: func(s *matrixSeed, caseID string) string {
 				// A disposable member per case. Seeded directly: the
 				// invitation door is exercised by its own tests, and one
-				// organization per person (D26) would refuse a second
+				// organization per person would refuse a second
 				// active membership for a matrix caller anyway.
 				s.env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/register", map[string]any{
 					"handle": caseID, "email": caseID + "@example.test", "password": "hunter2hunter2",
@@ -468,7 +468,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"getVersionAttestation": {method: "GET", path: agentPath("/versions/9.9.9/attestation")},
 		"getPlatformPolicy":     {method: "GET", path: sPath("/api/v1/platform/policy")},
 		"getOrgPolicy":          {method: "GET", path: orgPath("/policy")},
-		// The logo (agentry#367). The matrix judges authorization, not the
+		// The logo. The matrix judges authorization, not the
 		// upload: an admin's JSON body is a 400 past the gate, which is a
 		// PASS; the multipart path is org_logo_test.go's.
 		"getOrgLogo":    {method: "GET", path: orgPath("/logo")},
@@ -506,7 +506,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			path:   func(s *matrixSeed, _ string) string { return "/api/v1/user/stars/" + s.orgH + "/mx-agent" },
 		},
 		"listAccountInstalls": {method: "GET", path: sPath("/api/v1/user/installs")},
-		// Knowledge packs (agentry#593): an authorized caller meets a pack
+		// Knowledge packs: an authorized caller meets a pack
 		// that is not theirs (404), a key that does not open for them (404)
 		// or a short key (422) — never a denial — and nothing is stored.
 		"listKnowledgePacks": {method: "GET", path: sPath("/api/v1/knowledge/packs")},
@@ -532,7 +532,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			},
 		},
 		"getKnowledgeUsage": {method: "GET", path: sPath("/api/v1/knowledge/usage")},
-		// The Writing Voice (agentry#809): the caller's own. The matrix's
+		// The Writing Voice: the caller's own. The matrix's
 		// server has no voice judge, so an authorized call meets the store
 		// off (503) or a refused body (422) past the gate; nothing is stored.
 		"getVoice":            {method: "GET", path: sPath("/api/v1/voice")},
@@ -541,7 +541,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"discardVoicePending": {method: "DELETE", path: sPath("/api/v1/voice/pending")},
 		"restoreVoice":        {method: "POST", path: sPath("/api/v1/voice/restore")},
 		"updateVoiceSettings": {method: "PUT", path: sPath("/api/v1/voice/settings"), body: func(*matrixSeed, string) any { return map[string]any{} }},
-		// An organization's shared knowledge (agentry#646): the same shapes
+		// An organization's shared knowledge: the same shapes
 		// under the fixture organization, every pack id a stranger's and
 		// every key short or foreign, so an authorized caller meets a 404 or
 		// a 422 past the gate and nothing is stored.
@@ -604,7 +604,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		},
 		// The fixture agent has no published version: an allowed caller
 		// gets 409 nothing-to-fork, a refused one its 401 or 403, and no
-		// fork is made (agentry#943). A session forks into its own
+		// fork is made. A session forks into its own
 		// namespace, as createAgent's does below.
 		"forkAgent": {
 			method: "POST",
@@ -667,7 +667,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			body: func(*matrixSeed, string) any { return map[string]any{"code": "000000"} },
 		},
 
-		// Enterprise (M6/WG-J). SSO/SCIM config = owner; webhooks/domains =
+		// Enterprise: SSO/SCIM config = admin; webhooks/domains =
 		// admin+; audit export = admin+ (audit:read). Allowed callers may still
 		// get 404/422 (missing target / invalid config) — the matrix only
 		// asserts the authz outcome (not 401/403), so these are fine.
@@ -729,7 +729,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return "/api/v1/orgs/" + s.orgH + "/webhooks/" + uuid.NewString() + "/ping"
 			},
 		},
-		// Invitations and approvals (agentry#361). The approve/decline
+		// Invitations and approvals. The approve/decline
 		// targets are the pawn, an ACTIVE member: an authorized caller gets
 		// 409 rather than changing the fixture, which the matrix counts as
 		// a pass.
@@ -924,7 +924,7 @@ func expectAllowed(decl api.RouteDecl, p *auth.Principal, orgID uuid.UUID) bool 
 	}
 	if decl.AgentScoped {
 		// The fixture agent is PUBLIC and org-owned with no explicit grants
-		// for matrix callers: effective role = namespace-derived (§12.2),
+		// for matrix callers: effective role = namespace-derived,
 		// pinned separately in internal/auth tests.
 		role := auth.NamespaceDerivedAgentRole(p, "org", orgID, p.OrgRoles[orgID])
 		return auth.CheckAgent(p, auth.AgentResource{Public: true, EffectiveRole: role}, decl.Action) == nil
