@@ -8,8 +8,8 @@ an actual git transport and a browser form are separate contracts.
 ## Named evidence inventory
 
 `docs/testing-inventory.json` lists every tracked Go test file, its behavior
-family, owning package and named surviving tests/fuzz targets. The foundation
-retains all existing evidence. The inventory records ownership and names;
+family, owning package and named tests and fuzz targets. The inventory
+records ownership and names;
 it does not claim that similar names or files prove equivalent assertions.
 Dependency hints come from direct source references and need investigation
 before changing a fixture or execution lane.
@@ -23,7 +23,7 @@ python3 scripts/testing/inventory.py --check
 
 `make check` checks inventory drift. A new package needs an explicit behavior
 owner in the generator. Test helpers without named tests remain recorded.
-The catalogue also retains acceptance/self-test scripts, their support files
+The catalogue also records acceptance/self-test scripts, their support files
 and workflow job names. The Makefile, CI workflows and scripts below define
 which entry points run; a listed support file is not another executed test.
 
@@ -35,7 +35,7 @@ which entry points run; a listed support file is not another executed test.
 | Actual headless UI flows | `scripts/acceptance/ui.sh`; page rendering is tested independently |
 | Published envelopes verified by independent code | `scripts/dev/attest-interop.sh` |
 | Directory integration and cleanup | `scripts/acceptance/directory-*.sh`, their Python drivers and cleanup self-tests; consult CI for the required jobs |
-| Historical milestone acceptance | `scripts/acceptance/m*.sh`; filtered Go evidence must name actual passing tests through `gotest` |
+| End-to-end acceptance | `scripts/acceptance/auth.sh`, `git.sh`, `publish-install.sh`, `cli.sh`, `gate.sh`, `enterprise-sso.sh`; filtered Go evidence must name actual passing tests through `gotest` |
 | Helm and deployment configuration | `scripts/acceptance/helm.sh` and CI's render/config checks |
 | Release behavior | `scripts/release/selftest.sh` and signing/release workflows |
 | Prose and generated/spec/rules drift | `scripts/prose/check.sh --self-test` and Makefile/CI drift gates |
@@ -71,20 +71,20 @@ through the real HTTP authentication, CSRF and authorization middleware.
 Use `register`, `login`, `joinOrg` and the real endpoints when their side
 effects are the subject: registration, password verification, staff syncing,
 second factors, remembered browsers, session/PAT issuance, account erasure or
-invitation acceptance. The authorization matrix and private-reader fixture
-pilots use seedCaller; invitations and sign-in lifecycle tests retain their
-existing paths. Seeding is not evidence those lifecycle endpoints work.
+invitation acceptance. The authorization matrix and the private-reader fixtures
+use seedCaller; invitations and sign-in lifecycle tests use the real
+endpoints. Seeding is not evidence those lifecycle endpoints work.
 
 ## Consolidating a behavior family
 
-For each removed assertion, name the surviving test and case with the same
+For each removed assertion, name the test and case that still covers the same
 behavior dimensions and enforcement boundary in the PR. Keep distinct
 concurrency, failure direction, current/revoked ownership, kernel/transport,
 malicious/benign corpus and cross-format compatibility cases. Do not compute
 expected behavior through the production function being tested.
 
 Verify changed security evidence by breaking the specific control once and
-seeing the surviving assertion fail for that reason. Update architecture,
+seeing the remaining assertion fail for that reason. Update architecture,
 acceptance filters and the named-evidence catalogue together. Report actual
 executed/skipped counts, setup/invocation counts and comparable timings;
 combining declarations into subtests alone does not reduce execution cost.
@@ -94,13 +94,13 @@ route, role, principal and signing boundaries and their caller fixtures.
 
 ### Configuration guard ownership
 
-`TestValidateGuards` keeps sixteen distinct refusal cases and checks the
+`TestValidateGuards` holds sixteen distinct refusal cases and checks the
 setting each refusal names. The production fixtures configure file signing
 and a sealing key before changing the one setting under test. An accepted
 production configuration checks that fixture first. This exercises `Validate`;
 loading an actual signing key remains separate signing evidence.
 
-| Retained case | Setting under test | Other guards configured |
+| Case | Setting under test | Other guards configured |
 | --- | --- | --- |
 | `prod devMode` | Dev mode is refused in production | File signing and a sealing key |
 | `staging devMode` | Dev mode is refused in staging | File signing and a sealing key |
@@ -108,12 +108,11 @@ loading an actual signing key remains separate signing evidence.
 | `no sealing key outside dev mode` | A sealing key is required | Dev environment, dev mode off |
 
 The environment, storage, judge, proxy, audit and staff-rule cases remain
-independent. The named inventory and acceptance filters retain the same test.
+independent. The named inventory and acceptance filters name the same test.
 Configuration defaults, entitlement mapping and consumer outage enforcement
-also keep their separate boundaries. These fixture repairs remove no cases
-or validation calls; the accepted production fixture adds one validation call.
+also keep their separate boundaries.
 
-`TestValidateCapsCredentialTTLs` keeps its fifteen named cases. PAT and SSO
+`TestValidateCapsCredentialTTLs` holds fifteen named cases. PAT and SSO
 at/over-cap inputs use literal contract values so a changed production ceiling
 cannot move the tested boundary with it:
 
@@ -126,8 +125,7 @@ cannot move the tested boundary with it:
 The session cases and remembered browser cases stay in the same table, with their
 independent 24-hour and 30-day contract/default checks in
 `TestTrustedDeviceIsASecondClassNotALongerSession`. Zero/negative lifetimes
-and organization-bound narrowing retain their existing assertions. The
-literal-input repair adds or removes no cases or validation calls.
+and organization-bound narrowing have their own assertions.
 
 ### Gate outcome ownership
 
@@ -136,10 +134,10 @@ cases in `pkg/gatecases/cases.json`. Its baseline, grid and branch guards
 remain separate. Clients consume the same published inputs and expectations;
 the table is not derived from `Evaluate`.
 
-The standalone `TestGateSeverityTable` repeated seven outcome-only calls to
-`Evaluate`. Their retained equivalents are these `TestGateCases` subcases:
+These `TestGateCases` subcases cover the outcome of one finding at each
+severity, and of none:
 
-| Former case | Retained published case |
+| Input | Published case |
 | --- | --- |
 | `clean` | `baseline: no findings publish` |
 | `info` | `baseline: a info finding publishes` |
@@ -149,20 +147,13 @@ The standalone `TestGateSeverityTable` repeated seven outcome-only calls to
 | `critical reject` | `baseline: a critical finding is rejected` |
 | `low-confidence high does not gate alone` | `a low-confidence high finding does not gate alone` |
 
-Each uses the same baseline, one finding of the same severity/confidence
-(or no finding), no flags and no declared capabilities. The old `Sx/test`
-and table's `S4/example` are ordinary scanner ids, outside the unread-content
-set; titles differ only in the reason that the old test did not assert.
+Each uses the same baseline, one finding of the given severity and confidence
+(or no finding), no flags and no declared capabilities. The scanner ids in
+the cases are ordinary ids, outside the unread-content set.
 `TestGateCasesBaselineIsTheRegistrysBaseline` pins the table's policy to the
-compiled baseline. The retained cases check outcome, queue and deciding
-branch, keeping every removed outcome assertion.
+compiled baseline. The cases check outcome, queue and deciding branch.
 
 Policy parsing/merge and tighten-only rules, empty-policy fallback, conditional
 review, judge flags, public queue routing, unread content and verdict ratings
-retain their tests. Corpus, pipeline signing/failure and registry state-machine
-tests retain their own boundaries. The pure gate table saves seven evaluations;
-this does not establish an improvement in the full suite's runtime.
-
-The [estate plan](https://github.com/blaktron/agentry-notes/blob/main/plans/test-suite-refactoring.md)
-sets the migration order. GitHub issues and the board track the work; this
-document describes the test contracts.
+have their own tests. Corpus, pipeline signing/failure and registry
+state-machine tests keep their own boundaries.

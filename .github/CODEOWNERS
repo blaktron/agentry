@@ -1,7 +1,7 @@
-# Every path needs a maintainer's review before merge once the repository is
-# public (agentry#209). The two places with a higher bar — the scanners and
-# the authorization layer (CONTRIBUTING.md, "The rules that matter") — are
-# listed explicitly so the ownership is visible, not implied by the wildcard.
+# Every path needs a maintainer's review before merge. The two places with a
+# higher bar — the scanners and the authorization layer (CONTRIBUTING.md,
+# "The rules that matter") — are listed explicitly so the ownership is
+# visible, not implied by the wildcard.
 *                              @blaktron
 /internal/scan/                @blaktron
 /rules/                        @blaktron

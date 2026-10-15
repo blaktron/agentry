@@ -1,6 +1,6 @@
 # API conventions
 
-Rules that hold across the whole REST surface (PLAN §9.1), plus the
+Rules that hold across the whole REST surface, plus the
 per-endpoint semantics that are easy to get wrong. The authoritative
 contract is `schemas/openapi.yaml`; this document explains the parts a
 schema cannot express.
@@ -10,16 +10,14 @@ Base path is `/api/v1`. Three surfaces sit deliberately outside it: `/scim/v2`
 people paste into address bars and IdP consoles, not a JSON operation), and
 `/internal/directory/trusted-device` (the directory's own trust check on the
 private network, gated by a shared secret and never routed by an edge; see
-`docs/self-hosting.md`, agentry#670). The last is not part of the public API
+`docs/self-hosting.md`). The last is not part of the public API
 and answers bare status codes.
 
 ## Versioning
 
 `/api/v1` is additive: a CI gate (`oasdiff`) refuses a pull request that
-removes or narrows anything in the contract. It was broken deliberately
-once, before the beta and with no external consumers — spec 0.2.0 → 0.3.0
-replaced the `kind` classification with `modes` (`?kind=` → `?mode=`, the
-`kind` facet → `mode`; DEV-088) — and has been additive again since. A
+removes or narrows anything in the contract. An agent is classified by its
+`modes` (`?mode=` filters on it, and the `mode` facet counts it). A
 version's `manifestSchemaVersion` says which manifest major its snapshot
 follows, so a client reading a v1 snapshot applies the v1 mapping
 (`skill`, `prompt-agent` → `[autonomous]`).
@@ -46,7 +44,7 @@ was recorded. `422 private-agent-cap` refuses one more private agent in a
 namespace at its cap, on create and on a `PATCH` that turns an agent
 private; nothing already private is touched.
 
-The organization problems (plan organization-subscriptions), each with
+The organization problems, each with
 its own slug so a client can offer the right next step. Answered by every
 registry: `409 last-admin` refuses the demotion or removal of an
 organization's last admin, by an admin or by the organization's IdP over
@@ -62,7 +60,7 @@ organization's seats, carrying `used`, `invited`, `pending` and `max`; a
 registry with no billing extension has no seat cap and never answers it.
 `403 feature-not-included` refuses an act the organization's subscription
 does not include at all, which is not the same as its allowance being
-reached; since agentry#820 it also refuses `POST /user/ssh-keys` where the
+reached; it also refuses `POST /user/ssh-keys` where the
 person's own subscription does not include adding SSH keys (a key already
 held keeps working, listed and removable; a registry with no billing
 extension includes it). `409 already-a-member` refuses an invitation, an approval or
@@ -72,7 +70,7 @@ organization: a person belongs to one at a time, and leaves it (`DELETE
 `409 staff-org-domain` refuses the deployment's staff organization
 (`AGENTRY_STAFF_ORG`) an address outside its domain (`AGENTRY_STAFF_DOMAIN`),
 at every door: an invitation, its accept, an approval, SCIM provisioning and
-founding it; its members are platform staff (agentry#556).
+founding it; its members are platform staff.
 `409 domain-claimed` refuses `POST /orgs` from an address whose domain
 already belongs to an organization — recorded at that organization's
 creation, or verified by it over DNS — and a DNS verification of a domain
@@ -85,7 +83,7 @@ it, carrying `org` and `decommissionAt`; reads, the audit log and its
 export go on until then, and a member may still leave. A suspended organization, and everything under
 it, answers `404` to everyone until platform staff reinstate it.
 
-Unscanned private agents (plan organization-subscriptions §4) have three
+Unscanned private agents have three
 refusals of their own, all `409`. `pipeline-skip-public` and
 `pipeline-skip-personal` refuse `pipelineSkip: true` on `PATCH
 /agents/{ns}/{name}` for a public agent and for one in a personal
@@ -98,7 +96,7 @@ only a version that passed the gate is ever public. A version admitted
 without a scan carries `scanStatus: skipped` on the version and on
 resolve, its report `verdict: unscanned`, and has no attestation.
 
-A publisher puts away their own agent in two ways (agentry#942, DEV-219),
+A publisher puts away their own agent in two ways,
 both open to the namespace's administrators. `POST
 /agents/{ns}/{name}/retire` makes it private and marks it `retiredAt`.
 Every submission to it is then refused with `409 agent-retired`, as is
@@ -108,8 +106,8 @@ any agent becoming public (`409 agent-unscanned`). Back to private it is
 under the cap again (`422 private-agent-cap`). It answers `409
 agent-not-retired` when there is nothing to restore.
 
-`DELETE /agents/{ns}/{name}` removes an agent that never had a version, as
-before. For one with version history the request needs `confirm=<name>`
+`DELETE /agents/{ns}/{name}` removes an agent that never had a version.
+For one with version history the request needs `confirm=<name>`
 (`422 confirm-name`), and the delete leaves a tombstone:
 - every published or quarantined version is yanked, with the reason "The
   publisher deleted this QuickAgent.";
@@ -125,7 +123,7 @@ the public feed. `GET /agents?namespace=` takes `q`, `state` (`active`,
 `retired`) and `sort` (`name`, `newest`, `installs`, `submitted`). It never
 lists a deleted agent.
 
-A built-in agent (agentry#737) is one of the packages the Agentry CLI
+A built-in agent is one of the packages the Agentry CLI
 embeds, published for reading: `builtin` on the agent and on every search
 hit says so, and clients label it Built-in in place of its run modes.
 `PATCH /agents/{ns}/{name}` takes `builtin` from platform staff only (`403`
@@ -144,7 +142,7 @@ retry cannot create a second resource.
 Honoured on `POST /orgs`, `POST /orgs/{org}/webhooks`,
 `POST /orgs/{org}/webhooks/{id}/ping`, `POST /platform/ruleset-releases`,
 and `POST /agents/{ns}/{name}/versions` (a version upload with a key is a
-multipart body; the key is pinned to it like any other, agentry#22).
+multipart body; the key is pinned to it like any other).
 
 Semantics:
 
@@ -206,7 +204,7 @@ RateLimit-Reset: 2314
 `RateLimit-Reset` is **seconds until the window resets**, not a timestamp.
 On a `429` the same headers are present plus **`Retry-After`**, in seconds.
 Honour it; the buckets are per-user for authenticated traffic and per-IP for
-anonymous traffic, and burst and sustained budgets are separate (§19). The
+anonymous traffic, and burst and sustained budgets are separate. The
 model-input routes draw from a budget of their own per caller, a staff
 member or one hosted job ([model-input.md](model-input.md)).
 
@@ -231,11 +229,11 @@ agent actually asks for.** A manifest declaring `network: {egress: none}`
 still serializes with the `network` key present, so key-existence alone
 would match every agent ever published; the filter additionally requires the
 value not to be `none`, null or empty, and for object-valued capabilities
-that at least one member is non-empty (DEV-021).
+that at least one member is non-empty.
 
 ## SCIM 2.0
 
-The subset is Users and Groups→teams (§12.5). Four behaviours to code
+The subset is Users and Groups→teams. Four behaviours to code
 against:
 
 - **`PUT /scim/v2/Users/{id}` is a full-resource replace,** not a merge.
@@ -257,21 +255,20 @@ against:
 
 ## Account erasure (GDPR)
 
-`POST /user/delete` (§12.7) requires an explicit decision about published
+`POST /user/delete` requires an explicit decision about published
 content whenever the account has any:
 
 - **`publishedContent` is required** (`yank` or `transfer`), and a request
   without it gets `400` naming the count of published public versions. There
-  is no default; the previous behaviour defaulted to `yank` and the guard
-  meant to prevent that was dead code behind it (DEV-021).
+  is no default.
 - **`publishedContent=transfer` additionally requires `transferOrg=<org
   handle>`**, and the caller must be an admin of that org.
-- Published versions are **yanked or transferred, never deleted**. §4.3
-  forbids deleting version rows and a database trigger enforces it: digests
+- Published versions are **yanked or transferred, never deleted**. A
+  database trigger forbids deleting version rows: digests
   stay resolvable so existing installs can still be verified. PII is purged
   and credentials revoked; what remains is a leak-free tombstone.
 - **Every pending desktop sign-in code is consumed** in the erasure
-  transaction (agentry#502), so a code minted by another session just
+  transaction, so a code minted by another session just
   before the erasure cannot be exchanged for a token afterwards.
 - **An organization's last admin cannot be erased** (`409 last-admin`):
   promote another member first, or decommission the organization. The
@@ -280,13 +277,13 @@ content whenever the account has any:
 - **A transfer respects the organization's private-agent cap** (`422
   private-agent-cap`, nothing erased, nothing moved) and is refused into an
   organization in its decommission hold.
-- **An extension's rows go in the same transaction** (agentry#638): an
+- **An extension's rows go in the same transaction**: an
   extension that keeps rows about the account deletes them inside the
   erasure's transaction, and the `user.delete` event's detail counts them
   under `extensions`. If it cannot, the account is not erased and the
   answer is `500` (a yank or a transfer already made stands; both run
   before the erasure).
-- **The `204` carries `X-Agentry-Directory-Erasure`** (agentry#499): where the
+- **The `204` carries `X-Agentry-Directory-Erasure`**: where the
   sign-in account at the directory stands — `deleted`, `not-found`,
   `not-configured` (erasure is registry-only), `pending` (the directory
   was unreachable and a job retries it), or `failed` (the retry could not
@@ -296,8 +293,8 @@ content whenever the account has any:
 
 ## Clearing an account's data
 
-`POST /user/clear-data` (session only) empties an account and keeps it
-(agentry#498). It revokes every personal access token and SSH key, deletes
+`POST /user/clear-data` (session only) empties an account and keeps it.
+It revokes every personal access token and SSH key, deletes
 every remembered browser (the ones that skip the second factor), consumes
 every pending desktop sign-in code, ends every session except the caller's,
 removes every account install, clears the display name, resets the
@@ -313,7 +310,7 @@ answers `204`, and the caller stays signed in.
 - **Extensions hear `user.data_cleared`** with the user id after the commit,
   so an extension clears what it holds for the account (the hosted-runs
   extension deletes the account's run history).
-- **An extension's rows go in the same transaction** (agentry#638), as on
+- **An extension's rows go in the same transaction**, as on
   an erasure: an extension that keeps credentials or history for the
   account deletes them inside the clear's transaction, the detail counts
   them under `extensions`, and if it cannot, nothing is cleared and the
@@ -349,7 +346,7 @@ back.
 
 A QuickAgent's namespace administrators (its owner, or an organization's
 admins) can put it away or end it, and anyone signed in can copy a public
-one (plan forks-and-publisher, agentry#942 and agentry#943).
+one.
 
 **Retire.** `POST /agents/{ns}/{name}/retire` makes the agent private and
 labels it `retiredAt`, keeping the visibility it had. A retired agent takes
@@ -373,7 +370,7 @@ to its name (`422 confirm-name` otherwise):
 A delete is refused (`409`) while a version is in the pipeline or in review,
 and while the agent carries trust & safety records (advisories, abuse
 reports, a quarantine or a block), which outlive the publisher's wish to
-remove it (DEV-021, DEV-219).
+remove it.
 
 **Fork.** `POST /agents/{ns}/{name}/fork {namespace, name?}` copies a
 public agent into a namespace the caller may create a private agent in:
@@ -413,7 +410,7 @@ A public agent's read carries `forkCount`: a count, never which forks.
 `GET /agents?namespace=` takes `forks=only` or `forks=none`. When the
 platform quarantines or blocks an origin, its forks are left as they are:
 each went through its own pipeline. The act's audit record carries how many
-forks there are (D11).
+forks there are.
 
 ## Personal access tokens and their scopes
 
@@ -448,12 +445,12 @@ carrying only these two is refused everywhere a token without the right
 scope is. [Hosted runs](hosted-runs.md) is what those routes do, route by
 route. `secret:write` is likewise consumed only by a registry that mounts
 the vault extension, which is to admit it for setting and deleting a
-secret (agentry-enterprise#251) and keeps the list of them for a
+secret and keeps the list of them for a
 signed-in session. The desktop app's sign-in grant
 asks for a fixed set (`agent:read`, `agent:publish`, `agent:manage`,
 `repo:read`, `repo:write`, `user:profile`, `run:read`, `run:write`,
 `knowledge:read`, `knowledge:write`, `secret:write`, `voice:read`,
-`voice:write`). `agent:manage` (agentry#993) lets the desktop's Publisher
+`voice:write`). `agent:manage` lets the desktop's Publisher
 section make a QuickAgent public or private, retire, restore and delete
 it; the caller must still be the namespace itself or an admin of its
 organization, and no other setting of the agent, grant or organization
@@ -463,7 +460,7 @@ gain it: sign in again.
 ## Native credentials vs an external directory
 
 A deployment can hand its account directory to an external IdP
-(`AGENTRY_AUTH_EXTERNAL_ONLY=true`, DEV-057 — the shipped compose stack
+(`AGENTRY_AUTH_EXTERNAL_ONLY=true` — the shipped compose stack
 runs authentik this way). The five native credential endpoints —
 `POST /auth/register`, `POST /auth/login`, `POST /auth/verify-email`, and
 the TOTP setup/verify pair — then answer **`410 Gone`**: the surface is
@@ -476,12 +473,12 @@ Two surfaces exist only for that arrangement. **Account settings**:
 when it is, the URLs of the directory's password-change and authenticator
 enrolment flows (each returns to the registry's Settings when it finishes)
 plus the enrolled authenticators; `DELETE
-/user/directory/devices/{kind}/{deviceId}` removes one of the caller's own
-(DEV-089). **Desktop sign-in**: a signed-in browser records a grant with
+/user/directory/devices/{kind}/{deviceId}` removes one of the caller's own.
+**Desktop sign-in**: a signed-in browser records a grant with
 `POST /user/tokens/desktop-grant` (the app's `state` nonce), and the app
 exchanges the resulting one-time code for its PAT at `POST
 /auth/desktop/exchange` from its own process — the code is single-use and
-valid for 60 seconds, and the token never rides a URL (DEV-058, agentry#19).
+valid for 60 seconds, and the token never rides a URL.
 
 ## Dependency alerts and scanned MCP servers
 
@@ -585,7 +582,7 @@ unicast, dials the verified IP to defeat DNS rebinding, and follows no
 redirects.
 
 `POST /orgs/{org}/webhooks/{id}/ping` records its delivery with event type
-`ping`, which is deliberately absent from the §9.3 subscribable catalogue;
+`ping`, which is deliberately absent from the subscribable event catalogue;
 nobody subscribes to a ping. It otherwise travels the ordinary path, same
 envelope and guard and retry ladder, so the test answers "does my endpoint
 work" using the code that will actually call it.

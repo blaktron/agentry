@@ -1,4 +1,4 @@
-# Agentry server configuration example (M0). Copy to agentry.yaml and adjust.
+# Agentry server configuration example. Copy to agentry.yaml and adjust.
 # Every key can be overridden by AGENTRY_* environment variables — see
 # internal/config/config.go for the full mapping.
 
@@ -7,14 +7,14 @@ devMode: false      # opt-in, and only with env: dev; true switches off the seal
 
 http:
   addr: ":8080"
-  # gitAddr: ":8081"   # optional separate listener for git smart-HTTP (§6.1)
+  # gitAddr: ":8081"   # optional separate listener for git smart-HTTP
 
 database:
   url: postgres://agentry:agentry@localhost:5477/agentry_dev?sslmode=disable
   migrateOnStart: true
 
 # redis:
-#   url: redis://localhost:6379/0   # optional (D-06); nothing in the core reads it today — the state replicas share is in Postgres (agentry#414, #447)
+#   url: redis://localhost:6379/0   # optional; nothing in the core reads it today — the state replicas share is in Postgres
 
 storage:
   kind: local        # local | s3
@@ -31,17 +31,17 @@ log:
 
 auth:
   sessionTTL: 24h
-  patMaxTTL: 8760h   # 1 year (§12.3)
+  patMaxTTL: 8760h   # 1 year
   trustedDeviceTTL: 720h  # 30 days, and 30 days is also the ceiling: how long
                           # a browser that answered the second factor may skip
                           # it. A second credential class — it never lengthens
-                          # a session (DEV-123).
+                          # a session.
   cookieSecure: false  # true outside local dev
-  # DEV-057: true hands credentials to the directory service — native
+  # true hands credentials to the directory service — native
   # register/password/TOTP endpoints answer 410; configure social.authentik.
   externalOnly: false
 
-# DEV-091: how this server presents itself and where browsers land.
+# How this server presents itself and where browsers land.
 web:
   url: ""              # a site that fronts this server (its origin); unset = the server's own /ui/ pages
 ui:
@@ -59,7 +59,7 @@ signing:
   kind: none         # none (dev) | file | kms — prod requires file or kms
 
 judge:
-  provider: none     # none | static | openai | anthropic | bedrock | typesafe | classifier (D-13)
+  provider: none     # none | static | openai | anthropic | bedrock | typesafe | classifier
   # typesafe (TypeSafe AI's Jev, hosted only): apiKey required; model is a
   # pinned version id, default jev-1.13.0 — an alias such as jev-latest is
   # refused at startup; baseUrl defaults to https://api.typesafe.ai.
@@ -71,7 +71,7 @@ judge:
   apiKey: ""
   model: ""          # optional; defaults per protocol when empty
 
-# Social login for individual accounts (§12.1). All five are optional; a
+# Social login for individual accounts. All five are optional; a
 # provider without credentials is simply not offered. google and microsoft
 # have built-in OIDC endpoints; openai and claude need an issuer override.
 social:
@@ -81,7 +81,7 @@ social:
   github:
     clientId: ""
     clientSecret: ""
-  # The deployment's own directory service (DEV-057); issuer is the
+  # The deployment's own directory service; issuer is the
   # Authentik application, e.g. https://auth.example/application/o/agentry/
   authentik:
     clientId: ""

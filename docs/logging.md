@@ -5,7 +5,7 @@ a dashboard or an alert may key on. This page is the reference the log
 stack — the collector, the store and the dashboards in `agentry-logging` —
 is built against; the code that keeps it is `internal/logx` (the mechanism)
 and `internal/logevent` (the names), and a test fails when the code and this
-page disagree. The plan behind it is `agentry-notes/plans/log-stack.md`.
+page disagree.
 
 ## A line
 
@@ -80,7 +80,7 @@ is a name missing from this table.
 | `auth.login_failed` | INFO | a native sign-in failed | `user` (the id when the login named an account; the zero id otherwise). The login as typed is on the audit row, not here |
 | `auth.social_rejected` | WARN | a social or directory sign-in was rejected at the token exchange | `provider`, `err` |
 | `saml.state_unavailable` | ERROR | a SAML login refused because the shared state behind it could not be read or written; the fail-closed opposite of `failopen.*` | `set` (`assertions`, `requests`), `err` |
-| `auth.totp_challenge_unavailable` | ERROR | a 2FA social login's second leg refused because its challenge could not be recorded as consumed in the shared set; fail closed, as `saml.state_unavailable` is (agentry#457). A request that had already ended logs a WARN without the event | `err` |
+| `auth.totp_challenge_unavailable` | ERROR | a 2FA social login's second leg refused because its challenge could not be recorded as consumed in the shared set; fail closed, as `saml.state_unavailable` is. A request that had already ended logs a WARN without the event | `err` |
 | `ssrf.refused` | WARN | the private-range guard refused a webhook target | `org`, `delivery`, `endpoint`, `host` |
 | `gate.verdict` | INFO | the gate decided a version | `outcome` (`published`, `rejected`, `needs_review`), `version`, `agent`, `run`, `worst_severity`, `findings`, `reason`; and `ruleset` when a new ruleset's redo of the review queue published a held version |
 | `gate.error` | WARN | the platform's own failure sent a version to review: stage errors, an unusable policy, the watchdog | `version`, `run`, and `stage_errors` or `kind` + `err` |
@@ -88,13 +88,13 @@ is a name missing from this table.
 | `failopen.audit_stream_drop` | ERROR | an audit archive record was dropped on a full buffer | `action`, `id` |
 | `failopen.history_not_scanned` | WARN | a git history the S2 stage did not scan, or scanned only to its size cap; a history scan that failed (`S2/history-error`) holds the version for review and is not counted here | `stage`, `scanner`, `title` |
 | `failopen.osv_not_checked` | WARN | a dependency set S7 did not check against OSV | `stage`, `scanner`, `title` |
-| `failopen.version_not_checked` | WARN | declared MCP server versions S7 did not check against their package registry: the check is off (`AGENTRY_SCAN_NPM_REGISTRY=none`), or npm or PyPI gave no answer, and the version publishes (`scanner` is `S7/version-not-checked`; agentry#1036) | `stage`, `scanner`, `title` |
+| `failopen.version_not_checked` | WARN | declared MCP server versions S7 did not check against their package registry: the check is off (`AGENTRY_SCAN_NPM_REGISTRY=none`), or npm or PyPI gave no answer, and the version publishes (`scanner` is `S7/version-not-checked`) | `stage`, `scanner`, `title` |
 | `failopen.osv_error` | WARN | an OSV lookup errored and left a declared server with no data (`scanner` is `S7/osv-no-data`; a server S7 does not cover makes the same finding and is not counted here) | `stage`, `scanner`, `title` |
 | `failopen.directory_erasure` | ERROR | an account erasure's directory half did not happen: its retries ran out, or the retry could not be queued; the sign-in account is left for the operator to delete | `user`, `attempts`, `err` |
 | `git.push_refused` | WARN | the git door refused a submission after a tag push | `agent`, `tag`, `err` |
 | `mail.suppressed` | INFO | a notification was withheld from an unverified address (WARN when the user row could not be read) | `user`, `kind` |
 | `webhook.delivered` | INFO | a webhook delivery attempt finished | `outcome` (`ok`, `error`), `org`, `delivery`, `attempt`, `status` or `err` |
-| `model_input.call` | INFO | a call to a model-input route finished (agentry#608): AI Review of text a model is about to read, or a brokered web search | `op` (`scan`, `search`), `caller` (`staff`, `job`), `job` (a hosted job's id, when a job called), `verdict` (`pass`, `withheld`, `not_scanned`; a search is `withheld` when any result was), `source`, `scanned`, `withheld`, `requests`, `input_tokens`. Never the text, the query or a result's address |
+| `model_input.call` | INFO | a call to a model-input route finished: AI Review of text a model is about to read, or a brokered web search | `op` (`scan`, `search`), `caller` (`staff`, `job`), `job` (a hosted job's id, when a job called), `verdict` (`pass`, `withheld`, `not_scanned`; a search is `withheld` when any result was), `source`, `scanned`, `withheld`, `requests`, `input_tokens`. Never the text, the query or a result's address |
 | `audit.<action>` | INFO | the audit mirror: one line per audit event, named by the audit action (`audit.user.login`, `audit.pat.create`, …) | see below |
 
 Each `failopen.*` name is also a `FailOpenEvents{path}` metric increment;
