@@ -107,11 +107,11 @@ The `git` role is the only one that needs repo storage mounted, and the
 what lets you give the scanning workers a no-egress security group.
 
 Whatever `api` replicas must see alike lives in the database, not in any one
-process: sessions, the job queue, and — since agentry#414 — the SAML sets, so
+process: sessions, the job queue, and the SAML sets, so
 an assertion consumed by one replica is refused by every other and a login
 started on one completes on another. Nothing has to be enabled for that;
 Redis (`AGENTRY_REDIS_URL`) remains optional and unused by these. What is
-still per process is the §19 rate-limit buckets, which an N-replica
+still per process is the rate-limit buckets, which an N-replica
 deployment multiplies by N (the edge's limits are the ones that hold).
 
 ### The Helm chart
@@ -141,7 +141,7 @@ helm install agentry oci://ghcr.io/blaktron/agentry/charts/agentry \
 ```
 
 The values that make it installable on a cluster that is not the AWS
-reference (added for the Vultr production cluster, DEV-124):
+reference:
 
 - `image.pullSecrets` — the Secrets that pull a private image.
 - `config.git.sshAddr` (off by default) and `config.git.sshPublicUrl` — the
@@ -155,19 +155,18 @@ reference (added for the Vultr production cluster, DEV-124):
   that is) in the worker pods only. The `api` and `git` roles start without
   the key: they serve the key set and the ruleset attestation from what the
   worker recorded, and a reviewer's approval is published and signed by the
-  worker (a version stays in `needs_review` for the moment in between;
-  agentry#479). The chart refuses to render `kind: file` without the Secret.
+  worker (a version stays in `needs_review` for the moment in between). The chart refuses to render `kind: file` without the Secret.
 - `objectStoreCredentials.existingSecret` — object-store credentials
   (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), injected into the api and
   worker pods only; the git role never touches the store. A `v*` tag
   pushed there is recorded by the git role and its archive is stored by a
   worker, which rebuilds it from the recorded commit and stores it only if
-  the digest matches (agentry#508). So the worker needs the git volume
+  the digest matches. So the worker needs the git volume
   (`worker.mountGitData`, the default). A tag submission whose archive is
   not stored within two hours is rejected, and the publisher pushes a new
   version tag.
 - `secret.existingSecret` (or the chart's own Secret) — each role gets only
-  the keys it uses (agentry#744). The git role, which takes untrusted
+  the keys it uses. The git role, which takes untrusted
   pushes, gets `AGENTRY_DATABASE_URL` and `AGENTRY_AUTH_SEALING_KEY`. The
   worker also gets `AGENTRY_KNOWLEDGE_SEALING_KEY`, `AGENTRY_SMTP_PASS` and
   `AGENTRY_IDP_ADMIN_TOKEN`: it sends the digest and billing mail, retries
@@ -203,7 +202,7 @@ reference (added for the Vultr production cluster, DEV-124):
   the pre-receive policy hook from; unset means the system temp directory,
   the chart's `/tmp` `emptyDir`. The hook never runs from the repository
   volume, because an RWX volume may not allow exec (Vultr VFS refuses with
-  "Bad address", agentry#495). The git role runs the hook once at startup
+  "Bad address"). The git role runs the hook once at startup
   and before every push, and refuses to start, or refuses the push, when it
   will not run; point it elsewhere only at a directory the server owns on a
   file system that allows exec.
@@ -211,7 +210,7 @@ reference (added for the Vultr production cluster, DEV-124):
   role; `extraEnv` reaches every role.
 - `podAnnotations` and `api.podAnnotations`, `git.podAnnotations`,
   `worker.podAnnotations` — annotations on the pods; a role's own win on a
-  clash (agentry#745). A cluster autoscaler will not evict a pod with an
+  clash. A cluster autoscaler will not evict a pod with an
   `emptyDir` volume (every role has a scratch one), so it cannot drain their
   nodes unless the pods carry the annotation
   `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`. Set it on a role
@@ -224,13 +223,13 @@ reference (added for the Vultr production cluster, DEV-124):
   role's nodes, the autoscaler's included.
 - `serviceAccount` — each role runs under a ServiceAccount of its own,
   `<release>-agentry-api`, `<release>-agentry-worker` and
-  `<release>-agentry-git` (agentry#627), so a pod's service-account token
+  `<release>-agentry-git`, so a pod's service-account token
   names the role presenting it: a service that authenticates pods by that
   token (the enterprise build's key service for hosted-run secrets binds
   encryption to the api's account and decryption to the worker's) can tell
   them apart. `serviceAccount.annotations` (an EKS IRSA role, say) goes on
   all three; an IAM trust policy written for the single account
-  `<release>-agentry` the chart made before agentry#627 must name the three
+  `<release>-agentry` that earlier chart versions made must name the three
   (or `<release>-agentry-*`) before the upgrade, or the roles lose their S3
   and KMS access. `serviceAccount.create: false` with `serviceAccount.name` runs
   every role under one existing account instead; `name` with `create: true`
@@ -270,7 +269,7 @@ signing:
   kind: file            # file | kms, 'none' is refused in prod
   keyFile: /etc/agentry/signing-key.pem
 
-# How the server presents itself and where browsers land (DEV-091).
+# How the server presents itself and where browsers land.
 web:
   url: ""               # a site fronting this server; unset = the server's own /ui/ pages
 ui:
@@ -316,7 +315,7 @@ webSearch:
   # The web search the registry brokers for POST /model-input/search
   # (docs/model-input.md): none, youcom (You.com's Web Search API), brave
   # (Brave's LLM Context API), or tavily, exa or perplexity (their search
-  # APIs, for a person's own key: DEV-185 on their terms). The key stays
+  # APIs, with a person's own key). The key stays
   # in the registry and never reaches a sandbox host.
   provider: none                      # AGENTRY_WEB_SEARCH_PROVIDER: none | youcom | brave | tavily | exa | perplexity
   # apiKey: ...                       # AGENTRY_WEB_SEARCH_API_KEY (required with a provider)
@@ -325,7 +324,7 @@ webSearch:
   #                                   #   https://api.tavily.com, https://api.exa.ai, https://api.perplexity.ai)
 
 scan:
-  # The one external scanner tool behind the §8.3 seam. Optional: unset,
+  # The one external scanner tool behind the secret scanner's seam. Optional: unset,
   # the native Go secret detectors run alone.
   gitleaksBin: /usr/bin/gitleaks      # AGENTRY_SCAN_GITLEAKS_BIN ("auto" = PATH lookup); shipped in the image
   # gitleaks runs with the registry's own rule configuration (its built-in
@@ -337,7 +336,7 @@ scan:
   # switch the lookup off (S7 then reports "not checked" and routes nothing).
   # osvUrl: https://api.osv.dev       # AGENTRY_SCAN_OSV_URL
   # Where S7 first asks whether each declared server's pinned version is
-  # published at all (agentry#1036): a version its registry does not have
+  # published at all: a version its registry does not have
   # rejects the submission. Defaults below; "none" in npmRegistryUrl stops
   # the check, and S7 then says it did not check.
   # npmRegistryUrl: https://registry.npmjs.org   # AGENTRY_SCAN_NPM_REGISTRY
@@ -370,7 +369,7 @@ version is yanked, quarantined or blocked, or when the advisory is
 withdrawn; publishing a fixed version does not close the old version's
 alert, because the old version stays installable until it is yanked.
 
-Git-tag publishes also have their **git history** scanned for secrets (§8.3):
+Git-tag publishes also have their **git history** scanned for secrets:
 S2 walks the added lines of every commit reachable from the tag, so a key
 committed and later removed still surfaces as `S2/history-<rule>`. That needs
 the scanning role to see the repository data directory — the compose stack's
@@ -380,11 +379,9 @@ single `all` role does; a separate worker without shared git storage reports
 A configured tool that cannot be found is a startup error, never a silent
 fallback. A tool that fails mid-scan leaves an `S2/tool-error` finding on
 the report, so "gitleaks did not run" is distinguishable from "no
-secrets". The code-analysis stages that once ran opengrep and an OSV
-dependency check were retired with the package kinds they served:
-QuickAgents carry no tool code, and the MCP servers one declares are
-resolved and pinned by the runner instead. Both ids are in use again — S6
-is the support-scripts stage that reads a package's shell, Python and
+secrets". QuickAgents carry no tool code, so there is no code-analysis
+stage; the MCP servers one declares are resolved and pinned by the runner.
+S6 is the support-scripts stage that reads a package's shell, Python and
 JavaScript files against the manifest, and S7 the MCP server lookup above.
 
 Generate a signing key:
@@ -462,34 +459,28 @@ name (`us-east-1`). `s3Prefix` puts every key under a prefix, so one bucket
 can hold several stores. The restore drill uses it to read the backup copy's
 `store/` in place.
 
-**What has been verified, and where.** The `s3` backend has run against two
-S3 implementations:
-- MinIO, in the compose stack, on every dev deployment since the first.
-- Ceph RGW, as Vultr Object Storage, in production. The Vultr plan's M3
-  (agentry#450, 2026-09-23) proved there:
-  - a publish end to end, with the archive round-tripped byte for byte;
-  - the write-once conditional PUT answered `412` on a second write;
-  - the attestation verified against the served key.
+**Supported stores.** The `s3` backend runs against two S3
+implementations:
+- MinIO, in the compose stack.
+- Ceph RGW, as Vultr Object Storage. A publish stores the archive byte for
+  byte, the write-once conditional PUT answers `412` on a second write, and
+  the attestation verifies against the served key. A copy of the store in a
+  second region can be served through `s3Prefix`.
 
-  Its M7 (agentry-web#212, 2026-09-24) served and verified a version from a
-  copy of the store in a second region, through `s3Prefix`.
+Signing with `kind: file` is what a production deployment can run: a P-256
+key in a Secret mounted by the worker pods only.
 
-Signing with `kind: file` is what production runs: a P-256 key in a Secret
-mounted by the worker pods only (DEV-129).
-
-**Honest caveat:** AWS S3 and KMS signing have **not been exercised against a
-live AWS account**. The AWS Terraform is validated but never applied, and the
-build environment has no AWS credentials. The first deployment on AWS is
-therefore also the first integration test of the `kms` signer and of S3's own
-behaviour, such as its conditional-write semantics. If you are standing up
-production on S3 and KMS, publish a throwaway version first and confirm that
-the archive round-trips and `agentry verify` passes before you trust it with
-anything.
+**Caveat:** AWS S3 and KMS signing have **not been exercised against a live
+AWS account**. The first deployment on AWS is therefore also the first
+integration test of the `kms` signer and of S3's own behaviour, such as its
+conditional-write semantics. If you are standing up production on S3 and
+KMS, publish a throwaway version first and confirm that the archive
+round-trips and `agentry verify` passes before you trust it with anything.
 
 ### Social login
 
 Individual accounts can sign in with Google, GitHub, Microsoft, OpenAI, or
-Claude (§12.1). All are optional and independent: **a provider with no
+Claude. All are optional and independent: **a provider with no
 client id is not offered at all**. Its start endpoint returns 404, so
 probing cannot distinguish "misconfigured" from "not enabled".
 
@@ -525,9 +516,9 @@ set correctly for social login to work at all.
 `GET /api/v1/meta` lists the configured providers as `signInProviders`
 (an empty list when there are none), so a front end offers them without
 calling `/auth/oidc/{provider}/start`, which begins a flow and is rate
-limited like any anonymous request (agentry#694).
+limited like any anonymous request.
 
-Two behaviours worth knowing before you enable this (DEV-019, DEV-055):
+Two behaviours worth knowing before you enable this:
 
 - **Google and Microsoft are real OIDC**: discovery, issuer pinning, PKCE,
   ID-token signature and nonce verification. Google uses
@@ -550,7 +541,7 @@ Two behaviours worth knowing before you enable this (DEV-019, DEV-055):
 
 Every audit event is written to the `audit_events` table. It is partitioned
 monthly and carries an append-only trigger: rows cannot be updated or
-deleted, by anyone, including you. §12.6 additionally wants a
+deleted, by anyone, including you. The registry can additionally write a
 continuous NDJSON stream. It is **off by default**:
 
 ```yaml
@@ -572,8 +563,8 @@ Env: `AGENTRY_AUDIT_STREAM_KIND`, `AGENTRY_AUDIT_STREAM_DIR`,
   wherever the server's lines are shipped — the log stack's `agentry-audit`
   index, for one. It is a mirror: the row stays the record.
 - `s3` is **not implemented**. The constructor refuses at startup and names
-  the bucket it was asked for, rather than silently dropping records
-  (DEV-020). Use `file` plus your log shipper.
+  the bucket it was asked for, rather than silently dropping records.
+  Use `file` plus your log shipper.
 - An unavailable sink degrades to a no-op plus an error log; it does not stop
   the server from booting.
 - Two deliberate trade-offs: the stream is fed by the audit writer
@@ -636,7 +627,7 @@ address is how a registry bounces mail from its own test data.
 
 ### Limits and quotas
 
-The §19 quotas are configuration (`limits.*`; the rate limits also as
+The quotas are configuration (`limits.*`; the rate limits also as
 `AGENTRY_LIMITS_*` in the environment, the repository quotas in YAML only) and an organization on a larger plan can be raised above them
 through the entitlements resolver. The defaults:
 
@@ -673,14 +664,12 @@ Postgres database. The driver is [River](https://riverqueue.com)
 `river_queue`, `river_leader`, `river_notification`, `river_migration`) are
 created by the migrator on start beside the core schema, so nothing extra
 runs. `queue.workers` (`AGENTRY_QUEUE_WORKERS`, default 1) is how many jobs
-one worker process runs at once per queue: 1 keeps the serial behaviour of
-earlier releases; raise it on a worker with the memory for parallel scans.
+one worker process runs at once per queue: 1 runs jobs serially; raise it on a worker with the memory for parallel scans.
 A job that fails retries with exponential backoff up to five attempts, a
 job a crashed worker held is rescued after 30 minutes, and every outcome is
-counted (see Metrics). River is the only driver: the earlier `SELECT … FOR
-UPDATE SKIP LOCKED` implementation (`queue.driver: pg`) and its `jobs` table
-were removed after a release on River, so a configuration that still names
-`pg` is refused at start, and the migrator drops the table.
+counted (see Metrics). River is the only driver: a configuration that
+names `queue.driver: pg` is refused at start, and the migrator drops the
+legacy `jobs` table.
 
 ### Metrics
 
@@ -744,7 +733,7 @@ the rest.
 
 ### What the stack exposes
 
-`/ui/` is the server's own browser surface (DEV-091): the device authorize
+`/ui/` is the server's own browser surface: the device authorize
 page `agentry login` and the desktop app open, and, on a server without a
 site in front, sign-in, the account pages and the review, staff and
 organization pages. The edge sends it to the API like `/api/`. The handle
@@ -797,7 +786,7 @@ thirty seconds under load, and a slow write is better than a refused one.
 
 ### Rate limits at the edge
 
-agentryd applies the §19 per-IP limits to the API; the edge adds `limit_req`
+agentryd applies per-IP limits to the API; the edge adds `limit_req`
 zones (keyed on the resolved visitor address) for the routes that do work for
 strangers: the sign-in page `/ui/login`, `/api/v1/auth/*`, and the directory's
 flow pages and executor API (`/if/flow` and `/api/v3/flows/executor`, 30/min,
@@ -819,7 +808,7 @@ rate-limiting rule so the edge is the second line, not the first.
 
 ### Running behind a proxy
 
-Rate limiting (§19) buckets anonymous traffic per client IP. Behind a load
+Rate limiting buckets anonymous traffic per client IP. Behind a load
 balancer, every request appears to come from the balancer unless you say
 otherwise:
 
@@ -838,7 +827,7 @@ hops wrote the tail of `X-Forwarded-For`, so the server knows which entry is
 the client's. `trustedProxyCIDRs` says **who** may speak for a client at all:
 when it is set, the header is read only on a request whose TCP peer is inside
 one of the ranges, and every other request resolves to its peer, whatever the
-header says (agentry#429). Set both. With the hop count alone, the server
+header says. Set both. With the hop count alone, the server
 reads the last N entries from whoever connects, so a client that reaches
 agentryd's port directly with N = 1 names its own address and picks its own
 rate-limit bucket; the only defence is keeping that port off every network a
@@ -888,7 +877,7 @@ Point `AGENTRY_EDGE_CERT_DIR` at a directory holding `edge.crt` and
 `edge.key`; on a Tailscale host
 
 ```bash
-sudo tailscale cert --cert-file edge.crt --key-file edge.key <host>.<tailnet>.ts.net
+sudo tailscale cert --cert-file edge.crt --key-file edge.key <host>.<tailnet-name>.ts.net
 ```
 
 issues a certificate browsers trust, and a self-signed pair works for a
@@ -933,12 +922,11 @@ does not appear in `ps` or `docker inspect`'s command — and the container
 runs read-only with every capability dropped. The tunnel is remotely
 managed: configure the public hostnames in the dashboard, each with origin
 `https://edge:443` and the **origin server name** set to that hostname so
-TLS to the edge verifies (see the beta readiness notes for the full list of
-hostnames and the caching, WAF, and Access settings that matter). Running
+TLS to the edge verifies. Running
 `docker run … --token …` by hand holds the terminal because cloudflared runs
 in the foreground; the service is the way to run it.
 
-### The directory service (DEV-057)
+### The directory service
 
 The compose stack ships Authentik as the account directory: passwords,
 MFA, recovery, and sign-up live there, and the registry consumes it as
@@ -964,7 +952,7 @@ API creates gets none and refuses every sign-in with `invalid_request`,
 and one migrated from an older release gets all of them, including
 `password` and `client_credentials`, which hand out tokens to anyone
 holding the client secret, with no browser flow. Re-running the script
-after such an upgrade narrows the provider (agentry#494).
+after such an upgrade narrows the provider.
 
 ```bash
 AGENTRY_AUTH_EXTERNAL_ONLY=true
@@ -978,7 +966,7 @@ The sign-out URL is the provider's `end-session/` endpoint wrapped in
 authentik's cancel view. authentik answers an empty page, and does not sign
 out, when the directory session still holds a flow plan (a flow the person
 walked away from, for one); the cancel view drops that plan first and then
-continues to `next` (agentry#441). The bootstrap script prints the value.
+continues to `next`. The bootstrap script prints the value.
 
 The bootstrap script attaches the `openid`, `profile`, and `email`
 scope mappings to the provider — without them authentik issues an ID
@@ -987,16 +975,16 @@ account (`<handle>@authentik.social.local`) instead of linking to the
 existing one. For `email` it attaches the account-flows blueprint's
 `agentry-verified-email` mapping instead of authentik's managed one,
 which hard-codes `email_verified: false` (2026.8); the registry's
-auto-link rule (T-12) only links an IdP identity to an existing account
+auto-link rule only links an IdP identity to an existing account
 when *both* sides' addresses are verified. The blueprint's mapping
-reports confirmation (agentry#861, narrowed by agentry#869): `false` for a
+reports confirmation: `false` for a
 self-enrolled account until the registry's activation link confirms it
 (marked by `agentry_email_verified: false`), `true` once it has,
 and `true` for an account without the attribute — one created by an
-operator, provisioned from an upstream directory, or enrolled before
-agentry#861. Since agentry#869 the false marker makes the mapping read the
+operator, provisioned from an upstream directory, or enrolled before the
+activation link existed. While the false marker is set, the mapping reads the
 registry for the linked subject and same address; activation never changes that marker.
-Before agentry#861 the script made its own mapping that
+An earlier version of the script made its own mapping that
 asserted `true` for everyone; re-running the script moves the provider
 onto the blueprint's (the old mapping is left unused).
 
@@ -1041,7 +1029,7 @@ The rule rests on facts nobody sets about themselves:
 - **Membership** is granted by the organization's admins.
 - **The organization itself** can be founded only by platform staff.
 - **A stored address** changes only at erasure (SCIM refuses a change, and
-  the directory denies self-service changes, DEV-134).
+  the directory denies self-service changes).
 
 An address counts as verified when the registry's mailed link was
 followed, the directory or a social provider asserted it at sign-in, an
@@ -1054,7 +1042,7 @@ A registry-side service account needs an address at the domain and a
 membership like anyone else. With neither key set, nothing syncs and
 existing flags stay as they are.
 
-**The directory's mirror of platform staff** (agentry#598). An application
+**The directory's mirror of platform staff.** An application
 that signs in through the directory and should admit staff alone, such as
 the log stack's OpenSearch Dashboards, can read only what the directory's
 tokens carry. Set `AGENTRY_IDP_STAFF_MIRROR_GROUP` (the chart's
@@ -1102,12 +1090,12 @@ after their first such sign-in.
   file.
 
 It prints the provider's OpenID configuration URL, which the log stack's
-Dashboards takes (agentry-logging#49).
+Dashboards takes.
 
 **Moving a deployment onto the rule, in this order.**
 
 1. Make sure the staff organization exists, founded by an account that is
-   staff under the old rules.
+   staff before the rule is set.
 2. Give every account meant to stay staff (operators, service accounts) a
    verified address at the domain and an active membership.
 3. Set both keys and restart.
@@ -1117,8 +1105,8 @@ loses staff, audited. If nobody is a member, nobody is staff, and only an
 operator writing to the database can seed the first one again.
 
 The directory group (`AGENTRY_IDP_STAFF_GROUP`) and the domain-alone rule
-(`AGENTRY_IDP_STAFF_DOMAIN`) are retired: they grant nothing, and the server
-logs a warning at start-up while either is set.
+(`AGENTRY_IDP_STAFF_DOMAIN`) grant nothing, and the server logs a warning at
+start-up while either is set.
 
 **Provisioning org members from Authentik (SCIM).** The registry's SCIM
 endpoint is per organisation and authenticated by a token an org admin
@@ -1141,8 +1129,7 @@ The Helm chart carries the same knobs (`config.auth.externalOnly`,
 `config.idp.logoutUrl`, `secret.authentikClientSecret`,
 `secret.idpAdminToken`); the hosted service's Terraform (kept with the
 site) carries them as `idp_client_id`, `idp_issuer` and `idp_logout_url`,
-with the client secret in Secrets Manager; its `idp_staff_group` is retired
-with the group (agentry#556).
+with the client secret in Secrets Manager.
 
 **Account flows.** `deploy/compose/authentik/blueprints/agentry-account-flows.yaml`
 is mounted into authentik as a blueprint and applied automatically on
@@ -1153,7 +1140,7 @@ page. The flow page's template (below, with the remembered browser) also puts
 and both sign-up links carry what was typed into the sign-in's field: a name
 opens the form with the username filled in, an address with the email
 (`/if/flow/agentry-enrollment/?username=…` or `?email=…`, the sign-in's own
-query kept; agentry#860). The link shows whether or not the name exists, so
+query kept). The link shows whether or not the name exists, so
 it reveals nothing about which accounts do. A filled-in value is validated
 like anything typed:
 
@@ -1161,15 +1148,15 @@ like anything typed:
   email, password), then the deployment's Terms of Service where it has
   them (below), then the account written **active but unactivated**
   (`agentry_email_verified: false`), then authenticator setup and
-  sign-in, with no mail to wait for (agentry#861). That is **registry
+  sign-in, with no mail to wait for. That is **registry
   activation**, on where `AGENTRY_DIRECTORY_REGISTRY_ACTIVATION` is set to
   any non-empty value in the directory's environment (server and worker;
   the compose file defaults it to `true`). Set it only where the
   registry's provider uses the blueprint's `agentry-verified-email`
   mapping (the bootstrap script attaches it): a mapping that asserts every
   address verified would vouch for unconfirmed accounts. Unset, sign-up
-  is what it was before: the account written inactive and the
-  directory's own confirmation mail activating it. With it on, the registry mails the
+  writes the account inactive and the directory's own confirmation mail
+  activates it. With it on, the registry mails the
   activation link at that first sign-in, through its own SMTP settings
   (`AGENTRY_SMTP_*`): with none set the link is only logged, and nobody
   can activate. Until the link is followed the account is **read-only**
@@ -1187,7 +1174,7 @@ like anything typed:
   (the remembered-browser check's URL and secret). It requires the exact linked
   authentik subject and the same address, and withholds verification on a
   refused, unreachable or malformed answer. The false attribute stays
-  unchanged; activation needs no directory write or `change_user` (agentry#869).
+  unchanged; activation needs no directory write or `change_user`.
   The read-only rule applies where the directory owns credentials
   (`AGENTRY_AUTH_EXTERNAL_ONLY=true`); a native deployment keeps its
   narrower gates on an unverified address (no publishing, QuickAgents or
@@ -1195,13 +1182,13 @@ like anything typed:
   becomes the registry handle at the first sign-in, so the form refuses
   one that is not a valid handle (letters, digits and hyphens, at most
   39) or that the registry reserves for its own paths and names
-  (agentry#590). Any case is accepted and the username is written in
+  Any case is accepted and the username is written in
   lower case, so `ChrisY` becomes `chrisy`; a blank display name keeps
   the case it was typed in, and a username that differs from an existing
-  one only by case is refused as taken (agentry#856). Users created in the directory some other way are not
+  one only by case is refused as taken. Users created in the directory some other way are not
   checked; the registry maps such a username to a valid handle and
-  records the one asked for (DEV-142).
-- **The promo code field** (agentry#759) — an optional field at the end of
+  records the one asked for.
+- **The promo code field** — an optional field at the end of
   the sign-up form, shown only when `AGENTRY_DIRECTORY_PROMO_FIELD` is set
   to any non-empty value in the directory's environment (the worker reads
   it when it applies the blueprint; compose passes it through, empty by
@@ -1216,10 +1203,10 @@ like anything typed:
   as the `agentry_promo_code` claim, and the registry passes it to its
   extensions as `promoCode` in `user.registered`, upper-cased, only on the
   sign-in that creates the account and only from the directory's token.
-- **The display name** (agentry#788) is optional. Left blank, the account
+- **The display name** is optional. Left blank, the account
   is written with its username as its name, which is what the registry
   shows until the person changes it.
-- **The Terms of Service step** (agentry#788) — shown only when
+- **The Terms of Service step** — shown only when
   `AGENTRY_DIRECTORY_TERMS_FILE` names a file in the directory server's
   environment (compose passes it through, empty by default). The file is an
   HTML fragment with your terms, its root element carrying
@@ -1244,17 +1231,17 @@ like anything typed:
   so an unknown address gets the same answer a real one does and the form
   cannot be used to discover who has an account. Recovery deliberately
   does **not** activate an inactive account: an operator-deactivated user
-  must not be able to reactivate themselves by requesting a reset. (Since
-  agentry#861 a self-enrolled account is active from the start, and
-  confirming its address is the registry's link, not this flow.)
+  must not be able to reactivate themselves by requesting a reset. (With
+  registry activation on, a self-enrolled account is active from the start,
+  and confirming its address is the registry's link, not this flow.)
 - **The two mails** (the sign-up confirmation and the reset link) are the
   core's own templates in `deploy/compose/authentik/templates/agentry/`
-  (since agentry#861 the confirmation is sent only by an enrolment that
-  still binds the stage, such as the site's untrusted social providers;
+  (with registry activation on, the confirmation is sent only by an
+  enrolment that still binds the stage, such as the site's untrusted social providers;
   self-enrolment's activation mail is the registry's),
   mounted read-only at `/templates`, not authentik's stock ones: they say
   Agentry and use the core's palette. Their header shows the Agentry mark
-  inline (agentry#720): the HTML names `cid:logo`, and authentik attaches
+  inline: the HTML names `cid:logo`, and authentik attaches
   the PNG at its logo path, `/web/dist/assets/icons/icon_left_brand.png`,
   where the compose file mounts the core's
   `deploy/compose/authentik/brand/mail-logo.png` in the server and the
@@ -1269,10 +1256,10 @@ like anything typed:
   authentik-server authentik-worker`).
   `scripts/acceptance/directory-email.sh` renders the mails in the pinned
   image and checks that the attached logo is the core's.
-  Before agentry#518 `/templates` was an empty named volume,
-  `authentik-templates`; a stack upgraded from then keeps that volume
-  unused (`docker volume rm <project>_authentik-templates` removes it),
-  and a template an operator had put in it is no longer mounted.
+  A stack created by an earlier compose file keeps an unused named volume,
+  `authentik-templates` (`docker volume rm <project>_authentik-templates`
+  removes it), and a template an operator had put in it is no longer
+  mounted.
 - **No authentik device cookie.** authentik's User Login stage writes its
   own "known device" cookie, `authentik_device`, for 30 days by default. It
   is a signed token the directory keeps no record of: it cannot be listed,
@@ -1281,8 +1268,8 @@ like anything typed:
   installation's identifier and the stage. The blueprint sets
   `remember_device: seconds=0` on every login stage, the sign-in's,
   sign-up's and recovery's and authentik's two source stages, so the
-  directory never writes it
-  (agentry#460). A cookie written before that change is not revoked, since
+  directory never writes it. A cookie written before the blueprint set this
+  is not revoked, since
   nothing can revoke it: it expires within its 30 days, and nothing in
   Agentry reads it. authentik also uses the cookie to refresh a person's
   other open sign-in tabs once they have signed in, which no longer
@@ -1325,12 +1312,12 @@ production values:
   mail stages record with the client's address for a flow's first mail and
   for each resend from the "check your mail" page. The budget records its own because authentik 2026.8 sends mail
   from its worker, and that `email_sent` event carries no address
-  (agentry#830). Ordinary use costs 2
+  Ordinary use costs 2
   (an account and its confirmation mail) to sign up and 1 to reset a
   password, so the budget is generous for a shared office address while
   ending bulk account creation. Where registry activation is on, the
-  confirmation mail is the registry's, held to its own per-account limit
-  (DEV-197), and a sign-up costs 1 here. The check is made when a flow
+  confirmation mail is the registry's, held to its own per-account limit,
+  and a sign-up costs 1 here. The check is made when a flow
   starts, so a flow already open finishes, and its resends are held by the
   mail stage's own per-account limit rather than refused by this one. Recovery also keeps authentik's
   own per-user control on the email stage (`recovery_max_attempts`,
@@ -1348,7 +1335,7 @@ production values:
 compose passes it through, and the blueprint formats it into the policy at
 apply time. Enrollment ends by offering authenticator (TOTP) setup: the
 person sets one up there, or skips it and adds one later from their
-settings (agentry#894). An account without an authenticator signs in with
+settings. An account without an authenticator signs in with
 its password alone and has no second factor for the public-publish gate
 until it adds one. Recovery verifies the authenticator before the password
 may change, and a user who has none is sent through the same setup stage. Lost-authenticator recovery is an
@@ -1364,7 +1351,7 @@ result the CLI and tests consume.
 
 With `AGENTRY_AUTH_EXTERNAL_ONLY=true` the native register, password
 login and TOTP endpoints answer 410 Gone (email-verify stays open: it is
-the activation link's target, agentry#861), and the web
+the activation link's target), and the web
 login page offers the directory service only. Turning the flag off (the
 default) restores the native flows — nothing was removed.
 
@@ -1390,7 +1377,7 @@ account has signed in or written a password under this blueprint the field
 is absent, and so is either field when the directory does not answer.
 
 **Account erasure spans both systems.** `POST /user/delete` pseudonymizes the
-registry account (§12.7); the sign-in account — email, display name,
+registry account; the sign-in account — email, display name,
 password hash — lives in authentik. Set `AGENTRY_IDP_ADMIN_URL` (the API
 origin as the server reaches it: `http://authentik-server:9000` on the
 compose stack) and `AGENTRY_IDP_ADMIN_TOKEN` (an authentik API token with
@@ -1405,8 +1392,8 @@ identity that has not signed in since, the account at the registry's
 address carrying that `uid`; and for an account that never signed in
 through the directory, the account at its address only when exactly one
 account holds it (authentik does not keep addresses unique). The settings
-page's authenticators and sign-in facts read the account by the same rule
-(agentry#727). Each attempt is recorded as its own `user.directory_erase` audit
+page's authenticators and sign-in facts read the account by the same rule.
+Each attempt is recorded as its own `user.directory_erase` audit
 event (`deleted`, `not-found`, `unresolved`, `failed`, `not-configured`, or
 `abandoned`, with `directoryLookup` naming the rule each linked account was
 found by),
@@ -1415,7 +1402,7 @@ outcome in the `X-Agentry-Directory-Erasure` header. A failure does not undo the
 erasure: the request answers `pending` and a `gdpr.directory_erase` job on
 the worker retries with backoff (fourteen attempts, about four and a half
 hours; the queued address is sealed with the sealing key) until the
-directory deletes the account or finds none (agentry#499). When the
+directory deletes the account or finds none. When the
 retries run out the last attempt is audited `abandoned` and the server
 logs `failopen.directory_erasure` at ERROR and counts
 `FailOpenEvents{path="directory_erasure"}`: alert on either, then delete the
@@ -1429,7 +1416,7 @@ have to keep manually.
 
 **Two-factor authentication and public publishing.** Outside dev mode the
 registry normally refuses to publish to a public namespace until the
-account has a TOTP factor (§12.1, §19). With the directory service in
+account has a TOTP factor. With the directory service in
 charge no account can enrol one — the native TOTP endpoints are the ones
 answering 410 — so that gate is **off under `externalOnly`** and the
 requirement is yours to enforce in authentik. Bind an MFA policy (or an
@@ -1499,19 +1486,19 @@ cannot be answered — an outage, a revoked record, an expired one, somebody
 else's — demands the code rather than skipping it.
 
 A remembered browser is a second credential class, not a longer session:
-§12.4's 24-hour cap still binds every session, and a `trusted_devices` record
+the 24-hour session cap still binds every session, and a `trusted_devices` record
 lengthens none of them.
 
 **Withdrawing it.** `GET /api/v1/user/trusted-devices` answers how many live
 remembered browsers the caller's account has, and `DELETE` on the same path
 revokes all of them, this browser's included, and clears this browser's
-cookie (agentry#672). Both are for a session: a personal access token reads 0
+cookie. Both are for a session: a personal access token reads 0
 and is refused the clear. There is no list and no per-browser removal; the
 hosted site offers the clear as one "Clear remembered devices" button. Account
 erasure deletes the account's records in the erasure transaction
 (`handlers_gdpr.go`), and SCIM deactivation revokes them. Every lookup ignores a
 record past its expiry, and an hourly sweep on the worker role
-(`trusted_device.sweep`, agentry#464) deletes those rows, with the address and
+(`trusted_device.sweep`) deletes those rows, with the address and
 user agent they hold. A revoked record is kept until its own expiry, inert,
 and swept then. Signing out, and "sign out everywhere else", leave remembered
 browsers alone: surviving them is the point, and the clear above is the
@@ -1524,7 +1511,7 @@ asks for one.
 **Remembering a browser on the directory's sign-in.** Under
 `AGENTRY_AUTH_EXTERNAL_ONLY=true` the native login answers 410 and the
 directory asks for the second factor, so the choice and the skip both happen
-there (agentry#670, DEV-163). The registry keeps the same record, with the same
+there. The registry keeps the same record, with the same
 lifetime, ceiling and fail-closed lookup:
 
 - **Minting.** The registry asks the directory for one more scope, `agentry`.
@@ -1566,9 +1553,9 @@ lifetime, ceiling and fail-closed lookup:
   only the directory: if a staging or development deployment runs under the
   production registry's name, production's tokens reach its directory too.
   Keep such deployments on a name of their own, or accept that they receive
-  those tokens (the hosted deployment accepts it, DEV-163).
+  those tokens (the hosted deployment accepts it).
 
-The directory's half ships with the compose stack (agentry#671):
+The directory's half ships with the compose stack:
 
 - **The checkbox.** `deploy/compose/authentik/templates/if/flow.html` is
   authentik's own flow page, byte for byte, plus one marked block that draws
@@ -1586,7 +1573,7 @@ The directory's half ships with the compose stack (agentry#671):
   `agentry-remember-device` scope mapping answers the `agentry` scope with
   `agentry_remember_device`, and with `agentry_directory_id`, the signed-in
   account's directory id, which the registry records on the identity and
-  reads the account by (agentry#727). `scripts/dev/authentik-bootstrap.sh` attaches the
+  reads the account by. `scripts/dev/authentik-bootstrap.sh` attaches the
   mapping to the registry's provider; re-run it once after upgrading.
 - **The skip.** The blueprint's `agentry-remembered-browser-skip` policy, on
   the sign-in's MFA stage, calls the check before the code page. It reads
@@ -1614,9 +1601,9 @@ authentik's simplified flow page for old browsers, which asks for the code
 as before. The directory's own remember-this-device behaviour is a
 different thing and is not used: it keeps no server-side record of the
 browsers it remembers, so they could be neither cleared nor individually
-revoked (agentry#460).
+revoked.
 
-**A Content Security Policy for public directory flows** (agentry#985).
+**A Content Security Policy for public directory flows.**
 The templates support a policy that rejects arbitrary inline scripts and
 event handlers. Generate it from the same core checkout as the templates:
 
@@ -1637,7 +1624,7 @@ the upstream Lit components and their shadow trees; it grants no script
 permission. Same-origin frames support upstream flow embedding.
 
 Interactive Turnstile renders directly in its flow card through a static
-adapter (agentry#1038). It uses the vendor SDK and the existing stage
+adapter. It uses the vendor SDK and the existing stage
 callback and server verifier, without a blob document or inline renderer.
 The adapter follows the stage's theme, language, retry and teardown
 lifecycle. The upstream static theme bootstrap is included verbatim so its
@@ -1659,7 +1646,7 @@ The directory's flows are unbranded here and call the deployment
 `AGENTRY_BRAND_NAME`; a site that fronts the registry applies its own
 brand (title, wordmark, favicon, flow background, custom CSS) through the
 directory's API — the hosted site's repository carries that script and
-stylesheet (DEV-091).
+stylesheet.
 
 **Upgrading the directory service.** Authentik refuses to skip a release
 line: every `YYYY.M` line between the running version and the target
@@ -1682,7 +1669,7 @@ the edge sends `auth.<site>/` and the directory's user panel
 where a person changes their password, adds an authenticator app or
 security key, or removes one — each is one short step in the directory
 that returns to Settings. For that the directory needs to know the site.
-Two variables tell it where its flows return (DEV-091): sign-out lands on
+Two variables tell it where its flows return: sign-out lands on
 `AGENTRY_PUBLIC_WEB_URL` and a password change or an authenticator
 enrolment on `AGENTRY_ACCOUNT_URL`. Both default to the server's own pages
 (`<AGENTRY_PUBLIC_URL>/ui/` and `…/ui/account/directory`); a site in front
@@ -1702,9 +1689,9 @@ password-change and authenticator flows return to `AGENTRY_ACCOUNT_URL`
 through the flow plan's `redirect`, set by the blueprint's
 `agentry-return-to-settings` policy, not through a redirect stage: a
 redirect stage leaves the flow's plan parked in the session, and the next
-sign-out then answers an empty page (agentry#441). The blueprint also
+sign-out then answers an empty page. The blueprint also
 unsets the brand's user-settings flow. Re-run the bootstrap script after
-upgrading a deployment that predates this (agentry#164).
+upgrading an older deployment.
 `scripts/acceptance/directory-signout.py` proves sign-out against a live
 directory — after a fresh sign-in, after an abandoned authenticator flow
 and after a completed one — with a throwaway user it deletes on the way
@@ -1718,8 +1705,8 @@ they typed. authentik's own `default-user-settings-flow` has an email field
 and stays reachable by URL even with the settings panel unset; the only
 thing refusing a change there is the system setting "Allow users to change
 email" (off by default), which blueprints cannot pin. The account-flows
-blueprint therefore binds a policy that always denies to that flow
-(agentry#490): nobody can run it, whatever the setting says. Display name
+blueprint therefore binds a policy that always denies to that flow:
+nobody can run it, whatever the setting says. Display name
 and handle are the registry's; an operator who must correct an address
 does it in the directory's admin console, and should confirm the new
 address belongs to the person first.
@@ -1761,7 +1748,7 @@ rest; a `SHA256SUMS` beside it, written by the Mac, is checked before the
 copy. It writes `SHA256SUMS` and `manifest.json`; the page renders from
 the manifest, shows every target on the release matrix, and marks the ones
 without an artifact as not yet available instead of linking to nothing.
-The Windows artifacts are Authenticode-signed since desktop 0.5.0 (D-032):
+The Windows artifacts are Authenticode-signed (desktop 0.5.0 or later):
 the import re-verifies each signature with `osslsigncode` against the name
 the bundle's `BUILD-INFO` states before the manifest marks it `signed`, and
 refuses a mismatch. The macOS bundle is ad-hoc signed and the Linux packages
@@ -1777,8 +1764,8 @@ when one is in front) once so the mount exists. Versions come from
 The platform baseline lives in the `policies` table (`org_id IS NULL`) and is
 readable at `/api/v1/platform/policy`. With no row, the defaults are the
 ruleset's: findings up to `medium` auto-publish with the findings shown,
-`high` goes to review, `critical` is rejected, wildcard network egress (and,
-since agentry#1134, a browser whose `scope` is `public`; `wildcardEgress`
+`high` goes to review, `critical` is rejected, wildcard network egress (and
+a browser whose `scope` is `public`; `wildcardEgress`
 decides both) goes to review, and content a stage could not read goes to review whatever the
 threshold. The threshold is released with the rule bundle's version (`medium`
 since ruleset 0.3.0, `low` before it), so upgrading the server can move it;
@@ -1882,8 +1869,8 @@ Env: `AGENTRY_ORGS_DECOMMISSION_HOLD`, `AGENTRY_ORGS_PENDING_DIGEST_EVERY`.
   and never publish. That is the fail-closed design working, but it looks like
   a hang. Check the worker first when publishes stall.
 - **A new ruleset rescans the catalogue and redoes the review queue.**
-  Registering a ruleset semver for the first time enqueues the §8.7 sweep
-  automatically; the rescan sweep quarantines published versions that newly
+  Registering a ruleset semver for the first time enqueues the rescan
+  sweep automatically; the rescan sweep quarantines published versions that newly
   trip a high or critical finding no person has decided on. Beside it,
   `scan.redo_review_queue` judges every version in `needs_review` with a
   pending item again under the new ruleset and publishes the ones the gate
@@ -1921,7 +1908,7 @@ same authorization, hooks and quotas as HTTPS.
 - **Credential:** a user's SSH public key, registered on the settings page (or
   `POST /user/ssh-keys`). A key is worth repository read/write and the release tag the
   user's role allows; it never reaches the API. There is no anonymous mode over SSH. Adding
-  a key reads the entitlements switch `SSHKeys` (agentry#820): the core always includes it;
+  a key reads the entitlements switch `SSHKeys`: the core always includes it;
   a closed build's resolver may refuse it by subscription (`403 feature-not-included`), and a
   key already held keeps working.
 - **Host key:** generated under the git data directory on first start
@@ -1992,7 +1979,7 @@ entirely configuration:
   and its settings page, and applies its own brand object to the directory
   through the directory's API (the flows stay the core's blueprint).
   `AGENTRY_IDP_LOGOUT_URL` is the provider's end-session endpoint behind
-  authentik's cancel view (agentry#441).
+  authentik's cancel view.
 - **The edge** — a site replaces `edge/nginx.conf` with one that sends
   `/api/`, git, `/ui/` and `/downloads/` to the server and everything else to
   the site, and adds rate-limit zones for its own forms.
