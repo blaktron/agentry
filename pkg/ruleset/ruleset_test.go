@@ -12,25 +12,26 @@ import "testing"
 // (README.md). Compute a digest with `go run
 // ./scripts/dev/ruleset-digest`.
 var releasedDigests = map[string]string{
-	"0.2.0": "9395e31404aefa5256103a3977d86ec482927a6717235a4a487952a65b9b4ed5",
-	"0.2.1": "24def4274e46f12a7dddd6b10d018b166ce6a0414cc62c28e05f1718ece3c030",
-	"0.2.2": "ba992698f2aac91d6a4ebdc570e1b26c5e73e62888a78dbce74882dde9f486d8",
-	"0.2.3": "ac5f7cb4035e8c31e576ed311b6b33ffc4397f3cb461380cd3befdb59d63ccbd",
-	"0.3.0": "727f7cf4ed91e09e127a1826cdd80c27da89c1431657fa4af01058434416d320",
-	"0.3.1": "781d4e9788989bff4a2c5507a988c84bc9737898fb5254896d9caef8900b0c7a",
-	"0.3.2": "9f626807737fec785dd4bf1d170fcc5abc6fee16e7f35b76422bee8a8b92f275",
-	"0.3.3": "70613140ee82c520a8d1bfe294896a2c064b74f4237324224808afe0538ccff8",
-	"0.3.4": "fe314e7919459a75dad54ec877c178f8257ec7dffbf5927d0e14eb6a7275d581",
-	"0.4.0": "edb8b362b370edf7ff55375795e535155033138b7164fdb76c07a3811b5b917a",
-	"0.4.1": "fb63d649b09993b2d8c414909929cad58d1628e1b640f73f75824ec9ac539e5f",
-	"0.4.2": "24263e3ac50b399bb59ad33bafeae902f9ceee317211e0fb1c48e37777fcc7ac",
-	"0.4.3": "ef91b334344c20bf9acf7dd7877d840483d1c9b67172b6b31b24310195b898de",
-	"0.4.4": "ab9db32f2bf901b82e7fd2442851d4da24a98effcc146456ae34321e6b8cbb1e",
-	"0.4.5": "95ecf2cad3f39fa00bb8741d9111d350e6b3935e5607af48010fc02bfc7464d3",
-	"0.4.6": "1773b75db22525d0f47f3b56b7718be9e2d6195e2da343fc3376c81075b07c28",
-	"0.4.7": "40def2e2921c99cd8b03648162f537dc77fb7a7e4cbf27f9963f9869095bc532",
-	"0.4.8": "dab795b65e5a03de4afcdd43e7eec66347728d4d6d7b95be3a407055d821bbad",
-	"0.4.9": "90c02e8c272b3f772eabc6d2bae732de7ad5089a45a3c1f7691abacf4deece5b",
+	"0.2.0":  "9395e31404aefa5256103a3977d86ec482927a6717235a4a487952a65b9b4ed5",
+	"0.2.1":  "24def4274e46f12a7dddd6b10d018b166ce6a0414cc62c28e05f1718ece3c030",
+	"0.2.2":  "ba992698f2aac91d6a4ebdc570e1b26c5e73e62888a78dbce74882dde9f486d8",
+	"0.2.3":  "ac5f7cb4035e8c31e576ed311b6b33ffc4397f3cb461380cd3befdb59d63ccbd",
+	"0.3.0":  "727f7cf4ed91e09e127a1826cdd80c27da89c1431657fa4af01058434416d320",
+	"0.3.1":  "781d4e9788989bff4a2c5507a988c84bc9737898fb5254896d9caef8900b0c7a",
+	"0.3.2":  "9f626807737fec785dd4bf1d170fcc5abc6fee16e7f35b76422bee8a8b92f275",
+	"0.3.3":  "70613140ee82c520a8d1bfe294896a2c064b74f4237324224808afe0538ccff8",
+	"0.3.4":  "fe314e7919459a75dad54ec877c178f8257ec7dffbf5927d0e14eb6a7275d581",
+	"0.4.0":  "edb8b362b370edf7ff55375795e535155033138b7164fdb76c07a3811b5b917a",
+	"0.4.1":  "fb63d649b09993b2d8c414909929cad58d1628e1b640f73f75824ec9ac539e5f",
+	"0.4.2":  "24263e3ac50b399bb59ad33bafeae902f9ceee317211e0fb1c48e37777fcc7ac",
+	"0.4.3":  "ef91b334344c20bf9acf7dd7877d840483d1c9b67172b6b31b24310195b898de",
+	"0.4.4":  "ab9db32f2bf901b82e7fd2442851d4da24a98effcc146456ae34321e6b8cbb1e",
+	"0.4.5":  "95ecf2cad3f39fa00bb8741d9111d350e6b3935e5607af48010fc02bfc7464d3",
+	"0.4.6":  "1773b75db22525d0f47f3b56b7718be9e2d6195e2da343fc3376c81075b07c28",
+	"0.4.7":  "40def2e2921c99cd8b03648162f537dc77fb7a7e4cbf27f9963f9869095bc532",
+	"0.4.8":  "dab795b65e5a03de4afcdd43e7eec66347728d4d6d7b95be3a407055d821bbad",
+	"0.4.9":  "90c02e8c272b3f772eabc6d2bae732de7ad5089a45a3c1f7691abacf4deece5b",
+	"0.4.10": "b3e518ca141c72bb5d90d71b941e0c2be0468439896af869fc3f4fae75fa88d0",
 }
 
 func TestEmbeddedBundleDigestIsPinnedForItsVersion(t *testing.T) {
@@ -69,7 +70,7 @@ func TestEveryReleasedVersionNamesItsThreshold(t *testing.T) {
 // The thresholds of released versions are fixed: 0.3.0 is the first
 // version that publishes on medium.
 func TestReleasedThresholdsAreHistory(t *testing.T) {
-	for v, want := range map[string]string{"0.2.3": "low", "0.3.0": "medium", "0.3.1": "medium", "0.3.2": "medium", "0.3.3": "medium", "0.3.4": "medium", "0.4.0": "medium", "0.4.1": "medium", "0.4.2": "medium", "0.4.3": "medium", "0.4.4": "medium", "0.4.5": "medium", "0.4.6": "medium", "0.4.7": "medium", "0.4.8": "medium", "0.4.9": "medium", "0.0.0-unknown": "low"} {
+	for v, want := range map[string]string{"0.2.3": "low", "0.3.0": "medium", "0.3.1": "medium", "0.3.2": "medium", "0.3.3": "medium", "0.3.4": "medium", "0.4.0": "medium", "0.4.1": "medium", "0.4.2": "medium", "0.4.3": "medium", "0.4.4": "medium", "0.4.5": "medium", "0.4.6": "medium", "0.4.7": "medium", "0.4.8": "medium", "0.4.9": "medium", "0.4.10": "medium", "0.0.0-unknown": "low"} {
 		if got := BaselineMaxAutoPublishSeverityFor(v); got != want {
 			t.Errorf("BaselineMaxAutoPublishSeverityFor(%q) = %q, want %q", v, got, want)
 		}

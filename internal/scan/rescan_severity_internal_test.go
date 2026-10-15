@@ -6,7 +6,8 @@ import "testing"
 // rated high on probable evidence hold a submission but weigh medium when
 // a rescan decides whether to pull a published version. These are undeclared
 // env reads and S5 scores of 2 for injection, undeclared capability and
-// deceiving the user. Everything else weighs what it is.
+// deceiving the user, and S6's ungranted tools, which say a run lacks a
+// tool rather than that it does harm. Everything else weighs what it is.
 func TestRescanSeverityKeepsTheOldBarForTheReratedFindings(t *testing.T) {
 	cases := []struct {
 		name string
@@ -23,6 +24,7 @@ func TestRescanSeverityKeepsTheOldBarForTheReratedFindings(t *testing.T) {
 		{"a manipulated judge", Finding{Scanner: "S5/manipulated-judge", Severity: SevHigh}, SevHigh},
 		{"a pack's C1 at 3", Finding{Scanner: "SK/S5/C1_injection", Severity: SevHigh, Detail: map[string]any{"score": 3}}, SevHigh},
 		{"C6 at 3", Finding{Scanner: "S5/C6_destructive_actions", Severity: SevHigh, Detail: map[string]any{"score": 3}}, SevHigh},
+		{"S6's ungranted tools", Finding{Scanner: "S6/ungranted-tool", Severity: SevHigh}, SevMedium},
 		{"another S6 high", Finding{Scanner: "S6/undeclared-exec", Severity: SevHigh}, SevHigh},
 		{"a critical", Finding{Scanner: "S1/binary-executable", Severity: SevCritical}, SevCritical},
 	}

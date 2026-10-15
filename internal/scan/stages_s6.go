@@ -28,6 +28,15 @@ const scannerUndeclaredEnv = "S6/undeclared-env"
 // skipped in an informational finding, so the report never implies coverage
 // it did not have.
 //
+// It also reads the other direction, needed but not declared: the runner
+// tools the instruction calls for (browser_click, run_command, fetch,
+// host_run, fs_write, a declared server's tool) against the grants the
+// manifest declares (pkg/toolgrant). A run of a release that does not
+// declare the grant has no such tool, so the instruction describes a run
+// that cannot happen. Each grant missing is one high finding: the version
+// goes to a person, who can see the instruction and the manifest
+// disagree; it is never rejected.
+//
 // Not done here, and said so in the trust docs
 // (https://docs.secureagentry.net/trust/): data-flow analysis, evaluating
 // what a fetch returns, other languages.
@@ -160,7 +169,7 @@ func isCommentLineOf(class scriptClass, line string) bool {
 
 func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 	decl := s6DeclaredFromManifest(in.ManifestJSON)
-	var findings []Finding
+	findings := s6UngrantedTools(in)
 	var scanned []string
 	var skipped []map[string]any
 	undeclaredNet := map[string]s6Hit{} // host → first hit
@@ -282,7 +291,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 		}
 	}
 	if len(scripts) == 0 && len(skipped) == 0 {
-		return StageResult{Scanner: "S6"}
+		return StageResult{Scanner: "S6", Findings: findings}
 	}
 
 	// Findings in a fixed order: the report is hashed and signed.
@@ -356,7 +365,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 	findings = append(findings, Finding{
 		Scanner: "S6/coverage", Severity: SevInfo, Confidence: ConfHigh,
 		Title:  fmt.Sprintf("S6 read %d script(s); %d file(s) in languages it does not cover", len(scanned), len(skipped)),
-		Detail: map[string]any{"scannedScripts": scanned, "skippedFiles": skipped, "checks": []string{"network calls vs declared egress", "filesystem writes vs filesystem.write", "subprocesses vs exec", "environment reads vs secrets", "remote and obfuscated execution", "declared but unreferenced hosts"}},
+		Detail: map[string]any{"scannedScripts": scanned, "skippedFiles": skipped, "checks": []string{"network calls vs declared egress", "filesystem writes vs filesystem.write", "subprocesses vs exec", "environment reads vs secrets", "remote and obfuscated execution", "declared but unreferenced hosts", "runner tools the instruction calls for vs their grants"}},
 	})
 	return StageResult{Scanner: "S6", Findings: findings}
 }

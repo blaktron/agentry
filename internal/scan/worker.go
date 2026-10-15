@@ -535,9 +535,12 @@ func (p *Pipeline) sweepBatch() int32 {
 // quarantine it. AI
 // Review reads the same bytes differently from run to run, and a sweep
 // must not pull published versions for a probable undeclared
-// capability no earlier run had read.
+// capability no earlier run had read. S6's ungranted tools count at medium
+// too: they say a run of the version lacks a tool its instruction calls
+// for, which holds a submission for a person but is no reason to pull a
+// version people already run.
 func rescanSeverity(f Finding) Severity {
-	if f.Severity == SevHigh && reratedToHigh(f) {
+	if f.Severity == SevHigh && (reratedToHigh(f) || f.Scanner == scannerUngrantedTool) {
 		return SevMedium
 	}
 	return f.Severity
