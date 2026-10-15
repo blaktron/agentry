@@ -5008,7 +5008,8 @@
             "TestAListItemAfterANegationIsJudgedAlone",
             "TestBrowserEvaluateIsNotGivenToABrowserThatTypesSecrets",
             "TestADeclaredServerIsMatchedByItsName",
-            "TestTheTableNamesEachRunnerToolOnce"
+            "TestTheTableNamesEachRunnerToolOnce",
+            "TestALargeInstructionIsReadInLinearTime"
           ],
           "fuzz": [],
           "benchmarks": [],

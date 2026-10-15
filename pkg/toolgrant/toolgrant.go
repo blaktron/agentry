@@ -355,6 +355,7 @@ var families = map[string]Grant{"browser_*": GrantBrowser, "host_*": GrantTarget
 
 func mentions(text string) []mention {
 	var out []mention
+	line, counted := 1, 0
 	for _, loc := range token.FindAllStringIndex(text, -1) {
 		s, e := loc[0], loc[1]
 		if s > 0 && strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./-@:$", rune(text[s-1])) {
@@ -367,19 +368,49 @@ func mentions(text string) []mention {
 		if !ok {
 			continue
 		}
-		m.start, m.end = s, e
-		m.line = 1 + strings.Count(text[:s], "\n")
+		line += strings.Count(text[counted:s], "\n")
+		counted = s
+		m.start, m.end, m.line = s, e, line
 		out = append(out, m)
 	}
+	// Every pass below is linear in the text, however many mentions it
+	// holds: the paragraphs are found once, each is read for the word
+	// QuickAgent once, and a clause is read back a bounded distance.
+	paras := paragraphStarts(text)
+	about := make(map[int]bool, len(paras))
+	p := 0
 	for i := range out {
+		for p+1 < len(paras) && paras[p+1] <= out[i].start {
+			p++
+		}
 		if i > 0 && continuesList(text[out[i-1].end:out[i].start]) {
 			out[i].negated = out[i-1].negated
 			continue
 		}
-		out[i].negated = turnedAway(text[clauseStart(text, out[i].start):out[i].start]) ||
-			aboutAQuickAgent(paragraphAt(text, out[i].start))
+		q, ok := about[p]
+		if !ok {
+			end := len(text)
+			if p+1 < len(paras) {
+				end = paras[p+1]
+			}
+			q = quickAgent.MatchString(text[paras[p]:end])
+			about[p] = q
+		}
+		out[i].negated = q || turnedAway(text[clauseStart(text, out[i].start):out[i].start])
 	}
 	return out
+}
+
+// paragraphStarts are the offsets where the text's paragraphs and list
+// items begin: the start, and after each line break that ends a clause.
+func paragraphStarts(text string) []int {
+	starts := []int{0}
+	for j := 0; j < len(text); j++ {
+		if text[j] == '\n' && lineBreaksClause(text, j) {
+			starts = append(starts, j+1)
+		}
+	}
+	return starts
 }
 
 func isWordByte(b byte) bool {
@@ -434,9 +465,11 @@ func writtenAsCode(text string, s, e int) bool {
 
 // clauseStart is where the clause holding offset i begins: after the last
 // sentence end, semicolon, colon, comma, parenthesis, table cell, dash, or
-// line break that is not a wrap within a paragraph.
+// line break that is not a wrap within a paragraph, at most clauseLookback
+// bytes back.
 func clauseStart(text string, i int) int {
-	for j := i - 1; j >= 0; j-- {
+	stop := max(0, i-clauseLookback)
+	for j := i - 1; j >= stop; j-- {
 		switch text[j] {
 		case '\n':
 			if lineBreaksClause(text, j) {
@@ -453,8 +486,12 @@ func clauseStart(text string, i int) int {
 			return j + 1
 		}
 	}
-	return 0
+	return stop
 }
+
+// clauseLookback bounds how far back a clause is read: only its last
+// three words matter.
+const clauseLookback = 256
 
 // listItem opens a Markdown list item, heading or table row.
 var listItem = regexp.MustCompile(`^[ \t]*(?:[-*+][ \t]|\d+[.)][ \t]|#|\|)`)
@@ -491,31 +528,9 @@ func turnedAway(clause string) bool {
 	return turnAway.MatchString(strings.Join(fields, " "))
 }
 
-// paragraphAt is the paragraph or list item holding offset i: from the
-// line break before it that ends a clause to the next one.
-func paragraphAt(text string, i int) string {
-	start := 0
-	for j := i - 1; j >= 0; j-- {
-		if text[j] == '\n' && lineBreaksClause(text, j) {
-			start = j + 1
-			break
-		}
-	}
-	end := len(text)
-	for j := i; j < len(text); j++ {
-		if text[j] == '\n' && lineBreaksClause(text, j) {
-			end = j
-			break
-		}
-	}
-	return text[start:end]
-}
-
 // quickAgent is the product's word for a package, which an instruction
 // uses of another package and not of its own run.
 var quickAgent = regexp.MustCompile(`(?i)\bquickagents?\b|\bquickagent['’]s\b`)
-
-func aboutAQuickAgent(sentence string) bool { return quickAgent.MatchString(sentence) }
 
 // listJoin is the text between two tool names in one list: spaces,
 // backticks, commas, slashes, and "or", "and", "nor".
