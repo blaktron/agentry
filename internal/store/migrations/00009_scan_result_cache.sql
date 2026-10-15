@@ -1,10 +1,10 @@
 -- +goose Up
--- Rescan results cache (§8.7): "skip unchanged rule↔digest pairs via a
--- results cache keyed (digest, scanner, ruleset)". A ruleset bump re-runs the
--- deterministic scanners over every published version; archives are
--- content-addressed, so the same bytes under the same scanner and the same
--- rule bundle can only produce the same findings. Caching that triple turns a
--- sweep of an unchanged catalogue into a table lookup.
+-- Rescan results cache, keyed (digest, scanner, ruleset), so a rescan skips
+-- unchanged rule and digest pairs. A ruleset bump re-runs the deterministic
+-- scanners over every published version; archives are content-addressed, so
+-- the same bytes under the same scanner and the same rule bundle can only
+-- produce the same findings. Caching that triple turns a sweep of an
+-- unchanged catalogue into a table lookup.
 --
 -- The cached payload is the stage's findings as the pipeline models them
 -- (scan.Finding JSON), not findings rows: rows belong to a scan_run, and a

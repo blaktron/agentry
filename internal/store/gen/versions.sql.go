@@ -71,7 +71,7 @@ type CreateAgentVersionParams struct {
 	DraftRun        *uuid.UUID `json:"draft_run"`
 }
 
-// Agent versions + state machine (M3/WG-E).
+// Agent versions + state machine.
 func (q *Queries) CreateAgentVersion(ctx context.Context, arg CreateAgentVersionParams) (AgentVersion, error) {
 	row := q.db.QueryRow(ctx, createAgentVersion,
 		arg.ID,
@@ -231,9 +231,9 @@ WHERE agent_id = $1 AND status IN ('published','yanked')
 ORDER BY created_at DESC
 `
 
-// Resolution set (§9.4): published resolves by range, yanked resolves only by
-// exact pin. quarantined and blocked are excluded here by construction — a
-// version the platform has disabled must never come back from a resolve.
+// Resolution set: published resolves by range, yanked resolves only by exact
+// pin. quarantined and blocked are excluded here by construction — a version
+// the platform has disabled must never come back from a resolve.
 func (q *Queries) ListResolvableVersions(ctx context.Context, agentID uuid.UUID) ([]AgentVersion, error) {
 	rows, err := q.db.Query(ctx, listResolvableVersions, agentID)
 	if err != nil {
@@ -392,11 +392,10 @@ type MarkVersionDrafterRevisionParams struct {
 	DraftBaseline *string   `json:"draft_baseline"`
 }
 
-// The scan proved the version's claimed draft (plan drafter-revisions.md
-// §6; agentry#794): the source becomes 'drafter-revision', with the S9
-// baseline it was proved against. Only once, only while scanning, and only
-// for a cli-upload that claimed a draft (the immutability trigger holds
-// the same edge).
+// The scan proved the version's claimed draft: the source becomes
+// 'drafter-revision', with the S9 baseline it was proved against. Only once,
+// only while scanning, and only for a cli-upload that claimed a draft (the
+// immutability trigger holds the same edge).
 func (q *Queries) MarkVersionDrafterRevision(ctx context.Context, arg MarkVersionDrafterRevisionParams) (int64, error) {
 	result, err := q.db.Exec(ctx, markVersionDrafterRevision, arg.ID, arg.DraftBaseline)
 	if err != nil {
@@ -410,10 +409,10 @@ UPDATE agent_versions SET scan_status = 'skipped', updated_at = now()
 WHERE id = $1 AND status = 'submitted'
 `
 
-// The version was admitted without a scan (M21): recorded in the same
-// transaction as the submitted → published edge, which refuses a version
-// not so marked. Only a submitted version is marked; the caller requires
-// the one row, so a version that has moved on is never marked.
+// The version was admitted without a scan: recorded in the same transaction
+// as the submitted → published edge, which refuses a version not so marked.
+// Only a submitted version is marked; the caller requires the one row, so a
+// version that has moved on is never marked.
 func (q *Queries) MarkVersionScanSkipped(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, markVersionScanSkipped, id)
 	if err != nil {

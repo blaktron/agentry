@@ -1,10 +1,10 @@
--- Orgs, memberships, teams (M1/WG-B).
+-- Orgs, memberships, teams.
 
 -- name: CreateOrg :one
 -- activated_at is now() where nothing will activate the org later (no
--- admission extension), NULL where one will (agentry#360). domain is the
--- creator's verified email domain, or NULL for none (agentry#363); the
--- unique constraint refuses a second organization at one domain.
+-- admission extension), NULL where one will. domain is the creator's verified
+-- email domain, or NULL for none; the unique constraint refuses a second
+-- organization at one domain.
 INSERT INTO orgs (id, display_name, created_by, activated_at, domain)
 VALUES ($1, $2, $3, CASE WHEN sqlc.arg(activated)::boolean THEN now() ELSE NULL END, sqlc.narg(domain)::citext)
 RETURNING *;
@@ -19,10 +19,10 @@ WHERE o.created_by = $1 AND o.activated_at IS NULL
 LIMIT 1;
 
 -- name: LockKey :exec
--- A transaction-scoped advisory lock on a name, for the rules that span
--- more than one table or row and so have no constraint to hold them: a
--- domain across orgs.domain and the verified claims, a person's once-a-day
--- request for access (agentry#363). Released with the transaction.
+-- A transaction-scoped advisory lock on a name, for the rules that span more
+-- than one table or row and so have no constraint to hold them: a domain
+-- across orgs.domain and the verified claims, a person's once-a-day request
+-- for access. Released with the transaction.
 SELECT pg_advisory_xact_lock(hashtext(sqlc.arg(key)::text));
 
 -- name: LockOrg :exec
@@ -33,14 +33,14 @@ SELECT id FROM orgs WHERE id = $1 FOR UPDATE;
 -- name: LockUser :exec
 -- Serialises the membership doors of one PERSON across organizations: the
 -- one-organization-per-person count runs under this lock, after the
--- organization's (always in that order), so two organizations admitting
--- the same person at once cannot both count zero (agentry#412).
+-- organization's (always in that order), so two organizations admitting the
+-- same person at once cannot both count zero.
 SELECT id FROM users WHERE id = $1 FOR UPDATE;
 
 -- name: GetOrgByHandle :one
--- verified_domains is every domain the organization proved control of
--- over DNS (domain_claims.verified_at), oldest first: the T-12 auto-link
--- rule and the invitation door read it (agentry#363).
+-- verified_domains is every domain the organization proved control of over
+-- DNS (domain_claims.verified_at), oldest first: the SSO auto-link rule and
+-- the invitation door read it.
 SELECT o.*, h.handle,
   coalesce((SELECT array_agg(dc.domain::text ORDER BY dc.verified_at)
             FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL), '{}')::text[] AS verified_domains
@@ -53,12 +53,12 @@ SELECT o.*, h.handle,
 FROM orgs o JOIN handles h ON h.id = o.id WHERE o.id = $1;
 
 -- name: GetOrgByDomain :one
--- The organization a domain belongs to: recorded at its creation, or
--- verified over DNS by it. One organization per domain (D21, D26) spans
--- both facts, so a creation at a DNS-verified domain and a verification
--- of another organization's creation domain are both refused by the API
--- against this lookup. A decommissioned organization has released its
--- domain (both columns are cleared by the erasure), so it never matches.
+-- The organization a domain belongs to: recorded at its creation, or verified
+-- over DNS by it. One organization per domain spans both facts, so a creation
+-- at a DNS-verified domain and a verification of another organization's
+-- creation domain are both refused by the API against this lookup. A
+-- decommissioned organization has released its domain (both columns are
+-- cleared by the erasure), so it never matches.
 SELECT o.*, h.handle
 FROM orgs o JOIN handles h ON h.id = o.id
 WHERE o.domain = sqlc.arg(domain)::citext
@@ -68,8 +68,8 @@ ORDER BY o.created_at
 LIMIT 1;
 
 -- name: GetOrgState :one
--- What the organization's state permits, for the one gate the API, the
--- git door and the membership chokepoint consult (agentry#363).
+-- What the organization's state permits, for the one gate the API, the git
+-- door and the membership chokepoint consult.
 SELECT state, decommission_at FROM orgs WHERE id = $1;
 
 -- name: DecommissionOrg :execrows
@@ -93,9 +93,9 @@ WHERE o.state = 'decommissioning' AND o.decommission_at <= now()
 ORDER BY o.decommission_at;
 
 -- name: GetOrgWhereUserIsLastAdmin :one
--- The erasure guard (D14): an account that is the only active admin of an
--- organization that still exists cannot be erased until another admin is
--- in place. Counts the way CountOrgAdmins does.
+-- The erasure guard: an account that is the only active admin of an
+-- organization that still exists cannot be erased until another admin is in
+-- place. Counts the way CountOrgAdmins does.
 SELECT h.handle FROM memberships m
 JOIN orgs o ON o.id = m.org_id
 JOIN handles h ON h.id = m.org_id
@@ -108,8 +108,8 @@ LIMIT 1;
 
 -- name: ListOrgAdminsForMail :many
 -- The organization's active admins with what a mail to them needs; whether
--- each may be written to — a verified address, the orgInvites preference —
--- is notify.AllowsEmail's decision, not this query's (agentry#363).
+-- each may be written to — a verified address, the orgInvites preference — is
+-- notify.AllowsEmail's decision, not this query's.
 SELECT u.id, u.email, h.handle
 FROM memberships m
 JOIN users u ON u.id = m.user_id
@@ -118,8 +118,8 @@ WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'a
 ORDER BY h.handle;
 
 -- name: DeleteUserMemberships :execrows
--- An erased account holds no seat anywhere (agentry#363): its rows go
--- with it, after the last-admin guard has passed.
+-- An erased account holds no seat anywhere: its rows go with it, after the
+-- last-admin guard has passed.
 DELETE FROM memberships WHERE user_id = $1;
 
 -- name: UpdateOrgDisplayName :one
@@ -127,9 +127,9 @@ UPDATE orgs SET display_name = $2, updated_at = now() WHERE id = $1 RETURNING id
 
 -- name: UpsertMembership :execrows
 -- Role changes only, and it cannot create: every door that makes someone a
--- member goes through registry.ActivateMember (agentry#361), which counts
--- seats. An UPDATE with no row is 0 rows, so a caller that reaches here
--- with nobody to change writes nothing rather than admitting them.
+-- member goes through registry.ActivateMember, which counts seats. An UPDATE
+-- with no row is 0 rows, so a caller that reaches here with nobody to change
+-- writes nothing rather than admitting them.
 UPDATE memberships SET role = $3, updated_at = now()
 WHERE org_id = $1 AND user_id = $2;
 
@@ -142,10 +142,10 @@ VALUES ($1, $2, $3, 'active');
 
 -- name: UpsertPendingMembership :execrows
 -- The SCIM and fold-in doors: a membership that holds no seat and confers
--- nothing until an admin approves it. An existing membership is left alone
--- — approving twice, or provisioning someone who is already active, must
--- not push them back to pending. Reports 1 when this call wrote the row,
--- which is how the fold-in knows to audit and count it once (agentry#364).
+-- nothing until an admin approves it. An existing membership is left alone —
+-- approving twice, or provisioning someone who is already active, must not
+-- push them back to pending. Reports 1 when this call wrote the row, which is
+-- how the fold-in knows to audit and count it once.
 INSERT INTO memberships (org_id, user_id, role, via_scim, via_domain, state)
 VALUES ($1, $2, $3, $4, $5, 'pending')
 ON CONFLICT (org_id, user_id) DO NOTHING;
@@ -178,35 +178,34 @@ ORDER BY h.handle;
 -- name: CountOrgAdmins :one
 -- Only an admin who can still act counts: an erased account keeps its
 -- membership row (and the last-owner guard this replaces counted it), and a
--- pending admin holds nothing until they are approved (agentry#361).
+-- pending admin holds nothing until they are approved.
 SELECT count(*) FROM memberships m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1 AND m.role = 'admin' AND m.state = 'active' AND u.state = 'active';
 
 -- name: CountOrgSeats :one
--- A seat is every active membership plus every open invitation (plan §4
--- "Seats"); pending members hold none and are reported so an admin can see
--- who is waiting.
+-- A seat is every active membership plus every open invitation; pending
+-- members hold none and are reported so an admin can see who is waiting.
 SELECT
   (SELECT count(*) FROM memberships am WHERE am.org_id = $1 AND am.state = 'active')::bigint AS used,
   (SELECT count(*) FROM org_invitations oi WHERE oi.org_id = $1 AND oi.accepted_at IS NULL AND oi.expires_at > now())::bigint AS invited,
   (SELECT count(*) FROM memberships pm WHERE pm.org_id = $1 AND pm.state = 'pending')::bigint AS pending;
 
 -- name: CountActiveMembershipsElsewhere :one
--- One organization per person (D26): an invitation or an approval for
--- someone already active elsewhere is refused.
+-- One organization per person: an invitation or an approval for someone
+-- already active elsewhere is refused.
 SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active' AND m.org_id <> $2;
 
 -- name: CountActiveMemberships :one
--- The same rule at the creation door (agentry#370): a person who is an
--- active member anywhere founds nothing until they leave.
+-- The same rule at the creation door: a person who is an active member
+-- anywhere founds nothing until they leave.
 SELECT count(*) FROM memberships m WHERE m.user_id = $1 AND m.state = 'active';
 
 -- name: ListUserMemberships :many
 -- The caller's org roles, for the principal every request is authorized
--- against. ACTIVE memberships only (agentry#361): a pending member —
--- provisioned by the IdP, or folded in from the domain — is waiting for an
--- admin and holds nothing of the organization until then, so their row
--- must not reach auth.Check as a role.
+-- against. ACTIVE memberships only: a pending member — provisioned by the
+-- IdP, or folded in from the domain — is waiting for an admin and holds
+-- nothing of the organization until then, so their row must not reach
+-- auth.Check as a role.
 SELECT m.org_id, m.role FROM memberships m WHERE m.user_id = $1 AND m.state = 'active';
 
 -- name: ListUserMembershipsWithHandles :many
@@ -217,18 +216,17 @@ WHERE m.user_id = $1
 ORDER BY h.handle;
 
 -- name: CountMemberships :one
--- Every membership row a person holds, pending included: the fold-in
--- (agentry#364) fires only for a member of no organization, and a person
--- already waiting somewhere is not folded in elsewhere.
+-- Every membership row a person holds, pending included: the fold-in fires
+-- only for a member of no organization, and a person already waiting
+-- somewhere is not folded in elsewhere.
 SELECT count(*) FROM memberships m WHERE m.user_id = $1;
 
 -- name: GetUserPendingOrg :one
 -- The organization a person is waiting to be approved by, for GET /user's
--- pendingOrg (agentry#364): every page and client says it until an admin
--- approves or declines. Active organizations only: a suspended one is
--- absent to everyone, its pending members included, and one in its hold
--- can approve nobody, so a notice that its admins have been asked would
--- promise what cannot happen.
+-- pendingOrg: every page and client says it until an admin approves or
+-- declines. Active organizations only: a suspended one is absent to everyone,
+-- its pending members included, and one in its hold can approve nobody, so a
+-- notice that its admins have been asked would promise what cannot happen.
 SELECT h.handle, o.display_name, m.via_scim, m.via_domain
 FROM memberships m
 JOIN orgs o ON o.id = m.org_id
@@ -239,11 +237,11 @@ LIMIT 1;
 
 -- name: ListUsersAtDomainForFoldIn :many
 -- The accounts the fold-in sweep considers when an organization gains a
--- domain (agentry#364): a verified address at the domain — the part after
--- the last @, a trailing dot dropped, the way maildomains.Of reads it —
--- an active account, a member of nothing, and not declined by this
--- organization before. The sign-in step applies the same rules one
--- person at a time (registry.writePending).
+-- domain: a verified address at the domain — the part after the last @, a
+-- trailing dot dropped, the way maildomains.Of reads it — an active account,
+-- a member of nothing, and not declined by this organization before. The
+-- sign-in step applies the same rules one person at a time
+-- (registry.writePending).
 SELECT u.id, h.handle, u.email
 FROM users u
 JOIN handles h ON h.id = u.id
@@ -258,7 +256,7 @@ ORDER BY h.handle;
 SELECT * FROM fold_in_declines WHERE org_id = $1 AND user_id = $2;
 
 -- name: UpsertFoldInDecline :exec
--- A decline is remembered for that person at that organization (D25).
+-- A decline is remembered for that person at that organization.
 INSERT INTO fold_in_declines (org_id, user_id, declined_by)
 VALUES ($1, $2, $3)
 ON CONFLICT (org_id, user_id) DO UPDATE SET declined_by = EXCLUDED.declined_by, declined_at = now();
@@ -269,10 +267,9 @@ ON CONFLICT (org_id, user_id) DO UPDATE SET declined_by = EXCLUDED.declined_by, 
 DELETE FROM fold_in_declines WHERE org_id = $1 AND user_id = $2;
 
 -- name: ListOrgsWithUnnotifiedPending :many
--- The organizations the daily digest has something to say to
--- (agentry#364), or the one named: active ones with a pending member no
--- admin has been mailed about. A suspended or held organization gets no
--- digest; its admins can add nobody.
+-- The organizations the daily digest has something to say to, or the one
+-- named: active ones with a pending member no admin has been mailed about. A
+-- suspended or held organization gets no digest; its admins can add nobody.
 SELECT o.id, h.handle, o.display_name
 FROM orgs o
 JOIN handles h ON h.id = o.id
@@ -303,8 +300,8 @@ RETURNING *;
 
 -- name: GetInvitationByToken :one
 -- Whether the invited address is at one of the organization's DNS-verified
--- domains travels with the invitation: it decides both whether the offer
--- was mailed and whether accepting confirms the address (agentry#361).
+-- domains travels with the invitation: it decides both whether the offer was
+-- mailed and whether accepting confirms the address.
 SELECT i.*, h.handle AS org_handle, o.display_name AS org_display_name,
   EXISTS (SELECT 1 FROM domain_claims dc
           WHERE dc.org_id = i.org_id AND dc.verified_at IS NOT NULL
@@ -365,20 +362,20 @@ ORDER BY h.handle;
 SELECT team_id FROM team_members WHERE user_id = $1;
 
 -- name: SetOrgLogo :one
--- Records the logo now served for the organization and returns the key
--- it replaces (NULL for none), so the caller can remove the old object
--- once the row points at the new one (agentry#367). The previous value
--- is read under the row lock in the same statement — a departure from
--- this file's LockOrg-then-write shape, taken so the swap and what it
--- replaced are one round trip and cannot disagree.
+-- Records the logo now served for the organization and returns the key it
+-- replaces (NULL for none), so the caller can remove the old object once the
+-- row points at the new one. The previous value is read under the row lock in
+-- the same statement — a departure from this file's LockOrg-then-write shape,
+-- taken so the swap and what it replaced are one round trip and cannot
+-- disagree.
 WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 FOR UPDATE)
 UPDATE orgs SET logo_object_key = $2, updated_at = now() FROM old WHERE orgs.id = $1
 RETURNING old.logo_object_key AS previous_key;
 
 -- name: ClearOrgLogo :one
--- Removes the organization's logo and returns the key that was served,
--- for the caller to delete the object (agentry#367); the same one-statement
--- shape as SetOrgLogo. No row when there was no logo.
+-- Removes the organization's logo and returns the key that was served, for
+-- the caller to delete the object; the same one-statement shape as
+-- SetOrgLogo. No row when there was no logo.
 WITH old AS (SELECT logo_object_key FROM orgs WHERE id = $1 AND logo_object_key IS NOT NULL FOR UPDATE)
 UPDATE orgs SET logo_object_key = NULL, updated_at = now() FROM old WHERE orgs.id = $1
 RETURNING old.logo_object_key AS previous_key;

@@ -1,5 +1,5 @@
 -- +goose Up
--- The §10.4 ranking multiplies relevance by installs over the last 30 days.
+-- The search ranking multiplies relevance by installs over the last 30 days.
 -- download_stats is keyed (agent_id, version_id, day), so a 30-day window
 -- across all agents has no usable index and degrades to a full scan of the
 -- table that grows fastest in the schema — on every search.

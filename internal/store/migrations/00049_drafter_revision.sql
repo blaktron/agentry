@@ -1,14 +1,13 @@
 -- +goose Up
--- A Drafter revision S9 gives the benefit of the doubt (plan
--- drafter-revisions.md §6, R5; agentry#794). An upload may claim the hosted
--- draft it was published from (draft_run); the claim alone changes nothing.
--- The scan asks the extension's DraftProvenance whether the submitter ran
--- that draft against this agent's S9 baseline and whether the draft's
--- recorded proof matches the submitted files; only then does the version's
--- source become 'drafter-revision', with the baseline it was proved against
--- (draft_baseline). A rescan reads that record and never asks again, so the
--- benefit lapses neither when the draft's record is gone nor when a later
--- release becomes the baseline the rescan diffs against.
+-- A Drafter revision S9 gives the benefit of the doubt. An upload may claim
+-- the hosted draft it was published from (draft_run); the claim alone changes
+-- nothing. The scan asks the extension's DraftProvenance whether the
+-- submitter ran that draft against this agent's S9 baseline and whether the
+-- draft's recorded proof matches the submitted files; only then does the
+-- version's source become 'drafter-revision', with the baseline it was proved
+-- against (draft_baseline). A rescan reads that record and never asks again,
+-- so the benefit lapses neither when the draft's record is gone nor when a
+-- later release becomes the baseline the rescan diffs against.
 ALTER TABLE agent_versions DROP CONSTRAINT agent_versions_source_check;
 ALTER TABLE agent_versions ADD CONSTRAINT agent_versions_source_check
   CHECK (source IN ('git-tag', 'cli-upload', 'drafter-revision'));
@@ -19,11 +18,11 @@ ALTER TABLE agent_versions ADD CONSTRAINT agent_versions_drafter_revision_check
      AND (source <> 'drafter-revision' OR draft_run IS NOT NULL));
 
 -- +goose StatementBegin
--- §4.3 with one edge more: past 'submitted' the source may move once, from
--- 'cli-upload' to 'drafter-revision', while the version is being scanned,
--- for a version that claimed a draft, and only with the baseline it was
--- proved against. The claim itself is immutable past 'submitted', and so is
--- the baseline once written.
+-- The usual immutability rule with one edge more: past 'submitted' the source
+-- may move once, from 'cli-upload' to 'drafter-revision', while the version
+-- is being scanned, for a version that claimed a draft, and only with the
+-- baseline it was proved against. The claim itself is immutable past
+-- 'submitted', and so is the baseline once written.
 CREATE OR REPLACE FUNCTION agent_versions_enforce_immutability() RETURNS trigger AS $$
 DECLARE
   proved boolean := OLD.status = 'scanning'

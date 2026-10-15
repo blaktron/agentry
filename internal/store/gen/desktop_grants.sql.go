@@ -47,8 +47,8 @@ const consumeDesktopGrantsForUser = `-- name: ConsumeDesktopGrantsForUser :execr
 UPDATE desktop_grants SET consumed_at = now() WHERE user_id = $1 AND consumed_at IS NULL
 `
 
-// Clear-data (agentry#498): a code minted before the clear cannot be
-// exchanged for a token after it.
+// Clear-data: a code minted before the clear cannot be exchanged for a token
+// after it.
 func (q *Queries) ConsumeDesktopGrantsForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, consumeDesktopGrantsForUser, userID)
 	if err != nil {
@@ -74,7 +74,7 @@ type CreateDesktopGrantParams struct {
 	ExpiresAt   time.Time `json:"expires_at"`
 }
 
-// Desktop browser sign-in grants (agentry#19).
+// Desktop browser sign-in grants.
 func (q *Queries) CreateDesktopGrant(ctx context.Context, arg CreateDesktopGrantParams) (DesktopGrant, error) {
 	row := q.db.QueryRow(ctx, createDesktopGrant,
 		arg.ID,

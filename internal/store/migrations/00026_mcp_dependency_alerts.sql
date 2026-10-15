@@ -1,11 +1,11 @@
 -- +goose Up
--- Dependency alerts (agentry#177 M2, DEV-090): a published version that
--- declares an MCP server version which the daily sweep found to carry a
--- newly known high or critical vulnerability. One open alert per
--- (version, server version); resolved when the version leaves `published`
--- (yanked, quarantined, blocked) or the advisories are withdrawn. Not an
--- advisory: an advisory is a trust-and-safety record about the agent, this
--- is a dependency fact that clears itself when the author ships a fix.
+-- Dependency alerts: a published version that declares an MCP server version
+-- which the daily sweep found to carry a newly known high or critical
+-- vulnerability. One open alert per (version, server version); resolved when
+-- the version leaves `published` (yanked, quarantined, blocked) or the
+-- advisories are withdrawn. Not an advisory: an advisory is a
+-- trust-and-safety record about the agent, this is a dependency fact that
+-- clears itself when the author ships a fix.
 CREATE TABLE mcp_dependency_alerts (
   id              uuid PRIMARY KEY,
   version_id      uuid NOT NULL REFERENCES agent_versions(id) ON DELETE CASCADE,

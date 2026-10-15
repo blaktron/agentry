@@ -73,9 +73,8 @@ type CreateKnowledgePackParams struct {
 	WrappedKey       []byte    `json:"wrapped_key"`
 }
 
-// Knowledge packs (plan knowledge.md §4.4, agentry#593). Every read and
-// write names the owner: a pack is found only by its owner, and anyone
-// else's lookup is a pack that does not exist.
+// Knowledge packs. Every read and write names the owner: a pack is found only
+// by its owner, and anyone else's lookup is a pack that does not exist.
 func (q *Queries) CreateKnowledgePack(ctx context.Context, arg CreateKnowledgePackParams) (KnowledgePack, error) {
 	row := q.db.QueryRow(ctx, createKnowledgePack,
 		arg.OwnerKind,
@@ -484,7 +483,7 @@ type SetKnowledgePackExportableParams struct {
 	Exportable bool      `json:"exportable"`
 }
 
-// Whether an organization's members may export its shared pack (D26).
+// Whether an organization's members may export its shared pack.
 func (q *Queries) SetKnowledgePackExportable(ctx context.Context, arg SetKnowledgePackExportableParams) (KnowledgePack, error) {
 	row := q.db.QueryRow(ctx, setKnowledgePackExportable,
 		arg.ID,
@@ -579,11 +578,11 @@ type SumKnowledgeBytesOfPoolParams struct {
 	ExceptID   uuid.UUID   `json:"except_id"`
 }
 
-// What a pool's owners keep in the registry, the pack named aside (the one
-// an upload replaces; uuid.Nil for none): the allocation counts every other
-// pack of every owner in the pool (agentry#612). An owner's id is a handle's,
-// unique across people and organizations, so the two lists match exactly
-// the owners given, on the owner index.
+// What a pool's owners keep in the registry, the pack named aside (the one an
+// upload replaces; uuid.Nil for none): the allocation counts every other pack
+// of every owner in the pool. An owner's id is a handle's, unique across
+// people and organizations, so the two lists match exactly the owners given,
+// on the owner index.
 func (q *Queries) SumKnowledgeBytesOfPool(ctx context.Context, arg SumKnowledgeBytesOfPoolParams) (int64, error) {
 	row := q.db.QueryRow(ctx, sumKnowledgeBytesOfPool, arg.OwnerKinds, arg.OwnerIds, arg.ExceptID)
 	var column_1 int64

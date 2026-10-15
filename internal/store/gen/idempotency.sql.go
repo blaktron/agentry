@@ -42,7 +42,7 @@ type ClaimIdempotencyKeyRow struct {
 	Claimed        bool       `json:"claimed"`
 }
 
-// Idempotency-Key replay store (§9.1 "Mutating POSTs accept Idempotency-Key").
+// Idempotency-Key replay store ("Mutating POSTs accept Idempotency-Key").
 // Reserves the key for this request. A conflicting row means the key was
 // used before: the existing row comes back so the caller can decide between
 // replaying its recorded response (same request_hash) and refusing (409).

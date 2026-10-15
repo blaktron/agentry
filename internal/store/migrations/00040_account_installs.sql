@@ -1,16 +1,15 @@
 -- +goose Up
--- Account installs (plan web-dashboard-shell §5, D3/D4; agentry#448): a
--- signed-in person's record, on the registry, of a QuickAgent release they
--- accepted for their account — the version, the declared capabilities they
--- consented to as the release declared them, and which of the unsigned and
--- unscanned consents the release needed. One record per QuickAgent per
--- account, as the desktop keeps one runner record per QuickAgent (D-031).
--- It is an acceptance, not a laying-down: nothing is written on any
--- machine, and it bumps no download counter. The ref is stored as the
+-- Account installs: a signed-in person's record, on the registry, of a
+-- QuickAgent release they accepted for their account — the version, the
+-- declared capabilities they consented to as the release declared them, and
+-- which of the unsigned and unscanned consents the release needed. One record
+-- per QuickAgent per account, as the desktop keeps one runner record per
+-- QuickAgent. It is an acceptance, not a laying-down: nothing is written on
+-- any machine, and it bumps no download counter. The ref is stored as the
 -- person knew it, so a record whose QuickAgent they can no longer read is
--- listed and removed by that name and never by where the QuickAgent went.
--- The version row is referenced without a cascade because version rows
--- are never deleted (00004); the person's and the agent's rows cascade.
+-- listed and removed by that name and never by where the QuickAgent went. The
+-- version row is referenced without a cascade because version rows are never
+-- deleted (00004); the person's and the agent's rows cascade.
 CREATE TABLE account_installs (
   user_id            uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   agent_id           uuid NOT NULL REFERENCES agents(id) ON DELETE CASCADE,

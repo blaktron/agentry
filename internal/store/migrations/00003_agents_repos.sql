@@ -1,9 +1,9 @@
 -- +goose Up
--- Agents + repos + per-agent grants (PLAN §4.2, M2/WG-C prerequisites).
--- Versions/scan tables land with M3/M4 migrations.
+-- Agents + repos + per-agent grants. Versions and scan tables are created by
+-- later migrations.
 
 CREATE TABLE repos (
-  id uuid PRIMARY KEY,                 -- immutable; storage path derives from this (D-19)
+  id uuid PRIMARY KEY,                 -- immutable; storage path derives from this
   default_branch text NOT NULL DEFAULT 'main',
   size_bytes bigint NOT NULL DEFAULT 0,
   last_push_at timestamptz,
@@ -21,7 +21,7 @@ CREATE TABLE agents (
   latest_published_version_id uuid,    -- denormalized pointer (FK added with agent_versions)
   quarantine_state text NOT NULL DEFAULT 'none'
     CHECK (quarantine_state IN ('none','quarantined','blocked')),
-  auto_publish_tags boolean NOT NULL DEFAULT true,   -- §6.3 post-receive submission
+  auto_publish_tags boolean NOT NULL DEFAULT true,   -- post-receive submission
   search_tsv tsvector,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -46,7 +46,7 @@ CREATE TRIGGER agents_search_tsv_trg
   BEFORE INSERT OR UPDATE OF name, summary ON agents
   FOR EACH ROW EXECUTE FUNCTION agents_search_tsv_update();
 
--- Per-agent grants (§12.2): read < write < maintain < publish.
+-- Per-agent grants: read < write < maintain < publish.
 CREATE TABLE agent_user_grants (
   agent_id uuid NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES users(id),

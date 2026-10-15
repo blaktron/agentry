@@ -1,6 +1,6 @@
--- Account installs (plan web-dashboard-shell §5; agentry#448): the
--- per-account record of a QuickAgent release a person accepted and the
--- contract they consented to. Nothing here touches download_stats.
+-- Account installs: the per-account record of a QuickAgent release a person
+-- accepted and the contract they consented to. Nothing here touches
+-- download_stats.
 
 -- name: UpsertAccountInstall :one
 -- A PUT on an existing record is the update: the version moves and the
@@ -46,5 +46,5 @@ ORDER BY ai.updated_at DESC, a.name;
 DELETE FROM account_installs WHERE agent_id IN (SELECT id FROM agents WHERE namespace_id = $1);
 
 -- name: DeleteAccountInstallsForUser :execrows
--- Clear-data (agentry#498): every record the user holds.
+-- Clear-data: every record the user holds.
 DELETE FROM account_installs WHERE user_id = $1;
