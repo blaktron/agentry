@@ -55,3 +55,25 @@ func TestReadRefusesWhatIsNotADraftOrPastItsBounds(t *testing.T) {
 		}
 	}
 }
+
+// Read answers which runner tools the instruction calls for that the
+// manifest does not grant, as S6 reads them at publish.
+func TestReadListsTheToolsTheManifestDoesNotGrant(t *testing.T) {
+	rd, err := Read(Package{Files: []File{
+		{Path: "agent.yaml", Content: yml}, {Path: "AGENT.md", Content: "Open the site with `browser_navigate`, then count lines with `run_command`.\nNever call `fetch`.\n"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, x := range rd.Ungranted {
+		got = append(got, x.Tool+" "+x.Path)
+	}
+	if strings.Join(got, ",") != "browser_navigate capabilities.browser,run_command capabilities.exec.commands" {
+		t.Fatalf("ungranted: %v", got)
+	}
+	rd, err = Read(Package{Files: []File{{Path: "agent.yaml", Content: yml}, {Path: "AGENT.md", Content: "Write the brief with write_report.\n"}}})
+	if err != nil || len(rd.Ungranted) != 0 {
+		t.Fatalf("a draft naming only the runner's own tools: %v %+v", err, rd.Ungranted)
+	}
+}

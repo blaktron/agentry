@@ -921,6 +921,17 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 | `filesystem.write` | `fs_write` |
 | `network.egress` hosts | `fetch` (with optional declared-secret auth) |
 | `exec.commands` | `run_command` |
+| `browser` | the [browser tools](runner.md#the-browser-a-site-to-test-named-at-run-time) (`browser_navigate`, `browser_click`, …), from the browser server |
+| `targetHosts` | the host tools (`host_run`, `host_read`, …), from the host link |
+| `mcpServers` | each declared server's own tools |
+
+A tool whose line the manifest does not declare is absent from the run, not
+present and refusing, so an instruction that calls for one describes a run
+that cannot happen. The registry reads the tool names an instruction calls
+for against these lines at publication, and a release that names a tool it
+is not granted goes to a person rather than publishing (stage S6, since
+ruleset 0.4.10; [trust](trust.md#s6)); the check of a finished draft lists
+the same tools before Submit ([model input](model-input.md#the-check-of-a-finished-draft)).
 
 The runner puts the **System Prompt** before every instruction. Its fixed
 head says the run is in a locked sandbox, puts attached knowledge first, and

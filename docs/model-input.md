@@ -13,8 +13,9 @@ the registry rather than holding a key of their own:
   deployment's provider, with the registry's key, and scans every result
   the same way before returning it.
 - `POST /api/v1/model-input/check` reads a finished draft's package the
-  way AI Review will at publish, and asks whether the draft does the task
-  it was drafted for, so the person knows before Submit. See [the check of a finished draft](#the-check-of-a-finished-draft).
+  way AI Review will at publish, asks whether the draft does the task it
+  was drafted for, and lists the runner tools its instruction calls for
+  that its manifest does not grant, so the person knows before Submit. See [the check of a finished draft](#the-check-of-a-finished-draft).
 
 This is not the publication scan. A release is still scanned at
 publication, by the pipeline (S1–S10), whatever these routes said about
@@ -173,6 +174,27 @@ result of wordings tuned on those same drafts and checked against the
 attack corpus. A draft that is flagged goes to
 review at publish, not to refusal.
 
+Beside the two halves, and with no judge, the check reads the runner
+tools the instruction calls for against the lines of the manifest that
+grant them, as stage S6 does at publish (since ruleset 0.4.10; core
+`pkg/toolgrant`). `ungranted` lists each tool the run would not have:
+`browser_click` with no `capabilities.browser`, `run_command` with no
+`exec` commands, `fetch` with no `network.egress` host, a host tool with no
+`targetHosts`, `fs_read`, `fs_list` or `fs_write` with no `filesystem`
+access, and a `<server>__<tool>` name of a server the manifest does not
+declare. Each entry names the tool, the line it needs (`grant`), the
+manifest path that holds it (`path`, such as `capabilities.browser`), the
+first line of the instruction that calls for it, and a sentence saying why.
+Any one sends the version to a person at publish, so the fix is to declare
+the line or to stop calling the tool. A tool the instruction names only to
+turn it away ("not `browser_pdf_save`", "never call `fetch`", "if you have
+`run_command`"), or in a paragraph about a QuickAgent, is not listed, and a
+word such as "browser" or "fetch the page" in prose is not a tool name.
+The list is empty when every tool the instruction names is granted, and it
+is answered even when both halves are `not_scanned`. A client that reads
+the check with an older core, or a registry older than 0.4.10's, gets no
+`ungranted` field.
+
 Each half answers `pass`, `flagged` or `not_scanned` on its own. A half
 the judge could not answer for (an error, a timeout, or for the draft set
 a part past its bound of 8, 16 and 32 KiB, or a state past 48 KiB in
@@ -239,6 +261,8 @@ kept. Each call
 writes one `model_input.call` log line ([logging.md](logging.md)) with its
 operation, caller kind, job, verdict, source and counts, and counts into
 the `ModelInputCalls{op,verdict}` and `ModelInputJudgeTokens{op}` metrics.
+A check's verdict there is `flagged` when either half flagged or
+`ungranted` lists a tool.
 A chunk that was not scanned also logs why: the judge's status when it
 answered with an error, never its body, which could echo the text. A
 search the provider did not answer logs its status alone, for the same

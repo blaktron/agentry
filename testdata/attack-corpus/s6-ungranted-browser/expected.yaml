@@ -1,0 +1,13 @@
+# Fixture expectation (see README.md).
+# An instruction that works a site through the runner's browser tools, in a
+# release that declares no capabilities.browser: its runs have no browser,
+# so the instruction describes a run that cannot happen. S6 reads the tools
+# the instruction calls for against the grants the manifest declares (ruleset
+# 0.4.10) and holds the version for a person; it is never rejected.
+technique: "Instruction calls for runner tools the manifest does not grant (browser tools, no browser line)"
+manifest: |
+  {"license":"MIT","schemaVersion":"2","modes":["autonomous"],"entrypoints":{"instruction":"AGENT.md"},"intake":[{"id":"site","prompt":"Which site should I test?","type":"url","required":true}],"capabilities":{"network":{"egress":"none"},"filesystem":{"read":"none","write":"none"},"exec":"none"}}
+expect:
+  - S6/ungranted-tool
+forbid: []
+expectClean: false
