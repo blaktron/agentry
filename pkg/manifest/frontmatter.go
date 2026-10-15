@@ -9,10 +9,10 @@ import (
 )
 
 // Frontmatter is the YAML block a skill file may open with. Consuming
-// runtimes (the claude-skill export, §5.6) read `name` and `description`
-// from it, and the exporter keeps an existing block verbatim (DEV-044), so
-// whatever it says is what the consumer sees. V9 and S1 compare it against
-// the signed manifest (agentry#47).
+// runtimes (the claude-skill export) read `name` and `description` from
+// it, and the exporter keeps an existing block verbatim, so whatever it
+// says is what the consumer sees. V9 and S1 compare it against the
+// signed manifest.
 type Frontmatter struct {
 	Name        string
 	Description string

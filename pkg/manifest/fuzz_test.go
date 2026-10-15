@@ -2,9 +2,9 @@ package manifest
 
 import "testing"
 
-// FuzzParse is a crash-safety fuzz target (§17.5): Parse and the
-// downstream Validate / ValidateInContext / CanonicalJSON paths must never
-// panic on arbitrary input.
+// FuzzParse is a crash-safety fuzz target: Parse and the downstream
+// Validate / ValidateInContext / CanonicalJSON paths must never panic
+// on arbitrary input.
 func FuzzParse(f *testing.F) {
 	seeds := [][]byte{
 		[]byte(normativeYAML),

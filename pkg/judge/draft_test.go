@@ -70,11 +70,11 @@ func TestADraftPastItsBoundsOrAFailedJudgeIsNotScanned(t *testing.T) {
 	}
 }
 
-// The instruction bound is 32 KiB, the cap the Drafter holds its own to
-// (agentry#789, agentry-cli#521): a drafted instruction of 20–30 KB, and
-// one at the bound, is asked off_task whole. The state as a whole is held
-// to 48 KiB, so a long instruction beside a manifest and description at
-// their bounds is not scanned and never cut.
+// The instruction bound is 32 KiB, the cap the Drafter holds its own
+// to: a drafted instruction of 20–30 KB, and one at the bound, is asked
+// off_task whole. The state as a whole is held to 48 KiB, so a long
+// instruction beside a manifest and description at their bounds is not
+// scanned and never cut.
 func TestALongDraftedInstructionIsAskedWholeUpToTheBound(t *testing.T) {
 	if DraftMaxInstruction != 32<<10 || DraftMaxState != 48<<10 {
 		t.Fatalf("bounds %d and %d, want 32 KiB (the Drafter's cap) and 48 KiB", DraftMaxInstruction, DraftMaxState)
@@ -127,8 +127,8 @@ func TestTheRubricReadsAPackageChunkByChunkWithItsContract(t *testing.T) {
 }
 
 // Every chunk's state tells the judge what the runner gives every run
-// beside what the manifest declares (agentry#731), so an instruction that
-// reads its own inputs and writes its own report is not read as needing an
+// beside what the manifest declares, so an instruction that reads its
+// own inputs and writes its own report is not read as needing an
 // undeclared capability. The statement is the same whatever the version
 // declares or says: nothing of the version is rendered into it.
 func TestTheRubricStateSaysWhatTheRunnerGrantsEveryRun(t *testing.T) {
@@ -153,8 +153,8 @@ func TestTheRubricStateSaysWhatTheRunnerGrantsEveryRun(t *testing.T) {
 			t.Fatalf("the runner's grants changed with the version: %q vs %q", g, seen[0])
 		}
 	}
-	// What a declared target host gives, and what it does not unless the
-	// purpose intends it (agentry#1092, DEV-242), is part of the constant.
+	// What a declared target host gives, and what it does not unless
+	// the purpose intends it, is part of the constant.
 	for _, want := range []string{"/inputs", "read-only", "list_inputs", "read_input", "write_report", "reports/",
 		"targetHosts", "host tools", "any other machine", "unless the QuickAgent's purpose"} {
 		if !strings.Contains(seen[0], want) {
@@ -166,11 +166,11 @@ func TestTheRubricStateSaysWhatTheRunnerGrantsEveryRun(t *testing.T) {
 	}
 }
 
-// Every chunk's state carries what the release says it is for: its name,
-// summary and guide overview (agentry#1044), the purpose C3 weighs a
-// capability against. Nothing else of the manifest reaches it, a manifest
-// that states no purpose says so, and a long overview is cut at the bound
-// on a character boundary.
+// Every chunk's state carries what the release says it is for: its
+// name, summary and guide overview, the purpose C3 weighs a capability
+// against. Nothing else of the manifest reaches it, a manifest that
+// states no purpose says so, and a long overview is cut at the bound on
+// a character boundary.
 func TestTheRubricStateCarriesTheReleasesPurpose(t *testing.T) {
 	manifestJSON := `{"name":"csv-check","summary":"Checks a CSV for missing values.",` +
 		`"guide":{"overview":"Reads the CSV you add and reports problems per column.","task":"e.g. check it"},` +

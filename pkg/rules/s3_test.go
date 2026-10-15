@@ -46,9 +46,9 @@ func TestDetectZeroWidth(t *testing.T) {
 	}
 }
 
-// A zero-width joiner inside an emoji ZWJ sequence and a leading byte-order
-// mark are how ordinary text is written, and do not fire (ruleset 0.3.2,
-// agentry#775). The same code points anywhere else still do.
+// A zero-width joiner inside an emoji ZWJ sequence and a leading
+// byte-order mark are how ordinary text is written, and do not fire.
+// The same code points anywhere else still do.
 func TestZeroWidthLeavesEmojiJoinersAndALeadingBOM(t *testing.T) {
 	for name, text := range map[string]string{
 		"woman technologist":                "\U0001F469\u200d\U0001F4BB",

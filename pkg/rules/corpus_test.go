@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// corpusDir is the golden corpus at the repo root (§17.3), relative to this
+// corpusDir is the golden corpus at the repo root, relative to this
 // package.
 const corpusDir = "../../testdata/attack-corpus"
 
@@ -57,10 +57,11 @@ func ruleLevel(id string) bool {
 	return strings.HasPrefix(id, "S3/") || strings.HasPrefix(id, "S4/")
 }
 
-// TestCorpus is the golden-corpus gate of §17.3: it walks every fixture
-// directory, scans its files with S3 + the shipped S4 bundle, and asserts
-// 100% recall on `expect` ids, absence of `forbid` ids, and — for benign
-// twins marked expectClean — zero findings at all (precision regression).
+// TestCorpus is the golden-corpus gate: it walks every fixture
+// directory, scans its files with S3 + the shipped S4 bundle, and
+// asserts 100% recall on `expect` ids, absence of `forbid` ids, and —
+// for benign twins marked expectClean — zero findings at all (precision
+// regression).
 func TestCorpus(t *testing.T) {
 	bundle := loadShippedBundle(t)
 

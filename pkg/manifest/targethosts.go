@@ -7,28 +7,27 @@ import (
 	"strings"
 )
 
-// Target hosts (plan runtime-hosts.md §4, D2, D10, D13, D17; agentry#1092).
-// A target host is a machine the person names when a run starts, such as a
-// Linux server to set up or manage, that the runner reaches over SSH from a
-// container of its own (the host link) and the agent works through the
-// runner's host tools. The release declares that it takes one, never which:
-// an intake question of type host, whose id is listed in
-// capabilities.targetHosts. The answer, [user@]host[:port], belongs to the
-// run, as a source's URL does, and no address, user, port or credential is
-// ever in the manifest.
+// Target hosts. A target host is a machine the person names when a run
+// starts, such as a Linux server to set up or manage, that the runner
+// reaches over SSH from a container of its own (the host link) and the
+// agent works through the runner's host tools. The release declares
+// that it takes one, never which: an intake question of type host,
+// whose id is listed in capabilities.targetHosts. The answer,
+// [user@]host[:port], belongs to the run, as a source's URL does, and
+// no address, user, port or credential is ever in the manifest.
 //
-// Unlike a source, a target host is inside the contract: the agent acts on
-// the machine, so consent shows it, an upgrade that adds one asks again, the
-// judge reads it as a declared capability (pkg/judge RunnerGrants), and
-// search can filter on it. It grants nothing else: it is not network egress,
-// and a script the release ships that runs ssh itself is still the
-// release's own network (S6).
+// Unlike a source, a target host is inside the contract: the agent acts
+// on the machine, so consent shows it, an upgrade that adds one asks
+// again, the judge reads it as a declared capability (pkg/judge
+// RunnerGrants), and search can filter on it. It grants nothing else:
+// it is not network egress, and a script the release ships that runs
+// ssh itself is still the release's own network (S6).
 
-// MaxTargetHosts bounds the target hosts one release may declare (D13).
+// MaxTargetHosts bounds the target hosts one release may declare.
 const MaxTargetHosts = 4
 
-// remoteShellClients are the programs that make an SSH or rsync session.
-// An exec declaration naming one is pointed at targetHosts (D10).
+// remoteShellClients are the programs that make an SSH or rsync
+// session. An exec declaration naming one is pointed at targetHosts.
 var remoteShellClients = []string{"ssh", "scp", "sftp", "rsync"}
 
 // RemoteShellCommands returns the commands of c's exec declaration that

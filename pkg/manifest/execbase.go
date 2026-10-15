@@ -2,13 +2,13 @@ package manifest
 
 import "slices"
 
-// baseExecCommands are the commands every machine provides to a QuickAgent
-// that declares them, a hosted run included: the busybox applets of DR-64,
-// agentry-cli's policy.BaseExecCommands, whose test holds the two lists
-// equal. A declared command outside them is one only a run on the person's
-// own computer, with that program installed, can provide. The rating by
-// declaration (ruleset 0.4.0, agentry#893) reads it: a finding about a base
-// command is low, one about any other declared command medium.
+// baseExecCommands are the commands every machine provides to a
+// QuickAgent that declares them, a hosted run included: the busybox
+// applets, and the CLI's policy.BaseExecCommands, whose test holds the
+// two lists equal. A declared command outside them is one only a run on
+// the person's own computer, with that program installed, can provide.
+// The rating by declaration (ruleset 0.4.0) reads it: a finding about a
+// base command is low, one about any other declared command medium.
 var baseExecCommands = []string{
 	// reading and comparing text
 	"cat", "head", "tail", "wc", "cut", "tr", "sort", "uniq", "grep", "comm", "diff", "cmp",

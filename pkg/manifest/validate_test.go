@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// validSkillManifest returns the normative §5.2 example as a struct.
+// validSkillManifest returns the normative example as a struct.
 func validSkillManifest() *Manifest {
 	return &Manifest{
 		SchemaVersion: "1",
@@ -105,9 +105,9 @@ func wantClean(t *testing.T, errs []error) {
 	}
 }
 
-// TestNormativeExampleValidatesClean runs the §5.2 example end to end:
-// Parse, Validate, and ValidateInContext must all pass with zero issues
-// (warnings included) under a suitable context.
+// TestNormativeExampleValidatesClean runs the normative example end to
+// end: Parse, Validate, and ValidateInContext must all pass with zero
+// issues (warnings included) under a suitable context.
 func TestNormativeExampleValidatesClean(t *testing.T) {
 	m := mustParse(t, normativeYAML)
 	wantClean(t, Validate(m))
@@ -115,7 +115,7 @@ func TestNormativeExampleValidatesClean(t *testing.T) {
 }
 
 // TestV1MCPServerKindIsWithdrawn: the archives published under kind
-// mcp-server still parse, but the kind is refused for publish (DEV-088).
+// mcp-server still parse, but the kind is refused for publish.
 func TestV1MCPServerKindIsWithdrawn(t *testing.T) {
 	errs := Validate(validMCPManifest())
 	wantIssue(t, errs, "V1", SeverityError, "kind")
@@ -369,8 +369,9 @@ func TestValidateInContext(t *testing.T) {
 			c.Quotas = &q
 		}, "V8", SeverityError, "publish.include"},
 		{"V8 text total over the prose cap", nil, func(c *Context) {
-			// Each file is under the per-file cap; together the prose the
-			// scanners read passes 1 MiB (§19 instruction-file total, agentry#44).
+			// Each file is under the per-file cap; together the prose
+			// the scanners read passes 1 MiB (the instruction-file
+			// total).
 			c.Files = append(c.Files,
 				FileInfo{Path: "prompts/a.md", Size: 600 << 10, IsText: true},
 				FileInfo{Path: "prompts/b.md", Size: 600 << 10, IsText: true})
@@ -500,9 +501,9 @@ func TestWarningsAreDistinguishable(t *testing.T) {
 	}
 }
 
-// TestAgentYAMLInclusionWarning: a v1 archive without agent.yaml is legal
-// but flagged (the v1 reading path; a v2 archive is refused, agentry#288
-// — TestV2AgentYAMLInclusionRefused).
+// TestAgentYAMLInclusionWarning: a v1 archive without agent.yaml is
+// legal but flagged (the v1 reading path; a v2 archive is refused,
+// TestV2AgentYAMLInclusionRefused).
 func TestAgentYAMLInclusionWarning(t *testing.T) {
 	m := validSkillManifest()
 	m.Publish.Include = []string{"README.md", "SKILL.md", "prompts/**", "LICENSE"}
@@ -553,8 +554,8 @@ func TestKnownSPDXID(t *testing.T) {
 	if _, ok := KnownSPDXID("Proprietary-EULA"); ok {
 		t.Errorf("unknown id must not be accepted")
 	}
-	// The full list (agentry#28): ids the 60-entry allowlist lacked, and a
-	// deprecated id kept as an identifier.
+	// The full list: ids a short allowlist would lack, and a deprecated
+	// id kept as an identifier.
 	for _, id := range []string{"EUPL-1.2", "CECILL-2.1", "OFL-1.1", "LGPL-2.1-only", "GPL-3.0", "Beerware"} {
 		if _, ok := KnownSPDXID(id); !ok {
 			t.Errorf("%s missing from the embedded SPDX list", id)
