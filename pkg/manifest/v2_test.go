@@ -1,7 +1,7 @@
-// Schema major 2 (DEV-088): modes, the single instruction entrypoint,
-// intake and interactive hints, and the v1 reading path that maps the old
-// kinds onto them. Every rule in the modes plan §3 has a failing and a
-// passing case here.
+// Schema major 2: modes, the single instruction entrypoint, intake and
+// interactive hints, and the v1 reading path that maps the old kinds
+// onto them. Every rule of the modes has a failing and a passing case
+// here.
 package manifest
 
 import (
@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// v2YAML is the plan's §3 example: both modes, a named instruction file,
+// v2YAML is the example manifest: both modes, a named instruction file,
 // one intake question, session hints.
 const v2YAML = `schemaVersion: "2"
 name: incident-summarizer
@@ -344,10 +344,11 @@ func TestInstructionCandidates(t *testing.T) {
 }
 
 // TestV2AgentYAMLInclusionRefused: a v2 manifest — here one declaring a
-// server env — whose publish.include does not match agent.yaml is refused
-// at validation (V4, agentry#288): the runner reads the manifest from the
-// installed tree and S2 scans the archive's files, so the archive carries
-// its own contract. The same manifest with agent.yaml included is clean.
+// server env — whose publish.include does not match agent.yaml is
+// refused at validation (V4): the runner reads the manifest from the
+// installed tree and S2 scans the archive's files, so the archive
+// carries its own contract. The same manifest with agent.yaml included
+// is clean.
 func TestV2AgentYAMLInclusionRefused(t *testing.T) {
 	m := validV2Manifest(t)
 	m.Capabilities.MCPServers = []MCPServer{{NPM: "github-mcp-server-js", Version: "0.1.7", Env: map[string]string{"GITHUB_PERMISSION": "read-only"}}}
@@ -465,9 +466,9 @@ func TestV2SchemaFileShape(t *testing.T) {
 	}
 }
 
-// TestV2SchemaEnvShape pins the mcpServer.env schema beside the Go rules:
-// the count cap, the name grammar, the value limits and the literal-value
-// rule (agentry#291) are the constants and expressions pkg/manifest
+// TestV2SchemaEnvShape pins the mcpServer.env schema beside the Go
+// rules: the count cap, the name grammar, the value limits and the
+// literal-value rule are the constants and expressions pkg/manifest
 // enforces. (The secret/env collision is a cross-list rule JSON schema
 // cannot express; TestMCPServerEnvRefusals holds it.)
 func TestV2SchemaEnvShape(t *testing.T) {

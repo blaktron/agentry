@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// canonicalGolden is the expected canonical encoding of the §5.2
-// normative example. Key order is lexicographic at every level and the
-// empty dependencies block is pruned. This string is load-bearing: it
-// pins the byte-stable form stored in agent_versions.manifest.
+// canonicalGolden is the expected canonical encoding of the normative
+// example. Key order is lexicographic at every level and the empty
+// dependencies block is pruned. This string is load-bearing: it pins
+// the byte-stable form stored in agent_versions.manifest.
 const canonicalGolden = `{"authors":[{"email":"jane@acme.example","name":"Jane Doe"}],"capabilities":{"dataAccess":["tickets"],"exec":"none","filesystem":{"read":"workspace","write":"none"},"network":{"egress":["api.pagerduty.com"]},"secrets":["PAGERDUTY_TOKEN"]},"entrypoints":{"skill":"SKILL.md"},"homepage":"https://acme.example/agents/incident-summarizer","kind":"skill","license":"Apache-2.0","name":"incident-summarizer","namespace":"acme","publish":{"channel":"stable","include":["agent.yaml","README.md","SKILL.md","prompts/**","LICENSE"]},"runtime":{"interfaces":["claude-skill"],"models":["claude-*"]},"schemaVersion":"1","summary":"Summarizes PagerDuty incidents into postmortem drafts","tags":["incident-response","summarization"],"version":"1.4.2"}`
 
 func TestCanonicalJSONGolden(t *testing.T) {

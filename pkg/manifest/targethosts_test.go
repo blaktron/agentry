@@ -8,13 +8,12 @@ import (
 	"testing"
 )
 
-// Target hosts (V14; plan runtime-hosts.md §4, D2, D10, D13, D17;
-// agentry#1092): an intake question of type host, listed in
-// capabilities.targetHosts, declares that the release takes a machine the
-// person names at run time. These tests pin the one-to-one rule between the
-// two, the bound, that choices are refused on a host question, that the
-// line is part of the contract (canonical JSON, the capability diff), the
-// exec hint, and the schema.
+// Target hosts (V14): an intake question of type host, listed in
+// capabilities.targetHosts, declares that the release takes a machine
+// the person names at run time. These tests pin the one-to-one rule
+// between the two, the bound, that choices are refused on a host
+// question, that the line is part of the contract (canonical JSON, the
+// capability diff), the exec hint, and the schema.
 
 // targetHostsManifest is v2YAML with a host question and its contract line.
 func targetHostsManifest(t *testing.T) *Manifest {

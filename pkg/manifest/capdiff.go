@@ -8,15 +8,15 @@ import (
 	"strings"
 )
 
-// CapabilityDiff is the comparison between a capability contract a person
-// accepted and the one a newer release declares (§11 "widened contract").
-// Each line is phrased for a human — "adds network egress to evil.example"
-// — because the consent gate shows it verbatim.
+// CapabilityDiff is the comparison between a capability contract a
+// person accepted and the one a newer release declares. Each line is
+// phrased for a human — "adds network egress to evil.example" — because
+// the consent gate shows it verbatim.
 //
 // The rule is the one the CLI's install state and the desktop's Prepare
-// apply on an update; the registry applies it to an account install
-// (agentry#448), so a person is asked for the capability acceptance again
-// only when the new release may do more than the one they accepted.
+// apply on an update; the registry applies it to an account install, so
+// a person is asked for the capability acceptance again only when the
+// new release may do more than the one they accepted.
 type CapabilityDiff struct {
 	// Widened lists strictly-more-permissive changes.
 	Widened []string `json:"widened,omitempty"`
@@ -67,8 +67,9 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 		d.Narrowed = append(d.Narrowed, "drops subprocess execution: "+c)
 	}
 
-	// Filesystem, both directions. Write escalation is the one §11 names,
-	// but a read widening is a widening too and gets the same treatment.
+	// Filesystem, both directions. Write escalation is the usual case,
+	// but a read widening is a widening too and gets the same
+	// treatment.
 	d.appendFSDiff("read", old.Filesystem.Read, next.Filesystem.Read)
 	d.appendFSDiff("write", old.Filesystem.Write, next.Filesystem.Write)
 
@@ -82,8 +83,8 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 		d.Narrowed = append(d.Narrowed, "no longer asks for secret: "+s)
 	}
 
-	// Target hosts (plan runtime-hosts.md §8): one more is one more machine
-	// the agent may run any command on, so it asks again.
+	// Target hosts: one more is one more machine the agent may run any
+	// command on, so it asks again.
 	added, removed = diffSets(old.TargetHosts, next.TargetHosts)
 	for _, h := range added {
 		d.Widened = append(d.Widened, "asks for a target host when it runs, and can run any command on it: "+h)
@@ -102,10 +103,10 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 		d.Narrowed = append(d.Narrowed, "drops data access: "+s)
 	}
 
-	// Declared MCP servers (RUNNER-PLAN-3): a new server — or the same
-	// server at a different pin, or a remote server at a different
-	// address — is new tool surface and new supply chain, so it widens. A
-	// dropped one narrows.
+	// Declared MCP servers: a new server — or the same server at a
+	// different pin, or a remote server at a different address — is new
+	// tool surface and new supply chain, so it widens. A dropped one
+	// narrows.
 	oldSrv, newSrv := mcpServersByIdentity(old.MCPServers), mcpServersByIdentity(next.MCPServers)
 	added, removed = diffSets(slices.Sorted(maps.Keys(oldSrv)), slices.Sorted(maps.Keys(newSrv)))
 	for _, id := range added {
@@ -125,8 +126,8 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 		d.appendServerDiff(id, prev, newSrv[id])
 	}
 
-	// Shipped knowledge (plan knowledge.md §4.6): a pack is text that
-	// enters the agent's context, so one more asks again.
+	// Shipped knowledge: a pack is text that enters the agent's
+	// context, so one more asks again.
 	added, removed = diffSets(old.Knowledge, next.Knowledge)
 	for _, k := range added {
 		d.Widened = append(d.Widened, "ships knowledge: "+k)
@@ -138,10 +139,10 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 	return d
 }
 
-// appendBrowserDiff records the browser line's change (plan
-// browser-testing.md invariant 8): a new line, a new site, a new host, a
-// new secret the browser may type, or site scope to public widens, so an
-// upgrade that does any of them asks again.
+// appendBrowserDiff records the browser line's change: a new line, a
+// new site, a new host, a new secret the browser may type, or site
+// scope to public widens, so an upgrade that does any of them asks
+// again.
 func (d *CapabilityDiff) appendBrowserDiff(old, next *Browser) {
 	switch {
 	case old == nil && next == nil:
@@ -310,8 +311,8 @@ func describeOAuth(o *MCPOAuth) string {
 }
 
 // appendServerDiff compares one server present in both contracts: its
-// plain env, a remote server's auth and scopes, a package server's OAuth
-// sign-in (agentry#910).
+// plain env, a remote server's auth and scopes, a package server's
+// OAuth sign-in.
 func (d *CapabilityDiff) appendServerDiff(id string, prev, next MCPServer) {
 	// A server's plain env: a new or changed value changes what the
 	// server receives, so it widens and re-asks; a dropped key narrows.
@@ -356,11 +357,11 @@ func (d *CapabilityDiff) appendServerDiff(id string, prev, next MCPServer) {
 }
 
 // appendRemoteToolsAndSecret compares what a remote server may be asked
-// and what it is sent. Its tool allowlist bounds what the model reaches at
-// a vendor that holds the person's account, so a tool added, or the list
-// lifted (every tool the server serves), widens; and its one bearer secret
-// is sent to the vendor, so a different name widens. The same fields of a
-// package server are agentry#527's.
+// and what it is sent. Its tool allowlist bounds what the model reaches
+// at a vendor that holds the person's account, so a tool added, or the
+// list lifted (every tool the server serves), widens; and its one
+// bearer secret is sent to the vendor, so a different name widens. The
+// same fields of a package server are not compared here.
 func (d *CapabilityDiff) appendRemoteToolsAndSecret(id string, prev, next MCPServer) {
 	switch {
 	case len(prev.Tools) > 0 && len(next.Tools) == 0:

@@ -8,10 +8,10 @@ import (
 )
 
 // TestBundleNotPatternsAreParagraphScoped pins the scope of the shipped
-// bundle's bundle-level notPatterns (agentry#845, DEV-010): they evaluate over
-// the containing paragraph, so a descriptive word on a neighbouring prose line
-// still suppresses a live directive (the stated residual risk), while a blank
-// line or a Markdown heading ends that reach (ruleset 0.3.3).
+// bundle's bundle-level notPatterns: they evaluate over the containing
+// paragraph, so a descriptive word on a neighbouring prose line still
+// suppresses a live directive (the stated residual risk), while a blank
+// line or a Markdown heading ends that reach.
 func TestBundleNotPatternsAreParagraphScoped(t *testing.T) {
 	b, err := ruleset.Load()
 	if err != nil {

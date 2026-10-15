@@ -13,9 +13,9 @@ as a `ruleset_releases` row (semver, bundle digest, notes, date), and every
 as its snapshot. So "which ruleset published this" always has an answer.
 
 - **Bump the version whenever a finding's rating or the gate's threshold
-  changes**, in the same PR (plan `scan-and-run-tweaks.md` §4.1), and whenever
-  a rule file changes. The results cache is keyed by ruleset, so a change
-  without a bump would be answered from results cached under the old one.
+  changes**, in the same change, and whenever a rule file changes. The
+  results cache is keyed by ruleset, so a change without a bump would be
+  answered from results cached under the old one.
 - **Pin the new version's digest** in `ruleset_test.go`. Its test fails when
   the bundle's content changes under a version already pinned: a row is keyed
   by semver, and two bundles under one semver would rewrite the row's digest.
@@ -24,20 +24,18 @@ as its snapshot. So "which ruleset published this" always has an answer.
 - **Registering a semver for the first time** enqueues the catalogue sweep,
   which scans every published version again, and the redo of the review queue,
   which judges every version waiting for a person again and publishes the ones
-  the gate now passes (agentry#772). A restart on the same semver enqueues
+  the gate now passes. A restart on the same semver enqueues
   neither. Both jobs name their ruleset, and a worker runs one only under
   that ruleset: during a rolling deploy a worker of the outgoing build hands
   the new ruleset's jobs back for retry until a worker of the new build takes
-  them, and a job for an older ruleset is done by nothing (agentry#805).
+  them, and a job for an older ruleset is done by nothing.
 
 ## Tags: reading an old ruleset back
 
 The first `main` commit that carries a version is tagged `ruleset/v<semver>`
 by `.github/workflows/ruleset-tag.yaml`. The tag holds that bundle and the Go
 stages of its day (which assign the S1–S3 and S5–S9 severities the bundle does
-not hold). `ruleset/v0.2.1` and `ruleset/v0.2.2` were placed by hand, on the
-last `main` commit that carried 0.2.1 and the promotion that brought 0.2.2
-(`b621181`, production's pin when the tags began).
+not hold).
 
 To check a release row's digest against its tag:
 

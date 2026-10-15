@@ -8,12 +8,12 @@ import (
 	"testing"
 )
 
-// Input sources (V13; plan input-sources.md §5, D2–D4; agentry#1060): the
-// intake types repository and url ask for a source the runner fetches into
-// /inputs/<id>/. These tests pin that both types validate, that a source
-// question grants nothing and asks nothing of capabilities, that a
-// repository question warns without failing when the release does not take
-// code, and that the schema's enum is the Go set.
+// Input sources (V13): the intake types repository and url ask for a
+// source the runner fetches into /inputs/<id>/. These tests pin that
+// both types validate, that a source question grants nothing and asks
+// nothing of capabilities, that a repository question warns without
+// failing when the release does not take code, and that the schema's
+// enum is the Go set.
 
 // sourcesManifest is v2YAML with a repository and a url question appended
 // to its intake.
@@ -105,9 +105,9 @@ func TestSourceTypesAreTheClosedSet(t *testing.T) {
 	}
 }
 
-// TestSourceQuestionGrantsNothing: D4. A source question is outside the
-// contract: adding one widens nothing, and it validates with no egress, no
-// secret and no capabilities entry of its own.
+// TestSourceQuestionGrantsNothing: a source question is outside the
+// contract: adding one widens nothing, and it validates with no egress,
+// no secret and no capabilities entry of its own.
 func TestSourceQuestionGrantsNothing(t *testing.T) {
 	with := sourcesManifest(t)
 	without := mustParse(t, v2YAML)
