@@ -2580,6 +2580,21 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/gitsrv/reviewed_view_test.go",
+          "tests": [
+            "TestOnlyReviewedVersionsAreCloneable",
+            "TestAPublicAgentWithNothingReviewedIsNotFound",
+            "TestAPrivateOrgAgentOverGit",
+            "TestSSHServesOnlyReviewedVersionsToAReaderWithNoRole"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/split_roles_test.go",
           "tests": [
             "TestSplitGitRoleLeavesTheTagArchiveToTheWorker",

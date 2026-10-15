@@ -5,11 +5,16 @@ package gitsrv
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -211,6 +216,7 @@ func (s *RepoStore) Remove(repoID uuid.UUID) error {
 	if !strings.HasPrefix(dir, filepath.Clean(s.dataDir)+string(os.PathSeparator)) {
 		return fmt.Errorf("gitsrv: refusing to remove outside data dir")
 	}
+	s.pruneViews(repoID, "")
 	return os.RemoveAll(dir)
 }
 
@@ -242,6 +248,132 @@ func (s *RepoStore) RefsAt(ctx context.Context, repoID uuid.UUID, refs []string)
 		}
 	}
 	return have, nil
+}
+
+// Tag is a tag's own object id and the commit it points at: the same id
+// for a lightweight tag, the commit an annotated tag peels to otherwise.
+type Tag struct {
+	Object string
+	Commit string
+}
+
+// Tags lists the repository's tags by full ref name. A tag that does not
+// point at a commit is left out. A repository never pushed to has none.
+func (s *RepoStore) Tags(ctx context.Context, repoID uuid.UUID) (map[string]Tag, error) {
+	dir := s.Path(repoID)
+	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	out, err := s.git(ctx, dir, nil, nil, "for-each-ref",
+		"--format=%(refname) %(objectname) %(objecttype) %(*objectname) %(*objecttype)", "refs/tags/")
+	if err != nil {
+		return nil, err
+	}
+	tags := make(map[string]Tag)
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Fields(line)
+		switch {
+		case len(f) == 3 && f[2] == "commit":
+			tags[f[0]] = Tag{Object: f[1], Commit: f[1]}
+		case len(f) == 5 && f[2] == "tag" && f[4] == "commit":
+			tags[f[0]] = Tag{Object: f[1], Commit: f[3]}
+		}
+	}
+	return tags, nil
+}
+
+// ReviewedView returns a bare repository that holds the given tags (full
+// ref name → the tag's object id) and only the objects they reach, with
+// HEAD detached at head. It is what a reader is served when they may read
+// only what passed review: git serves any object of a repository to a
+// client that names its id, so the only sure way to keep the rest from
+// them is a repository without it. A view is built once for its set of
+// tags and kept, under {dataDir}/views, until the set changes; older views
+// of the same repository are removed once none has been used for
+// viewStaleAfter.
+func (s *RepoStore) ReviewedView(ctx context.Context, repoID uuid.UUID, tags map[string]string, head string) (string, error) {
+	if !reCommitID.MatchString(head) {
+		return "", fmt.Errorf("gitsrv: view head %q is not a commit id", head)
+	}
+	refs := make([]string, 0, len(tags))
+	for ref, oid := range tags {
+		if !safeRefName(ref) || !strings.HasPrefix(ref, "refs/tags/") || !reCommitID.MatchString(oid) {
+			return "", fmt.Errorf("gitsrv: view ref %q", ref)
+		}
+		refs = append(refs, ref)
+	}
+	sort.Strings(refs)
+	h := sha256.New()
+	for _, ref := range refs {
+		_, _ = fmt.Fprintf(h, "%s %s\n", ref, tags[ref])
+	}
+	_, _ = fmt.Fprintf(h, "HEAD %s\n", head)
+	id := repoID.String()
+	dir := s.viewsDir(repoID)
+	path := filepath.Join(dir, id+"-"+hex.EncodeToString(h.Sum(nil))[:24]+".git")
+	if _, err := os.Stat(path); err == nil {
+		// Its time is its last use, which pruneViews reads.
+		now := time.Now()
+		_ = os.Chtimes(path, now, now)
+		return path, nil
+	}
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return "", err
+	}
+	tmp, err := os.MkdirTemp(dir, id+"-build-")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	if _, err := s.git(ctx, tmp, nil, nil, "init", "--quiet", "--bare"); err != nil {
+		return "", err
+	}
+	args := []string{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-auto-gc", s.Path(repoID)}
+	for _, ref := range refs {
+		args = append(args, "+"+ref+":"+ref)
+	}
+	if _, err := s.git(ctx, tmp, nil, nil, args...); err != nil {
+		return "", err
+	}
+	if _, err := s.git(ctx, tmp, nil, nil, "update-ref", "--no-deref", "HEAD", head); err != nil {
+		return "", err
+	}
+	if _, err := s.git(ctx, tmp, nil, nil, "config", "uploadpack.allowFilter", "true"); err != nil {
+		return "", err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		if _, statErr := os.Stat(path); statErr == nil {
+			return path, nil // built at the same time by another reader
+		}
+		return "", err
+	}
+	s.pruneViews(repoID, path)
+	return path, nil
+}
+
+// viewStaleAfter is how long a superseded view is kept for a clone that may
+// still be reading it.
+const viewStaleAfter = 30 * time.Minute
+
+func (s *RepoStore) viewsDir(repoID uuid.UUID) string {
+	return filepath.Join(s.dataDir, "views", repoID.String()[:2])
+}
+
+// pruneViews removes the repository's views other than keep that were last
+// used more than viewStaleAfter ago, and every view when keep is "".
+func (s *RepoStore) pruneViews(repoID uuid.UUID, keep string) {
+	matches, _ := filepath.Glob(filepath.Join(s.viewsDir(repoID), repoID.String()+"-*.git"))
+	for _, m := range matches {
+		if m == keep {
+			continue
+		}
+		if keep != "" {
+			if fi, err := os.Stat(m); err != nil || time.Since(fi.ModTime()) < viewStaleAfter {
+				continue
+			}
+		}
+		_ = os.RemoveAll(m)
+	}
 }
 
 // safeRefName reports whether a client-supplied ref name is a plain,
