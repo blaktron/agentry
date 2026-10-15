@@ -862,6 +862,11 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 				srv.SetVoiceAdmitter(a)
 			}
 		}
+		if k, ok := e.(AdmitsKnowledge); ok {
+			if a := k.KnowledgeAdmitter(); a != nil {
+				srv.SetKnowledgeAdmitter(a)
+			}
+		}
 		if d, ok := e.(ProvesDrafts); ok {
 			// No pipeline without archive storage: nothing to scan.
 			if dp, pl := d.DraftProvenance(), srv.Pipeline(); dp != nil && pl != nil {

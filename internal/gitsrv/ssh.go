@@ -349,7 +349,7 @@ func (s *SSHServer) runGit(ctx context.Context, ch ssh.Channel, fp, client, gitP
 	if service == "receive-pack" {
 		act = auth.ActAgentRepoWrite
 	}
-	agent, role, denial := h.authorizeGit(ctx, ns, name, principal, act)
+	agent, role, view, denial := h.authorizeGit(ctx, ns, name, principal, act)
 	if denial != nil {
 		msg := denial.message
 		if denial.status == http.StatusNotFound {
@@ -366,10 +366,10 @@ func (s *SSHServer) runGit(ctx context.Context, ch ssh.Channel, fp, client, gitP
 			return 1
 		}
 	}
-	return s.execGit(ctx, ch, client, service, gitProtocol, agent, principal, role)
+	return s.execGit(ctx, ch, client, service, gitProtocol, agent, principal, role, view)
 }
 
-func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, client, service, gitProtocol string, agent registry.Agent, principal *auth.Principal, role auth.AgentRole) int {
+func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, client, service, gitProtocol string, agent registry.Agent, principal *auth.Principal, role auth.AgentRole, view refView) int {
 	h := s.h
 	start := time.Now()
 	outcome := "ok"
@@ -385,7 +385,7 @@ func (s *SSHServer) execGit(ctx context.Context, ch ssh.Channel, client, service
 		cmdCapture = &bytes.Buffer{}
 		stdin = io.TeeReader(ch, newCommandCapture(cmdCapture))
 	}
-	cmd, done, err := h.repos.Command(ctx, service, h.repos.Path(agent.RepoID))
+	cmd, done, err := h.repos.Command(ctx, service, view.repoPath(h.repos, agent))
 	if err != nil {
 		outcome = "error"
 		h.log.Error("git hooks unavailable", "service", service, "err", err)

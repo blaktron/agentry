@@ -757,6 +757,19 @@
           ]
         },
         {
+          "path": "internal/api/knowledge_admission_test.go",
+          "tests": [
+            "TestAKnowledgeUploadIsAdmittedBeforeAnythingIsStored",
+            "TestAnUploadTheAllocationRefusesIsVoided"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
           "path": "internal/api/knowledge_replace_test.go",
           "tests": [
             "TestKnowledgeReplaceThroughTheSeam",
@@ -1217,7 +1230,8 @@
             "TestAccountInstallInvisibleToNonReaders",
             "TestAccountInstallListsABlockedQuickAgentAsBlocked",
             "TestAccountInstallMovesNoDownloadCounter",
-            "TestAccountInstallOptionalSecretFlipAsksNothing"
+            "TestAccountInstallOptionalSecretFlipAsksNothing",
+            "TestAccountInstallReasksWhenAServerWidensAtTheSamePin"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2580,6 +2594,21 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/gitsrv/reviewed_view_test.go",
+          "tests": [
+            "TestOnlyReviewedVersionsAreCloneable",
+            "TestAPublicAgentWithNothingReviewedIsNotFound",
+            "TestAPrivateOrgAgentOverGit",
+            "TestSSHServesOnlyReviewedVersionsToAReaderWithNoRole"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/split_roles_test.go",
           "tests": [
             "TestSplitGitRoleLeavesTheTagArchiveToTheWorker",
@@ -3137,6 +3166,19 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/scan/policy_merge_test.go",
+          "tests": [
+            "TestMergeKeepsTheBaselineLicenseFloor",
+            "TestNoCommonLicenseSurvivesTheSnapshot",
+            "TestMergeKeepsEveryReviewCondition",
+            "TestADifferentConditionIsNotALoosening"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/remote_server_caps_test.go",
           "tests": [
             "TestARemoteServerIsNetwork",
@@ -3194,6 +3236,7 @@
             "TestQueuePipelineSurfacesEnqueueFailure",
             "TestUnparseableOrgPolicyFailsClosed",
             "TestPolicyKnobsRejectSubmissions",
+            "TestOrgOverlayStaysAboveTheStoredBaseline",
             "TestPublicPublishRequiresTOTP",
             "TestRetriedScanResumesInsteadOfDuplicating",
             "TestRescanUsesResultsCache",
@@ -3374,6 +3417,16 @@
           "path": "internal/scan/ruleset_job_internal_test.go",
           "tests": [
             "TestRulesetJobActionFor"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/server_egress_caps_test.go",
+          "tests": [
+            "TestAPackageServersEgressIsNetwork"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4407,6 +4460,17 @@
             "TestCanonicalJSONPrunesUndeclared",
             "TestCanonicalJSONRoundTrip",
             "TestCanonicalJSONNil"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/capdiff_server_test.go",
+          "tests": [
+            "TestDiffCapabilitiesComparesAPackageServersOwnCapabilities",
+            "TestAServerSecretsOptionalMarkingIsNotADiff"
           ],
           "fuzz": [],
           "benchmarks": [],

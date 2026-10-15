@@ -71,6 +71,30 @@ func (c manifestCaps) remoteServerHosts() []string {
 	return out
 }
 
+// serverEgress maps each host a declared package MCP server's own
+// egress names (lowercased, "*" kept) to the server that names it first.
+// It is network the release reaches, from the server's container rather
+// than the agent's, so it counts for policy and S9 and never marks an
+// agent script's own host as declared (S6 does not read it).
+func (c manifestCaps) serverEgress() map[string]string {
+	out := map[string]string{}
+	for _, srv := range c.MCPServers {
+		if srv.IsRemote() {
+			continue
+		}
+		for _, h := range srv.Egress {
+			h = strings.ToLower(strings.TrimSpace(h))
+			if h == "" || h == "none" {
+				continue
+			}
+			if _, seen := out[h]; !seen {
+				out[h] = srv.SourceID() + "@" + srv.Version
+			}
+		}
+	}
+	return out
+}
+
 // browserHosts are the hosts the manifest's browser line declares,
 // lowercased, exact or "*.": none for a line that does not read.
 func (c manifestCaps) browserHosts() []string {
@@ -105,7 +129,7 @@ func declaredCaps(manifestJSON []byte) map[string]bool {
 	if !ok {
 		return out
 	}
-	if (len(c.Network.Egress.Hosts) > 0 && !onlyNone(c.Network.Egress.Hosts)) || len(c.remoteServerHosts()) > 0 {
+	if (len(c.Network.Egress.Hosts) > 0 && !onlyNone(c.Network.Egress.Hosts)) || len(c.remoteServerHosts()) > 0 || len(c.serverEgress()) > 0 {
 		out["network"] = true
 	}
 	if notNone(c.Filesystem.Write) {
