@@ -1217,7 +1217,8 @@
             "TestAccountInstallInvisibleToNonReaders",
             "TestAccountInstallListsABlockedQuickAgentAsBlocked",
             "TestAccountInstallMovesNoDownloadCounter",
-            "TestAccountInstallOptionalSecretFlipAsksNothing"
+            "TestAccountInstallOptionalSecretFlipAsksNothing",
+            "TestAccountInstallReasksWhenAServerWidensAtTheSamePin"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3410,6 +3411,16 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/scan/server_egress_caps_test.go",
+          "tests": [
+            "TestAPackageServersEgressIsNetwork"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/signing_kms_test.go",
           "tests": [
             "TestKMSSignerProducesAVerifiableEnvelope",
@@ -4436,6 +4447,17 @@
             "TestCanonicalJSONPrunesUndeclared",
             "TestCanonicalJSONRoundTrip",
             "TestCanonicalJSONNil"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/manifest/capdiff_server_test.go",
+          "tests": [
+            "TestDiffCapabilitiesComparesAPackageServersOwnCapabilities",
+            "TestAServerSecretsOptionalMarkingIsNotADiff"
           ],
           "fuzz": [],
           "benchmarks": [],
