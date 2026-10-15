@@ -1,181 +1,109 @@
 # Agentry
 
-**A registry and git host for single-purpose AI agents, with a mandatory
-pre-publication security pipeline and signed provenance.**
+The Agentry registry server: a registry and git host for single-purpose AI
+agents, with a mandatory pre-publication security pipeline and signed
+provenance.
 
-> This repository is the **open core**: the registry server (`agentryd`), the
-> security pipeline, the account and authorization system, the git host, and
-> a headless deployment. It runs on its own and serves its own pages at
-> `/ui/`. **SecureAgentry** ([secureagentry.net](https://secureagentry.net)) is
-> the hosted product built on it: a closed front end (`blaktron/agentry-web`)
-> and an enterprise build (`blaktron/agentry-enterprise`) that extend this code
-> through documented seams rather than forking it. The technical identifiers —
-> the Go module path, the `agentryd` / `agentry` binaries, the `AGENTRY_` env
-> prefix — keep the `agentry` name.
+This repository is the open core. It holds `agentryd` (the server, in api,
+git and worker roles), the ten-stage security pipeline, the account and
+authorization system, the git host, the server's own pages at `/ui/`, and a
+headless deployment (Docker Compose and a Helm chart). It runs on its own.
+The Go module path, the `agentryd` and `agentry` binaries and the `AGENTRY_`
+environment prefix keep the `agentry` name.
 
-Agent instruction files — skills, system prompts, small MCP servers — are
-executed with your credentials and your tool access. They are also, today,
-distributed with no signing, no malware scanning, and no review. Agentry
-treats that as the problem worth solving: every published version is scanned
-on the exact bytes that will ship, and nothing becomes installable until the
-gate decides.
+Every published version is scanned on the exact bytes that will ship, and
+nothing becomes installable until the gate decides. A scanner that errors or
+times out, or content it could not read, fails **toward** review — never
+through. Static analysis cannot prove an agent safe, and the product never
+claims it does. See [the trust model](https://docs.secureagentry.net/trust/)
+for what the pipeline checks, what a signature proves and what none of it
+guarantees.
 
-## What it does
+## Prerequisites
 
-- **Hosts agents in git.** Smart-HTTP push/clone, per-agent permissions, a `v*`
-  tag namespace where tags are immutable and creating one needs publish
-  permission, so releasing is a distinct right from editing.
-- **Gates publication.** Ten scanner stages look for prompt injection, hidden
-  and obfuscated content, secrets, undeclared capabilities, dependency and
-  install-script risk, publisher anomalies, and rug-pull release diffs. A
-  version with low and medium findings publishes with them shown; a high
-  finding goes to human review; a critical one is rejected. A scanner that
-  errors or times out, or content it could not read, fails **toward**
-  review — never through.
-- **Makes capabilities explicit.** The manifest declares network egress,
-  filesystem access, subprocess execution, and expected secrets. Consumers see
-  it before installing, policy engines act on it, and the code scanner diffs it
-  against what the code actually does.
-- **Signs what it publishes.** Each release is content-addressed and carries an
-  in-toto/DSSE attestation binding the archive digest to its scan report,
-  ruleset version, and policy. `agentry verify` checks it offline.
-- **Says what it does not know.** Static analysis cannot prove an agent safe,
-  and the product never claims it does. Pages show the findings, the ruleset
-  version, and when the scan ran; published versions are rescanned as detection
-  improves, with quarantine and advisories when something new surfaces.
+- Go at the version on the `go` line of `go.mod` (an older `go` fetches that
+  toolchain itself). There is no JavaScript build: the server's pages are Go
+  templates.
+- Docker with Compose, or PostgreSQL 16 locally (`scripts/dev/pg.sh` runs a
+  private cluster).
+- `sqlc` for query code generation (`make generate`).
+- `golangci-lint` for `make lint` (the target skips it when it is absent).
 
-## Quick look
+## Build, test and lint
 
 ```bash
-# Author
-agentry init --modes autonomous incident-summarizer
-agentry validate                 # the server's V-rules + S1/S3/S4 scanners, offline
-git push origin main && git tag v1.0.0 && git push origin v1.0.0
-
-# Consumer
-agentry install acme/incident-summarizer --target=claude-skill
-agentry verify  acme/incident-summarizer@1.0.0
+make build      # compile ./... and write bin/agentryd
+make test       # all Go tests; database tests read AGENTRY_TEST_DATABASE_URL
+make lint       # gofmt, go vet, golangci-lint
+make generate   # regenerate the OpenAPI server, the Go client and sqlc output
+make check      # the CI gate: generated-code drift, ruleset sync, lint, tests, build
 ```
 
-Install prints the declared capabilities and asks before installing anything
-that can reach the network or run commands.
+`./scripts/dev/pg.sh test-url` prints a database URL for the tests. The
+acceptance scripts in `scripts/acceptance/` drive a booted server end to end
+(`make e2e` runs `smoke.sh`). The API is spec-first: edit `schemas/openapi.yaml`,
+run `make generate`, then implement the new method on `internal/api.Server`.
+[Developing Agentry](docs/dev/getting-started.md) has the details.
 
-## Try it locally
+## Run it locally
 
 ```bash
-make db-up      # local Postgres 16
-make dev        # migrations + agentryd (all roles) on :8080
+make db-up      # local Postgres 16 on :5477
+make dev        # migrations, then agentryd (all roles) on :8080
+curl localhost:8080/api/v1/meta
 ```
 
-Open http://localhost:8080/ui/ — sign-in, your account and tokens, the review
-queue, the staff console and organization administration are served by the
-server itself. Then [docs/self-hosting.md](docs/self-hosting.md) for a real
-deployment.
+Open http://localhost:8080/ui/ for sign-in, account and tokens, the review
+queue, the staff console and organization administration. Configuration is
+`agentry.yaml` (copy `agentry.yaml.example`) with `AGENTRY_*` environment
+overrides; the environment wins. `deploy/compose` runs the whole registry
+with no site in front: Postgres, object storage, mail, the directory
+service, `agentryd` and an nginx edge. For a real deployment, see
+[self-hosting](https://docs.secureagentry.net/self-hosting/).
 
-## Headless, or behind a front end
-
-**Headless.** `deploy/compose` runs the whole registry with no site: Postgres,
-object storage, mail, the directory service (authentik, with the account flows
-as blueprints), `agentryd`, and an nginx edge. The server's `/ui/` pages are
-the browser surface; `agentry login` and the desktop app open its
-`/ui/authorize` page to get their token, and everything else they do is the
-API. The Helm chart deploys the api, git and worker roles and expects
-Postgres, object storage, mail and the identity provider outside it.
-
-**Behind a front end.** A site in front sets `web.url` (where every redirect
-and email link the API writes should land), `ui.mode: authorize` (the server
-keeps only the device-authorize page), and the brand hooks (`brand.name`,
-`logoURL`, `cssURL`, `supportEmail`, `securityEmail`; `GET /api/v1/meta`
-reports the name, the logo and the support address). It talks to the same API under the same authorization
-matrix — a front end cannot do anything the API refuses. The hosted site is
-closed; another one can be built on exactly these hooks
-([docs/self-hosting.md](docs/self-hosting.md), "Fronting it with a site").
-
-**Extended.** `pkg/extension` lets an outside Go module mount routes under
-`/api/v1/x/<name>/`, run its own migrations in its own schema, replace the
-entitlements resolver, subscribe to committed events, and add worker jobs.
-The enterprise build is one such module; the core carries none.
-
-## Repository layout
+## Layout
 
 | Path | What |
 |---|---|
 | `cmd/agentryd` | the server: `agentryd api\|git\|worker\|all` |
-| — | the CLI lives in [blaktron/agentry-cli](https://github.com/blaktron/agentry-cli) (depends on this module's `pkg/`) |
 | `internal/scan` | the security pipeline: orchestrator, stages S1–S10, gate, judge, signing |
 | `internal/registry` | agents, versions, the publication state machine, deterministic archives |
-| `internal/gitsrv` | git smart-HTTP, repo storage, policy hooks |
-| `internal/api` `internal/auth` `internal/store` | HTTP layer, identity/authz, Postgres |
+| `internal/gitsrv` | git smart-HTTP, repository storage, policy hooks |
+| `internal/api` `internal/auth` `internal/store` | HTTP layer, identity and authorization, Postgres |
 | `internal/render` | the only path by which author markdown reaches a browser |
-| `internal/ui` | the server's own pages at `/ui/` (Go templates, no JavaScript build): device authorize, sign-in, account, review, staff, organizations |
-| `pkg/extension` | the seam a closed build extends the server through: routes, migrations, entitlements, hooks, jobs |
-| `pkg/judge` `pkg/websearch` | the one Jev client and its question sets, and the web search clients: the registry's model-input routes and a person's local scans use the same code |
-| `pkg/` | public: manifest spec + refs, rules engine, embedded ruleset, deterministic archives + extractor, attestation verify, generated API client — the surface the CLI and third parties build on |
+| `internal/ui` | the server's own pages at `/ui/` (Go templates): device authorize, sign-in, account, review, staff, organizations |
+| `pkg/extension` | the seam an outside Go module extends the server through: routes, migrations, entitlements, hooks, jobs |
+| `pkg/judge` `pkg/websearch` | the AI Review client and its question sets, and the web search clients |
+| `pkg/` | the public surface the CLI and third parties build on: manifest spec and refs, rules engine, embedded ruleset, deterministic archives and extractor, attestation verification, the generated API client |
 | `rules/` | the versioned S3/S4 rule bundle |
 | `testdata/attack-corpus/` | the golden corpus: attack fixtures and their benign twins |
-| — | the hosted site (front end, brand, its compose overlay and Terraform) lives in blaktron/agentry-web and the enterprise build in blaktron/agentry-enterprise — both closed; a registry runs without them (DEV-091) |
-| — | the docs & developers sites live in blaktron/agentry-docs (they clone this repo's `docs/` and `schemas/` at build, beside the site's pages) |
-| `deploy/` | the headless compose stack and the Helm chart |
-| `docs/` | user, operator, and API docs — start with `trust.md`, `self-hosting.md`, `api-conventions.md` |
+| `examples/` | small example QuickAgent packages that publish through the pipeline |
+| `deploy/` | the headless Compose stack and the Helm chart |
+| `schemas/` | the OpenAPI spec and the code generator configuration |
+| `docs/` | the pages published at docs.secureagentry.net |
+
+The CLI is [agentry-cli](https://github.com/blaktron/agentry-cli); it depends
+on this module's `pkg/`.
 
 ## Documentation
 
-- [Trust and security model](docs/trust.md) — what the pipeline checks, what a
-  signature proves, and what none of it guarantees; a site in front renders
-  the same posture on its `/trust` page, and every instance publishes its live
-  signing keys at `/.well-known/agentry/signing-keys.json`
-- [Self-hosting](docs/self-hosting.md)
-- [Running QuickAgents](docs/runner.md) — every command, flag, policy key and enforcement mechanism of the runner
-- [Hosted runs](docs/hosted-runs.md) — running a release on a deployment's own machine: the caps, the credit hold and its settlement, what is refused, and what the receipt carries (a deployment that mounts the runs extension; this repository's server carries none)
-- [Knowledge packs in the registry](docs/knowledge.md) — an account's packs kept sealed under keys of their own, the key-wrapper seam, what the scan reads, and when they are destroyed
-- [The Writing Voice in the registry](docs/voice.md) — the one VOICE.md an account keeps: its live, pending and previous versions, the review by AI Review's `voice` question set before a version is live, the seal, and the extension's doors
-- [Model input](docs/model-input.md) — AI Review of text a model is about to read, and web search brokered by the registry: who may call, the question set and its bench, the verdicts, what is recorded
-- [The log contract](docs/logging.md) — what a line carries, what is never in one, the `event` names a dashboard keys on
-- [Operational runbooks](docs/ops/runbooks.md)
-- [Contributing](CONTRIBUTING.md) — including the rules that actually matter (route authorization, scanner fixtures)
-- [Reporting a vulnerability](SECURITY.md)
-- Development notes — the immutable build plan, workgroup tracking, and the deviations register — live in [agentry-notes](https://github.com/blaktron/agentry-notes); new deviations continue there
+- [Self-hosting](https://docs.secureagentry.net/self-hosting/)
+- [Running QuickAgents](https://docs.secureagentry.net/quickagents/)
+- [Trust and security model](https://docs.secureagentry.net/trust/)
+- [The runner](https://docs.secureagentry.net/runner/)
+- [API reference](https://developers.secureagentry.net/)
+- [Developing Agentry](docs/dev/getting-started.md)
 
-## Status
+## Contributing
 
-Milestones **M0–M7** of the v1 plan are implemented, with automated
-acceptance scripts in `scripts/acceptance/` (`m0`–`m4`, `m6`, `m7`,
-`ui.sh` for the core's own pages, and `directory-signout.py` against a live
-directory): scaffolding and CI (M0), identity
-and authorization (M1), git hosting (M2), the registry and publication state
-machine (M3), the security pipeline (M4), the web UI (M5 — since moved to the
-closed site repository; the core keeps its own `/ui/` pages), enterprise
-SSO/SCIM and webhooks (M6), and the AWS reference deployment (M7 — Terraform
-validated, never applied to a live account; it now lives with the site).
+Contributions are welcome under the Developer Certificate of Origin (every
+commit is signed off) and no CLA. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**M8 (launch hardening) is partial.** Done: SECURITY.md and coordinated
-disclosure, CONTRIBUTING/DCO, signed releases with SBOM (built with
-reproducible-build flags; no step yet rebuilds and compares),
-release-please automation, GDPR erasure, abuse intake and the trust & safety
-console, the operational runbooks. Remaining: an external penetration test, a
-status page, and `security@` / `abuse@` addresses live before launch. Seed
-content is decided: PLAN §20 Q10 named the forty worked QuickAgents in
-`agentry-examples` (DEV-093), and production launches with none published
-(`production-on-vultr.md` D14).
+## Security
 
-An independent audit of this repository found the tracking documents
-overstating completeness, and roughly nineteen departures from the plan that
-were never recorded. The substantive gaps in the code have since been fixed and
-the register backfilled.
-
-The register in [agentry-notes](https://github.com/blaktron/agentry-notes)
-records the departures that make a claim weaker, not only the ones that make it
-stronger.
-
-Decided since the plan was written: the product name (**Agentry**, PLAN
-§20 Q1 — this module keeps the `agentry` technical name) and the license
-(**MIT**, Q2), and the hosted registry's judge (Q3: TypeSafe AI's Jev as the
-`typesafe` provider, DEV-113, 2026-09-20). The launch baseline policy (Q4)
-was decided as the built defaults (DEV-093, 2026-09-07) and reversed by
-ruleset 0.3.0, which publishes medium findings and holds high ones
-(DEV-186, 2026-10-01).
+Report vulnerabilities as described in [SECURITY.md](SECURITY.md), never in a
+public issue.
 
 ## License
 
-MIT (see [LICENSE](LICENSE)), with a DCO and no CLA — see
-[CONTRIBUTING.md](CONTRIBUTING.md).
+MIT (see [LICENSE](LICENSE)).
