@@ -3137,6 +3137,19 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/scan/policy_merge_test.go",
+          "tests": [
+            "TestMergeKeepsTheBaselineLicenseFloor",
+            "TestNoCommonLicenseSurvivesTheSnapshot",
+            "TestMergeKeepsEveryReviewCondition",
+            "TestADifferentConditionIsNotALoosening"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/remote_server_caps_test.go",
           "tests": [
             "TestARemoteServerIsNetwork",
@@ -3194,6 +3207,7 @@
             "TestQueuePipelineSurfacesEnqueueFailure",
             "TestUnparseableOrgPolicyFailsClosed",
             "TestPolicyKnobsRejectSubmissions",
+            "TestOrgOverlayStaysAboveTheStoredBaseline",
             "TestPublicPublishRequiresTOTP",
             "TestRetriedScanResumesInsteadOfDuplicating",
             "TestRescanUsesResultsCache",
