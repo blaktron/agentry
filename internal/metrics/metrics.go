@@ -1,14 +1,14 @@
-// Package metrics is the §16.2 telemetry seam: one instrument set, two ways
+// Package metrics is the telemetry seam: one instrument set, two ways
 // out of the process.
 //
 //   - OTLP/HTTP export (opt-in, AGENTRY_OTEL_ENDPOINT). On SaaS this points at
 //     the ADOT sidecar, which writes the metrics to CloudWatch as EMF under the
-//     `Agentry` namespace — which is where the §16.3 alarms read them.
-//   - A Prometheus exposition endpoint at /metrics, always on (D-25: a
+//     `Agentry` namespace — which is where the alarms read them.
+//   - A Prometheus exposition endpoint at /metrics, always on (a
 //     self-hosted operator gets the same numbers without running a collector).
 //
-// Instrument names are the CloudWatch metric names the terraform dashboards
-// and alarms in deploy/terraform/modules/observability reference, verbatim —
+// Instrument names are the CloudWatch metric names the hosted deployment's
+// dashboards and alarms reference, verbatim —
 // QueueAgeSeconds, ScanStageErrors, ScanStageRuns and the rest. They are
 // deliberately NOT renamed to OTel dotted convention on the way out: an alarm
 // that reads a metric nobody emits is worse than an unidiomatic name, and the
@@ -40,7 +40,7 @@ const scopeName = "github.com/blaktron/agentry/internal/metrics"
 // secondsBuckets are the explicit histogram boundaries for every *Seconds
 // instrument. The SDK default boundaries top out at 10,000 and are shaped for
 // milliseconds; against seconds they put every real latency in the first
-// bucket and make the §16.1 p95 SLOs (git clone first byte < 2 s, API p99 <
+// bucket and make the p95 SLOs (git clone first byte < 2 s, API p99 <
 // 300 ms) unreadable. These span 5 ms to 10 min, which covers an API read and
 // a slow scan stage in one scale.
 var secondsBuckets = []float64{
@@ -97,13 +97,13 @@ type Metrics struct {
 
 	webhookDeliveries metric.Int64Counter
 
-	// failOpen counts the deliberate fail-open paths (agentry#33): places
+	// failOpen counts the deliberate fail-open paths: places
 	// that log and continue so a broken control never becomes an outage.
 	// "We did not check" has to be visible on a dashboard, not only in a
 	// log line.
 	failOpen metric.Int64Counter
 	// mcpSweeps / mcpAlerts: the daily MCP server vulnerability sweep and
-	// the dependency alerts it opens (agentry#177).
+	// the dependency alerts it opens.
 	mcpSweeps metric.Int64Counter
 	mcpAlerts metric.Int64Counter
 }
@@ -199,18 +199,18 @@ func (m *Metrics) instrument(meter metric.Meter) error {
 		return g
 	}
 
-	// RED per endpoint (§16.2).
+	// RED per endpoint.
 	m.httpRequests = i64c("HttpRequests", "HTTP requests by route class, method and status class.")
 	m.httpDuration = f64h("HttpRequestDurationSeconds", "HTTP request duration by route class.")
 
-	// Queue depth/age per River queue (§16.2) — QueueAgeSeconds carries the
-	// §16.3 page alarm.
+	// Queue depth/age per River queue — QueueAgeSeconds carries the
+	// page alarm.
 	m.queueDepth = i64g("QueueDepth", "Jobs waiting in a queue.")
 	m.queueAge = f64g("QueueAgeSeconds", "Age of the oldest waiting job in a queue.", "s")
 	m.queueJobs = i64c("QueueJobs", "Queue job outcomes by queue, kind and outcome.")
 
 	// Scan pipeline. ScanStageRuns/ScanStageErrors are the numerator and
-	// denominator of the §16.3 scan-error-rate page alarm.
+	// denominator of the scan-error-rate page alarm.
 	m.scanStageRuns = i64c("ScanStageRuns", "Scan stage executions.")
 	m.scanStageErrors = i64c("ScanStageErrors", "Scan stage executions that failed.")
 	m.failOpen = i64c("FailOpenEvents", "Deliberate fail-open events by path (audit_stream_drop, osv_not_checked, osv_error, history_not_scanned, directory_erasure).")
@@ -219,7 +219,7 @@ func (m *Metrics) instrument(meter metric.Meter) error {
 	m.mcpAlerts = i64c("McpDependencyAlertsOpened", "Dependency alerts opened on published versions by the MCP sweep.")
 	m.scanStageDuration = f64h("ScanStageDurationSeconds", "Scan stage duration.")
 
-	// Publish funnel (§16.2 pipeline dashboard).
+	// Publish funnel (pipeline dashboard).
 	m.publishSubmitted = i64c("PublishSubmitted", "Versions submitted for scanning.")
 	m.publishVerdicts = map[string]metric.Int64Counter{
 		VerdictClean:   i64c("PublishVerdictClean", "Versions whose pipeline verdict was clean."),
@@ -227,12 +227,12 @@ func (m *Metrics) instrument(meter metric.Meter) error {
 		VerdictBlocked: i64c("PublishVerdictBlocked", "Versions whose pipeline verdict was blocked."),
 	}
 	m.judgeTokens = i64c("JudgeTokens", "S5 judge token use as the provider reported it, by kind (prompt|completion).")
-	// The model-input routes (agentry#608): calls by op and verdict, and
-	// the judge's input tokens they spent. Counts, never a price (DEV-150).
+	// The model-input routes: calls by op and verdict, and
+	// the judge's input tokens they spent. Counts, never a price.
 	m.modelInputCalls = i64c("ModelInputCalls", "Model-input route calls by op (scan|search) and verdict (pass|withheld|not_scanned).")
 	m.modelInputTokens = i64c("ModelInputJudgeTokens", "Judge input tokens the model-input routes spent, by op (scan|search).")
 
-	// git (§16.2 git dashboard; first-byte carries the §16.1 p95 < 2s SLO).
+	// git (git dashboard; first-byte carries the p95 < 2s SLO).
 	m.gitOps = i64c("GitOps", "git smart-HTTP operations by op and outcome.")
 	m.gitOpDuration = f64h("GitOpDurationSeconds", "git smart-HTTP operation duration.")
 	m.gitOpConcurrency = i64g("GitOpConcurrency", "git operations currently in flight.")
@@ -341,22 +341,22 @@ func (m *Metrics) RecordScanStage(ctx context.Context, stage string, d time.Dura
 
 // FailOpen paths, the attribute values RecordFailOpen accepts. Each is a
 // place the code chooses to continue rather than stop when a control is
-// unavailable (DEV-020, DEV-026.3), so its count is the honest measure of
+// unavailable, so its count is the honest measure of
 // how often that control did not run.
 const (
 	FailOpenAuditStreamDrop = "audit_stream_drop"
 	FailOpenOSVNotChecked   = "osv_not_checked"
 	FailOpenOSVError        = "osv_error"
 	// FailOpenVersionNotChecked counts declared MCP server versions S7 did
-	// not check against their package registry (agentry#1036): the check is
+	// not check against their package registry: the check is
 	// off, or the registry gave no answer, and the version publishes.
 	FailOpenVersionNotChecked = "version_not_checked"
 	// FailOpenHistoryNotScanned counts git-tag publishes whose history S2
-	// could not (fully) scan for secrets (agentry#54).
+	// could not (fully) scan for secrets.
 	FailOpenHistoryNotScanned = "history_not_scanned"
 	// FailOpenDirectoryErasure counts account erasures whose directory
 	// half did not happen: the retries ran out, or the retry could not be
-	// queued (agentry#499). The registry's erasure stands; the sign-in
+	// queued. The registry's erasure stands; the sign-in
 	// account is left for the operator to delete.
 	FailOpenDirectoryErasure = "directory_erasure"
 )
@@ -405,10 +405,9 @@ func (m *Metrics) RecordVerdict(ctx context.Context, verdict string) {
 	}
 }
 
-// RecordJudgeTokens counts one adjudication's token use by kind. It
-// replaces the judge-cost counter that nothing ever fed: the price per
-// token is the operator's to apply to these counts (plan subscription-tiers
-// §10), and a count is what every provider actually reports.
+// RecordJudgeTokens counts one adjudication's token use by kind.
+// It records counts, not a price: the price per token is the operator's to
+// apply to these counts, and a count is what every provider reports.
 func (m *Metrics) RecordJudgeTokens(ctx context.Context, prompt, completion int) {
 	if m == nil {
 		return
@@ -448,7 +447,7 @@ func (m *Metrics) RecordGitConcurrency(ctx context.Context, op string, inflight 
 }
 
 // RecordGitCloneFirstByte records time-to-first-byte for a clone/fetch — the
-// §16.1 "p95 < 2 s first-byte" SLI.
+// "p95 < 2 s first-byte" SLI.
 func (m *Metrics) RecordGitCloneFirstByte(ctx context.Context, d time.Duration) {
 	if m == nil {
 		return
@@ -482,7 +481,7 @@ func (m *Metrics) meter(scope string) metric.Meter {
 func extensionScope(name string) string { return scopeName + "/x/" + name }
 
 // ExtensionMeter is the meter an extension named name creates its own
-// instruments on (agentry#777). It is the same provider as the core's, so
+// instruments on. It is the same provider as the core's, so
 // what the extension records is scraped from /metrics with the core's
 // resource labels and leaves through OTLP when that is configured; only the
 // instrumentation scope differs. In the scrape the core's series win: Gather

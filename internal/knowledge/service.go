@@ -28,7 +28,7 @@ import (
 type State string
 
 // The states a pack is in: empty until a tree is uploaded, scanning from
-// each upload until its scan ends, ready after it whatever it found (D27),
+// each upload until its scan ends, ready after it whatever it found,
 // failed when the stored tree could not be read to scan.
 const (
 	StateEmpty    State = "empty"
@@ -63,12 +63,12 @@ var (
 	// ErrName is a name that is not a pack's.
 	ErrName = errors.New("knowledge: a pack name is 1-64 lowercase letters, digits, '.', '-' or '_', starting with a letter or a digit")
 	// ErrScanning is a pack whose tree is being scanned: a pack is
-	// unusable only then (D27).
+	// unusable only then.
 	ErrScanning = errors.New("knowledge: the pack is being scanned")
 )
 
 // AllocationError is an upload past the owner's allocation: what they
-// would keep and the cap (D5, D25).
+// would keep and the cap.
 type AllocationError struct {
 	Bytes int64
 	Max   int64
@@ -212,7 +212,7 @@ func (s *Service) Create(ctx context.Context, owner Owner, name string, w Wrappe
 }
 
 // SetExportable marks whether one of an organization's packs may be
-// exported by its members (D26), with also run in its transaction. A
+// exported by its members, with also run in its transaction. A
 // person's own pack has no such mark: its owner exports it.
 func (s *Service) SetExportable(ctx context.Context, owner Owner, id uuid.UUID, exportable bool, also Also) (storegen.KnowledgePack, error) {
 	if err := s.ready(); err != nil {
@@ -436,7 +436,7 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 		if err != nil {
 			return fmt.Errorf("knowledge: count the allocation: %w", err)
 		}
-		// A cap never deletes (D25): a tree no larger than the one it
+		// A cap never deletes: a tree no larger than the one it
 		// replaces is always taken; one that grows must fit.
 		if c := pool.Cap; tree.Bytes > cur.Bytes && (!c.Enabled || (c.Max > 0 && others+tree.Bytes > c.Max)) {
 			return &AllocationError{Bytes: others + tree.Bytes, Max: c.Max}
@@ -530,7 +530,7 @@ func (s *Service) Export(ctx context.Context, owner Owner, id uuid.UUID) (storeg
 }
 
 // ErrNotExportable is an organization's shared pack its admins have not
-// marked exportable, exported by a member (D26).
+// marked exportable, exported by a member.
 var ErrNotExportable = errors.New("knowledge: the pack is not marked exportable")
 
 // ExportIf is Export, refused when allow answers an error for the pack as
@@ -685,7 +685,7 @@ func (s *Service) RegisterHandlers(q queue.Client) {
 		if err != nil && last {
 			// The last attempt never leaves a pack scanning: whatever
 			// stopped it, the pack is failed, with nothing claimed read.
-			// The queue's job timeout (DEV-176) cancels ctx, so the write
+			// The queue's job timeout cancels ctx, so the write
 			// must not ride it.
 			s.failPack(context.WithoutCancel(ctx), args)
 		}
@@ -703,7 +703,7 @@ func (s *Service) RegisterHandlers(q queue.Client) {
 // scanPack reads the tree the job names and records its report. A tree
 // since replaced is not scanned: its successor has a job of its own. A
 // scan that did not finish is retried until the last attempt, which
-// records what it read (D27: the report is a record, never a gate).
+// records what it read (the report is a record, never a gate).
 func (s *Service) scanPack(ctx context.Context, args ScanArgs, last bool) error {
 	if err := s.ready(); err != nil {
 		return err

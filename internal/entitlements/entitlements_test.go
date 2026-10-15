@@ -10,8 +10,8 @@ import (
 	"github.com/blaktron/agentry/internal/config"
 )
 
-// The point of the seam is that wiring it changed nothing: these are the §19
-// table values the hardcoded constants used to carry.
+// The point of the seam is that wiring it changes nothing: these are the
+// default quota table values.
 func TestDefaultResolverReproducesSection19(t *testing.T) {
 	r := Default()
 	ctx := t.Context()
@@ -83,7 +83,7 @@ func TestLimitsFollowConfig(t *testing.T) {
 
 // The core resolver caps nothing and switches nothing off: a self-hosted
 // registry has no tiers, so every Cap is enabled with no maximum and every
-// flag is on, for users and orgs alike (§1.6.5, §14.3: no crippled stubs).
+// flag is on, for users and orgs alike (no crippled stubs).
 // The walk is over the struct's fields, so a field added to Features fails
 // here until the resolver answers it and this test knows its kind.
 func TestOSSResolverCapsNothing(t *testing.T) {

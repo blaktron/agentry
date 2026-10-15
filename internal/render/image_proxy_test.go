@@ -30,7 +30,7 @@ func TestImagesRouteThroughTheProxy(t *testing.T) {
 	if again := r.sanitize(out); again != out {
 		t.Fatal("sanitize not idempotent")
 	}
-	// Default renderer: no proxy, placeholder as before.
+	// Default renderer: no proxy, placeholder.
 	out, _ = New().Markdown([]byte("![Logo](https://cdn.example/logo.png)\n"))
 	if strings.Contains(out, "<img") {
 		t.Fatalf("default renderer must not emit img:\n%s", out)

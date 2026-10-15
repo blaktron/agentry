@@ -35,7 +35,7 @@ func TestMutatorsApply(t *testing.T) {
 // fixture fires unmutated (otherwise the corpus gate would already be red),
 // the case count is fixtures × applicable mutators, and the report is
 // internally consistent. Evasions are REPORTED, never asserted — that is
-// the whole point of §17.5's report-only mode.
+// the whole point of the report-only mode.
 func TestRunAgainstEmbeddedBundle(t *testing.T) {
 	bundle, err := ruleset.Load()
 	if err != nil {
