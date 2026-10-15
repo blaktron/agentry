@@ -1,4 +1,4 @@
-# oapi-codegen config: server stubs for internal/api (std net/http, D-09).
+# oapi-codegen config: server stubs for internal/api (std net/http).
 package: api
 generate:
   models: true

@@ -1,7 +1,7 @@
-# Agentry public REST API: spec-first contract (PLAN D-09, §9).
+# Agentry public REST API: spec-first contract.
 # This file is the source of truth; server stubs and clients are generated
 # from it (make generate). Changes within /api/v1 must be additive; the CI
-# oasdiff gate enforces it. Document version 3.0.3 per DEVIATIONS.md DEV-002.
+# oasdiff gate enforces it. The document is OpenAPI 3.0.3.
 openapi: 3.0.3
 info:
   title: Agentry API
@@ -11,27 +11,24 @@ info:
     follow RFC 9457 (application/problem+json).
 
 
-    Pagination (§9.1): list endpoints take `?cursor=&limit=` with an opaque
+    Pagination: list endpoints take `?cursor=&limit=` with an opaque
     cursor and return the next page as a `Link: <…>; rel="next"` header
     (cursor-carrying bodies keep `nextCursor` too). A `limit` outside the
     documented bounds is clamped, never rejected.
 
 
-    Rate limits (§19) are reported on every rate-limited response with
+    Rate limits are reported on every rate-limited response with
     `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset`
     (plus `Retry-After` on 429); an extension's signed-callback route that
     opts out of the anonymous class carries none.
 
 
-    Compatibility: 0.3.0 broke the additive-only rule once, deliberately
-    (DEV-088, 2026-09-05): the `kind` classification (skill | prompt-agent |
-    mcp-server) was replaced by `modes`, the set of run modes a release
-    supports (autonomous | interactive); `?kind=` became `?mode=` and the
-    `kind` facet became `mode`. There were no external consumers before the
-    beta. The rule is additive again from 0.3.0.
+    Compatibility: changes within `/api/v1` are additive. A release declares
+    `modes`, the set of run modes it supports (autonomous | interactive);
+    the search filter is `?mode=` and the facet is `mode`.
 
 
-    Idempotency (§9.1): mutating POSTs accept an `Idempotency-Key` request
+    Idempotency: mutating POSTs accept an `Idempotency-Key` request
     header (≤255 chars). The first request under a key executes and its
     response is recorded. A retry with the same key, user, endpoint, and
     body replays that recorded response verbatim. Reusing a key with a
@@ -51,39 +48,38 @@ tags:
     description: Server metadata and feature discovery.
   - name: auth
     description: >-
-      Registration, login, sessions, 2FA (§12.1); sign-in through the
-      directory service (DEV-057) and the desktop app's one-time-code
-      exchange (DEV-058).
+      Registration, login, sessions, 2FA; sign-in through the
+      directory service and the desktop app's one-time-code
+      exchange.
   - name: users
     description: >-
       Current user, public profiles, personal access tokens, SSH keys,
-      browser sessions, and the account's directory-service settings
-      (DEV-089).
+      browser sessions, and the account's directory-service settings.
   - name: orgs
-    description: Organizations, members, teams (§12.2).
+    description: Organizations, members, teams.
   - name: audit
-    description: Org audit log (§12.6).
+    description: Org audit log.
   - name: agents
-    description: Agents, hosted repos, per-agent grants (§9.2).
+    description: Agents, hosted repos, per-agent grants.
   - name: search
-    description: Full-text search and facets for discovery (§10.4).
+    description: Full-text search and facets for discovery.
   - name: versions
-    description: Version submission, resolution, downloads (§7, §9.4).
+    description: Version submission, resolution, downloads.
   - name: reviews
-    description: Review queue and finding verdicts (§8.5, §8.6).
+    description: Review queue and finding verdicts.
   - name: policies
-    description: Platform baseline and org policy overlays (§8.6).
+    description: Platform baseline and org policy overlays.
   - name: platform
-    description: Trust & safety actions and advisories (§7, §8.7).
+    description: Trust & safety actions and advisories.
   - name: sso
-    description: "Enterprise SSO: SAML 2.0 SP and OIDC RP (§12.4)."
+    description: "Enterprise SSO: SAML 2.0 SP and OIDC RP."
   - name: scim
-    description: SCIM 2.0 provisioning tokens (§12.5).
+    description: SCIM 2.0 provisioning tokens.
   - name: webhooks
-    description: Org webhook endpoints and deliveries (§9.3).
+    description: Org webhook endpoints and deliveries.
   - name: domains
     description: >-
-      Domain verification (§12.4). A verified domain is what an
+      Domain verification. A verified domain is what an
       organization proves it controls, and three things rest on it: linking
       an SSO identity to an existing member's account for the first time,
       mailing an invitation to an address there, and treating that address
@@ -91,29 +87,28 @@ tags:
   - name: mcp-servers
     description: >-
       The registry of scanned MCP server package versions S7 keeps and the
-      daily sweep refreshes (agentry#177).
+      daily sweep refreshes.
   - name: stars
-    description: Stars and per-agent counters (§9.2).
+    description: Stars and per-agent counters.
   - name: installs
     description: >-
-      Account installs (agentry#448): a signed-in person's record of a
+      Account installs: a signed-in person's record of a
       QuickAgent release they accepted for their account and the contract
       they consented to. Not a star, not the desktop's or the CLI's
       per-machine record; no download counter moves.
   - name: voice
     description: >-
-      The Writing Voice (agentry#809): the one VOICE.md an account keeps,
+      The Writing Voice: the one VOICE.md an account keeps,
       reviewed by AI Review before it is live.
   - name: knowledge
     description: >-
-      Knowledge packs (agentry#593): an account's packs kept in the
+      Knowledge packs: an account's packs kept in the
       registry, sealed under data keys of their own, scanned on arrival,
       and the wrap and unwrap of their data keys.
   - name: model-input
     description: >-
       AI Review of text a model is about to read, and web search brokered
-      by the registry (agentry#608; plan builder-rework.md D20–D24). The
-      caller pushes the text; the registry asks the deployment's judge
+      by the registry. The caller pushes the text; the registry asks the deployment's judge
       with the model-input question set and keeps the keys. Open to
       platform staff by session and, where an extension admits them, to
       hosted jobs by their job credential; never to an ordinary account's
@@ -125,7 +120,7 @@ paths:
     get:
       operationId: getMeta
       tags: [meta]
-      summary: Server version and self-host feature flags (§9.2).
+      summary: Server version and self-host feature flags.
       security: []
       responses:
         "200":
@@ -141,10 +136,10 @@ paths:
     post:
       operationId: register
       tags: [auth]
-      summary: Create an individual account (email+password, §12.1).
+      summary: Create an individual account (email+password).
       description: >
         When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
         sign in through /auth/oidc/{provider}/start instead.
       security: []
       requestBody:
@@ -168,7 +163,7 @@ paths:
       operationId: verifyEmail
       description: >
         When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
         sign in through /auth/oidc/{provider}/start instead.
       tags: [auth]
       summary: Confirm an email address with the mailed token.
@@ -194,7 +189,7 @@ paths:
       operationId: login
       description: >
         When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
         sign in through /auth/oidc/{provider}/start instead.
       tags: [auth]
       summary: Password (+TOTP when enabled) login; sets the session cookie.
@@ -226,7 +221,7 @@ paths:
         Answers 204 for a native or OIDC session. For a session established
         through an organization's SAML connection whose IdP publishes a
         Single Logout endpoint, answers 200 with the IdP logout URL the
-        browser should be sent to next (SP-initiated SLO, §12.4); the
+        browser should be sent to next (SP-initiated SLO); the
         registry session is revoked either way.
       responses:
         "204":
@@ -245,7 +240,7 @@ paths:
       operationId: totpSetup
       description: >
         When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
         sign in through /auth/oidc/{provider}/start instead.
       tags: [auth]
       summary: Begin TOTP enrollment; returns the provisioning secret.
@@ -264,7 +259,7 @@ paths:
       operationId: totpVerify
       description: >
         When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`, DEV-057), this endpoint answers 410 Gone;
+        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
         sign in through /auth/oidc/{provider}/start instead.
       tags: [auth]
       summary: Confirm TOTP enrollment with a current code.
@@ -288,14 +283,14 @@ paths:
     post:
       operationId: totpChallenge
       tags: [auth]
-      summary: Complete a pending 2FA challenge and open the session (§12.1).
+      summary: Complete a pending 2FA challenge and open the session.
       description: >
-        Second leg of a login that could not carry a TOTP code inline. Today
-        the only such login is social login: its callback is a browser
+        Second leg of a login that could not carry a TOTP code inline. The
+        only such login is social login: its callback is a browser
         redirect. The challenge is opaque and expires in five minutes; it
         proves nothing on its own, so a valid TOTP code is still required. It
         is single use: completing it records it as consumed in the database
-        every replica reads (agentry#457), so a second completion is refused
+        every replica reads, so a second completion is refused
         with 401 `totp-challenge-used`, and an expired one with 401
         `totp-challenge-expired`. A wrong code does not consume it; attempts are
         held to the login rate limit. When the
@@ -333,7 +328,7 @@ paths:
         Unauthenticated; the code is the credential. Single use, bound to the
         `state` nonce the desktop app generated, and valid for 60 seconds from
         the grant. The PAT is minted at this moment and returned exactly once,
-        like `createToken`. Rate-limited with the login class (§19).
+        like `createToken`. Rate-limited with the login class.
       security: []
       requestBody:
         required: true
@@ -355,14 +350,14 @@ paths:
     get:
       operationId: socialOidcStart
       tags: [auth]
-      summary: Begin social login with a configured provider (§12.1).
+      summary: Begin social login with a configured provider.
       description: >
         Individual-account login through a social identity provider
         (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is
         not an OIDC issuer). Providers must be configured on the server
         (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured
         providers return 404. This is individual login and never grants org
-        membership. Org SSO lives under /orgs/{org}/sso (§12.4).
+        membership. Org SSO lives under /orgs/{org}/sso.
       security: []
       parameters:
         - $ref: "#/components/parameters/SocialProvider"
@@ -389,13 +384,12 @@ paths:
     get:
       operationId: socialOidcCallback
       tags: [auth]
-      summary: "Social login redirect URI: establish a session (§12.1)."
+      summary: "Social login redirect URI: establish a session."
       description: >
         Exchanges the code, verifies the identity, then links or JIT-creates
         an individual account (`identities.provider_kind='social'`).
         Auto-linking to an existing account happens only when the provider
-        asserts a verified email that matches a verified account email
-        (T-12); otherwise the response is 409 and the accounts must be linked
+        asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked
         explicitly. When the account has TOTP enabled the response is a
         pending 2FA challenge rather than a session. A login begun with
         `next` (browser mode) answers 303 to that in-app path once the
@@ -473,10 +467,10 @@ paths:
     post:
       operationId: deleteCurrentUser
       tags: [users]
-      summary: Erase the caller's account (GDPR flow, §12.7).
+      summary: Erase the caller's account (GDPR flow).
       description: >
         Purges personal data and pseudonymizes the account. Published public
-        versions are never deleted (§12.7): they are either yanked, so
+        versions are never deleted: they are either yanked, so
         already-installed copies keep verifying, or the personal-namespace
         agents are transferred to an organization the caller administers.
         When the account has published public versions the choice is
@@ -517,10 +511,10 @@ paths:
           headers:
             X-Agentry-Directory-Erasure:
               description: >
-                The directory half of the erasure (agentry#499). `deleted`:
+                The directory half of the erasure. `deleted`:
                 the sign-in account at the directory is gone. `not-found`:
                 the directory holds no account this person signed in with,
-                nor one at this address. `unresolved` (agentry#727): the
+                nor one at this address. `unresolved`: the
                 directory holds an account the registry could not tell
                 apart as this person's (two accounts at the address, a
                 recorded account id that now names another account, or an
@@ -542,10 +536,10 @@ paths:
     post:
       operationId: sendEmailVerification
       tags: [users]
-      summary: Send the caller a new activation link (agentry#861).
+      summary: Send the caller a new activation link.
       description: >
         Mails a new link that confirms the account's address and so
-        activates it (plan unactivated-accounts.md). An unactivated account
+        activates it. An unactivated account
         (an address not yet confirmed) can read but not write; this is one
         of the few writes it may make. At most one mail per account every
         five minutes, counted from the last one sent, the one sent at the
@@ -630,7 +624,7 @@ paths:
     put:
       operationId: starAgent
       tags: [stars]
-      summary: Star an agent (idempotent, §9.2).
+      summary: Star an agent (idempotent).
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -642,7 +636,7 @@ paths:
     delete:
       operationId: unstarAgent
       tags: [stars]
-      summary: Remove a star (idempotent, §9.2).
+      summary: Remove a star (idempotent).
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -785,7 +779,7 @@ paths:
     post:
       operationId: createToken
       tags: [users]
-      summary: Mint a PAT. The secret is returned exactly once (D-22).
+      summary: Mint a PAT. The secret is returned exactly once.
       requestBody:
         required: true
         content:
@@ -806,7 +800,7 @@ paths:
     get:
       operationId: listSshKeys
       tags: [users]
-      summary: List the caller's SSH public keys for the git transport (§6.1 Q7).
+      summary: List the caller's SSH public keys for the git transport.
       responses:
         "200":
           description: Keys.
@@ -824,7 +818,7 @@ paths:
       summary: Register an SSH public key for ssh://git@…/{ns}/{name}.git (session-only).
       description: >-
         Refused with `403 feature-not-included` where the caller's subscription
-        does not include adding SSH keys (agentry#820); a self-hosted registry
+        does not include adding SSH keys; a self-hosted registry
         includes it. Keys already held keep working and can be listed and
         removed on every subscription.
       requestBody:
@@ -865,7 +859,7 @@ paths:
     get:
       operationId: getUserNotificationSettings
       tags: [users]
-      summary: How the registry's alerts reach the caller (agentry#190).
+      summary: How the registry's alerts reach the caller.
       description: >-
         Email per kind of notification, and whether the dependency-alert
         banner shows in a front end (the site reads it). An account that
@@ -882,7 +876,7 @@ paths:
     put:
       operationId: updateUserNotificationSettings
       tags: [users]
-      summary: Replace the caller's notification settings (agentry#190).
+      summary: Replace the caller's notification settings.
       requestBody:
         required: true
         content:
@@ -902,14 +896,14 @@ paths:
     get:
       operationId: getUserReportSettings
       tags: [users]
-      summary: The report design the caller's PDF reports take (agentry#989, agentry#1024).
+      summary: The report design the caller's PDF reports take.
       description: >-
-        A profile setting (plan report-designs.md D11, D12): the whole
+        A profile setting: the whole
         report design, a theme document version 2, that `export_pdf`
         renders with in the caller's runs. The model never chooses it. An
         account that never chose reads back with no `design`, which is not
         the same as Plain: a signed-in client then falls to its own
-        configuration, else Plain (DEV-227).
+        configuration, else Plain.
       parameters:
         - $ref: "#/components/parameters/ReportSettingsInclude"
       responses:
@@ -924,7 +918,7 @@ paths:
     put:
       operationId: updateUserReportSettings
       tags: [users]
-      summary: Replace the caller's report settings (agentry#989, agentry#1024).
+      summary: Replace the caller's report settings.
       description: >-
         A full replace: a body with no `design` clears the choice. The
         design is validated by the core's pkg/reportdesign before it is
@@ -937,7 +931,7 @@ paths:
         logo with the core's own re-encoding of it; one that carries none
         leaves a stored logo as it is (remove it with DELETE
         /user/report-settings/logo), so a client that does not know logos
-        never drops one by saving (agentry#1025). A body with no design
+        never drops one by saving. A body with no design
         clears the logo too.
       parameters:
         - $ref: "#/components/parameters/ReportSettingsInclude"
@@ -960,10 +954,9 @@ paths:
     put:
       operationId: putUserReportLogo
       tags: [users]
-      summary: Set the logo of the caller's report design (agentry#1025).
+      summary: Set the logo of the caller's report design.
       description: >-
-        Multipart, one part named `file`: PNG or JPEG, at most 512 KB (plan
-        report-designs.md D9). The core decodes it, scales it down to fit
+        Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit
         1024 pixels each way and encodes it again as PNG from the pixels, so
         nothing of the upload but its pixels is kept; the runner draws it
         only in the title block, and it never comes from the model or a URL.
@@ -995,7 +988,7 @@ paths:
     delete:
       operationId: deleteUserReportLogo
       tags: [users]
-      summary: Remove the logo from the caller's report design (agentry#1025).
+      summary: Remove the logo from the caller's report design.
       description: >-
         The design stays. Removing a logo that is not there is not an error.
       responses:
@@ -1011,7 +1004,7 @@ paths:
     get:
       operationId: listUserActivity
       tags: [users]
-      summary: The caller's own activity — the audit events they performed (agentry#192).
+      summary: The caller's own activity — the audit events they performed.
       description: >-
         Sign-ins, tokens and SSH keys created or revoked, profile and
         notification changes, publishes and reviews, newest first, with the
@@ -1042,7 +1035,7 @@ paths:
     get:
       operationId: listUserDependencyAlerts
       tags: [users]
-      summary: Open dependency alerts on published versions the caller submitted (agentry#177).
+      summary: Open dependency alerts on published versions the caller submitted.
       description: >-
         A dependency alert says a published version declares an MCP server
         version that the daily sweep found to carry a newly known high or
@@ -1068,12 +1061,11 @@ paths:
       tags: [users]
       summary: Record a one-time grant for the desktop app's browser sign-in.
       description: >
-        Session-only. The server's own `/ui/authorize` page (DR-17) calls this after the user
+        Session-only. The server's own `/ui/authorize` page calls this after the user
         consents; the response is a short-lived, single-use `code` bound to the
         app's `state` nonce. No token is minted here — the desktop app
         exchanges the code at `POST /auth/desktop/exchange` from its own
-        process, so the PAT never travels in a URL (DEV-058 hardening,
-        agentry#19). The grant's scopes are fixed to the desktop set
+        process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set
         (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
       requestBody:
         required: true
@@ -1095,7 +1087,7 @@ paths:
     delete:
       operationId: revokeToken
       tags: [users]
-      summary: Revoke a PAT immediately (§12.3).
+      summary: Revoke a PAT immediately.
       parameters:
         - name: tokenId
           in: path
@@ -1113,7 +1105,7 @@ paths:
     get:
       operationId: getUserDirectory
       tags: [users]
-      summary: Where the caller manages password, MFA and profile when a directory service owns the account (DEV-057).
+      summary: Where the caller manages password, MFA and profile when a directory service owns the account.
       description: >
         With auth.externalOnly, credentials live in the directory service
         (Authentik). This answers the settings page's question "where do I
@@ -1134,7 +1126,7 @@ paths:
     delete:
       operationId: deleteUserDirectoryDevice
       tags: [users]
-      summary: Remove one of the caller's own authenticators from the directory service (agentry#164).
+      summary: Remove one of the caller's own authenticators from the directory service.
       description: >
         With auth.externalOnly and directory admin access, removes the
         caller's authenticator of this kind and id through the
@@ -1164,7 +1156,7 @@ paths:
     get:
       operationId: listUserSessions
       tags: [users]
-      summary: List the caller's active browser sessions (§12.1).
+      summary: List the caller's active browser sessions.
       description: >
         Sessions are cookie sessions. A PAT-authenticated caller has no
         sessions of its own, so the list is empty (200, not an error).
@@ -1196,12 +1188,12 @@ paths:
     get:
       operationId: countTrustedDevices
       tags: [users]
-      summary: How many browsers skip the caller's second factor (agentry#672).
+      summary: How many browsers skip the caller's second factor.
       description: >
         The number of the caller's live remembered browsers: browsers where
         "Remember this device for 30 days" was ticked and whose record has
         not expired or been revoked. There is no list: the account's control
-        is one button that clears them all (DEV-163). A PAT-authenticated
+        is one button that clears them all. A PAT-authenticated
         caller gets 0, as it gets an empty session list: a token is not a
         way to take an inventory of someone's browsers.
       responses:
@@ -1216,7 +1208,7 @@ paths:
     delete:
       operationId: clearTrustedDevices
       tags: [users]
-      summary: Clear every remembered browser of the caller's account (agentry#672).
+      summary: Clear every remembered browser of the caller's account.
       description: >
         Revokes all of the caller's remembered browsers, this one included:
         each is asked for the second factor at its next sign-in. Sessions and
@@ -1237,7 +1229,7 @@ paths:
     delete:
       operationId: revokeUserSession
       tags: [users]
-      summary: Revoke one of the caller's own sessions (§12.1).
+      summary: Revoke one of the caller's own sessions.
       description: >
         Own sessions only. An id that is not one of the caller's live
         sessions answers 404 whether it does not exist or belongs to
@@ -1276,7 +1268,7 @@ paths:
 
         The digest is the pin: a client MUST recompute it over the received
         bundle and refuse a mismatch. Bundle-level *signatures* do not exist
-        yet (see DEVIATIONS DEV-024); this endpoint pins by digest only.
+        yet; this endpoint pins by digest only.
       security: []
       responses:
         "200":
@@ -1311,9 +1303,8 @@ paths:
         whose subject digest is the bundle's content digest, signed with the
         registry's release-signing key (`/.well-known/agentry/signing-keys.json`).
         Lets `agentry validate --rules-update` verify a fetched bundle by
-        signature rather than only by the digest the same server advertised
-        (agentry#25). The worker signs it at start and stores it, so every
-        replica serves the same envelope (agentry#479). 404 when the registry
+        signature rather than only by the digest the same server advertised. The worker signs it at start and stores it, so every
+        replica serves the same envelope. 404 when the registry
         does not sign (`signing.kind: none`), or when no process holding the
         signing key has started with this bundle yet (a rolling deploy).
       security: []
@@ -1398,7 +1389,7 @@ paths:
                   maxLength: 120
                 ssoRequired:
                   type: boolean
-                  description: Enforce SSO for org resources (§12.4). Admin only.
+                  description: Enforce SSO for org resources. Admin only.
       responses:
         "200":
           description: Updated organization.
@@ -1512,7 +1503,7 @@ paths:
       summary: The organization's logo, as this registry re-encoded it.
       description: >
         A raster the core decoded and encoded again from the pixels: the
-        bytes an admin uploaded are never what is served (§10.3). The type
+        bytes an admin uploaded are never what is served. The type
         is pinned and not sniffed. The URL an organization's resource
         carries (`logoUrl`) names the content by its `v`, and that URL is
         served as immutable for a year; the bare path, or one whose `v` is
@@ -1613,7 +1604,7 @@ paths:
       operationId: setOrgMember
       tags: [orgs]
       summary: >
-        Change a member's role (admin). Adding is retired: an organization
+        Change a member's role (admin). This route does not add members: an organization
         is joined by accepting an invitation, or by an admin approving
         someone the IdP provisioned, and a PUT for a handle that holds no
         membership answers 422 naming those doors.
@@ -1929,7 +1920,7 @@ paths:
     get:
       operationId: listOrgAudit
       tags: [audit]
-      summary: Org audit events, newest first (admin+; cursor paged, §12.6).
+      summary: Org audit events, newest first (admin+; cursor paged).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - name: cursor
@@ -1960,7 +1951,7 @@ paths:
     post:
       operationId: createAgent
       tags: [agents]
-      summary: Create an agent and its hosted git repository (§9.2).
+      summary: Create an agent and its hosted git repository.
       description: >
         A private agent counts against the namespace's private-agent cap
         when the deployment's entitlements set one (the hosted product's
@@ -1999,8 +1990,8 @@ paths:
       description: >-
         Public agents for everyone; the private ones too for the namespace's
         owner and the active members of its organization. A deleted agent is
-        never listed. The publisher's page (agentry#942) narrows and orders
-        the list with `q`, `state`, `forks` (agentry#943) and `sort`, and
+        never listed. The publisher's page narrows and orders
+        the list with `q`, `state`, `forks` and `sort`, and
         each agent carries `installs30d`, `lastSubmittedAt`, `forkCount` on a
         public agent, `forkedFrom` and `forkState` on a fork and, when it is
         retired, `retiredAt`.
@@ -2032,7 +2023,7 @@ paths:
           required: false
           description: >-
             `only` lists the namespace's forks, `none` the agents that are
-            not forks; absent, both (agentry#943).
+            not forks; absent, both.
           schema:
             type: string
             enum: [only, none]
@@ -2067,8 +2058,7 @@ paths:
         its owner, the owning org's admins, and anyone holding a
         grant on it; every other caller, anonymous included, gets the 404 a
         missing name gets — never a 401 or 403 that would confirm the name
-        exists. The same rule holds on every route under `/agents/{ns}/{name}`
-        (agentry#313).
+        exists. The same rule holds on every route under `/agents/{ns}/{name}`.
       security: []
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -2103,24 +2093,22 @@ paths:
                   description: >-
                     The namespace's administrators only. A token needs
                     `org:admin`, or `agent:manage` when the body sets
-                    visibility and nothing else (agentry#993). `public` is
+                    visibility and nothing else. `public` is
                     refused on a retired agent (`409
                     agent-retired`): Restore is how a retired agent comes
                     back. It is refused on a fork for good (`409
-                    fork-stays-private`, agentry#943).
+                    fork-stays-private`).
                   type: string
                   enum: [public, private]
                 autoPublishTags:
                   type: boolean
                 allowForcePush:
                   description: >
-                    Allow non-fast-forward pushes to the default branch
-                    (§6.3). Off by default; maintain only.
+                    Allow non-fast-forward pushes to the default branch. Off by default; maintain only.
                   type: boolean
                 pipelineSkip:
                   description: >-
-                    Admit submissions to this agent without a scan (plan
-                    organization-subscriptions §4, D16). Settable by the
+                    Admit submissions to this agent without a scan. Settable by the
                     namespace's administrators on a private agent of an
                     organization's whose subscription includes unscanned
                     agents; refused on a public agent
@@ -2135,7 +2123,7 @@ paths:
                   type: boolean
                 builtin:
                   description: >-
-                    Mark or unmark the agent as built-in (agentry#737): a
+                    Mark or unmark the agent as built-in: a
                     package the Agentry CLI embeds, published for reading,
                     which clients label Built-in in place of its run modes.
                     Platform staff only (403 for anyone else, the
@@ -2161,15 +2149,14 @@ paths:
     delete:
       operationId: deleteAgent
       tags: [agents]
-      summary: Delete an agent (the namespace's administrators, §9.2, agentry#942).
+      summary: Delete an agent (the namespace's administrators).
       description: >
-        A token needs `agent:manage` or `org:admin` (agentry#993).
+        A token needs `agent:manage` or `org:admin`.
         An agent with no version row is deleted outright, with its hosted
-        repository. An agent with version history is deleted as a tombstone
-        (agentry#942): every published or quarantined version is yanked, the
+        repository. An agent with version history is deleted as a tombstone: every published or quarantined version is yanked, the
         agent becomes private, and every route by name, the git transport and
         hosted runs answer the 404 a missing name gets, to everyone. Nothing
-        is removed — §4.3 keeps version rows forever, and the archives,
+        is removed — version rows are kept forever, and the archives,
         receipts and audit trail stay — and the name stays held in its
         namespace: creating it again answers `409 name-held`. It cannot be
         undone. A tombstone needs `confirm` set to the agent's name (`422
@@ -2204,7 +2191,7 @@ paths:
     post:
       operationId: forkAgent
       tags: [agents]
-      summary: Fork a public agent into a namespace the caller may create in (agentry#943).
+      summary: Fork a public agent into a namespace the caller may create in.
       description: >-
         Makes a private copy of a public agent: a new agent in `namespace`,
         under the origin's name unless `name` gives another, that records
@@ -2261,11 +2248,11 @@ paths:
     post:
       operationId: retireAgent
       tags: [agents]
-      summary: Retire an agent (the namespace's administrators, agentry#942).
+      summary: Retire an agent (the namespace's administrators).
       description: >-
         Makes the agent private and labels it retired, keeping the
         visibility it had for Restore. A token needs `agent:manage` or
-        `org:admin` (agentry#993). A retired agent takes no submission
+        `org:admin`. A retired agent takes no submission
         (`409 agent-retired`), is in no public listing, and holds no place
         under the private-agent cap. Its versions are untouched. Retiring a
         retired agent changes nothing.
@@ -2286,10 +2273,10 @@ paths:
     post:
       operationId: restoreAgent
       tags: [agents]
-      summary: Restore a retired agent (the namespace's administrators, agentry#942).
+      summary: Restore a retired agent (the namespace's administrators).
       description: >-
         Returns a retired agent to the visibility it had. A token needs
-        `agent:manage` or `org:admin` (agentry#993). Back to public it
+        `agent:manage` or `org:admin`. Back to public it
         meets the rules of any agent becoming public (`409 agent-unscanned`,
         also when pipeline: skip was set while it was retired); back to
         private it takes a place under
@@ -2312,7 +2299,7 @@ paths:
     get:
       operationId: getAgentStats
       tags: [stars]
-      summary: Star count and install counts for an agent (§9.2).
+      summary: Star count and install counts for an agent.
       security: []
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -2331,7 +2318,7 @@ paths:
     get:
       operationId: listAgentActivity
       tags: [agents]
-      summary: Recent activity for an agent (§9.2).
+      summary: Recent activity for an agent.
       description: >
         Drawn from the audit log. Anyone who can see a public agent gets the
         public-safe subset: publishes and yanks; callers with an explicit
@@ -2454,9 +2441,9 @@ paths:
     post:
       operationId: submitVersion
       tags: [versions]
-      summary: Submit a version for publication (§7 state machine entry).
+      summary: Submit a version for publication.
       description: >
-        Two sources (§6.5): JSON {tag} submits an existing repo tag
+        Two sources: JSON {tag} submits an existing repo tag
         (git-tag source); multipart/form-data with an `archive` part
         (tar.zst) submits a client-built package (cli-upload source; the
         server re-validates, re-packs deterministically, and compares
@@ -2505,8 +2492,7 @@ paths:
                   format: uuid
                   description: >-
                     The hosted draft this package was published from (Edit
-                    with AI's Publish this version; plan drafter-revisions
-                    §6). A claim only: the scan asks the deployment's
+                    with AI's Publish this version). A claim only: the scan asks the deployment's
                     DraftProvenance whether the submitter ran that draft
                     against the agent's current release and whether its
                     recorded proof matches these files. When it does, the
@@ -2586,7 +2572,7 @@ paths:
     get:
       operationId: getVersionManifest
       tags: [versions]
-      summary: The validated manifest (canonical JSON, §4.2).
+      summary: The validated manifest (canonical JSON).
       security: []
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -2607,7 +2593,7 @@ paths:
     post:
       operationId: yankVersion
       tags: [versions]
-      summary: Yank a published version (§5.5 semantics; publish permission).
+      summary: Yank a published version (publish permission).
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -2633,7 +2619,7 @@ paths:
     get:
       operationId: downloadVersion
       tags: [versions]
-      summary: Download the release archive (§9.4; counts an install).
+      summary: Download the release archive (counts an install).
       security: []
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -2650,7 +2636,7 @@ paths:
         "302":
           description: Redirect to the CDN object (SaaS).
         "410":
-          description: Version blocked by trust & safety (§7).
+          description: Version blocked by trust & safety.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -2658,9 +2644,9 @@ paths:
     get:
       operationId: listVersionFiles
       tags: [versions]
-      summary: List the files inside the version's release archive (§10.2).
+      summary: List the files inside the version's release archive.
       description: >
-        The same inventory a reviewer sees (§10.1), opened under the
+        The same inventory a reviewer sees, opened under the
         download access gate: published and yanked versions list, blocked
         versions return 410, quarantined versions 409. Browsing does not
         count an install.
@@ -2677,7 +2663,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewFileList"
         "410":
-          description: Version blocked by trust & safety (§7).
+          description: Version blocked by trust & safety.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -2685,11 +2671,11 @@ paths:
     get:
       operationId: getVersionFile
       tags: [versions]
-      summary: Read one file from the version's release archive (§10.2).
+      summary: Read one file from the version's release archive.
       description: >
         Text files return UTF-8 content up to the display cap with a
         truncation flag; binary files return metadata only (binary true),
-        never raw bytes (§10.3). Same access gate as listVersionFiles.
+        never raw bytes. Same access gate as listVersionFiles.
       security: []
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -2709,7 +2695,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewFileContent"
         "410":
-          description: Version blocked by trust & safety (§7).
+          description: Version blocked by trust & safety.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -2717,7 +2703,7 @@ paths:
     get:
       operationId: resolveRef
       tags: [versions]
-      summary: Resolve ns/name@range to a concrete version (§9.4 step 1).
+      summary: Resolve ns/name@range to a concrete version.
       security: []
       parameters:
         - name: ref
@@ -2746,7 +2732,7 @@ paths:
     get:
       operationId: streamVersionEvents
       tags: [versions]
-      summary: Server-sent events for a version's pipeline progress (§11 "SSE/poll"; agentry#65).
+      summary: Server-sent events for a version's pipeline progress.
       security: []
       description: >
         Streams `event: status` messages (JSON: status, statusReason, the
@@ -2773,7 +2759,7 @@ paths:
     get:
       operationId: getVersionReport
       tags: [versions]
-      summary: The scan report for a version (findings, ruleset, verdict, §8).
+      summary: The scan report for a version (findings, ruleset, verdict).
       security: []
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -2793,7 +2779,7 @@ paths:
     get:
       operationId: getVersionAttestation
       tags: [versions]
-      summary: The signed DSSE attestation (§8.8), verbatim.
+      summary: The signed DSSE attestation, verbatim.
       security: []
       parameters:
         - $ref: "#/components/parameters/Namespace"
@@ -2819,7 +2805,7 @@ paths:
       summary: Pending review items (platform staff, or an org's security_reviewer for its queue).
       description: >-
         The platform queue is platform staff's. An org queue is that
-        organization's reviewers' and platform staff's (agentry#912); staff
+        organization's reviewers' and platform staff's; staff
         may leave `org` out to list every organization's pending items, and
         anyone else must name it (422).
       parameters:
@@ -2928,7 +2914,7 @@ paths:
     post:
       operationId: decideReviewItem
       tags: [reviews]
-      summary: Approve or reject a version under review (not its author, unless platform staff; §12.2, agentry#912).
+      summary: Approve or reject a version under review (not its author, unless platform staff).
       description: >-
         An author cannot decide their own version (403), whatever their
         organization role. Platform staff may decide any item, their own
@@ -2965,7 +2951,7 @@ paths:
     post:
       operationId: setFindingVerdict
       tags: [reviews]
-      summary: Confirm or dismiss a finding (§8.5 dismissals).
+      summary: Confirm or dismiss a finding.
       parameters:
         - name: id
           in: path
@@ -2997,7 +2983,7 @@ paths:
     get:
       operationId: listKnowledgePacks
       tags: [knowledge]
-      summary: The caller's knowledge packs, by name (agentry#593).
+      summary: The caller's knowledge packs, by name.
       responses:
         "200":
           description: Packs, each with its scan state and report.
@@ -3214,12 +3200,11 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
-  # The Writing Voice (plan writing-voice.md §4, §7; agentry#809): the one
-  # VOICE.md the caller keeps in Agentry, the instructions a run follows
-  # for how it writes and nothing else. Every route is the caller's own.
-  # A version goes live only once AI Review passed it (the pack scan's rule
-  # stages and Jev's voice question set); a flagged one stays pending with
-  # its findings and the live one stays live.
+  # The Writing Voice: the one VOICE.md the caller keeps in Agentry, the
+  # instructions a run follows for how it writes and nothing else. Every
+  # route is the caller's own. A version goes live only once AI Review
+  # passed it (the pack scan's rule stages and the voice question set); a
+  # flagged one stays pending with its findings and the live one stays live.
   /voice:
     get:
       operationId: getVoice
@@ -3350,12 +3335,11 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
-  # An organization's shared knowledge (plan knowledge.md §4.7, D13, D26;
-  # agentry#646): packs the organization owns, wrapped to its key, written
-  # by its admins and read by its active members, membership checked at
-  # every call. A caller who is not an active member — another
-  # organization's member, platform staff — is answered 404 on every route,
-  # as for another account's pack.
+  # An organization's shared knowledge: packs the organization owns,
+  # wrapped to its key, written by its admins and read by its active
+  # members, membership checked at every call. A caller who is not an
+  # active member — another organization's member, platform staff — is
+  # answered 404 on every route, as for another account's pack.
   /orgs/{org}/knowledge/packs:
     parameters:
       - $ref: "#/components/parameters/OrgHandle"
@@ -3632,7 +3616,7 @@ paths:
     get:
       operationId: getPlatformPolicy
       tags: [policies]
-      summary: The read-only platform baseline policy (§8.6).
+      summary: The read-only platform baseline policy.
       security: []
       responses:
         "200":
@@ -3649,7 +3633,7 @@ paths:
     get:
       operationId: listRedTeamReports
       tags: [platform]
-      summary: Reports of the scheduled red-team job against the S3/S4 gate (§17.5; platform staff).
+      summary: Reports of the scheduled red-team job against the S3/S4 gate (platform staff).
       description: >-
         Newest first. Each report is one run of the attack corpus's rewrites
         (paraphrase, encoding, unicode and obfuscation mutators) scanned with
@@ -3691,7 +3675,7 @@ paths:
     put:
       operationId: setOrgPolicy
       tags: [policies]
-      summary: Set the org policy overlay (admin; tighten-only, §8.6).
+      summary: Set the org policy overlay (admin; tighten-only).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       requestBody:
@@ -3716,7 +3700,7 @@ paths:
     get:
       operationId: listSsoConnections
       tags: [sso]
-      summary: List the org's SSO connections (admin, §12.4).
+      summary: List the org's SSO connections (admin).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       responses:
@@ -3740,7 +3724,7 @@ paths:
         alone by a subscription change and works again the moment the
         subscription includes SSO.
       tags: [sso]
-      summary: Create or update a SAML/OIDC connection (admin, §12.4).
+      summary: Create or update a SAML/OIDC connection (admin).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/SsoKind"
@@ -3762,7 +3746,7 @@ paths:
     delete:
       operationId: deleteSsoConnection
       tags: [sso]
-      summary: Delete a connection (admin, §12.4).
+      summary: Delete a connection (admin).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/SsoKind"
@@ -3776,7 +3760,7 @@ paths:
     post:
       operationId: testSsoConnection
       tags: [sso]
-      summary: Probe a stored connection without signing in (admin, §12.4; agentry#50).
+      summary: Probe a stored connection without signing in (admin).
       description: >
         OIDC: runs discovery against the stored issuer and reports the
         endpoints it advertises. SAML: parses the stored IdP metadata and
@@ -3800,7 +3784,7 @@ paths:
     get:
       operationId: getSamlMetadata
       tags: [sso]
-      summary: SP SAML metadata for this org's connection (§12.4).
+      summary: SP SAML metadata for this org's connection.
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -3818,7 +3802,7 @@ paths:
     post:
       operationId: samlAcs
       tags: [sso]
-      summary: "SAML Assertion Consumer Service: consume a signed assertion (§12.4)."
+      summary: "SAML Assertion Consumer Service: consume a signed assertion."
       description: >
         A `RelayState` form field holding a same-origin path puts this in
         browser mode: the session and CSRF cookies are set and the answer
@@ -3846,7 +3830,7 @@ paths:
     get:
       operationId: samlSloRedirect
       tags: [sso]
-      summary: "SAML Single Logout endpoint, HTTP-Redirect binding (§12.4)."
+      summary: "SAML Single Logout endpoint, HTTP-Redirect binding."
       description: >-
         Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it
         names and answers the IdP with a LogoutResponse) or the IdP's
@@ -3865,7 +3849,7 @@ paths:
     post:
       operationId: samlSloPost
       tags: [sso]
-      summary: "SAML Single Logout endpoint, HTTP-POST binding (§12.4)."
+      summary: "SAML Single Logout endpoint, HTTP-POST binding."
       security: []
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
@@ -3881,7 +3865,7 @@ paths:
     get:
       operationId: oidcStart
       tags: [sso]
-      summary: Begin the OIDC auth-code + PKCE flow (redirect to IdP, §12.4).
+      summary: Begin the OIDC auth-code + PKCE flow (redirect to IdP).
       description: >
         404 while the organization's subscription does not include SSO: the
         door is not there to be started. `next` puts the callback in
@@ -3908,7 +3892,7 @@ paths:
     get:
       operationId: oidcCallback
       tags: [sso]
-      summary: "OIDC redirect URI: exchange the code and establish a session (§12.4)."
+      summary: "OIDC redirect URI: exchange the code and establish a session."
       description: >
         When the start carried a `next`, this is browser mode: the session
         and CSRF cookies are set and the answer is a 303 to that path, and
@@ -3942,7 +3926,7 @@ paths:
     get:
       operationId: listScimTokens
       tags: [scim]
-      summary: List active SCIM provisioning tokens (admin, §12.5).
+      summary: List active SCIM provisioning tokens (admin).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       responses:
@@ -3964,7 +3948,7 @@ paths:
         left alone by a subscription change and provision again the moment
         it includes SCIM.
       tags: [scim]
-      summary: Mint a SCIM bearer token (admin, §12.5).
+      summary: Mint a SCIM bearer token (admin).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       requestBody:
@@ -3992,7 +3976,7 @@ paths:
     delete:
       operationId: revokeScimToken
       tags: [scim]
-      summary: Revoke a SCIM token (admin, §12.5).
+      summary: Revoke a SCIM token (admin).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - name: tokenId
@@ -4011,7 +3995,7 @@ paths:
     get:
       operationId: listWebhooks
       tags: [webhooks]
-      summary: List webhook endpoints (admin+, §9.3).
+      summary: List webhook endpoints (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       responses:
@@ -4028,7 +4012,7 @@ paths:
     post:
       operationId: createWebhook
       tags: [webhooks]
-      summary: Create a webhook endpoint (admin+, §9.3).
+      summary: Create a webhook endpoint (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       requestBody:
@@ -4051,7 +4035,7 @@ paths:
     get:
       operationId: getWebhook
       tags: [webhooks]
-      summary: Get a webhook endpoint (admin+, §9.3).
+      summary: Get a webhook endpoint (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/WebhookID"
@@ -4067,7 +4051,7 @@ paths:
     patch:
       operationId: updateWebhook
       tags: [webhooks]
-      summary: Update a webhook endpoint (admin+, §9.3).
+      summary: Update a webhook endpoint (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/WebhookID"
@@ -4098,7 +4082,7 @@ paths:
     delete:
       operationId: deleteWebhook
       tags: [webhooks]
-      summary: Delete a webhook endpoint (admin+, §9.3).
+      summary: Delete a webhook endpoint (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/WebhookID"
@@ -4112,7 +4096,7 @@ paths:
     post:
       operationId: pingWebhook
       tags: [webhooks]
-      summary: Send a test delivery to an endpoint (admin+, §9.2).
+      summary: Send a test delivery to an endpoint (admin+).
       description: >
         Enqueues a signed `ping` delivery through the ordinary webhook
         machinery (same signature header, same SSRF guard, same retry
@@ -4135,7 +4119,7 @@ paths:
     get:
       operationId: listWebhookDeliveries
       tags: [webhooks]
-      summary: Recent delivery attempts for an endpoint (admin+, §9.3).
+      summary: Recent delivery attempts for an endpoint (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/WebhookID"
@@ -4157,7 +4141,7 @@ paths:
     get:
       operationId: listDomainClaims
       tags: [domains]
-      summary: List domain claims (admin+, §12.4).
+      summary: List domain claims (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       responses:
@@ -4174,7 +4158,7 @@ paths:
     post:
       operationId: createDomainClaim
       tags: [domains]
-      summary: Start a domain claim; returns the DNS TXT challenge (admin+, §12.4).
+      summary: Start a domain claim; returns the DNS TXT challenge (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       requestBody:
@@ -4201,7 +4185,7 @@ paths:
     post:
       operationId: verifyDomainClaim
       tags: [domains]
-      summary: Check the DNS TXT record and mark verified (admin+, §12.4).
+      summary: Check the DNS TXT record and mark verified (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       requestBody:
@@ -4228,7 +4212,7 @@ paths:
     post:
       operationId: createAuditExport
       tags: [audit]
-      summary: Start an async NDJSON audit export (admin+, §12.6).
+      summary: Start an async NDJSON audit export (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
       requestBody:
@@ -4255,7 +4239,7 @@ paths:
     get:
       operationId: getAuditExport
       tags: [audit]
-      summary: Poll an audit export's status and download reference (admin+, §12.6).
+      summary: Poll an audit export's status and download reference (admin+).
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - name: id
@@ -4278,10 +4262,10 @@ paths:
     get:
       operationId: listPlatformAudit
       tags: [audit]
-      summary: Audit events across every org (platform staff, §12.6).
+      summary: Audit events across every org (platform staff).
       description: >
         The staff-wide slice of the audit log, newest first. Staff access to
-        it is itself audited (§12.6), one event per call.
+        it is itself audited, one event per call.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit200"
@@ -4308,7 +4292,7 @@ paths:
     get:
       operationId: listRulesetReleases
       tags: [platform]
-      summary: Ruleset releases, newest first (platform staff, §10.1 console).
+      summary: Ruleset releases, newest first (platform staff).
       responses:
         "200":
           description: Registered releases; the first is what new scans run under.
@@ -4323,11 +4307,11 @@ paths:
     post:
       operationId: createRulesetRelease
       tags: [platform]
-      summary: Register a ruleset release (platform staff, §9.2).
+      summary: Register a ruleset release (platform staff).
       description: >
         Records the versioned scanner bundle a deployment is running, so scan
         runs can name it. Omitting the body registers the server's own
-        embedded bundle (§8.3). Honours `Idempotency-Key`; re-registering the
+        embedded bundle. Honours `Idempotency-Key`; re-registering the
         same semver returns the existing row.
       requestBody:
         required: false
@@ -4365,7 +4349,7 @@ paths:
     post:
       operationId: platformAgentAction
       tags: [platform]
-      summary: Quarantine, block, or reinstate an agent (platform staff, §7).
+      summary: Quarantine, block, or reinstate an agent (platform staff).
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -4396,7 +4380,7 @@ paths:
     post:
       operationId: reportAbuse
       tags: [platform]
-      summary: Report malicious or abusive content (authed, rate-limited §8.7).
+      summary: Report malicious or abusive content (authed, rate-limited).
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -4489,7 +4473,7 @@ paths:
     post:
       operationId: scanModelInput
       tags: [model-input]
-      summary: AI Review of text a model is about to read (agentry#608).
+      summary: AI Review of text a model is about to read.
       description: >-
         Scans pushed text as model input: the deployment's judge is asked
         the model-input question set (injection, exfiltration, user
@@ -4528,7 +4512,7 @@ paths:
     post:
       operationId: searchModelInput
       tags: [model-input]
-      summary: Web search through the deployment's provider, every result scanned (agentry#608).
+      summary: Web search through the deployment's provider, every result scanned.
       description: >-
         Searches the web through the deployment's search provider with the
         registry's own key, then scans each result (its title, address and
@@ -4562,7 +4546,7 @@ paths:
     post:
       operationId: checkDraft
       tags: [model-input]
-      summary: AI Review of a finished draft before it is submitted (agentry#708).
+      summary: AI Review of a finished draft before it is submitted.
       description: >-
         Reads a finished QuickAgent draft's rendered package the two ways
         AI Review will: with the release rubric that stage S5 of the
@@ -4577,8 +4561,7 @@ paths:
         judge could not answer for is `not_scanned`. This is not the
         publication scan: a submitted version is scanned in full whatever
         this said. Nothing of the package is kept or logged. `usage` is for
-        the record, never a price (AI Review is 1 credit for a whole draft,
-        DEV-150). Callers as for `POST /model-input/scan`. 422
+        the record, never a price (AI Review is 1 credit for a whole draft). Callers as for `POST /model-input/scan`. 422
         `draft-unreadable` for a package with no `agent.yaml`, one that
         does not parse, or no instruction file; 413 `draft-too-large` past
         32 files or 65,536 bytes of text; 503 `model-input-unavailable`
@@ -4605,7 +4588,7 @@ paths:
     get:
       operationId: getMcpServerScan
       tags: [mcp-servers]
-      summary: The registry's last vulnerability check of one MCP server package version (agentry#177).
+      summary: The registry's last vulnerability check of one MCP server package version.
       security: []
       description: >-
         What S7 recorded for the exact package version: `safe` means no
@@ -4645,15 +4628,15 @@ paths:
     get:
       operationId: listAdvisories
       tags: [platform]
-      summary: Published advisories — for one agent, or the global feed (§8.7).
+      summary: Published advisories — for one agent, or the global feed.
       description: >
         With `affecting`, the advisories against that agent (newest first),
         under the agent's own read rule: a private agent's advisories are
         its readers' (the owning user, the owning org's admins,
         and anyone holding a grant on the agent), and anyone else —
         anonymous or signed in — gets the 404 a missing name gets, so the
-        agent's existence is not discoverable here (agentry#313). The one
-        exception is a holder of one of its releases (agentry#949): a
+        agent's existence is not discoverable here. The one
+        exception is a holder of one of its releases: a
         signed-in caller whose account install names the agent, or any
         caller presenting with `digest` the archive digest of a version of
         it that was ever published, gets its advisories whatever its
@@ -4662,7 +4645,7 @@ paths:
         published after it went private.
         Without it, the global feed: every published advisory against a
         public agent, newest first, keyset-paged with `cursor`/`limit` and a
-        `Link: rel="next"` header (§9.1). Each item carries `agent`
+        `Link: rel="next"` header. Each item carries `agent`
         (`ns/name`) so a feed reader can find the affected QuickAgent.
       security: []
       parameters:
@@ -4682,7 +4665,7 @@ paths:
             With `affecting`: the `archiveDigest` of a release of that agent
             the caller holds. It proves the caller held the agent, so its
             advisories are served even when the agent is now private,
-            retired or deleted (agentry#949). Ignored without `affecting`
+            retired or deleted. Ignored without `affecting`
             and when the caller can read the agent anyway.
         - name: cursor
           in: query
@@ -4717,8 +4700,7 @@ paths:
       description: >
         Only an advisory against a public agent resolves; any other id is a
         404, so a private agent's advisory is not discoverable by id. A
-        holder of the agent's release reads it through `affecting`
-        (agentry#949).
+        holder of the agent's release reads it through `affecting`.
       security: []
       parameters:
         - name: advisoryId
@@ -4742,7 +4724,7 @@ paths:
     get:
       operationId: searchAgents
       tags: [search]
-      summary: Full-text search over public agents with facets (§10.4).
+      summary: Full-text search over public agents with facets.
       security: []
       parameters:
         - name: q
@@ -4761,8 +4743,7 @@ paths:
             Capability the latest published version actually asks for, e.g.
             `network`, `filesystem`, `exec`, `secrets`, `dataAccess`, or
             `targetHosts` (a machine the person names when the run starts),
-            or `browser` (a headless browser for the sites the person names)
-            (§5.4).
+            or `browser` (a headless browser for the sites the person names).
             A capability declared as `none`, null, or empty does not match:
             `network: {egress: none}` is not a network agent.
           schema:
@@ -4810,7 +4791,7 @@ paths:
     get:
       operationId: listAgentsByTag
       tags: [search]
-      summary: Public agents tagged with {tag} (§9.2).
+      summary: Public agents tagged with {tag}.
       description: >
         Matches the tag list of each agent's latest published manifest
         (`manifest.tags`, V8). Blocked agents never appear.
@@ -4838,7 +4819,7 @@ paths:
     get:
       operationId: getAgentReadme
       tags: [agents]
-      summary: The agent README rendered to sanitized HTML (§10.3, D-11).
+      summary: The agent README rendered to sanitized HTML.
       description: >
         Markdown is rendered server-side through a strict allowlist: no raw
         HTML, no user styles, no SVG, external links rewritten, and invisible
@@ -4869,8 +4850,7 @@ components:
       name: include
       in: query
       description: >-
-        `logo` answers the design with its logo, if the person has one
-        (agentry#1025). Without it the design comes without a `logo` key, so
+        `logo` answers the design with its logo, if the person has one. Without it the design comes without a `logo` key, so
         a client built before logos still reads it.
       schema:
         $ref: "#/components/schemas/ReportSettingsInclude"
@@ -4942,10 +4922,9 @@ components:
       in: path
       required: true
       description: >
-        Social identity provider id (§12.1). google and microsoft use their
+        Social identity provider id. google and microsoft use their
         built-in OIDC endpoints; openai and claude need an operator-set
-        issuer; authentik is the deployment's own directory service
-        (DEV-057) and also needs one; an unconfigured provider answers 404.
+        issuer; authentik is the deployment's own directory service and also needs one; an unconfigured provider answers 404.
       schema:
         type: string
         enum: [google, github, microsoft, openai, claude, authentik]
@@ -5006,7 +4985,7 @@ components:
             type: boolean
         minCLIVersion:
           type: string
-          description: Oldest supported agentry CLI version (§11 distribution note).
+          description: Oldest supported agentry CLI version.
         brand:
           $ref: '#/components/schemas/BrandInfo'
         ui:
@@ -5015,7 +4994,7 @@ components:
           type: array
           description: >
             Names of the extensions this build mounts under `/api/v1/x/<name>/`
-            (DEV-091, pkg/extension); absent on the core build.
+            (registered through pkg/extension); absent on the core build.
           items:
             type: string
         signInProviders:
@@ -5024,7 +5003,7 @@ components:
             The individual sign-in providers this registry has configured
             (the `provider` ids of `/auth/oidc/{provider}/start`, in that
             enum's order), so a front end can offer them without starting a
-            flow to find out (agentry#694). Empty when none is configured.
+            flow to find out. Empty when none is configured.
             A provider is listed when its client id and secret are set, and
             an issuer where it has no default; a listed provider's start
             redirects and an unlisted one's answers 404. A listed provider
@@ -5037,7 +5016,7 @@ components:
       type: object
       required: [name]
       description: >
-        What this deployment calls itself (config `brand.*`, DEV-091): the
+        What this deployment calls itself (config `brand.*`): the
         name for prompts and titles, and optional logo and support address.
       properties:
         name:
@@ -5053,7 +5032,7 @@ components:
       type: object
       required: [mode]
       description: >
-        The server's own browser surface under `/ui/` (DEV-091). `mode` is
+        The server's own browser surface under `/ui/`. `mode` is
         `full` (device authorize, sign-in, account, review, staff, org
         admin), `authorize` (only the device-authorize page — a site fronts
         this server) or `off`. `authorizeUrl` is the absolute page a CLI or
@@ -5163,7 +5142,7 @@ components:
           type: boolean
         accountUrl:
           description: >
-            Deprecated and no longer set (agentry#164): the directory's own
+            Deprecated and no longer set: the directory's own
             account page is not offered; every setting lives here.
           type: string
           deprecated: true
@@ -5199,7 +5178,7 @@ components:
         firstSocialProvider:
           description: >
             The social provider the caller's directory account was first
-            connected to (agentry#706), for the account's profile. Absent when
+            connected to, for the account's profile. Absent when
             the account has none, the server has no directory admin access,
             or the directory did not answer.
           type: object
@@ -5213,11 +5192,11 @@ components:
               type: string
         hasPassword:
           description: >
-            Whether the caller's directory account has a password (agentry#706):
+            Whether the caller's directory account has a password:
             false for an account a social provider created and no password was
             added to. Absent when the directory did not answer or has not
             recorded it yet (the account has not signed in or set a password
-            since the directory began keeping it).
+            since the directory began recording it).
           type: boolean
     EmailVerificationSent:
       type: object
@@ -5255,7 +5234,7 @@ components:
           description: >
             GET /user only, while the address is unconfirmed: the earliest
             moment `POST /user/email-verification` will send another
-            activation link (agentry#861). Absent when one may be sent now.
+            activation link. Absent when one may be sent now.
           type: string
           format: date-time
         platformStaff:
@@ -5319,14 +5298,14 @@ components:
           type: string
         prefix:
           type: string
-          description: First 12 characters, for display and lookup (§4.2 pats).
+          description: First 12 characters, for display and lookup.
         scopes:
           type: array
           items:
             $ref: "#/components/schemas/ScopeGranted"
         orgHandle:
           type: string
-          description: Set when org-bound (enforced SSO, §12.4).
+          description: Set when org-bound (enforced SSO).
         expiresAt:
           type: string
           format: date-time
@@ -5363,12 +5342,12 @@ components:
           type: string
           format: date-time
           description: >-
-            Defaults to the max PAT lifetime (§12.3); a later value is refused
+            Defaults to the max PAT lifetime; a later value is refused
             with 422, not clamped.
         orgHandle:
           type: string
           description: >
-            Bind the token to this org (§12.4). Requires the current session to
+            Bind the token to this org. Requires the current session to
             be SSO-fresh for the org; org-bound tokens live at most 90 days (a
             later expiresAt is refused with 422) and are the only tokens accepted
             against an enforced-SSO org's resources.
@@ -5406,14 +5385,14 @@ components:
     Scope:
       type: string
       description: |
-        PAT scopes (§12.3). A token can do only what its scopes allow; a
+        PAT scopes. A token can do only what its scopes allow; a
         session acts with the account's full authority. `run:write` lets a
         token start, feed and cancel a hosted run of a QuickAgent and
         `run:read` lets it read a run, its log and its artefacts — both are
         consumed only by a registry that mounts the runs extension, and
         unlock nothing on one that does not. `agent:manage` takes the owner
         actions on a QuickAgent the caller administers (make it public or
-        private, retire, restore, delete; agentry#993), which `org:admin`
+        private, retire, restore, delete), which `org:admin`
         also covers, and reaches none of its other settings. `knowledge:read` and
         `knowledge:write` read and write the account's knowledge packs.
         `secret:write` sets and deletes the account's hosted-run secrets and
@@ -5441,14 +5420,14 @@ components:
     Voice:
       type: object
       description: >-
-        The caller's Writing Voice (plan writing-voice.md §4, D13): at most
+        The caller's Writing Voice: at most
         a live version (the one runs attach), a pending one (in review, or
         flagged with its findings) and the previous one, for Restore.
       required: [alwaysAttach, questionSet, updatedAt]
       properties:
         alwaysAttach:
           type: boolean
-          description: Runs In Agentry attach the live voice by default (D11); on when a voice first goes live.
+          description: Runs In Agentry attach the live voice by default; on when a voice first goes live.
         live:
           $ref: "#/components/schemas/VoiceVersion"
         pending:
@@ -5591,8 +5570,7 @@ components:
     KnowledgePack:
       type: object
       description: >-
-        A knowledge pack the caller keeps in the registry (plan
-        knowledge.md §4.4): what may be read of it without its data key,
+        A knowledge pack the caller keeps in the registry: what may be read of it without its data key,
         and the key as the caller's wrapper wrapped it.
       required: [id, name, state, bytes, files, pages, digest, wrappedKey, shared, createdAt, updatedAt]
       properties:
@@ -5606,7 +5584,7 @@ components:
         shared:
           type: boolean
           description: >-
-            An organization's shared pack (agentry#646), read through
+            An organization's shared pack, read through
             `/orgs/{org}/knowledge/`; false for the caller's own.
         org:
           type: string
@@ -5615,7 +5593,7 @@ components:
           type: boolean
           description: >-
             On a shared pack: whether its members may export it, which an
-            admin marks (D26). Its admins export it either way; a
+            admin marks. Its admins export it either way; a
             person's own pack is theirs to export and carries no flag.
         bytes:
           type: integer
@@ -5740,13 +5718,13 @@ components:
           description: The allocation; 0 is no cap.
         pooled:
           type: boolean
-          description: The allocation is shared with other owners (agentry#612).
+          description: The allocation is shared with other owners.
 
     KnowledgeScanReport:
       type: object
       description: >-
-        What a pack's scan read and found (plan knowledge.md §4.4, D19): a
-        record, never a gate (D27). The stages that read prose over every
+        What a pack's scan read and found: a
+        record, never a gate. The stages that read prose over every
         text file, then AI Review over `sources/` and then `wiki/` in
         chunks no larger than the judge declares it reads.
       required: [schema, stages, read, review, findings]
@@ -5865,12 +5843,12 @@ components:
     OrgRole:
       type: string
       description: >
-        An organization role, ordered admin > security_reviewer | member
-        (§12.2 as amended by agentry#360). Admins manage the organization,
+        An organization role, ordered admin > security_reviewer | member.
+        Admins manage the organization,
         its members, settings, SSO and SCIM, and hold the security
         reviewer's powers; security_reviewer is a platform-internal role
-        that exists only inside a first-party organization; the owner role
-        is retired and every owner became an admin. An organization always
+        that exists only inside a first-party organization; there is no owner
+        role, only admins. An organization always
         keeps one admin: demoting or removing the last one is 409 last-admin.
       enum: [admin, member, security_reviewer]
 
@@ -5878,8 +5856,7 @@ components:
       type: string
       description: >
         The role a PUT assigns. security_reviewer is refused outside a
-        first-party organization, and owner — retired by agentry#360, kept
-        here so an older client's request still parses — is refused with a
+        first-party organization. `owner` is accepted by the schema but refused with a
         422 that names the roles that exist.
       enum: [admin, member, security_reviewer, owner]
 
@@ -6125,7 +6102,7 @@ components:
                 address belongs to no account, to an account whose address
                 the registry has not verified, or to someone who has turned
                 organization-invitation mail off — the registry mails no
-                address it has not confirmed (DEV-099).
+                address it has not confirmed.
 
     InvitationOffer:
       type: object
@@ -6201,7 +6178,7 @@ components:
 
     ActivityEvent:
       type: object
-      description: One agent-scoped entry from the audit log (§9.2 activity).
+      description: One agent-scoped entry from the audit log.
       required: [id, occurredAt, action]
       properties:
         id:
@@ -6352,7 +6329,7 @@ components:
 
     RedTeamReport:
       type: object
-      description: One run of the §17.5 red-team job (agentry#67).
+      description: One run of the red-team job.
       required: [id, rulesetSemver, bundleDigest, fixtures, cases, evaded, createdAt, report]
       properties:
         id:
@@ -6415,7 +6392,7 @@ components:
     AgentMode:
       type: string
       description: >
-        A run mode a release supports (DEV-088). `autonomous` runs from its
+        A run mode a release supports. `autonomous` runs from its
         source files, writes its output and receipts, and ends; `interactive`
         starts from the same plan and controls but the run is a conversation
         with the user in the CLI or the desktop. A release declares one or both.
@@ -6431,7 +6408,7 @@ components:
 
     AgentRole:
       type: string
-      description: Per-agent grant levels (§12.2), read < write < maintain < publish.
+      description: Per-agent grant levels, read < write < maintain < publish.
       enum: [read, write, maintain, publish]
 
     CreateAgentRequest:
@@ -6518,7 +6495,7 @@ components:
     ReportSettings:
       type: object
       description: >-
-        The caller's report settings, a profile setting (agentry#989). No
+        The caller's report settings, a profile setting. No
         `design` means the person never chose one.
       properties:
         design:
@@ -6531,8 +6508,7 @@ components:
     ReportDesign:
       type: object
       description: >-
-        A report design, the theme document version 2 (plan
-        report-designs.md §4, D11, D14, D17, D22; agentry#1024). Defined by
+        A report design, the theme document version 2. Defined by
         the core's pkg/reportdesign, whose JSON Schema this mirrors (a core
         test holds them equal). Beyond what the schema says, the accent must
         reach 4.5:1 contrast on white when it touches text (titleBlock
@@ -6540,7 +6516,7 @@ components:
         `name` and `footer.text` are one line with no control or
         bidirectional formatting characters. The tint is derived: 12% of the
         accent over white. The five built-in themes are each a value of it.
-        `logo` is optional and not counted in the 16 KB (agentry#1025).
+        `logo` is optional and not counted in the 16 KB.
       additionalProperties: false
       required: [agentryTheme, name, basedOn, version, paper, fonts, accent, titleBlock, headings, tables, quotes, footer]
       properties:
@@ -6634,7 +6610,7 @@ components:
       type: object
       description: >-
         A published version declares an MCP server version with a newly
-        known high or critical vulnerability (agentry#177).
+        known high or critical vulnerability.
       required: [id, agent, version, ecosystem, package, packageVersion, severity, advisoryIds, fixedIn, createdAt]
       properties:
         id:
@@ -6688,12 +6664,11 @@ components:
           type: string
           enum: [info, low, medium, high, critical]
           description: >-
-            The severity the gate gives the finding this advisory makes
-            (agentry#774): a Critical advisory is critical and rejects the
+            The severity the gate gives the finding this advisory makes: a Critical advisory is critical and rejects the
             version; a High one is high from a CVSS base score of 8.5 and
             medium below it, and high when it carries no usable score; any
             other is its own severity. Served so the runner can apply the
-            same rule (agentry-cli#501).
+            same rule.
         cvssScore:
           type: number
           format: double
@@ -6754,7 +6729,7 @@ components:
       type: object
       description: >-
         The judge's requests and input tokens, for the record. Never a
-        price: AI Review is charged per operation (DEV-150).
+        price: AI Review is charged per operation.
       required: [requests, inputTokens]
       properties:
         requests:
@@ -7068,8 +7043,7 @@ components:
           description: >-
             safe means no known advisories when last checked (OSV), and
             nothing else about the server. A version its package registry
-            does not publish is served as error, with lastError saying so
-            (agentry#1036), so no client meets a value the contract lacks.
+            does not publish is served as error, with lastError saying so, so no client meets a value the contract lacks.
           enum: [safe, vulnerable, error]
         maxSeverity:
           type: string
@@ -7108,15 +7082,14 @@ components:
           type: string
         gitHttpUrl:
           type: string
-          description: Clone URL for the hosted repository (§6.1).
+          description: Clone URL for the hosted repository.
         gitSshUrl:
           type: string
-          description: SSH clone URL (§6.1 Q7), present when the deployment serves the SSH transport.
+          description: SSH clone URL, present when the deployment serves the SSH transport.
         dependencyAlerts:
           type: array
           description: >-
-            Open dependency alerts on this agent's published versions
-            (agentry#177). Present on GET /agents/{ns}/{name}.
+            Open dependency alerts on this agent's published versions. Present on GET /agents/{ns}/{name}.
           items:
             $ref: "#/components/schemas/DependencyAlert"
         quarantineState:
@@ -7124,26 +7097,25 @@ components:
           enum: [none, quarantined, blocked]
         autoPublishTags:
           type: boolean
-          description: Present for callers with maintain (§6.3 toggle).
+          description: Present for callers with maintain.
         canPublish:
           type: boolean
           description: >-
             Present, and true, on GET /agents/{ns}/{name} when the caller may
             add a version to this agent: the publish role over the namespace
-            or a grant, and a token's `agent:publish` (agentry#875). Absent
+            or a grant, and a token's `agent:publish`. Absent
             otherwise. A client offers Edit on it where the caller's token
             carries no `org:admin` and so never reads `autoPublishTags` (the
             desktop's sign-in grant). The upload decides again; the
             organization's gate for a write is not applied here.
         allowForcePush:
           type: boolean
-          description: Present for callers with maintain; whether force-push to the default branch is allowed (§6.3).
+          description: Present for callers with maintain; whether force-push to the default branch is allowed.
         pipelineSkip:
           type: boolean
           description: >-
             Present for callers with maintain; whether submissions are
-            admitted without a scan (an organization's private agent only,
-            plan organization-subscriptions §4). A version so admitted is
+            admitted without a scan (an organization's private agent only). A version so admitted is
             served with `scanStatus: skipped` and the report's verdict
             `unscanned`.
         builtin:
@@ -7151,7 +7123,7 @@ components:
           description: >-
             Whether this is a built-in agent: one of the packages the Agentry
             CLI embeds and runs as part of the application, published here
-            for reading (agentry#737). A client labels it Built-in in place of
+            for reading. A client labels it Built-in in place of
             its run modes. Only platform staff set it, on an agent of a
             first-party namespace. Not the runner's attestation state
             `builtin`, which only the CLI's embedded copy of a package runs
@@ -7164,7 +7136,7 @@ components:
           type: string
           format: date-time
           description: >-
-            When the agent was retired (agentry#942): it is private, takes no
+            When the agent was retired: it is private, takes no
             submission, and `POST …/restore` returns the visibility it had.
             Absent on an agent that is not retired.
         installs30d:
@@ -7183,7 +7155,7 @@ components:
           type: string
           enum: [copying, ready, failed]
           description: >-
-            Present on a fork (agentry#943): `copying` until a worker has
+            Present on a fork: `copying` until a worker has
             copied the repository and submitted the first version, `ready`
             after, `failed` with `forkDetail`.
         forkDetail:
@@ -7198,7 +7170,7 @@ components:
     ForkOrigin:
       type: object
       description: >-
-        What a fork was taken from (agentry#943). Kept for good: there is no
+        What a fork was taken from. Kept for good: there is no
         detach.
       required: [namespace, name, version, available]
       properties:
@@ -7232,10 +7204,10 @@ components:
     VersionStatus:
       type: string
       description: >
-        Publication state machine states (§7). `approved` is reserved and
+        Publication state machine states. `approved` is reserved and
         never produced: a reviewer's approval publishes directly
         (needs_review → published), so clients will not observe it; it is
-        kept because removing an enum value is a breaking change (DEV-046).
+        kept because removing an enum value is a breaking change.
       enum: [submitted, scanning, needs_review, approved, published, rejected, yanked, quarantined, blocked]
 
     AgentVersion:
@@ -7261,7 +7233,7 @@ components:
             Where the version came from: a repository tag, an uploaded
             package, or an uploaded package the scan proved was a hosted
             Drafter revision of the agent's current release
-            (`drafter-revision`, plan drafter-revisions §6), which S9
+            (`drafter-revision`), which S9
             scans with the benefit of the doubt. The set grows by
             addition, so it is declared extensible: a client keeps a source
             it does not know as the string it is rather than failing on it.
@@ -7271,7 +7243,7 @@ components:
           description: >-
             How the version was admitted: through the pipeline, or skipped
             — no scan run, no findings, no attestation, the report's
-            verdict `unscanned` (plan organization-subscriptions §4). A
+            verdict `unscanned`. A
             skipped version is a private organization agent's; a client
             that installs or runs one asks for consent first.
         manifestSchemaVersion:
@@ -7285,7 +7257,7 @@ components:
           type: string
         archiveDigest:
           type: string
-          description: sha256:<hex>, the release identity (D-15).
+          description: sha256:<hex>, the release identity.
         archiveSize:
           type: integer
           format: int64
@@ -7293,7 +7265,7 @@ components:
           type: object
           additionalProperties: true
           description: >-
-            The capability contract (§5.4): the declared capability block,
+            The capability contract: the declared capability block,
             and under `knowledge` the names of the knowledge packs the
             release ships (the manifest's `knowledge.ships`), so a release
             shipping one more than an installed one asks for consent again.
@@ -7327,8 +7299,7 @@ components:
         attestationUrl:
           type: string
           description: >
-            Where to fetch the DSSE attestation over this release (§8.8,
-            §9.4 step 3). Present whenever the version has been signed:
+            Where to fetch the DSSE attestation over this release. Present whenever the version has been signed:
             every version published by a signing-enabled deployment. Absent
             when the deployment runs `signing.kind: none` (dev/self-host
             opt-out) or the version predates signing.
@@ -7337,13 +7308,12 @@ components:
           additionalProperties: true
         yanked:
           type: boolean
-          description: True only for exact pins of yanked versions (§5.5).
+          description: True only for exact pins of yanked versions.
         scanStatus:
           type: string
           enum: [pipeline, skipped]
           description: >-
-            How the resolved version was admitted (plan
-            organization-subscriptions §4): `skipped` is a version published
+            How the resolved version was admitted: `skipped` is a version published
             without a scan — no attestation exists for it, which is not the
             same as an unsigned registry — and a client installs or runs it
             only with the person's consent.
@@ -7383,8 +7353,7 @@ components:
           type: string
           description: >-
             Why a reviewer dismissed or confirmed this finding. Dismissed
-            findings stay on the public report WITH their rationale (PLAN
-            §8.5). A finding that vanishes without explanation is exactly
+            findings stay on the public report WITH their rationale. A finding that vanishes without explanation is exactly
             what the report exists to prevent.
 
     ScanReport:
@@ -7414,7 +7383,7 @@ components:
           type: string
           description: >-
             The scan run's status; `skipped` for a version admitted without
-            a scan (M21), which has no run.
+            a scan, which has no run.
         verdict:
           $ref: "#/components/schemas/ReportVerdict"
         finishedAt:
@@ -7433,7 +7402,7 @@ components:
           type: array
           description: >-
             What the scan read of each knowledge pack the release ships
-            (plan knowledge.md §4.6; the manifest's `knowledge.ships`):
+            (the manifest's `knowledge.ships`):
             every rule stage over every page and source, then AI Review over
             the pack's `sources/` and its `wiki/` in chunks no larger than
             the judge reads, or "AI Review not configured". The pack's
@@ -7464,7 +7433,7 @@ components:
         sweep, a manual rescan) while the report describes the latest run that
         finished. Present only when such a run exists: the verdict a release was
         published on stands until the rescan finishes, and the report says one
-        is under way rather than going blank (agentry#542).
+        is under way rather than going blank.
       properties:
         scanRunId:
           type: string
@@ -7511,18 +7480,17 @@ components:
           description: >-
             Where the item stands. `superseded`: no person decided; the
             version was published by the gate when a new ruleset judged the
-            review queue again and it passed (agentry#772). The set grows by
+            review queue again and it passed. The set grows by
             addition, so it is declared extensible: a client keeps a state it
             does not know as the string it is rather than failing on it.
           type: string
           x-extensible-enum: [pending, approved, rejected, superseded]
         version:
           type: string
-        # The version's own status when the item was read (§7), so a client
+        # The version's own status when the item was read, so a client
         # can say what a decision will do: a needs_review version rejected
         # goes to rejected, a quarantined one — public, under re-review —
-        # is yanked instead, the rejected edge not existing for it
-        # (agentry#273).
+        # is yanked instead, the rejected edge not existing for it.
         versionStatus:
           $ref: "#/components/schemas/VersionStatus"
         agent:
@@ -7547,7 +7515,7 @@ components:
           $ref: "#/components/schemas/AgentVersion"
         previous:
           # The most recent previously published version, when one exists:
-          # the baseline for the capability diff (§10.1).
+          # the baseline for the capability diff.
           $ref: "#/components/schemas/AgentVersion"
         manifest:
           description: The submitted manifest (canonical JSON form).
@@ -7590,7 +7558,7 @@ components:
           type: boolean
         content:
           description: UTF-8 text content; absent for binary files. Rendered
-            by clients with invisible-character escaping (§10.3).
+            by clients with invisible-character escaping.
           type: string
 
     AbuseReport:
@@ -7763,7 +7731,7 @@ components:
 
     Problem:
       type: object
-      description: RFC 9457 problem details (D-10).
+      description: RFC 9457 problem details.
       required: [type, title, status]
       properties:
         type:
@@ -7903,7 +7871,7 @@ components:
       properties:
         url:
           type: string
-          description: HTTPS endpoint (§9.3 requires https).
+          description: HTTPS endpoint (https is required).
         events:
           type: array
           items:
@@ -7995,7 +7963,7 @@ components:
       name: X-Agentry-Job-Token
       description: >-
         A hosted job's credential for the model-input routes, minted by an
-        extension for one job and valid while it runs (agentry#608). Never
+        extension for one job and valid while it runs. Never
         a personal access token.
 
 security:
