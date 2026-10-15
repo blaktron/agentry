@@ -1,11 +1,10 @@
-// Package packseal is the sealed form of a knowledge pack (plan
-// knowledge.md §4.3, §4.4; agentry#593): the pack's tree, as one tar,
-// encrypted under a random data key of its own, so that neither a laptop's
-// store nor Agentry's holds a pack's pages in the clear. The data key is
-// never stored beside it in the clear: it is wrapped, by the registry the
-// person is signed in to or, signed out, by a key on the machine. It is
-// the core's, open, so the CLI, the desktop and the registry all read and
-// write the same bytes.
+// Package packseal is the sealed form of a knowledge pack: the pack's
+// tree, as one tar, encrypted under a random data key of its own, so that
+// neither a laptop's store nor Agentry's holds a pack's pages in the
+// clear. The data key is never stored beside it in the clear: it is
+// wrapped, by the registry the person is signed in to or, signed out, by a
+// key on the machine. It is the core's, open, so the CLI, the desktop and
+// the registry all read and write the same bytes.
 //
 // The layout, all integers big-endian:
 //
@@ -20,7 +19,7 @@
 // moved, dropped or repeated, the header cannot be changed, and a stream
 // cut short at a frame boundary does not open (the last frame says it is
 // the last). It follows the framing of the hosted run's sealed output
-// (agentry-enterprise internal/runout), with a data key in place of HPKE.
+// (the enterprise build's runout package), with a data key in place of HPKE.
 package packseal
 
 import (

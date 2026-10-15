@@ -12,10 +12,10 @@ import (
 	"testing"
 )
 
-// The providers a person may name for their own key (agentry#783): each is
+// The providers a person may name for their own key: each is
 // one POST with the key in its header and never in the URL or the body,
 // asks for the plain results and none of the paid extras, and reads only
-// its result list. The answers are the documented shapes (2026-09-30), with
+// its result list. The answers are the documented shapes, with
 // the fields each client must ignore.
 var personalProviders = []struct {
 	name   string
