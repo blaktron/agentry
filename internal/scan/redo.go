@@ -16,7 +16,7 @@ import (
 
 // JobRedoReviewQueue judges every version waiting in the review queue again
 // under a newly registered ruleset and publishes what now passes the gate
-// (agentry#772; the operator's D19 of 2026-09-30). Enqueued beside the
+// Enqueued beside the
 // catalogue sweep, which covers published versions only. On the sandbox
 // queue: it scans untrusted content.
 const JobRedoReviewQueue = "scan.redo_review_queue"
@@ -112,7 +112,7 @@ func (p *Pipeline) redoOne(ctx context.Context, versionID uuid.UUID) (bool, erro
 		return false, fmt.Errorf("%w: %s is %s", registry.ErrVersionMoved, v.Version, v.Status)
 	}
 	// A policy that will not parse leaves the version held: it is never a
-	// reason to judge by a looser one (§8.6).
+	// reason to judge by a looser one.
 	rj, err := p.rejudge(ctx, v)
 	if err != nil {
 		return false, err

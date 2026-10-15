@@ -120,8 +120,8 @@ func keywordListRatio(text string) float64 {
 	return float64(listy) / float64(lines)
 }
 
-// confusableSkeleton normalizes a name for the anti-typosquat compare (T-10,
-// UTS #39 spirit): lowercase, map common confusable digits/letters, and
+// confusableSkeleton normalizes a name for the anti-typosquat compare (UTS #39
+// spirit): lowercase, map common confusable digits/letters, and
 // strip separators. A cheap skeleton that collapses obvious look-alikes.
 func confusableSkeleton(s string) string {
 	s = strings.ToLower(s)

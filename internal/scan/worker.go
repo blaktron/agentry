@@ -17,22 +17,22 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// Job kinds handled by the scan worker (§8.2, §8.7, §7).
+// Job kinds handled by the scan worker.
 const (
 	JobScanVersion = "scan.version"
 	JobRescanSweep = "scan.rescan_sweep"
 	// JobAttestSweep signs every published version that has no
-	// attestation (agentry#407).
+	// attestation.
 	JobAttestSweep = "scan.attest_sweep"
-	// JobScanReconcile is the §7 watchdog: sweep versions parked in
+	// JobScanReconcile is the watchdog: sweep versions parked in
 	// `scanning` past the 30-minute cap into review.
 	JobScanReconcile = "scan.reconcile"
 	// JobReattestSweep countersigns every attestation with a newly
-	// registered signing key (§8.8, agentry#350). On the core queue: it
+	// registered signing key. On the core queue: it
 	// touches the database and the signer, never untrusted content.
 	JobReattestSweep = "scan.reattest_sweep"
 	// JobPublishApproved publishes and signs a version whose review item a
-	// keyless role approved (agentry#479). On the core queue: it signs, and
+	// keyless role approved. On the core queue: it signs, and
 	// touches no untrusted content.
 	JobPublishApproved = "scan.publish_approved"
 )
@@ -49,7 +49,7 @@ type ScanJobArgs struct {
 }
 
 // RescanSweepArgs records why a sweep was scheduled (the ruleset semver whose
-// arrival triggered it, §8.7).
+// arrival triggered it).
 type RescanSweepArgs struct {
 	RulesetSemver string `json:"rulesetSemver,omitempty"`
 }
@@ -72,7 +72,7 @@ const (
 	// rulesetJobDefer: the job is for a newer ruleset than this worker's
 	// bundle. A rolling deploy runs a worker of the outgoing build beside the
 	// api of the incoming one, which registered the ruleset; the job goes
-	// back to the queue for a worker of the incoming build (agentry#805).
+	// back to the queue for a worker of the incoming build.
 	rulesetJobDefer
 	// rulesetJobSkip: the job is for an older ruleset. Its work would be
 	// done under a ruleset it was not enqueued for, and the newer ruleset's
@@ -81,8 +81,7 @@ const (
 )
 
 // rulesetJobActionFor compares a job's ruleset with the worker's. A semver
-// that does not parse runs the job, as every job did before jobs were
-// compared.
+// that does not parse runs the job.
 func rulesetJobActionFor(worker, job string) rulesetJobAction {
 	if job == "" || job == worker {
 		return rulesetJobRun
@@ -122,16 +121,16 @@ func (p *Pipeline) ownRulesetJob(ctx context.Context, job queue.Job) (bool, erro
 	return true, nil
 }
 
-// RegisterHandlers wires the pipeline's job handlers onto a queue client
-// (§8.2). The worker role calls this then Work(); dev/tests can Drain().
+// RegisterHandlers wires the pipeline's job handlers onto a queue client.
+// The worker role calls this then Work(); dev/tests can Drain().
 func (p *Pipeline) RegisterHandlers(q queue.Client) {
 	q.Register(JobScanVersion, func(ctx context.Context, job queue.Job) error {
 		var args ScanJobArgs
 		if err := json.Unmarshal(job.Args, &args); err != nil {
 			return fmt.Errorf("scan worker: bad args: %w", err)
 		}
-		// Top of the §16.2 publish funnel for a submission the receiving
-		// role handed off (agentry#507), counted once, not on each retry;
+		// Top of the publish funnel for a submission the receiving
+		// role handed off, counted once, not on each retry;
 		// the synchronous path counts in VersionSubmitted.
 		if args.Trigger == "publish" && job.Attempt <= 1 {
 			p.mx.RecordPublishSubmitted(ctx)
@@ -193,8 +192,7 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		if moved > 0 {
 			p.log.Warn("scan: watchdog routed stuck versions to review", "count", moved)
 		}
-		// Handed-off git-tag submissions whose archive was never stored
-		// (agentry#508).
+		// Handed-off git-tag submissions whose archive was never stored.
 		if p.reg != nil {
 			rejected, err := p.reg.ReconcileStuckSubmissions(ctx)
 			if err != nil {
@@ -203,7 +201,7 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 			if rejected > 0 {
 				p.log.Warn("scan: watchdog rejected git-tag submissions whose archive was never stored", "count", rejected)
 			}
-			// Forks whose copy never finished (agentry#943).
+			// Forks whose copy never finished.
 			failed, err := p.reg.ReconcileStuckForks(ctx)
 			if err != nil {
 				return err
@@ -224,16 +222,16 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 }
 
 // QueuePipeline adapts the queue into registry.Pipeline: instead of scanning
-// inline, it enqueues a scan.version job (§8.2, §13.3). Every role that takes
-// submissions hands them off this way (api.Server.HandOffScans, agentry#507);
+// inline, it enqueues a scan.version job. Every role that takes
+// submissions hands them off this way (api.Server.HandOffScans);
 // the synchronous Pipeline remains for tests that drive a scan in-request.
 type QueuePipeline struct {
 	Q queue.Client
 }
 
 // VersionSubmitted implements registry.Pipeline by enqueueing a scan job.
-// The enqueue error used to be discarded, which turned "the queue is down"
-// into a version silently parked in `scanning` with nobody scanning it.
+// The enqueue error is returned, so "the queue is down" is not
+// a version silently parked in `scanning` with nobody scanning it.
 func (qp QueuePipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUID) error {
 	if _, err := qp.Q.Enqueue(ctx, JobScanVersion, "sandbox",
 		ScanJobArgs{VersionID: versionID, Trigger: "publish"}); err != nil {
@@ -250,14 +248,14 @@ type RescanSummary struct {
 	Scanned     int
 	Quarantined int
 	Failed      int
-	// CachedStages counts stage results that did not have to be re-run — §8.7
+	// CachedStages counts stage results that did not have to be re-run —
 	// results-cache hits, plus any stage an interrupted attempt had already
 	// completed. The measure of what the cache saved.
 	CachedStages int
 }
 
 // RescanSweep re-runs the scanners against published versions when a new
-// ruleset ships (§8.7). New high/critical findings quarantine the version and
+// ruleset ships. New high/critical findings quarantine the version and
 // draft an advisory. One unreadable version never stops the sweep — the rest
 // of the catalogue still gets checked — but the count comes back to the caller
 // so the worker can log it at error level and alerting can see it.
@@ -292,7 +290,7 @@ type AttestSummary struct {
 // effective one at sweep time (the run's snapshot carries the policy
 // itself, not its version). A version whose latest run has no report
 // digest is skipped and counted as failed — signing an empty digest
-// asserts nothing (§8.8) — and the log names it. Exactly once per
+// asserts nothing — and the log names it. Exactly once per
 // version still holds: the insert's ON CONFLICT (version_id) does nothing
 // for a row that appeared meanwhile.
 func (p *Pipeline) AttestSweep(ctx context.Context) (AttestSummary, error) {
@@ -355,7 +353,7 @@ func (p *Pipeline) attestOne(ctx context.Context, q *storegen.Queries, v storege
 //
 // Paging is keyset, not LIMIT/OFFSET. The sweep quarantines rows out of the
 // very set it is paging over, so under OFFSET every version it acted on
-// shifted an unscanned one into the gap — the sweep skipped exactly the
+// would shift an unscanned one into the gap — the sweep would skip exactly the
 // neighbours of the versions it had just found problems with.
 func (p *Pipeline) RescanSweepWithSummary(ctx context.Context) (RescanSummary, error) {
 	batch := p.sweepBatch()
@@ -401,10 +399,10 @@ type rescanOutcome struct {
 }
 
 // rescanOne re-scans a single published version. A new high/critical finding
-// (new: no person decided on it; high: at rescanSeverity, which weighs 0.2.2's
-// re-ratings at medium) quarantines it, persists the run that found it, files
+// (new: no person decided on it; high: at rescanSeverity, which weighs the
+// re-rated findings at medium) quarantines it, persists the run that found it, files
 // a platform review item so the quarantine has a way OUT, drafts an advisory
-// and notifies the author (§8.7).
+// and notifies the author.
 func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOutcome, error) {
 	q := p.st.Queries()
 	before, err := q.GetVersionByID(ctx, versionID)
@@ -425,12 +423,11 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	// reviewer approved with the finding on its report, or a quarantine a
 	// reviewer cleared, is not pulled again by every new ruleset, and a
 	// re-rating does not pull what a person already approved at the lower
-	// rating (agentry#781; the operator's decision of 2026-09-30, whichever
-	// queue approved it). A finding is matched by scanner, file and line in
-	// the same archive, so a finding with no file (S5's, per category) matches
+	// rating, whichever queue approved it. A finding is matched by scanner,
+	// file and line in the same archive, so a finding with no file (S5's, per category) matches
 	// any earlier one of its scanner: the bytes are the same, only the
 	// reading is new. If the lookup fails, nothing counts as decided and the
-	// rescan quarantines as before (fail toward review).
+	// rescan quarantines (fail toward review).
 	seen := map[reviewedKey]bool{}
 	decided, err := q.ListDecidedFindings(ctx, storegen.ListDecidedFindingsParams{
 		VersionID: versionID, ExcludeRunID: runID,
@@ -463,7 +460,7 @@ func (p *Pipeline) rescanOne(ctx context.Context, versionID uuid.UUID) (rescanOu
 	}
 	out.quarantined = true
 
-	// The way back out (§8.7: "platform reviewer resolves within SLA"). A
+	// The way back out (a platform reviewer resolves it within the SLA). A
 	// quarantine with no review item is a dead end — the version can only
 	// leave quarantine through a decision, and nothing was asking for one.
 	if err := p.st.WithTx(ctx, func(tx *storegen.Queries) error {
@@ -495,7 +492,7 @@ type rejudged struct {
 
 // rejudge scans a version again as a rescan and performs no transition: the
 // catalogue sweep and the redo of the review queue layer theirs on it. The
-// run is persisted like any other (§8.7 quarantines must be explainable): the
+// run is persisted like any other (quarantines must be explainable): the
 // reviewer who has to act on it needs the findings.
 func (p *Pipeline) rejudge(ctx context.Context, v storegen.AgentVersion) (rejudged, error) {
 	agent, err := p.st.Queries().GetAgentByID(ctx, v.AgentID)
@@ -532,12 +529,12 @@ func (p *Pipeline) sweepBatch() int32 {
 }
 
 // rescanSeverity is what a finding weighs when a rescan decides whether to
-// pull a published version. The findings ruleset 0.2.2 re-rated from medium
-// to high count at their old rating here: they hold a submission for a
+// pull a published version. The findings re-rated from medium
+// to high on probable evidence count at their medium rating here: they hold a submission for a
 // person, but a new reading of one on a version already published does not
-// quarantine it (the operator's decision of 2026-09-30, agentry#771). AI
-// Review reads the same bytes differently from run to run, and on dev the
-// 0.2.2 sweep pulled seven published versions for a probable undeclared
+// quarantine it. AI
+// Review reads the same bytes differently from run to run, and a sweep
+// must not pull published versions for a probable undeclared
 // capability no earlier run had read.
 func rescanSeverity(f Finding) Severity {
 	if f.Severity == SevHigh && reratedToHigh(f) {
@@ -546,10 +543,9 @@ func rescanSeverity(f Finding) Severity {
 	return f.Severity
 }
 
-// reratedToHigh reports a finding that is high only by ruleset 0.2.2's
-// re-rating (D16): S6's undeclared environment read, and AI Review's
-// injection and undeclared-capability axes at score 2 (and user deception,
-// since ruleset 0.4.0, agentry#893), in a release's own scan or a shipped
+// reratedToHigh reports a finding that is high only on probable evidence: S6's
+// undeclared environment read, and AI Review's injection, undeclared-capability
+// and user-deception axes at score 2, in a release's own scan or a shipped
 // pack's.
 func reratedToHigh(f Finding) bool {
 	if f.Scanner == scannerUndeclaredEnv {
@@ -577,7 +573,7 @@ type reviewedKey struct {
 }
 
 // notifyAuthorQuarantined tells the submitter their published version was
-// pulled (§8.7 "author notification"). Best-effort by design: a mail failure
+// pulled (author notification). Best-effort by design: a mail failure
 // must never unwind a protective quarantine.
 func (p *Pipeline) notifyAuthorQuarantined(ctx context.Context, v storegen.AgentVersion, agent storegen.GetAgentByIDRow, severity, reason string) {
 	if p.notifier == nil {
@@ -589,7 +585,7 @@ func (p *Pipeline) notifyAuthorQuarantined(ctx context.Context, v storegen.Agent
 		return
 	}
 	if !notify.AllowsEmail(ctx, p.st.Queries(), p.log, u.ID, notify.KindQuarantine) {
-		return // unverified address, or the author switched these off (#299, #190)
+		return // unverified address, or the author switched these off
 	}
 	if err := p.notifier.AgentQuarantined(ctx, notify.QuarantineNotice{
 		ToEmail:  u.Email,
@@ -602,9 +598,9 @@ func (p *Pipeline) notifyAuthorQuarantined(ctx context.Context, v storegen.Agent
 	}
 }
 
-// Block disables every live version of an agent (§7 `blocked`: downloads
+// Block disables every live version of an agent (`blocked`: downloads
 // return 410, only platform staff set or unset it). Setting
-// agents.quarantine_state alone left published versions downloadable and made
+// agents.quarantine_state alone would leave published versions downloadable and make
 // the download handler's 410 branch unreachable.
 func (p *Pipeline) Block(ctx context.Context, agentID uuid.UUID, reason string, ev audit.Event) (int, error) {
 	return p.transitionLiveVersions(ctx, agentID,
@@ -615,10 +611,10 @@ func (p *Pipeline) Block(ctx context.Context, agentID uuid.UUID, reason string, 
 		registry.StatusBlocked, reason, ev)
 }
 
-// Reinstate reverses a block or quarantine (§7). Blocked versions pass back
+// Reinstate reverses a block or quarantine. Blocked versions pass back
 // through quarantined — the edge the state machine draws — and on to
 // published. No re-signing happens: the attestation was issued once, on the
-// original publish (§7).
+// original publish.
 func (p *Pipeline) Reinstate(ctx context.Context, agentID uuid.UUID, reason string, ev audit.Event) (int, error) {
 	n, err := p.transitionLiveVersions(ctx, agentID,
 		[]string{string(registry.StatusBlocked)}, registry.StatusQuarantined, reason, ev)

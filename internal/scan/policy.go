@@ -9,7 +9,7 @@ import (
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
 
-// Policy is the §8.6 policy document. The platform baseline is the floor;
+// Policy is the policy document. The platform baseline is the floor;
 // org policies may only tighten (Evaluate enforces this).
 type Policy struct {
 	// RequireHumanReview: "never" | "always" | {"whenCapabilities": [...]}.
@@ -20,26 +20,26 @@ type Policy struct {
 	// AllowedLicenses: public publishes outside this list are rejected.
 	AllowedLicenses []string `json:"allowedLicenses,omitempty"`
 	// BlockedMcpServers: submissions whose manifest declares one of these
-	// MCP servers are rejected at submission (RUNNER-PLAN-3 §P1 org
-	// blocklist, agentry#52). Entries are "npm:<package>" / "pypi:<package>",
-	// or "url:<host>" for a remote server (agentry#910); path.Match globs
+	// MCP servers are rejected at submission (an org blocklist).
+	// Entries are "npm:<package>" / "pypi:<package>",
+	// or "url:<host>" for a remote server; path.Match globs
 	// are allowed ("npm:@evil/*", "pypi:*-fetch", "url:*.example.com").
 	// Unions toward strict like blockedCapabilities.
 	BlockedMcpServers []string `json:"blockedMcpServers,omitempty"`
-	// MaxAutoPublishSeverity tightens the §8.5 table: worst auto-publishable
+	// MaxAutoPublishSeverity tightens the severity table: worst auto-publishable
 	// severity. "" means the baseline default, which the ruleset carries
-	// (medium since ruleset 0.3.0, agentry#773).
+	// (medium).
 	MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity,omitempty"`
 	// RequireEvals: evals/ dir must exist and be non-empty.
 	RequireEvals bool `json:"requireEvals,omitempty"`
-	// WildcardEgress: "review" | "reject" for "*" egress, and since
-	// agentry#1134 for a browser whose scope is public (unrestrictedNetwork).
+	// WildcardEgress: "review" | "reject" for "*" egress, and for a browser
+	// whose scope is public (unrestrictedNetwork).
 	WildcardEgress string `json:"wildcardEgress,omitempty"`
 }
 
-// DefaultBaseline is the platform baseline policy (§8.5 defaults). Its
+// DefaultBaseline is the platform baseline policy. Its
 // threshold is the embedded ruleset's: released with the bundle version, so
-// "which ruleset published this" names the threshold too (agentry#773).
+// "which ruleset published this" names the threshold too.
 func DefaultBaseline() Policy {
 	return Policy{
 		RequireHumanReview:     json.RawMessage(`"never"`),
@@ -124,7 +124,7 @@ func parseReviewMode(raw json.RawMessage) (reviewMode, error) {
 	return reviewMode{whenCapabilities: obj.WhenCapabilities}, nil
 }
 
-// Merge tightens baseline with an org overlay (§8.6: org may only tighten).
+// Merge tightens baseline with an org overlay (org may only tighten).
 // The stricter of each knob wins; org can never loosen the baseline.
 func Merge(baseline, org Policy) Policy {
 	out := baseline
@@ -232,7 +232,7 @@ func intersect(a, b []string) []string {
 }
 
 // LoosensBaseline reports whether org would loosen baseline on any knob the
-// API rejects outright (§8.6). Merge already clamps silently; this gives the
+// API rejects outright. Merge already clamps silently; this gives the
 // author a clear error for the most confusing case — a looser
 // maxAutoPublishSeverity or downgrading wildcardEgress from reject.
 func LoosensBaseline(baseline, org Policy) bool {

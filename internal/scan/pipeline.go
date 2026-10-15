@@ -26,14 +26,9 @@ import (
 	"github.com/blaktron/agentry/internal/webhook"
 )
 
-// Pipeline is the M4 implementation of registry.Pipeline (§8): it fetches the
-// version's archive, runs the orchestrator, persists the scan run + findings,
-// drives the §7 state machine per the gate decision, and signs on publish.
-// It replaces the M3 dev stub. Runs synchronously from a queue handler (or
-// inline in dev/tests).
 // ErrNoSigningKey is returned when a process that holds no signing key is
-// asked to sign (agentry#479): the api and git roles run without the key,
-// and a version is never published without its attestation (agentry#407),
+// asked to sign: the api and git roles run without the key,
+// and a version is never published without its attestation,
 // so the transition that needed the signature does not happen there.
 var ErrNoSigningKey = errors.New("scan: this process holds no signing key; the worker signs")
 
@@ -41,6 +36,11 @@ var ErrNoSigningKey = errors.New("scan: this process holds no signing key; the w
 // is no longer pending (a second reviewer acting on a stale page).
 var ErrAlreadyDecided = errors.New("scan: review item already decided")
 
+// Pipeline implements registry.Pipeline: it fetches the
+// version's archive, runs the orchestrator, persists the scan run + findings,
+// drives the version state machine per the gate decision, and signs on
+// publish. It runs synchronously from a queue handler (or
+// inline in dev/tests).
 type Pipeline struct {
 	st          *store.Store
 	reg         *registry.Service
@@ -60,17 +60,17 @@ type Pipeline struct {
 	// drafts answers a version's claimed draft (DraftProvenance); nil =
 	// no version is a Drafter revision (the core alone).
 	drafts DraftProvenance
-	// mx records the §16.2 publish funnel. nil is a working no-op.
+	// mx records the publish funnel. nil is a working no-op.
 	mx *metrics.Metrics
 	// osv and mcpCache are S7's vulnerability database and scanned-server
-	// registry, kept here for the daily sweep (agentry#177).
+	// registry, kept here for the daily sweep.
 	osv      OSVClient
 	mcpCache MCPScanCache
-	// jobs carries a keyless role's approvals to the worker (agentry#479).
+	// jobs carries a keyless role's approvals to the worker.
 	jobs queue.Client
 }
 
-// SetMetrics wires the §16.2 instrument set onto the pipeline and the
+// SetMetrics wires the instrument set onto the pipeline and the
 // orchestrator it drives.
 func (p *Pipeline) SetMetrics(m *metrics.Metrics) {
 	p.mx = m
@@ -80,7 +80,7 @@ func (p *Pipeline) SetMetrics(m *metrics.Metrics) {
 }
 
 // SetMCPScanning wires S7's vulnerability database and scanned-server
-// registry onto the orchestrator (agentry#177).
+// registry onto the orchestrator.
 func (p *Pipeline) SetMCPScanning(client OSVClient, cache MCPScanCache) {
 	p.osv, p.mcpCache = client, cache
 	if p.orch != nil {
@@ -89,7 +89,7 @@ func (p *Pipeline) SetMCPScanning(client OSVClient, cache MCPScanCache) {
 }
 
 // SetPackageRegistries wires the registries S7 asks whether a declared
-// server's pinned version is published (agentry#1036).
+// server's pinned version is published.
 func (p *Pipeline) SetPackageRegistries(r PackageRegistries) {
 	if p.orch != nil {
 		p.orch.SetPackageRegistries(r)
@@ -97,10 +97,10 @@ func (p *Pipeline) SetPackageRegistries(r PackageRegistries) {
 }
 
 // MCPScanningEnabled reports whether the sweep has a vulnerability database
-// to ask — the wiring check agentry#184 exists for.
+// to ask.
 func (p *Pipeline) MCPScanningEnabled() bool { return osvEnabled(p.osv) && p.mcpCache != nil }
 
-// SetNotifier overrides the author-notification transport (§8.7).
+// SetNotifier overrides the author-notification transport.
 func (p *Pipeline) SetNotifier(n notify.Notifier) {
 	if n != nil {
 		p.notifier = n
@@ -108,8 +108,8 @@ func (p *Pipeline) SetNotifier(n notify.Notifier) {
 }
 
 // PipelineDeps bundles the pipeline's collaborators.
-// GitHistory is the repository seam S2's history scan reads through
-// (agentry#54); the git and all roles provide gitsrv.RepoStore, a worker
+// GitHistory is the repository seam S2's history scan reads through;
+// the git and all roles provide gitsrv.RepoStore, a worker
 // without repo storage leaves it nil and S2 reports "not scanned".
 type GitHistory interface {
 	HistoryPatch(ctx context.Context, repoID uuid.UUID, commit string) (io.ReadCloser, error)
@@ -125,20 +125,20 @@ type PipelineDeps struct {
 	Orchestrator *Orchestrator
 	Signer       Signer
 	Audit        *audit.Writer
-	// Notifier reaches the author when their published agent is quarantined
-	// (§8.7). Defaults to the log notifier.
+	// Notifier reaches the author when their published agent is quarantined.
+	// Defaults to the log notifier.
 	Notifier    notify.Notifier
 	Log         *slog.Logger
 	RegistryURL string
 	RulesetID   uuid.UUID
 	RulesetVer  string
-	// Jobs is the queue a keyless role hands an approval to (agentry#479):
+	// Jobs is the queue a keyless role hands an approval to:
 	// with no Signer, an approve → published is published and signed by the
 	// worker's publish job, not in the request.
 	Jobs queue.Client
 }
 
-// StuckScanCap is the §7 timeout: a version in `scanning` longer than this
+// StuckScanCap is the scan timeout: a version in `scanning` longer than this
 // had its scan die, and the watchdog routes it to review.
 const StuckScanCap = 30 * time.Minute
 
@@ -163,7 +163,7 @@ func NewPipeline(d PipelineDeps) *Pipeline {
 // VersionSubmitted implements registry.Pipeline: run the scan for a version
 // that just entered `scanning`. Idempotent — safe to call again after a crash.
 func (p *Pipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUID) error {
-	// Top of the §16.2 publish funnel. Counted here rather than in the
+	// Top of the publish funnel. Counted here rather than in the
 	// registry so that the submitted count and the verdict counts come from
 	// the same object and cannot drift apart; a submission handed to the
 	// queue (QueuePipeline) is counted by the scan.version handler instead.
@@ -171,7 +171,7 @@ func (p *Pipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUID) er
 	if err := p.Scan(ctx, versionID, "publish"); err != nil {
 		p.log.Error("pipeline: scan failed", "version", versionID, "err", err)
 		// Fail closed: the version stays in scanning and the watchdog routes
-		// it to review at the §7 cap. Returning the error lets the submitter
+		// it to review at the stuck-scan cap. Returning the error lets the submitter
 		// learn that now instead of guessing from a stalled status.
 		return err
 	}
@@ -179,7 +179,7 @@ func (p *Pipeline) VersionSubmitted(ctx context.Context, versionID uuid.UUID) er
 }
 
 // Scan runs the full pipeline for one version, persists the run, and drives
-// the state machine per the gate (§7, §8.5).
+// the state machine per the gate.
 func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string) error {
 	q := p.st.Queries()
 	v, err := q.GetVersionByID(ctx, versionID)
@@ -190,7 +190,7 @@ func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string
 	if err != nil {
 		return fmt.Errorf("scan: load agent: %w", err)
 	}
-	// A version admitted without a scan (M21) is never scanned after the
+	// A version admitted without a scan is never scanned after the
 	// fact: a run on it would put a report on a version whose verdict is
 	// "unscanned" and make the two say different things. The sweeps leave
 	// it out by their queries; a scan asked for by name stops here.
@@ -199,7 +199,7 @@ func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string
 		return nil
 	}
 	// A publish scan is for a version in `scanning`. Queue delivery is
-	// at-least-once (agentry#507), so a scan.version job can arrive again
+	// at-least-once, so a scan.version job can arrive again
 	// after its version was published, held or rejected; running it would
 	// judge the version a second time and could file a review item against
 	// a decided version. Rescans use their own triggers and are not stopped.
@@ -213,7 +213,7 @@ func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string
 	if err != nil {
 		// A policy we cannot parse is not a policy we may ignore. Falling
 		// back to the platform baseline would silently LOOSEN an org that
-		// asked to be tightened (§8.6), so the version goes to a human.
+		// asked to be tightened, so the version goes to a human.
 		p.log.Error("scan: effective policy unusable; failing to review",
 			"version", versionID, "err", err)
 		return p.FailToReview(ctx, v, agent, trigger, "policy", err)
@@ -238,9 +238,9 @@ func (p *Pipeline) Scan(ctx context.Context, versionID uuid.UUID, trigger string
 }
 
 // resumeOrCreateRun reuses an interrupted run for this version+trigger and
-// reports which of its stages are already done (§8.2: "stage results keyed by
-// (scan_run_id, scanner)"). At-least-once queue delivery means a retried scan
-// job used to create a second run and a second copy of every finding.
+// reports which of its stages are already done (stage results are keyed by
+// (scan_run_id, scanner)). At-least-once queue delivery means a retried scan
+// job would otherwise create a second run and a second copy of every finding.
 func (p *Pipeline) resumeOrCreateRun(ctx context.Context, v storegen.AgentVersion, trigger string, pol Policy) (uuid.UUID, Resume, error) {
 	q := p.st.Queries()
 	prior, err := q.RunningScanRunForVersion(ctx, storegen.RunningScanRunForVersionParams{
@@ -356,13 +356,13 @@ func (p *Pipeline) runOrchestrator(
 	}
 	_ = blob.Close()
 
-	// S9's baseline. Absence is normal (first-ever publish, §8.3 S9); a
-	// database error is NOT, and treating the two alike silently skipped the
-	// rug-pull diff — the single most documented real-world attack shape.
+	// S9's baseline. Absence is normal (first-ever publish); a
+	// database error is NOT, and treating the two alike would silently skip
+	// the rug-pull diff — the single most documented real-world attack shape.
 	//
 	// The previous version's ARCHIVE is materialized too, not just its
 	// manifest: postmark-mcp changed no manifest field at all, so a
-	// manifest-only diff would have cleared it (§8.3 S9, DEV-026).
+	// manifest-only diff would have cleared it.
 	var prevManifest []byte
 	var prevVersion, prevDir string
 	var baseline *storegen.AgentVersion
@@ -382,14 +382,14 @@ func (p *Pipeline) runOrchestrator(
 
 	// A Drafter revision of the baseline, proved by the extension against
 	// the files extracted above, is read by S9 with the benefit of the
-	// doubt (plan drafter-revisions.md §6; agentry#794).
+	// doubt.
 	revision, err := p.draftRevision(ctx, v, agent, extractDir, baseline, prevDir)
 	if err != nil {
 		return RunResult{}, err
 	}
 
 	// S8's anti-typosquat compare needs names to compare against; without the
-	// live top-N it silently matched nothing on every scan (§8.3 S8, T-10).
+	// live top-N it would silently match nothing on every scan.
 	popular, err := q.ListPopularAgentNames(ctx, popularAgentSampleSize)
 	if err != nil {
 		return RunResult{}, fmt.Errorf("scan: popular agent names: %w", err)
@@ -459,7 +459,7 @@ func (p *Pipeline) runOrchestrator(
 		OnStage:           onStage,
 	})
 	// The version ↔ declared-server join the daily sweep maps alerts
-	// through (agentry#177). Recorded whatever the outcome: a version in
+	// through. Recorded whatever the outcome: a version in
 	// review still declares the servers it declares.
 	p.recordVersionMCPServers(ctx, v.ID, v.Manifest)
 	sinkMu.Lock()
@@ -587,7 +587,7 @@ func (p *Pipeline) persistStage(ctx context.Context, runID uuid.UUID, res StageR
 
 // assemblyScanner tags the findings S10 adds while assembling the report
 // rather than any single stage — today the S0/pipeline-error that a stage
-// failure produces (§7 fail-closed).
+// failure produces (fail-closed).
 const assemblyScanner = "S0"
 
 func insertFinding(ctx context.Context, q *storegen.Queries, runID uuid.UUID, f Finding) error {
@@ -706,10 +706,10 @@ func (p *Pipeline) finishRun(ctx context.Context, runID uuid.UUID, result RunRes
 	return err
 }
 
-// applyDecision maps the gate outcome onto §7 transitions and, on publish,
+// applyDecision maps the gate outcome onto version transitions and, on publish,
 // signs the attestation.
 func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByIDRow, v storegen.AgentVersion, runID uuid.UUID, result RunResult, policyVer int) error {
-	// §9.3 catalog (agentry#56): the scan finished, whatever the gate says
+	// Event catalog: the scan finished, whatever the gate says
 	// next; subscribers that want the outcome also get the version.* event.
 	counts := map[string]int{}
 	for _, f := range result.Findings {
@@ -730,7 +730,7 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 		p.log.WarnContext(ctx, "gate: stage errors routed the version to review", logevent.GateError.Attr(),
 			"version", v.ID, "run", runID, "stage_errors", result.Report.StageErrors)
 	}
-	// §16.2 publish funnel: one verdict per version, recorded where the
+	// Publish funnel: one verdict per version, recorded where the
 	// decision is acted on rather than where it is computed (the orchestrator
 	// can run more than once for a version — rescans, resumes).
 	// The verdict applies to the version the scan was of — one still in
@@ -738,7 +738,7 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 	// already handed to a reviewer (needs_review, a review item filed, the
 	// author told); its late verdict must not publish or reject over that,
 	// so every transition here holds the row and requires `scanning`
-	// (registry.TransitionFrom, agentry#343). A moved version keeps its
+	// (registry.TransitionFrom). A moved version keeps its
 	// run and its findings on record and gets nothing else from this call.
 	moved := func(err error) error {
 		if errors.Is(err, registry.ErrVersionMoved) {
@@ -781,9 +781,9 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 // judged it. The attestation and the transition to `published` are one
 // transaction under the version's row lock. When the transition came first
 // and the signature last, a signing failure (a KMS outage, the empty-digest
-// refusal) left a published, unattested version, and the retry's fresh run
-// found the row moved and swallowed the verdict — "scanned, N findings,
-// signed" false for it forever (security review 2026-09-20 §5.4). Signing
+// refusal) would leave a published, unattested version, and the retry's fresh run
+// would find the row moved and swallow the verdict — "scanned, N findings,
+// signed" false for it forever. Signing
 // before the transition, outside a transaction, would sign a version the
 // watchdog had meanwhile held for review. So: lock the row, refuse a version
 // no longer in `from` (registry.ErrVersionMoved), run the route's own step
@@ -791,7 +791,7 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 // anywhere leaves the version where it was with no attestation, and the
 // queue's retry finishes the job. The attest sweep backfills anything that
 // still slips through. A submission publishes from `scanning`; a new
-// ruleset's redo of the review queue from `needs_review` (agentry#772).
+// ruleset's redo of the review queue from `needs_review`.
 func (p *Pipeline) publishUnderLock(ctx context.Context, agent storegen.GetAgentByIDRow, v storegen.AgentVersion,
 	from registry.Status, runID uuid.UUID, result RunResult, policyVer int, reason string,
 	inTx func(q *storegen.Queries) error,
@@ -830,7 +830,7 @@ func (p *Pipeline) publishUnderLock(ctx context.Context, agent storegen.GetAgent
 }
 
 // notifyHeldForReview tells a version's author the gate held it for a
-// human (§8.7; agentry#274): the one outcome an author would otherwise
+// human: the one outcome an author would otherwise
 // learn only by looking. Sent on a fresh submission's transition to
 // needs_review — the gate's own verdict and the pipeline-error route
 // alike — never on a rescan, whose review item concerns a version the
@@ -847,7 +847,7 @@ func (p *Pipeline) notifyHeldForReview(ctx context.Context, agent storegen.GetAg
 		return
 	}
 	if !notify.AllowsEmail(ctx, q, p.log, author.ID, notify.KindReviewDecision) {
-		return // unverified address, or the author switched review mails off (#299, #190)
+		return // unverified address, or the author switched review mails off
 	}
 	// The transition's reason rides as the rationale: the gate's verdict
 	// ("wildcard egress: review"), or what stopped the scan, which is what
@@ -864,7 +864,7 @@ func (p *Pipeline) notifyHeldForReview(ctx context.Context, agent storegen.GetAg
 }
 
 // indexReadme denormalizes the just-published version's README onto the agent
-// row so the §10.4 weight-C part of search_tsv has text to index.
+// row so the weight-C part of search_tsv has text to index.
 //
 // Best-effort by design: an agent whose README could not be read is still
 // published, just less findable. Failing the publish over a search-index
@@ -893,7 +893,7 @@ func (p *Pipeline) indexReadme(ctx context.Context, agentID uuid.UUID, v storege
 }
 
 // createReviewItem files a version for human review on the right queue
-// (§8.6). org_id is set only for the org queue, which is the only queue that
+// org_id is set only for the org queue, which is the only queue that
 // has an owner to scope to. Re-filing an already-pending item is a no-op.
 func createReviewItem(ctx context.Context, q *storegen.Queries, versionID uuid.UUID, agent storegen.GetAgentByIDRow, queue string) error {
 	if queue != "org" {
@@ -906,7 +906,7 @@ func createReviewItem(ctx context.Context, q *storegen.Queries, versionID uuid.U
 	}
 	if queue == "org" && orgID == nil {
 		// Defensive: an org-queue item with no org is undecidable. The gate
-		// no longer produces one; if anything ever does, it lands where a
+		// does not produce one; if anything ever does, it lands where a
 		// human can actually see it.
 		queue = "platform"
 	}
@@ -919,7 +919,7 @@ func createReviewItem(ctx context.Context, q *storegen.Queries, versionID uuid.U
 	return err
 }
 
-// FailToReview implements the §7 fail-closed rule: a version whose scan could
+// FailToReview implements the fail-closed rule: a version whose scan could
 // not complete is recorded as an errored run with an S0/pipeline-error
 // finding and routed to human review — never silently published, and never
 // left parked in `scanning`. Idempotent.
@@ -962,7 +962,7 @@ func (p *Pipeline) FailToReview(ctx context.Context, v storegen.AgentVersion, ag
 	// The row is held for the check (registry.TransitionFrom): a version
 	// another route moved first — the watchdog, or a verdict that landed
 	// while this was under way — stays where that route put it, and this
-	// call still files the run's finding (agentry#343).
+	// call still files the run's finding.
 	held := false
 	if registry.Status(v.Status) == registry.StatusScanning {
 		err := p.reg.TransitionFrom(ctx, v.ID, registry.StatusScanning, registry.StatusNeedsReview, reason,
@@ -993,10 +993,10 @@ func (p *Pipeline) FailToReview(ctx context.Context, v storegen.AgentVersion, ag
 	return nil
 }
 
-// ReconcileStuckScans is the §7 watchdog: versions that entered `scanning`
+// ReconcileStuckScans is the watchdog: versions that entered `scanning`
 // and never came out (terminally failed job, worker killed mid-DAG) are
 // routed to review with an S0/pipeline-error finding once they pass the
-// 30-minute cap. Without it a lost scan job parked a version forever, visible
+// 30-minute cap. Without it a lost scan job would park a version forever, visible
 // to nobody. Returns how many it moved.
 func (p *Pipeline) ReconcileStuckScans(ctx context.Context) (int, error) {
 	cutoff := time.Now().Add(-StuckScanCap)
@@ -1024,25 +1024,25 @@ func (p *Pipeline) ReconcileStuckScans(ctx context.Context) (int, error) {
 	return moved, nil
 }
 
-// sign builds and stores the DSSE attestation on → published (§8.8). Signing
-// happens exactly once per version (§7): quarantine/reinstate and a re-review
+// sign builds and stores the DSSE attestation on → published. Signing
+// happens exactly once per version: quarantine/reinstate and a re-review
 // that republishes never re-issue it.
 func (p *Pipeline) sign(ctx context.Context, q *storegen.Queries, agent storegen.GetAgentByIDRow, v storegen.AgentVersion, runID uuid.UUID, reportDigest, judgeModel string, policyVer int) error {
 	if _, err := q.GetAttestation(ctx, v.ID); err == nil {
-		return nil // already signed (§7: exactly once)
+		return nil // already signed (exactly once)
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("scan: attestation lookup: %w", err)
 	}
 	if p.signer == nil {
 		// A process without the key never publishes a version that has no
-		// attestation: the transaction this runs in rolls back (agentry#479).
+		// attestation: the transaction this runs in rolls back.
 		// Publishing is the worker's, which holds the key.
 		return ErrNoSigningKey
 	}
 	if reportDigest == "" {
 		// The attestation's whole claim is "this report describes these
 		// bytes". Signing an empty digest asserts nothing while looking
-		// exactly like a valid attestation (§8.8).
+		// exactly like a valid attestation.
 		return fmt.Errorf("scan: refusing to sign version %s with an empty report digest", v.ID)
 	}
 	digest := ""
@@ -1072,7 +1072,7 @@ func (p *Pipeline) sign(ctx context.Context, q *storegen.Queries, agent storegen
 	return err
 }
 
-// effectivePolicy resolves baseline ← org overlay (§8.6). An org document
+// effectivePolicy resolves baseline ← org overlay. An org document
 // that will not parse is an error, not a reason to fall back to the looser
 // platform baseline: org policies may only TIGHTEN, so a silent fallback
 // hands the org the opposite of what it configured.
@@ -1125,18 +1125,18 @@ func newUUID() uuid.UUID {
 
 func strptr(s string) *string { return &s }
 
-// ReviewDecision is one reviewer verdict on a review item (§8.6).
+// ReviewDecision is one reviewer verdict on a review item.
 type ReviewDecision struct {
 	ItemID    uuid.UUID
 	VersionID uuid.UUID
-	// Target is the §7 state the decision moves the version to.
+	// Target is the version state the decision moves the version to.
 	Target registry.Status
 	// State is the review_items state ("approved" | "rejected").
 	State     string
 	Rationale string
 	DecidedBy uuid.UUID
-	// SelfDecision marks platform staff deciding a version they submitted
-	// (agentry#912): allowed, and recorded in the audit event's detail so
+	// SelfDecision marks platform staff deciding a version they submitted:
+	// allowed, and recorded in the audit event's detail so
 	// it stays visible after the fact.
 	SelfDecision bool
 	// Audit is the caller's audit event (actor, request context); the action
@@ -1144,21 +1144,20 @@ type ReviewDecision struct {
 	Audit audit.Event
 }
 
-// DecideReview records a reviewer's verdict AND performs the §7 transition in
-// one transaction, signing on approve→published.
+// DecideReview records a reviewer's verdict AND performs the version
+// transition in one transaction, signing on approve→published.
 //
-// These used to be two commits. A transient failure between them left the
-// item marked decided while the version stayed in needs_review — and the
-// handler's "already decided" guard then refused every retry, so the version
-// was stuck with no way forward but a manual database edit.
+// Both happen in one commit: a transient failure between two commits would
+// leave the item marked decided while the version stayed in needs_review,
+// and the handler's "already decided" guard would then refuse every retry.
 //
-// A process that holds no signing key (the api role, agentry#479) cannot
+// A process that holds no signing key (the api role) cannot
 // publish a version that has no attestation yet. It records the verdict and
 // hands the publish to the worker (JobPublishApproved), which transitions
 // and signs in one transaction; until then the version stays in
 // needs_review, and the watchdog finishes an approval whose job was lost.
 // A version that already carries its attestation (a quarantined one being
-// reinstated) is published here as before: nothing needs signing.
+// reinstated) is published here directly: nothing needs signing.
 //
 // handedOff reports that the publish was handed to the worker, so the
 // caller does not announce a publication that has not happened yet.
@@ -1183,7 +1182,7 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) (handedO
 				}
 				// Refuse now what the worker could not sign later, so the
 				// verdict is not committed with nothing able to act on it
-				// and the reviewer can retry, as before the hand-off.
+				// and the reviewer can retry.
 				if run, rerr := q.LatestFinishedScanRunForVersion(ctx, v.ID); rerr != nil {
 					return fmt.Errorf("scan: latest run for review decision: %w", rerr)
 				} else if run.ReportDigest == nil || *run.ReportDigest == "" {
@@ -1256,8 +1255,8 @@ func (p *Pipeline) DecideReview(ctx context.Context, in ReviewDecision) (handedO
 
 // signReviewed signs a version a reviewer published, from its latest
 // finished scan run (the one the review bundle showed), inside the caller's
-// transaction. A run still going, a new ruleset's redo of the queue
-// (agentry#772), has no report to sign and is not what the reviewer read.
+// transaction. A run still going, a new ruleset's redo of the queue,
+// has no report to sign and is not what the reviewer read.
 func (p *Pipeline) signReviewed(ctx context.Context, q *storegen.Queries, agent storegen.GetAgentByIDRow, v storegen.AgentVersion) error {
 	run, err := q.LatestFinishedScanRunForVersion(ctx, v.ID)
 	if err != nil {
@@ -1279,7 +1278,7 @@ func (p *Pipeline) signReviewed(ctx context.Context, q *storegen.Queries, agent 
 }
 
 // PublishApproved publishes and signs, in one transaction, a version whose
-// review item a keyless role approved (agentry#479). It runs where the key
+// review item a keyless role approved. It runs where the key
 // is: the worker's publish job, or the watchdog. Idempotent: an item that is
 // not approved, or a version no longer in needs_review, is left alone, so a
 // redelivered job or a job racing the watchdog does nothing the second time.
@@ -1363,12 +1362,12 @@ func (p *Pipeline) ReconcileApprovedReviews(ctx context.Context) (int, error) {
 	return done, nil
 }
 
-// Quarantine/Block/Reinstate implement the T&S platform actions (§7).
+// Quarantine/Block/Reinstate implement the T&S platform actions.
 func (p *Pipeline) Quarantine(ctx context.Context, versionID uuid.UUID, reason string, ev audit.Event) error {
 	return p.reg.Transition(ctx, versionID, registry.StatusQuarantined, reason, ev)
 }
 
-// PublishAdvisory records a security advisory for an agent (§8.7) and
+// PublishAdvisory records a security advisory for an agent and
 // announces it on the org's webhooks.
 func (p *Pipeline) PublishAdvisory(ctx context.Context, agentID uuid.UUID, affected, severity, summary, detail string) error {
 	adv, err := p.st.Queries().CreateAdvisory(ctx, storegen.CreateAdvisoryParams{
@@ -1386,11 +1385,11 @@ func (p *Pipeline) PublishAdvisory(ctx context.Context, agentID uuid.UUID, affec
 	return nil
 }
 
-// notifyAdvisoryPublished mails the agent's author (§8.7 lists the advisory
-// alongside the webhook and the author notification). Best-effort: the
+// notifyAdvisoryPublished mails the agent's author (alongside the webhook
+// and the author notification). Best-effort: the
 // advisory is the record that matters, and it is already written.
 //
-// §7 is explicit that installed copies are never reached, so the advisory and
+// Installed copies are never reached, so the advisory and
 // this mail ARE the notification path — which is why a failure here is logged
 // at error rather than swallowed.
 func (p *Pipeline) notifyAdvisoryPublished(ctx context.Context, agentID uuid.UUID, affected, severity, summary string) {
@@ -1419,7 +1418,7 @@ func (p *Pipeline) notifyAdvisoryPublished(ctx context.Context, agentID uuid.UUI
 		return
 	}
 	if !notify.AllowsEmail(ctx, q, p.log, u.ID, notify.KindAdvisory) {
-		return // unverified address, or the author switched these off (#299, #190)
+		return // unverified address, or the author switched these off
 	}
 	if err := p.notifier.AdvisoryPublished(ctx, notify.AdvisoryNotice{
 		ToEmail:          u.Email,
@@ -1441,12 +1440,12 @@ func strptrOrNil(s string) *string {
 
 // SetOrchestratorForTest replaces the orchestrator. It exists so tests can
 // simulate "the ruleset learned something after this version was published"
-// (§8.7) without shipping two rule bundles. Not for production use.
+// without shipping two rule bundles. Not for production use.
 func (p *Pipeline) SetOrchestratorForTest(o *Orchestrator) { p.orch = o }
 
 // SetRulesetForTest points the pipeline at another ruleset release, so a
-// test can register "the next ruleset" without shipping a second bundle
-// (agentry#772). Not for production use.
+// test can register "the next ruleset" without shipping a second bundle.
+// Not for production use.
 func (p *Pipeline) SetRulesetForTest(id uuid.UUID, semver string) {
 	p.rulesetID, p.rulesetVer = id, semver
 }

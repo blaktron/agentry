@@ -1,6 +1,6 @@
 package scan_test
 
-// §8.8, agentry#350: a rotation retires the key that signed every attestation
+// A rotation retires the key that signed every attestation
 // so far. The registry records each signer's public key, advertises the
 // retired ones that signed something, and countersigns existing envelopes
 // with the new key — so a client pinning after the rotation verifies

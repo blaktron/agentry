@@ -10,8 +10,7 @@ import (
 )
 
 // A host the browser may open is a host the release declares to S4's
-// rating by declaration and to S9 (agentry#1198, ruleset 0.4.9): the
-// browser reaches it through the runner's browse proxy, the installer is
+// rating by declaration and to S9: the
 // shown it and the run is held to it, as a network.egress host is. S6 is
 // unmoved: a script's own call to it is still the release's own network
 // (TestS6StillFlagsAScriptsOwnCallWithABrowserDeclared).

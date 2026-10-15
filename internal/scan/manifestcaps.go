@@ -13,8 +13,7 @@ import (
 // own union type, because the canonical form carries `egress: none` as the
 // JSON string "none" and a host list as an array; decoding it into a
 // []string failed the whole decode, and every capability of such a
-// manifest read as undeclared to S6, S9, the gate and namespace policy
-// (agentry#755).
+// manifest read as undeclared to S6, S9, the gate and namespace policy.
 type manifestCaps struct {
 	Network struct {
 		Egress manifest.Egress `json:"egress"`
@@ -29,7 +28,7 @@ type manifestCaps struct {
 	TargetHosts []string             `json:"targetHosts"`
 	// Browser is kept raw and read by browser(), so a value of an odd
 	// shape cannot fail the whole decode and leave every other capability
-	// undeclared (agentry#755).
+	// undeclared.
 	Browser json.RawMessage `json:"browser"`
 }
 
@@ -48,7 +47,7 @@ func (c manifestCaps) browser() (b *manifest.Browser, declared, ok bool) {
 
 // unrestrictedNetwork reports whether the manifest asks for the network
 // without naming where: "*" egress, or a browser whose scope is any public
-// site (plan browser-testing.md D1, D12). The gate holds both the same way,
+// site. The gate holds both the same way,
 // under the policy's wildcardEgress.
 func unrestrictedNetwork(manifestJSON []byte) bool {
 	if egressSet(manifestJSON)["*"] {
@@ -60,7 +59,7 @@ func unrestrictedNetwork(manifestJSON []byte) bool {
 }
 
 // remoteServerHosts are the hosts of the manifest's remote MCP servers
-// (agentry#910): network the release reaches, through the runner's bridge,
+// (declared remote MCP servers): network the release reaches, through the runner's bridge,
 // as surely as through network.egress.
 func (c manifestCaps) remoteServerHosts() []string {
 	var out []string
@@ -88,7 +87,7 @@ func (c manifestCaps) browserHosts() []string {
 
 // readManifestCaps decodes the capabilities block. ok is false when the
 // manifest is not JSON or has no capabilities block; an unreadable
-// manifest reads as nothing declared, as before.
+// manifest reads as nothing declared.
 func readManifestCaps(manifestJSON []byte) (caps manifestCaps, ok bool) {
 	var m struct {
 		Capabilities *manifestCaps `json:"capabilities"`
@@ -127,7 +126,7 @@ func declaredCaps(manifestJSON []byte) map[string]bool {
 	if len(c.TargetHosts) > 0 {
 		out["targetHosts"] = true
 	}
-	// The browser is its own token too (plan browser-testing.md §5): it
+	// The browser is its own token too: it
 	// reaches sites through the runner's browse proxy, never the tools
 	// container's fetch, so it is not "network" and S6's bar for a
 	// script's own call does not move.
@@ -160,7 +159,7 @@ func onlyNone(egress []string) bool {
 }
 
 // declarationOf is what the manifest declares, as S4's rating by
-// declaration reads it (ruleset 0.4.0, agentry#893). An unreadable manifest
+// declaration reads it. An unreadable manifest
 // declares nothing, so every capability family's hit is high.
 func declarationOf(manifestJSON []byte) rules.Declared {
 	d := rules.Declared{BaseCommands: manifest.BaseExecCommands()}
@@ -181,7 +180,7 @@ func declarationOf(manifestJSON []byte) rules.Declared {
 		d.ServerHosts = append(d.ServerHosts, strings.ToLower(h))
 	}
 	d.MCPServers = len(c.MCPServers) > 0
-	// A browser's hosts are hosts the release declares (agentry#1198). A
+	// A browser's hosts are hosts the release declares. A
 	// line that does not read declares none here, the side this rating
 	// fails toward.
 	if b, declared, ok := c.browser(); declared && ok {

@@ -12,13 +12,13 @@ import (
 	"time"
 )
 
-// TestTypeSafeCorpusBench is the by-hand corpus check of the plan
-// (judge-jev-provider.md §5, M1): it runs the live Jev provider over the
+// TestTypeSafeCorpusBench is the by-hand corpus check: it runs the live
+// Jev provider over the
 // attack corpus's S4 fixtures and their benign twins, in each of the three
 // request shapes (one request with six questions, two of three, six of
 // one), three samples each, and writes one CSV row per fixture × shape ×
 // axis with the samples, so the wording of the questions and the shape that
-// ships can be chosen on numbers and recorded in the register.
+// ships can be chosen on numbers.
 //
 // It never runs in CI: it needs AGENTRY_JUDGE_BENCH=1 and a key in
 // AGENTRY_JUDGE_API_KEY, spends real requests, and is not a gate. The CSV
@@ -50,7 +50,7 @@ func TestTypeSafeCorpusBench(t *testing.T) {
 	const samples = 3
 	// The fixture families asked about; AGENTRY_JUDGE_BENCH_PREFIXES widens
 	// or narrows them ("s3-,manifest-" for the families the default leaves
-	// out; agentry#731 benched those too).
+	// out).
 	prefixes := []string{"s4-", "incident-", "script-"}
 	if s := os.Getenv("AGENTRY_JUDGE_BENCH_PREFIXES"); s != "" {
 		prefixes = strings.Split(s, ",")

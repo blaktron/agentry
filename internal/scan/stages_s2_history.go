@@ -12,8 +12,8 @@ import (
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
-// S2 history scan (§8.3: "scan full git history for secrets on git-tag
-// publishes", agentry#54). The archive holds the tagged tree; a secret
+// S2 history scan (scan full git history for secrets on git-tag
+// publishes). The archive holds the tagged tree; a secret
 // committed and later removed is not in it but is still in every clone.
 // The pipeline hands S2 a patch stream of the history reachable from the
 // tagged commit (Input.History) and S2 runs its native secret rules over
