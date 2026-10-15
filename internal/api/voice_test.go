@@ -376,6 +376,7 @@ type stubVoiceAdmitter struct {
 	mu       sync.Mutex
 	mode     string
 	admitted []api.VoiceAdmission
+	tickets  []string
 	voided   []string
 }
 
@@ -389,7 +390,9 @@ func (a *stubVoiceAdmitter) AdmitVoice(_ context.Context, adm api.VoiceAdmission
 		return registry.Ticket{}, nil, errors.New("billing down")
 	}
 	a.admitted = append(a.admitted, adm)
-	return registry.Ticket{ID: uuid.NewString()}, nil, nil
+	id := uuid.NewString()
+	a.tickets = append(a.tickets, id)
+	return registry.Ticket{ID: id}, nil, nil
 }
 
 func (a *stubVoiceAdmitter) VoidVoice(_ context.Context, t registry.Ticket) error {

@@ -253,6 +253,14 @@ func (s *Service) Live(ctx context.Context, user uuid.UUID) (*Version, error) {
 // until this one passes. The person's voice row, and its data key wrapped
 // for them, is made with their first version.
 func (s *Service) Put(ctx context.Context, user uuid.UUID, text []byte, source Source) (State, error) {
+	return s.PutAdmitted(ctx, user, text, source, "")
+}
+
+// PutAdmitted is Put for a review an extension admitted: ticket, when not
+// empty, is recorded as stored (admitted_stores, kind "voice") in the
+// transaction that stores the version, so a ticket with no row stored
+// nothing.
+func (s *Service) PutAdmitted(ctx context.Context, user uuid.UUID, text []byte, source Source, ticket string) (State, error) {
 	if err := s.ready(); err != nil {
 		return State{}, err
 	}
@@ -282,6 +290,9 @@ func (s *Service) Put(ctx context.Context, user uuid.UUID, text []byte, source S
 		if queued, err = s.queuePending(ctx, q, user, source, sealed, Digest(text), len(text)); err != nil {
 			return err
 		}
+		if err := recordAdmitted(ctx, q, ticket); err != nil {
+			return err
+		}
 		st, err = s.get(ctx, q, user)
 		return err
 	})
@@ -289,6 +300,19 @@ func (s *Service) Put(ctx context.Context, user uuid.UUID, text []byte, source S
 		s.queueAfter(ctx, queued)
 	}
 	return st, err
+}
+
+// recordAdmitted records an admission ticket as stored on q, the storing
+// transaction; an empty ticket (no extension admitted the review) records
+// nothing.
+func recordAdmitted(ctx context.Context, q *storegen.Queries, ticket string) error {
+	if ticket == "" {
+		return nil
+	}
+	if err := q.RecordAdmittedStore(ctx, storegen.RecordAdmittedStoreParams{Ticket: ticket, Kind: "voice"}); err != nil {
+		return fmt.Errorf("voice: record the admission: %w", err)
+	}
+	return nil
 }
 
 // lockOrCreate locks a person's voice row, making it, with a fresh data
@@ -389,6 +413,14 @@ var ErrRestoreNeedsReview = errors.New("voice: the previous version needs a revi
 // reviewed like any other, which the caller must have admitted
 // (review).
 func (s *Service) Restore(ctx context.Context, user uuid.UUID, review bool) (State, error) {
+	return s.RestoreAdmitted(ctx, user, review, "")
+}
+
+// RestoreAdmitted is Restore for a review an extension admitted: ticket,
+// when not empty, is recorded as stored (admitted_stores, kind "voice") in
+// the transaction that puts the previous version up for review. A restore
+// that swaps live and previous at once reviews nothing and records nothing.
+func (s *Service) RestoreAdmitted(ctx context.Context, user uuid.UUID, review bool, ticket string) (State, error) {
 	if err := s.ready(); err != nil {
 		return State{}, err
 	}
@@ -433,6 +465,9 @@ func (s *Service) Restore(ctx context.Context, user uuid.UUID, review bool) (Sta
 				return err
 			}
 			if queued, err = s.queuePending(ctx, q, user, SourceRestore, prev.Sealed, prev.Digest, int(prev.Bytes)); err != nil {
+				return err
+			}
+			if err := recordAdmitted(ctx, q, ticket); err != nil {
 				return err
 			}
 		}

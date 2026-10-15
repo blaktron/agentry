@@ -247,6 +247,10 @@ type KnowledgeAdmitter interface {
 	AdmitKnowledge(ctx context.Context, a KnowledgeAdmission) (registry.Ticket, *registry.Refusal, error)
 	// VoidKnowledge cancels a ticket for an upload the core then did not
 	// store (the account's allocation, a lost race). It must be idempotent.
+	// A void can fail or never be called (a crash between the admission and
+	// the store): the core records each ticket it stored in admitted_stores,
+	// in the storing transaction, so a ticket with no row there stored
+	// nothing.
 	VoidKnowledge(ctx context.Context, t registry.Ticket) error
 }
 
@@ -279,11 +283,12 @@ func (e *knowledgeAdmissionUnavailable) Error() string {
 }
 
 // admitKnowledgeUpload asks the extension, if any, to admit an upload's
-// scan, and voids its ticket when the upload is then not stored.
-func (s *Server) admitKnowledgeUpload(ctx context.Context, a knowledge.UploadAdmission) (func(stored bool), error) {
+// scan, hands the store its ticket to record with the tree, and voids the
+// ticket when the upload is then not stored.
+func (s *Server) admitKnowledgeUpload(ctx context.Context, a knowledge.UploadAdmission) (string, func(stored bool), error) {
 	adm := s.knowledgeAdmitter()
 	if adm == nil {
-		return func(bool) {}, nil
+		return "", func(bool) {}, nil
 	}
 	t, refusal, err := adm.AdmitKnowledge(ctx, KnowledgeAdmission{
 		User: principalFrom(ctx).UserID, OwnerKind: string(a.Owner.Kind), OwnerID: a.Owner.ID,
@@ -291,11 +296,11 @@ func (s *Server) admitKnowledgeUpload(ctx context.Context, a knowledge.UploadAdm
 	})
 	switch {
 	case err != nil:
-		return nil, &knowledgeAdmissionUnavailable{err: err}
+		return "", nil, &knowledgeAdmissionUnavailable{err: err}
 	case refusal != nil:
-		return nil, &knowledgeRefused{refusal: *refusal}
+		return "", nil, &knowledgeRefused{refusal: *refusal}
 	}
-	return func(stored bool) {
+	return t.ID, func(stored bool) {
 		if stored || t.ID == "" {
 			return
 		}
