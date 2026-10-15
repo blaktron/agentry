@@ -8,12 +8,12 @@ import (
 
 // RequestTracker remembers the AuthnRequest ids this SP has issued, so an
 // assertion that names one (`InResponseTo`) can be matched to a login THIS
-// server actually started (§12.4 SP-initiated).
+// server actually started (SP-initiated login).
 //
 // It is the mirror image of ReplayCache: the replay cache remembers what has
 // been consumed, the tracker remembers what is outstanding. Both are TTL sets
 // with the same deployment story — in the database when there is one
-// (StoreRequestTracker, agentry#414), so any API replica can complete a
+// (StoreRequestTracker), so any API replica can complete a
 // login the user started on another; in memory for a server without one,
 // where a lost entry costs the user one retry of a login that never
 // completed.

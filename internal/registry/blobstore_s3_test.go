@@ -19,7 +19,7 @@ import (
 
 // fakeS3 is an in-process stand-in for S3. These tests exercise the store's
 // logic — key layout, conditional-write handling, not-found mapping — never a
-// network. Behaviour against live AWS is untested here (DEV-029).
+// network. Behaviour against live AWS is untested here.
 type fakeS3 struct {
 	mu      sync.Mutex
 	objects map[string][]byte

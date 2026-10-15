@@ -1,7 +1,7 @@
 package gitsrv_test
 
-// §19: 60 pushes/h per repo. There was no push budget at all, so a loop could
-// drive unbounded git subprocesses and pack writes against one repository.
+// 60 pushes/h per repo. Without a push budget a loop could drive unbounded
+// git subprocesses and pack writes against one repository.
 //
 // The check sits in receivePack, at the admission point, rather than in the
 // pre-receive hook: the hook is a fresh process per push with no shared state,
@@ -19,7 +19,7 @@ import (
 )
 
 // receivePackAttempt makes the admission-level request a `git push` makes,
-// with an empty body. The §19 budget is spent before the body matters, so an
+// with an empty body. The push budget is spent before the body matters, so an
 // empty request is enough to observe the quota — and much cheaper than 60
 // real pushes.
 func (e *gitEnv) receivePackAttempt(t *testing.T, ns, agent, pat string) *http.Response {
@@ -44,8 +44,8 @@ func TestPushQuotaRefusesPastTheHourlyBudget(t *testing.T) {
 	agent := env.seedAgent("pushquota", "private")
 	_ = agent
 
-	// The whole budget is the burst: §19 says 60 pushes/h, not one a minute,
-	// so a developer landing a run of commits must not be paced.
+	// The whole budget is the burst: the limit is 60 pushes/h, not one a
+	// minute, so a developer landing a run of commits must not be paced.
 	for i := range budget {
 		res := env.receivePackAttempt(t, env.owner.handle, "pushquota", env.owner.patRW)
 		_ = res.Body.Close()

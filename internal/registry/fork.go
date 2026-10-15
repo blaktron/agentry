@@ -20,11 +20,11 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// Forks (plan forks-and-publisher.md M3, agentry#943; D6–D9, D11).
+// Forks.
 //
 // Any signed-in account may fork a public QuickAgent into a namespace it
 // may create in, under the same name unless another is given. The fork is
-// its own agent: private for good (D9), with its origin and the published
+// its own agent: private for good, with its origin and the published
 // version it was taken from kept on the row and never changed.
 //
 // It is made in two halves, because the api role holds no repositories (the
@@ -35,7 +35,7 @@ import (
 // and ref by ref, writes one commit on top of the forked version that
 // renames the manifest into the fork's namespace, tags it with the same
 // version and submits that tag through SubmitVersion like any submission:
-// the same gates, the same admission (D7: it is charged), the same
+// the same gates, the same admission (it is charged), the same
 // pipeline. Nothing about a fork is ever written straight to published.
 // The fork is `ready` once its first version is submitted, or `failed`
 // with the reason in words.
@@ -138,7 +138,7 @@ var (
 	// ErrNameTaken reports a fork whose name the target namespace already
 	// has; the API answers 409 name-taken, and the person picks another.
 	ErrNameTaken = errors.New("registry: the namespace already has a QuickAgent of that name")
-	// ErrNameHeld reports a name a deleted agent holds for good (D4).
+	// ErrNameHeld reports a name a deleted agent holds for good.
 	ErrNameHeld = errors.New("registry: the name is held by a deleted QuickAgent")
 	// ErrForkTree reports a release whose files cannot be a fork's tree
 	// (a .git path, a file that is not a regular one): ForkRepos wraps it,
@@ -175,7 +175,7 @@ func (s *Service) Fork(ctx context.Context, p *auth.Principal, src Agent, in For
 		return Agent{}, errors.New("registry: forks are unavailable on this role (no queue to copy them on)")
 	}
 	// The fork is private, so creating it is a member's in an organization
-	// and needs a place under the private-agent cap (D8).
+	// and needs a place under the private-agent cap.
 	t, err := s.createTarget(ctx, p, in.Namespace, "private")
 	if err != nil {
 		return Agent{}, err
@@ -218,8 +218,7 @@ func (s *Service) Fork(ctx context.Context, p *auth.Principal, src Agent, in For
 			return err
 		}
 		// The audit event goes to the fork's namespace only. The origin's
-		// publisher is told how many forks there are, never whose (the
-		// plan's invariant 5).
+		// publisher is told how many forks there are, never whose.
 		e := actorEvent
 		e.Action = audit.ActionAgentFork
 		if t.ns.Kind == "org" {
@@ -298,9 +297,9 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 		}
 		return err
 	}
-	// Taken off the pipeline before its first version (M21's flag, set by
-	// an organization's administrator while the copy waited): the first
-	// version of a fork is scanned, as the plan's invariant 3 has it.
+	// Taken off the pipeline before its first version (the pipeline-skip
+	// flag, set by an organization's administrator while the copy waited):
+	// the first version of a fork is always scanned.
 	if fork.PipelineSkip {
 		s.failFork(ctx, fork.ID, "This fork was taken off the pipeline before its first version, which a fork's first version never is. Clear pipeline: skip, delete this fork and fork again.")
 		return nil
@@ -369,7 +368,7 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 	switch {
 	case err == nil, errors.Is(err, ErrScanNotScheduled):
 		// The version is recorded; a scan that was not scheduled is the
-		// scan watchdog's (§7). Ready even if the fork watchdog gave up on
+		// scan watchdog's. Ready even if the fork watchdog gave up on
 		// the copy meanwhile: the version is there.
 		return q.MarkForkReady(ctx, fork.ID)
 	case isForkSubmitRefusal(err):

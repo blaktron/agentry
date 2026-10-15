@@ -13,8 +13,8 @@ import (
 	"github.com/blaktron/agentry/internal/queue"
 )
 
-// KindRepoGC is the WG-C "gc job" (agentry#55): housekeeping for a bare
-// repository after pushes. The git handler enqueues one per accepted push
+// KindRepoGC is the gc job: housekeeping for a bare repository after
+// pushes. The git handler enqueues one per accepted push
 // with a delay so a burst of pushes coalesces into a quiet moment, and the
 // job runs `git gc --auto`, which is a no-op unless git's own thresholds
 // (loose objects, pack count) say there is work — so an extra job costs a

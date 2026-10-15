@@ -1,10 +1,10 @@
 package gitsrv
 
 // ClientOpsHeld reports how many git operations the client address key holds
-// against its §19 budget right now. The black-box budget tests wait on it
-// instead of probing with a request of their own: a probe from the budgeted
-// address takes that address's slot while it runs, so with a budget of one it
-// can refuse the very operation the test is trying to hold (agentry#562).
+// against its concurrent-operation budget right now. The black-box budget
+// tests wait on it instead of probing with a request of their own: a probe
+// from the budgeted address takes that address's slot while it runs, so with
+// a budget of one it can refuse the very operation the test is trying to hold.
 func (h *Handler) ClientOpsHeld(key string) int {
 	s := h.perClient
 	s.mu.Lock()

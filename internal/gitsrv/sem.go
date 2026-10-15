@@ -11,13 +11,13 @@ import (
 	"github.com/blaktron/agentry/internal/logevent"
 )
 
-// §6.2 requires a "concurrency semaphore per repo and global". The global cap
-// protects the host (git subprocesses are the expensive resource); the
-// per-repo cap keeps one hot repository — a CI fleet hammering one agent, or
-// a clone storm on a popular one — from occupying every global slot and
-// starving the rest of the instance. §19's per-address budget
-// (limits.gitConcurrentPerIP, default 20; agentry#454) keeps one client
-// spread across many repositories from doing the same.
+// Git operations take a concurrency semaphore per repo and a global one.
+// The global cap protects the host (git subprocesses are the expensive
+// resource); the per-repo cap keeps one hot repository — a CI fleet
+// hammering one agent, or a clone storm on a popular one — from occupying
+// every global slot and starving the rest of the instance. The per-address
+// budget (limits.gitConcurrentPerIP, default 20) keeps one client spread
+// across many repositories from doing the same.
 const (
 	globalGitConcurrency  = 32
 	perRepoGitConcurrency = 4
@@ -38,15 +38,15 @@ type keyedSlots struct {
 	refs int // holders + waiters; the entry lives while this is > 0
 }
 
-// repoSemaphores is the per-repository cap of §6.2.
+// repoSemaphores is the per-repository cap.
 type repoSemaphores = keyedSemaphores[uuid.UUID]
 
 func newRepoSemaphores(capacity int) *repoSemaphores {
 	return &repoSemaphores{capacity: capacity, live: make(map[uuid.UUID]*keyedSlots)}
 }
 
-// clientSemaphores is §19's per-address budget, keyed by the trusted client
-// address (agentry#454).
+// clientSemaphores is the per-address budget, keyed by the trusted client
+// address.
 type clientSemaphores = keyedSemaphores[string]
 
 func newClientSemaphores(capacity int) *clientSemaphores {
@@ -120,7 +120,7 @@ func (s *keyedSemaphores[K]) tracked() int {
 }
 
 // errClientBusy refuses an operation whose client address already holds
-// its §19 budget of concurrent git operations (agentry#454).
+// its budget of concurrent git operations.
 var errClientBusy = errors.New("too many concurrent git operations from this address; try again shortly")
 
 // acquireGit admits one git operation for client (the trusted client
@@ -168,7 +168,7 @@ func (h *Handler) acquireGit(ctx context.Context, repoID uuid.UUID, client strin
 }
 
 // rateClassGitConcurrent names the per-address budget in the
-// http.rate_limited line (docs/logging.md) and in the git routes' §19
+// http.rate_limited line (docs/logging.md) and in the git routes' rate-class
 // declarations.
 const rateClassGitConcurrent = "git-concurrent"
 

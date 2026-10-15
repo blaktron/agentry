@@ -10,11 +10,10 @@ import (
 	"github.com/blaktron/agentry/internal/entitlements"
 )
 
-// The admission seam (plan subscription-tiers §5.1, agentry#319). A closed
-// build may refuse a submission for reasons the core does not know — a
-// spent credit allowance — but only at one point: after every core gate
-// has passed (quota, validation, 2FA, policy) and before anything is
-// stored. The core build has no Admitter and admits everything; the gate,
+// The admission seam. A closed build may refuse a submission for reasons
+// the core does not know — a spent credit allowance — but only at one
+// point: after every core gate has passed (quota, validation, 2FA, policy)
+// and before anything is stored. The core build has no Admitter and admits everything; the gate,
 // the pipeline and the review queue never see an admission at all.
 
 // Admitter is asked once per submission.
@@ -82,7 +81,7 @@ func (e *ErrAdmissionRefused) Error() string {
 func (s *Service) SetAdmitter(a Admitter) { s.admitter = a }
 
 // HasAdmitter reports whether an admission seam is wired: whether this
-// deployment runs the extension that sells things (agentry#360).
+// deployment runs the extension that sells things.
 func (s *Service) HasAdmitter() bool { return s.admitter != nil }
 
 // admit asks the Admitter, if any. The returned ticket is empty when there

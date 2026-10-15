@@ -2,7 +2,7 @@ package gitsrv
 
 // White-box: the SSH listener's per-source budget on public-key offers sits
 // in front of the key lookup, so a stranger cycling through keys costs the
-// database nothing past the budget (§19, agentry#410). The lookup is the
+// database nothing past the budget. The lookup is the
 // boundary faked here; the wire is the real one.
 
 import (

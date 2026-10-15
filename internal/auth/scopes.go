@@ -1,17 +1,17 @@
 package auth
 
-// Scope is a PAT permission scope (§12.3). Sessions carry no scopes: a
+// Scope is a PAT permission scope. Sessions carry no scopes: a
 // browser session acts with the user's full authority (mutations gated by
 // CSRF); PATs are least-privilege credentials.
 type Scope string
 
-// The closed v1 scope list (§12.3).
+// The closed v1 scope list.
 const (
 	ScopeRepoRead     Scope = "repo:read"
 	ScopeRepoWrite    Scope = "repo:write"
 	ScopeAgentPublish Scope = "agent:publish"
 	ScopeAgentRead    Scope = "agent:read"
-	// ScopeAgentManage (agentry#993) lets a token take the owner actions on
+	// ScopeAgentManage lets a token take the owner actions on
 	// a QuickAgent it administers: make it public or private, retire,
 	// restore and delete it. It is narrower than org:admin, which also
 	// covers these: it reaches no other setting of the agent, no grant on
@@ -22,42 +22,39 @@ const (
 	ScopeReviewAct   Scope = "review:act"
 	ScopeAuditRead   Scope = "audit:read"
 	ScopeUserProfile Scope = "user:profile"
-	// The hosted-run scopes (plans/hosted-runs.md §6, agentry#348): a
-	// token that may start, cancel and feed a hosted run of a QuickAgent
-	// (run:write) or read a run, its log and its artefacts (run:read).
-	// No core route consumes them; the runs extension of the closed build
-	// requires them through pkg/extension, so a registry without it treats
-	// a token carrying only these as a token with no scope at all.
+	// The hosted-run scopes: a token that may start, cancel and feed a
+	// hosted run of a QuickAgent (run:write) or read a run, its log and
+	// its artefacts (run:read). No core route consumes them; the hosted
+	// runs extension requires them through pkg/extension, so a registry
+	// without it treats a token carrying only these as a token with no
+	// scope at all.
 	ScopeRunRead  Scope = "run:read"
 	ScopeRunWrite Scope = "run:write"
-	// The knowledge scopes (plan knowledge.md §4.3, agentry#593): a token
-	// that may read the caller's knowledge packs, their scan reports and
-	// their trees and have a pack's data key unwrapped (knowledge:read), or
-	// create, upload, delete and wrap (knowledge:write).
+	// The knowledge scopes: a token that may read the caller's knowledge
+	// packs, their scan reports and their trees and have a pack's data key
+	// unwrapped (knowledge:read), or create, upload, delete and wrap
+	// (knowledge:write).
 	ScopeKnowledgeRead  Scope = "knowledge:read"
 	ScopeKnowledgeWrite Scope = "knowledge:write"
-	// The vault scope (plan hosted-credentials-vault.md D13, agentry#676):
-	// a token that may set and delete the caller's hosted-run secrets and
-	// never list or read one. No core route consumes it; the enterprise
-	// build's vault requires it through pkg/extension, and keeps its list
-	// for a session alone.
+	// The vault scope: a token that may set and delete the caller's
+	// hosted-run secrets and never list or read one. No core route
+	// consumes it; the hosted vault requires it through pkg/extension, and
+	// keeps its list for a session alone.
 	ScopeSecretWrite Scope = "secret:write"
-	// The voice scopes (plan writing-voice.md §4, agentry#809): a token
-	// that may read the caller's Writing Voice, every version's text and
-	// review (voice:read), or put, restore, set and delete it
-	// (voice:write).
+	// The voice scopes: a token that may read the caller's Writing Voice,
+	// every version's text and review (voice:read), or put, restore, set
+	// and delete it (voice:write).
 	ScopeVoiceRead  Scope = "voice:read"
 	ScopeVoiceWrite Scope = "voice:write"
 )
 
-// ScheduleScopes are the scopes a schedule's credential carries
-// (agentry#1002, plan quickagent-scheduling.md §6): what one autonomous
-// run of a QuickAgent needs and nothing more — read the agent, start and
-// read the run, and attach the owner's knowledge and Writing Voice the
-// schedule names. No write to knowledge, voice or the vault, no repository
-// access and nothing administrative: a schedule starts a run, it does not
-// change what the run reads. Fresh on every call, so no caller can widen
-// another's set.
+// ScheduleScopes are the scopes a schedule's credential carries:
+// what one autonomous run of a QuickAgent needs and nothing more — read
+// the agent, start and read the run, and attach the owner's knowledge and
+// Writing Voice the schedule names. No write to knowledge, voice or the
+// vault, no repository access and nothing administrative: a schedule
+// starts a run, it does not change what the run reads. Fresh on every
+// call, so no caller can widen another's set.
 func ScheduleScopes() []string {
 	return []string{
 		string(ScopeAgentRead), string(ScopeRunRead), string(ScopeRunWrite),
@@ -78,15 +75,13 @@ func AllScopes() []Scope {
 // SignInGrantScopes is the scope set the desktop app's and the CLI's
 // sign-in grant mints: browse and install (agent:read, repo:read), Build →
 // publish (agent:publish, repo:write), identity (user:profile), and hosted
-// runs — In Agentry on RunPanel (run:read, run:write; plan hosted-runs.md
-// §4.7), the Knowledge panel's packs and their keys (knowledge:read,
-// knowledge:write; plan knowledge.md §4.3), and the hosted-run start's
-// secrets, set and deleted, never read (secret:write; plan
-// hosted-credentials-vault.md D13, agentry#676), and the account's Writing
-// Voice, read, uploaded and downloaded (voice:read, voice:write; plan
-// writing-voice.md V3, V6), and the owner actions on the person's own
+// runs — In Agentry on RunPanel (run:read, run:write), the Knowledge
+// panel's packs and their keys (knowledge:read, knowledge:write), and the
+// hosted-run start's secrets, set and deleted, never read (secret:write),
+// and the account's Writing Voice, read, uploaded and downloaded
+// (voice:read, voice:write), and the owner actions on the person's own
 // QuickAgents and their organizations' where they are an admin
-// (agent:manage; plan forks-and-publisher.md M6, agentry#993).
+// (agent:manage).
 // Deliberately no review:act and no org scopes. Fixed server-side so a
 // caller of the grant endpoint cannot widen it, and shown verbatim on the
 // approval page.
