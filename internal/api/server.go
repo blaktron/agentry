@@ -80,7 +80,9 @@ type Server struct {
 	renderer         *render.Renderer
 	// knowledge is the store of accounts' knowledge packs;
 	// nil without a database, and off (every route 503) with no wrapper.
-	knowledge *knowledge.Service
+	// knowledgeAdmit is the extension that admits an upload's scan.
+	knowledge      *knowledge.Service
+	knowledgeAdmit knowledgeAdmission
 	// voice is the store of people's Writing Voices; nil
 	// without a database, and off (every route 503) with no key wrapper or
 	// no Jev judge to review with. voiceAdmit is the extension that admits

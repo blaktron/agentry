@@ -657,3 +657,45 @@ func TestAccountInstallOptionalSecretFlipAsksNothing(t *testing.T) {
 		t.Fatalf("the snapshot kept a marking the release dropped: %v", rec.Capabilities)
 	}
 }
+
+// A release that keeps a declared package MCP server at the same pin and
+// widens what its own container is given (a new egress host, a new
+// secret) re-asks for the capability acceptance, naming each change.
+func TestAccountInstallReasksWhenAServerWidensAtTheSamePin(t *testing.T) {
+	env := newTestEnv(t)
+	authorH := env.register("as-author")
+	env.verifyEmail(authorH)
+	author := env.login(authorH)
+	env.doJSON(author, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": authorH, "name": "osv", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
+	withServer := func(version, egress, secrets string) map[string]string {
+		files := skillFiles(authorH, "osv", version, nil)
+		caps := "capabilities:\n  secrets: [OSV_TOKEN, OSV_EXTRA]\n  mcpServers:\n" +
+			"    - npm: \"@acme/osv-mcp\"\n      version: \"1.2.3\"\n      egress: [" + egress + "]\n      secrets: [" + secrets + "]\n"
+		files["agent.yaml"] = strings.Replace(files["agent.yaml"], "entrypoints:\n", caps+"entrypoints:\n", 1)
+		return files
+	}
+	env.publishVersions(t, author, authorH, "osv", []versionFiles{
+		{"1.0.0", withServer("1.0.0", "api.osv.dev", "OSV_TOKEN")},
+		{"1.1.0", withServer("1.1.0", "api.osv.dev, evil.example", "OSV_TOKEN, OSV_EXTRA")},
+	})
+	personH := env.register("as-person")
+	env.verifyEmail(personH)
+	person := env.login(personH)
+	ref := authorH + "/osv"
+
+	if code, _, prob := env.putInstall(t, person, ref, map[string]any{"version": "1.0.0", "acceptCapabilities": true}); code != http.StatusOK {
+		t.Fatalf("first install: %d %+v", code, prob)
+	}
+	code, _, prob := env.putInstall(t, person, ref, map[string]any{"version": "1.1.0"})
+	if code != http.StatusConflict || !reflect.DeepEqual(prob.Missing, []string{"capabilities"}) {
+		t.Fatalf("a same-pin server widening was not asked again: %d %+v", code, prob)
+	}
+	want := []string{
+		"adds network egress to evil.example for MCP server npm:@acme/osv-mcp@1.2.3",
+		"gives MCP server npm:@acme/osv-mcp@1.2.3 the secret OSV_EXTRA",
+	}
+	if !reflect.DeepEqual(prob.Widened, want) {
+		t.Fatalf("widened = %q, want %q", prob.Widened, want)
+	}
+}

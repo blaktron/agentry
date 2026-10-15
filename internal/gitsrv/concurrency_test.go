@@ -113,10 +113,11 @@ func (e *gitEnv) infoRefs(t *testing.T, repo, addr string) int {
 
 func seedPublicRepo(t *testing.T, e *gitEnv, name string) {
 	t.Helper()
-	e.seedAgent(name, "public")
+	agent := e.seedAgent(name, "public")
 	work := seedWorkdir(t, map[string]string{"agent.yaml": "schemaVersion: \"1\"\n", "README.md": "# budget\n"})
 	mustGit(t, work, "remote", "add", "origin", e.cloneURL(name, e.owner.patRW))
 	mustGit(t, work, "push", "origin", "main")
+	e.releaseHead(agent, work, "origin", "v0.1.0")
 }
 
 // Behind a trusted proxy each forwarded address is its own client: one at

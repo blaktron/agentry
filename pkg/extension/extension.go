@@ -311,6 +311,26 @@ type (
 	VoiceAdmission = api.VoiceAdmission
 )
 
+// AdmitsKnowledge is the optional interface for an extension that admits,
+// and may charge for, the scan an upload of a knowledge pack's tree queues
+// (PUT …/knowledge/packs/{id}/tree, an account's or an organization's).
+// AI Review is 1 credit an operation; the core charges nothing. It is
+// asked after the core has read the tree and before anything is stored; a
+// refusal is answered in its own status and words, and a ticket is voided
+// when the core then stores nothing. An upload of the tree the pack
+// already holds queues no scan and is never asked about, nor is a pack an
+// extension builds and stores through Knowledge.
+type AdmitsKnowledge interface {
+	KnowledgeAdmitter() KnowledgeAdmitter
+}
+
+// KnowledgeAdmitter and KnowledgeAdmission are the knowledge upload's
+// admission types.
+type (
+	KnowledgeAdmitter  = api.KnowledgeAdmitter
+	KnowledgeAdmission = api.KnowledgeAdmission
+)
+
 // Voice is the core's store of Writing Voices as an extension may act
 // on it: the hosted Voice Writer reads the live voice it improves or
 // edits and puts back the voice it wrote, and a hosted run reads the

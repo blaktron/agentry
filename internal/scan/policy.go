@@ -18,7 +18,14 @@ type Policy struct {
 	// V-validation (registry enforces; listed here for completeness).
 	BlockedCapabilities []string `json:"blockedCapabilities,omitempty"`
 	// AllowedLicenses: public publishes outside this list are rejected.
+	// An absent or empty list allows any license.
 	AllowedLicenses []string `json:"allowedLicenses,omitempty"`
+	// NoPublicLicense: no license is allowed for public publishes, so every
+	// public publish is rejected. Merge sets it when the baseline's and the
+	// organization's allowedLicenses have no identifier in common: the
+	// empty intersection must not read as an absent list, which allows any
+	// license. A policy document may also set it to stop public publishes.
+	NoPublicLicense bool `json:"noPublicLicense,omitempty"`
 	// BlockedMcpServers: submissions whose manifest declares one of these
 	// MCP servers are rejected at submission (an org blocklist).
 	// Entries are "npm:<package>" / "pypi:<package>",
@@ -151,9 +158,13 @@ func Merge(baseline, org Policy) Policy {
 		if len(baseline.AllowedLicenses) == 0 {
 			out.AllowedLicenses = org.AllowedLicenses
 		} else {
-			out.AllowedLicenses = intersect(baseline.AllowedLicenses, org.AllowedLicenses)
+			out.AllowedLicenses = intersectFold(baseline.AllowedLicenses, org.AllowedLicenses)
+			if len(out.AllowedLicenses) == 0 {
+				out.NoPublicLicense = true
+			}
 		}
 	}
+	out.NoPublicLicense = out.NoPublicLicense || baseline.NoPublicLicense || org.NoPublicLicense
 	out.RequireEvals = baseline.RequireEvals || org.RequireEvals
 	if org.WildcardEgress == "reject" || baseline.WildcardEgress == "reject" {
 		out.WildcardEgress = "reject"
@@ -161,32 +172,29 @@ func Merge(baseline, org Policy) Policy {
 	return out
 }
 
+// tightenReview merges two review modes toward strict: "always" wins over
+// any condition, and two capability conditions combine, so a version that
+// declares a capability either side names goes to review.
 func tightenReview(a, b reviewMode) json.RawMessage {
-	rank := func(m reviewMode) int {
-		switch {
-		case m.always:
-			return 2
-		case len(m.whenCapabilities) > 0:
-			return 1
-		default:
-			return 0
-		}
-	}
-	if rank(b) > rank(a) {
-		if b.always {
-			return json.RawMessage(`"always"`)
-		}
-		out, _ := json.Marshal(map[string][]string{"whenCapabilities": b.whenCapabilities})
-		return out
-	}
-	if a.always {
+	if a.always || b.always {
 		return json.RawMessage(`"always"`)
 	}
-	if len(a.whenCapabilities) > 0 {
-		out, _ := json.Marshal(map[string][]string{"whenCapabilities": a.whenCapabilities})
+	if caps := union(a.whenCapabilities, b.whenCapabilities); len(caps) > 0 {
+		out, _ := json.Marshal(map[string][]string{"whenCapabilities": caps})
 		return out
 	}
 	return json.RawMessage(`"never"`)
+}
+
+func reviewRank(m reviewMode) int {
+	switch {
+	case m.always:
+		return 2
+	case len(m.whenCapabilities) > 0:
+		return 1
+	default:
+		return 0
+	}
 }
 
 // orNever returns raw, or the "never" default when empty (the only default
@@ -217,14 +225,17 @@ func union(a, b []string) []string {
 	return out
 }
 
-func intersect(a, b []string) []string {
+// intersectFold keeps the entries of a that b also lists, compared as the
+// gate compares SPDX identifiers: trimmed and case-insensitively. The
+// spelling kept is a's.
+func intersectFold(a, b []string) []string {
 	set := map[string]bool{}
-	for _, s := range a {
-		set[s] = true
+	for _, s := range b {
+		set[strings.ToLower(strings.TrimSpace(s))] = true
 	}
 	var out []string
-	for _, s := range b {
-		if set[s] {
+	for _, s := range a {
+		if set[strings.ToLower(strings.TrimSpace(s))] {
 			out = append(out, s)
 		}
 	}
@@ -235,6 +246,10 @@ func intersect(a, b []string) []string {
 // API rejects outright. Merge already clamps silently; this gives the
 // author a clear error for the most confusing case — a looser
 // maxAutoPublishSeverity or downgrading wildcardEgress from reject.
+// A requireHumanReview below the baseline's ("never" under a condition, a
+// condition under "always") is a loosening; a capability condition that
+// names other capabilities than the baseline's is not, because Merge keeps
+// both sets.
 func LoosensBaseline(baseline, org Policy) bool {
 	if org.MaxAutoPublishSeverity != "" {
 		bSev, _ := severityByName(orDefault(baseline.MaxAutoPublishSeverity, baselineMaxAuto()))
@@ -248,20 +263,8 @@ func LoosensBaseline(baseline, org Policy) bool {
 	// requireHumanReview: org cannot go below baseline.
 	bm, _ := parseReviewMode(orNever(baseline.RequireHumanReview))
 	om, err := parseReviewMode(orNever(org.RequireHumanReview))
-	if err == nil && len(org.RequireHumanReview) > 0 {
-		rank := func(m reviewMode) int {
-			switch {
-			case m.always:
-				return 2
-			case len(m.whenCapabilities) > 0:
-				return 1
-			default:
-				return 0
-			}
-		}
-		if rank(om) < rank(bm) {
-			return true
-		}
+	if err == nil && len(org.RequireHumanReview) > 0 && reviewRank(om) < reviewRank(bm) {
+		return true
 	}
 	return false
 }

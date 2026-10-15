@@ -690,7 +690,13 @@ the resolved artifact digests, and configures the gateway to load them
 new supply-chain decision: nothing carries over, not the servers, not
 their keys. Per-server `secrets` join the guided profile setup; per-server
 `egress` is that server's own allowlist (`"*"` is policy-gated, like agent
-egress). Removing the agent removes the server configuration and keys by
+egress). A server's `egress` counts as network the release reaches: a
+namespace's `blockedCapabilities: [network]` refuses it, and a host an
+update adds that the previous release did not reach is a low
+`S9/new-egress` finding (medium for `"*"`). An update that keeps a server
+at the same pin but adds an egress host, a secret or a tool, or lifts its
+`tools` list, is a widening and asks for consent again, as a new pin
+does. Removing the agent removes the server configuration and keys by
 default; keeping them is an explicit option, and a kept configuration is
 reachable by nothing except a reinstall of the same digest. Full runtime
 mechanics: the [Runner reference](runner.md).

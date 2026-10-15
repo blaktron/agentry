@@ -2,6 +2,7 @@ package scan
 
 import (
 	"fmt"
+	"maps"
 	"path"
 	"slices"
 	"sort"
@@ -341,9 +342,10 @@ func s9ManifestDiff(in *Input) []Finding {
 	for _, h := range prevCapsBlock.remoteServerHosts() {
 		prevRemote[h] = true
 	}
+	prevServerEgress := prevCapsBlock.serverEgress()
 	newRemote := map[string]bool{}
 	for _, h := range curCapsBlock.remoteServerHosts() {
-		if !prevRemote[h] && !prevEgress[h] {
+		if _, reached := prevServerEgress[strings.ToLower(h)]; !prevRemote[h] && !prevEgress[h] && !reached {
 			newRemote[h] = true
 		}
 	}
@@ -352,6 +354,25 @@ func s9ManifestDiff(in *Input) []Finding {
 			Scanner: "S9/new-egress", Severity: SevLow, Confidence: ConfHigh,
 			Title:    "New remote MCP server host in this release: " + host,
 			Detail:   map[string]any{"host": host, "remoteServer": true, "pattern": "new destination after clean releases (postmark-mcp)"},
+			Taxonomy: []string{"LLM03", "ASI04"},
+		})
+	}
+	// And a host a package server's own egress names: one the previous
+	// release did not reach by any of the three is the same finding, low,
+	// and medium for "*", which names any host.
+	curServerEgress := curCapsBlock.serverEgress()
+	for _, host := range slices.Sorted(maps.Keys(curServerEgress)) {
+		if _, reached := prevServerEgress[host]; reached || prevEgress[host] || prevRemote[host] {
+			continue
+		}
+		sev := SevLow
+		if host == "*" {
+			sev = SevMedium
+		}
+		findings = append(findings, Finding{
+			Scanner: "S9/new-egress", Severity: sev, Confidence: ConfHigh,
+			Title:    "New MCP server egress host in this release: " + host + " (" + curServerEgress[host] + ")",
+			Detail:   map[string]any{"host": host, "mcpServer": curServerEgress[host], "pattern": "new destination after clean releases (postmark-mcp)"},
 			Taxonomy: []string{"LLM03", "ASI04"},
 		})
 	}

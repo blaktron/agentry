@@ -391,14 +391,38 @@ func objectKey(owner Owner, pack uuid.UUID) string {
 // against the allocation owner's packs draw on, under a lock on that pool,
 // then stores it sealed as it came.
 func (s *Service) Upload(ctx context.Context, owner Owner, id uuid.UUID, sealed []byte) (storegen.KnowledgePack, error) {
-	return s.upload(ctx, owner, id, sealed, nil)
+	return s.UploadAdmitted(ctx, owner, id, sealed, nil)
+}
+
+// UploadAdmission is what an upload that will queue a scan is admitted
+// on: the pack and the tree read from the body.
+type UploadAdmission struct {
+	Owner Owner
+	Pack  uuid.UUID
+	Bytes int64
+	Files int
+}
+
+// Admit admits an upload that will queue a scan. It is asked once, after
+// the tree is read and before anything is stored; an error refuses the
+// upload with nothing stored. release is called once with whether the
+// tree was stored, so a ticket for an upload the core then refused (the
+// allocation cap, a lost race) can be voided.
+type Admit func(ctx context.Context, a UploadAdmission) (release func(stored bool), err error)
+
+// UploadAdmitted is Upload with admit asked first. An upload of the tree
+// the pack already holds, scanned or being scanned, stores nothing and
+// queues no scan, so it is never admitted; one that failed to scan is
+// scanned again unadmitted, since the failure was the registry's.
+func (s *Service) UploadAdmitted(ctx context.Context, owner Owner, id uuid.UUID, sealed []byte, admit Admit) (storegen.KnowledgePack, error) {
+	return s.upload(ctx, owner, id, sealed, nil, admit)
 }
 
 // upload is the one path a tree is stored by, through the route and
 // through an extension's Replace alike; check, when given, is asked about
 // the pack as it stands under its row lock, and its error refuses the
 // upload with nothing stored.
-func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed []byte, check func(storegen.KnowledgePack) error) (storegen.KnowledgePack, error) {
+func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed []byte, check func(storegen.KnowledgePack) error, admit Admit) (_ storegen.KnowledgePack, err error) {
 	p, err := s.Get(ctx, owner, id)
 	if err != nil {
 		return p, err
@@ -406,6 +430,20 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 	tree, err := s.open(ctx, owner, p, bytes.NewReader(sealed))
 	if err != nil {
 		return p, err
+	}
+	if admit != nil {
+		held := p.ObjectKey != "" && p.Digest == tree.Digest
+		switch {
+		case held && State(p.State) != StateFailed:
+			return p, nil
+		case !held:
+			release, aerr := admit(ctx, UploadAdmission{Owner: owner, Pack: id, Bytes: tree.Bytes, Files: len(tree.Files)})
+			if aerr != nil {
+				return p, aerr
+			}
+			// err is the result this upload returns: stored only when nil.
+			defer func() { release(err == nil) }()
+		}
 	}
 	key := objectKey(owner, id)
 	// The blob first: a row never names an object that is not there. An
