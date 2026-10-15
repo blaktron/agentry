@@ -14,13 +14,13 @@ import (
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
-// The hardened archive extractor (§8.2): the single shared unpacker for
+// The hardened archive extractor: the single shared unpacker for
 // untrusted release archives. It rejects path traversal, absolute paths,
 // symlinks/hardlinks, device nodes, and any non-regular entry; enforces
 // per-file, total-size, and file-count caps; and bounds the compression
 // ratio to defuse zip bombs. Fuzzed in extract_test.go.
 
-// ExtractLimits bounds a safe extraction (§19 quotas + a decompression cap).
+// ExtractLimits bounds a safe extraction (the release-archive quotas plus a decompression cap).
 type ExtractLimits struct {
 	MaxFileBytes  int64
 	MaxTotalBytes int64
@@ -29,10 +29,10 @@ type ExtractLimits struct {
 	MaxRatio int64
 }
 
-// DefaultLimits are the §19 release-archive quotas, raised by the most a
-// release may ship in knowledge packs (plan knowledge.md §4.6): the
-// extractor bounds what any archive can unpack to, and the manifest's V8
-// holds each release to its own quotas and each pack to a pack's.
+// DefaultLimits are the release-archive quotas, raised by the most a
+// release may ship in knowledge packs: the extractor bounds what any
+// archive can unpack to, and the manifest's V8 holds each release to its
+// own quotas and each pack to a pack's.
 func DefaultLimits() ExtractLimits {
 	const packs = manifest.MaxShippedPacks
 	return ExtractLimits{
