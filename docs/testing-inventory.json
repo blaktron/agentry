@@ -580,6 +580,21 @@
           ]
         },
         {
+          "path": "internal/api/directory_takeover_test.go",
+          "tests": [
+            "TestAnExtensionsDirectoryTakesTheDirectoryPath",
+            "TestTheBuiltInDirectoryStillReadsItsClaims",
+            "TestAnExtensionsDirectoryKeepsNoCoreStaffMirror",
+            "TestADirectoryThatErasesItselfAnswersTheErasure"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
           "path": "internal/api/directory_test.go",
           "tests": [
             "TestDirectoryFindAccount",
@@ -2403,6 +2418,16 @@
           "path": "internal/auth/decoy_test.go",
           "tests": [
             "TestDecoyHashUsesTheRealParameters"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/auth/seal_for_test.go",
+          "tests": [
+            "TestSealerForIsItsOwnKey"
           ],
           "fuzz": [],
           "benchmarks": [],
