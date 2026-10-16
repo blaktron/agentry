@@ -2119,15 +2119,25 @@ run a job on a period, and register audit actions under its own name.
 An extension can also be the deployment's directory, the service that holds
 people's sign-in accounts. It supplies the directory the registry erases
 accounts in, lists and removes authenticators through, and mirrors platform
-staff into (`ManagesDirectory`), replacing the built-in one. It hears every
+staff into (`ManagesDirectory`), replacing the built-in one. Its directory
+then takes the whole directory path: the registry reads none of the built-in
+directory's own claims at sign-in, mints no remembered browser for it,
+answers `/internal/directory/` with 404 and keeps no staff mirror group. A
+directory that also carries out an erasure's directory half itself, retries
+included (`DirectoryErasure`), is handed the erased account once the
+registry's erasure has committed, and the outcome it returns is what
+`X-Agentry-Directory-Erasure` reports. It hears every
 sign-in through an individual provider with all of the ID token's claims,
-before the session is issued (`HearsSignIn`), and the events
+before the session is issued, and whether that sign-in created the account
+(`HearsSignIn`), and the events
 `account.erased` (with the identities the account signed in with and the
 address it held) and `staff.changed`. It can read platform staff, mint a
 remembered browser at a sign-in it hears, and check one, under the
 registry's rules: minted only from that sign-in's own verified token, whose
 `amr` names a second factor and whose `auth_time` is minutes old, stored as
-a SHA-256 hash and bound to one account. It can serve calls
+a SHA-256 hash and bound to one account. It can seal a small value it must
+keep at rest, such as a queued erasure's address, under the server's
+sealing key (`Deps.Sealer`). It can serve calls
 from a service of its own under `/internal/x/<name>/` (`ReceivesCallbacks`).
 There the registry checks a shared secret of at least 32 characters, answers
 404 to any request carrying `X-Forwarded-For` or `Forwarded`, applies the
