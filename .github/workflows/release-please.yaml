@@ -32,9 +32,10 @@
 # no RELEASE_PLEASE_TOKEN. So the release job below calls release.yaml
 # directly when a release was created, and nothing listens for tag pushes. The
 # release PR opened with GITHUB_TOKEN gets pull_request runs that wait for
-# approval; it is gated by dispatching ci on its branch. A RELEASE_PLEASE_TOKEN
-# a maintainer might add is still used first: its PR's runs would start by
-# themselves, and its tags start nothing that is not already called here.
+# approval; it is gated by dispatching ci and branch-model on its branch. A
+# RELEASE_PLEASE_TOKEN a maintainer might add is still used first: its PR's
+# runs would start by themselves, and its tags start nothing that is not
+# already called here.
 name: release-please
 on:
   push:
