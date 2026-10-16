@@ -27,6 +27,10 @@ import (
 type SignIn struct {
 	// UserID is the account the sign-in resolved to.
 	UserID uuid.UUID
+	// NewAccount is true when this sign-in created the account: what an
+	// extension reads to treat a sign-up's own claims (a promo code typed
+	// on the sign-up form) as a sign-up's and never a returning person's.
+	NewAccount bool
 	// Provider is the provider's id, and Subject the identity it signed in
 	// ("<provider>:<sub>").
 	Provider string

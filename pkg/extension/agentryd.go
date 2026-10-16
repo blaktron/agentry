@@ -890,7 +890,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
-				Staff: staffOf(srv, pool), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name())})
+				Staff: staffOf(srv, pool), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name()), Sealer: srv.Sealer()})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
