@@ -187,40 +187,27 @@ func TestOIDC_PreferredUsernameSurfaced(t *testing.T) {
 	}
 }
 
-// TestOIDC_RememberDeviceIsOnlyAJSONTrue: the directory's
-// `agentry_remember_device` claim is half of what mints a credential, so
-// only the JSON boolean its scope mapping emits counts. A string, a number
-// or an absent claim is "not asked", never a guess.
-func TestOIDC_RememberDeviceIsOnlyAJSONTrue(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		value any
-		set   bool
-		want  bool
-	}{
-		{"true", true, true, true},
-		{"false", false, true, false},
-		{"absent", nil, false, false},
-		{"the string true", "true", true, false},
-		{"one", 1, true, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			idp := newFakeIDP(t)
-			if tc.set {
-				idp.extra = map[string]any{"agentry_remember_device": tc.value}
-			}
-			rp, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback")
-			if err != nil {
-				t.Fatal(err)
-			}
-			claims, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", idp.nonce)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if claims.RememberDevice != tc.want {
-				t.Fatalf("RememberDevice = %v for %#v, want %v", claims.RememberDevice, tc.value, tc.want)
-			}
-		})
+// TestOIDC_RawCarriesEveryClaim: claims this package does not name reach
+// the caller as the token sent them, so a reader that knows its IdP's own
+// claims decides what they mean; nothing is coerced on the way.
+func TestOIDC_RawCarriesEveryClaim(t *testing.T) {
+	idp := newFakeIDP(t)
+	idp.extra = map[string]any{"x_flag": true, "x_count": 7, "x_name": "seven", "x_list": []any{"a", "b"}}
+	rp, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", idp.nonce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]any{"x_flag": true, "x_count": float64(7), "x_name": "seven", "sub": claims.Subject} {
+		if got := claims.Raw[k]; got != want {
+			t.Errorf("Raw[%q] = %#v, want %#v", k, got, want)
+		}
+	}
+	if l, ok := claims.Raw["x_list"].([]any); !ok || len(l) != 2 {
+		t.Errorf("Raw[x_list] = %#v, want the list as sent", claims.Raw["x_list"])
 	}
 }
 
@@ -252,35 +239,5 @@ func TestOIDC_AuthTimeSurfaced(t *testing.T) {
 				t.Fatalf("AuthTime = %v, want %v", claims.AuthTime, tc.want)
 			}
 		})
-	}
-}
-
-// TestPromoCodeClaim: the directory's agentry_promo_code claim is read as a
-// string inside the billing extension's grammar, upper-cased, and as nothing
-// otherwise.
-func TestPromoCodeClaim(t *testing.T) {
-	for in, want := range map[any]string{
-		"LAUNCH-2026":           "LAUNCH-2026",
-		" launch-2026 ":         "LAUNCH-2026",
-		"a1b2":                  "A1B2",
-		strings.Repeat("a", 32): strings.Repeat("A", 32),
-		"":                      "",
-		"abc":                   "",
-		"-abcd":                 "",
-		"ab cd":                 "",
-		"ab_cd":                 "",
-		strings.Repeat("a", 33): "",
-		"Ünicode":               "",
-		"ſale":                  "",
-		"ıdea":                  "",
-		1234:                    "",
-		true:                    "",
-	} {
-		if got := PromoCodeClaim(in); got != want {
-			t.Errorf("PromoCodeClaim(%#v) = %q, want %q", in, got, want)
-		}
-	}
-	if got := PromoCodeClaim(nil); got != "" {
-		t.Errorf("PromoCodeClaim(nil) = %q", got)
 	}
 }

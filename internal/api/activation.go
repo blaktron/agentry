@@ -160,14 +160,14 @@ func (s *Server) SendEmailVerification(w http.ResponseWriter, r *http.Request) {
 // signedInDirectoryLinks names the directory accounts the person signed in
 // with, none for an account that never did (unlike directoryLinksFor, which
 // falls back to the address for erasure).
-func (s *Server) signedInDirectoryLinks(ctx context.Context, userID uuid.UUID, email string) ([]directoryLink, error) {
+func (s *Server) signedInDirectoryLinks(ctx context.Context, userID uuid.UUID, email string) ([]DirectoryLink, error) {
 	rows, err := s.q().ListUserDirectoryLinks(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("read the account's directory links: %w", err)
 	}
-	links := make([]directoryLink, 0, len(rows))
+	links := make([]DirectoryLink, 0, len(rows))
 	for _, r := range rows {
-		links = append(links, directoryLink{AccountID: r.DirectoryAccountID, UID: r.DirectorySubject, Email: email})
+		links = append(links, DirectoryLink{AccountID: r.DirectoryAccountID, UID: r.DirectorySubject, Email: email})
 	}
 	return links, nil
 }
@@ -177,14 +177,14 @@ func (s *Server) signedInDirectoryLinks(ctx context.Context, userID uuid.UUID, e
 type directoryPresence interface {
 	// AccountGone reports that the account is no longer in the directory.
 	// False when it cannot tell.
-	AccountGone(ctx context.Context, link directoryLink) (bool, error)
+	AccountGone(ctx context.Context, link DirectoryLink) (bool, error)
 }
 
 // AccountGone implements directoryPresence. A recorded id that answers 404,
 // or now holds an account with another uid, is gone; without an id, the
 // uid found at no account at the address is gone. A link with neither says
 // nothing, and is not gone.
-func (a *authentikEraser) AccountGone(ctx context.Context, link directoryLink) (bool, error) {
+func (a *authentikEraser) AccountGone(ctx context.Context, link DirectoryLink) (bool, error) {
 	if link.AccountID > 0 {
 		u, err := a.accountByID(ctx, link.AccountID)
 		if err != nil {

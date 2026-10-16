@@ -96,14 +96,14 @@ func (s *Server) eraseDirectoryAccount(ctx context.Context, base audit.Event, us
 				break
 			}
 			var ok bool
-			var how directoryLookup
+			var how DirectoryLookup
 			ok, how, err = s.dirEraser.EraseAccount(ctx, link)
 			lookups = append(lookups, string(how))
 			deleted = deleted || ok
 			unresolved = unresolved || how.unresolved()
 		}
 		if len(lookups) > 0 {
-			detail["directoryLookup"] = strings.Join(lookups, ",")
+			detail["DirectoryLookup"] = strings.Join(lookups, ",")
 		}
 		switch {
 		case err != nil:
@@ -129,7 +129,7 @@ func (s *Server) eraseDirectoryAccount(ctx context.Context, base audit.Event, us
 	if outcome == dirEraseUnresolved {
 		// Not retried: another attempt would find the same accounts.
 		s.alertDirectoryErasure(ctx, userID, attempt,
-			fmt.Errorf("the directory account could not be told apart (%v): nothing was deleted that might be somebody else's", detail["directoryLookup"]))
+			fmt.Errorf("the directory account could not be told apart (%v): nothing was deleted that might be somebody else's", detail["DirectoryLookup"]))
 	}
 	return outcome, failure
 }

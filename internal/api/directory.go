@@ -25,70 +25,70 @@ type directoryEraser interface {
 	// findAccount), never a superuser or a service account, and says which
 	// rule it looked by. Returns false with no error when no account
 	// qualifies.
-	EraseAccount(ctx context.Context, link directoryLink) (bool, directoryLookup, error)
+	EraseAccount(ctx context.Context, link DirectoryLink) (bool, DirectoryLookup, error)
 }
 
-// directoryLink is how the registry names a person's directory account:
+// DirectoryLink is how the registry names a person's directory account:
 // the directory's own id for it, learnt at sign-in; the uid
 // the directory reports for it, which is the registry's `authentik:`
 // subject; and the registry's copy of the address, the lookup of last
 // resort. The id and the uid are zero for an account that never signed in
 // through the directory, and the id alone for one that has not signed in
 // since the directory began sending it.
-type directoryLink struct {
+type DirectoryLink struct {
 	AccountID int64
 	UID       string
 	Email     string
 }
 
-// directoryLookup is how findAccount ended: the rule that found the
+// DirectoryLookup is how findAccount ended: the rule that found the
 // account, or why none was taken. The erasure's audit row records it.
-type directoryLookup string
+type DirectoryLookup string
 
 const (
-	dirLookupByID      directoryLookup = "id"
-	dirLookupByUID     directoryLookup = "uid"
-	dirLookupByAddress directoryLookup = "address"
+	DirectoryLookupByID      DirectoryLookup = "id"
+	DirectoryLookupByUID     DirectoryLookup = "uid"
+	DirectoryLookupByAddress DirectoryLookup = "address"
 	// The three that leave an account the person may hold in place: more
 	// than one account at the address, the recorded id now holding an
 	// account with another uid, and a superuser, which erasure never
 	// deletes. Erasure reports these as unresolved, for the operator.
-	dirLookupAddressShared directoryLookup = "address-shared"
-	dirLookupIDMismatch    directoryLookup = "id-mismatch"
-	dirLookupSuperuser     directoryLookup = "superuser"
+	DirectoryLookupAddressShared DirectoryLookup = "address-shared"
+	DirectoryLookupIDMismatch    DirectoryLookup = "id-mismatch"
+	DirectoryLookupSuperuser     DirectoryLookup = "superuser"
 )
 
 // unresolved reports a lookup that may have left the person's account in
 // the directory.
-func (l directoryLookup) unresolved() bool {
-	return l == dirLookupAddressShared || l == dirLookupIDMismatch || l == dirLookupSuperuser
+func (l DirectoryLookup) unresolved() bool {
+	return l == DirectoryLookupAddressShared || l == DirectoryLookupIDMismatch || l == DirectoryLookupSuperuser
 }
 
 // directoryLinksFor names every directory account the person is linked to
 // oldest first: the directory's id and uid from each
 // directory sign-in, with the registry's address as the last resort. With
 // no directory sign-in it is the address alone.
-func (s *Server) directoryLinksFor(ctx context.Context, userID uuid.UUID, email string) ([]directoryLink, error) {
+func (s *Server) directoryLinksFor(ctx context.Context, userID uuid.UUID, email string) ([]DirectoryLink, error) {
 	rows, err := s.q().ListUserDirectoryLinks(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("read the account's directory links: %w", err)
 	}
 	if len(rows) == 0 {
-		return []directoryLink{{Email: email}}, nil
+		return []DirectoryLink{{Email: email}}, nil
 	}
-	links := make([]directoryLink, 0, len(rows))
+	links := make([]DirectoryLink, 0, len(rows))
 	for _, r := range rows {
-		links = append(links, directoryLink{AccountID: r.DirectoryAccountID, UID: r.DirectorySubject, Email: email})
+		links = append(links, DirectoryLink{AccountID: r.DirectoryAccountID, UID: r.DirectorySubject, Email: email})
 	}
 	return links, nil
 }
 
 // directoryLinkFor is the oldest of directoryLinksFor, which the settings
 // page reads so its answer does not move while the account keeps it.
-func (s *Server) directoryLinkFor(ctx context.Context, userID uuid.UUID, email string) (directoryLink, error) {
+func (s *Server) directoryLinkFor(ctx context.Context, userID uuid.UUID, email string) (DirectoryLink, error) {
 	links, err := s.directoryLinksFor(ctx, userID, email)
 	if err != nil {
-		return directoryLink{Email: email}, err
+		return DirectoryLink{Email: email}, err
 	}
 	return links[0], nil
 }
@@ -138,40 +138,40 @@ func (a *authentikEraser) do(ctx context.Context, method, path string) (*http.Re
 //
 // Addresses match exactly and case-blind; a service account never counts.
 // nil, with how it looked, when no account qualifies.
-func (a *authentikEraser) findAccount(ctx context.Context, link directoryLink) (*authentikUser, directoryLookup, error) {
+func (a *authentikEraser) findAccount(ctx context.Context, link DirectoryLink) (*authentikUser, DirectoryLookup, error) {
 	if link.AccountID > 0 {
 		u, err := a.accountByID(ctx, link.AccountID)
 		if err != nil || u == nil {
-			return nil, dirLookupByID, err
+			return nil, DirectoryLookupByID, err
 		}
 		if link.UID == "" || u.UID != link.UID || u.isService() {
-			return nil, dirLookupIDMismatch, nil
+			return nil, DirectoryLookupIDMismatch, nil
 		}
-		return u, dirLookupByID, nil
+		return u, DirectoryLookupByID, nil
 	}
 	if link.Email == "" {
-		return nil, dirLookupByAddress, nil
+		return nil, DirectoryLookupByAddress, nil
 	}
 	accounts, err := a.accountsAt(ctx, link.Email)
 	if err != nil {
-		return nil, dirLookupByAddress, err
+		return nil, DirectoryLookupByAddress, err
 	}
 	if link.UID != "" {
 		for i := range accounts {
 			if accounts[i].UID == link.UID {
-				return &accounts[i], dirLookupByUID, nil
+				return &accounts[i], DirectoryLookupByUID, nil
 			}
 		}
-		return nil, dirLookupByUID, nil
+		return nil, DirectoryLookupByUID, nil
 	}
 	switch len(accounts) {
 	case 0:
-		return nil, dirLookupByAddress, nil
+		return nil, DirectoryLookupByAddress, nil
 	case 1:
 	default:
-		return nil, dirLookupAddressShared, nil
+		return nil, DirectoryLookupAddressShared, nil
 	}
-	return &accounts[0], dirLookupByAddress, nil
+	return &accounts[0], DirectoryLookupByAddress, nil
 }
 
 // accountByID reads one directory account by its id; nil when there is none.
@@ -223,13 +223,13 @@ func (a *authentikEraser) accountsAt(ctx context.Context, email string) ([]authe
 // EraseAccount implements directoryEraser. A superuser is never deleted,
 // however it was found: an operator's own account must not be erasable
 // through a registry account.
-func (a *authentikEraser) EraseAccount(ctx context.Context, link directoryLink) (bool, directoryLookup, error) {
+func (a *authentikEraser) EraseAccount(ctx context.Context, link DirectoryLink) (bool, DirectoryLookup, error) {
 	u, how, err := a.findAccount(ctx, link)
 	if err != nil || u == nil {
 		return false, how, err
 	}
 	if u.IsSuperuser {
-		return false, dirLookupSuperuser, nil
+		return false, DirectoryLookupSuperuser, nil
 	}
 	res, err := a.do(ctx, http.MethodDelete, fmt.Sprintf("/api/v3/core/users/%d/", u.PK))
 	if err != nil {
@@ -250,10 +250,10 @@ func (a *authentikEraser) EraseAccount(ctx context.Context, link directoryLink) 
 // directoryDevices is the read side of the same admin access: the
 // authenticators a user has enrolled, for the settings page.
 type directoryDevices interface {
-	Devices(ctx context.Context, link directoryLink) ([]DirectoryDevice, error)
+	Devices(ctx context.Context, link DirectoryLink) ([]DirectoryDevice, error)
 	// DeleteDevice removes one of the account's authenticators; false when
 	// the account has no device of that kind and id (never somebody else's).
-	DeleteDevice(ctx context.Context, link directoryLink, kind, id string) (bool, error)
+	DeleteDevice(ctx context.Context, link DirectoryLink, kind, id string) (bool, error)
 }
 
 // DirectoryDevice is one enrolled authenticator as the directory reports it.
@@ -267,7 +267,7 @@ type DirectoryDevice struct {
 // Devices lists the authenticators of the directory account the link names
 // (findAccount; authentik: /authenticators/admin/all/?user=<pk>). No
 // account or no devices is an empty list, not an error.
-func (a *authentikEraser) Devices(ctx context.Context, link directoryLink) ([]DirectoryDevice, error) {
+func (a *authentikEraser) Devices(ctx context.Context, link DirectoryLink) ([]DirectoryDevice, error) {
 	u, _, err := a.findAccount(ctx, link)
 	if err != nil {
 		return nil, err
@@ -311,7 +311,7 @@ func (a *authentikEraser) Devices(ctx context.Context, link directoryLink) ([]Di
 // DeleteDevice implements directoryDevices: the device must be one the
 // account's own list reports (kind and id), so a caller can never reach
 // another account's authenticator through this path.
-func (a *authentikEraser) DeleteDevice(ctx context.Context, link directoryLink, kind, id string) (bool, error) {
+func (a *authentikEraser) DeleteDevice(ctx context.Context, link DirectoryLink, kind, id string) (bool, error) {
 	if _, ok := deviceAdminPath[kind]; !ok || id == "" {
 		return false, nil
 	}

@@ -134,6 +134,7 @@ type totpChallengeBlob struct {
 var socialProviderIDs = []string{
 	social.ProviderGoogle, social.ProviderGitHub, social.ProviderMicrosoft,
 	social.ProviderOpenAI, social.ProviderClaude, social.ProviderAuthentik,
+	social.ProviderOIDC,
 }
 
 // configuredSocialProviders lists the providers socialProviderConfig accepts,
@@ -151,9 +152,12 @@ func (s *Server) configuredSocialProviders() []string {
 
 // socialProviderConfig returns a provider's settings, and whether they are
 // enough to start a sign-in with (social.Startable: a client id and secret,
-// and an issuer where the provider has no default).
-func (s *Server) socialProviderConfig(name string) (config.SocialProvider, bool) {
+// and an issuer where the provider has no default). "authentik" and "oidc"
+// are the deployment's one sign-in OpenID provider (config.SignInOIDC),
+// answered under whichever of the two ids it has.
+func (s *Server) socialProviderConfig(name string) (social.Config, bool) {
 	var pc config.SocialProvider
+	var scopes []string
 	switch name {
 	case social.ProviderGoogle:
 		pc = s.cfg.Social.Google
@@ -165,12 +169,22 @@ func (s *Server) socialProviderConfig(name string) (config.SocialProvider, bool)
 		pc = s.cfg.Social.OpenAI
 	case social.ProviderClaude:
 		pc = s.cfg.Social.Claude
-	case social.ProviderAuthentik:
-		pc = s.cfg.Social.Authentik
+	case social.ProviderAuthentik, social.ProviderOIDC:
+		p, ok := s.cfg.SignInOIDC()
+		if !ok || p.ID != name {
+			return social.Config{}, false
+		}
+		pc = config.SocialProvider{ClientID: p.ClientID, ClientSecret: p.ClientSecret, Issuer: p.Issuer}
+		scopes = p.Scopes
 	default:
-		return config.SocialProvider{}, false
+		return social.Config{}, false
 	}
-	return pc, social.Startable(name, social.Config{ClientID: pc.ClientID, ClientSecret: pc.ClientSecret, Issuer: pc.Issuer})
+	c := social.Config{
+		ClientID: pc.ClientID, ClientSecret: pc.ClientSecret,
+		Issuer: pc.Issuer, AuthURL: pc.AuthURL, TokenURL: pc.TokenURL,
+		APIBaseURL: pc.APIBaseURL, Scopes: scopes,
+	}
+	return c, social.Startable(name, c)
 }
 
 // socialRedirectURL is the provider's registered redirect URI for this server.
@@ -188,15 +202,12 @@ func (s *Server) socialRedirectURL(r *http.Request, provider string) string {
 
 // socialProvider builds the provider client for one request.
 func (s *Server) socialProvider(r *http.Request, name string) (social.Provider, error) {
-	pc, ok := s.socialProviderConfig(name)
+	c, ok := s.socialProviderConfig(name)
 	if !ok {
 		return nil, errors.New("provider not configured")
 	}
-	return social.New(r.Context(), name, social.Config{
-		ClientID: pc.ClientID, ClientSecret: pc.ClientSecret,
-		Issuer: pc.Issuer, AuthURL: pc.AuthURL, TokenURL: pc.TokenURL,
-		APIBaseURL: pc.APIBaseURL, HTTPClient: s.oidcHTTPClient,
-	}, s.socialRedirectURL(r, name))
+	c.HTTPClient = s.oidcHTTPClient
+	return social.New(r.Context(), name, c, s.socialRedirectURL(r, name))
 }
 
 // SocialOidcStart implements GET /auth/oidc/{provider}/start.
@@ -357,8 +368,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	// directory lookup reads the account by it. Only the directory's token
 	// is believed, and it is recorded on the identity this token signed in,
 	// so it is a directory fact and never one a person sets.
-	if name == social.ProviderAuthentik && id.DirectoryAccountID > 0 {
-		dirID := id.DirectoryAccountID
+	if dirID := directoryAccountID(id.Claims); name == social.ProviderAuthentik && dirID > 0 {
 		if err := s.q().SetSocialIdentityDirectoryAccount(r.Context(), storegen.SetSocialIdentityDirectoryAccountParams{
 			Subject: id.NamespacedSubject, DirectoryAccountID: &dirID,
 		}); err != nil {
@@ -409,6 +419,11 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 
+	s.fireSignIn(r.Context(), SignIn{
+		UserID: userID, Provider: name, Subject: id.NamespacedSubject,
+		Claims: id.Claims, AMR: id.AMR, AuthTime: id.AuthTime,
+		Request: r, SetCookie: func(c *http.Cookie) { http.SetCookie(w, c) },
+	})
 	s.issueSocialSession(w, r, user, name, st.Next, id.AMR, s.directoryRemembers(name, id))
 }
 
@@ -584,7 +599,7 @@ func signupPromoCode(id *social.Identity) string {
 	if id.Provider != social.ProviderAuthentik {
 		return ""
 	}
-	return id.PromoCode
+	return PromoCodeClaim(id.Claims[claimPromoCode])
 }
 
 // sealTOTPChallenge mints the opaque challenge for a pending 2FA login.
