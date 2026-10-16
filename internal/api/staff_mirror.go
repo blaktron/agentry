@@ -65,16 +65,16 @@ const (
 type directoryGroups interface {
 	// GroupMembers returns the group's id and members, creating the group
 	// when it does not exist.
-	GroupMembers(ctx context.Context, group string) (groupID string, members []directoryAccount, err error)
+	GroupMembers(ctx context.Context, group string) (groupID string, members []DirectoryAccount, err error)
 	// AccountsByEmail returns the directory accounts at exactly this
 	// address (case-blind), service accounts left out.
-	AccountsByEmail(ctx context.Context, email string) ([]directoryAccount, error)
+	AccountsByEmail(ctx context.Context, email string) ([]DirectoryAccount, error)
 	SetMember(ctx context.Context, groupID string, accountPK int, member bool) error
 }
 
-// directoryAccount is one directory account as the mirror sees it: its pk,
+// DirectoryAccount is one directory account as the mirror sees it: its pk,
 // its address, and its uid, the sub the registry's provider issues for it.
-type directoryAccount struct {
+type DirectoryAccount struct {
 	PK     int
 	Email  string
 	UID    string
@@ -163,7 +163,7 @@ func (s *Server) ReconcileStaffMirror(ctx context.Context) (StaffMirrorOutcome, 
 			if err != nil {
 				return fmt.Errorf("find the directory account for a staff address: %w", err)
 			}
-			var found *directoryAccount
+			var found *DirectoryAccount
 			for i := range accounts {
 				if accounts[i].UID == uid {
 					found = &accounts[i]
@@ -193,7 +193,7 @@ func (s *Server) ReconcileStaffMirror(ctx context.Context) (StaffMirrorOutcome, 
 func (s *Server) auditStaffMirror(ctx context.Context, group string, userID uuid.UUID, directoryPK int, member bool) error {
 	e := audit.Event{
 		Action: audit.ActionDirectoryStaffMirror, ActorKind: audit.ActorSystem,
-		Detail: map[string]any{"group": group, "member": member, "directoryAccount": directoryPK},
+		Detail: map[string]any{"group": group, "member": member, "DirectoryAccount": directoryPK},
 	}
 	if userID != uuid.Nil {
 		e.TargetKind, e.TargetID = "user", userID
@@ -357,7 +357,7 @@ type authentikPage[T any] struct {
 	Results []T `json:"results"`
 }
 
-func (a *authentikEraser) GroupMembers(ctx context.Context, group string) (string, []directoryAccount, error) {
+func (a *authentikEraser) GroupMembers(ctx context.Context, group string) (string, []DirectoryAccount, error) {
 	var groups authentikPage[struct {
 		PK   string `json:"pk"`
 		Name string `json:"name"`
@@ -380,7 +380,7 @@ func (a *authentikEraser) GroupMembers(ctx context.Context, group string) (strin
 		}
 		return created.PK, nil, nil
 	}
-	var members []directoryAccount
+	var members []DirectoryAccount
 	for page := 1; page > 0; {
 		var users authentikPage[authentikUser]
 		path := fmt.Sprintf("/api/v3/core/users/?page_size=100&page=%d&groups_by_name=%s", page, url.QueryEscape(group))
@@ -388,24 +388,24 @@ func (a *authentikEraser) GroupMembers(ctx context.Context, group string) (strin
 			return "", nil, err
 		}
 		for _, u := range users.Results {
-			members = append(members, directoryAccount{PK: u.PK, Email: u.Email, UID: u.UID, Active: u.IsActive})
+			members = append(members, DirectoryAccount{PK: u.PK, Email: u.Email, UID: u.UID, Active: u.IsActive})
 		}
 		page = users.Pagination.Next
 	}
 	return groupID, members, nil
 }
 
-func (a *authentikEraser) AccountsByEmail(ctx context.Context, email string) ([]directoryAccount, error) {
+func (a *authentikEraser) AccountsByEmail(ctx context.Context, email string) ([]DirectoryAccount, error) {
 	// accountsAt matches the address exactly and case-blind;
 	// the mirror also leaves inactive accounts out.
 	users, err := a.accountsAt(ctx, email)
 	if err != nil {
 		return nil, err
 	}
-	var out []directoryAccount
+	var out []DirectoryAccount
 	for _, u := range users {
 		if u.IsActive {
-			out = append(out, directoryAccount{PK: u.PK, Email: u.Email, UID: u.UID, Active: true, HasPassword: jsonBool(u.Attributes.HasPassword)})
+			out = append(out, DirectoryAccount{PK: u.PK, Email: u.Email, UID: u.UID, Active: true, HasPassword: jsonBool(u.Attributes.HasPassword)})
 		}
 	}
 	return out, nil

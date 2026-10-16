@@ -735,3 +735,80 @@ func TestKnowledgeSealingKeyFromEnv(t *testing.T) {
 		t.Fatalf("knowledge = %+v, cap %d", c.Knowledge, c.Limits.KnowledgeBytesPerAccount)
 	}
 }
+
+// TestSignInOIDCIsOneProvider: the sign-in OpenID provider is auth.oidc,
+// "oidc" unless it says otherwise, or the older social.authentik keys read
+// as the same provider under "authentik", the prefix their accounts are
+// linked by. The directory's issuer comes from it only under that id.
+func TestSignInOIDCIsOneProvider(t *testing.T) {
+	cfg := devDefault()
+	if _, ok := cfg.SignInOIDC(); ok {
+		t.Fatal("a provider with nothing configured")
+	}
+
+	cfg.Auth.OIDC = OIDCProvider{Issuer: "https://idp.example/", ClientID: "c", ClientSecret: "s", Scopes: []string{"openid"}, DisplayName: "Example SSO"}
+	p, ok := cfg.SignInOIDC()
+	if !ok || p.ID != OIDCProviderID || p.Issuer != "https://idp.example/" || p.DisplayName != "Example SSO" || len(p.Scopes) != 1 {
+		t.Fatalf("auth.oidc: %+v %v", p, ok)
+	}
+	if cfg.DirectoryIssuer() != "" {
+		t.Error("a provider that is no directory gave a directory issuer")
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("auth.oidc refused: %v", err)
+	}
+
+	cfg.Auth.OIDC.ID = DirectoryProviderID
+	if p, _ := cfg.SignInOIDC(); p.ID != DirectoryProviderID || cfg.DirectoryIssuer() != "https://idp.example/" {
+		t.Fatalf("auth.oidc with id authentik: %+v, issuer %q", p, cfg.DirectoryIssuer())
+	}
+
+	legacy := devDefault()
+	legacy.Social.Authentik = SocialProvider{ClientID: "c", ClientSecret: "s", Issuer: "https://auth.example/application/o/agentry/"}
+	p, ok = legacy.SignInOIDC()
+	if !ok || p.ID != DirectoryProviderID || p.ClientID != "c" || p.Issuer != legacy.Social.Authentik.Issuer {
+		t.Fatalf("social.authentik read as %+v %v", p, ok)
+	}
+	if legacy.DirectoryIssuer() != legacy.Social.Authentik.Issuer {
+		t.Fatalf("the directory issuer under social.authentik is %q", legacy.DirectoryIssuer())
+	}
+
+	for name, tc := range map[string]struct {
+		cfg   func(*Config)
+		names string
+	}{
+		"both named": {func(c *Config) {
+			c.Auth.OIDC = OIDCProvider{Issuer: "https://idp.example/", ClientID: "c", ClientSecret: "s"}
+			c.Social.Authentik = SocialProvider{ClientID: "c", ClientSecret: "s", Issuer: "https://auth.example/"}
+		}, "social.authentik"},
+		"an id no route serves": {func(c *Config) {
+			c.Auth.OIDC = OIDCProvider{ID: "google", Issuer: "https://idp.example/", ClientID: "c", ClientSecret: "s"}
+		}, "auth.oidc.id"},
+		"no issuer": {func(c *Config) { c.Auth.OIDC = OIDCProvider{ClientID: "c", ClientSecret: "s"} }, "issuer"},
+	} {
+		c := devDefault()
+		tc.cfg(&c)
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), tc.names) {
+			t.Errorf("%s: %v, want a refusal naming %s", name, err, tc.names)
+		}
+	}
+}
+
+func TestSignInOIDCFromEnv(t *testing.T) {
+	t.Setenv("AGENTRY_DEV_MODE", "true")
+	t.Setenv("AGENTRY_AUTH_OIDC_ID", "authentik")
+	t.Setenv("AGENTRY_AUTH_OIDC_ISSUER", "https://idp.example/")
+	t.Setenv("AGENTRY_AUTH_OIDC_CLIENT_ID", "client")
+	t.Setenv("AGENTRY_AUTH_OIDC_CLIENT_SECRET", "secret")
+	t.Setenv("AGENTRY_AUTH_OIDC_SCOPES", "openid,email,profile,agentry")
+	t.Setenv("AGENTRY_AUTH_OIDC_DISPLAY_NAME", "Example SSO")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, ok := cfg.SignInOIDC()
+	if !ok || p.ID != "authentik" || p.Issuer != "https://idp.example/" || p.ClientID != "client" || p.ClientSecret != "secret" ||
+		strings.Join(p.Scopes, " ") != "openid email profile agentry" || p.DisplayName != "Example SSO" {
+		t.Fatalf("from the environment: %+v %v", p, ok)
+	}
+}

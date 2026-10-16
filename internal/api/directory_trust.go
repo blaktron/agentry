@@ -10,11 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/blaktron/agentry/internal/audit"
-	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/auth/social"
 	"github.com/blaktron/agentry/internal/httpmux"
-	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // The directory's trust check.
@@ -98,9 +95,8 @@ func (s *Server) directoryTrustCheck(w http.ResponseWriter, r *http.Request) {
 
 // directoryTrusts answers the check. Every "not this user's live record" is
 // false with no error, and only a store that could not answer is an error.
-// The lookups are the native path's own: the identity the directory's subject
-// is linked to, the account's state, and GetTrustedDeviceByHash, which filters
-// owner, revocation and expiry in one statement.
+// The identity the directory's subject is linked to names the account; the
+// rest is useTrustedDevice, the same use an extension's directory makes.
 func (s *Server) directoryTrusts(ctx context.Context, r *http.Request, req directoryTrustRequest) (bool, error) {
 	q := s.q()
 	ident, err := q.GetSocialIdentity(ctx, social.ProviderAuthentik+":"+req.Sub)
@@ -110,40 +106,7 @@ func (s *Server) directoryTrusts(ctx context.Context, r *http.Request, req direc
 	if err != nil {
 		return false, err
 	}
-	user, err := q.GetUserByID(ctx, ident.UserID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	if user.State != "active" {
-		return false, nil
-	}
-	row, err := q.GetTrustedDeviceByHash(ctx, storegen.GetTrustedDeviceByHashParams{
-		TokenSha256: auth.HashToken(req.Token),
-		UserID:      user.ID,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
 	// The use is recorded before the answer is given: a skip nobody could
-	// audit is not granted. last_seen_at moves; expires_at never does.
-	err = s.st.WithTx(ctx, func(tq *storegen.Queries) error {
-		if err := tq.TouchTrustedDevice(ctx, row.ID); err != nil {
-			return err
-		}
-		e := auditEvent(r, audit.ActionTrustedDeviceUse)
-		e.Actor, e.ActorKind = user.ID, audit.ActorUser
-		e.TargetKind, e.TargetID = "user", user.ID
-		e.Detail = map[string]any{"via": "directory", "device": row.ID.String()}
-		return s.auditW.Write(ctx, tq, e)
-	})
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	// audit is not granted.
+	return s.useTrustedDevice(ctx, r, ident.UserID, req.Token, map[string]any{"via": "directory"})
 }

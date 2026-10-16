@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/blaktron/agentry/internal/auth/oidc"
 )
 
 // The directory's sign-up form carries an optional promo code. These hold
@@ -117,7 +115,7 @@ func TestEnrollmentPromoGrammarMatchesTheCore(t *testing.T) {
 	form := regexp.MustCompile(`^(?:` + m[1] + `)$`)
 	for _, code := range []string{"LAUNCH", "launch-2026", "a1b2", "BY52VFT9PFBP", strings.Repeat("a", 32),
 		"", "abc", "-abcd", "ab cd", "ab_cd", strings.Repeat("a", 33), "Ünicode", "ſale", "a\nb"} {
-		if got, want := form.MatchString(code), oidc.PromoCodeClaim(code) != ""; got != want {
+		if got, want := form.MatchString(code), PromoCodeClaim(code) != ""; got != want {
 			t.Errorf("%q: the form accepts it %v, the core %v", code, got, want)
 		}
 	}

@@ -177,7 +177,7 @@ func (s *Server) directoryRemembers(provider string, id *social.Identity) bool {
 	if s.cfg.Auth.IdPTrustCheckToken == "" || provider != social.ProviderAuthentik {
 		return false
 	}
-	if !id.RememberDevice || !id.MFAAsserted() || id.AuthTime.IsZero() {
+	if !directoryRememberDevice(id.Claims) || !id.MFAAsserted() || id.AuthTime.IsZero() {
 		return false
 	}
 	age := time.Since(id.AuthTime)

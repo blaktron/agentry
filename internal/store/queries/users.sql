@@ -68,6 +68,23 @@ LEFT JOIN identities i ON i.user_id = u.id AND i.provider_kind = 'social'
 WHERE u.platform_staff AND u.state = 'active' AND u.email_verified_at IS NOT NULL
 ORDER BY 2, 3;
 
+-- name: ListPlatformStaff :many
+-- Every account that is platform staff and active, with its handle and its
+-- verified address, lower-cased: what an extension mirrors staff from.
+SELECT u.id, h.handle, lower(u.email)::text AS email
+FROM users u
+JOIN handles h ON h.id = u.id
+WHERE u.platform_staff AND u.state = 'active' AND u.email_verified_at IS NOT NULL
+ORDER BY h.handle;
+
+-- name: ListUserSignInSubjects :many
+-- The subjects the account signs in with at individual providers
+-- ("<provider>:<sub>"), oldest first. An organization's SSO identities are
+-- left out: they belong to the organization's connection.
+SELECT i.subject FROM identities i
+WHERE i.user_id = $1 AND i.provider_kind = 'social' AND i.sso_connection_id IS NULL
+ORDER BY i.created_at, i.id;
+
 -- name: ListStaffOrgMembersNotStaff :many
 -- Active members of the staff organization who are not platform staff: an
 -- address outside its domain or unverified, or an account that is not active.

@@ -66,7 +66,7 @@ func erasureDirectory(t *testing.T, accounts func(at string) []map[string]any, a
 func lastDirectoryErasure(t *testing.T, env *testEnv, userID string) (outcome, lookup string) {
 	t.Helper()
 	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT detail->>'directoryErasure', coalesce(detail->>'directoryLookup', '') FROM audit_events
+		`SELECT detail->>'directoryErasure', coalesce(detail->>'DirectoryLookup', '') FROM audit_events
 		 WHERE action = 'user.directory_erase' AND target_id = $1::uuid ORDER BY occurred_at DESC LIMIT 1`, userID).Scan(&outcome, &lookup); err != nil {
 		t.Fatal(err)
 	}

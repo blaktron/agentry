@@ -7,8 +7,6 @@ package oidc
 import (
 	"context"
 	"fmt"
-	"math"
-	"regexp"
 	"strings"
 	"time"
 
@@ -56,29 +54,16 @@ type Claims struct {
 	// account's handle, never an identifier: OIDC Core §5.7 does not make
 	// it unique or stable, so nothing is looked up by it.
 	PreferredUsername string
-	// RememberDevice is the directory's `agentry_remember_device` claim:
-	// the person ticked "Remember this device for 30 days" on the directory's
-	// code page, in the sign-in this token closes. True only for a JSON true.
-	// It asks for a remembered browser; it proves nothing about a factor,
-	// which is AMR's to say.
-	RememberDevice bool
 	// AuthTime is the `auth_time` claim: when the person last actually
 	// authenticated at the IdP, zero when absent. A token minted silently
 	// against a live IdP session carries the original time, which is how
 	// the registry tells a fresh sign-in from a replayed session.
 	AuthTime time.Time
-	// DirectoryAccountID is the directory's `agentry_directory_id` claim:
-	// the directory's own id for the account signing in, sent by the same
-	// `agentry` scope. It lets the registry read that account without
-	// narrowing by an address the directory does not keep unique.
-	// Zero when absent or not a positive whole number.
-	DirectoryAccountID int64
-	// PromoCode is the directory's `agentry_promo_code` claim:
-	// the promo code typed on its sign-up form, sent by the same `agentry`
-	// scope on every token of that account. Upper-cased and held to the
-	// code grammar; "" when absent, not a string or outside it. What a code
-	// is worth is an extension's to decide, never the core's.
-	PromoCode string
+	// Raw is every claim of the verified ID token, as JSON decoded it, for
+	// a reader of claims this type does not name: a deployment's own IdP
+	// may send claims of its own (an extension reads them through the
+	// sign-in hook). Never nil for a token that verified.
+	Raw map[string]any
 }
 
 // New builds the RP. coreoidc.NewProvider performs discovery and pins the
@@ -159,12 +144,13 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		ACR           string `json:"acr"`
 		Groups        any    `json:"groups"`
 		PreferredUser string `json:"preferred_username"`
-		RememberDev   any    `json:"agentry_remember_device"`
-		DirectoryID   any    `json:"agentry_directory_id"`
-		PromoCode     any    `json:"agentry_promo_code"`
 		AuthTime      int64  `json:"auth_time"`
 	}
 	if err := idToken.Claims(&raw); err != nil {
+		return nil, fmt.Errorf("oidc: decode claims: %w", err)
+	}
+	all := map[string]any{}
+	if err := idToken.Claims(&all); err != nil {
 		return nil, fmt.Errorf("oidc: decode claims: %w", err)
 	}
 	c := &Claims{
@@ -178,16 +164,10 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		// Trimmed only: the handle grammar is the caller's to apply.
 		PreferredUsername: strings.TrimSpace(raw.PreferredUser),
 	}
-	// Strictly the boolean: this claim is half of what mints a credential,
-	// so nothing that merely looks like yes counts.
-	if v, ok := raw.RememberDev.(bool); ok && v {
-		c.RememberDevice = true
-	}
 	if raw.AuthTime > 0 {
 		c.AuthTime = time.Unix(raw.AuthTime, 0)
 	}
-	c.DirectoryAccountID = asAccountID(raw.DirectoryID)
-	c.PromoCode = PromoCodeClaim(raw.PromoCode)
+	c.Raw = all
 	if c.Subject == "" {
 		c.Subject = raw.Sub
 	}
@@ -195,17 +175,6 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 		return nil, fmt.Errorf("oidc: id_token has no subject")
 	}
 	return c, nil
-}
-
-// asAccountID reads a directory account id: a JSON number that is a
-// positive whole number a float64 holds exactly. Anything else is 0, which
-// the registry treats as "not sent".
-func asAccountID(v any) int64 {
-	f, ok := v.(float64)
-	if !ok || f < 1 || f > 1<<53 || f != math.Trunc(f) {
-		return 0
-	}
-	return int64(f)
 }
 
 // asStrings reads amr as the JSON array RFC 8176 specifies, tolerating a
@@ -263,24 +232,4 @@ func (rp *RP) Describe() Description {
 	}
 	_ = rp.provider.Claims(&claims)
 	return Description{Issuer: rp.cfg.Issuer, AuthURL: ep.AuthURL, TokenURL: ep.TokenURL, UserInfoURL: claims.UserInfo, JWKSURL: claims.JWKS}
-}
-
-// promoCodeRE is a promo code's grammar, the billing extension's own, in
-// either case: an ASCII letter or
-// digit, then three to thirty-one ASCII letters, digits or hyphens. Read
-// before upper-casing, because strings.ToUpper maps ſ to S and ı to I.
-var promoCodeRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{3,31}$`)
-
-// PromoCodeClaim reads an `agentry_promo_code` claim: a string inside the
-// grammar once trimmed and upper-cased, else "".
-func PromoCodeClaim(v any) string {
-	s, ok := v.(string)
-	if !ok {
-		return ""
-	}
-	code := strings.TrimSpace(s)
-	if !promoCodeRE.MatchString(code) {
-		return ""
-	}
-	return strings.ToUpper(code)
 }

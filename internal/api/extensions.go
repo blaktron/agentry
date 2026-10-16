@@ -31,14 +31,21 @@ import (
 // Event is one committed event the core fans out to extensions: the org
 // webhook kinds (version.published, agent.quarantined, org.member_added,
 // org.policy_updated, …) carrying the owning org, plus user.registered,
-// user.data_cleared and org.created. Payload is the same map the webhook
-// carries.
+// user.data_cleared, account.erased, staff.changed and org.created.
+// Payload is the same map the webhook carries.
 type Event struct {
 	Kind    string
 	OrgID   uuid.UUID // uuid.Nil for a personal namespace or a user event
 	AgentID uuid.UUID // set for agent transitions
-	UserID  uuid.UUID // set for user.registered and user.data_cleared
+	UserID  uuid.UUID // set for user.registered, user.data_cleared and account.erased
 	Payload map[string]any
+	// Identities and Email are set for account.erased: the subjects the
+	// account signed in with at individual providers ("<provider>:<sub>"),
+	// oldest first, and the address it held. The account holds neither
+	// address nor name by the time the event is heard, so this is the only
+	// place an extension can learn them from.
+	Identities []string
+	Email      string
 }
 
 var reExtensionName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)

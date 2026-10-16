@@ -17,10 +17,11 @@ import (
 	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/pkg/handle"
 )
 
 // Handle/name grammar shared with the DDL.
-var reHandle = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$`)
+var reHandle = regexp.MustCompile(handle.Grammar)
 
 const emailVerificationTTL = 48 * time.Hour
 
