@@ -737,7 +737,7 @@ func TestKnowledgeSealingKeyFromEnv(t *testing.T) {
 }
 
 // TestSignInOIDCIsOneProvider: the sign-in OpenID provider is auth.oidc,
-// "oidc" unless it says otherwise, or the older social.authentik keys read
+// "oidc" unless it says otherwise, or the social.authentik keys read
 // as the same provider under "authentik", the prefix their accounts are
 // linked by. The directory's issuer comes from it only under that id.
 func TestSignInOIDCIsOneProvider(t *testing.T) {

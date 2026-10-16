@@ -10,7 +10,7 @@ import (
 	"slices"
 )
 
-// Grammar is a handle's form: one to forty lower-case ASCII letters,
+// Grammar is a handle's form: one to thirty-nine lower-case ASCII letters,
 // digits and hyphens, starting and ending with a letter or a digit.
 const Grammar = `^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$`
 

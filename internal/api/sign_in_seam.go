@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,22 +36,32 @@ type SignIn struct {
 	// reads that IdP's own claims here, and believes them only from that
 	// provider.
 	Claims map[string]any
-	// AMR and AuthTime are the token's `amr` and `auth_time`, the evidence
-	// MintRememberedBrowser asks for.
+	// AMR and AuthTime are the token's `amr` and `auth_time`.
 	AMR      []string
 	AuthTime time.Time
-	// Request is the callback's request, for MintRememberedBrowser and the
-	// extension's own audit; its body is spent.
+	// Request is the callback's request, for the extension's own audit; its
+	// body is spent.
 	Request *http.Request
 	// SetCookie sets a cookie on the response that gives the session.
 	SetCookie func(*http.Cookie)
+	// RememberBrowser records a remembered browser for this sign-in's
+	// account from this sign-in's own token, and returns the token to set
+	// as its cookie and its lifetime. The evidence is the verified ID
+	// token's, never the caller's: it is ErrNoSecondFactor unless `amr`
+	// names a second factor and `auth_time` is minutes old. detail rides
+	// the user.trusted_device_add audit row.
+	RememberBrowser func(detail map[string]any) (token string, ttl time.Duration, err error)
 }
 
 // AddSignInHook registers a listener for every sign-in through an
-// individual provider, called once the account is resolved and active and
-// before the session is issued, so a cookie it sets rides the same
-// response. It runs synchronously in the callback and cannot refuse the
-// sign-in; a slow hook slows it. A panic is recovered and logged.
+// individual provider that the callback gives a session, called once the
+// account is resolved and active and before the session is issued, so a
+// cookie it sets rides the same response. A sign-in that must still answer
+// the account's own TOTP code is given no session there and is not heard.
+// The hook runs synchronously in the callback and cannot refuse the
+// sign-in; a slow hook slows it. Each hook gets its own copy of the claims,
+// so none changes what the core or another hook reads. A panic is recovered
+// and logged.
 func (s *Server) AddSignInHook(h func(ctx context.Context, in SignIn)) {
 	s.signInHooks = append(s.signInHooks, h)
 }
@@ -62,33 +74,33 @@ func (s *Server) fireSignIn(ctx context.Context, in SignIn) {
 					s.log.ErrorContext(ctx, "sign-in hook panicked", "provider", in.Provider, "panic", rec)
 				}
 			}()
-			h(ctx, in)
+			h(ctx, signInCopy(in))
 		}()
 	}
 }
 
-// rememberWindow is how recent a sign-in must be for its token to earn a
-// remembered browser: the seconds between answering the code and arriving
-// at the callback, with room for clock skew. A token an IdP minted silently
-// against a live session of its own repeats the original `auth_time`, so
-// without this every sign-in against one IdP session would mint a fresh
-// lifetime, and trust would renew itself.
-const rememberWindow = directoryRememberWindow
+// signInCopy is in with its claims and amr copied, one level deep: what
+// the core reads of them is top-level values.
+func signInCopy(in SignIn) SignIn {
+	in.Claims = maps.Clone(in.Claims)
+	in.AMR = slices.Clone(in.AMR)
+	return in
+}
 
-// ErrNoSecondFactor is MintRememberedBrowser's refusal of a sign-in whose
+// ErrNoSecondFactor is the remembered browser's refusal of a sign-in whose
 // evidence does not show a second factor answered just now.
 var ErrNoSecondFactor = errors.New("api: a remembered browser needs a sign-in that answered a second factor just now")
 
-// MintRememberedBrowser records a remembered browser for userID and returns
-// the token to set as its cookie and the record's lifetime
-// (pkg/extension.Deps.RememberedBrowsers). The core's rules hold whoever
-// asks: the evidence must name a second factor (amr) from a sign-in no
-// older than a few minutes (authTime), or it is ErrNoSecondFactor; the
-// account must be active; only the token's SHA-256 is stored, bound to this
-// one account; the lifetime is auth.trustedDeviceTTL and absolute. The
-// record and its user.trusted_device_add audit row commit together, with
-// detail on the row. The token leaves the server here and nowhere else.
-func (s *Server) MintRememberedBrowser(r *http.Request, userID uuid.UUID, amr []string, authTime time.Time, detail map[string]any) (string, time.Duration, error) {
+// mintRememberedBrowser records a remembered browser for userID and returns
+// the token to set as its cookie and the record's lifetime. It is reached
+// only through SignIn.RememberBrowser, with the verified token's evidence.
+// The evidence must name a second factor (amr) from a sign-in no older than
+// a few minutes (authTime), or it is ErrNoSecondFactor; the account must be
+// active; only the token's SHA-256 is stored, bound to this one account; the
+// lifetime is auth.trustedDeviceTTL and absolute. The record and its
+// user.trusted_device_add audit row commit together, with detail on the
+// row. The token leaves the server here and nowhere else.
+func (s *Server) mintRememberedBrowser(r *http.Request, userID uuid.UUID, amr []string, authTime time.Time, detail map[string]any) (string, time.Duration, error) {
 	if s.st == nil {
 		return "", 0, errors.New("api: no database to record a remembered browser in")
 	}

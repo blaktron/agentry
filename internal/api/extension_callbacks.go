@@ -23,9 +23,9 @@ import (
 //     the right secret or not;
 //   - with no secret configured the whole mount answers 404, as though it
 //     did not exist;
-//   - every other request must present the secret as a bearer token,
-//     compared in constant time, or is answered 401;
-//   - the rate class the extension declared is applied before its handler.
+//   - the rate class the extension declared is spent, wrong secret or not;
+//   - every request must present the secret as a bearer token, compared in
+//     constant time, or is answered 401.
 
 // extensionCallbackPrefix is where every extension's callback mount sits.
 const extensionCallbackPrefix = "/internal/x/"
@@ -74,8 +74,8 @@ func (s *Server) RegisterExtensionCallbacks(name string, cb ExtensionCallbacks) 
 	if cb.Routes == nil {
 		panic("api: extension " + name + ": a callback mount needs routes")
 	}
-	if cb.Class != "anon" && cb.Class != RateNone {
-		panic("api: extension " + name + ": a callback mount draws from \"anon\" or \"" + RateNone + "\", not " + cb.Class)
+	if cb.Class != RateAnon && cb.Class != RateNone {
+		panic("api: extension " + name + ": a callback mount draws from \"" + RateAnon + "\" or \"" + RateNone + "\", not " + cb.Class)
 	}
 	if strings.TrimSpace(cb.Why) == "" {
 		panic("api: extension " + name + ": a callback mount says what bounds its use")
@@ -109,19 +109,21 @@ func (s *Server) extensionCallbackGate(cb ExtensionCallbacks, next http.Handler)
 			http.NotFound(w, r)
 			return
 		}
+		// The class is spent before the secret is read, so it bounds the
+		// guesses at the secret as well as the calls that present it.
+		if cb.Class == RateAnon {
+			res := s.limits.Allow(RateAnon, clientIP(r), s.classes.anon, s.classes.anonBurst)
+			writeRateLimitHeaders(w, res)
+			if !res.OK {
+				s.rateLimited(r, RateAnon)
+				problemTooMany(w, r, "This caller has used up its rate limit. Wait for the Retry-After interval.")
+				return
+			}
+		}
 		given, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !ok || subtle.ConstantTimeCompare([]byte(given), []byte(cb.Secret)) != 1 {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
-		}
-		if cb.Class == "anon" {
-			res := s.limits.Allow("anon", clientIP(r), s.classes.anon, s.classes.anonBurst)
-			writeRateLimitHeaders(w, res)
-			if !res.OK {
-				s.rateLimited(r, "anon")
-				problemTooMany(w, r, "This caller has used up its rate limit. Wait for the Retry-After interval.")
-				return
-			}
 		}
 		next.ServeHTTP(w, r)
 	})

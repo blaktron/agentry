@@ -265,5 +265,6 @@ func (s *Server) eraseSuperseded(r *http.Request, userID uuid.UUID, email, provi
 		return fmt.Errorf("erase the superseded account: %w", err)
 	}
 	s.knowledge.FinishErasure(ctx, knowledge.User(userID), erased.knowledgeKeys)
+	s.fireAccountErased(ctx, userID, email)
 	return nil
 }

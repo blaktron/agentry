@@ -38,14 +38,14 @@ auth:
                           # a session.
   cookieSecure: false  # true outside local dev
   # true hands credentials to an external sign-in provider — native
-  # register/password/TOTP endpoints answer 410; configure auth.oidc (or the
-  # older social.authentik).
+  # register/password/TOTP endpoints answer 410; configure auth.oidc or
+  # social.authentik.
   externalOnly: false
   # Sign in with your OpenID provider: any OIDC issuer. The redirect URI is
   # {baseURL}/api/v1/auth/oidc/<id>/callback. Leave id at oidc unless the
-  # provider is the deployment's own directory, configured before as
-  # social.authentik, whose accounts are linked as authentik (keep one of the
-  # two configured, never both).
+  # provider is the deployment's own directory, whose accounts are linked as
+  # authentik, as social.authentik links them (configure one of the two,
+  # never both).
   oidc:
     id: oidc
     issuer: ""

@@ -1512,7 +1512,8 @@
             "TestWithNoDirectoryTheRegistryStandsAlone",
             "TestSignInHookHearsTheClaimsAndMayRememberTheBrowser",
             "TestStaffChangedIsHeardAndTheSetIsRead",
-            "TestAccountErasedCarriesTheIdentitiesWithoutAnyDirectory"
+            "TestAccountErasedCarriesTheIdentitiesWithoutAnyDirectory",
+            "TestAnExtensionsDirectoryErasesAsTheBuiltInOneDoes"
           ],
           "fuzz": [],
           "benchmarks": [],

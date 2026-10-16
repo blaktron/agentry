@@ -151,7 +151,7 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 	}
 	all := map[string]any{}
 	if err := idToken.Claims(&all); err != nil {
-		return nil, fmt.Errorf("oidc: decode claims: %w", err)
+		return nil, fmt.Errorf("oidc: decode the claim set: %w", err)
 	}
 	c := &Claims{
 		Subject:       idToken.Subject,

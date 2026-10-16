@@ -395,6 +395,14 @@ services:
       AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID: ${AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID:-}
       AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET: ${AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET:-}
       AGENTRY_SOCIAL_AUTHENTIK_ISSUER: ${AGENTRY_SOCIAL_AUTHENTIK_ISSUER:-}
+      # Sign in with any OpenID provider instead (docs/self-hosting.md); set
+      # these or the AGENTRY_SOCIAL_AUTHENTIK_* three, not both.
+      AGENTRY_AUTH_OIDC_ID: ${AGENTRY_AUTH_OIDC_ID:-}
+      AGENTRY_AUTH_OIDC_ISSUER: ${AGENTRY_AUTH_OIDC_ISSUER:-}
+      AGENTRY_AUTH_OIDC_CLIENT_ID: ${AGENTRY_AUTH_OIDC_CLIENT_ID:-}
+      AGENTRY_AUTH_OIDC_CLIENT_SECRET: ${AGENTRY_AUTH_OIDC_CLIENT_SECRET:-}
+      AGENTRY_AUTH_OIDC_SCOPES: ${AGENTRY_AUTH_OIDC_SCOPES:-}
+      AGENTRY_AUTH_OIDC_DISPLAY_NAME: ${AGENTRY_AUTH_OIDC_DISPLAY_NAME:-}
       # Account erasure reaches into the directory too: the
       # server deletes the sign-in account through authentik's API. The
       # bootstrap token works; a dedicated token with rights over users is

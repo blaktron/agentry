@@ -423,6 +423,9 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		UserID: userID, Provider: name, Subject: id.NamespacedSubject,
 		Claims: id.Claims, AMR: id.AMR, AuthTime: id.AuthTime,
 		Request: r, SetCookie: func(c *http.Cookie) { http.SetCookie(w, c) },
+		RememberBrowser: func(detail map[string]any) (string, time.Duration, error) {
+			return s.mintRememberedBrowser(r, userID, id.AMR, id.AuthTime, detail)
+		},
 	})
 	s.issueSocialSession(w, r, user, name, st.Next, id.AMR, s.directoryRemembers(name, id))
 }

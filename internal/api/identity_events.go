@@ -17,9 +17,10 @@ import (
 // staff) and must follow the registry's word.
 
 const (
-	// EventAccountErased is heard once the erasure of POST /user/delete has
-	// committed, with the identities the account signed in with and the
-	// address it held.
+	// EventAccountErased is heard once an account's erasure has committed
+	// (POST /user/delete, or an unconfirmed account superseded by a verified
+	// sign-in), with the identities it signed in with and the address it
+	// held.
 	EventAccountErased = "account.erased"
 	// EventStaffChanged is heard a few seconds after a sync changed someone's
 	// platform_staff flag. It names nobody: the reader reads the whole set

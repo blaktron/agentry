@@ -62,7 +62,7 @@ func TestOIDCProviderSignsPeopleIn(t *testing.T) {
 }
 
 // TestExistingDirectoryIdentitiesKeepTheirAccounts: every account the
-// directory linked as "authentik:<sub>" under the older social.authentik
+// directory linked as "authentik:<sub>" under the social.authentik
 // keys is the same account when the same provider is configured as the
 // generic one with the id "authentik": no account is re-created or
 // re-linked.
@@ -288,20 +288,26 @@ func TestWithNoDirectoryTheRegistryStandsAlone(t *testing.T) {
 func TestSignInHookHearsTheClaimsAndMayRememberTheBrowser(t *testing.T) {
 	var srv *api.Server
 	var heard []api.SignIn
+	var firstSaw, secondSaw any
 	env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) {
 		srv = s
 		s.AddSignInHook(func(_ context.Context, in api.SignIn) {
 			heard = append(heard, in)
+			firstSaw = in.Claims["x_org"]
 			if in.Claims["x_remember"] != true {
 				return
 			}
-			tok, ttl, err := s.MintRememberedBrowser(in.Request, in.UserID, in.AMR, in.AuthTime, map[string]any{"via": "test-directory"})
+			tok, ttl, err := in.RememberBrowser(map[string]any{"via": "test-directory"})
 			if err != nil {
 				t.Errorf("mint: %v", err)
 				return
 			}
 			in.SetCookie(&http.Cookie{Name: "x_remembered", Value: tok, MaxAge: int(ttl.Seconds())})
+			// A hook's changes to the claims are its own.
+			in.Claims["agentry_remember_device"] = true
+			in.Claims["x_org"] = "changed"
 		})
+		s.AddSignInHook(func(_ context.Context, in api.SignIn) { secondSaw = in.Claims["x_org"] })
 	})
 	h := "hooked" + env.sfx
 	person := testidp.Person{
@@ -312,9 +318,12 @@ func TestSignInHookHearsTheClaimsAndMayRememberTheBrowser(t *testing.T) {
 	if in.status != http.StatusOK || len(heard) != 1 {
 		t.Fatalf("sign-in: %d, %d hooks heard", in.status, len(heard))
 	}
+	if secondSaw != "acme" {
+		t.Fatalf("the second hook read x_org %v: the first hook's change reached it", secondSaw)
+	}
 	got := heard[0]
 	if got.UserID.String() != in.userID || got.Provider != "oidc" || got.Subject != "oidc:sub-"+h ||
-		got.Claims["x_org"] != "acme" || len(got.AMR) != 2 || got.AuthTime.IsZero() {
+		firstSaw != "acme" || len(got.AMR) != 2 || got.AuthTime.IsZero() {
 		t.Fatalf("the hook heard %+v", got)
 	}
 	var token string
@@ -442,5 +451,49 @@ func TestAccountErasedCarriesTheIdentitiesWithoutAnyDirectory(t *testing.T) {
 	raw, _ := json.Marshal(heard[0].Identities)
 	if heard[0].UserID.String() != uid || heard[0].Email != c.name+"@example.test" || string(raw) != `["oidc:sub-`+c.name+`"]` {
 		t.Fatalf("account.erased = %+v", heard[0])
+	}
+}
+
+// TestAnExtensionsDirectoryErasesAsTheBuiltInOneDoes: the same erasure
+// through the built-in directory and through an extension's reports the
+// same outcome, on the response and in the audit row, and each deletes the
+// one account at the address.
+func TestAnExtensionsDirectoryErasesAsTheBuiltInOneDoes(t *testing.T) {
+	type result struct{ header, outcome, lookup string }
+	erase := func(t *testing.T, builtIn bool) result {
+		var at string
+		url, deleted, _ := erasureDirectory(t, func(a string) []map[string]any {
+			return []map[string]any{{"pk": 41, "uid": "uid-41", "email": a, "type": "internal", "is_superuser": false}}
+		}, &at)
+		dir := &fakeDirectory{}
+		env, idp := newOIDCTestEnv(t, func(c *config.Config) {
+			if builtIn {
+				c.Auth.IdPAdminURL = url
+				c.Auth.IdPAdminToken = "idp-admin-token"
+			}
+		}, func(s *api.Server) {
+			if !builtIn {
+				s.SetDirectory(dir)
+			}
+		})
+		c := env.mintAccount(t, idp, "same-erasure")
+		at = c.name + "@example.test"
+		dir.mu.Lock()
+		dir.email = at
+		dir.mu.Unlock()
+		uid := env.selfID(c)
+		r := result{header: eraseAndReadOutcome(t, env, c)}
+		r.outcome, r.lookup = lastDirectoryErasure(t, env, uid)
+		if builtIn && len(*deleted) != 1 {
+			t.Fatalf("the built-in directory deleted %v", *deleted)
+		}
+		if !builtIn && len(dir.erased) != 1 {
+			t.Fatalf("the extension's directory erased %v", dir.erased)
+		}
+		return r
+	}
+	builtIn, ext := erase(t, true), erase(t, false)
+	if builtIn != ext || builtIn.header != "deleted" || builtIn.lookup != "address" {
+		t.Fatalf("built-in %+v, extension %+v: want both deleted by address", builtIn, ext)
 	}
 }
