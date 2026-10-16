@@ -27,10 +27,9 @@
 # be bound the same way (docs/self-hosting.md, "Cloudflare Tunnel").
 
 # Logs. Every service keeps Docker's json-file driver, rotated (three files
-# of 10 MB per container), so a stack without the log stack does not keep
-# logs forever; `docker logs` is the reader. The log stack (agentry-logging)
-# replaces this block per service with the syslog driver from its own
-# overlay — docs/self-hosting.md, "Logs".
+# of 10 MB per container), so logs never grow without bound; `docker logs`
+# is the reader. An override file that sets `logging` on a service ships
+# that service's lines elsewhere instead — docs/self-hosting.md, "Logs".
 x-logging: &rotated
   driver: json-file
   options:
@@ -387,8 +386,8 @@ services:
       AGENTRY_PROXY_REQUEST_ID: ${AGENTRY_PROXY_REQUEST_ID:-false}
       # The log contract's knobs (docs/logging.md): the minimum level, and
       # the audit archive stream — `log` mirrors every audit event as an
-      # event=audit.<action> line beside the row, which is what the log
-      # stack's agentry-audit index is fed from; `file` and `none` as in
+      # event=audit.<action> line beside the row, for a log store to index;
+      # `file` and `none` as in
       # docs/self-hosting.md "Audit archive and retention".
       AGENTRY_LOG_LEVEL: ${AGENTRY_LOG_LEVEL:-info}
       AGENTRY_AUDIT_STREAM_KIND: ${AGENTRY_AUDIT_STREAM_KIND:-none}
@@ -430,8 +429,8 @@ services:
       AGENTRY_STAFF_DOMAIN: ${AGENTRY_STAFF_DOMAIN:-}
       # The directory group the registry keeps equal to its platform staff,
       # written through the admin URL and token above; a
-      # directory application that should admit staff alone (the log
-      # stack's Dashboards) reads it. Empty means no mirror.
+      # directory application that should admit staff alone (an OpenSearch
+      # Dashboards, say) reads it. Empty means no mirror.
       AGENTRY_IDP_STAFF_MIRROR_GROUP: ${AGENTRY_IDP_STAFF_MIRROR_GROUP:-}
       # Retired: these grant nothing and the server warns at
       # start-up while either is set.
