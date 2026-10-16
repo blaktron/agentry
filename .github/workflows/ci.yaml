@@ -9,7 +9,7 @@
 name: ci
 on:
   push:
-    # dev is the integration branch; main is production.
+    # dev is the integration branch; main takes only promotions from it.
     branches: [main, dev]
   pull_request:
   # release-please's release PR is opened with GITHUB_TOKEN, so its
@@ -110,9 +110,8 @@ jobs:
       # not the server.
       # `make check` runs this too; it is called out here so a drift failure
       # names itself in the job log rather than hiding inside a long target.
-      # The hosted site is not part of this repository: nothing of it may come
-      # back — its app, image, brand, terraform, downloads tooling and pages
-      # live elsewhere.
+      # A front end's app, image, brand, terraform, downloads tooling and pages
+      # are not part of this repository: nothing of them may come back.
       - name: site files stay out
         run: |
           set -euo pipefail
