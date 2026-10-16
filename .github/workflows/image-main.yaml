@@ -1,6 +1,6 @@
 # The agentryd image of the current main and dev: every merge publishes
-# ghcr.io/blaktron/agentry/agentryd:<branch> — :main for production, :dev for
-# the integration branch — and :sha-<short>, so the hosted site's and the
+# ghcr.io/blaktron/agentry/agentryd:<branch> — :main for the release line, :dev
+# for the integration branch — and :sha-<short>, so a front end's and the
 # enterprise build's CI can boot a real API without building Go, against the
 # branch they are on. Releases keep publishing the tagged images from release.yaml; these
 # are the moving tags in between.
