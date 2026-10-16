@@ -420,9 +420,10 @@ done, and writes a draft. It never submits anything.
   through the knowledge tools, the repair turn included, on this machine and
   in Agentry. It holds:
     - how a QuickAgent run works;
-    - what a declared MCP server meets in the runner: musl images, no install
-      scripts, wheels only, a start with no arguments, stdio only, none of
-      the run's files, and only port 443 to its declared hosts;
+    - what a declared MCP server meets in the runner: a musl Node image and a
+      glibc Python image, no install scripts, wheels only, a start with no
+      arguments, stdio only, none of the run's files, and only port 443 to
+      its declared hosts;
     - a check to make before pinning a server;
     - two lists of servers, *Runs here* and *Does not run here*, each entry
       saying what a survey saw, on which runtime and when;
