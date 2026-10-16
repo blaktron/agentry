@@ -470,8 +470,23 @@ func PrincipalFromContext(ctx context.Context) *Principal { return api.Principal
 // its activation link or an invitation at an organization's domain; an
 // account created verified hears only user.registered, with
 // emailVerified true), user.data_cleared (clear what the extension
-// holds for that user) and org.created.
+// holds for that user), account.erased, staff.changed and org.created.
 type Event = api.Event
+
+// The identity events.
+const (
+	// EventAccountErased is heard once an account's erasure has committed,
+	// with UserID, the Identities it signed in with and the Email it held:
+	// what an extension that keeps a copy of the person elsewhere (a
+	// directory's account) needs to erase it there. It is best-effort like
+	// every hook, so an extension that must not miss one enqueues a Job
+	// from it and retries there.
+	EventAccountErased = api.EventAccountErased
+	// EventStaffChanged is heard a few seconds after the registry changed
+	// someone's platform staff standing. It names nobody: read the whole
+	// set (Deps.Staff), which also catches up on a change missed.
+	EventStaffChanged = api.EventStaffChanged
+)
 
 // Hooks are called after the core has committed the change; they are
 // best-effort and must not block — an extension that needs durability
@@ -573,6 +588,13 @@ type Deps struct {
 	// anything a caller chooses, because every distinct value is a series
 	// kept for the life of the process.
 	Meter metric.Meter
+	// Staff reads platform staff. nil when the server runs without a
+	// database.
+	Staff Staff
+	// RememberedBrowsers mints and checks remembered browsers under the
+	// core's rules, audited under the extension's name. nil when the
+	// server runs without a database.
+	RememberedBrowsers RememberedBrowsers
 	// BaseURL is the deployment's public origin, the address the core's
 	// own links are built on (config baseURL, or AGENTRY_BASE_URL over
 	// it), without a trailing slash: for an extension that must name an
@@ -826,6 +848,108 @@ const (
 	ActorPAT    = audit.ActorPAT
 	ActorSystem = audit.ActorSystem
 )
+
+// ManagesDirectory is the optional interface for an extension that is the
+// deployment's directory: the service that holds people's sign-in
+// accounts. Its Directory replaces the built-in one for everything the
+// registry asks of a directory (api.Directory): erasure and its retries,
+// the authenticators on the settings page, the superseded-account check,
+// the staff mirror. The rules stay the core's, the records the
+// directory's. One extension at most; a nil Directory leaves the built-in
+// one in place.
+type ManagesDirectory interface {
+	Directory() Directory
+}
+
+// Directory and the types it speaks are the core's directory port.
+type (
+	Directory            = api.Directory
+	DirectoryLink        = api.DirectoryLink
+	DirectoryLookup      = api.DirectoryLookup
+	DirectoryDevice      = api.DirectoryDevice
+	DirectorySignInFacts = api.DirectorySignInFacts
+	DirectorySource      = api.DirectorySource
+	DirectoryAccount     = api.DirectoryAccount
+)
+
+// The rules a directory lookup ends by; the last three left an account the
+// person may hold in place, which erasure reports as unresolved.
+const (
+	DirectoryLookupByID          = api.DirectoryLookupByID
+	DirectoryLookupByUID         = api.DirectoryLookupByUID
+	DirectoryLookupByAddress     = api.DirectoryLookupByAddress
+	DirectoryLookupAddressShared = api.DirectoryLookupAddressShared
+	DirectoryLookupIDMismatch    = api.DirectoryLookupIDMismatch
+	DirectoryLookupSuperuser     = api.DirectoryLookupSuperuser
+)
+
+// ReceivesCallbacks is the optional interface for an extension that serves
+// calls from a service of its own, such as its directory's sign-in flow
+// asking whether a browser is remembered. They are mounted under
+// /internal/x/<name>/, outside /api/, where no edge shipped with the
+// registry routes, and the core holds the gate (api.ExtensionCallbacks):
+// the secret as a bearer token, 404 to a request that came through a
+// proxy or while the secret is unset, the declared rate class. A handler
+// there has no Principal: its caller is infrastructure, not a person.
+type ReceivesCallbacks interface {
+	Callbacks() Callbacks
+}
+
+// Callbacks is an extension's callback mount.
+type Callbacks = api.ExtensionCallbacks
+
+// The rate classes a callback mount may draw from: none, for a caller that
+// speaks for everyone signing in, or the anonymous bucket per address.
+const (
+	CallbackRateNone = api.RateNone
+	CallbackRateAnon = api.RateAnon
+)
+
+// HearsSignIn is the optional interface for an extension that hears every
+// sign-in through an individual provider that the callback gives a session,
+// with every claim of the ID token, once the account is resolved and
+// before the session is issued: a cookie it sets rides the session's
+// response, and SignIn.RememberBrowser mints a remembered browser from
+// this sign-in's own evidence. It cannot refuse the sign-in, and it runs
+// in the callback, so it is quick.
+type HearsSignIn interface {
+	SignedIn(ctx context.Context, in SignIn)
+}
+
+// SignIn is a sign-in as HearsSignIn hears it.
+type SignIn = api.SignIn
+
+// Staff is the read side of platform staff, which the registry alone
+// decides (the staff organization's rule): for an extension that mirrors
+// it somewhere else, on EventStaffChanged and on its own period.
+type Staff interface {
+	// Members lists every active account that is platform staff with a
+	// verified address, by handle.
+	Members(ctx context.Context) ([]StaffMember, error)
+}
+
+// StaffMember is one member of platform staff: account, handle, verified
+// address (lower-cased).
+type StaffMember = api.StaffMember
+
+// RememberedBrowsers is the core's remembered-browser credential as an
+// extension may use it: a browser that answered the second factor at its
+// directory may skip it there next time. One is minted only at a sign-in,
+// by SignIn.RememberBrowser, from the verified token's own evidence (`amr`
+// naming a second factor, `auth_time` minutes old), so no extension can
+// mint one for an account on its own word. The core keeps the rules:
+// stored only as its SHA-256, bound to one active account, an absolute
+// lifetime, every use audited before it is granted.
+type RememberedBrowsers interface {
+	// Use reports whether token is a live remembered browser of userID's,
+	// recording the use first. An error means the store could not answer:
+	// treat it as no.
+	Use(r *http.Request, userID uuid.UUID, token string) (bool, error)
+}
+
+// ErrNoSecondFactor is SignIn.RememberBrowser's refusal of a sign-in whose
+// token shows no second factor answered just now.
+var ErrNoSecondFactor = api.ErrNoSecondFactor
 
 // Binds is the optional interface for an extension that needs Deps.
 type Binds interface {

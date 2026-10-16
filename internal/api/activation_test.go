@@ -54,16 +54,16 @@ func TestDirectoryAccountGone(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name string
-		link directoryLink
+		link DirectoryLink
 		gone bool
 	}{
-		{"the id answers 404", directoryLink{AccountID: 999, UID: "uid-x"}, true},
-		{"the id holds another account now", directoryLink{AccountID: 12, UID: "uid-old"}, true},
-		{"the id holds it", directoryLink{AccountID: 7, UID: "uid-alice"}, false},
-		{"an inactive account is still there", directoryLink{AccountID: 20, UID: "uid-gone"}, false},
-		{"no id, the uid at the address", directoryLink{UID: "uid-bob", Email: "bob@example.test"}, false},
-		{"no id, the uid nowhere at the address", directoryLink{UID: "uid-old", Email: "bob@example.test"}, true},
-		{"nothing to go on", directoryLink{Email: "bob@example.test"}, false},
+		{"the id answers 404", DirectoryLink{AccountID: 999, UID: "uid-x"}, true},
+		{"the id holds another account now", DirectoryLink{AccountID: 12, UID: "uid-old"}, true},
+		{"the id holds it", DirectoryLink{AccountID: 7, UID: "uid-alice"}, false},
+		{"an inactive account is still there", DirectoryLink{AccountID: 20, UID: "uid-gone"}, false},
+		{"no id, the uid at the address", DirectoryLink{UID: "uid-bob", Email: "bob@example.test"}, false},
+		{"no id, the uid nowhere at the address", DirectoryLink{UID: "uid-old", Email: "bob@example.test"}, true},
+		{"nothing to go on", DirectoryLink{Email: "bob@example.test"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			gone, err := a.AccountGone(ctx, tc.link)

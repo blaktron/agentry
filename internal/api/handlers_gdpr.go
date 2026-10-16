@@ -244,6 +244,11 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		dir = s.scheduleDirectoryErasure(r.Context(), p.UserID, user.Email, derr)
 	}
 
+	// The extensions hear it after the directory's first attempt, so one
+	// that keeps a copy of the account elsewhere acts on an erasure that has
+	// committed.
+	s.fireAccountErased(r.Context(), p.UserID, user.Email)
+
 	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
 	// A header on the 204, not a body: the contract is additive-only.
 	w.Header().Set(directoryErasureHeader, dir)

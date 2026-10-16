@@ -266,6 +266,11 @@ type Auth struct {
 	// itself. Read and warned about like
 	// IdPStaffGroup.
 	IdPStaffDomain string `yaml:"idpStaffDomain"`
+	// OIDC is the deployment's one "sign in with your OpenID provider": any
+	// OpenID Connect issuer the operator registers the registry with. See
+	// OIDCProvider, and SignInOIDC for how the social.authentik keys
+	// name the same provider.
+	OIDC OIDCProvider `yaml:"oidc"`
 	// RequireIdPMFA re-enables the "2FA before public publish" gate
 	// under externalOnly, satisfied by evidence rather than trust: the
 	// account must have signed in at least once with an ID token whose
@@ -462,16 +467,17 @@ type Brand struct {
 // ignores a Domain attribute that is an address or a public suffix, and the
 // cookie would then silently be host-only.
 func (c Config) DirectoryTrustCookieDomain() (string, error) {
-	if !c.Social.Authentik.Configured() || c.Social.Authentik.Issuer == "" {
-		return "", fmt.Errorf("config: auth.idpTrustCheckToken needs the directory configured (social.authentik with its issuer): it is the directory that asks")
+	issuer := c.DirectoryIssuer()
+	if issuer == "" {
+		return "", fmt.Errorf("config: auth.idpTrustCheckToken needs the directory configured (social.authentik, or auth.oidc with id authentik, with its issuer): it is the directory that asks")
 	}
 	registry := hostOf(c.BaseURL)
 	if registry == "" {
 		return "", fmt.Errorf("config: auth.idpTrustCheckToken needs baseURL: the registry sets the cookie on the callback at its public origin, and the directory has to be able to receive it")
 	}
-	directory := hostOf(c.Social.Authentik.Issuer)
+	directory := hostOf(issuer)
 	if directory == "" {
-		return "", fmt.Errorf("config: social.authentik.issuer %q has no host", c.Social.Authentik.Issuer)
+		return "", fmt.Errorf("config: the directory's issuer %q has no host", issuer)
 	}
 	covers := func(parent, host string) bool { return host == parent || strings.HasSuffix(host, "."+parent) }
 	d := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(c.Auth.DirectoryCookieDomain), "."))
@@ -617,6 +623,69 @@ type SocialProvider struct {
 
 // Configured reports whether the provider can be offered.
 func (p SocialProvider) Configured() bool { return p.ClientID != "" && p.ClientSecret != "" }
+
+// The ids the sign-in OIDC provider may have.
+const (
+	// OIDCProviderID is the generic provider's id.
+	OIDCProviderID = "oidc"
+	// DirectoryProviderID is the id of a provider that is the deployment's
+	// own directory: its accounts are linked as "authentik:<sub>".
+	DirectoryProviderID = "authentik"
+)
+
+// OIDCProvider is the sign-in OpenID provider: an issuer with a discovery
+// document, and the client the registry is registered there as. Its
+// redirect URI is <baseURL>/api/v1/auth/oidc/<id>/callback.
+type OIDCProvider struct {
+	// ID names the provider: the segment of its sign-in routes and the
+	// prefix of every identity it links ("<id>:<sub>"). "oidc" by default;
+	// "authentik" for a deployment whose provider is its own directory,
+	// whose accounts are linked under that prefix already. Changing it
+	// on a deployment with accounts unlinks every one of them.
+	ID           string `yaml:"id"`
+	Issuer       string `yaml:"issuer"`
+	ClientID     string `yaml:"clientId"`
+	ClientSecret string `yaml:"clientSecret"`
+	// Scopes are asked for at sign-in; empty asks for openid, email and
+	// profile (and, for the directory, the agentry scope its own claims
+	// come with).
+	Scopes []string `yaml:"scopes"`
+	// DisplayName is what the sign-in page calls it ("Continue with …");
+	// empty names it after the deployment for the directory and "your
+	// OpenID provider" otherwise.
+	DisplayName string `yaml:"displayName"`
+}
+
+// Configured reports whether the provider can be offered.
+func (p OIDCProvider) Configured() bool { return p.ClientID != "" && p.ClientSecret != "" }
+
+// SignInOIDC is the deployment's sign-in OpenID provider, when it has one:
+// auth.oidc as configured, with its id defaulted, or else the
+// social.authentik keys read as that provider under the id "authentik",
+// which every identity they linked carries. The two are never both set
+// (validate refuses it).
+func (c Config) SignInOIDC() (OIDCProvider, bool) {
+	if p := c.Auth.OIDC; p.Configured() {
+		if p.ID == "" {
+			p.ID = OIDCProviderID
+		}
+		return p, true
+	}
+	if a := c.Social.Authentik; a.Configured() {
+		return OIDCProvider{ID: DirectoryProviderID, Issuer: a.Issuer, ClientID: a.ClientID, ClientSecret: a.ClientSecret}, true
+	}
+	return OIDCProvider{}, false
+}
+
+// DirectoryIssuer is the issuer of the sign-in provider when that provider
+// is the deployment's own directory, "" otherwise: where the directory's
+// settings links and the remembered browser's cookie domain come from.
+func (c Config) DirectoryIssuer() string {
+	if p, ok := c.SignInOIDC(); ok && p.ID == DirectoryProviderID {
+		return strings.TrimSpace(p.Issuer)
+	}
+	return ""
+}
 
 // RedTeam configures the scheduled red-team job: corpus
 // rewrites scanned against the S3/S4 bundle, report-only.
@@ -908,6 +977,12 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID", &c.Social.Authentik.ClientID)
 	str("AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET", &c.Social.Authentik.ClientSecret)
 	str("AGENTRY_SOCIAL_AUTHENTIK_ISSUER", &c.Social.Authentik.Issuer)
+	str("AGENTRY_AUTH_OIDC_ID", &c.Auth.OIDC.ID)
+	str("AGENTRY_AUTH_OIDC_ISSUER", &c.Auth.OIDC.Issuer)
+	str("AGENTRY_AUTH_OIDC_CLIENT_ID", &c.Auth.OIDC.ClientID)
+	str("AGENTRY_AUTH_OIDC_CLIENT_SECRET", &c.Auth.OIDC.ClientSecret)
+	list("AGENTRY_AUTH_OIDC_SCOPES", &c.Auth.OIDC.Scopes)
+	str("AGENTRY_AUTH_OIDC_DISPLAY_NAME", &c.Auth.OIDC.DisplayName)
 	str("AGENTRY_IDP_ADMIN_URL", &c.Auth.IdPAdminURL)
 	str("AGENTRY_IDP_ADMIN_TOKEN", &c.Auth.IdPAdminToken)
 	str("AGENTRY_IDP_TRUST_CHECK_TOKEN", &c.Auth.IdPTrustCheckToken)
@@ -1127,6 +1202,9 @@ func (c Config) Validate() error {
 		if g == c.Auth.IdPStaffGroup {
 			return fmt.Errorf("config: auth.idpStaffMirrorGroup must not be the retired auth.idpStaffGroup (%q): that group was a source of staff, the mirror is written by the registry", g)
 		}
+	}
+	if err := c.validateSignInOIDC(); err != nil {
+		return err
 	}
 	if c.Auth.IdPTrustCheckToken != "" {
 		// Remembered browsers on the directory path: refused
@@ -1466,4 +1544,24 @@ func InCIDRs(prefixes []netip.Prefix, addr netip.Addr) bool {
 		}
 	}
 	return false
+}
+
+// validateSignInOIDC refuses a sign-in provider that would be ambiguous or
+// unreachable: named twice (auth.oidc beside social.authentik),
+// under an id its routes do not serve, or configured without an issuer.
+func (c Config) validateSignInOIDC() error {
+	p := c.Auth.OIDC
+	if p.ID != "" && p.ID != OIDCProviderID && p.ID != DirectoryProviderID {
+		return fmt.Errorf("config: auth.oidc.id must be %q or %q, got %q", OIDCProviderID, DirectoryProviderID, p.ID)
+	}
+	if !p.Configured() {
+		return nil
+	}
+	if c.Social.Authentik.Configured() {
+		return fmt.Errorf("config: auth.oidc and social.authentik both name the sign-in provider; keep one (auth.oidc with id %q keeps social.authentik's accounts linked)", DirectoryProviderID)
+	}
+	if strings.TrimSpace(p.Issuer) == "" {
+		return fmt.Errorf("config: auth.oidc needs an issuer: the registry discovers the provider's endpoints from it")
+	}
+	return nil
 }
