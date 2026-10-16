@@ -5230,6 +5230,14 @@
   ],
   "acceptanceAndWorkflowEvidence": [
     {
+      "path": ".github/workflows/branch-model.yaml",
+      "disposition": "retain",
+      "kind": "workflow",
+      "jobs": [
+        "branch-model"
+      ]
+    },
+    {
       "path": ".github/workflows/ci.yaml",
       "disposition": "retain",
       "kind": "workflow",

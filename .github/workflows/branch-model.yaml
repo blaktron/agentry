@@ -1,0 +1,75 @@
+# main takes pull requests only from dev. Every change lands on dev and is
+# checked there, and main receives it by a pull request from dev. The one
+# other pull request main takes is release-please's release PR, which
+# carries only CHANGELOG.md and the release manifest. The `branch-model` job
+# is a required check on both branches, so it reports on every pull request:
+# it succeeds into dev, and into main only when the head is this
+# repository's own dev branch (a fork's branch named dev is refused) or the
+# release PR's branch, opened by github-actions[bot].
+#
+# It runs on pull_request_target, so the workflow file is always the default
+# branch's copy (dev's), whatever the pull request's base, and a pull request
+# cannot edit the check it is judged by. That is also why it may run on a
+# persistent self-hosted runner for a fork's pull request: it checks out
+# nothing, runs no code from the pull request, and its token has no
+# permissions. The branch names are chosen by whoever opens the pull
+# request, so the script reads them from the environment and never has them
+# interpolated into its text. `edited` is among the types because changing a
+# pull request's base branch is an edit, and the check must judge the new
+# base.
+#
+# The release PR is opened with GITHUB_TOKEN, so its pull request events wait
+# for approval. It is gated by dispatching this workflow on its branch, as
+# `ci` is (`gh workflow run branch-model --ref <branch>`); a dispatch on any
+# other branch fails.
+name: branch-model
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  branch-model:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - name: main takes pull requests only from dev
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          REPO: ${{ github.repository }}
+          RELEASE_BRANCH: release-please--branches--main--components--agentry
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            if [ "$REF" = "$RELEASE_BRANCH" ]; then
+              echo "Dispatched on the release PR's branch."
+              exit 0
+            fi
+            echo "::error::Only the release PR's branch, $RELEASE_BRANCH, is gated by a dispatch; this one ran on $REF."
+            exit 1
+          fi
+          if [ "$BASE" != main ]; then
+            echo "Into $BASE: any branch may open it."
+            exit 0
+          fi
+          if [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD" = dev ]; then
+            echo "Into main from dev: a promotion."
+            exit 0
+          fi
+          if [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD" = "$RELEASE_BRANCH" ] && [ "$AUTHOR" = "github-actions[bot]" ]; then
+            echo "Into main from release-please: the release PR."
+            exit 0
+          fi
+          echo "::error::main takes pull requests only from $REPO:dev and the release PR, and this one is from $HEAD_REPO:$HEAD. Open it against dev instead."
+          exit 1
