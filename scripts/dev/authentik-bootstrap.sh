@@ -12,7 +12,7 @@
 # Optional:
 #   AGENTRY_CLIENT_ID   (default agentry-registry)
 #   CURL_FLAGS          e.g. -k while the edge still runs a self-signed cert
-# Optional, the log stack's Dashboards (skipped unless the URL is set):
+# Optional, an OpenSearch Dashboards that signs in here (skipped unless the URL is set):
 #   AGENTRY_DASHBOARDS_URL             e.g. https://dash.<host> — Dashboards' public URL
 #   AGENTRY_IDP_STAFF_MIRROR_GROUP     the group the registry keeps equal to its
 #                                      platform staff (default agentry-staff); give the
@@ -164,7 +164,7 @@ curlx -X PATCH "$API/core/brands/$BRAND_PK/" -d "$(APP_PK="$APP_PK" python3 -c "
 echo "brand $BRAND_PK: default_application=$APP_PK, flow_user_settings=null"
 
 if [ -n "${AGENTRY_DASHBOARDS_URL:-}" ]; then
-  # The log stack's Dashboards signs in here too. Its tokens
+  # An OpenSearch Dashboards signs in here too. Its tokens
   # carry `roles`: ["agentry-reader"] for a member of the staff mirror group,
   # which the registry keeps equal to its platform staff, and nothing else;
   # the application is bound to the group, so nobody else is even given a
@@ -283,7 +283,7 @@ print(json.dumps(p))')
   else
     echo "application already bound to $POLICY_NAME"
   fi
-  echo "== Dashboards issuer (the log stack's OpenID connect URL) =="
+  echo "== Dashboards issuer (the URL Dashboards' OpenID settings take) =="
   echo "$AUTHENTIK_URL/application/o/agentry-dashboards/.well-known/openid-configuration"
   echo "client id and secret: $DASH_SECRET_FILE"
 fi

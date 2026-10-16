@@ -77,8 +77,8 @@ config:
     staffDomain: ""
     # The directory group the registry keeps equal to its platform staff,
     # written through idpAdminURL and secret.idpAdminToken,
-    # for a directory application that admits staff alone (the log stack's
-    # Dashboards). Needs staffOrg and the admin URL and token. Empty: none.
+    # for a directory application that admits staff alone (an OpenSearch
+    # Dashboards, say). Needs staffOrg and the admin URL and token. Empty: none.
     idpStaffMirrorGroup: ""
     # Retired: they grant nothing, and the server warns at
     # start-up while either is set.
