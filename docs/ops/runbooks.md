@@ -5,6 +5,10 @@ then the steps, and ends with the check that proves it worked.
 
 Conventions: `agentryd` is the server binary; `$DB` is the database URL;
 `psql "$DB"` assumes the app role. Anything destructive says so in bold.
+"The status page" is where a deployment tells its users about an outage, on a
+host other than its own: for the hosted service it is
+[status.secureagentry.net](https://status.secureagentry.net); a self-hosted
+deployment names its own.
 
 ---
 
