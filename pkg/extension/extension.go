@@ -595,6 +595,13 @@ type Deps struct {
 	// core's rules, audited under the extension's name. nil when the
 	// server runs without a database.
 	RememberedBrowsers RememberedBrowsers
+	// Sealer seals and opens small values under a key derived from the
+	// server's sealing key (auth.sealingKey) for this extension alone
+	// (authenticated encryption), for an extension that must keep a
+	// personal value at rest in a row, as a queued erasure keeps the
+	// address it erases. It opens none of the server's own sealed values
+	// and none of another extension's. Never nil.
+	Sealer Sealer
 	// BaseURL is the deployment's public origin, the address the core's
 	// own links are built on (config baseURL, or AGENTRY_BASE_URL over
 	// it), without a trailing slash: for an extension that must name an
@@ -856,7 +863,11 @@ const (
 // the authenticators on the settings page, the superseded-account check,
 // the staff mirror. The rules stay the core's, the records the
 // directory's. One extension at most; a nil Directory leaves the built-in
-// one in place.
+// one in place. A Directory set this way takes the directory's whole path:
+// the core then reads none of the directory's own claims at sign-in, mints
+// no remembered browser for it, answers its built-in checks 404 and keeps
+// no staff mirror, which the extension does through HearsSignIn,
+// ReceivesCallbacks and EventStaffChanged.
 type ManagesDirectory interface {
 	Directory() Directory
 }
@@ -946,6 +957,33 @@ type RememberedBrowsers interface {
 	// treat it as no.
 	Use(r *http.Request, userID uuid.UUID, token string) (bool, error)
 }
+
+// Sealer is the server's sealer as an extension uses it. Open refuses a
+// value sealed under another key or changed since it was sealed.
+type Sealer interface {
+	Seal(plaintext []byte) ([]byte, error)
+	Open(sealed []byte) ([]byte, error)
+}
+
+// DirectoryErasure is the optional interface for an extension's Directory
+// that carries out the directory half of an erasure itself, retries
+// included (api.DirectoryErasure): the core calls EraseErased once after
+// the registry's erasure commits, in place of its own attempt and retry
+// job, and reports the outcome it returns on the erasure's response.
+type DirectoryErasure = api.DirectoryErasure
+
+// ErasedAccount is what EraseErased is told of the erased account.
+type ErasedAccount = api.ErasedAccount
+
+// The outcomes EraseErased may return; any other is left off the response.
+const (
+	DirectoryErasureDeleted       = api.DirectoryErasureDeleted
+	DirectoryErasureNotFound      = api.DirectoryErasureNotFound
+	DirectoryErasureUnresolved    = api.DirectoryErasureUnresolved
+	DirectoryErasureNotConfigured = api.DirectoryErasureNotConfigured
+	DirectoryErasureFailed        = api.DirectoryErasureFailed
+	DirectoryErasurePending       = api.DirectoryErasurePending
+)
 
 // ErrNoSecondFactor is SignIn.RememberBrowser's refusal of a sign-in whose
 // token shows no second factor answered just now.

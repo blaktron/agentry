@@ -574,6 +574,16 @@ func (w serverWebhooks) Deliver(ctx context.Context, orgID, endpointID uuid.UUID
 	return w.srv.DeliverWebhook(ctx, orgID, endpointID, event, data)
 }
 
+// sealerOf is the extension's own sealer. A key that cannot be derived is
+// a broken build, found at start-up.
+func sealerOf(srv *api.Server, name string) Sealer {
+	s, err := srv.ExtensionSealer(name)
+	if err != nil {
+		panic("extension " + name + ": " + err.Error())
+	}
+	return s
+}
+
 // staffOf adapts the server's staff read to Staff: nil without a
 // database, the way Deps.DB is.
 func staffOf(srv *api.Server, pool *pgxpool.Pool) Staff {
@@ -890,7 +900,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
-				Staff: staffOf(srv, pool), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name())})
+				Staff: staffOf(srv, pool), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name()), Sealer: sealerOf(srv, e.Name())})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {

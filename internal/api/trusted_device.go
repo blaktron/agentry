@@ -162,7 +162,9 @@ const rememberWindow = 5 * time.Minute
 // directoryRemembers reports whether this directory sign-in earned a
 // remembered browser. Everything must hold:
 //
-//   - the directory path is on (auth.idpTrustCheckToken is set);
+//   - the directory path is on (auth.idpTrustCheckToken is set) and is the
+//     core's own: an extension's directory remembers browsers itself, from
+//     the sign-in hook;
 //   - the token is the directory's own: another provider asserting the claim
 //     is not the directory the registry takes it from;
 //   - the claim asks, and `amr` names a second factor;
@@ -177,7 +179,7 @@ const rememberWindow = 5 * time.Minute
 // A sign-in the directory let skip the factor carries no `mfa`, so a skip
 // can never mint either: trust stays absolute.
 func (s *Server) directoryRemembers(provider string, id *social.Identity) bool {
-	if s.cfg.Auth.IdPTrustCheckToken == "" || provider != social.ProviderAuthentik {
+	if s.cfg.Auth.IdPTrustCheckToken == "" || provider != social.ProviderAuthentik || !s.builtInDirectory() {
 		return false
 	}
 	if !directoryRememberDevice(id.Claims) || !id.MFAAsserted() || id.AuthTime.IsZero() {

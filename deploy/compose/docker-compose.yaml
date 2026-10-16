@@ -166,6 +166,10 @@ services:
       # directory's database. Unset, the code is always asked.
       AGENTRY_IDP_TRUST_CHECK_TOKEN: ${AGENTRY_IDP_TRUST_CHECK_TOKEN:-}
       AGENTRY_REGISTRY_INTERNAL_URL: ${AGENTRY_REGISTRY_INTERNAL_URL:-http://server:8080}
+      # Where on the registry those calls go: its own routes, or the
+      # callback mount of the extension that is the directory
+      # (/internal/x/directory in an enterprise build).
+      AGENTRY_REGISTRY_CALLBACK_PATH: ${AGENTRY_REGISTRY_CALLBACK_PATH:-/internal/directory}
       # The sign-up form's optional promo code field: any
       # non-empty value shows it; unset or empty leaves it a hidden input the
       # form never shows. Only a deployment whose billing extension redeems
