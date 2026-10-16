@@ -777,7 +777,7 @@ answers and podman is installed and answers, the CLI drives podman's own
 | Variable | Effect |
 |---|---|
 | `AGENTRY_ENGINE` | `docker` or `podman`: the CLI to drive |
-| `AGENTRY_DOCKER` | the `docker` binary, for an unusual install (implies docker) |
+| `AGENTRY_DOCKER` | the `docker` binary, for an unusual install |
 | `AGENTRY_PODMAN` | the `podman` binary |
 | `AGENTRY_DOCKER_FILTER` | `process` or `sidecar`: where the run's docker filter runs, overriding the rule below |
 
