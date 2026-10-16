@@ -190,6 +190,8 @@ jobs:
         with:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
+          # Read only by this run's sbom-and-sign job.
+          retention-days: 1
 
   sbom-and-sign:
     needs: [guard, binaries, image, chart]
@@ -287,6 +289,14 @@ jobs:
           PRERELEASE: ${{ needs.guard.outputs.prerelease }}
           LATEST: ${{ needs.guard.outputs.latest }}
         run: ./scripts/release/publish.sh "$TAG" dist "$RUNNER_TEMP/verification.md"
+
+      # Each dev push publishes a prerelease; the ten newest are kept and the
+      # older ones deleted with their assets. Tags and stable releases stay.
+      - name: Keep the ten newest dev prereleases
+        if: needs.guard.outputs.prerelease == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/release/prune-prereleases.sh 10
 
   # One image per release: agentryd (every role, git included). The hosted
   # site's image is built and released from its own repository; the chart
