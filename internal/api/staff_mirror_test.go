@@ -2,11 +2,11 @@ package api_test
 
 // The directory's mirror of platform staff: the registry keeps
 // one directory group equal to its platform staff, so an application that
-// signs in through the directory (the log stack's Dashboards) admits staff
+// signs in through the directory (an OpenSearch Dashboards, say) admits staff
 // alone. The group is written from the registry's flag, which only the staff
 // organization's rule sets, and never read back as a source.
 // These tests drive membership the way a person does and read the fake
-// directory's group the way Dashboards would.
+// directory's group the way such an application would.
 
 import (
 	"context"

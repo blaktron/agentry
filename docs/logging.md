@@ -1,9 +1,9 @@
 # The log contract
 
 What a line the server writes contains, what is never in one, and the names
-a dashboard or an alert may key on. This page is the reference the log
-stack — the collector, the store and the dashboards in `agentry-logging` —
-is built against; the code that keeps it is `internal/logx` (the mechanism)
+a dashboard or an alert may key on. This page is the reference a
+collector, a log store, a dashboard or an alert is built against; the code
+that keeps it is `internal/logx` (the mechanism)
 and `internal/logevent` (the names), and a test fails when the code and this
 page disagree.
 
@@ -143,14 +143,14 @@ drop accounting.
 - **The probes.** No access line for `/healthz`, `/readyz` or `/metrics`.
 
 The client address is in a line (`client_ip`) for as long as the lines are
-kept — the retention the log stack sets — and on the audit row for the
-audit retention; the privacy page says so.
+kept, which is the retention of whatever store they are shipped to, and on
+the audit row for the audit retention; the privacy page says so.
 
-## Shipping is best-effort
+## Shipping is the deployment's
 
-Where the lines go after stderr is the log stack's business (the "Logs"
-section of [self-hosting](self-hosting.md)). The transport never stalls the
-server and never stops a container from starting; the price is that a
-collector that is down loses the lines sent while it was down, and a burst
-far above the registry's own rate can lose a small share. The audit record
-does not depend on any of it.
+Where the lines go after stderr is the deployment's choice (the "Logs"
+section of [self-hosting](self-hosting.md)). Ship them best-effort: a
+transport that cannot block, such as a Docker logging driver in
+`mode: non-blocking`, never stalls the server or stops a container from
+starting, at the price of the lines sent while the collector was down. The
+audit record does not depend on any of it.

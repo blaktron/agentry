@@ -3,8 +3,8 @@ package api
 // The directory's mirror of platform staff. Platform staff is the
 // registry's word: the platform_staff flag, which the staff organization's
 // rule sets and nothing else does (registry/staff.go). An application that signs in
-// through the directory and should admit staff alone, the log stack's
-// OpenSearch Dashboards first, can read only what the directory's tokens
+// through the directory and should admit staff alone, such as an
+// OpenSearch Dashboards, can read only what the directory's tokens
 // carry. So the registry keeps one directory group, auth.idpStaffMirrorGroup,
 // equal to its platform staff: for every active account with the flag and a
 // verified address, the directory account it is linked to, and nobody else.
@@ -24,7 +24,7 @@ package api
 // soon after the server starts. A change is therefore mirrored within
 // seconds when the directory answers, and within the interval when it did
 // not, which bounds how long a removed member keeps the group. A directory
-// session or a Dashboards session already open is not ended by it.
+// session or an application session already open is not ended by it.
 
 import (
 	"bytes"
