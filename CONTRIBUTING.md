@@ -23,7 +23,8 @@ and the examples each have their own public repository (see
 ## Contributing from outside
 
 Fork, branch from `dev`, open a pull request against `dev`: `dev` is where
-changes land, and `main` takes only its promotions. CI runs on the maintainers'
+changes land, and `main` takes only its promotions (the `branch-model` check
+fails any other pull request into `main`). CI runs on the maintainers'
 own runners once a maintainer approves the run for a first-time contributor.
 Sign off every commit (the DCO, below); keep a change to one concern; say in
 the PR what you verified and how. A change that alters documented behaviour
@@ -306,7 +307,8 @@ notes give the `cosign verify-blob` command.
 workflow's own `GITHUB_TOKEN`. Its events start no other workflow, so the two
 release workflows call `release.yaml` directly rather than waiting for a tag
 push. For the same reason the release PR's `pull_request` runs wait for
-approval, so it is gated by dispatching `ci` on its branch
-(`gh workflow run ci --ref <branch>`). `workflow_dispatch` on `release`, run
-on the tag's own branch, rebuilds an existing tag whose release failed
-part-way.
+approval, so it is gated by dispatching `ci` and `branch-model` on its
+branch (`gh workflow run ci --ref <branch>` and
+`gh workflow run branch-model --ref <branch>`). `workflow_dispatch` on
+`release`, run on the tag's own branch, rebuilds an existing tag whose release
+failed part-way.
