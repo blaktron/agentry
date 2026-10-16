@@ -181,5 +181,30 @@ echo '[{"id": 9, "tag_name": "v0.6.0", "draft": true, "body": "## 0.6.0 changelo
 accepts "publish: a draft whose earlier run appended the block" run_publish v0.6.0 false true
 expect $'## 0.6.0 changelog\n\n<!-- agentry-release-verification -->\nVerify it.' "  the block is not appended twice" jq -r .body "$fake/body.PATCH"
 
+# --- prune-prereleases.sh, against the same fake API ---------------------------
+prune="$here/prune-prereleases.sh"
+run_prune() { # run_prune <keep>
+  rm -f "$fake/calls" "$fake"/body.*
+  env PATH="$fake/bin:$PATH" FAKE="$fake" GH_TOKEN=t GITHUB_REPOSITORY=o/r "$prune" "$1"
+}
+deleted() { { grep '^DELETE ' "$fake/calls" || true; } | sed 's|.*/releases/||' | sort -n | tr '\n' ' ' | sed 's/ $//'; }
+cat > "$fake/list.json" <<'JSON'
+[{"id": 1, "tag_name": "v0.6.9-dev.1", "prerelease": true, "draft": false},
+ {"id": 2, "tag_name": "v0.6.10-dev.9", "prerelease": true, "draft": false},
+ {"id": 3, "tag_name": "v0.6.10-dev.10", "prerelease": true, "draft": false},
+ {"id": 4, "tag_name": "v0.6.10-dev.1", "prerelease": true, "draft": false},
+ {"id": 5, "tag_name": "v0.6.9", "prerelease": false, "draft": false},
+ {"id": 6, "tag_name": "v0.6.8-dev.4", "prerelease": true, "draft": true},
+ {"id": 7, "tag_name": "v0.6.8-rc.1", "prerelease": true, "draft": false},
+ {"id": 8, "tag_name": "v0.6.8-dev.3", "prerelease": false, "draft": false}]
+JSON
+accepts "prune: keep 2 of four dev prereleases" run_prune 2
+expect "1 4" "  the two oldest by version go (dev.1 before dev.9 before dev.10, 0.6.9 before 0.6.10)" deleted
+expect 0 "  no stable release, draft, other tag or unflagged dev tag is deleted" count '^DELETE .*/releases/[5-8]$' "$fake/calls"
+expect 0 "  no tag is deleted" count '/git/refs' "$fake/calls"
+accepts "prune: keep 10 with four candidates" run_prune 10
+expect "" "  deletes nothing" deleted
+refuses "prune: keep 0 is refused" run_prune 0
+
 [ "$fails" = 0 ] || { echo "release selftest: $fails failed"; exit 1; }
 echo "release selftest: all passed"
