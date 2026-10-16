@@ -149,6 +149,14 @@ truncation never makes two roles' names one. */ -}}
       key: AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET
       optional: true
 {{- end }}
+{{- if and $api (or $ctx.Values.secret.oidcClientSecret $existing) }}
+- name: AGENTRY_AUTH_OIDC_CLIENT_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secret }}
+      key: AGENTRY_AUTH_OIDC_CLIENT_SECRET
+      optional: true
+{{- end }}
 {{- if and (or $apiOrWorker $ctx.Values.config.auth.idpStaffMirrorGroup) (or $ctx.Values.secret.idpAdminToken $existing) }}
 - name: AGENTRY_IDP_ADMIN_TOKEN
   valueFrom:

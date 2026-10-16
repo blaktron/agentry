@@ -84,6 +84,18 @@ config:
     # start-up while either is set.
     idpStaffGroup: ""
     idpStaffDomain: ""
+    # Sign in with your OpenID provider: any OIDC issuer, redirect URI
+    # {baseURL}/api/v1/auth/oidc/<id>/callback. clientSecret is a secret:
+    # secret.oidcClientSecret / existingSecret key
+    # AGENTRY_AUTH_OIDC_CLIENT_SECRET. id is oidc unless the provider is the
+    # deployment's directory, whose accounts are linked as authentik; set this
+    # or social.authentik, not both.
+    oidc:
+      id: ""
+      issuer: ""
+      clientId: ""
+      scopes: []
+      displayName: ""
   social:
     # The deployment's own directory as an OIDC provider. clientSecret is a
     # secret: secret.authentikClientSecret / existingSecret key
@@ -216,8 +228,9 @@ secret:
   # Each role reads only the keys it uses (docs/self-hosting.md):
   # git the database URL and the sealing key, the worker also knowledge, mail
   # and the directory admin token, the api all of them.
-  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_KNOWLEDGE_SEALING_KEY / AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN / AGENTRY_IDP_TRUST_CHECK_TOKEN
+  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_KNOWLEDGE_SEALING_KEY / AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_AUTH_OIDC_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN / AGENTRY_IDP_TRUST_CHECK_TOKEN
   authentikClientSecret: "" # OIDC client secret for config.social.authentik
+  oidcClientSecret: "" # OIDC client secret for config.auth.oidc
   idpAdminToken: "" # directory API token for account erasure (config.auth.idpAdminURL)
   # The secret the directory's sign-in presents to the registry's trust check,
   # 32+ characters, the same value on the directory's side.

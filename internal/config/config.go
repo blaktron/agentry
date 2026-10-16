@@ -268,7 +268,7 @@ type Auth struct {
 	IdPStaffDomain string `yaml:"idpStaffDomain"`
 	// OIDC is the deployment's one "sign in with your OpenID provider": any
 	// OpenID Connect issuer the operator registers the registry with. See
-	// OIDCProvider, and SignInOIDC for how the older social.authentik keys
+	// OIDCProvider, and SignInOIDC for how the social.authentik keys
 	// name the same provider.
 	OIDC OIDCProvider `yaml:"oidc"`
 	// RequireIdPMFA re-enables the "2FA before public publish" gate
@@ -629,8 +629,7 @@ const (
 	// OIDCProviderID is the generic provider's id.
 	OIDCProviderID = "oidc"
 	// DirectoryProviderID is the id of a provider that is the deployment's
-	// own directory, which the registry has linked accounts under since
-	// before the generic provider existed.
+	// own directory: its accounts are linked as "authentik:<sub>".
 	DirectoryProviderID = "authentik"
 )
 
@@ -661,7 +660,7 @@ type OIDCProvider struct {
 func (p OIDCProvider) Configured() bool { return p.ClientID != "" && p.ClientSecret != "" }
 
 // SignInOIDC is the deployment's sign-in OpenID provider, when it has one:
-// auth.oidc as configured, with its id defaulted, or else the older
+// auth.oidc as configured, with its id defaulted, or else the
 // social.authentik keys read as that provider under the id "authentik",
 // which every identity they linked carries. The two are never both set
 // (validate refuses it).
@@ -1548,7 +1547,7 @@ func InCIDRs(prefixes []netip.Prefix, addr netip.Addr) bool {
 }
 
 // validateSignInOIDC refuses a sign-in provider that would be ambiguous or
-// unreachable: named twice (auth.oidc beside the older social.authentik),
+// unreachable: named twice (auth.oidc beside social.authentik),
 // under an id its routes do not serve, or configured without an issuer.
 func (c Config) validateSignInOIDC() error {
 	p := c.Auth.OIDC

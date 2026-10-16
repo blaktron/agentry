@@ -151,10 +151,13 @@ func setTrustedDeviceCookieAt(w http.ResponseWriter, token string, ttl time.Dura
 // ever needs it, so no request to the registry carries it.
 const directoryFlowExecutorPath = "/api/v3/flows/executor/"
 
-// directoryRememberWindow is how recent the directory's sign-in must be for
-// its token to earn a remembered browser: the seconds between answering the
-// code and arriving at the callback, with room for clock skew.
-const directoryRememberWindow = 5 * time.Minute
+// rememberWindow is how recent a sign-in must be for its token to earn a
+// remembered browser: the seconds between answering the code and arriving
+// at the callback, with room for clock skew. A token an IdP mints silently
+// against a live session of its own repeats the original `auth_time`, so
+// without this every sign-in against one IdP session would mint a fresh
+// lifetime, and trust would renew itself.
+const rememberWindow = 5 * time.Minute
 
 // directoryRemembers reports whether this directory sign-in earned a
 // remembered browser. Everything must hold:
@@ -163,7 +166,7 @@ const directoryRememberWindow = 5 * time.Minute
 //   - the token is the directory's own: another provider asserting the claim
 //     is not the directory the registry takes it from;
 //   - the claim asks, and `amr` names a second factor;
-//   - `auth_time` is within directoryRememberWindow of now. The claim and
+//   - `auth_time` is within rememberWindow of now. The claim and
 //     `amr` both come from the directory session's login event, so a later
 //     authorize that a live directory session answers silently repeats them
 //     with no code asked. Only auth_time, which is that event's time, says
@@ -181,7 +184,7 @@ func (s *Server) directoryRemembers(provider string, id *social.Identity) bool {
 		return false
 	}
 	age := time.Since(id.AuthTime)
-	return age <= directoryRememberWindow && age >= -directoryRememberWindow
+	return age <= rememberWindow && age >= -rememberWindow
 }
 
 // setDirectoryTrustedDeviceCookie sets the directory path's cookie, scoped

@@ -539,10 +539,10 @@ verified; otherwise it is refused with `409 sso-link-required`, never linked.
 evidence for `auth.requireIdpMFA`.
 
 `auth.oidc.id` names the provider in its routes and in every account it
-links, and is `oidc` unless you set it. A deployment whose provider is its
-own directory service, configured with the older `social.authentik` keys,
-signs people in as the provider `authentik`: moving those keys to `auth.oidc`
-keeps every account linked only with `id: authentik`. The registry refuses
+links, and is `oidc` unless you set it. The `social.authentik` keys configure
+the same provider as the deployment's own directory service, under the id
+`authentik`: moving them to `auth.oidc` keeps every account linked only with
+`id: authentik`. The registry refuses
 to start with both `auth.oidc` and `social.authentik` set, and never change
 the id of a provider whose accounts exist: each would be signed in as
 somebody new.
@@ -2123,10 +2123,11 @@ staff into (`ManagesDirectory`), replacing the built-in one. It hears every
 sign-in through an individual provider with all of the ID token's claims,
 before the session is issued (`HearsSignIn`), and the events
 `account.erased` (with the identities the account signed in with and the
-address it held) and `staff.changed`. It can read platform staff and mint
-and check remembered browsers under the registry's rules: only from a
-sign-in whose `amr` names a second factor and whose `auth_time` is minutes
-old, stored as a SHA-256 hash and bound to one account. It can serve calls
+address it held) and `staff.changed`. It can read platform staff, mint a
+remembered browser at a sign-in it hears, and check one, under the
+registry's rules: minted only from that sign-in's own verified token, whose
+`amr` names a second factor and whose `auth_time` is minutes old, stored as
+a SHA-256 hash and bound to one account. It can serve calls
 from a service of its own under `/internal/x/<name>/` (`ReceivesCallbacks`).
 There the registry checks a shared secret of at least 32 characters, answers
 404 to any request carrying `X-Forwarded-For` or `Forwarded`, applies the

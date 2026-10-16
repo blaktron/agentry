@@ -589,6 +589,24 @@ func (s serverStaff) Members(ctx context.Context) ([]StaffMember, error) {
 	return s.srv.PlatformStaff(ctx)
 }
 
+// signInHookOf hands an extension's hook the sign-in with a remembered
+// browser that is audited under the extension's name, whatever detail the
+// extension asks for.
+func signInHookOf(h HearsSignIn, name string) func(context.Context, SignIn) {
+	return func(ctx context.Context, in SignIn) {
+		mint := in.RememberBrowser
+		in.RememberBrowser = func(detail map[string]any) (string, time.Duration, error) {
+			d := map[string]any{}
+			for k, v := range detail {
+				d[k] = v
+			}
+			d["via"], d["extension"] = "extension", name
+			return mint(d)
+		}
+		h.SignedIn(ctx, in)
+	}
+}
+
 // rememberedBrowsersOf adapts the server's remembered browsers to
 // RememberedBrowsers: nil without a database. Every record and use is
 // audited with the extension's name, so an investigator can tell which
@@ -603,10 +621,6 @@ func rememberedBrowsersOf(srv *api.Server, pool *pgxpool.Pool, name string) Reme
 type serverRememberedBrowsers struct {
 	srv  *api.Server
 	name string
-}
-
-func (b serverRememberedBrowsers) Mint(r *http.Request, userID uuid.UUID, amr []string, authTime time.Time) (string, time.Duration, error) {
-	return b.srv.MintRememberedBrowser(r, userID, amr, authTime, map[string]any{"via": "extension", "extension": b.name})
 }
 
 func (b serverRememberedBrowsers) Use(r *http.Request, userID uuid.UUID, token string) (bool, error) {
@@ -932,7 +946,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			srv.RegisterExtensionCallbacks(e.Name(), c.Callbacks())
 		}
 		if h, ok := e.(HearsSignIn); ok {
-			srv.AddSignInHook(h.SignedIn)
+			srv.AddSignInHook(signInHookOf(h, e.Name()))
 		}
 		if h := e.Hooks().Event; h != nil {
 			srv.AddEventHook(h)

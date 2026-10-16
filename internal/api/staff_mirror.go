@@ -193,7 +193,7 @@ func (s *Server) ReconcileStaffMirror(ctx context.Context) (StaffMirrorOutcome, 
 func (s *Server) auditStaffMirror(ctx context.Context, group string, userID uuid.UUID, directoryPK int, member bool) error {
 	e := audit.Event{
 		Action: audit.ActionDirectoryStaffMirror, ActorKind: audit.ActorSystem,
-		Detail: map[string]any{"group": group, "member": member, "DirectoryAccount": directoryPK},
+		Detail: map[string]any{"group": group, "member": member, "directoryAccount": directoryPK},
 	}
 	if userID != uuid.Nil {
 		e.TargetKind, e.TargetID = "user", userID

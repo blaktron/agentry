@@ -902,14 +902,16 @@ type Callbacks = api.ExtensionCallbacks
 // speaks for everyone signing in, or the anonymous bucket per address.
 const (
 	CallbackRateNone = api.RateNone
-	CallbackRateAnon = "anon"
+	CallbackRateAnon = api.RateAnon
 )
 
 // HearsSignIn is the optional interface for an extension that hears every
-// sign-in through an individual provider, with every claim of the ID
-// token, once the account is resolved and before the session is issued:
-// a cookie it sets rides the session's response. It cannot refuse the
-// sign-in, and it runs in the callback, so it is quick.
+// sign-in through an individual provider that the callback gives a session,
+// with every claim of the ID token, once the account is resolved and
+// before the session is issued: a cookie it sets rides the session's
+// response, and SignIn.RememberBrowser mints a remembered browser from
+// this sign-in's own evidence. It cannot refuse the sign-in, and it runs
+// in the callback, so it is quick.
 type HearsSignIn interface {
 	SignedIn(ctx context.Context, in SignIn)
 }
@@ -931,25 +933,22 @@ type Staff interface {
 type StaffMember = api.StaffMember
 
 // RememberedBrowsers is the core's remembered-browser credential as an
-// extension may mint and use it: a browser that answered the second factor
-// at its directory may skip it there next time. The core keeps the rules:
-// minted only from a sign-in whose `amr` names a second factor and whose
-// `auth_time` is minutes old, stored only as its SHA-256, bound to one
-// active account, with an absolute lifetime; every use is audited before
-// it is granted.
+// extension may use it: a browser that answered the second factor at its
+// directory may skip it there next time. One is minted only at a sign-in,
+// by SignIn.RememberBrowser, from the verified token's own evidence (`amr`
+// naming a second factor, `auth_time` minutes old), so no extension can
+// mint one for an account on its own word. The core keeps the rules:
+// stored only as its SHA-256, bound to one active account, an absolute
+// lifetime, every use audited before it is granted.
 type RememberedBrowsers interface {
-	// Mint records a remembered browser for userID from a sign-in's
-	// evidence and returns the token for its cookie and its lifetime.
-	// ErrNoSecondFactor when the evidence does not show a second factor
-	// answered just now. The token is never stored; set it and drop it.
-	Mint(r *http.Request, userID uuid.UUID, amr []string, authTime time.Time) (token string, ttl time.Duration, err error)
 	// Use reports whether token is a live remembered browser of userID's,
 	// recording the use first. An error means the store could not answer:
 	// treat it as no.
 	Use(r *http.Request, userID uuid.UUID, token string) (bool, error)
 }
 
-// ErrNoSecondFactor is RememberedBrowsers.Mint's refusal.
+// ErrNoSecondFactor is SignIn.RememberBrowser's refusal of a sign-in whose
+// token shows no second factor answered just now.
 var ErrNoSecondFactor = api.ErrNoSecondFactor
 
 // Binds is the optional interface for an extension that needs Deps.

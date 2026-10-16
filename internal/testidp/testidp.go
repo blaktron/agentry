@@ -1,5 +1,5 @@
 // Package testidp is a stand-in OpenID provider for tests: discovery, a
-// signing key, an authorization endpoint and a token endpoint that hold an
+// signing key, an authorization endpoint and a token endpoint that hold a
 // relying party to the parts of the protocol the registry depends on (the
 // registered client, PKCE, single-use codes, the nonce), and sign real ID
 // tokens for whoever a test says is signing in. A test signs people in
