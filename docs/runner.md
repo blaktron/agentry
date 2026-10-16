@@ -40,8 +40,8 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
    sign-ins](#model-sign-ins), which sign in through your browser; they apply
    to local runs only, and setup then prepares the image of the harness that
    choice needs instead of docker-agent's.
-2. Stands up the **docker-mcp-gateway plane**: verifies the docker
-   engine, pulls the pinned gateway and harness images, and builds the
+2. Stands up the **docker-mcp-gateway plane**: verifies the
+   [container engine](#container-engines), pulls the pinned gateway and harness images, and builds the
    local runner image from the CLI's embedded, stdlib-only build context
    (`--skip-images` configures policy only).
 
@@ -54,7 +54,9 @@ YAML — hand-written comments there are not preserved.
 Reports, without changing anything, whether `agentry run` would get past
 its preflight on this machine: the operator policy and model (provider,
 model, the `apiKeyEnv` variable present in the environment), the secret
-source, the docker engine, the pinned gateway/harness/runner images (and the
+source, the [container engine](#container-engines) (its `docker` line is the
+receipt's `engine` line, or why a run on that engine would be refused), the
+pinned gateway/harness/runner images (and the
 node/python runtime images when the agent declares MCP servers of that
 ecosystem), and the registry's `/healthz`. With a ref or `--local DIR` it
 also checks that QuickAgent: resolution, the verified install (a warning
@@ -759,6 +761,71 @@ uninstalling a QuickAgent does the same, because **remove is the default**.
 `agentry uninstall --keep-mcp` retains the signature directory so a
 same-digest reinstall reconnects without re-prompting.
 
+## Container engines
+
+A run needs a container engine that serves the Docker Engine API: Docker
+Engine, the engine inside Docker Desktop, or podman (CLI v0.6.129 or later
+for podman). The runner finds it, says which in the receipt, and decides from
+it where the run's docker filter runs.
+
+**Which engine.** By default the CLI drives the `docker` CLI against its
+current context, so `DOCKER_HOST`, `DOCKER_CONTEXT` and `docker context use`
+choose the engine as they do for `docker` itself. When no docker daemon
+answers and podman is installed and answers, the CLI drives podman's own
+`podman` CLI instead. Name one to skip the search:
+
+| Variable | Effect |
+|---|---|
+| `AGENTRY_ENGINE` | `docker` or `podman`: the CLI to drive |
+| `AGENTRY_DOCKER` | the `docker` binary, for an unusual install |
+| `AGENTRY_PODMAN` | the `podman` binary |
+| `AGENTRY_DOCKER_FILTER` | `process` or `sidecar`: where the run's docker filter runs, overriding the rule below |
+
+Setting `DOCKER_HOST` or `DOCKER_CONTEXT` also means docker: the CLI does
+not look for podman then.
+
+**podman.** podman's API socket must be running, since the run's docker
+filter and the gateway use it: `systemctl --user enable --now podman.socket`
+for rootless podman, `systemctl enable --now podman.socket` for rootful.
+`agentry doctor` says so when it does not answer. The images a run uses live
+in podman's own store, so `agentry setup` pulls and builds them there once.
+The `docker` CLI pointed at podman's socket (`DOCKER_HOST`) also runs, but
+it is not the supported route.
+
+**The endpoint.** The engine must be on a Unix socket on this machine (or,
+on Windows, Docker Desktop's named pipe). A `tcp://` or `ssh://` endpoint is
+refused with exit 13: the run's docker filter cannot be put in front of a
+daemon on another machine.
+
+**Where the docker filter runs.** The gateway reaches the daemon only
+through a filter of the run's own ([what a run enforces](#what-a-run-enforces)).
+When the daemon reports this machine's kernel and hostname (or the CLI
+itself runs in a container on that machine), the CLI serves the filter on a
+socket the daemon mounts into the gateway: *in-process*. When the daemon runs
+in a virtual machine (Docker Desktop on any system, Colima, Lima, a podman
+machine), a socket on this machine cannot reach it, so the filter runs in a
+container of the run's own beside the gateway: *sidecar*. Rootful or
+rootless, docker or podman, an engine on this machine's own kernel is
+in-process.
+
+**What the receipt says.** The envelope's `capabilities_enforced["engine"]`
+names the engine, its version, whether it runs rootless, its socket, and
+where the filter ran and why:
+
+```text
+podman 5.8.4, rootless, /run/user/1000/podman/podman.sock, docker filter in-process: the daemon reports this machine's hostname (box) and kernel (7.1.13-200.fc44.x86_64)
+docker 29.7.2, rootful, /var/run/docker.sock, docker filter in-process: the daemon reports this machine's hostname (box) and kernel (7.1.13-200.fc44.x86_64)
+```
+
+**Not yet on podman.** A policy that names [`docker.runtime`](#the-oci-runtime-dockerruntime)
+is refused on podman (exit 13; `agentry doctor` says so): the containers the
+gateway creates go through podman's Docker-compatible API, which does not
+apply a container's runtime, so the receipt would name a runtime they did
+not run under. On a rootless engine the steps that install a declared MCP
+server and fetch an input source run as your uid, which the engine maps to
+another one, so they cannot write your files; the decode step runs as the
+container's root, which on a rootless engine is you.
+
 ## The operator policy (`~/.agentry/runner/policy.yaml`)
 
 Created on first use; `AGENTRY_RUNNER_HOME` moves the whole runner home.
@@ -1026,7 +1093,7 @@ lower them for your own host.
 | `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
 | `grep` and `glob` (granted with the scratch folder) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds and, on Linux through the run's docker filter, every capability dropped but each kind's own ([above](#container-limits-dockerlimits)) |
-| the gateway's reach into the docker daemon | only through the run's docker filter, which admits the run's own containers, networks and volumes and checks every create (every decision in `receipts/docker-filter.log`). It never gives a container the daemon's default bridge (CLI v0.6.122 or later): a container that names no network gets none, or the one run network it names as an endpoint, and one that names several endpoints with no primary network, or an endpoint named `default` or `bridge`, is refused. On Linux the CLI serves it on a socket mounted in place of the daemon's. On Docker Desktop (macOS, Windows) it runs in a container of the run's own, from the runner image, with no network, every capability dropped and a read-only root, and serves its socket in a volume the gateway mounts at `/var/run`; the gateway starts only once it is ready. Elsewhere the gateway holds the daemon's own socket, and the receipt's `daemon` line says so |
+| the gateway's reach into the docker daemon | only through the run's docker filter, which admits the run's own containers, networks and volumes and checks every create (every decision in `receipts/docker-filter.log`). It never gives a container the daemon's default bridge (CLI v0.6.122 or later): a container that names no network gets none, or the one run network it names as an endpoint, and one that names several endpoints with no primary network, or an endpoint named `default` or `bridge`, is refused. Where the daemon shares this machine's kernel the CLI serves it on a socket mounted in place of the daemon's; where the daemon runs in a virtual machine (Docker Desktop, Colima, Lima, a podman machine) it runs in a container of the run's own ([container engines](#container-engines)), from the runner image, with no network, every capability dropped and a read-only root, and serves its socket in a volume the gateway mounts at `/var/run`; the gateway starts only once it is ready. Elsewhere the gateway holds the daemon's own socket, and the receipt's `daemon` line says so |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
 | the gateway on an SELinux host | the gateway is the one container that drives the host's docker daemon, so on a daemon with SELinux enabled it runs with label confinement off (`--security-opt label=disable`) — a confined container cannot open that socket at all. Everything else in the run stays confined, and the run's own directories are relabelled so the tool containers can use them; the socket itself is never relabelled, which would hand daemon access to every container on the machine. |
 | a tool **result** that looks like a secret | the pinned gateway refuses it before the harness sees it, and the agent gets `Error calling tool: … a secret is being returned by the …` instead of the value. This is docker/mcp-gateway's own `--block-secrets`, on by default in the pinned version rather than something the run asks for, so it guards every tool's result, `run_command`'s included, and the arguments of every call, a `write_report` that quotes a key included. **The person's own inputs are the exception**: a successful `read_input` or `search_inputs` serves the file unchanged, keys and passwords included, so a QuickAgent whose job is to *find* credentials can read them. An input tool's error, and the input tools under the review grant, are still refused. A `git log -p` through `run_command` that would print a key is refused too, and a finding should name a credential's kind and where it is, never its value, because a report that repeats it is refused. |
