@@ -33,26 +33,31 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 	if !s.requireDB(w, r) {
 		return
 	}
-	issuer := strings.TrimSpace(s.cfg.Social.Authentik.Issuer)
-	out := UserDirectory{Managed: s.cfg.Auth.ExternalOnly && issuer != ""}
+	// The account is the directory's when credentials live there and the
+	// registry knows the directory: its sign-in provider, or an extension's
+	// directory. With neither, there is nothing to send anyone to.
+	issuer := s.cfg.DirectoryIssuer()
+	out := UserDirectory{Managed: s.cfg.Auth.ExternalOnly && (issuer != "" || s.dirSet)}
 	if !out.Managed {
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	origin := strings.TrimRight(issuer, "/")
-	if m := issuerOriginRe.FindStringSubmatch(issuer); m != nil {
-		origin = m[1]
-	}
 	str := func(v string) *string { return &v }
-	// authentik's default flow slugs (2026.x); the user interface path is
-	// stable across releases.
-	// The Agentry flows (compose blueprint agentry-account-flows.yaml):
-	// each ends with a redirect back to the account settings (the site's,
-	// or the server's own /ui/ page), and no
-	// link ever points at the directory's own panel.
-	out.PasswordChangeUrl = str(origin + "/if/flow/agentry-password-change/")
-	out.TotpSetupUrl = str(origin + "/if/flow/agentry-totp-setup/")
-	out.WebauthnSetupUrl = str(origin + "/if/flow/agentry-webauthn-setup/")
+	if issuer != "" {
+		origin := strings.TrimRight(issuer, "/")
+		if m := issuerOriginRe.FindStringSubmatch(issuer); m != nil {
+			origin = m[1]
+		}
+		// authentik's default flow slugs (2026.x); the user interface path
+		// is stable across releases.
+		// The Agentry flows (compose blueprint agentry-account-flows.yaml):
+		// each ends with a redirect back to the account settings (the
+		// site's, or the server's own /ui/ page), and no
+		// link ever points at the directory's own panel.
+		out.PasswordChangeUrl = str(origin + "/if/flow/agentry-password-change/")
+		out.TotpSetupUrl = str(origin + "/if/flow/agentry-totp-setup/")
+		out.WebauthnSetupUrl = str(origin + "/if/flow/agentry-webauthn-setup/")
+	}
 
 	if lister, ok := s.dirEraser.(directoryDevices); ok {
 		p := principalFrom(r.Context())
@@ -91,7 +96,7 @@ func (s *Server) GetUserDirectory(w http.ResponseWriter, r *http.Request) {
 // answer for the account the caller's directory sign-in is
 // linked to. Anything the directory does not answer is left out: the page
 // shows nothing rather than a guess.
-func (s *Server) addSignInFacts(r *http.Request, link directoryLink, out *UserDirectory) {
+func (s *Server) addSignInFacts(r *http.Request, link DirectoryLink, out *UserDirectory) {
 	facts, ok := s.dirEraser.(directorySignInFacts)
 	if !ok {
 		return

@@ -4933,10 +4933,13 @@ components:
       description: >
         Social identity provider id. google and microsoft use their
         built-in OIDC endpoints; openai and claude need an operator-set
-        issuer; authentik is the deployment's own directory service and also needs one; an unconfigured provider answers 404.
+        issuer. oidc is the deployment's own sign-in OpenID provider, any
+        issuer the operator configures; authentik is the same provider on a
+        deployment whose provider is its own directory service. An
+        unconfigured provider answers 404.
       schema:
         type: string
-        enum: [google, github, microsoft, openai, claude, authentik]
+        enum: [google, github, microsoft, openai, claude, authentik, oidc]
     Cursor:
       name: cursor
       in: query

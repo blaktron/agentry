@@ -76,6 +76,12 @@ func TestRouteDeclarationsComplete(t *testing.T) {
 	cfg := config.Default()
 	cfg.DevMode = true // a fixture has no sealing key
 	srv := api.New(cfg, nil, nil)
+	// An extension's callback mount is declared by the extension, so one is
+	// registered here for the gate to read: the core build has none.
+	srv.RegisterExtensionCallbacks("probe", api.ExtensionCallbacks{
+		Class: api.RateNone, Why: "a probe the gate reads; its secret is unset, so it answers 404",
+		Routes: func(m *http.ServeMux) { m.HandleFunc("POST /check", func(http.ResponseWriter, *http.Request) {}) },
+	})
 	api.NewHandlerWithGit(srv, (&gitsrv.Handler{}).Mount)
 	mounted := srv.MountedRoutes()
 	recorded := make(map[string]bool, len(mounted))
@@ -95,7 +101,7 @@ func TestRouteDeclarationsComplete(t *testing.T) {
 			seenSpec[opID] = true // declared from the spec side, above
 			continue
 		}
-		decl, ok := api.MountAuthzDecl(pattern)
+		decl, ok := srv.MountAuthzDecl(pattern)
 		if !ok {
 			t.Errorf("%s: registered on the public mux and undeclared — name its gate and its rate class in authz_routes.go", pattern)
 			continue

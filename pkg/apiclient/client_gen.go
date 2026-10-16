@@ -1582,6 +1582,7 @@ const (
 	SocialProviderGithub    SocialProvider = "github"
 	SocialProviderGoogle    SocialProvider = "google"
 	SocialProviderMicrosoft SocialProvider = "microsoft"
+	SocialProviderOidc      SocialProvider = "oidc"
 	SocialProviderOpenai    SocialProvider = "openai"
 )
 
@@ -1597,6 +1598,8 @@ func (e SocialProvider) Valid() bool {
 	case SocialProviderGoogle:
 		return true
 	case SocialProviderMicrosoft:
+		return true
+	case SocialProviderOidc:
 		return true
 	case SocialProviderOpenai:
 		return true
@@ -1741,6 +1744,7 @@ const (
 	SocialOidcCallbackParamsProviderGithub    SocialOidcCallbackParamsProvider = "github"
 	SocialOidcCallbackParamsProviderGoogle    SocialOidcCallbackParamsProvider = "google"
 	SocialOidcCallbackParamsProviderMicrosoft SocialOidcCallbackParamsProvider = "microsoft"
+	SocialOidcCallbackParamsProviderOidc      SocialOidcCallbackParamsProvider = "oidc"
 	SocialOidcCallbackParamsProviderOpenai    SocialOidcCallbackParamsProvider = "openai"
 )
 
@@ -1757,6 +1761,8 @@ func (e SocialOidcCallbackParamsProvider) Valid() bool {
 		return true
 	case SocialOidcCallbackParamsProviderMicrosoft:
 		return true
+	case SocialOidcCallbackParamsProviderOidc:
+		return true
 	case SocialOidcCallbackParamsProviderOpenai:
 		return true
 	default:
@@ -1771,6 +1777,7 @@ const (
 	SocialOidcStartParamsProviderGithub    SocialOidcStartParamsProvider = "github"
 	SocialOidcStartParamsProviderGoogle    SocialOidcStartParamsProvider = "google"
 	SocialOidcStartParamsProviderMicrosoft SocialOidcStartParamsProvider = "microsoft"
+	SocialOidcStartParamsProviderOidc      SocialOidcStartParamsProvider = "oidc"
 	SocialOidcStartParamsProviderOpenai    SocialOidcStartParamsProvider = "openai"
 )
 
@@ -1786,6 +1793,8 @@ func (e SocialOidcStartParamsProvider) Valid() bool {
 	case SocialOidcStartParamsProviderGoogle:
 		return true
 	case SocialOidcStartParamsProviderMicrosoft:
+		return true
+	case SocialOidcStartParamsProviderOidc:
 		return true
 	case SocialOidcStartParamsProviderOpenai:
 		return true

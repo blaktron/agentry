@@ -60,6 +60,22 @@ data:
       {{- with .Values.config.auth.idpStaffDomain }}
       idpStaffDomain: {{ . | quote }}
       {{- end }}
+      {{- with .Values.config.auth.oidc }}
+      {{- if .clientId }}
+      oidc:
+        {{- with .id }}
+        id: {{ . | quote }}
+        {{- end }}
+        issuer: {{ .issuer | quote }}
+        clientId: {{ .clientId | quote }}
+        {{- with .scopes }}
+        scopes: {{ toJson . }}
+        {{- end }}
+        {{- with .displayName }}
+        displayName: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      {{- end }}
     {{- if .Values.config.social.authentik.clientId }}
     social:
       authentik:

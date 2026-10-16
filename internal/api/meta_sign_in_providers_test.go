@@ -104,17 +104,31 @@ func TestMetaListsTheSignInProvidersStartRedirectsFor(t *testing.T) {
 	}
 }
 
-// Every provider the spec names can be listed, in the spec's order.
+// Every provider the spec names can be listed, in the spec's order. The
+// sign-in OpenID provider is one provider under one of two ids, "authentik"
+// for the deployment's own directory and "oidc" otherwise, so each is
+// listed in a deployment of its own, with every other provider beside it.
 func TestMetaListsEveryConfiguredSignInProvider(t *testing.T) {
-	gh := newFakeGitHub(t)
-	idp := newFakeOIDC(t)
-	env := newTestEnvCfg(t, func(cfg *config.Config) {
-		gh.configure(cfg)
-		oidc := config.SocialProvider{ClientID: idp.clientID, ClientSecret: "secret", Issuer: idp.srv.URL}
-		cfg.Social.Google, cfg.Social.Microsoft, cfg.Social.OpenAI = oidc, oidc, oidc
-		cfg.Social.Claude, cfg.Social.Authentik = oidc, oidc
-	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
-	metaAgreesWithStart(t, env, specSignInProviders(t))
+	for _, id := range []string{"authentik", "oidc"} {
+		t.Run(id, func(t *testing.T) {
+			gh := newFakeGitHub(t)
+			idp := newFakeOIDC(t)
+			env := newTestEnvCfg(t, func(cfg *config.Config) {
+				gh.configure(cfg)
+				oidc := config.SocialProvider{ClientID: idp.clientID, ClientSecret: "secret", Issuer: idp.srv.URL}
+				cfg.Social.Google, cfg.Social.Microsoft, cfg.Social.OpenAI, cfg.Social.Claude = oidc, oidc, oidc, oidc
+				cfg.Auth.OIDC = config.OIDCProvider{ID: id, Issuer: idp.srv.URL, ClientID: idp.clientID, ClientSecret: "secret"}
+			}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
+			other := map[string]string{"authentik": "oidc", "oidc": "authentik"}[id]
+			var want []string
+			for _, p := range specSignInProviders(t) {
+				if p != other {
+					want = append(want, p)
+				}
+			}
+			metaAgreesWithStart(t, env, want)
+		})
+	}
 }
 
 // A registry with no provider says so with an empty list, not an absent

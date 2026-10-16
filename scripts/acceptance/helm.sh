@@ -178,7 +178,7 @@ render api_app deployment-api.yaml "${APP[@]}"
 render worker_app deployment-worker.yaml "${APP[@]}"
 render git_app deployment-git.yaml "${APP[@]}"
 check "api holds every app key" "$(secretKeys "$api_app")" \
-  "AGENTRY_AUTH_SEALING_KEY AGENTRY_DATABASE_URL AGENTRY_IDP_ADMIN_TOKEN AGENTRY_IDP_TRUST_CHECK_TOKEN AGENTRY_KNOWLEDGE_SEALING_KEY AGENTRY_REDIS_URL AGENTRY_SMTP_PASS AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET"
+  "AGENTRY_AUTH_OIDC_CLIENT_SECRET AGENTRY_AUTH_SEALING_KEY AGENTRY_DATABASE_URL AGENTRY_IDP_ADMIN_TOKEN AGENTRY_IDP_TRUST_CHECK_TOKEN AGENTRY_KNOWLEDGE_SEALING_KEY AGENTRY_REDIS_URL AGENTRY_SMTP_PASS AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET"
 check "worker holds the database, sealing, knowledge, mail and erasure keys" "$(secretKeys "$worker_app")" \
   "AGENTRY_AUTH_SEALING_KEY AGENTRY_DATABASE_URL AGENTRY_IDP_ADMIN_TOKEN AGENTRY_KNOWLEDGE_SEALING_KEY AGENTRY_SMTP_PASS"
 check "git holds the database URL and the sealing key alone" "$(secretKeys "$git_app")" \
