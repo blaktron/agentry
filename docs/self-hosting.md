@@ -1136,7 +1136,9 @@ directory answers. While runs fail (the directory unreachable from the
 registry, or an admin token without rights over groups), a removed member
 keeps the group until a run succeeds: every failure is logged, and runs are
 retried every ten minutes. A directory
-session or an application session already open is not ended by it. Staff
+session or an application session already open is not ended by it. Where
+an extension supplies the directory (see the extension section below), the
+registry keeps no mirror of its own and the extension keeps the group. Staff
 who have not yet signed in to the registry through the directory are added
 after their first such sign-in.
 

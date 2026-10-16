@@ -595,10 +595,12 @@ type Deps struct {
 	// core's rules, audited under the extension's name. nil when the
 	// server runs without a database.
 	RememberedBrowsers RememberedBrowsers
-	// Sealer seals and opens small values under the server's sealing key
-	// (auth.sealingKey; authenticated encryption), for an extension that
-	// must keep a personal value at rest in a row or a job's arguments, as
-	// a queued erasure keeps the address it erases. Never nil.
+	// Sealer seals and opens small values under a key derived from the
+	// server's sealing key (auth.sealingKey) for this extension alone
+	// (authenticated encryption), for an extension that must keep a
+	// personal value at rest in a row, as a queued erasure keeps the
+	// address it erases. It opens none of the server's own sealed values
+	// and none of another extension's. Never nil.
 	Sealer Sealer
 	// BaseURL is the deployment's public origin, the address the core's
 	// own links are built on (config baseURL, or AGENTRY_BASE_URL over

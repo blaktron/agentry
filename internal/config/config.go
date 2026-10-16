@@ -197,6 +197,10 @@ type Auth struct {
 	// directory sign-in only while it is set. Empty means the directory path
 	// is off: nothing is minted there and the check route answers 404. At
 	// least 32 characters; the directory's side holds the same value.
+	// Where an extension supplies the directory, it remembers browsers and
+	// answers the check itself, and the core's route answers 404; the core
+	// still expires the cookie when an account clears its remembered
+	// browsers.
 	IdPTrustCheckToken string `yaml:"idpTrustCheckToken"`
 	// DirectoryCookieDomain is the parent domain the remembered-browser
 	// cookie of the directory path is set on (the native path's cookie is
@@ -255,7 +259,8 @@ type Auth struct {
 	// back as a source: the flag stays the staff organization's. A directory
 	// application that should admit staff alone, such as the log stack's
 	// Dashboards, reads membership of this group from its tokens. Empty means no mirror. It needs the admin URL and token and
-	// the staff organization.
+	// the staff organization. Where an extension supplies the directory,
+	// the core keeps no mirror and the extension keeps its own.
 	IdPStaffMirrorGroup string `yaml:"idpStaffMirrorGroup"`
 	// IdPStaffGroup is retired: the directory group no longer grants
 	// platform staff. It is still read, so a

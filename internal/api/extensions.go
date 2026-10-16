@@ -266,10 +266,13 @@ func (s *Server) BaseURL() string { return strings.TrimRight(s.cfg.BaseURL, "/")
 // way ExtensionDeps' pool is.
 func (s *Server) Blobs() registry.BlobStore { return s.blobs }
 
-// Sealer is the server's sealer (auth.Sealer, under auth.sealingKey), for
-// an extension's small values at rest; nil only on a server built without
-// one.
-func (s *Server) Sealer() *auth.Sealer { return s.sealer }
+// ExtensionSealer is a sealer for one extension's small values at rest,
+// under a key derived from auth.sealingKey for that extension alone: it
+// opens none of the server's own sealed values (TOTP seeds, webhook
+// secrets, sign-in state) and none of another extension's.
+func (s *Server) ExtensionSealer(name string) (*auth.Sealer, error) {
+	return s.sealer.For("extension " + name)
+}
 
 // AgentReadable is the core's read of an agent for pkg/extension.Deps.Agents:
 // whether p may read the agent at ns/name exactly as the
