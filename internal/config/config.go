@@ -257,7 +257,7 @@ type Auth struct {
 	// flag, and nobody else, matched by verified address. It is a mirror,
 	// written by the registry through IdPAdminURL/IdPAdminToken, never read
 	// back as a source: the flag stays the staff organization's. A directory
-	// application that should admit staff alone, such as the log stack's
+	// application that should admit staff alone, such as an OpenSearch
 	// Dashboards, reads membership of this group from its tokens. Empty means no mirror. It needs the admin URL and token and
 	// the staff organization. Where an extension supplies the directory,
 	// the core keeps no mirror and the extension keeps its own.

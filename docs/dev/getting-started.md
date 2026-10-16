@@ -61,11 +61,11 @@ The registry is one of several repositories that move together:
 [agentry-cli](https://github.com/blaktron/agentry-cli) (the CLI and the
 runner, Go), [agentry-desktop](https://github.com/blaktron/agentry-desktop)
 (Wails: Go plus a React frontend; on Linux it needs the GTK 3 and WebKit2GTK
-4.1 development headers to build), [agentry-mcp](https://github.com/blaktron/agentry-mcp)
+4.1 development headers to build) and [agentry-mcp](https://github.com/blaktron/agentry-mcp)
 (an MCP server that drives the installed `agentry` CLI so Claude Code,
 Codex or any MCP host can search, install, run and hold a session with
-QuickAgents), and [agentry-examples](https://github.com/blaktron/agentry-examples).
-Two more are closed: the hosted site (a Next.js front end that runs in
+QuickAgents).
+Others are closed, among them the hosted site (a Next.js front end that runs in
 front of this server) and the enterprise build (a Go module that builds the
 hosted server on `pkg/extension`). Each public repository has a `make check`
 that is its CI gate. A change to the API contract is made in
