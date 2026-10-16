@@ -482,6 +482,18 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/api/directory_claims_test.go",
+          "tests": [
+            "TestDirectoryRememberDeviceIsOnlyAJSONTrue",
+            "TestDirectoryAccountIDIsAPositiveWholeNumber",
+            "TestPromoCodeClaim"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/api/directory_device_cookie_blueprint_test.go",
           "tests": [
             "TestDirectoryIssuesNoDeviceCookie"
@@ -1424,6 +1436,21 @@
           ]
         },
         {
+          "path": "internal/api/extension_callbacks_test.go",
+          "tests": [
+            "TestExtensionCallbacksAreGatedByTheCore",
+            "TestExtensionCallbacksDrawFromTheDeclaredClass",
+            "TestExtensionCallbacksRefuseAWeakDeclaration",
+            "TestExtensionCallbacksAreDeclared"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/extension_test.go",
           "tests": [
             "TestExtensionRoutesMetaAndHooks"
@@ -1475,6 +1502,26 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        },
+        {
+          "path": "internal/api/identity_seam_test.go",
+          "tests": [
+            "TestOIDCProviderSignsPeopleIn",
+            "TestExistingDirectoryIdentitiesKeepTheirAccounts",
+            "TestADirectoryFromAnExtensionServesTheRegistry",
+            "TestWithNoDirectoryTheRegistryStandsAlone",
+            "TestSignInHookHearsTheClaimsAndMayRememberTheBrowser",
+            "TestStaffChangedIsHeardAndTheSetIsRead",
+            "TestAccountErasedCarriesTheIdentitiesWithoutAnyDirectory",
+            "TestAnExtensionsDirectoryErasesAsTheBuiltInOneDoes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
         },
         {
           "path": "internal/api/image_proxy_key_test.go",
@@ -1617,6 +1664,16 @@
           "dependencyHints": [
             "database fixture",
             "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/api/oidc_accounts_test.go",
+          "tests": [],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
           ]
         },
         {
@@ -2215,9 +2272,8 @@
             "TestOIDC_NonceMismatchRejected",
             "TestOIDC_EmailVerifiedSurfaced",
             "TestOIDC_PreferredUsernameSurfaced",
-            "TestOIDC_RememberDeviceIsOnlyAJSONTrue",
-            "TestOIDC_AuthTimeSurfaced",
-            "TestPromoCodeClaim"
+            "TestOIDC_RawCarriesEveryClaim",
+            "TestOIDC_AuthTimeSurfaced"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2305,8 +2361,8 @@
         {
           "path": "internal/auth/social/social_test.go",
           "tests": [
-            "TestProvidersIsAClosedSix",
-            "TestOpenAIAndClaudeRequireAnIssuer"
+            "TestProvidersIsAClosedSeven",
+            "TestProvidersWithoutDefaultsRequireAnIssuer"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2395,7 +2451,9 @@
             "TestParseCIDRs",
             "TestSSHProxyProtocolCIDRsFromEnv",
             "TestTrustedProxyCIDRsFromEnv",
-            "TestKnowledgeSealingKeyFromEnv"
+            "TestKnowledgeSealingKeyFromEnv",
+            "TestSignInOIDCIsOneProvider",
+            "TestSignInOIDCFromEnv"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4001,6 +4059,24 @@
       ]
     },
     {
+      "owner": "internal/testidp",
+      "behavior": "Stand-in OpenID provider: protocol checks and the claims it signs",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "internal/testidp/testidp_test.go",
+          "tests": [
+            "TestTheRegistrysRelyingPartySignsInThroughIt",
+            "TestItHoldsTheRelyingPartyToTheProtocol"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
       "owner": "internal/ui",
       "behavior": "Core pages through the in-process API and browser credentials",
       "disposition": "retain",
@@ -4325,6 +4401,20 @@
           "benchmarks": [],
           "fixtureEntryPoint": true,
           "dependencyHints": []
+        },
+        {
+          "path": "pkg/extension/identity_test.go",
+          "tests": [
+            "TestApplyExtensionsWiresTheIdentitySeam",
+            "TestOneDirectoryPerDeployment",
+            "TestTheIdentityEventsAreTheCoresNames"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
         }
       ]
     },
@@ -4338,6 +4428,25 @@
           "tests": [
             "TestTheEmbeddedTableLoads",
             "TestATableThatCannotBeReadIsRefused"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/handle",
+      "behavior": "Handle grammar and the reserved names a directory copies",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/handle/handle_test.go",
+          "tests": [
+            "TestValid",
+            "TestReserved",
+            "TestNamesAreSortedValidHandles"
           ],
           "fuzz": [],
           "benchmarks": [],

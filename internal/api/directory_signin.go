@@ -11,7 +11,7 @@ import (
 // caller signs in at the directory: the social provider the
 // account was first connected to, and whether it has a password.
 type directorySignInFacts interface {
-	SignInFacts(ctx context.Context, link directoryLink) (DirectorySignInFacts, error)
+	SignInFacts(ctx context.Context, link DirectoryLink) (DirectorySignInFacts, error)
 }
 
 // DirectorySignInFacts is what the directory says; a nil field is one it
@@ -35,7 +35,7 @@ type DirectorySource struct {
 // agentry_has_password attribute, which the account-flows blueprint keeps
 // (authentik's API has no such field); nil until the account has signed in
 // or written a password under a blueprint that keeps it.
-func (a *authentikEraser) SignInFacts(ctx context.Context, link directoryLink) (DirectorySignInFacts, error) {
+func (a *authentikEraser) SignInFacts(ctx context.Context, link DirectoryLink) (DirectorySignInFacts, error) {
 	var out DirectorySignInFacts
 	if link.UID == "" {
 		return out, nil
