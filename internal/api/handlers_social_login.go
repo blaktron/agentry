@@ -341,7 +341,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 
-	userID, err := s.resolveSocialUser(r, id)
+	userID, created, err := s.resolveSocialUser(r, id)
 	if err != nil {
 		if errors.Is(err, errExplicitLinkRequired) {
 			linkMsg := "An account already uses this email address. Sign in, then link " + name + " from account settings."
@@ -368,7 +368,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	// directory lookup reads the account by it. Only the directory's token
 	// is believed, and it is recorded on the identity this token signed in,
 	// so it is a directory fact and never one a person sets.
-	if dirID := directoryAccountID(id.Claims); name == social.ProviderAuthentik && dirID > 0 {
+	if dirID := directoryAccountID(id.Claims); s.builtInDirectory() && name == social.ProviderAuthentik && dirID > 0 {
 		if err := s.q().SetSocialIdentityDirectoryAccount(r.Context(), storegen.SetSocialIdentityDirectoryAccountParams{
 			Subject: id.NamespacedSubject, DirectoryAccountID: &dirID,
 		}); err != nil {
@@ -420,7 +420,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	}
 
 	s.fireSignIn(r.Context(), SignIn{
-		UserID: userID, Provider: name, Subject: id.NamespacedSubject,
+		UserID: userID, NewAccount: created, Provider: name, Subject: id.NamespacedSubject,
 		Claims: id.Claims, AMR: id.AMR, AuthTime: id.AuthTime,
 		Request: r, SetCookie: func(c *http.Cookie) { http.SetCookie(w, c) },
 		RememberBrowser: func(detail map[string]any) (string, time.Duration, error) {
@@ -456,16 +456,17 @@ func (s *Server) peekSocialState(w http.ResponseWriter, r *http.Request, provide
 	return st, "", false
 }
 
-// resolveSocialUser applies the linking rules and returns the user.
-func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.UUID, error) {
+// resolveSocialUser applies the linking rules and returns the user, and
+// whether this sign-in created it.
+func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.UUID, bool, error) {
 	ctx := r.Context()
 	q := s.q()
 
 	// 1. Known identity.
 	if row, err := q.GetSocialIdentity(ctx, id.NamespacedSubject); err == nil {
-		return row.UserID, nil
+		return row.UserID, false, nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return uuid.Nil, err
+		return uuid.Nil, false, err
 	}
 
 	// 2/3. Existing account by email.
@@ -480,11 +481,11 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 			// no organization's last admin (unactivatedSuperseded), so it
 			// is erased and the address starts clean.
 			if err := s.eraseSuperseded(r, u.ID, u.Email, id.Provider); err != nil {
-				return uuid.Nil, err
+				return uuid.Nil, false, err
 			}
 		case err == nil:
 			if !id.EmailVerified || u.EmailVerifiedAt == nil {
-				return uuid.Nil, errExplicitLinkRequired
+				return uuid.Nil, false, errExplicitLinkRequired
 			}
 			if err := s.st.WithTx(ctx, func(tq *storegen.Queries) error {
 				if _, err := tq.CreateIdentity(ctx, storegen.CreateIdentityParams{
@@ -499,11 +500,11 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 				e.Detail = map[string]any{"provider": id.Provider, "linked": true}
 				return s.auditW.Write(ctx, tq, e)
 			}); err != nil {
-				return uuid.Nil, err
+				return uuid.Nil, false, err
 			}
-			return u.ID, nil
+			return u.ID, false, nil
 		case !errors.Is(err, pgx.ErrNoRows):
-			return uuid.Nil, err
+			return uuid.Nil, false, err
 		}
 	}
 
@@ -512,7 +513,7 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	activation := ""
 	handle, err := s.allocateHandle(ctx, id.Username, id.Email, id.Provider+"-"+id.Subject)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, false, err
 	}
 	displayName := id.DisplayName
 	if strings.TrimSpace(displayName) == "" {
@@ -560,13 +561,13 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 		for k, v := range handleRequestedDetail(id.Username, handle) {
 			e.Detail[k] = v
 		}
-		if promo := signupPromoCode(id); promo != "" {
+		if promo := signupPromoCode(id); promo != "" && s.builtInDirectory() {
 			e.Detail["promoCode"] = promo
 		}
 		return s.auditW.Write(ctx, tq, e)
 	})
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, false, err
 	}
 	// The same event the native register handler fires: an extension that
 	// provisions something per account (a subscription tier's allowance)
@@ -585,14 +586,14 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	// the billing extension decides what it is worth. Only here, on the
 	// sign-in that makes the account: the claim rides every later token of
 	// the account too, and a linked account or a returning one is not new.
-	if promo := signupPromoCode(id); promo != "" {
+	if promo := signupPromoCode(id); promo != "" && s.builtInDirectory() {
 		payload["promoCode"] = promo
 	}
 	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: newUserID, Payload: payload})
 	if activation != "" {
 		s.mailActivation(ctx, email, handle, activation)
 	}
-	return newUserID, nil
+	return newUserID, true, nil
 }
 
 // signupPromoCode is the promo code a new account's first token carries,

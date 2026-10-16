@@ -103,6 +103,22 @@ func TestApplyExtensionsWiresTheIdentitySeam(t *testing.T) {
 	if ext.deps.Staff != nil || ext.deps.RememberedBrowsers != nil {
 		t.Error("without a database the staff read and the remembered browsers must be nil, as DB is")
 	}
+	// The sealer is the server's with or without a database: what it seals
+	// opens, and a value changed since does not.
+	if ext.deps.Sealer == nil {
+		t.Fatal("no sealer")
+	}
+	sealed, err := ext.deps.Sealer.Seal([]byte("person@example.test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open, err := ext.deps.Sealer.Open(sealed); err != nil || string(open) != "person@example.test" {
+		t.Fatalf("open: %q %v", open, err)
+	}
+	sealed[len(sealed)-1] ^= 1
+	if _, err := ext.deps.Sealer.Open(sealed); err == nil {
+		t.Fatal("a tampered value opened")
+	}
 
 	hs := httptest.NewServer(api.NewHandler(srv))
 	defer hs.Close()
