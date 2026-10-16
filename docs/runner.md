@@ -766,8 +766,8 @@ same-digest reinstall reconnects without re-prompting.
 
 A run needs a container engine that serves the Docker Engine API: Docker
 Engine, the engine inside Docker Desktop, or podman (CLI v0.6.129 or later
-for podman). The runner finds it, says which in the receipt, and decides from
-it where the run's docker filter runs.
+for podman, with gVisor on podman too). The runner finds it, says which in
+the receipt, and decides from it where the run's docker filter runs.
 
 **Which engine.** By default the CLI drives the `docker` CLI against its
 current context, so `DOCKER_HOST`, `DOCKER_CONTEXT` and `docker context use`
@@ -818,14 +818,70 @@ podman 5.8.4, rootless, /run/user/1000/podman/podman.sock, docker filter in-proc
 docker 29.7.2, rootful, /var/run/docker.sock, docker filter in-process: the daemon reports this machine's hostname (box) and kernel (7.1.13-200.fc44.x86_64)
 ```
 
-**Not yet on podman.** A policy that names [`docker.runtime`](#the-oci-runtime-dockerruntime)
-is refused on podman (exit 13; `agentry doctor` says so): the containers the
-gateway creates go through podman's Docker-compatible API, which does not
-apply a container's runtime, so the receipt would name a runtime they did
-not run under. On a rootless engine the steps that install a declared MCP
-server and fetch an input source run as your uid, which the engine maps to
-another one, so they cannot write your files; the decode step runs as the
-container's root, which on a rootless engine is you.
+**The sandbox on podman.** A policy that names [`docker.runtime`](#the-oci-runtime-dockerruntime)
+holds on podman too (CLI v0.6.129 or later, podman's own CLI). podman
+registers a runtime as a name and a path in `containers.conf`, with no
+arguments, so gVisor's flags go in a wrapper script, one per name; a
+rootless podman needs `--ignore-cgroups`, and the gateway's registration
+adds `--host-uds=open`, since the gateway reaches the run's docker filter
+through a bind-mounted Unix socket:
+
+```toml
+# ~/.config/containers/containers.conf (rootless) or /etc/containers/containers.conf
+[engine.runtimes]
+runsc = ["/usr/local/bin/runsc-podman"]
+runsc-uds = ["/usr/local/bin/runsc-podman-uds"]
+```
+
+```sh
+#!/bin/sh
+# /usr/local/bin/runsc-podman
+exec /usr/local/bin/runsc --ignore-cgroups "$@"
+```
+
+```sh
+#!/bin/sh
+# /usr/local/bin/runsc-podman-uds
+exec /usr/local/bin/runsc --ignore-cgroups --host-uds=open "$@"
+```
+
+```yaml
+docker:
+  runtime: runsc
+  gatewayRuntime: runsc-uds
+  resolvers: [192.0.2.53]
+```
+
+`agentry doctor` tries each name (`podman --runtime <name> info`), since
+podman lists every runtime its configuration names, installed or not, and
+reads the gateway's wrapper for `--host-uds=open` and the runtime it runs.
+podman's Docker-compatible API drops a container's runtime, so a run whose
+policy names one starts a podman API service of its own (`podman --runtime
+<name> system service`, on a socket in the run's directory) whose default
+runtime is the policy's: the run's docker filter sends the gateway's
+requests there, and the tools server, the declared MCP servers and the
+relays all land under the runtime with nothing translated. The service
+stops with the run; a run whose process died leaves a record the next run
+sweeps. On every engine, each container that must run under the runtime is
+created, its runtime read back from the engine, and started only when the
+two agree; a mismatch stops the run (exit 13), naming the container's class,
+and the receipt's `runtime` line says each class was checked. On an SELinux
+host gVisor refuses a labelled container under podman, so every container
+under the runtime runs with its SELinux label disabled there, and the
+receipt says so: the runtime's isolation stands in for the label's. A
+rootless podman keeps the kernel's floor on the ports a plain user may
+bind, so each relay, which binds 443 as one, is given
+`net.ipv4.ip_unprivileged_port_start=0`, as Docker Engine sets in every
+container. On a rootless engine the steps that write your files run as the
+container's root, which is you there: the decode step, the input sources'
+fetch, the MCP server installer, the browser server, the host link and the
+tools server's output. Three routes cannot hold a runtime on podman, and each is refused rather
+than left unenforced: the `docker` CLI pointed at podman's socket, which
+reports every container's runtime as `oci` and so cannot be checked; a
+podman machine (macOS, Windows), whose service runs in a VM on another
+kernel and is refused as remote; and a run whose docker filter the CLI does
+not serve itself (`AGENTRY_DOCKER_FILTER=sidecar`), since only the CLI can
+start the run's service and read each container's runtime back.
 
 ## The operator policy (`~/.agentry/runner/policy.yaml`)
 
@@ -894,7 +950,13 @@ through the run's docker filter, the tools server and the declared MCP servers
 the gateway launches. A sandboxed runtime's own network stack does not reach
 docker's embedded DNS at `127.0.0.11`, so the containers under it find the
 ones they talk to through `/etc/hosts` entries pinned from the containers'
-addresses.
+addresses. The runtime is enforced, never assumed: each container that must
+run under it is created, its runtime read back from the engine (`docker
+inspect`, or `podman inspect` on podman), and started only when the engine
+gave it the runtime asked for; a container the engine put under another
+runtime is removed and the run stops with exit 13, naming its class. On
+podman the gateway's containers get the runtime through a podman API
+service of the run's own ([Container engines](#container-engines)).
 
 Four classes need more than that, and each can move under a sandbox too:
 
