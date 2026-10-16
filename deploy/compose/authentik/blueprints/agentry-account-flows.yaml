@@ -1145,6 +1145,10 @@ entries:
   # the directory's database or its admin console:
   #   AGENTRY_IDP_TRUST_CHECK_TOKEN  the registry's auth.idpTrustCheckToken
   #   AGENTRY_REGISTRY_INTERNAL_URL  the registry as this container reaches it
+  #   AGENTRY_REGISTRY_CALLBACK_PATH where on it the directory's calls are
+  #                                  served: /internal/directory by default,
+  #                                  /internal/x/<name> where an extension
+  #                                  of the registry is the directory
   # With either unset the policy asks for the code, always. Never run the
   # directory with AUTHENTIK_DEBUG where the secret matters: its debug HTTP
   # session logs outgoing requests, this one's headers included.
@@ -1181,7 +1185,7 @@ entries:
             return True
         try:
             answer = requests.post(
-                base.rstrip("/") + "/internal/directory/trusted-device",
+                base.rstrip("/") + (os.environ.get("AGENTRY_REGISTRY_CALLBACK_PATH", "").strip().rstrip("/") or "/internal/directory") + "/trusted-device",
                 json={"token": cookie, "sub": user.uid},
                 headers={"Authorization": "Bearer " + secret},
                 timeout=2,
@@ -1276,7 +1280,7 @@ entries:
             return unavailable
         try:
             answer = requests.post(
-                base.rstrip("/") + "/internal/directory/email-verification",
+                base.rstrip("/") + (os.environ.get("AGENTRY_REGISTRY_CALLBACK_PATH", "").strip().rstrip("/") or "/internal/directory") + "/email-verification",
                 json={"sub": account.uid, "email": account.email},
                 headers={"Authorization": "Bearer " + secret},
                 timeout=2,

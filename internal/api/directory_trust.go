@@ -56,8 +56,9 @@ type directoryTrustRequest struct {
 
 func (s *Server) allowDirectoryCheck(w http.ResponseWriter, r *http.Request) bool {
 	secret := s.cfg.Auth.IdPTrustCheckToken
-	if secret == "" || r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" {
-		// The directory path is off, or the request came through a proxy:
+	if secret == "" || !s.builtInDirectory() || r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" {
+		// The directory path is off or is an extension's, which answers on
+		// its own callback mount, or the request came through a proxy:
 		// either way the route answers as though it did not exist.
 		http.NotFound(w, r)
 		return false

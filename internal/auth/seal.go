@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -14,6 +15,7 @@ import (
 // (envelope encryption is an operational concern, not a code path change).
 type Sealer struct {
 	aead cipher.AEAD
+	key  []byte
 }
 
 // NewSealer builds a Sealer from a base64 key (32 bytes decoded). An empty
@@ -45,7 +47,7 @@ func NewSealer(base64Key string, devMode bool) (*Sealer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("auth: sealer gcm: %w", err)
 	}
-	return &Sealer{aead: aead}, nil
+	return &Sealer{aead: aead, key: key}, nil
 }
 
 // Seal encrypts plaintext; output is nonce||ciphertext.
@@ -68,4 +70,25 @@ func (s *Sealer) Open(sealed []byte) ([]byte, error) {
 		return nil, fmt.Errorf("auth: unseal: %w", err)
 	}
 	return pt, nil
+}
+
+// For is a sealer under a key of its own, derived from this one's for one
+// purpose (HKDF-SHA256). What it seals this sealer cannot open, nor can a
+// sealer for another purpose, and it opens nothing they sealed: the server
+// hands one to each extension, so an extension's values and the server's
+// own (TOTP seeds, webhook secrets, sign-in state) never share a key.
+func (s *Sealer) For(purpose string) (*Sealer, error) {
+	key, err := hkdf.Key(sha256.New, s.key, nil, "agentry sealer: "+purpose, 32)
+	if err != nil {
+		return nil, fmt.Errorf("auth: derive a sealing key: %w", err)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("auth: sealer cipher: %w", err)
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("auth: sealer gcm: %w", err)
+	}
+	return &Sealer{aead: aead, key: key}, nil
 }
