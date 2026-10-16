@@ -72,7 +72,7 @@ jobs:
         id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
-          # Releases are cut from main (production); dev is the integration
+          # Releases are cut from main (the release line); dev is the integration
           # branch and may become the repository's default, which this action
           # would otherwise target.
           target-branch: main

@@ -169,7 +169,7 @@ services:
       # The sign-up form's optional promo code field: any
       # non-empty value shows it; unset or empty leaves it a hidden input the
       # form never shows. Only a deployment whose billing extension redeems
-      # codes turns it on (the hosted site's overlay does); the core alone
+      # codes turns it on (a front end's overlay can); the core alone
       # forwards a code and attaches no meaning to it. Read by the worker when
       # it applies the account-flows blueprint.
       AGENTRY_DIRECTORY_PROMO_FIELD: ${AGENTRY_DIRECTORY_PROMO_FIELD:-}
@@ -178,7 +178,7 @@ services:
       # deployment's terms, its root carrying data-terms-version="…". Set,
       # every sign-up shows it after the form and must agree to it; unset,
       # there is no terms step. The core ships no terms: a deployment mounts
-      # its own (the hosted site's overlay mounts the site's). Read by the
+      # its own (a front end's overlay can mount one). Read by the
       # server when the step is reached.
       AGENTRY_DIRECTORY_TERMS_FILE: ${AGENTRY_DIRECTORY_TERMS_FILE:-}
       # Registry activation: a self-enrolled account
@@ -509,7 +509,7 @@ services:
       - ${AGENTRY_EDGE_CERT_DIR:-./edge/certs}:/etc/nginx/certs:ro
       - edgecache:/var/cache/nginx/edge
       # Downloadable binaries a self-hoster publishes for its users (the
-      # hosted site's build script lives with the site). A host directory
+      # script that builds them lives with the front end). A host directory
       # when AGENTRY_DOWNLOADS_DIR names one; otherwise the empty named
       # volume below, so a fresh `up` never scaffolds a root-owned
       # directory into the checkout.
