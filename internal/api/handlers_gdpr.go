@@ -239,10 +239,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	// directory step stands so the site can tell the person.
 	e := auditEvent(r, audit.ActionUserDirectoryErase)
 	e.Actor, e.ActorKind = p.UserID, audit.ActorUser
-	dir, derr := s.eraseDirectoryAccount(r.Context(), e, p.UserID, user.Email, 0)
-	if derr != nil {
-		dir = s.scheduleDirectoryErasure(r.Context(), p.UserID, user.Email, derr)
-	}
+	dir := s.eraseInDirectory(r, e, p.UserID, user.Email)
 
 	// The extensions hear it after the directory's first attempt, so one
 	// that keeps a copy of the account elsewhere acts on an erasure that has
@@ -251,7 +248,9 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 
 	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
 	// A header on the 204, not a body: the contract is additive-only.
-	w.Header().Set(directoryErasureHeader, dir)
+	if dir != "" {
+		w.Header().Set(directoryErasureHeader, dir)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

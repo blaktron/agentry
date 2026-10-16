@@ -150,7 +150,10 @@ func TestDirectoryRememberBlueprint(t *testing.T) {
 	if !strings.Contains(skipExpr, `COOKIES.get("`+trustedDeviceCookieName+`")`) {
 		t.Errorf("the skip policy does not read the registry's cookie %q", trustedDeviceCookieName)
 	}
-	if !strings.Contains(skipExpr, `"/internal/directory/trusted-device"`) {
+	// The registry's own route by default; an extension's callback mount
+	// where AGENTRY_REGISTRY_CALLBACK_PATH names it.
+	if !strings.Contains(skipExpr, `or "/internal/directory") + "/trusted-device"`) ||
+		!strings.Contains(skipExpr, `os.environ.get("AGENTRY_REGISTRY_CALLBACK_PATH", "")`) {
 		t.Error("the skip policy does not call the registry's check route")
 	}
 	for _, line := range strings.Split(skipExpr, "\n") {
