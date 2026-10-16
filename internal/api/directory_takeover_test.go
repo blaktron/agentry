@@ -37,6 +37,7 @@ func TestAnExtensionsDirectoryTakesTheDirectoryPath(t *testing.T) {
 		cfg.BaseURL = "http://127.0.0.1"
 		cfg.Auth.TrustedDeviceTTL = deviceTTL
 		cfg.Social.Authentik = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.origin()}
+		cfg.Social.Google = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.origin()}
 		cfg.Auth.IdPTrustCheckToken = directoryTrustToken
 	}, func(s *api.Server) {
 		s.SetOIDCHTTPClient(idp.hostClient())
@@ -90,6 +91,16 @@ func TestAnExtensionsDirectoryTakesTheDirectoryPath(t *testing.T) {
 	if len(heard) != 2 || heard[1].NewAccount || heard[1].UserID.String() != userID {
 		mu.Unlock()
 		t.Fatalf("the second sign-in was heard as %+v", heard[1:])
+	}
+	mu.Unlock()
+
+	// The same address through another provider links the existing
+	// account: not a new one either.
+	directorySignIn(t, env, idp, "google")
+	mu.Lock()
+	if len(heard) != 3 || heard[2].NewAccount || heard[2].UserID.String() != userID || heard[2].Provider != "google" {
+		mu.Unlock()
+		t.Fatalf("a sign-in linked by its verified address was heard as %+v", heard[2:])
 	}
 	mu.Unlock()
 
@@ -182,8 +193,11 @@ type erasingDirectory struct {
 
 func (d *erasingDirectory) EraseErased(_ *http.Request, a api.ErasedAccount) string {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	d.asked = append(d.asked, a)
+	d.mu.Unlock()
+	if d.outcome == "panic" {
+		panic("the directory fell over")
+	}
 	return d.outcome
 }
 
@@ -192,14 +206,17 @@ var _ api.DirectoryErasure = (*erasingDirectory)(nil)
 // TestADirectoryThatErasesItselfAnswersTheErasure: the core hands the
 // directory half to the directory once, with the account's identities and
 // address, makes no attempt or retry of its own, and reports the
-// directory's outcome; an outcome the response does not define is left off.
+// directory's outcome; an outcome the response does not define, or a
+// directory that panics, is reported as failed.
 func TestADirectoryThatErasesItselfAnswersTheErasure(t *testing.T) {
 	for _, tc := range []struct{ outcome, header string }{
 		{api.DirectoryErasurePending, "pending"},
 		{api.DirectoryErasureDeleted, "deleted"},
-		{"maybe", ""},
+		{"maybe", "failed"},
+		{"", "failed"},
+		{"panic", "failed"},
 	} {
-		t.Run(tc.outcome, func(t *testing.T) {
+		t.Run("outcome "+tc.outcome, func(t *testing.T) {
 			dir := &erasingDirectory{outcome: tc.outcome}
 			env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) { s.SetDirectory(dir) })
 			c := env.mintAccount(t, idp, "self-erase")

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -92,7 +93,10 @@ func (s *Server) builtInDirectory() bool { return !s.dirSet }
 // outcome it returns on the erasure's response (X-Agentry-Directory-Erasure),
 // which the site reads to tell the person where their sign-in account
 // stands. EraseErased is called in the request, so it makes at most one
-// quick attempt and queues the rest.
+// quick attempt and queues the rest. The directory records each attempt
+// as a user.directory_erase audit event and raises one that never
+// completes, as the core does for its own. An outcome outside the set below
+// is reported as failed and raised.
 type DirectoryErasure interface {
 	EraseErased(r *http.Request, a ErasedAccount) string
 }
@@ -129,28 +133,41 @@ func knownDirectoryErasure(outcome string) bool {
 // eraseInDirectory is the directory half of a person's erasure, after the
 // registry's has committed: handed to an extension's directory that carries
 // it out itself, else the core's first attempt with its retry queued on
-// failure. It returns what the response reports. An outcome a directory
-// returns that the response does not define is logged and left off, so the
-// site says what it says when it cannot tell.
+// failure. It returns what the response reports.
 func (s *Server) eraseInDirectory(r *http.Request, base audit.Event, userID uuid.UUID, email string) string {
 	ctx := r.Context()
 	if de, ok := s.dirEraser.(DirectoryErasure); ok && s.dirSet {
-		subjects, err := s.q().ListUserSignInSubjects(ctx, userID)
-		if err != nil {
-			s.log.ErrorContext(ctx, "gdpr: read the identities for the directory's erasure", "user", userID, "err", err)
-		}
-		outcome := de.EraseErased(r, ErasedAccount{UserID: userID, Identities: subjects, Email: email})
-		if !knownDirectoryErasure(outcome) {
-			s.log.ErrorContext(ctx, "gdpr: the directory's erasure answered an outcome the response does not define", "user", userID, "outcome", outcome)
-			return ""
-		}
-		return outcome
+		return s.delegateErasure(r, de, userID, email)
 	}
 	dir, derr := s.eraseDirectoryAccount(ctx, base, userID, email, 0)
 	if derr != nil {
 		dir = s.scheduleDirectoryErasure(ctx, userID, email, derr)
 	}
 	return dir
+}
+
+// delegateErasure hands the directory half to the directory. An outcome the
+// response does not define, or a directory that panicked, is reported as
+// failed and raised to the operator as a failed erasure is: the registry
+// cannot tell that the sign-in account went.
+func (s *Server) delegateErasure(r *http.Request, de DirectoryErasure, userID uuid.UUID, email string) (outcome string) {
+	ctx := r.Context()
+	subjects, err := s.q().ListUserSignInSubjects(ctx, userID)
+	if err != nil {
+		s.log.ErrorContext(ctx, "gdpr: read the identities for the directory's erasure", "user", userID, "err", err)
+	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			s.alertDirectoryErasure(ctx, userID, 0, fmt.Errorf("the directory's erasure panicked: %v", rec))
+			outcome = dirEraseFailed
+		}
+	}()
+	outcome = de.EraseErased(r, ErasedAccount{UserID: userID, Identities: subjects, Email: email})
+	if !knownDirectoryErasure(outcome) {
+		s.alertDirectoryErasure(ctx, userID, 0, fmt.Errorf("the directory's erasure answered %q, which is no outcome the response defines", outcome))
+		return dirEraseFailed
+	}
+	return outcome
 }
 
 // HasDirectory reports whether the server has a directory, built in or an
