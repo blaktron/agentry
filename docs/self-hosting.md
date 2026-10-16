@@ -630,8 +630,8 @@ Env: `AGENTRY_AUDIT_STREAM_KIND`, `AGENTRY_AUDIT_STREAM_DIR`,
   Rotate and ship those with whatever you already use.
 - `log` mirrors every event as one line on the server's own log,
   `event=audit.<action>` ([the log contract](logging.md)), so it lands
-  wherever the server's lines are shipped — the log stack's `agentry-audit`
-  index, for one. It is a mirror: the row stays the record.
+  wherever the server's lines are shipped. It is a mirror: the row stays
+  the record.
 - `s3` is **not implemented**. The constructor refuses at startup and names
   the bucket it was asked for, rather than silently dropping records.
   Use `file` plus your log shipper.
@@ -774,32 +774,27 @@ addresses of people, values above 4 KB), and how the audit mirror
 `AGENTRY_LOG_LEVEL`.
 
 The compose stack keeps every container's `json-file` log rotated (three
-files of 10 MB per container), so a stack without a log stack does not keep
-logs forever; `docker logs` is the reader. The edge writes its access line
+files of 10 MB per container), so its logs never grow without bound;
+`docker logs` is the reader. The edge writes its access line
 as JSON too — `event=http.access`, the `request_id` it minted and passed
 upstream, the client address, method, path (never the query string),
 status, bytes, timings, host, user agent — so with
 `AGENTRY_PROXY_REQUEST_ID=true` one id names a request on the edge's line
 and on every line and audit row the server writes for it.
 
-**The log stack** — the rsyslog collector, the OpenSearch store and
-OpenSearch Dashboards, from the `agentry-logging` repository — is an
-optional profile applied over this stack as two more compose files. Every
-container then ships its lines through Docker's `syslog` driver, over UDP
-to a loopback port, in non-blocking mode: shipping is best-effort by
-design. A collector that is slow, down or not yet up never stalls the
-registry and never stops a container from starting; the price, measured,
-is the lines sent while the collector was down, and about three in a
-hundred at ten thousand lines a second (nothing at the registry's own
-rates). The audit record does not depend on it. Retention is the stack's
-knobs — `AGENTRY_LOGS_RETENTION_DAYS` (30), `AGENTRY_ACCESS_RETENTION_DAYS`
-(14), `AGENTRY_AUDIT_INDEX_RETENTION_DAYS` (90) — while `audit_events`
-keeps its rows for `audit.retentionDays`: Postgres is the audit record and
-the store is the search copy.
-OpenSearch needs `vm.max_map_count` of at least 262144 on the host
-(Fedora ships more; Debian and Ubuntu ship 65530 and it refuses to start)
-and about 5.5 GB of disk for the images. The repository's README carries
-the rest.
+**Shipping the lines** is the deployment's choice: the server needs no log
+store and depends on none. Every service in `docker-compose.yaml` has the
+same rotated `logging` block, and a compose override file that sets
+`logging` on a service replaces it with another Docker logging driver
+(`syslog`, `fluentd`, `gelf`, `journald`) pointed at whatever collector you
+run. Use the driver's
+`mode: non-blocking` so a collector that is slow or down never stalls a
+container; the price is the lines sent while it was down. On Kubernetes the
+chart's pods write to stdout and stderr, which any node-level collector
+reads from the kubelet's files. The audit record does not depend on any of
+it: `audit_events` keeps its rows for `audit.retentionDays`, and how long a
+log store keeps the `audit.<action>` lines of the `log` stream is that
+store's setting.
 
 ### What the stack exposes
 
@@ -1114,7 +1109,7 @@ existing flags stay as they are.
 
 **The directory's mirror of platform staff.** An application
 that signs in through the directory and should admit staff alone, such as
-the log stack's OpenSearch Dashboards, can read only what the directory's
+an OpenSearch Dashboards, can read only what the directory's
 tokens carry. Set `AGENTRY_IDP_STAFF_MIRROR_GROUP` (the chart's
 `config.auth.idpStaffMirrorGroup`), say `agentry-staff`, and the registry
 keeps that directory group equal to its platform staff: for every active
@@ -1161,8 +1156,8 @@ after their first such sign-in.
   checkout) and never printed. A re-run keeps the secret in an existing
   file.
 
-It prints the provider's OpenID configuration URL, which the log stack's
-Dashboards takes.
+It prints the provider's OpenID configuration URL, which Dashboards'
+OpenID settings take.
 
 **Moving a deployment onto the rule, in this order.**
 
@@ -2308,7 +2303,7 @@ and a seal pass moves the older ones within minutes.
   under a static seal, makes no recovery keys. Administration then
   needs a login of its own, such as a break-glass role that no pod uses.
 - **Audit.** A `file` device on standard output puts one JSON line per
-  request and response in the log stack. Each line names the path, the
+  request and response on the container's log. Each line names the path, the
   role and the policies, and replaces every value with a keyed hash.
 
 ### What to back up, and what it opens
