@@ -254,7 +254,7 @@ description explaining why an existing one will not do.
 Every build that ships is released under a version, on two channels.
 No release is 1.x until a maintainer enables it.
 
-- **`main` releases, `vX.Y.Z`**, go to production. They are automated with
+- **`main` releases, `vX.Y.Z`**, are the stable releases. They are automated with
   [release-please](https://github.com/googleapis/release-please)
   (`.github/workflows/release-please.yaml`, `release-please-config.json`):
   1. Merges to `main` update a standing **release PR** that bumps the version

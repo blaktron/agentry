@@ -111,7 +111,7 @@ config:
     s3Region: ""
     s3Prefix: "" # optional key prefix, letting one bucket host several envs
     s3Endpoint: "" # set for MinIO/Ceph; empty uses AWS
-    s3UsePathStyle: false # MinIO and Ceph RGW (Vultr Object Storage) need true; AWS does not
+    s3UsePathStyle: false # MinIO and Ceph RGW need true; AWS does not
   git:
     dataDir: /data/git
     # The SSH git transport: the address the git role listens on,
@@ -324,7 +324,7 @@ git:
     size: 20Gi
     # An RWX class whose driver leaves the volume's root owned by root: the
     # kubelet applies fsGroup only to ReadWriteOnce volumes under a CSI
-    # driver's default fsGroupPolicy, so NFS-like classes (Vultr VFS, EFS
+    # driver's default fsGroupPolicy, so NFS-like classes (EFS
     # without an access point, Filestore) hand the non-root git role a
     # directory it cannot write, and it dies on its SSH host key. true adds an
     # init container — the agentryd image run as root with CAP_CHOWN alone —
