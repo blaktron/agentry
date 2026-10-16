@@ -48,6 +48,9 @@ const (
 	// issuer — the operator points it at their instance's application slug
 	// (e.g. https://auth.example/application/o/agentry/).
 	ProviderAuthentik = "authentik"
+	// ProviderOIDC is the deployment's generic sign-in provider: any OpenID
+	// Connect issuer the operator points it at, with no defaults.
+	ProviderOIDC = "oidc"
 )
 
 // ScopeAgentry is the scope the directory's `agentry_remember_device`
@@ -61,7 +64,7 @@ const ScopeAgentry = "agentry"
 // page offers them. The API layer validates provider names against its
 // generated enum, so this is a listing for tooling and tests, not a gate.
 func Providers() []string {
-	return []string{ProviderGoogle, ProviderGitHub, ProviderMicrosoft, ProviderOpenAI, ProviderClaude, ProviderAuthentik}
+	return []string{ProviderGoogle, ProviderGitHub, ProviderMicrosoft, ProviderOpenAI, ProviderClaude, ProviderAuthentik, ProviderOIDC}
 }
 
 // Identity is what a completed social login asserts about the caller.
@@ -87,24 +90,16 @@ type Identity struct {
 	// the name chosen at the IdP, which seeds a new account's handle. Never
 	// used to find an account.
 	Username string
-	// RememberDevice is the ID token's `agentry_remember_device` claim: the
-	// person ticked "Remember this device for 30 days" on the directory's
-	// code page. The API honours it from the directory alone, and only
-	// beside an AMR that names a second factor.
-	RememberDevice bool
 	// AuthTime is the ID token's `auth_time`: when the person last actually
 	// authenticated at the IdP (zero when absent). A remembered browser is
 	// minted only from a fresh one.
 	AuthTime time.Time
-	// DirectoryAccountID is the ID token's `agentry_directory_id` claim: the
-	// directory's own id for the account. The API records it from
-	// the directory alone, on the identity the token signs in.
-	DirectoryAccountID int64
-	// PromoCode is the ID token's `agentry_promo_code` claim: the
-	// promo code typed on the directory's sign-up form, upper-cased and held
-	// to its grammar. The API forwards it from the directory alone, and only
-	// when this sign-in makes the account.
-	PromoCode string
+	// Claims is every claim of the ID token (OIDC providers only; nil for
+	// the GitHub shim), for a reader of an IdP's own claims: the
+	// deployment's directory sends some, which the registry reads from its
+	// token alone (the API's directory claims), and an extension reads
+	// through the sign-in hook.
+	Claims map[string]any
 }
 
 // MFAAsserted reports whether AMR names a second factor, by the rule the
@@ -167,6 +162,10 @@ func New(ctx context.Context, name string, cfg Config, redirectURL string) (Prov
 			cfg.Scopes = []string{coreoidc.ScopeOpenID, "email", "profile", ScopeAgentry}
 		}
 		return newOIDC(ctx, ProviderAuthentik, "", cfg, redirectURL)
+	case ProviderOIDC:
+		// Whatever issuer the operator names, asked for the scopes they
+		// configured or the standard three.
+		return newOIDC(ctx, ProviderOIDC, "", cfg, redirectURL)
 	case ProviderGitHub:
 		return newGitHub(cfg, redirectURL), nil
 	default:
@@ -176,7 +175,7 @@ func New(ctx context.Context, name string, cfg Config, redirectURL string) (Prov
 
 // Startable reports whether a provider's settings are enough for New to build
 // it: a client id and secret, and an issuer for an OIDC provider that has no
-// default endpoints (openai, claude, authentik). It needs no network, so it
+// default endpoints (openai, claude, authentik, oidc). It needs no network, so it
 // can answer for a provider whose issuer is down; New can still fail then.
 func Startable(name string, cfg Config) bool {
 	if cfg.ClientID == "" || cfg.ClientSecret == "" {
@@ -185,7 +184,7 @@ func Startable(name string, cfg Config) bool {
 	switch name {
 	case ProviderGoogle, ProviderMicrosoft, ProviderGitHub:
 		return true
-	case ProviderOpenAI, ProviderClaude, ProviderAuthentik:
+	case ProviderOpenAI, ProviderClaude, ProviderAuthentik, ProviderOIDC:
 		return cfg.Issuer != ""
 	default:
 		return false
@@ -252,19 +251,17 @@ func (p *oidcProvider) Exchange(ctx context.Context, code, verifier, nonce strin
 		return nil, err
 	}
 	return &Identity{
-		Provider:           p.name,
-		Subject:            claims.Subject,
-		NamespacedSubject:  p.name + ":" + claims.Subject,
-		Email:              claims.Email,
-		EmailVerified:      claims.EmailVerified,
-		AMR:                claims.AMR,
-		ACR:                claims.ACR,
-		Groups:             claims.Groups,
-		Username:           claims.PreferredUsername,
-		RememberDevice:     claims.RememberDevice,
-		AuthTime:           claims.AuthTime,
-		DirectoryAccountID: claims.DirectoryAccountID,
-		PromoCode:          claims.PromoCode,
+		Provider:          p.name,
+		Subject:           claims.Subject,
+		NamespacedSubject: p.name + ":" + claims.Subject,
+		Email:             claims.Email,
+		EmailVerified:     claims.EmailVerified,
+		AMR:               claims.AMR,
+		ACR:               claims.ACR,
+		Groups:            claims.Groups,
+		Username:          claims.PreferredUsername,
+		AuthTime:          claims.AuthTime,
+		Claims:            claims.Raw,
 	}, nil
 }
 

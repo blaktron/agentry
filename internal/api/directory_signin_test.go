@@ -78,7 +78,7 @@ func TestDirectorySignInFacts(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newAuthentikEraser(fakeSignInDirectory(t, tc.attr).URL, "tok")
-			for _, link := range []directoryLink{
+			for _, link := range []DirectoryLink{
 				// Signed in before the directory sent its id: the uid at the address.
 				{UID: "uid-pat", Email: "pat@example.test"},
 				// The directory's id, the registry's address being another
@@ -100,7 +100,7 @@ func TestDirectorySignInFacts(t *testing.T) {
 	}
 	t.Run("no account the link names: nothing is reported", func(t *testing.T) {
 		a := newAuthentikEraser(fakeSignInDirectory(t, true).URL, "tok")
-		for _, link := range []directoryLink{
+		for _, link := range []DirectoryLink{
 			{Email: "pat@example.test"}, // no directory sign-in: an address alone never picks it
 			{UID: "uid-nobody", Email: "pat@example.test"},
 			{AccountID: 12, UID: "uid-other", Email: "pat@example.test"}, // the id holds another account now

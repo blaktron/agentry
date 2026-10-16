@@ -1,33 +1,21 @@
 package api
 
-// pathHandles are the names no user or organization may take because they
-// are root paths of this server or of the site that fronts it: a handle is
-// the first segment of `/<ns>/<name>` pages, and `ui` is the server's own
-// surface. The list is the union of both surfaces so a handle
-// stays valid whichever fronts a deployment. Nobody can create these, staff
-// included: an org named `ui` would shadow the server's own pages.
-var pathHandles = map[string]bool{
-	"ui": true, "api": true, "auth": true, "sso": true, "scim": true, "healthz": true, "readyz": true, "metrics": true,
-	"login": true, "logout": true, "signup": true, "settings": true, "dashboard": true, "search": true, "build": true,
-	"new": true, "review": true, "staff": true, "orgs": true, "tags": true, "trust": true, "advisories": true,
-	"download": true, "downloads": true, "docs": true, "about": true, "contact": true, "privacy": true, "terms": true,
-	"cookies": true, "agent-template": true, "admin": true, "static": true, "img": true,
-	// The site's runs, invitations and pricing pages.
-	"runs": true, "invitations": true, "pricing": true,
-	// The site's About us page, account-deleted page, Scheduled pages and
-	// OAuth client metadata documents.
-	"aboutus": true, "account-deleted": true, "scheduled": true, "oauth": true,
-	// The site's Report bug page.
-	"report-bug": true,
-}
+import "github.com/blaktron/agentry/pkg/handle"
 
-// firstPartyHandles are the product's own names, reserved so that nobody
-// on a public registry can pass their content off as first-party. Unlike
-// pathHandles they are meant to exist: platform staff may create an
-// organization with one of them — the `agentry` org that publishes the
-// example QuickAgents.
-var firstPartyHandles = map[string]bool{
-	"agentry": true, "secureagentry": true,
+// pathHandles and firstPartyHandles are the handle package's reserved
+// names (pkg/handle): the root paths nobody may take, and the product's own
+// names only platform staff may give an organization.
+var (
+	pathHandles       = handleSet(handle.PathNames())
+	firstPartyHandles = handleSet(handle.FirstPartyNames())
+)
+
+func handleSet(names []string) map[string]bool {
+	m := make(map[string]bool, len(names))
+	for _, n := range names {
+		m[n] = true
+	}
+	return m
 }
 
 // firstPartyOrg reports whether an organization handle is one of the

@@ -503,6 +503,50 @@ conditional-write semantics. If you are standing up production on S3 and
 KMS, publish a throwaway version first and confirm that the archive
 round-trips and `agentry verify` passes before you trust it with anything.
 
+### Sign in with your OpenID provider
+
+The registry can hand sign-in to any OpenID Connect provider you already
+run (Keycloak, Entra ID, Okta, Google Workspace, authentik, Dex): people
+sign in there, and the registry keeps its own sessions, tokens and
+permissions. One provider at a time:
+
+```yaml
+auth:
+  oidc:
+    issuer: "https://idp.example.com/realms/agentry"   # has /.well-known/openid-configuration
+    clientId: "agentry"
+    clientSecret: "…"
+    scopes: [openid, email, profile]   # the default
+    displayName: "Example SSO"         # the sign-in button: "Continue with Example SSO"
+```
+
+Env: `AGENTRY_AUTH_OIDC_ISSUER`, `_CLIENT_ID`, `_CLIENT_SECRET`, `_SCOPES`
+(comma-separated), `_DISPLAY_NAME` and `_ID`.
+
+Register the client with your provider as a confidential client using the
+authorization code flow with PKCE, and the redirect URI
+`{baseURL}/api/v1/auth/oidc/oidc/callback`. `GET /api/v1/meta` then lists
+`oidc` among `signInProviders`.
+
+What the registry takes from the ID token, after checking its signature,
+issuer, audience, expiry and nonce: `sub`, which links the account (as
+`oidc:<sub>`), and `email` with `email_verified`. A first sign-in creates
+the account, its handle seeded from `preferred_username` when the name is
+free. A first sign-in whose address an existing account already holds links
+to that account only when both the token and the account have the address
+verified; otherwise it is refused with `409 sso-link-required`, never linked.
+`amr` naming a second factor (`mfa`, `otp`, `hwk`, …) is recorded as
+evidence for `auth.requireIdpMFA`.
+
+`auth.oidc.id` names the provider in its routes and in every account it
+links, and is `oidc` unless you set it. The `social.authentik` keys configure
+the same provider as the deployment's own directory service, under the id
+`authentik`: moving them to `auth.oidc` keeps every account linked only with
+`id: authentik`. The registry refuses
+to start with both `auth.oidc` and `social.authentik` set, and never change
+the id of a provider whose accounts exist: each would be signed in as
+somebody new.
+
 ### Social login
 
 Individual accounts can sign in with Google, GitHub, Microsoft, OpenAI, or
@@ -2070,7 +2114,30 @@ the anonymous rate class skips (`Unthrottles`: a payment provider's signed
 webhook), receive the database pool, the logger, an audit writer and a meter
 for its own metrics at start-up (`Binds`), delete the rows it keeps about a person inside the
 account erasure's and the data clear's own transaction (`ErasesAccounts`),
-run a job on a period, and register audit actions under its own name. The core carries no extension and behaves identically with none:
+run a job on a period, and register audit actions under its own name.
+
+An extension can also be the deployment's directory, the service that holds
+people's sign-in accounts. It supplies the directory the registry erases
+accounts in, lists and removes authenticators through, and mirrors platform
+staff into (`ManagesDirectory`), replacing the built-in one. It hears every
+sign-in through an individual provider with all of the ID token's claims,
+before the session is issued (`HearsSignIn`), and the events
+`account.erased` (with the identities the account signed in with and the
+address it held) and `staff.changed`. It can read platform staff, mint a
+remembered browser at a sign-in it hears, and check one, under the
+registry's rules: minted only from that sign-in's own verified token, whose
+`amr` names a second factor and whose `auth_time` is minutes old, stored as
+a SHA-256 hash and bound to one account. It can serve calls
+from a service of its own under `/internal/x/<name>/` (`ReceivesCallbacks`).
+There the registry checks a shared secret of at least 32 characters, answers
+404 to any request carrying `X-Forwarded-For` or `Forwarded`, applies the
+rate class the extension declared, and resolves no caller. No edge shipped
+with the registry routes `/internal/`, and an ingress you write must not
+either. `pkg/handle` exports the handle grammar and the reserved names, for
+a directory that lets people choose a username the registry seeds a handle
+from.
+
+The core carries no extension and behaves identically with none:
 a self-hosted registry has no subscription tiers, caps nothing, and never
 answers `402`.
 

@@ -169,25 +169,25 @@ func TestDirectoryFindAccount(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name string
-		link directoryLink
+		link DirectoryLink
 		pk   int // 0: none
-		how  directoryLookup
+		how  DirectoryLookup
 	}{
-		{"by id, the registry's address being another", directoryLink{AccountID: 12, UID: "uid-pat", Email: "pat@authentik.social.local"}, 12, dirLookupByID},
-		{"by id, but another account's uid there now", directoryLink{AccountID: 12, UID: "uid-bob", Email: "bob@example.test"}, 0, dirLookupIDMismatch},
-		{"by id, the account gone", directoryLink{AccountID: 999, UID: "uid-pat"}, 0, dirLookupByID},
-		{"by id, a service account", directoryLink{AccountID: 77, UID: "uid-svc"}, 0, dirLookupIDMismatch},
-		{"by id, an inactive account", directoryLink{AccountID: 20, UID: "uid-gone"}, 20, dirLookupByID},
-		{"by uid, held with capitals", directoryLink{UID: "uid-alice", Email: "alice@example.test"}, 7, dirLookupByUID},
-		{"by uid, one of two at the address", directoryLink{UID: "uid-s2", Email: "shared@example.test"}, 13, dirLookupByUID},
-		{"by uid, not at the address", directoryLink{UID: "uid-pat", Email: "pat@authentik.social.local"}, 0, dirLookupByUID},
-		{"by address, the only holder (a service account never counts)", directoryLink{Email: "alice@example.test"}, 7, dirLookupByAddress},
-		{"by address, the registry's copy in capitals", directoryLink{Email: "BOB@EXAMPLE.TEST"}, 8, dirLookupByAddress},
-		{"by address, an inactive account", directoryLink{Email: "gone@example.test"}, 20, dirLookupByAddress},
-		{"by address, two holders", directoryLink{Email: "shared@example.test"}, 0, dirLookupAddressShared},
-		{"by address, a prefix of an address is not it", directoryLink{Email: "shared@example"}, 0, dirLookupByAddress},
-		{"by address, nobody", directoryLink{Email: "nobody@example.test"}, 0, dirLookupByAddress},
-		{"nothing to go on", directoryLink{}, 0, dirLookupByAddress},
+		{"by id, the registry's address being another", DirectoryLink{AccountID: 12, UID: "uid-pat", Email: "pat@authentik.social.local"}, 12, DirectoryLookupByID},
+		{"by id, but another account's uid there now", DirectoryLink{AccountID: 12, UID: "uid-bob", Email: "bob@example.test"}, 0, DirectoryLookupIDMismatch},
+		{"by id, the account gone", DirectoryLink{AccountID: 999, UID: "uid-pat"}, 0, DirectoryLookupByID},
+		{"by id, a service account", DirectoryLink{AccountID: 77, UID: "uid-svc"}, 0, DirectoryLookupIDMismatch},
+		{"by id, an inactive account", DirectoryLink{AccountID: 20, UID: "uid-gone"}, 20, DirectoryLookupByID},
+		{"by uid, held with capitals", DirectoryLink{UID: "uid-alice", Email: "alice@example.test"}, 7, DirectoryLookupByUID},
+		{"by uid, one of two at the address", DirectoryLink{UID: "uid-s2", Email: "shared@example.test"}, 13, DirectoryLookupByUID},
+		{"by uid, not at the address", DirectoryLink{UID: "uid-pat", Email: "pat@authentik.social.local"}, 0, DirectoryLookupByUID},
+		{"by address, the only holder (a service account never counts)", DirectoryLink{Email: "alice@example.test"}, 7, DirectoryLookupByAddress},
+		{"by address, the registry's copy in capitals", DirectoryLink{Email: "BOB@EXAMPLE.TEST"}, 8, DirectoryLookupByAddress},
+		{"by address, an inactive account", DirectoryLink{Email: "gone@example.test"}, 20, DirectoryLookupByAddress},
+		{"by address, two holders", DirectoryLink{Email: "shared@example.test"}, 0, DirectoryLookupAddressShared},
+		{"by address, a prefix of an address is not it", DirectoryLink{Email: "shared@example"}, 0, DirectoryLookupByAddress},
+		{"by address, nobody", DirectoryLink{Email: "nobody@example.test"}, 0, DirectoryLookupByAddress},
+		{"nothing to go on", DirectoryLink{}, 0, DirectoryLookupByAddress},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			u, how, err := a.findAccount(ctx, tc.link)
@@ -209,7 +209,7 @@ func TestDirectoryFindAccount(t *testing.T) {
 
 	// An id in hand never falls back to the address.
 	d.byID, d.searched = 0, 0
-	if _, _, err := a.findAccount(ctx, directoryLink{AccountID: 999, UID: "uid-alice", Email: "alice@example.test"}); err != nil {
+	if _, _, err := a.findAccount(ctx, DirectoryLink{AccountID: 999, UID: "uid-alice", Email: "alice@example.test"}); err != nil {
 		t.Fatal(err)
 	}
 	if d.byID != 1 || d.searched != 0 {
@@ -221,7 +221,7 @@ func TestDirectoryFindAccount(t *testing.T) {
 // (numeric or string) so the settings page can name one to remove.
 func TestDirectoryDevicesCarryIDs(t *testing.T) {
 	c, _ := fakeAuthentik(t)
-	devs, err := c.Devices(context.Background(), directoryLink{AccountID: 7, UID: "uid-alice", Email: "alice@example.test"})
+	devs, err := c.Devices(context.Background(), DirectoryLink{AccountID: 7, UID: "uid-alice", Email: "alice@example.test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestDirectoryDevicesCarryIDs(t *testing.T) {
 	if devs[0].CreatedAt == nil {
 		t.Error("created timestamp not parsed")
 	}
-	none, err := c.Devices(context.Background(), directoryLink{Email: "shared@example.test"})
+	none, err := c.Devices(context.Background(), DirectoryLink{Email: "shared@example.test"})
 	if err != nil || len(none) != 0 {
 		t.Fatalf("an address two accounts hold: %+v %v, want no devices", none, err)
 	}
@@ -244,7 +244,7 @@ func TestDirectoryDevicesCarryIDs(t *testing.T) {
 func TestDirectoryDeleteDeviceOwnOnly(t *testing.T) {
 	c, d := fakeAuthentik(t)
 	ctx := context.Background()
-	alice := directoryLink{AccountID: 7, UID: "uid-alice", Email: "alice@example.test"}
+	alice := DirectoryLink{AccountID: 7, UID: "uid-alice", Email: "alice@example.test"}
 	ok, err := c.DeleteDevice(ctx, alice, "totp", "31")
 	if err != nil || !ok {
 		t.Fatalf("own device: ok=%v err=%v", ok, err)
@@ -253,15 +253,15 @@ func TestDirectoryDeleteDeviceOwnOnly(t *testing.T) {
 		t.Fatalf("deleted = %v", d.deleted)
 	}
 	for _, tc := range []struct {
-		link     directoryLink
+		link     DirectoryLink
 		kind, id string
 	}{
-		{directoryLink{AccountID: 8, UID: "uid-bob", Email: "bob@example.test"}, "totp", "31"},   // alice's device, bob asking
-		{directoryLink{AccountID: 7, UID: "uid-bob", Email: "alice@example.test"}, "totp", "31"}, // alice's id, bob's uid
+		{DirectoryLink{AccountID: 8, UID: "uid-bob", Email: "bob@example.test"}, "totp", "31"},   // alice's device, bob asking
+		{DirectoryLink{AccountID: 7, UID: "uid-bob", Email: "alice@example.test"}, "totp", "31"}, // alice's id, bob's uid
 		{alice, "webauthn", "31"}, // wrong kind for that id
 		{alice, "sms", "9"},       // no such device
 		{alice, "bogus", "31"},    // unknown kind
-		{directoryLink{Email: "nobody@example.test"}, "totp", "31"}, // no directory account
+		{DirectoryLink{Email: "nobody@example.test"}, "totp", "31"}, // no directory account
 	} {
 		ok, err := c.DeleteDevice(ctx, tc.link, tc.kind, tc.id)
 		if err != nil || ok {
@@ -280,17 +280,17 @@ func TestDirectoryEraseAccount(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name string
-		link directoryLink
+		link DirectoryLink
 		want string // "" when nothing is deleted
 	}{
-		{"by id, whatever the registry's address", directoryLink{AccountID: 12, UID: "uid-pat", Email: "pat@authentik.social.local"}, "user/12"},
-		{"by uid, one of two at the address", directoryLink{UID: "uid-s1", Email: "shared@example.test"}, "user/11"},
-		{"by address, the only holder, held with capitals", directoryLink{Email: "alice@example.test"}, "user/7"},
-		{"by address, an inactive account", directoryLink{Email: "gone@example.test"}, "user/20"},
-		{"by address, two holders", directoryLink{Email: "shared@example.test"}, ""},
-		{"a superuser, by id", directoryLink{AccountID: 1, UID: "uid-root", Email: "root@example.test"}, ""},
-		{"a superuser, by address", directoryLink{Email: "root@example.test"}, ""},
-		{"by id, the account gone", directoryLink{AccountID: 999, UID: "uid-x", Email: "bob@example.test"}, ""},
+		{"by id, whatever the registry's address", DirectoryLink{AccountID: 12, UID: "uid-pat", Email: "pat@authentik.social.local"}, "user/12"},
+		{"by uid, one of two at the address", DirectoryLink{UID: "uid-s1", Email: "shared@example.test"}, "user/11"},
+		{"by address, the only holder, held with capitals", DirectoryLink{Email: "alice@example.test"}, "user/7"},
+		{"by address, an inactive account", DirectoryLink{Email: "gone@example.test"}, "user/20"},
+		{"by address, two holders", DirectoryLink{Email: "shared@example.test"}, ""},
+		{"a superuser, by id", DirectoryLink{AccountID: 1, UID: "uid-root", Email: "root@example.test"}, ""},
+		{"a superuser, by address", DirectoryLink{Email: "root@example.test"}, ""},
+		{"by id, the account gone", DirectoryLink{AccountID: 999, UID: "uid-x", Email: "bob@example.test"}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, d := fakeAuthentik(t)

@@ -54,9 +54,14 @@ type Server struct {
 	// paths is where this server sends browsers (a site in front of it, or
 	// its own /ui/ pages).
 	paths webPaths
-	// dirEraser deletes the sign-in account in the directory service on
-	// erasure; nil when auth.idpAdminURL is unset.
+	// dirEraser is the directory (directory_port.go): the built-in one when
+	// auth.idpAdminURL is set, an extension's once SetDirectory is called,
+	// nil with neither. The settings page and the superseded check read
+	// its other methods by assertion.
 	dirEraser directoryEraser
+	// dirSet is SetDirectory having been called: the directory is an
+	// extension's.
+	dirSet bool
 	// unactivatedReadOnly makes an unactivated account read-only:
 	// where the directory owns credentials (externalOnly),
 	// a self-enrolled account reaches the registry before its address is
@@ -64,8 +69,8 @@ type Server struct {
 	// unverified address (no publishing, agents or organizations).
 	unactivatedReadOnly bool
 	// dirGroups writes the directory's mirror of platform staff
-	// (staff_mirror.go); nil unless auth.idpStaffMirrorGroup is
-	// set, which needs the admin URL and token.
+	// (staff_mirror.go); nil unless auth.idpStaffMirrorGroup is set and
+	// there is a directory.
 	dirGroups directoryGroups
 	// dirEraseAttempts overrides the directory erasure retry budget
 	// (directory_erasure.go; 0 is the default).
@@ -132,6 +137,12 @@ type Server struct {
 	// extensions and eventHooks are the closed build's additions (extensions.go).
 	extensions []extensionMount
 	eventHooks []func(ctx context.Context, ev Event)
+	// extensionCallbacks are the extensions' callback mounts
+	// (extension_callbacks.go).
+	extensionCallbacks []extensionCallbackMount
+	// signInHooks hear every sign-in through an individual provider
+	// (sign_in_seam.go).
+	signInHooks []func(ctx context.Context, in SignIn)
 	// accountErasers delete an extension's rows about an account inside
 	// the erasure and data-clear transactions.
 	accountErasers []namedEraser
@@ -380,11 +391,11 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 			srv.dirEraser = ak
 			if cfg.Auth.IdPStaffMirrorGroup != "" {
 				srv.dirGroups = ak
-				// On every role: a membership change on an API replica
-				// nudges the mirror as one on the worker does.
-				srv.reg.SetStaffChanged(srv.nudgeStaffMirror)
 			}
 		}
+		// On every role: a membership change on an API replica nudges the
+		// mirror and tells the extensions as one on the worker does.
+		srv.reg.SetStaffChanged(srv.staffChanged)
 		srv.reg.SetLogger(log)
 		// A ruleset semver we have never seen means the catalogue was judged
 		// by older rules.
@@ -660,6 +671,7 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 	s.registerFoldIn(q)             // the fold-in sweep and the pending members digest (handlers_fold_in.go)
 	s.registerDirectoryErasure(q)   // erasure's directory half, retried (directory_erasure.go)
 	s.registerStaffMirror(q)        // the directory's mirror of platform staff (staff_mirror.go)
+	s.registerStaffChangedEvent(q)  // staff.changed for the extensions (identity_events.go)
 	s.registerTrustedDeviceSweep(q) // remembered browsers past their expiry (trusted_device_sweep.go)
 	if s.knowledge != nil {
 		s.knowledge.RegisterHandlers(q) // the knowledge pack scan (internal/knowledge)
@@ -1012,6 +1024,11 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	// no edge routes to the registry, gated by its own secret.
 	s.mountDirectoryTrust(mux)
 
+	// Extension callbacks (extension_callbacks.go): /internal/x/<name>/,
+	// the same kind of mount as the directory's trust check, for a service
+	// an extension owns, gated by the extension's own secret.
+	s.mountExtensionCallbacks(mux)
+
 	// Extension routes (extensions.go): /api/v1/x/<name>/ behind
 	// the principal middleware, registered before the generated routes so a
 	// clash with a generated path is a start-up panic, never a shadow.
@@ -1079,13 +1096,21 @@ func (s *Server) uiBrand() ui.Brand {
 }
 
 // socialProviders lists the configured individual-login providers in the
-// order the sign-in page offers them: the directory first when there is
-// one (it is THE way in under externalOnly), then the rest.
+// order the sign-in page offers them: the sign-in OpenID provider first when
+// there is one (it is THE way in under externalOnly), under its display
+// name, then the rest.
 // "Configured" is socialProviderConfig's, the start route's own check, as
 // /meta's list is, so the page offers no button that 404s.
 func (s *Server) socialProviders() []ui.Provider {
+	signIn := "your OpenID provider"
+	if p, ok := s.cfg.SignInOIDC(); ok && p.DisplayName != "" {
+		signIn = p.DisplayName
+	} else if ok && p.ID == config.DirectoryProviderID {
+		signIn = "your " + s.cfg.DisplayName() + " account"
+	}
 	all := []struct{ id, label string }{
-		{"authentik", "your " + s.cfg.DisplayName() + " account"},
+		{"authentik", signIn},
+		{"oidc", signIn},
 		{"google", "Google"},
 		{"github", "GitHub"},
 		{"microsoft", "Microsoft"},

@@ -574,6 +574,59 @@ func (w serverWebhooks) Deliver(ctx context.Context, orgID, endpointID uuid.UUID
 	return w.srv.DeliverWebhook(ctx, orgID, endpointID, event, data)
 }
 
+// staffOf adapts the server's staff read to Staff: nil without a
+// database, the way Deps.DB is.
+func staffOf(srv *api.Server, pool *pgxpool.Pool) Staff {
+	if pool == nil {
+		return nil
+	}
+	return serverStaff{srv}
+}
+
+type serverStaff struct{ srv *api.Server }
+
+func (s serverStaff) Members(ctx context.Context) ([]StaffMember, error) {
+	return s.srv.PlatformStaff(ctx)
+}
+
+// signInHookOf hands an extension's hook the sign-in with a remembered
+// browser that is audited under the extension's name, whatever detail the
+// extension asks for.
+func signInHookOf(h HearsSignIn, name string) func(context.Context, SignIn) {
+	return func(ctx context.Context, in SignIn) {
+		mint := in.RememberBrowser
+		in.RememberBrowser = func(detail map[string]any) (string, time.Duration, error) {
+			d := map[string]any{}
+			for k, v := range detail {
+				d[k] = v
+			}
+			d["via"], d["extension"] = "extension", name
+			return mint(d)
+		}
+		h.SignedIn(ctx, in)
+	}
+}
+
+// rememberedBrowsersOf adapts the server's remembered browsers to
+// RememberedBrowsers: nil without a database. Every record and use is
+// audited with the extension's name, so an investigator can tell which
+// sign-in earned or spent it.
+func rememberedBrowsersOf(srv *api.Server, pool *pgxpool.Pool, name string) RememberedBrowsers {
+	if pool == nil {
+		return nil
+	}
+	return serverRememberedBrowsers{srv: srv, name: name}
+}
+
+type serverRememberedBrowsers struct {
+	srv  *api.Server
+	name string
+}
+
+func (b serverRememberedBrowsers) Use(r *http.Request, userID uuid.UUID, token string) (bool, error) {
+	return b.srv.UseRememberedBrowser(r, userID, token, map[string]any{"via": "extension", "extension": b.name})
+}
+
 // periodicTicker enqueues a job once now and then on its period. Every
 // replica running this enqueues on its own clock; the queue's claim runs
 // each row once, so the handler must tolerate a run that finds nothing to
@@ -823,6 +876,7 @@ func hookCmd() *cobra.Command {
 // (newWorkerQueue) and migrations run before the server exists
 // (migrateExtensions).
 func applyExtensions(srv *api.Server, exts []Extension) {
+	directoryFrom := ""
 	for _, e := range exts {
 		if a, ok := e.(Audits); ok {
 			for _, act := range a.AuditActions() {
@@ -835,7 +889,8 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool), Principals: principalsOf(srv, pool),
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
-				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL()})
+				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
+				Staff: staffOf(srv, pool), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name())})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
@@ -877,6 +932,21 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 			if c := m.ModelInputCallers(); c != nil {
 				srv.SetModelInputCallers(c)
 			}
+		}
+		if m, ok := e.(ManagesDirectory); ok {
+			if d := m.Directory(); d != nil {
+				if directoryFrom != "" {
+					panic("extension: " + e.Name() + " and " + directoryFrom + " both manage the directory; a deployment has one")
+				}
+				directoryFrom = e.Name()
+				srv.SetDirectory(d)
+			}
+		}
+		if c, ok := e.(ReceivesCallbacks); ok {
+			srv.RegisterExtensionCallbacks(e.Name(), c.Callbacks())
+		}
+		if h, ok := e.(HearsSignIn); ok {
+			srv.AddSignInHook(signInHookOf(h, e.Name()))
 		}
 		if h := e.Hooks().Event; h != nil {
 			srv.AddEventHook(h)

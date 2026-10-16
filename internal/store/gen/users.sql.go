@@ -367,6 +367,42 @@ func (q *Queries) ListPersonalNamespaceAgents(ctx context.Context, id uuid.UUID)
 	return items, nil
 }
 
+const listPlatformStaff = `-- name: ListPlatformStaff :many
+SELECT u.id, h.handle, lower(u.email)::text AS email
+FROM users u
+JOIN handles h ON h.id = u.id
+WHERE u.platform_staff AND u.state = 'active' AND u.email_verified_at IS NOT NULL
+ORDER BY h.handle
+`
+
+type ListPlatformStaffRow struct {
+	ID     uuid.UUID `json:"id"`
+	Handle string    `json:"handle"`
+	Email  string    `json:"email"`
+}
+
+// Every account that is platform staff and active, with its handle and its
+// verified address, lower-cased: what an extension mirrors staff from.
+func (q *Queries) ListPlatformStaff(ctx context.Context) ([]ListPlatformStaffRow, error) {
+	rows, err := q.db.Query(ctx, listPlatformStaff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPlatformStaffRow
+	for rows.Next() {
+		var i ListPlatformStaffRow
+		if err := rows.Scan(&i.ID, &i.Handle, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStaffMirrorAccounts = `-- name: ListStaffMirrorAccounts :many
 SELECT u.id, lower(u.email)::text AS email,
        coalesce(substring(i.subject from 11), '')::text AS directory_subject
@@ -502,6 +538,35 @@ func (q *Queries) ListUserDirectoryLinks(ctx context.Context, userID uuid.UUID) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserSignInSubjects = `-- name: ListUserSignInSubjects :many
+SELECT i.subject FROM identities i
+WHERE i.user_id = $1 AND i.provider_kind = 'social' AND i.sso_connection_id IS NULL
+ORDER BY i.created_at, i.id
+`
+
+// The subjects the account signs in with at individual providers
+// ("<provider>:<sub>"), oldest first. An organization's SSO identities are
+// left out: they belong to the organization's connection.
+func (q *Queries) ListUserSignInSubjects(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listUserSignInSubjects, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var subject string
+		if err := rows.Scan(&subject); err != nil {
+			return nil, err
+		}
+		items = append(items, subject)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

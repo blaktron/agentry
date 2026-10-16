@@ -349,6 +349,11 @@ const (
 // gate fails without it.
 const RateNone = "none"
 
+// RateAnon is the anonymous bucket, per client address: the class the
+// principal middleware gives a caller with no credential, and the one an
+// extension's callback mount may declare.
+const RateAnon = "anon"
+
 // RatePerPrincipal says the bucket is the principal middleware's choice per
 // request rather than a class the mount fixes: `anon` for a caller with no
 // credential, `authed` for one with. An extension's mount point is the only

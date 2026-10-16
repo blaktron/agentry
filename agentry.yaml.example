@@ -37,9 +37,22 @@ auth:
                           # it. A second credential class — it never lengthens
                           # a session.
   cookieSecure: false  # true outside local dev
-  # true hands credentials to the directory service — native
-  # register/password/TOTP endpoints answer 410; configure social.authentik.
+  # true hands credentials to an external sign-in provider — native
+  # register/password/TOTP endpoints answer 410; configure auth.oidc or
+  # social.authentik.
   externalOnly: false
+  # Sign in with your OpenID provider: any OIDC issuer. The redirect URI is
+  # {baseURL}/api/v1/auth/oidc/<id>/callback. Leave id at oidc unless the
+  # provider is the deployment's own directory, whose accounts are linked as
+  # authentik, as social.authentik links them (configure one of the two,
+  # never both).
+  oidc:
+    id: oidc
+    issuer: ""
+    clientId: ""
+    clientSecret: ""
+    scopes: []       # empty asks for openid, email, profile
+    displayName: ""  # the sign-in button's name; empty is "your OpenID provider"
 
 # How this server presents itself and where browsers land.
 web:

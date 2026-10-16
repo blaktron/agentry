@@ -96,7 +96,7 @@ func (s *Server) eraseDirectoryAccount(ctx context.Context, base audit.Event, us
 				break
 			}
 			var ok bool
-			var how directoryLookup
+			var how DirectoryLookup
 			ok, how, err = s.dirEraser.EraseAccount(ctx, link)
 			lookups = append(lookups, string(how))
 			deleted = deleted || ok
