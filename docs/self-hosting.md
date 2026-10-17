@@ -148,27 +148,56 @@ deployment multiplies by N (the edge's limits are the ones that hold).
 ### The Helm chart
 
 The chart in `deploy/helm/agentry` is published beside the image as an OCI
-chart, signed with cosign like the image. Every push to `dev` and `main`
-publishes `oci://ghcr.io/blaktron/agentry/charts/agentry` at a prerelease
-version, `0.1.0-<branch>.<run>.g<sha>`, whose default image is the
-`agentryd:sha-<sha>` built by the same run. A release publishes the tagged
-version: a `main` release as chart `0.6.0` with image `v0.6.0`, a `dev`
-prerelease as chart `0.6.1-dev.1` with image `v0.6.1-dev.1`. Only the newest
-`main` release moves the image's `latest`. A released chart or image is signed
-by the release workflow on its branch: pin
-`--certificate-identity https://github.com/blaktron/agentry/.github/workflows/release.yaml@refs/heads/main`
-(with `--certificate-github-workflow-repository blaktron/agentry`) to accept
-only `main` releases. The regexp below also accepts the per-branch builds. The package is private while the
-repository is, so pulling it needs a `read:packages` token, the same one the
-image needs.
+chart, signed with cosign like the image. The heads of `dev` and `main` are
+published shortly after they move: the image as `agentryd:<branch>` and
+`agentryd:sha-<sha>`, and the chart
+`oci://ghcr.io/blaktron/agentry/charts/agentry` at a prerelease version,
+`0.1.0-<branch>.<n>.g<sha>`, whose default image is that `agentryd:sha-<sha>`.
+A release publishes the tagged version: a `main` release as chart `0.6.15`
+with image `v0.6.15`, a `dev` prerelease as chart `0.6.16-dev.1` with image
+`v0.6.16-dev.1`. Only the newest `main` release moves the image's `latest`.
+The package is private while the repository is, so pulling it needs a
+`read:packages` token, the same one the image needs.
+
+Every signature is keyless, issued to a GitHub Actions workflow
+(`--certificate-oidc-issuer https://token.actions.githubusercontent.com`),
+and its certificate identity names the workflow that signed it. Pin the
+identity of what you mean to accept:
+
+| What | `--certificate-identity` |
+| --- | --- |
+| a `vX.Y.Z` release, from v0.6.15 | `https://github.com/blaktron/agentry-release/.github/workflows/core.yaml@refs/heads/main` |
+| a `vX.Y.Z-dev.N` prerelease, from v0.6.15-dev.112 | `https://github.com/blaktron/agentry-release/.github/workflows/core-dev.yaml@refs/heads/main` |
+| a branch head's image and chart (`agentryd:dev`, `:main`, `:sha-<sha>`, chart `0.1.0-<branch>.<n>.g<sha>` from `n` 1001) | `https://github.com/blaktron/agentry-release/.github/workflows/core-images.yaml@refs/heads/main` |
+
+The release identities tell a `main` release from a prerelease: each
+signature is refused under the other channel's identity. A branch head's
+identity is the same for `dev` and `main`, so the tag or the chart version
+is what says which branch it is. Earlier releases (v0.6.14 and before,
+v0.6.15-dev.111 and before) were signed as
+`https://github.com/blaktron/agentry/.github/workflows/release.yaml@refs/heads/main`
+(`@refs/heads/dev` for a prerelease), and earlier branch builds (`n` below
+1001) as `https://github.com/blaktron/agentry/.github/workflows/image-main.yaml@refs/heads/<branch>`.
+
+A release's binaries are covered by its `SHA256SUMS`, which is signed the
+same way; its notes give the commands for that release:
+
+```bash
+cosign verify-blob --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
+  --certificate-identity https://github.com/blaktron/agentry-release/.github/workflows/core.yaml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+```
+
+A chart (or an image) is checked before it is installed:
 
 ```bash
 echo "$GHCR_TOKEN" | helm registry login ghcr.io -u <user> --password-stdin
 cosign verify --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity-regexp '^https://github.com/blaktron/agentry/' \
-  ghcr.io/blaktron/agentry/charts/agentry:0.1.0-main.57.g8420dcb
+  --certificate-identity https://github.com/blaktron/agentry-release/.github/workflows/core.yaml@refs/heads/main \
+  ghcr.io/blaktron/agentry/charts/agentry:0.6.15
 helm install agentry oci://ghcr.io/blaktron/agentry/charts/agentry \
-  --version 0.1.0-main.57.g8420dcb -n agentry -f values.yaml
+  --version 0.6.15 -n agentry -f values.yaml
 ```
 
 The values that make it installable on a cluster that is not the AWS

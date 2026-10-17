@@ -4947,14 +4947,6 @@
       ]
     },
     {
-      "path": ".github/workflows/image-main.yaml",
-      "disposition": "retain",
-      "kind": "workflow",
-      "jobs": [
-        "image"
-      ]
-    },
-    {
       "path": ".github/workflows/pins.yaml",
       "disposition": "retain",
       "kind": "workflow",
@@ -4968,37 +4960,6 @@
       "kind": "workflow",
       "jobs": [
         "alert"
-      ]
-    },
-    {
-      "path": ".github/workflows/release-please.yaml",
-      "disposition": "retain",
-      "kind": "workflow",
-      "jobs": [
-        "github-release",
-        "release",
-        "release-pr"
-      ]
-    },
-    {
-      "path": ".github/workflows/release.yaml",
-      "disposition": "retain",
-      "kind": "workflow",
-      "jobs": [
-        "guard",
-        "verify",
-        "binaries",
-        "sbom-and-sign",
-        "image",
-        "chart"
-      ]
-    },
-    {
-      "path": ".github/workflows/ruleset-tag.yaml",
-      "disposition": "retain",
-      "kind": "workflow",
-      "jobs": [
-        "tag"
       ]
     },
     {
@@ -5083,11 +5044,6 @@
     },
     {
       "path": "scripts/prose/check.sh",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/release/selftest.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     }
