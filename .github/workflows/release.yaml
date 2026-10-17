@@ -2,13 +2,10 @@
 # ourselves to the standard we ask of publishers — signed artifacts, an SBOM,
 # and a scanned dependency tree.
 #
-# Two channels, one pipeline:
-#   - vX.Y.Z on main: release-please.yaml calls this when its release PR
-#     merges. release-please has created the tag and a draft release with the
-#     changelog as its body.
-#   - vX.Y.Z-dev.N on dev: dev-release.yaml calls this for dev's prereleases.
-#     Only the tag exists.
-# Both callers create their tag with GITHUB_TOKEN, whose events start no
+# The main channel: release-please.yaml calls this for vX.Y.Z when its release
+# PR merges; release-please has created the tag and a draft release with the
+# changelog as its body. dev's prereleases (vX.Y.Z-dev.N) are not cut here.
+# The caller creates its tag with GITHUB_TOKEN, whose events start no
 # workflow, so this runs as a called workflow, not on a tag push.
 # workflow_dispatch rebuilds and republishes an existing tag (a release whose
 # run failed part-way), and must run on the tag's own branch.
