@@ -92,9 +92,10 @@ separate from accepting risk for an organization. `TestReviewItemOfAnUnknownQueu
 forces a row past the database constraint to check the independent application
 refusal and restores the constraint afterwards. Preserve its serialization.
 
-A known author-verdict gap remains: the finding route does not apply the
-review decision's non-staff author rule. The decision tests above do not
-prove that finding verdicts enforce it. Extension adapters exercised through
+`TestAnAuthorSetsNoVerdictOnTheirOwnFindings` holds the finding route to the
+review decision's author rule: an organization's admin who submitted the
+version is refused a verdict on its findings, and a staff author's verdict is
+recorded with `self_decision` in its audit event. Extension adapters exercised through
 bound `Deps` are a separate boundary; the API probe tests here exercise the
 server seam, so they do not replace it.
 

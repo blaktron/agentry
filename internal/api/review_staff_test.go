@@ -224,3 +224,75 @@ func TestStaffSetFindingVerdictsOnAnOrganizationItem(t *testing.T) {
 		t.Fatalf("staff accept risk on an organization's finding: %d, want 403", res.StatusCode)
 	}
 }
+
+// findingAudit is the detail of the newest verdict audit event on a
+// finding, read from the store.
+func (env *testEnv) findingAudit(t *testing.T, findingID string) map[string]any {
+	t.Helper()
+	var raw []byte
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT detail FROM audit_events WHERE target_kind = 'finding' AND target_id = $1::uuid
+		 ORDER BY occurred_at DESC LIMIT 1`, findingID).Scan(&raw); err != nil {
+		t.Fatalf("no audit event for finding %s: %v", findingID, err)
+	}
+	var d map[string]any
+	if err := json.Unmarshal(raw, &d); err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+// itemFindings lists a review item's finding ids as a reader of it sees them.
+func (env *testEnv) itemFindings(t *testing.T, c caller, itemID string) []string {
+	t.Helper()
+	var bundle struct {
+		Findings []struct {
+			Id string `json:"id"`
+		} `json:"findings"`
+	}
+	env.doJSON(c, http.MethodGet, "/api/v1/review-items/"+itemID, nil, &bundle, http.StatusOK)
+	var ids []string
+	for _, f := range bundle.Findings {
+		ids = append(ids, f.Id)
+	}
+	if len(ids) == 0 {
+		t.Fatal("the item carries no findings")
+	}
+	return ids
+}
+
+// TestAnAuthorSetsNoVerdictOnTheirOwnFindings: the author rule of a review
+// decision holds for a finding's verdict. An organization's admin who
+// submitted the version reads its item on the organization's queue but is
+// refused a verdict on its findings, a false positive and an accepted risk
+// alike; platform staff who submitted a platform-queue version keep their
+// exception, and the verdict's audit event marks it as theirs, while
+// another staff member's verdict carries no mark.
+func TestAnAuthorSetsNoVerdictOnTheirOwnFindings(t *testing.T) {
+	env := newTestEnv(t)
+
+	_, _, owner, _, orgItem := setupOrgReviewItem(t, env, "avo", true)
+	f := env.itemFindings(t, owner, orgItem)[0]
+	for _, verdict := range []string{"dismissed_false_positive", "dismissed_accepted_risk", "confirmed"} {
+		res := env.do(owner, http.MethodPost, "/api/v1/findings/"+f+"/verdict", map[string]any{"verdict": verdict, "reason": "mine"})
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusForbidden {
+			t.Fatalf("the organization's admin set %s on their own finding: %d, want 403", verdict, res.StatusCode)
+		}
+	}
+
+	author, itemID, staffSess := setupReviewItem(t, env, "avs")
+	env.makePlatformStaff(t, author)
+	authorSess := env.login(author)
+	own := env.itemFindings(t, authorSess, itemID)
+	env.doJSON(authorSess, http.MethodPost, "/api/v1/findings/"+own[0]+"/verdict",
+		map[string]any{"verdict": "dismissed_false_positive", "reason": "the built-in package's own test fixture"}, nil, http.StatusNoContent)
+	if d := env.findingAudit(t, own[0]); d["self_decision"] != true || d["verdict"] != "dismissed_false_positive" {
+		t.Fatalf("the audit detail of a staff verdict on their own finding: %v", d)
+	}
+	env.doJSON(staffSess, http.MethodPost, "/api/v1/findings/"+own[0]+"/verdict",
+		map[string]any{"verdict": "confirmed", "reason": "a second look"}, nil, http.StatusNoContent)
+	if d := env.findingAudit(t, own[0]); d["self_decision"] != nil {
+		t.Fatalf("another staff member's verdict is marked: %v", d)
+	}
+}
