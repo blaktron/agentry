@@ -769,9 +769,37 @@ Engine, the engine inside Docker Desktop, or podman (CLI v0.6.129 or later
 for podman, with gVisor on podman too). The runner finds it, says which in
 the receipt, and decides from it where the run's docker filter runs.
 
+| Engine | Where | What it needs | Docker filter | Status |
+|---|---|---|---|---|
+| Docker Engine, rootful | Linux | the `docker` group, or root | in-process | supported |
+| Docker Engine, rootless | Linux | the rootless context selected (`docker context use rootless`) | in-process | expected to work, not yet tested |
+| podman, rootless | Linux | `podman.socket` enabled for you (below) | in-process | supported (CLI v0.6.129 or later) |
+| podman, rootful | Linux | the system `podman.socket` enabled | in-process | expected to work, not yet tested |
+| Docker Desktop | macOS, Windows | running | sidecar | supported |
+| Docker Desktop | Linux | running, its context selected | sidecar | expected to work, not yet tested |
+| Colima | macOS | `colima start`; Agentry Desktop can install and run it for you | sidecar | supported |
+| Lima, the `docker-rootful` template | macOS | its context selected | sidecar | expected to work, not yet tested |
+| Rancher Desktop, dockerd (moby) backend | macOS | the dockerd backend chosen in its settings; its socket is `~/.rd/docker.sock` | sidecar | supported (tested with 1.24.0) |
+| Rancher Desktop, dockerd (moby) backend | Windows | the dockerd backend chosen in its settings | sidecar | expected to work, not yet tested |
+| Podman Desktop (a podman machine) | macOS | the `docker` CLI installed and pointed at the machine's API socket (`podman machine inspect` names it) | sidecar | supported (tested with podman 6.1.4); no policy runtime |
+| Podman Desktop (a podman machine) | Windows | the `docker` CLI pointed at the machine's socket | sidecar | not yet tested; no policy runtime |
+| OrbStack | macOS | running | sidecar | expected to work, not yet tested |
+| Docker Engine inside WSL 2 | Windows | the Linux CLI, run inside the WSL 2 distribution | in-process | the Linux case |
+
+The engines that serve no Docker Engine API are not supported, since the
+runner drives that API: containerd with nerdctl (and so Rancher Desktop's
+containerd backend), Apple's `container` and `wslc`. An engine that answers
+`docker version` with any server but Docker Engine or podman is refused,
+naming what it reported. Rancher Desktop on its containerd backend keeps its
+socket file with nothing answering behind it, so a run stops with exit 13
+and `agentry doctor` reports the socket (below): choose the dockerd backend
+in its settings.
+
 **Which engine.** By default the CLI drives the `docker` CLI against its
 current context, so `DOCKER_HOST`, `DOCKER_CONTEXT` and `docker context use`
-choose the engine as they do for `docker` itself. When no docker daemon
+choose the engine as they do for `docker` itself: a VM engine (Colima, Lima,
+Rancher Desktop, OrbStack, Podman Desktop) is selected by its context or by
+`DOCKER_HOST` naming its socket. When no docker daemon
 answers and podman is installed and answers, the CLI drives podman's own
 `podman` CLI instead. Name one to skip the search:
 
@@ -791,7 +819,10 @@ for rootless podman, `systemctl enable --now podman.socket` for rootful.
 `agentry doctor` says so when it does not answer. The images a run uses live
 in podman's own store, so `agentry setup` pulls and builds them there once.
 The `docker` CLI pointed at podman's socket (`DOCKER_HOST`) also runs, but
-it is not the supported route.
+on Linux it is not the supported route. A podman machine (Podman Desktop on
+macOS) is the exception: podman's own client reaches it as a remote service,
+which the run refuses, so there the `docker` CLI at the machine's socket is
+the route, and the run's docker filter runs in a container.
 
 **The endpoint.** The engine must be on a Unix socket on this machine (or,
 on Windows, Docker Desktop's named pipe). A `tcp://` or `ssh://` endpoint is
@@ -817,6 +848,28 @@ where the filter ran and why:
 podman 5.8.4, rootless, /run/user/1000/podman/podman.sock, docker filter in-process: the daemon reports this machine's hostname (box) and kernel (7.1.13-200.fc44.x86_64)
 docker 29.7.2, rootful, /var/run/docker.sock, docker filter in-process: the daemon reports this machine's hostname (box) and kernel (7.1.13-200.fc44.x86_64)
 ```
+
+**What `agentry doctor` says.** Its `docker` line is the same text, or the
+reason a run on this engine would be refused: no engine on `PATH`, podman's
+socket not answering (with the command that starts it), a `tcp://` or
+`ssh://` endpoint, a remote podman service. Two more lines (CLI v0.6.130 or
+later) catch what an engine change leaves behind:
+
+- `docker:credentials` reads the docker CLI's configuration
+  (`$DOCKER_CONFIG/config.json`, else `~/.docker/config.json`) for a
+  credential helper that is not on `PATH`. The `docker` CLI runs that helper
+  for every pull the entry covers and fails the pull without it, so a
+  `credsStore` left behind by an uninstalled Docker Desktop (`"desktop"`)
+  fails every pull on the engine that replaced it: a `credsStore` fails the
+  check, a `credHelpers` entry warns for its registry. Remove the entry, or
+  install the helper. Nothing is checked when podman's own CLI is the
+  engine, since it does not read that file.
+- `docker:socket`, only when no engine answers, names each known engine
+  socket file with nothing answering behind it (Docker Desktop's, Colima's,
+  Lima's, OrbStack's, Rancher Desktop's and Podman Desktop's on macOS;
+  Docker Engine's, Docker Desktop's and podman's on Linux), with "start it,
+  or remove the file". An engine is known by its answer, never by its
+  socket file.
 
 **The sandbox on podman.** A policy that names [`docker.runtime`](#the-oci-runtime-dockerruntime)
 holds on podman too (CLI v0.6.129 or later, podman's own CLI). podman
