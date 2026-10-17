@@ -5140,14 +5140,18 @@ type ClientInterface interface {
 	// Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
 	VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetFindingVerdictWithBody Confirm or dismiss a finding.
+	// SetFindingVerdictWithBody Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
+	//
+	// An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
 	SetFindingVerdictWithBody(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetFindingVerdict Confirm or dismiss a finding.
+	// SetFindingVerdict Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
+	//
+	// An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -7309,7 +7313,9 @@ func (c *Client) VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBod
 	return c.Client.Do(req)
 }
 
-// SetFindingVerdictWithBody Confirm or dismiss a finding.
+// SetFindingVerdictWithBody Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
+//
+// An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -7326,7 +7332,9 @@ func (c *Client) SetFindingVerdictWithBody(ctx context.Context, id openapi_types
 	return c.Client.Do(req)
 }
 
-// SetFindingVerdict Confirm or dismiss a finding.
+// SetFindingVerdict Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
+//
+// An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -18762,14 +18770,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /auth/verify-email (the `VerifyEmail` operationId).
 	VerifyEmailWithResponse(ctx context.Context, body VerifyEmailJSONRequestBody, reqEditors ...RequestEditorFn) (*VerifyEmailResponse, error)
 
-	// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding.
+	// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
+	//
+	// An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /findings/{id}/verdict (the `SetFindingVerdict` operationId).
 	SetFindingVerdictWithBodyWithResponse(ctx context.Context, id openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetFindingVerdictResponse, error)
 
-	// SetFindingVerdictWithResponse Confirm or dismiss a finding.
+	// SetFindingVerdictWithResponse Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
+	//
+	// An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -29369,7 +29381,9 @@ func (c *ClientWithResponses) VerifyEmailWithResponse(ctx context.Context, body 
 	return ParseVerifyEmailResponse(rsp)
 }
 
-// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding.
+// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
+//
+// An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29382,7 +29396,9 @@ func (c *ClientWithResponses) SetFindingVerdictWithBodyWithResponse(ctx context.
 	return ParseSetFindingVerdictResponse(rsp)
 }
 
-// SetFindingVerdictWithResponse Confirm or dismiss a finding.
+// SetFindingVerdictWithResponse Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
+//
+// An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

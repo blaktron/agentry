@@ -567,6 +567,21 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 	if !readJSON(w, r, &req) {
 		return
 	}
+	v, err := s.q().GetVersionByID(r.Context(), run.VersionID)
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+	// The author rule of a decision holds for a verdict too: a dismissal
+	// waives a finding, so an author cannot record one on their own
+	// version, an organization's admin or security reviewer included.
+	// Platform staff keep the decision's exception, marked in the audit
+	// event.
+	selfVerdict := v.SubmittedBy == p.UserID
+	if selfVerdict && !p.PlatformStaff {
+		problemForbidden(w, r, "Authors cannot set verdicts on their own versions' findings.")
+		return
+	}
 	// accepted_risk only by org reviewers, only ≤ medium.
 	if req.Verdict == "dismissed_accepted_risk" {
 		if scan.SeverityAtLeast(f.Severity, "high") {
@@ -581,11 +596,6 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 		// re-checks the org role regardless of the staff flag.
 		// Personal-namespace agents have no org
 		// to defer to and keep the platform-queue rule.
-		v, err := s.q().GetVersionByID(r.Context(), run.VersionID)
-		if err != nil {
-			problemInternal(w, r)
-			return
-		}
 		agent, err := s.q().GetAgentByID(r.Context(), v.AgentID)
 		if err != nil {
 			problemInternal(w, r)
@@ -608,6 +618,9 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 		}
 		e.TargetKind, e.TargetID = "finding", id
 		e.Detail = map[string]any{"verdict": req.Verdict}
+		if selfVerdict {
+			e.Detail["self_decision"] = true
+		}
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {
