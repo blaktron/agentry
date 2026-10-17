@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.4.10"
+version: "0.4.11"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -182,6 +182,15 @@ notes: >
   or in a paragraph that speaks of another package as a QuickAgent, is
   not a need, and browser_evaluate is a need a browser that may type
   secrets does not meet. The threshold stays medium.
+  0.4.11 changes no signature. It names the release whose S3 reads
+  variation selectors (U+FE00..U+FE0F and the supplement U+E0100..
+  U+E01EF), the invisible carrier of emoji smuggling: one selector after
+  a base character that takes it in a standardized or an emoji variation
+  sequence (Unicode 16.0) picks a glyph and is not a finding; a selector
+  from the supplement, a second selector in a row, and a selector after a
+  character with no such sequence are one high S3/variation-selector
+  finding per line, as the other invisible carriers are, and the finding
+  decodes the bytes they would carry. The threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that

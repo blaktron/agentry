@@ -5100,6 +5100,7 @@
             "TestExtendedPictographic",
             "TestDetectBidiControls",
             "TestDetectTagBlock",
+            "TestDetectVariationSelectors",
             "TestDetectPrivateUse",
             "TestDetectMixedScript",
             "TestDetectHTMLComment",
