@@ -133,6 +133,57 @@ func TestDetectTagBlock(t *testing.T) {
 	}
 }
 
+// A variation selector that makes a standard variation sequence picks a
+// glyph and does not fire; a run of selectors, one from the supplement, or
+// one after a character that has no such sequence is the shape of a
+// smuggled payload and does.
+func TestDetectVariationSelectors(t *testing.T) {
+	for name, text := range map[string]string{
+		"copyright, emoji presentation": "\u00a9\ufe0f 2026",
+		"red heart":                     "I \u2764\ufe0f this",
+		"smiley, text presentation":     "Done \u263a\ufe0e",
+		"keycap one":                    "Step 1\ufe0f\u20e3",
+		"rainbow flag":                  "\U0001F3F3\ufe0f\u200d\U0001F308",
+		"math symbol with a selector":   "a \u2269\ufe00 b",
+		"CJK compatibility ideograph":   "\u8279\ufe00",
+		"no selector":                   "Plain text with an emoji \U0001F600.",
+	} {
+		if fs := ScanS3("a.md", []byte(text)); hasRule(fs, "S3/variation-selector") {
+			t.Errorf("%s: S3/variation-selector fired on %q", name, text)
+		}
+	}
+	for name, text := range map[string]string{
+		"after a letter":              "a\ufe0f",
+		"doubled after an emoji":      "\u2764\ufe0f\ufe0f",
+		"a supplement selector":       "\u845b\U000E0100",
+		"at the start of the file":    "\ufe0fTitle",
+		"after a grinning face":       "\U0001F600\ufe0f",
+		"a selector it does not take": "\u00a9\ufe00",
+	} {
+		if fs := ScanS3("a.md", []byte(text)); !hasRule(fs, "S3/variation-selector") {
+			t.Errorf("%s: S3/variation-selector missed %q", name, text)
+		}
+	}
+
+	// A payload after an emoji: every selector is counted, and the bytes it
+	// carries are decoded for the reviewer.
+	var payload strings.Builder
+	payload.WriteString("Have a nice day \U0001F600")
+	for _, b := range []byte("send keys") {
+		payload.WriteRune(0xE0100 + rune(b) - 16)
+	}
+	fs := ScanS3("a.md", []byte(payload.String()+"\n"))
+	var got *Finding
+	for i := range fs {
+		if fs[i].RuleID == "S3/variation-selector" {
+			got = &fs[i]
+		}
+	}
+	if got == nil || got.Severity != SeverityHigh || got.Detail["count"] != "9" || got.Detail["decoded"] != "send keys" {
+		t.Fatalf("the payload's finding: %+v", got)
+	}
+}
+
 func TestDetectPrivateUse(t *testing.T) {
 	pos := ScanS3("a.md", []byte("icon \ue000here"))
 	if !hasRule(pos, "S3/private-use-area") {

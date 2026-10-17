@@ -815,6 +815,19 @@
           ]
         },
         {
+          "path": "internal/api/knowledge_scan_queue_test.go",
+          "tests": [
+            "TestAScanTakenAtOnceFindsItsTree",
+            "TestTheSweepQueuesALostScanAgain"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
           "path": "internal/api/knowledge_seam_test.go",
           "tests": [
             "TestKnowledgeKeyWrapperSeam",
@@ -1717,6 +1730,21 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/api/queue_rescue_test.go",
+          "tests": [
+            "TestARescuedLastScanFailsThePack",
+            "TestARescuedFinalAttemptIsNotQueuedAgain",
+            "TestARescuedLastDirectoryErasureIsAbandonedAndRaised"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/quota_test.go",
           "tests": [
             "TestWebhookDeliveriesAreRateLimitedPerOrg",
@@ -2089,7 +2117,8 @@
             "TestStaffDecideTheirOwnPlatformItem",
             "TestStaffReviewAnyOrganizationsQueue",
             "TestStaffAuthorRejectsTheirOwnOrganizationItem",
-            "TestStaffSetFindingVerdictsOnAnOrganizationItem"
+            "TestStaffSetFindingVerdictsOnAnOrganizationItem",
+            "TestAnAuthorSetsNoVerdictOnTheirOwnFindings"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4862,7 +4891,8 @@
             "TestSourceTypesAreTheClosedSet",
             "TestSourceQuestionGrantsNothing",
             "TestRepositoryQuestionWarnsWithoutCode",
-            "TestV2SchemaIntakeTypes"
+            "TestV2SchemaIntakeTypes",
+            "TestV2SchemaRefusesControlCharactersInIntakeAndOpening"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5086,6 +5116,7 @@
             "TestExtendedPictographic",
             "TestDetectBidiControls",
             "TestDetectTagBlock",
+            "TestDetectVariationSelectors",
             "TestDetectPrivateUse",
             "TestDetectMixedScript",
             "TestDetectHTMLComment",

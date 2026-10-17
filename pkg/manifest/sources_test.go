@@ -211,3 +211,58 @@ func TestV2SchemaIntakeTypes(t *testing.T) {
 		t.Fatalf("schema intake types %v; Go %v", got, want)
 	}
 }
+
+// TestV2SchemaRefusesControlCharactersInIntakeAndOpening pins the schema's
+// patterns beside V10: a prompt and a choice are single plain lines, as the
+// guide's one-line parts are, and the opening keeps newlines and tabs, as
+// the guide's overview does.
+func TestV2SchemaRefusesControlCharactersInIntakeAndOpening(t *testing.T) {
+	raw, err := os.ReadFile("../../schemas/agent-manifest-2.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	type str struct {
+		Pattern string `json:"pattern"`
+	}
+	var schema struct {
+		Properties struct {
+			Interactive struct {
+				Properties struct {
+					Opening str `json:"opening"`
+				} `json:"properties"`
+			} `json:"interactive"`
+			Guide struct {
+				Properties struct {
+					Overview str `json:"overview"`
+					Task     str `json:"task"`
+				} `json:"properties"`
+			} `json:"guide"`
+		} `json:"properties"`
+		Defs struct {
+			IntakeQuestion struct {
+				Properties struct {
+					Prompt  str `json:"prompt"`
+					Choices struct {
+						Items str `json:"items"`
+					} `json:"choices"`
+				} `json:"properties"`
+			} `json:"intakeQuestion"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	line, markdown := schema.Properties.Guide.Properties.Task.Pattern, schema.Properties.Guide.Properties.Overview.Pattern
+	if line == "" || markdown == "" {
+		t.Fatal("the guide's patterns are not where this test reads them")
+	}
+	q := schema.Defs.IntakeQuestion.Properties
+	for name, got := range map[string]string{"intake prompt": q.Prompt.Pattern, "intake choice": q.Choices.Items.Pattern} {
+		if got != line {
+			t.Errorf("schema %s pattern is %q, want the guide's one-line %q", name, got, line)
+		}
+	}
+	if got := schema.Properties.Interactive.Properties.Opening.Pattern; got != markdown {
+		t.Errorf("schema opening pattern is %q, want the guide overview's %q", got, markdown)
+	}
+}

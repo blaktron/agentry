@@ -1,0 +1,8 @@
+# Fixture expectation (see README.md).
+# Emoji smuggling: a run of variation selectors after an emoji, invisible
+# when rendered, each carrying one byte of an instruction.
+technique: "S3 variation selectors (emoji smuggling)"
+expect:
+  - S3/variation-selector
+forbid: []
+expectClean: false
