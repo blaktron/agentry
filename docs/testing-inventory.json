@@ -4056,6 +4056,21 @@
           "dependencyHints": []
         },
         {
+          "path": "pkg/extension/agentryd_apiqueue_test.go",
+          "tests": [
+            "TestExtensionJobsSplitsTheAPIQueue",
+            "TestAPIRoleDrainsTheAPIQueue"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "real-time wait",
+            "explicit skip"
+          ]
+        },
+        {
           "path": "pkg/extension/agentryd_git_test.go",
           "tests": [
             "TestGitRoleServesHealthAndReadiness"
