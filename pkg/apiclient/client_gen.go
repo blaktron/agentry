@@ -3632,10 +3632,6 @@ type User struct {
 	// PendingOrg The organization the caller is waiting to be approved by (present on GET /user only, and only while a pending membership exists): the domain folded them in at a sign-in, or the organization's IdP provisioned them. Every page and client can say it until an admin approves or declines them; until then they keep working on their own tier.
 	PendingOrg    *PendingOrg `json:"pendingOrg,omitempty"`
 	PlatformStaff *bool       `json:"platformStaff,omitempty"`
-
-	// TotpEnabled Always false: the server keeps no second factor of its own, and the field goes in a later release. A sign-in's second factor is the OpenID provider's.
-	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
-	TotpEnabled bool `json:"totpEnabled"`
 }
 
 // VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
