@@ -804,8 +804,8 @@ for each connection:
 
 - locks the connection and opens its refresh token, and any client secret,
   under the account's key;
-- refreshes it at the vendor, through the egress guard (and, in
-  production, through the worker's egress proxy);
+- refreshes it at the vendor, through the egress guard (and, where the worker has an egress proxy,
+  through it);
 - keeps the new refresh token, sealed, when the vendor rotates it;
 - sets the connection's last refresh and last use;
 - writes one `vault.connection_used` audit event, with the server, the
@@ -1529,27 +1529,16 @@ them.
 
 ### Where it runs
 
-Agentry's own deployment answers the residency question in one line: the
-United States, on Vultr, thirty days, encrypted to the user. The sandbox
-hosts and the runs buckets are in the registry's Vultr region, New Jersey;
-the hosts' model is Vultr Serverless Inference; a run and its output are
-deleted thirty days after the run was created; and every output is
-encrypted to the person who ran it. A region per organization is not
-offered.
-
-The hosts sit in a network of their own that shares no route with the
-registry's. A host has no public address. runhost's port is forwarded to it
-through that network's gateway, from the registry's egress address alone;
-the design also allows a break-glass SSH forward from the operator's
-address, which no host has today. Outbound, a firewall of the host's own
-admits DNS to the host's resolvers and TCP 80 and 443 to public addresses,
-and refuses private ranges, CGNAT, link-local and loopback addresses. The
-containers are also refused the cloud's metadata address; the host itself
-may read it at boot, and may reach NTP. The registry's fleet makes, drains and destroys
-the hosts from the Staff panel (`AGENTRY_RUNS_FLEET_*`); a deployment
-without the fleet makes its hosts by hand. [A sandbox host of your
-own](self-hosting.md#sandbox-hosts-for-hosted-runs) gives the same shape
-without Vultr.
+A deployment chooses where its runs happen. The sandbox hosts and the runs
+buckets sit in the region and network the operator gives them, and the hosts'
+model is the one [the host's settings](#the-hosts-settings) name. A run and
+its output are deleted after the [retention](#retention) period, and every
+output is encrypted to the person who ran it. A region per organization is
+not offered. The hosts belong in a network of their own that shares no route
+with the registry's: [a sandbox host of your
+own](self-hosting.md#sandbox-hosts-for-hosted-runs) lists the rules.
+[Where hosted runs run](https://docs.secureagentry.net/agentry/hosted-runs/#where-hosted-runs-run)
+says where SecureAgentry's own runs sit.
 
 ## Retention
 
@@ -1608,18 +1597,12 @@ destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
 | `AGENTRY_RUNS_STORE_INPUT_BUCKET` | `runs-input` | where a run's task and inputs are staged, sealed, at the hand-off |
 | `AGENTRY_RUNS_STORE_OUTPUT_BUCKET` | `runs-output` | where a host posts the sealed output; must differ from the input bucket |
 | `AGENTRY_RUNS_STORE_PATH_STYLE` | `true` | path-style bucket addressing |
-| `AGENTRY_RUNS_STORE_CREATE_BUCKETS` | `false` | make the two buckets at start-up when they are missing, for a development store; production's are made by terraform |
+| `AGENTRY_RUNS_STORE_CREATE_BUCKETS` | `false` | make the two buckets at start-up when they are missing, for a development store; any other deployment makes its buckets itself |
 | `AGENTRY_RUNS_DISPATCH_EVERY` | `5s` | how often the dispatcher calls the hosts, hands out queued runs and collects finished ones |
 | `AGENTRY_RUNS_HOST_RENEW_BEFORE` | `240h` | how long before a host's certificate ends Agentry pushes it a new one |
 | `AGENTRY_RUNS_HOST_REGISTRY_TOKEN`, `AGENTRY_RUNS_HOST_MODEL`, `AGENTRY_RUNS_HOST_MODEL_BASE_URL`, `AGENTRY_RUNS_HOST_MODEL_API_KEY` | none | the settings pushed to every host ([the host's settings](#the-hosts-settings)), all or none; none pushes nothing |
 | `AGENTRY_RUNS_HOST_MODEL_PROVIDER` | `openai` | the model's provider, pushed with those settings |
 | `AGENTRY_RUNS_HOST_HYBRID_API_KEY` | none | the platform's Hybrid Analysis key, pushed with those settings and refused without them |
-| `AGENTRY_RUNS_FLEET_PROVIDER` | none | `vultr`; `fake`, for a deployment with no runs network to make hosts in; or unset, for hosts made by hand |
-| `AGENTRY_RUNS_FLEET_CONFIG` | none | the runs network, as JSON, as the runs terraform root outputs it |
-| `AGENTRY_RUNS_FLEET_ORIGIN` | none | Agentry's public `https://` origin, where a new host enrols |
-| `AGENTRY_RUNS_FLEET_HOST_DOMAIN` | none | the DNS suffix of the hosts' names |
-| `AGENTRY_RUNS_FLEET_DEADLINE` | `45m` | how long a new host has from its request to its enrolment before it is destroyed and reported; at least `10m` |
-| `AGENTRY_RUNS_FLEET_VULTR_API_KEY`, `AGENTRY_RUNS_FLEET_RUNHOST_IMAGE`, `AGENTRY_RUNS_FLEET_GHCR_USER`, `AGENTRY_RUNS_FLEET_GHCR_TOKEN` | none | on `vultr`, all or none, and only on the process that makes hosts (the worker role): the fleet's Vultr key, the runhost image a new host runs (by digest), and the credential it pulls that image with, once, at boot |
 | `AGENTRY_RUNS_SESSIONS` | off | whether this deployment runs [hosted sessions](#a-hosted-session); they also need sandbox hosts |
 | `AGENTRY_RUNS_SESSION_FREE_MINUTES` | `10` | a session's free minutes of server time |
 | `AGENTRY_RUNS_SESSION_MINUTE_CREDITS` | `50` | what each minute after the free ones costs; must be positive |
