@@ -67,7 +67,7 @@ func TestTheSweepQueuesALostScanAgain(t *testing.T) {
 	if n, err := svc.SweepScans(ctx, cutoff); err != nil || n != 0 {
 		t.Fatalf("a scan stored just now was queued again: %d %v", n, err)
 	}
-	if _, err := env.st.Pool().Exec(ctx, `UPDATE knowledge_packs SET updated_at = now() - interval '2 hours' WHERE id = $1`, p.ID); err != nil {
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE knowledge_packs SET updated_at = now() - interval '3 hours' WHERE id = $1`, p.ID); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := svc.SweepScans(ctx, cutoff); err != nil || n < 1 {
