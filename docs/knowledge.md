@@ -255,12 +255,17 @@ when it is erased after its decommission ([Erasure](#erasure)).
 ## The scan
 
 A pack is `scanning` from each upload until its `knowledge.scan` job ends
-(the sandbox queue, the same worker that scans a version). It is `ready`
+(the sandbox queue, the same worker that scans a version). The job is
+queued once the upload's tree is stored, so a worker that takes it at once
+finds the tree. It is `ready`
 after the job, whether it has findings or not: the report is a record,
 never a gate. A pack is unusable only while it is
 `scanning`: its download and export answer 409 `knowledge-scanning`. A
 pack whose stored tree could not be read on the job's last attempt is
-`failed`, with no report.
+`failed`, with no report. A pack still `scanning` an hour after its tree
+was stored, because its job could not be queued or was lost, has its scan
+queued again by an hourly sweep (`knowledge.scan.sweep`, on the core
+queue), so it ends `ready` or `failed` rather than scanning for good.
 
 The scan reads every text file of the tree: every page and every source.
 A source's original that is not text (a PDF, an image) is listed under
