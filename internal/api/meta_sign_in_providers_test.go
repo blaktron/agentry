@@ -82,8 +82,8 @@ func TestMetaListsTheSignInProvidersStartRedirectsFor(t *testing.T) {
 	idp := newFakeOIDC(t)
 	env := newTestEnvCfg(t, func(cfg *config.Config) {
 		gh.configure(cfg)
-		cfg.Social.Authentik = config.SocialProvider{
-			ClientID: idp.clientID, ClientSecret: "authentik-secret", Issuer: idp.srv.URL,
+		cfg.Auth.OIDC = config.OIDCProvider{
+			ID: config.AuthentikProviderID, ClientID: idp.clientID, ClientSecret: "authentik-secret", Issuer: idp.srv.URL,
 		}
 		// A client without the issuer it needs cannot start, so it is not
 		// offered either.
@@ -106,7 +106,7 @@ func TestMetaListsTheSignInProvidersStartRedirectsFor(t *testing.T) {
 
 // Every provider the spec names can be listed, in the spec's order. The
 // sign-in OpenID provider is one provider under one of two ids, "authentik"
-// for the deployment's own directory and "oidc" otherwise, so each is
+// where its accounts are linked under that id and "oidc" otherwise, so each is
 // listed in a deployment of its own, with every other provider beside it.
 func TestMetaListsEveryConfiguredSignInProvider(t *testing.T) {
 	for _, id := range []string{"authentik", "oidc"} {

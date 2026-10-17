@@ -57,8 +57,8 @@ Open http://localhost:8080/ui/ for sign-in, account and tokens, the review
 queue, the staff console and organization administration. Configuration is
 `agentry.yaml` (copy `agentry.yaml.example`) with `AGENTRY_*` environment
 overrides; the environment wins. `deploy/compose` runs the whole registry
-with no site in front: Postgres, object storage, mail, the directory
-service, `agentryd` and an nginx edge. For a real deployment, see
+with no site in front: Postgres, object storage, mail, `agentryd` and an
+nginx edge. For a real deployment, see
 [self-hosting](https://docs.secureagentry.net/self-hosting/).
 
 ## Layout

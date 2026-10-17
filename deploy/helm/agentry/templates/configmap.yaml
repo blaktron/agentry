@@ -39,26 +39,11 @@ data:
       {{- with .Values.config.idp.logoutUrl }}
       idpLogoutURL: {{ . | quote }}
       {{- end }}
-      {{- with .Values.config.auth.idpAdminURL }}
-      idpAdminURL: {{ . | quote }}
-      {{- end }}
-      {{- with .Values.config.auth.directoryCookieDomain }}
-      directoryCookieDomain: {{ . | quote }}
-      {{- end }}
       {{- with .Values.config.auth.staffOrg }}
       staffOrg: {{ . | quote }}
       {{- end }}
       {{- with .Values.config.auth.staffDomain }}
       staffDomain: {{ . | quote }}
-      {{- end }}
-      {{- with .Values.config.auth.idpStaffMirrorGroup }}
-      idpStaffMirrorGroup: {{ . | quote }}
-      {{- end }}
-      {{- with .Values.config.auth.idpStaffGroup }}
-      idpStaffGroup: {{ . | quote }}
-      {{- end }}
-      {{- with .Values.config.auth.idpStaffDomain }}
-      idpStaffDomain: {{ . | quote }}
       {{- end }}
       {{- with .Values.config.auth.oidc }}
       {{- if .clientId }}
@@ -76,12 +61,6 @@ data:
         {{- end }}
       {{- end }}
       {{- end }}
-    {{- if .Values.config.social.authentik.clientId }}
-    social:
-      authentik:
-        clientId: {{ .Values.config.social.authentik.clientId | quote }}
-        issuer: {{ .Values.config.social.authentik.issuer | quote }}
-    {{- end }}
     storage:
       kind: {{ .Values.config.storage.kind }}
       s3Bucket: {{ .Values.config.storage.s3Bucket | quote }}

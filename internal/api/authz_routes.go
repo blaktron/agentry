@@ -263,7 +263,6 @@ var routeAuthz = map[string]RouteDecl{
 	"listUserSessions":               {Action: auth.ActUserSelfRead},
 	"getDomainOrg":                   {Action: auth.ActUserSelfRead},
 	"requestDomainOrgAccess":         {Action: auth.ActUserOrgRequest, SessionOnly: true},
-	"getUserDirectory":               {Action: auth.ActUserSelfRead},
 	"listUserDependencyAlerts":       {Action: auth.ActUserSelfRead},
 	"listUserActivity":               {Action: auth.ActUserSelfRead},
 	"getUserNotificationSettings":    {Action: auth.ActUserSelfRead},
@@ -274,11 +273,10 @@ var routeAuthz = map[string]RouteDecl{
 	"getUserReportSettings":    {Action: auth.ActUserSelfRead},
 	"updateUserReportSettings": {Action: auth.ActUserSelfUpdate},
 	// Its logo, the same setting's image.
-	"putUserReportLogo":         {Action: auth.ActUserSelfUpdate},
-	"deleteUserReportLogo":      {Action: auth.ActUserSelfUpdate},
-	"deleteUserDirectoryDevice": {Action: auth.ActUserSelfUpdate},
-	"revokeUserSession":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"revokeOtherUserSessions":   {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"putUserReportLogo":       {Action: auth.ActUserSelfUpdate},
+	"deleteUserReportLogo":    {Action: auth.ActUserSelfUpdate},
+	"revokeUserSession":       {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"revokeOtherUserSessions": {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	// Remembered browsers, on the sessions' rule: a token
 	// reads a count of 0 and cannot clear them.
 	"countTrustedDevices": {Action: auth.ActUserSelfRead},
@@ -338,10 +336,6 @@ const (
 	// GatePrincipal is behind the principal middleware, as the generated
 	// surface is.
 	GatePrincipal MountGate = "principal"
-	// GateDirectoryToken is gated by auth.idpTrustCheckToken, the secret the
-	// directory's sign-in flow presents. The route is absent
-	// (404) while that is unset.
-	GateDirectoryToken MountGate = "directory-token"
 )
 
 // RateNone says a mount draws from no rate-limit bucket. It is a claim rather than
@@ -450,21 +444,6 @@ var mountAuthz = map[string]MountDecl{
 	"GET /metrics": {
 		Gate: GatePublic, Class: RateNone,
 		Why: "a scraper is infrastructure, not a principal; the compose edge 404s it; a Helm ingress must exclude it",
-	},
-
-	// The directory's trust check: the directory's
-	// MFA-stage policy asks whether a browser is remembered before asking
-	// for the code. It is outside /api/ on purpose: the site's edge and the
-	// production chart route only /api/, /ui/, /scim/ and /.well-known/ to
-	// the registry, so nothing outside reaches it there, and the core's
-	// headless edge answers /internal/ with 404 (deploy/compose/edge).
-	"POST /internal/directory/trusted-device": {
-		Gate: GateDirectoryToken, Class: RateNone,
-		Why: "the directory calls it once per sign-in over the private network, behind a 32-character secret; the site's edge never routes /internal/ to the registry, the compose edge 404s it, and a Helm ingress must exclude it as it does /metrics",
-	},
-	"POST /internal/directory/email-verification": {
-		Gate: GateDirectoryToken, Class: RateNone,
-		Why: "the directory reads confirmation for its subject and address over the private network with the same secret as the remembered-browser check; edges exclude /internal/ and proxy headers are refused",
 	},
 
 	// The discovery documents are what a client reads before it holds

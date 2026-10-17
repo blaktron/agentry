@@ -858,15 +858,12 @@ const (
 
 // ManagesDirectory is the optional interface for an extension that is the
 // deployment's directory: the service that holds people's sign-in
-// accounts. Its Directory replaces the built-in one for everything the
-// registry asks of a directory (api.Directory): erasure and its retries,
-// the authenticators on the settings page, the superseded-account check,
-// the staff mirror. The rules stay the core's, the records the
-// directory's. One extension at most; a nil Directory leaves the built-in
-// one in place. A Directory set this way takes the directory's whole path:
-// the core then reads none of the directory's own claims at sign-in, mints
-// no remembered browser for it, answers its built-in checks 404 and keeps
-// no staff mirror, which the extension does through HearsSignIn,
+// accounts. Its Directory is what the registry asks of a directory
+// (api.Directory): erasure, and the superseded-account check. The rules
+// stay the core's, the records the directory's. One extension at most; a
+// nil Directory leaves the deployment without one. The directory's own
+// sign-in work (its claims, remembered browsers, the checks its flows make,
+// a staff mirror) is the extension's, through HearsSignIn,
 // ReceivesCallbacks and EventStaffChanged.
 type ManagesDirectory interface {
 	Directory() Directory

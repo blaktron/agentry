@@ -989,17 +989,14 @@ func migrateExtensions(ctx context.Context, databaseURL string, exts []Extension
 	return nil
 }
 
-// staffAtStart warns about the retired staff keys and recomputes
-// platform staff once over every account the staff organization's rule
-// could change, so a configuration change takes effect when the server
-// starts rather than at each person's next sign-in. Several replicas
-// may run it at once; the registry serialises them on an advisory lock.
+// staffAtStart recomputes platform staff once over every account the staff
+// organization's rule could change, so a configuration change takes effect
+// when the server starts rather than at each person's next sign-in.
+// Several replicas may run it at once; the registry serialises them on an
+// advisory lock.
 // A failure is logged, not fatal: the flag is recomputed again at every
 // sign-in and membership change.
 func staffAtStart(ctx context.Context, cfg config.Config, s *api.Server, log *slog.Logger) {
-	if keys := cfg.RetiredStaffKeys(); len(keys) > 0 {
-		log.Warn("retired platform-staff keys are set and grant nothing; platform staff is membership of auth.staffOrg at auth.staffDomain", "keys", keys)
-	}
 	reg := s.Reg()
 	if reg == nil || !reg.StaffConfigured() {
 		return
