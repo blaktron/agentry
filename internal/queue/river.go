@@ -150,7 +150,9 @@ func (e *envelope) UnmarshalJSON(b []byte) error {
 // that job's last attempt.
 type jobMeta struct {
 	ID string `json:"id"`
-	// FinalOf is the agentry id of the job this final attempt settles.
+	// Final marks a final attempt; FinalOf is the agentry id of the job it
+	// settles.
+	Final   bool   `json:"final,omitempty"`
 	FinalOf string `json:"finalOf,omitempty"`
 	// AttemptOffset is added to River's attempt count for the handler.
 	AttemptOffset int `json:"attemptOffset,omitempty"`
@@ -475,6 +477,9 @@ func (c *RiverClient) SettleRescued(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("queue: settle rescued: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// The rescuer appends its error to the job's errors, so a rescued job's
+	// last error is the marker; a job rescued and then retried ends with its
+	// handler's own error and is not matched.
 	rows, err := tx.Query(ctx, `
 		SELECT id, kind, queue, args, metadata, max_attempts FROM river_job
 		WHERE state = 'discarded' AND cardinality(errors) > 0
@@ -508,12 +513,12 @@ func (c *RiverClient) SettleRescued(ctx context.Context) (int, error) {
 	for _, r := range jobs {
 		var meta jobMeta
 		_ = json.Unmarshal(r.meta, &meta)
-		if meta.FinalOf == "" {
+		if !meta.Final {
 			id, err := uuid.NewV7()
 			if err != nil {
 				return 0, err
 			}
-			final, _ := json.Marshal(jobMeta{ID: id.String(), FinalOf: meta.ID, AttemptOffset: max(r.maxAttempts-1, 0)})
+			final, _ := json.Marshal(jobMeta{ID: id.String(), Final: true, FinalOf: meta.ID, AttemptOffset: max(r.maxAttempts-1, 0)})
 			if _, err := cl.InsertTx(ctx, tx, envelope{kind: r.kind, raw: r.args}, &river.InsertOpts{Queue: r.queue, MaxAttempts: 1, Metadata: final}); err != nil {
 				return 0, fmt.Errorf("queue: queue a rescued job's last attempt: %w", err)
 			}

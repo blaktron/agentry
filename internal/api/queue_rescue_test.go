@@ -10,6 +10,7 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/knowledge"
+	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
 )
 
@@ -57,7 +58,7 @@ func TestARescuedLastScanFailsThePack(t *testing.T) {
 	rescueAtLastAttempt(t, env, `kind = $1 AND args->>'pack' = $2`, knowledge.JobScan, p.ID.String())
 
 	rc := queue.NewRiverClient(env.st, nil)
-	if n, err := rc.SettleRescued(ctx); err != nil || n < 1 {
+	if n, err := rc.SettleRescued(ctx); err != nil || n != 1 {
 		t.Fatalf("SettleRescued = %d, %v", n, err)
 	}
 	drainKnowledgeScans(t, env)
@@ -66,7 +67,7 @@ func TestARescuedLastScanFailsThePack(t *testing.T) {
 		t.Fatalf("the pack after its rescued last scan: %+v (%v), want failed", got, err)
 	}
 	var finals int
-	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = $1 AND args->>'pack' = $2 AND metadata ? 'finalOf'`,
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = $1 AND args->>'pack' = $2 AND metadata ? 'final'`,
 		knowledge.JobScan, p.ID.String()).Scan(&finals); err != nil {
 		t.Fatal(err)
 	}
@@ -91,10 +92,10 @@ func TestARescuedFinalAttemptIsNotQueuedAgain(t *testing.T) {
 	}
 	rescueAtLastAttempt(t, env, `kind = $1 AND args->>'pack' = $2`, knowledge.JobScan, p.ID.String())
 	rc := queue.NewRiverClient(env.st, nil)
-	if n, err := rc.SettleRescued(ctx); err != nil || n < 1 {
+	if n, err := rc.SettleRescued(ctx); err != nil || n != 1 {
 		t.Fatalf("SettleRescued = %d, %v", n, err)
 	}
-	rescueAtLastAttempt(t, env, `kind = $1 AND args->>'pack' = $2 AND metadata ? 'finalOf'`, knowledge.JobScan, p.ID.String())
+	rescueAtLastAttempt(t, env, `kind = $1 AND args->>'pack' = $2 AND metadata ? 'final'`, knowledge.JobScan, p.ID.String())
 	if _, err := rc.SettleRescued(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -114,6 +115,11 @@ func TestARescuedFinalAttemptIsNotQueuedAgain(t *testing.T) {
 func TestARescuedLastDirectoryErasureIsAbandonedAndRaised(t *testing.T) {
 	idp := httptest.NewServer(http.NotFoundHandler())
 	idp.Close()
+	mx, err := metrics.New(context.Background(), metrics.Config{ServiceName: "agentryd", Role: "all", Env: "dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = mx.Shutdown(context.Background()) })
 	var srv *api.Server
 	env := newTestEnvCfg(t, func(c *config.Config) {
 		c.Auth.IdPAdminURL = idp.URL
@@ -121,6 +127,7 @@ func TestARescuedLastDirectoryErasureIsAbandonedAndRaised(t *testing.T) {
 	}, func(s *api.Server) {
 		srv = s
 		s.SetDirectoryErasureAttempts(2)
+		s.SetMetrics(mx)
 	})
 	h := env.register("dir-rescue")
 	env.verifyEmail(h)
@@ -134,9 +141,9 @@ func TestARescuedLastDirectoryErasureIsAbandonedAndRaised(t *testing.T) {
 	w.SetTestOnly(true)
 	srv.RegisterQueueHandlers(w)
 	w.Drain(context.Background(), "core")
-	rescueAtLastAttempt(t, env, `kind = 'gdpr.directory_erase' AND args->>'userId' = $1 AND NOT (metadata ? 'finalOf')`, uid)
+	rescueAtLastAttempt(t, env, `kind = 'gdpr.directory_erase' AND args->>'userId' = $1 AND NOT (metadata ? 'final')`, uid)
 
-	if n, err := w.SettleRescued(context.Background()); err != nil || n < 1 {
+	if n, err := w.SettleRescued(context.Background()); err != nil || n != 1 {
 		t.Fatalf("SettleRescued = %d, %v", n, err)
 	}
 	drainRetries(t, env, srv, uid)
@@ -147,5 +154,13 @@ func TestARescuedLastDirectoryErasureIsAbandonedAndRaised(t *testing.T) {
 	}
 	if strings.Join(seq, ",") != "failed,failed,abandoned" {
 		t.Fatalf("audited directory outcomes = %v, want failed,failed,abandoned", seq)
+	}
+	// Raised: the fail-open count the operator's alarm reads.
+	b, err := mx.Gather(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), metrics.FailOpenDirectoryErasure) {
+		t.Fatalf("no %s fail-open event in the metrics:\n%s", metrics.FailOpenDirectoryErasure, b)
 	}
 }
