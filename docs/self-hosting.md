@@ -177,7 +177,9 @@ identity is the same for `dev` and `main`, so the tag or the chart version
 is what says which branch it is. Earlier releases (v0.6.14 and before,
 v0.6.15-dev.111 and before) were signed as
 `https://github.com/blaktron/agentry/.github/workflows/release.yaml@refs/heads/main`
-(`@refs/heads/dev` for a prerelease). Earlier branch builds, with `n` below
+(`@refs/heads/dev` for a prerelease), and their sums file is
+`SHA256SUMS.txt` with `SHA256SUMS.txt.sig` and `SHA256SUMS.txt.pem` beside
+it; each one's notes give its command. Earlier branch builds, with `n` below
 1001, were signed by a workflow in `blaktron/agentry` on their own branch;
 `--certificate-identity-regexp '^https://github.com/blaktron/agentry/'`
 accepts them.
