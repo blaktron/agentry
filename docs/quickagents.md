@@ -371,7 +371,7 @@ interactive:
 
 `opening` is the assistant's first message when a session starts with no
 task text. It may span lines and use tabs, and carries no other control
-character and no format character, as the guide's overview (V10).
+character and no format character, as the guide's overview does (V10).
 Everything else about a session — budgets, idle timeout, wall
 time — is the operator's runner policy, which a manifest can only
 tighten. A release that does not list `interactive` may still declare

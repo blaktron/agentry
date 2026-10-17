@@ -662,7 +662,7 @@ func guideLine(s *issues, p, what, v string, maxChars int, required bool) {
 func plainLine(s *issues, p, what, v string) {
 	for _, r := range v {
 		if r < 0x20 || r == 0x7f || hiddenRune(r) {
-			s.errf("V10", p, "%s must be plain single-line text (no control or format characters)", what)
+			s.errf("V10", p, "%s must be plain single-line text (no control or format characters; found U+%04X)", what, r)
 			return
 		}
 	}
