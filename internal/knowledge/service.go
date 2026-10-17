@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -39,11 +40,21 @@ const (
 
 // The job kinds: the pack scan runs on the sandbox queue, as a version's
 // scan does, because it reads what an account uploaded; the retry of an
-// erasure's last step on the core queue, since it reads no content.
+// erasure's last step and the sweep that queues a lost scan again on the
+// core queue, since they read no content.
 const (
-	JobScan  = "knowledge.scan"
-	JobErase = "knowledge.erase"
+	JobScan      = "knowledge.scan"
+	JobErase     = "knowledge.erase"
+	JobScanSweep = "knowledge.scan.sweep"
 )
+
+// ScanStallAfter is how long a pack waits scanning since its tree was
+// stored, or since the sweep last queued its scan, before the sweep
+// queues the scan again: past a scan job's whole retry budget (three
+// attempts at the queue's job timeout, about 75 minutes at worst), so a
+// scan still being tried is not doubled, with room for a sandbox queue
+// that is behind.
+const ScanStallAfter = 2 * time.Hour
 
 // scanAttempts is the scan job's retry budget: a scan that did not finish
 // (a stage failed, the judge failed on a chunk) is retried until the last
@@ -464,6 +475,11 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 			defer func() { release(stored) }()
 		}
 	}
+	// A tree is stored only where its scan can be queued: without a queue
+	// the pack would be scanning for good.
+	if s.jobs == nil {
+		return p, errors.New("knowledge: no queue to scan the pack on")
+	}
 	key := objectKey(owner, id)
 	// The blob first: a row never names an object that is not there. An
 	// upload refused below leaves a sealed blob nothing names, which is
@@ -524,12 +540,6 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 				return fmt.Errorf("knowledge: record the admission: %w", err)
 			}
 		}
-		if s.jobs == nil {
-			return errors.New("knowledge: no queue to scan the pack on")
-		}
-		if _, err := s.jobs.Enqueue(ctx, JobScan, "sandbox", ScanArgs{Pack: id, Object: key}, queue.WithMaxAttempts(scanAttempts)); err != nil {
-			return fmt.Errorf("knowledge: queue the scan: %w", err)
-		}
 		return nil
 	})
 	if err != nil {
@@ -538,7 +548,62 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 	}
 	stored = true
 	s.deleteBlobs(ctx, replaced...)
+	// The scan is queued once the tree has committed: a worker can take a
+	// job at once, on another connection, and a scan queued inside the
+	// transaction could run first, find no tree and end with the pack
+	// scanning for good. A scan that cannot be queued now is logged, and
+	// the sweep queues it.
+	if qerr := s.queueScan(ctx, id, key); qerr != nil {
+		s.log.ErrorContext(ctx, "knowledge: could not queue the scan; the sweep will queue it", "pack", id, "err", qerr)
+	}
 	return p, nil
+}
+
+// queueScan queues the scan of the tree key holds for pack id.
+func (s *Service) queueScan(ctx context.Context, id uuid.UUID, key string) error {
+	if s.jobs == nil {
+		return errors.New("knowledge: no queue to scan the pack on")
+	}
+	_, err := s.jobs.Enqueue(ctx, JobScan, "sandbox", ScanArgs{Pack: id, Object: key}, queue.WithMaxAttempts(scanAttempts))
+	return err
+}
+
+// SweepScans queues the scan again of every pack still scanning since
+// before cutoff, its tree stored or its scan last queued then, and
+// reports how many. It is how a pack whose scan was never queued, or whose
+// job was lost, reaches ready or failed: a scan's own last attempt fails
+// the pack rather than leave it scanning.
+func (s *Service) SweepScans(ctx context.Context, cutoff time.Time) (int, error) {
+	if !s.Configured() {
+		return 0, nil
+	}
+	q := s.st.Queries()
+	rows, err := q.ListStalledKnowledgeScans(ctx, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("knowledge: list stalled scans: %w", err)
+	}
+	n := 0
+	for _, r := range rows {
+		// The touch is the claim: only a pack still stalled past the
+		// cutoff is touched, so of two sweeps at once (one per replica)
+		// one queues it, and a sweep that fails after it does not queue
+		// the same scan again on its next pass before this one has run.
+		touched, err := q.TouchKnowledgeScan(ctx, storegen.TouchKnowledgeScanParams{ID: r.ID, ObjectKey: r.ObjectKey, Cutoff: cutoff})
+		if err != nil {
+			return n, fmt.Errorf("knowledge: touch a stalled scan: %w", err)
+		}
+		if touched == 0 {
+			continue // its scan ended, or a new tree replaced it, meanwhile
+		}
+		if err := s.queueScan(ctx, r.ID, r.ObjectKey); err != nil {
+			return n, fmt.Errorf("knowledge: queue a stalled scan: %w", err)
+		}
+		n++
+	}
+	if n > 0 {
+		s.log.InfoContext(ctx, "knowledge: scans queued again", "count", n)
+	}
+	return n, nil
 }
 
 // admittedKind is a knowledge upload's kind in admitted_stores.
@@ -754,7 +819,8 @@ type ScanArgs struct {
 	Object string    `json:"object"`
 }
 
-// RegisterHandlers wires the scan job and the erasure's retry.
+// RegisterHandlers wires the scan job, the sweep of stalled scans and the
+// erasure's retry.
 func (s *Service) RegisterHandlers(q queue.Client) {
 	q.Register(JobScan, func(ctx context.Context, job queue.Job) error {
 		var args ScanArgs
@@ -770,6 +836,10 @@ func (s *Service) RegisterHandlers(q queue.Client) {
 			// must not ride it.
 			s.failPack(context.WithoutCancel(ctx), args)
 		}
+		return err
+	})
+	q.Register(JobScanSweep, func(ctx context.Context, _ queue.Job) error {
+		_, err := s.SweepScans(ctx, time.Now().Add(-ScanStallAfter))
 		return err
 	})
 	q.Register(JobErase, func(ctx context.Context, job queue.Job) error {

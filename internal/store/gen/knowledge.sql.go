@@ -470,6 +470,40 @@ func (q *Queries) ListKnowledgePacks(ctx context.Context, arg ListKnowledgePacks
 	return items, nil
 }
 
+const listStalledKnowledgeScans = `-- name: ListStalledKnowledgeScans :many
+SELECT id, object_key FROM knowledge_packs
+WHERE state = 'scanning' AND object_key <> '' AND updated_at < $1
+ORDER BY updated_at
+LIMIT 100
+`
+
+type ListStalledKnowledgeScansRow struct {
+	ID        uuid.UUID `json:"id"`
+	ObjectKey string    `json:"object_key"`
+}
+
+// Packs still scanning since before the cutoff: a scan never queued, or a
+// job lost. The sweep queues their scans again.
+func (q *Queries) ListStalledKnowledgeScans(ctx context.Context, cutoff time.Time) ([]ListStalledKnowledgeScansRow, error) {
+	rows, err := q.db.Query(ctx, listStalledKnowledgeScans, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListStalledKnowledgeScansRow
+	for rows.Next() {
+		var i ListStalledKnowledgeScansRow
+		if err := rows.Scan(&i.ID, &i.ObjectKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setKnowledgePackExportable = `-- name: SetKnowledgePackExportable :one
 UPDATE knowledge_packs SET exportable = $4, updated_at = now()
 WHERE id = $1 AND owner_kind = $2 AND owner_id = $3
@@ -588,4 +622,27 @@ func (q *Queries) SumKnowledgeBytesOfPool(ctx context.Context, arg SumKnowledgeB
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const touchKnowledgeScan = `-- name: TouchKnowledgeScan :execrows
+UPDATE knowledge_packs SET updated_at = now()
+WHERE id = $1 AND object_key = $2 AND state = 'scanning'
+  AND updated_at < $3
+`
+
+type TouchKnowledgeScanParams struct {
+	ID        uuid.UUID `json:"id"`
+	ObjectKey string    `json:"object_key"`
+	Cutoff    time.Time `json:"cutoff"`
+}
+
+// The sweep claims this tree's stalled scan to queue it again: it waits
+// another stall period before the next sweep looks at it, and a sweep
+// that finds it already touched past the cutoff claims nothing.
+func (q *Queries) TouchKnowledgeScan(ctx context.Context, arg TouchKnowledgeScanParams) (int64, error) {
+	result, err := q.db.Exec(ctx, touchKnowledgeScan, arg.ID, arg.ObjectKey, arg.Cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
