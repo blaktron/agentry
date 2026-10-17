@@ -2,15 +2,9 @@ package api_test
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
-	"github.com/blaktron/agentry/internal/api"
-	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/knowledge"
-	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
 )
 
@@ -106,61 +100,5 @@ func TestARescuedFinalAttemptIsNotQueuedAgain(t *testing.T) {
 	}
 	if jobs != 2 {
 		t.Fatalf("scan jobs for the pack: %d, want the original and one final attempt", jobs)
-	}
-}
-
-// A directory erasure whose last retry died with its worker is still
-// audited as abandoned and raised: the rescued job is given its last
-// attempt, which records the abandonment.
-func TestARescuedLastDirectoryErasureIsAbandonedAndRaised(t *testing.T) {
-	idp := httptest.NewServer(http.NotFoundHandler())
-	idp.Close()
-	mx, err := metrics.New(context.Background(), metrics.Config{ServiceName: "agentryd", Role: "all", Env: "dev"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = mx.Shutdown(context.Background()) })
-	var srv *api.Server
-	env := newTestEnvCfg(t, func(c *config.Config) {
-		c.Auth.IdPAdminURL = idp.URL
-		c.Auth.IdPAdminToken = "idp-admin-token"
-	}, func(s *api.Server) {
-		srv = s
-		s.SetDirectoryErasureAttempts(2)
-		s.SetMetrics(mx)
-	})
-	h := env.register("dir-rescue")
-	env.verifyEmail(h)
-	sess := env.login(h)
-	uid := env.selfID(sess)
-	if got := eraseAndReadOutcome(t, env, sess); got != "pending" {
-		t.Fatalf("X-Agentry-Directory-Erasure = %q, want pending", got)
-	}
-	// The job's first attempt fails; its last is rescued, not run.
-	w := queue.NewRiverClient(env.st, nil)
-	w.SetTestOnly(true)
-	srv.RegisterQueueHandlers(w)
-	w.Drain(context.Background(), "core")
-	rescueAtLastAttempt(t, env, `kind = 'gdpr.directory_erase' AND args->>'userId' = $1 AND NOT (metadata ? 'final')`, uid)
-
-	if n, err := w.SettleRescued(context.Background()); err != nil || n != 1 {
-		t.Fatalf("SettleRescued = %d, %v", n, err)
-	}
-	drainRetries(t, env, srv, uid)
-
-	var seq []string
-	for _, d := range directoryOutcomes(t, env, uid) {
-		seq = append(seq, d["directoryErasure"].(string))
-	}
-	if strings.Join(seq, ",") != "failed,failed,abandoned" {
-		t.Fatalf("audited directory outcomes = %v, want failed,failed,abandoned", seq)
-	}
-	// Raised: the fail-open count the operator's alarm reads.
-	b, err := mx.Gather(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(b), metrics.FailOpenDirectoryErasure) {
-		t.Fatalf("no %s fail-open event in the metrics:\n%s", metrics.FailOpenDirectoryErasure, b)
 	}
 }

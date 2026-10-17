@@ -63,7 +63,7 @@ PURPOSES = {
 SUBJECTS = {
     "internal/api": {
         "Authorization and principals": r"authz|private_agent|keyless|principal|agent_(read|publish|maintain|manage)_seam|agent_manage_scope",
-        "Directory and blueprint contracts": r"directory|enrollment|idp_|staff_mirror|signup_promo",
+        "Directory and identity seam contracts": r"directory|identity_seam|idp_|remembered_browsers",
         "Account and sign-in lifecycles": r"activation|totp|trusted_devices|login|m1_|m13_|m17_|m6_(flows|saml|oidc)|cookie|desktop_grant|clear_data|erasure|export|handles|fold_in|reserved_handles|m8_gdpr|m9_gdpr",
         "Organization and SSO/SCIM lifecycles": r"org_|m6_(enterprise|scim)|m9_(scim|db_hardening)|m16_|sso_|saml_|scim_|staff_org",
         "Publication, review and agent lifecycles": r"agent_|m4_|review_|accepted_risk|unscanned|versions|version_|publish_gate|pipeline_surface|scan_handoff|draft_claim|modes|mcp_|s7_|rescan|ruleset|signing|m08_|builtin",

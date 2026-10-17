@@ -58,10 +58,8 @@ func requireSetCookie(t *testing.T, cookies []*http.Cookie, name string, wantMax
 	return requireSetCookieAt(t, cookies, name, "/", "", wantMaxAge, secure)
 }
 
-// requireSetCookieAt is requireSetCookie for a cookie scoped somewhere other
-// than the whole host: the directory path's remembered-browser cookie is set
-// for authentik's flow executor alone, and on a parent domain when the
-// directory is a subdomain. wantDomain "" means host-only.
+// requireSetCookieAt is requireSetCookie for a cookie scoped to a path and a
+// domain. wantDomain "" means host-only.
 func requireSetCookieAt(t *testing.T, cookies []*http.Cookie, name, wantPath, wantDomain string, wantMaxAge int, secure bool) *http.Cookie {
 	t.Helper()
 	for _, c := range cookies {
