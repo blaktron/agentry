@@ -4876,7 +4876,8 @@
             "TestSourceTypesAreTheClosedSet",
             "TestSourceQuestionGrantsNothing",
             "TestRepositoryQuestionWarnsWithoutCode",
-            "TestV2SchemaIntakeTypes"
+            "TestV2SchemaIntakeTypes",
+            "TestV2SchemaRefusesControlCharactersInIntakeAndOpening"
           ],
           "fuzz": [],
           "benchmarks": [],
