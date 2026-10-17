@@ -1,5 +1,8 @@
 # Changelog
 
+This file ends at 0.6.14. From v0.6.15 on, each release's changes are in
+its notes on the [Releases page](https://github.com/blaktron/agentry/releases).
+
 ## [0.6.14](https://github.com/blaktron/agentry/compare/v0.6.10...v0.6.14) (2026-09-28)
 
 
@@ -348,12 +351,3 @@
 * **ui:** the staff console says what an enforcement action does, not "blockd" ([301085b](https://github.com/blaktron/agentry/commit/301085bf96826ffdfd32b4dcb81fe2dca55a25f1)), closes [#259](https://github.com/blaktron/agentry/issues/259)
 * **webhook:** the egress guard refuses 0.0.0.0/8 and judges an embedded IPv4 by what it embeds ([1c0ddf6](https://github.com/blaktron/agentry/commit/1c0ddf644e50199809d8792754aa79478845b165))
 * **webhook:** the egress guard refuses 0.0.0.0/8 and judges an embedded IPv4 by what it embeds ([aa4de22](https://github.com/blaktron/agentry/commit/aa4de22fb61439b15926ab50027825c146ba8011)), closes [#401](https://github.com/blaktron/agentry/issues/401)
-
-## Changelog
-
-All notable changes to this project are documented here. This file is
-maintained by [release-please](https://github.com/googleapis/release-please)
-from conventional-commit messages — do not edit it by hand; write good commit
-messages instead (see CONTRIBUTING.md → Releasing).
-
-<!-- release-please prepends new versions below this line. -->

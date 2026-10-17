@@ -914,7 +914,7 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 
 | Manifest declaration | Tool(s) granted |
 |---|---|
-| (always) | `write_report`: write files into the run's output folder |
+| (always) | `write_report`: write files into the run's output folder, and mark the one the person asked for as the run's [deliverable](#deliverables) |
 | (always) | `list_inputs`, `read_input`, `search_inputs`: the run's provided input files, read-only |
 | (always, but for the built-ins) | `scratch_list`, `scratch_read`, `scratch_write`, `scratch_search`: the run's [scratch folder](runner.md#the-scratch-folder) at `/scratch`, private to the run and deleted at its end |
 | (always, but for the built-ins) | `export_pdf`: a Markdown report as a PDF in `reports/`, in the form the agent picks (`report`, the default, `letter` or `memo`) and laid out in the person's [report theme](runner.md#the-report-theme) |
@@ -943,9 +943,10 @@ It covers the tools (only from the gateway), the network, the workspace at
 `/workspace`, the scratch folder at `/scratch`, searching files with
 `grep` and `glob`, the commands, the secrets
 by name, and the inputs under `/inputs`. It explains how to read an
-attached knowledge pack, that reports go through `write_report`, when to
-also export one as a PDF with `export_pdf`, and that the final message is
-the run's result.
+attached knowledge pack, that reports go through `write_report`, that the
+file the person asked for is marked as the run's deliverable, when to also
+export one as a PDF with `export_pdf`, and that the final message is the
+run's result.
 So an instruction need not repeat any of this. The text is in the run
 plan's hash, and [the runner reference](runner.md#the-system-prompt) shows it word
 for word for a sample QuickAgent.
@@ -1007,8 +1008,35 @@ environment · `14` the QuickAgent failed · `15` timeout · `16` budget ·
 **The output folder** (`--out`, default
 `./agentry-out/<ns>-<name>-<runid>/`) holds `reports/…`, `result.json`
 (the machine-readable envelope: enforcement mechanisms applied, digest,
-attestation state, usage, run-plan hash), and `receipts/` (event stream,
+attestation state, usage, run-plan hash, and the run's
+[deliverables](#deliverables)), and `receipts/` (event stream,
 gateway call log, the exact run plan).
+
+### Deliverables
+
+The files a run was for are its **deliverables**. A QuickAgent whose result
+is a file marks it: `write_report` takes `deliverable: true` and a `title`,
+one line of plain text of at most 120 characters, and so does `export_pdf`
+for a PDF. The runner then lists the file in the envelope by its SHA-256,
+and the person's tools can show it first and copy it to a folder of their
+own ([the runner reference](runner.md#deliverables)).
+
+The System Prompt already tells the agent to mark the file the person asked
+for and to leave notes and drafts unmarked, so an instruction need not
+repeat it. It helps to say which file is the result, in the `## Output`
+section of the instruction: "write the summary with `write_report` as
+`summary.md`, titled 'Weekly summary'". When a run marks nothing, the runner
+lists the PDFs it exported, else the files in `reports/`, else the final
+message, which it writes to `reports/deliverable.md`. A QuickAgent that
+returns only its answer needs no marking. A QuickAgent with an output schema
+returns structured data, which is the `result` in the envelope and is not
+written to a file.
+
+A publisher chooses nothing about where a deliverable goes. The person
+chooses a folder (`agentry run --deliver-to`, or `deliver.folder` in their
+config), and a release names none in its manifest. Marking needs agentry-cli
+v0.6.138 or later: an older CLI's `export_pdf` refuses the two arguments
+(its `write_report` ignores them).
 
 **Operator policy** (`~/.agentry/runner/policy.yaml`, created on first
 use) pins the gateway/harness images, names the model endpoint and its
