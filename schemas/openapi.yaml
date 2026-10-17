@@ -4887,7 +4887,7 @@ components:
           format: date-time
     User:
       type: object
-      required: [id, handle, email, displayName, emailVerified, totpEnabled, createdAt]
+      required: [id, handle, email, displayName, emailVerified, createdAt]
       properties:
         id:
           type: string
@@ -4900,13 +4900,6 @@ components:
           type: string
         emailVerified:
           type: boolean
-        totpEnabled:
-          type: boolean
-          deprecated: true
-          description: >
-            Always false: the server keeps no second factor of its own, and
-            the field goes in a later release. A sign-in's second factor is
-            the OpenID provider's.
         cookieAckAt:
           description: When this account acknowledged the cookie notice.
           type: string

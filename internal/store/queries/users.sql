@@ -143,7 +143,6 @@ UPDATE users SET
   email = $2,
   email_verified_at = NULL,
   display_name = 'deleted user',
-  totp_enabled = false,
   state = 'deleted',
   deleted_tombstone = $3,
   updated_at = now()
