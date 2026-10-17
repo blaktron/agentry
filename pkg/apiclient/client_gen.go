@@ -2055,36 +2055,6 @@ func (e DeleteCurrentUserParamsPublishedContent) Valid() bool {
 	}
 }
 
-// Defines values for DeleteUserDirectoryDeviceParamsKind.
-const (
-	Duo      DeleteUserDirectoryDeviceParamsKind = "duo"
-	Email    DeleteUserDirectoryDeviceParamsKind = "email"
-	Sms      DeleteUserDirectoryDeviceParamsKind = "sms"
-	Static   DeleteUserDirectoryDeviceParamsKind = "static"
-	Totp     DeleteUserDirectoryDeviceParamsKind = "totp"
-	Webauthn DeleteUserDirectoryDeviceParamsKind = "webauthn"
-)
-
-// Valid indicates whether the value is a known member of the DeleteUserDirectoryDeviceParamsKind enum.
-func (e DeleteUserDirectoryDeviceParamsKind) Valid() bool {
-	switch e {
-	case Duo:
-		return true
-	case Email:
-		return true
-	case Sms:
-		return true
-	case Static:
-		return true
-	case Totp:
-		return true
-	case Webauthn:
-		return true
-	default:
-		return false
-	}
-}
-
 // AbuseReport defines model for AbuseReport.
 type AbuseReport struct {
 	Agent     string             `json:"agent"`
@@ -3752,46 +3722,6 @@ type User struct {
 	TotpEnabled   bool        `json:"totpEnabled"`
 }
 
-// UserDirectory defines model for UserDirectory.
-type UserDirectory struct {
-	// AccountUrl Deprecated and no longer set: the directory's own account page is not offered; every setting lives here.
-	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
-	AccountUrl *string `json:"accountUrl,omitempty"`
-
-	// Devices The caller's enrolled authenticators as the directory reports them; absent when the server has no directory admin access.
-	Devices *[]struct {
-		CreatedAt *time.Time `json:"createdAt,omitempty"`
-
-		// Id The directory's id for the authenticator; pass it to DELETE /user/directory/devices/{kind}/{deviceId}.
-		Id *string `json:"id,omitempty"`
-
-		// Kind totp | webauthn | static | duo | sms | email | other
-		Kind string `json:"kind"`
-		Name string `json:"name"`
-	} `json:"devices,omitempty"`
-
-	// DevicesError Set when the authenticator lookup was attempted and failed; the links still work.
-	DevicesError *string `json:"devicesError,omitempty"`
-
-	// FirstSocialProvider The social provider the caller's directory account was first connected to, for the account's profile. Absent when the account has none, the server has no directory admin access, or the directory did not answer.
-	FirstSocialProvider *struct {
-		// Id The directory's slug for the provider, e.g. google.
-		Id string `json:"id"`
-
-		// Name The provider's display name, e.g. Google.
-		Name string `json:"name"`
-	} `json:"firstSocialProvider,omitempty"`
-
-	// HasPassword Whether the caller's directory account has a password: false for an account a social provider created and no password was added to. Absent when the directory did not answer or has not recorded it yet (the account has not signed in or set a password since the directory began recording it).
-	HasPassword *bool `json:"hasPassword,omitempty"`
-
-	// Managed True when a directory service owns credentials for this deployment.
-	Managed           bool    `json:"managed"`
-	PasswordChangeUrl *string `json:"passwordChangeUrl,omitempty"`
-	TotpSetupUrl      *string `json:"totpSetupUrl,omitempty"`
-	WebauthnSetupUrl  *string `json:"webauthnSetupUrl,omitempty"`
-}
-
 // VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
 type VersionStatus string
 
@@ -4478,9 +4408,6 @@ type DeleteCurrentUserParams struct {
 
 // DeleteCurrentUserParamsPublishedContent defines parameters for DeleteCurrentUser.
 type DeleteCurrentUserParamsPublishedContent string
-
-// DeleteUserDirectoryDeviceParamsKind defines parameters for DeleteUserDirectoryDevice.
-type DeleteUserDirectoryDeviceParamsKind string
 
 // GetUserReportSettingsParams defines parameters for GetUserReportSettings.
 type GetUserReportSettingsParams struct {
@@ -6061,7 +5988,7 @@ type ClientInterface interface {
 
 	// DeleteCurrentUser Erase the caller's account (GDPR flow).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service that an extension of the server reaches, the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: the directory retries it where it can (`pending`), and one that does not complete is raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 	//
 	// Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 	DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6072,20 +5999,6 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
 	ListUserDependencyAlerts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account.
-	//
-	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
-	//
-	// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
-	GetUserDirectory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service.
-	//
-	// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
-	//
-	// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
-	DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetDomainOrg Which organization the caller's verified email domain belongs to. 403 email-unverified until the address is verified.
 	//
@@ -9584,7 +9497,7 @@ func (c *Client) ClearCurrentUserData(ctx context.Context, reqEditors ...Request
 
 // DeleteCurrentUser Erase the caller's account (GDPR flow).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service that an extension of the server reaches, the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: the directory retries it where it can (`pending`), and one that does not complete is raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 //
 // Corresponds with POST /user/delete (the `DeleteCurrentUser` operationId).
 func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9606,40 +9519,6 @@ func (c *Client) DeleteCurrentUser(ctx context.Context, params *DeleteCurrentUse
 // Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
 func (c *Client) ListUserDependencyAlerts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListUserDependencyAlertsRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetUserDirectory Where the caller manages password, MFA and profile when a directory service owns the account.
-//
-// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
-//
-// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
-func (c *Client) GetUserDirectory(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetUserDirectoryRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// DeleteUserDirectoryDevice Remove one of the caller's own authenticators from the directory service.
-//
-// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
-//
-// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
-func (c *Client) DeleteUserDirectoryDevice(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteUserDirectoryDeviceRequest(c.Server, kind, deviceId)
 	if err != nil {
 		return nil, err
 	}
@@ -17075,74 +16954,6 @@ func NewListUserDependencyAlertsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewGetUserDirectoryRequest constructs an http.Request for the GetUserDirectory method
-func NewGetUserDirectoryRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/user/directory")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewDeleteUserDirectoryDeviceRequest constructs an http.Request for the DeleteUserDirectoryDevice method
-func NewDeleteUserDirectoryDeviceRequest(server string, kind DeleteUserDirectoryDeviceParamsKind, deviceId string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "deviceId", deviceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/user/directory/devices/%s/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewGetDomainOrgRequest constructs an http.Request for the GetDomainOrg method
 func NewGetDomainOrgRequest(server string) (*http.Request, error) {
 	var err error
@@ -19827,7 +19638,7 @@ type ClientWithResponsesInterface interface {
 
 	// DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow).
 	//
-	// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+	// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service that an extension of the server reaches, the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: the directory retries it where it can (`pending`), and one that does not complete is raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19842,24 +19653,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /user/dependency-alerts (the `ListUserDependencyAlerts` operationId).
 	ListUserDependencyAlertsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserDependencyAlertsResponse, error)
-
-	// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account.
-	//
-	// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
-	GetUserDirectoryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserDirectoryResponse, error)
-
-	// DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service.
-	//
-	// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
-	DeleteUserDirectoryDeviceWithResponse(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*DeleteUserDirectoryDeviceResponse, error)
 
 	// GetDomainOrgWithResponse Which organization the caller's verified email domain belongs to. 403 email-unverified until the address is verified.
 	//
@@ -26971,95 +26764,6 @@ func (r ListUserDependencyAlertsResponse) ContentType() string {
 	return ""
 }
 
-type GetUserDirectoryResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *UserDirectory
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetUserDirectoryResponse) GetJSON200() *UserDirectory {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r GetUserDirectoryResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r GetUserDirectoryResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetUserDirectoryResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetUserDirectoryResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetUserDirectoryResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type DeleteUserDirectoryDeviceResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r DeleteUserDirectoryDeviceResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r DeleteUserDirectoryDeviceResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteUserDirectoryDeviceResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteUserDirectoryDeviceResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DeleteUserDirectoryDeviceResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type GetDomainOrgResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -31248,7 +30952,7 @@ func (c *ClientWithResponses) ClearCurrentUserDataWithResponse(ctx context.Conte
 
 // DeleteCurrentUserWithResponse Erase the caller's account (GDPR flow).
 //
-// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service and is configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: it is retried by a job with backoff (each attempt audited) and the response says `pending`; a retry budget that runs out is audited as `abandoned` and raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
+// Purges personal data and pseudonymizes the account. Published public versions are never deleted: they are either yanked, so already-installed copies keep verifying, or the personal-namespace agents are transferred to an organization the caller administers. When the account has published public versions the choice is explicit: omitting `publishedContent` is a 400, never a silent yank. When the deployment holds credentials in a directory service that an extension of the server reaches, the sign-in account there is deleted in the same step; the outcome is audited as `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure` header. A failed directory attempt does not undo the registry's erasure: the directory retries it where it can (`pending`), and one that does not complete is raised to the operator. An account that is an organization's last admin is refused (409 last-admin) until another admin is in place; a transfer that would put the organization over its private-agent cap is refused (422 private-agent-cap) with nothing erased. The erased account's memberships go with it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31274,36 +30978,6 @@ func (c *ClientWithResponses) ListUserDependencyAlertsWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParseListUserDependencyAlertsResponse(rsp)
-}
-
-// GetUserDirectoryWithResponse Where the caller manages password, MFA and profile when a directory service owns the account.
-//
-// With auth.externalOnly, credentials live in the directory service (Authentik). This answers the settings page's question "where do I change my password or add an authenticator?" with the directory's flow URLs, and lists the caller's enrolled authenticators when the server has directory admin access (auth.idpAdminURL). Without a directory, `managed` is false and the rest is absent.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /user/directory (the `GetUserDirectory` operationId).
-func (c *ClientWithResponses) GetUserDirectoryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserDirectoryResponse, error) {
-	rsp, err := c.GetUserDirectory(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetUserDirectoryResponse(rsp)
-}
-
-// DeleteUserDirectoryDeviceWithResponse Remove one of the caller's own authenticators from the directory service.
-//
-// With auth.externalOnly and directory admin access, removes the caller's authenticator of this kind and id through the directory's admin API, so the settings page manages MFA without ever showing the directory's own panel. The authenticator must be on the caller's own account: an id that is somebody else's answers 404 exactly like a missing one. 404 when the server has no directory admin access; 502 when the directory did not answer.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /user/directory/devices/{kind}/{deviceId} (the `DeleteUserDirectoryDevice` operationId).
-func (c *ClientWithResponses) DeleteUserDirectoryDeviceWithResponse(ctx context.Context, kind DeleteUserDirectoryDeviceParamsKind, deviceId string, reqEditors ...RequestEditorFn) (*DeleteUserDirectoryDeviceResponse, error) {
-	rsp, err := c.DeleteUserDirectoryDevice(ctx, kind, deviceId, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteUserDirectoryDeviceResponse(rsp)
 }
 
 // GetDomainOrgWithResponse Which organization the caller's verified email domain belongs to. 403 email-unverified until the address is verified.
@@ -36662,68 +36336,6 @@ func ParseListUserDependencyAlertsResponse(rsp *http.Response) (*ListUserDepende
 			return nil, err
 		}
 		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetUserDirectoryResponse parses an HTTP response from a GetUserDirectoryWithResponse call
-func ParseGetUserDirectoryResponse(rsp *http.Response) (*GetUserDirectoryResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetUserDirectoryResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest UserDirectory
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDeleteUserDirectoryDeviceResponse parses an HTTP response from a DeleteUserDirectoryDeviceWithResponse call
-func ParseDeleteUserDirectoryDeviceResponse(rsp *http.Response) (*DeleteUserDirectoryDeviceResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteUserDirectoryDeviceResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

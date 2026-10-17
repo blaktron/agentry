@@ -353,3 +353,32 @@ func TestStaffOrgInvitationAtItsVerifiedDomainVerifiesInTheSameAct(t *testing.T)
 		t.Fatal("an invitee at the staff organization's verified domain must be admitted and made staff")
 	}
 }
+
+// TestStaffOrgMembersWhoAreNotStaffAreReported: a member of the staff
+// organization outside its domain is reported by the start-up check, and
+// stays a member.
+func TestStaffOrgMembersWhoAreNotStaffAreReported(t *testing.T) {
+	f := newStaffFixture(t)
+	old := f.env.registerEmail("oldtimer", "oldtimer-"+f.env.sfx+"@elsewhere.test")
+	f.env.verifyEmail(old)
+	f.env.seedMembership(f.org, old, "member", "active") // seeded past the domain check
+	if _, err := f.srv.Reg().ResyncStaff(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	handles, err := f.srv.Reg().StaffOrgMembersNotStaff(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(handles) != 1 || handles[0] != old {
+		t.Fatalf("reported %v, want only %s", handles, old)
+	}
+	if f.staff(old) {
+		t.Fatal("a member outside the domain is staff")
+	}
+	var state string
+	if err := f.env.st.Pool().QueryRow(context.Background(),
+		`SELECT state FROM memberships WHERE org_id = (SELECT id FROM handles WHERE handle = $1)
+		   AND user_id = (SELECT id FROM handles WHERE handle = $2)`, f.org, old).Scan(&state); err != nil || state != "active" {
+		t.Fatalf("the member was touched: %q %v", state, err)
+	}
+}

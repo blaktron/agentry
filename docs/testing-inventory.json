@@ -10,7 +10,6 @@
         {
           "path": "internal/api/activation_db_test.go",
           "tests": [
-            "TestDirectoryEmailVerification",
             "TestUnactivatedAccountUntilActivated",
             "TestUnactivatedSupersededByVerifiedSignIn",
             "TestActivationDailyCap"
@@ -26,8 +25,6 @@
         {
           "path": "internal/api/activation_test.go",
           "tests": [
-            "TestDirectoryEmailVerificationGate",
-            "TestDirectoryAccountGone",
             "TestUnactivated",
             "TestUnactivatedWritesFollowTheSpec",
             "TestRefuseUnactivated"
@@ -468,158 +465,31 @@
     },
     {
       "owner": "internal/api",
-      "behavior": "Directory and blueprint contracts",
+      "behavior": "Directory and identity seam contracts",
       "disposition": "retain",
       "files": [
         {
-          "path": "internal/api/directory_account_id_test.go",
+          "path": "internal/api/directory_claims_seam_test.go",
           "tests": [
-            "TestDirectoryAccountIDIsRecordedAtSignIn"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/api/directory_claims_test.go",
-          "tests": [
-            "TestDirectoryRememberDeviceIsOnlyAJSONTrue",
-            "TestDirectoryAccountIDIsAPositiveWholeNumber",
-            "TestPromoCodeClaim"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/api/directory_device_cookie_blueprint_test.go",
-          "tests": [
-            "TestDirectoryIssuesNoDeviceCookie"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/api/directory_erasure_retry_test.go",
-          "tests": [
-            "TestDirectoryErasureFailureIsRetried",
-            "TestDirectoryErasureAbandonedAfterItsRetries",
-            "TestDirectoryErasureOutcomeInTheResponse"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/directory_erasure_test.go",
-          "tests": [
-            "TestErasureDeletesDirectoryAccount",
-            "TestErasureWithoutDirectoryIsAudited"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/directory_has_password_blueprint_test.go",
-          "tests": [
-            "TestDirectoryRecordsHasPasswordBlueprint"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/api/directory_remember_blueprint_test.go",
-          "tests": [
-            "TestDirectoryRememberBlueprint"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "source/file contract"
-          ]
-        },
-        {
-          "path": "internal/api/directory_signin_live_test.go",
-          "tests": [
-            "TestDirectorySignInFactsAgainstALiveDirectory"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "HTTP transport",
-            "explicit skip"
-          ]
-        },
-        {
-          "path": "internal/api/directory_signin_test.go",
-          "tests": [
-            "TestDirectorySignInFacts"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/directory_takeover_test.go",
-          "tests": [
-            "TestAnExtensionsDirectoryTakesTheDirectoryPath",
-            "TestTheBuiltInDirectoryStillReadsItsClaims",
-            "TestAnExtensionsDirectoryKeepsNoCoreStaffMirror",
+            "TestTheCoreReadsNoDirectoryClaims",
             "TestADirectoryThatErasesItselfAnswersTheErasure"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture"
-          ]
+          "dependencyHints": []
         },
         {
-          "path": "internal/api/directory_test.go",
+          "path": "internal/api/identity_seam_test.go",
           "tests": [
-            "TestDirectoryFindAccount",
-            "TestDirectoryDevicesCarryIDs",
-            "TestDirectoryDeleteDeviceOwnOnly",
-            "TestDirectoryEraseAccount"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/directory_trusted_device_test.go",
-          "tests": [
-            "TestDirectoryIsAskedForTheAgentryScope",
-            "TestDirectoryRemembersOnlyOnItsClaimAndASecondFactor",
-            "TestDirectoryTrustCheck",
-            "TestDirectoryTrustCheckFailsClosed",
-            "TestDirectoryTrustCheckIsAbsentWhenOff",
-            "TestDirectoryRememberCookieCoversTheDirectorysHost",
-            "TestClearTrustedDevices",
-            "TestDirectoryRememberedBrowserSurvivesLogout"
+            "TestOIDCProviderSignsPeopleIn",
+            "TestExistingDirectoryIdentitiesKeepTheirAccounts",
+            "TestADirectoryFromAnExtensionServesTheRegistry",
+            "TestWithNoDirectoryTheRegistryStandsAlone",
+            "TestSignInHookHearsTheClaimsAndMayRememberTheBrowser",
+            "TestStaffChangedIsHeardAndTheSetIsRead",
+            "TestAccountErasedCarriesTheIdentitiesWithoutAnyDirectory",
+            "TestADirectoryWithoutItsOwnErasureIsAskedOnce"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -627,42 +497,6 @@
           "dependencyHints": [
             "database fixture",
             "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/enrollment_authenticator_blueprint_test.go",
-          "tests": [
-            "TestEnrollmentAuthenticatorSetupIsSkippable"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/api/enrollment_blueprint_test.go",
-          "tests": [
-            "TestEnrollmentUsernamePolicyMatchesHandleRules"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "source/file contract"
-          ]
-        },
-        {
-          "path": "internal/api/enrollment_promo_blueprint_test.go",
-          "tests": [
-            "TestEnrollmentPromoFieldIsOptIn",
-            "TestEnrollmentPromoGrammarMatchesTheCore",
-            "TestAgentryScopeCarriesThePromoCode"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "source/file contract"
           ]
         },
         {
@@ -692,59 +526,14 @@
           ]
         },
         {
-          "path": "internal/api/signup_promo_code_test.go",
+          "path": "internal/api/remembered_browsers_clear_test.go",
           "tests": [
-            "TestPromoClaimOnlyFromDirectoryOnCreate"
+            "TestClearTrustedDevices"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
-            "database fixture"
-          ]
-        },
-        {
-          "path": "internal/api/staff_mirror_authentik_test.go",
-          "tests": [
-            "TestAuthentikGroupsAgainstALiveDirectory"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "HTTP transport",
-            "explicit skip"
-          ]
-        },
-        {
-          "path": "internal/api/staff_mirror_test.go",
-          "tests": [
-            "TestStaffMirrorFollowsTheStaffOrg",
-            "TestStaffMirrorIsNudgedByAStaffChange",
-            "TestStaffMirrorWithoutADirectoryAccount",
-            "TestStaffMirrorUnconfiguredDoesNothing",
-            "TestStaffOrgMembersWhoAreNotStaffAreReported",
-            "TestStaffMirrorAddsOnlyTheLinkedActiveAccount",
-            "TestStaffMirrorKeepsTheAuditOfAHalfFinishedRun"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/user_directory_test.go",
-          "tests": [
-            "TestUserDirectoryLinksAndDevices",
-            "TestUserDirectoryNamesFirstProviderAndPassword"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
             "HTTP transport"
           ]
         }
@@ -1247,7 +1036,8 @@
             "TestStaffEndsWithErasure",
             "TestStaffFollowsSignInAndStartup",
             "TestStaffUnconfiguredLeavesTheFlag",
-            "TestStaffOrgInvitationAtItsVerifiedDomainVerifiesInTheSameAct"
+            "TestStaffOrgInvitationAtItsVerifiedDomainVerifiesInTheSameAct",
+            "TestStaffOrgMembersWhoAreNotStaffAreReported"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1532,26 +1322,6 @@
           "dependencyHints": []
         },
         {
-          "path": "internal/api/identity_seam_test.go",
-          "tests": [
-            "TestOIDCProviderSignsPeopleIn",
-            "TestExistingDirectoryIdentitiesKeepTheirAccounts",
-            "TestADirectoryFromAnExtensionServesTheRegistry",
-            "TestWithNoDirectoryTheRegistryStandsAlone",
-            "TestSignInHookHearsTheClaimsAndMayRememberTheBrowser",
-            "TestStaffChangedIsHeardAndTheSetIsRead",
-            "TestAccountErasedCarriesTheIdentitiesWithoutAnyDirectory",
-            "TestAnExtensionsDirectoryErasesAsTheBuiltInOneDoes"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
           "path": "internal/api/image_proxy_key_test.go",
           "tests": [
             "TestImageProxyKeyIsNeverAConstant",
@@ -1733,15 +1503,13 @@
           "path": "internal/api/queue_rescue_test.go",
           "tests": [
             "TestARescuedLastScanFailsThePack",
-            "TestARescuedFinalAttemptIsNotQueuedAgain",
-            "TestARescuedLastDirectoryErasureIsAbandonedAndRaised"
+            "TestARescuedFinalAttemptIsNotQueuedAgain"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
+            "database fixture"
           ]
         },
         {
@@ -2487,6 +2255,7 @@
             "TestLoadDefaults",
             "TestLoadFileAndEnvPrecedence",
             "TestLoadRejectsUnknownKeys",
+            "TestLoadRejectsUnknownNestedKeys",
             "TestValidateGuards",
             "TestValidateRefusesTheRemovedPGQueueDriver",
             "TestValidateCapsCredentialTTLs",
@@ -2499,9 +2268,6 @@
             "TestWebSearchEnvConfig",
             "TestSocialProviderEnv",
             "TestStaffOrgAcceptsAHandleAndABareDomain",
-            "TestStaffMirrorGroupNeedsItsWriterAndItsSource",
-            "TestDirectoryTrustCheckConfiguration",
-            "TestRetiredStaffKeysAreNamed",
             "TestParseCIDRs",
             "TestSSHProxyProtocolCIDRsFromEnv",
             "TestTrustedProxyCIDRsFromEnv",
@@ -4153,7 +3919,7 @@
             "TestLoginMirrorsTheSessionOntoTheBrowser",
             "TestModeAuthorizeServesOnlyTheAuthorizePage",
             "TestRefusalsRenderInsideTheLayout",
-            "TestAccountPagesAndTheDirectoryRedirect",
+            "TestAccountPageSavesAndFlashes",
             "TestSSHKeysPageRendersTheKeyAndItsLimits",
             "TestReviewQueueNamesAnOrganizationOnlyWhenChosen",
             "TestReviewPages",
@@ -5279,11 +5045,6 @@
         "deps",
         "attest-interop",
         "image-scan",
-        "directory-email",
-        "directory-remember",
-        "directory-promo",
-        "directory-terms",
-        "directory-budget",
         "helm",
         "oasdiff",
         "gitleaks"
@@ -5364,102 +5125,12 @@
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/directory-budget.py",
+      "path": "scripts/acceptance/edge.py",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },
     {
-      "path": "scripts/acceptance/directory-budget.sh",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-captcha-check.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-cleanup-selftest.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-cleanup.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-csp-proxy.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-edge.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-edge.sh",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-email.sh",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-promo.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-promo.sh",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-remember.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-remember.sh",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-resources.sh",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-signout.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-template-check.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-terms.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-terms.sh",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-user-settings.py",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/directory-verification.py",
+      "path": "scripts/acceptance/edge.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },

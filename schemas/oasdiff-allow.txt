@@ -1,0 +1,6 @@
+# One-time exception to the additive-only rule: the directory's account
+# settings routes leave the server (a directory extension serves them under
+# /api/v1/x/directory/). CI's oasdiff job ignores exactly these while this
+# file exists.
+GET /user/directory api path removed without deprecation
+DELETE /user/directory/devices/{kind}/{deviceId} api path removed without deprecation

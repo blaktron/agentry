@@ -109,7 +109,7 @@ func (env *testEnv) userOf(c caller) userOut {
 func newDirectoryEnv(t *testing.T, idp *fakeOIDC) *testEnv {
 	t.Helper()
 	return newTestEnvCfg(t, func(cfg *config.Config) {
-		cfg.Social.Authentik = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
+		cfg.Auth.OIDC = config.OIDCProvider{ID: config.AuthentikProviderID, ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
 	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
 }
 

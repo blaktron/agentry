@@ -1,9 +1,9 @@
 package api_test
 
-// The directory's word at sign-in does not make platform staff: neither
-// a directory group nor an address domain alone grants it, and staff is
-// membership of the staff organization. The sign-in through the
-// deployment's directory still recomputes the flag.
+// The sign-in provider's word does not make platform staff: neither a group
+// claim nor an address domain alone grants it, and staff is membership of
+// the staff organization. Every sign-in through the provider recomputes the
+// flag.
 
 import (
 	"context"
@@ -50,15 +50,15 @@ func platformStaff(t *testing.T, env *testEnv, userID string) bool {
 	return staff
 }
 
+// TestRetiredDirectoryRulesGrantNothing: a groups claim naming a staff group
+// and an address at the staff domain grant nothing without membership.
 func TestRetiredDirectoryRulesGrantNothing(t *testing.T) {
 	idp := newFakeOIDC(t)
 	tag := randSuffix()
 	org, domain := "staff"+tag, "staff"+tag+".test"
 	env := newTestEnvCfg(t, func(cfg *config.Config) {
-		cfg.Social.Authentik = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
+		cfg.Auth.OIDC = config.OIDCProvider{ID: config.AuthentikProviderID, ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
 		cfg.Auth.StaffOrg, cfg.Auth.StaffDomain = org, domain
-		// The group and domain settings still load, and grant nothing.
-		cfg.Auth.IdPStaffGroup, cfg.Auth.IdPStaffDomain = "agentry-platform-staff", domain
 	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
 
 	founder := env.registerEmail("founder", "founder-"+env.sfx+"@"+domain)
@@ -67,12 +67,12 @@ func TestRetiredDirectoryRulesGrantNothing(t *testing.T) {
 	env.makePlatformStaff(t, founder) // founding the staff organization is reserved to staff
 	env.createOrg(founderSess, org)
 
-	// In the directory's staff group, with a verified address at the domain, through
-	// the deployment's own directory: not staff, because not a member.
+	// In a staff group by the token's groups claim, with a verified address
+	// at the domain: not staff, because not a member.
 	idp.sub, idp.email, idp.groups = "d-"+tag, "dir-"+env.sfx+"@"+domain, []string{"agentry-platform-staff"}
 	userID := loginThroughFakeOIDCAs(t, env, idp)
 	if platformStaff(t, env, userID) {
-		t.Fatal("the retired group and domain rules must grant nothing")
+		t.Fatal("a group claim and the domain alone must grant nothing")
 	}
 
 	// A member of the staff organization: the next directory sign-in makes

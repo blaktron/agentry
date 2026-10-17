@@ -8,7 +8,7 @@ import (
 )
 
 // keepOneWaiting enqueues the next run of a self-rescheduling job (the
-// red team, audit retention, the staff mirror) unless one is already
+// red team, audit retention) unless one is already
 // waiting in the queue driver's own table. It is both the seed at start-up
 // and each run's reschedule, so a restart never adds a run, and a chain
 // that two seeds doubled folds back to one when its runs come round: the

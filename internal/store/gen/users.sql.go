@@ -403,47 +403,6 @@ func (q *Queries) ListPlatformStaff(ctx context.Context) ([]ListPlatformStaffRow
 	return items, nil
 }
 
-const listStaffMirrorAccounts = `-- name: ListStaffMirrorAccounts :many
-SELECT u.id, lower(u.email)::text AS email,
-       coalesce(substring(i.subject from 11), '')::text AS directory_subject
-FROM users u
-LEFT JOIN identities i ON i.user_id = u.id AND i.provider_kind = 'social'
-     AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
-WHERE u.platform_staff AND u.state = 'active' AND u.email_verified_at IS NOT NULL
-ORDER BY 2, 3
-`
-
-type ListStaffMirrorAccountsRow struct {
-	ID               uuid.UUID `json:"id"`
-	Email            string    `json:"email"`
-	DirectorySubject string    `json:"directory_subject"`
-}
-
-// Every account that is platform staff and active, with its verified address
-// (lower-cased; the directory's match is case-blind) and each directory
-// subject it is linked to by a directory sign-in, "authentik:" stripped
-// (empty when it has none): the set the directory's staff mirror group is
-// kept equal to.
-func (q *Queries) ListStaffMirrorAccounts(ctx context.Context) ([]ListStaffMirrorAccountsRow, error) {
-	rows, err := q.db.Query(ctx, listStaffMirrorAccounts)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListStaffMirrorAccountsRow
-	for rows.Next() {
-		var i ListStaffMirrorAccountsRow
-		if err := rows.Scan(&i.ID, &i.Email, &i.DirectorySubject); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listStaffOrgMembersNotStaff = `-- name: ListStaffOrgMembersNotStaff :many
 SELECT h.handle FROM memberships m
 JOIN users u ON u.id = m.user_id
@@ -506,27 +465,32 @@ func (q *Queries) ListStaffSyncCandidates(ctx context.Context, orgID uuid.UUID) 
 }
 
 const listUserDirectoryLinks = `-- name: ListUserDirectoryLinks :many
-SELECT substring(i.subject from 11)::text AS directory_subject,
+SELECT substring(i.subject from char_length($1::text) + 2)::text AS directory_subject,
        COALESCE(i.directory_account_id, 0)::bigint AS directory_account_id
 FROM identities i
-WHERE i.user_id = $1 AND i.provider_kind = 'social'
-  AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
+WHERE i.user_id = $2 AND i.provider_kind = 'social'
+  AND i.sso_connection_id IS NULL
+  AND i.subject LIKE $1::text || ':%'
 ORDER BY i.created_at, i.id
 `
+
+type ListUserDirectoryLinksParams struct {
+	ProviderID string    `json:"provider_id"`
+	UserID     uuid.UUID `json:"user_id"`
+}
 
 type ListUserDirectoryLinksRow struct {
 	DirectorySubject   string `json:"directory_subject"`
 	DirectoryAccountID int64  `json:"directory_account_id"`
 }
 
-// The directory accounts the account is linked to by directory sign-ins,
-// oldest first: each one's subject, "authentik:" stripped (the uid the
-// directory reports for it), and the directory's own id for it, learnt at
-// sign-in (0 until the identity signs in under a directory that sends it).
-// The settings page reads the oldest, so its answer does not move while the
-// account keeps one; erasure takes them all.
-func (q *Queries) ListUserDirectoryLinks(ctx context.Context, userID uuid.UUID) ([]ListUserDirectoryLinksRow, error) {
-	rows, err := q.db.Query(ctx, listUserDirectoryLinks, userID)
+// The directory accounts the account is linked to by sign-ins through the
+// sign-in provider whose id is provider_id, oldest first: each one's subject
+// with "<provider_id>:" stripped (the uid the directory reports for it), and
+// the directory's own id for it where one was recorded (0 otherwise).
+// Erasure takes them all.
+func (q *Queries) ListUserDirectoryLinks(ctx context.Context, arg ListUserDirectoryLinksParams) ([]ListUserDirectoryLinksRow, error) {
+	rows, err := q.db.Query(ctx, listUserDirectoryLinks, arg.ProviderID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -639,25 +603,6 @@ type ReleaseHandleParams struct {
 // keeps the global namespace free of impersonation of a deleted account.
 func (q *Queries) ReleaseHandle(ctx context.Context, arg ReleaseHandleParams) error {
 	_, err := q.db.Exec(ctx, releaseHandle, arg.ID, arg.Handle)
-	return err
-}
-
-const setSocialIdentityDirectoryAccount = `-- name: SetSocialIdentityDirectoryAccount :exec
-UPDATE identities SET directory_account_id = $2
-WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1
-  AND directory_account_id IS DISTINCT FROM $2
-`
-
-type SetSocialIdentityDirectoryAccountParams struct {
-	Subject            string `json:"subject"`
-	DirectoryAccountID *int64 `json:"directory_account_id"`
-}
-
-// Records the directory's id for the account a directory identity signs in
-// as, from the directory's signed ID token; moves it when the directory
-// reports another.
-func (q *Queries) SetSocialIdentityDirectoryAccount(ctx context.Context, arg SetSocialIdentityDirectoryAccountParams) error {
-	_, err := q.db.Exec(ctx, setSocialIdentityDirectoryAccount, arg.Subject, arg.DirectoryAccountID)
 	return err
 }
 

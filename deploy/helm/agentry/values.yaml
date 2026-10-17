@@ -60,54 +60,31 @@ config:
     cookieSecure: true
     sessionTTL: 24h
     patMaxTTL: 8760h
-    # Directory service. externalOnly hands passwords,
-    # MFA, recovery and sign-up to the IdP configured under social.authentik;
-    # idpAdminURL (+ secret.idpAdminToken) lets account erasure reach it.
+    # externalOnly hands passwords, MFA, recovery and sign-up to the OpenID
+    # provider configured under auth.oidc: the native register, password and
+    # TOTP endpoints answer 410.
     externalOnly: false
-    idpAdminURL: ""
-    # Remembered browsers on the directory's sign-in are on
-    # while secret.idpTrustCheckToken is set. The cookie is set for the
-    # registry's host, which covers a directory on a subdomain of it; for
-    # sibling hosts name a parent domain of both here.
-    directoryCookieDomain: ""
     # Platform staff is membership of the staff organization:
     # an active member of staffOrg whose verified address is at exactly
     # staffDomain; the organization admits nobody else. Set both or neither.
     staffOrg: ""
     staffDomain: ""
-    # The directory group the registry keeps equal to its platform staff,
-    # written through idpAdminURL and secret.idpAdminToken,
-    # for a directory application that admits staff alone (an OpenSearch
-    # Dashboards, say). Needs staffOrg and the admin URL and token. Empty: none.
-    idpStaffMirrorGroup: ""
-    # Retired: they grant nothing, and the server warns at
-    # start-up while either is set.
-    idpStaffGroup: ""
-    idpStaffDomain: ""
     # Sign in with your OpenID provider: any OIDC issuer, redirect URI
     # {baseURL}/api/v1/auth/oidc/<id>/callback. clientSecret is a secret:
     # secret.oidcClientSecret / existingSecret key
-    # AGENTRY_AUTH_OIDC_CLIENT_SECRET. id is oidc unless the provider is the
-    # deployment's directory, whose accounts are linked as authentik; set this
-    # or social.authentik, not both.
+    # AGENTRY_AUTH_OIDC_CLIENT_SECRET. id is oidc; a deployment whose
+    # accounts are already linked under the id authentik keeps that id, since
+    # every identity carries it.
     oidc:
       id: ""
       issuer: ""
       clientId: ""
       scopes: []
       displayName: ""
-  social:
-    # The deployment's own directory as an OIDC provider. clientSecret is a
-    # secret: secret.authentikClientSecret / existingSecret key
-    # AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET.
-    authentik:
-      clientId: ""
-      issuer: "" # https://auth.example.com/application/o/agentry/
   idp:
     # Where sign-out sends the browser (the server's own /ui/ sign-out, and a
-    # site's): the provider's end-session endpoint behind
-    # authentik's cancel view, which drops a parked flow plan first.
-    logoutUrl: "" # https://auth.example.com/flows/-/cancel/?next=/application/o/agentry/end-session/
+    # site's): the sign-in provider's end-session endpoint.
+    logoutUrl: "" # https://idp.example.com/end-session
   # A site fronting this server (its origin; empty = the server's
   # own /ui/ pages), how much of /ui/ to serve (full | authorize | off), and
   # what the server calls itself.
@@ -226,18 +203,10 @@ databaseCA:
 secret:
   create: true
   # Each role reads only the keys it uses (docs/self-hosting.md):
-  # git the database URL and the sealing key, the worker also knowledge, mail
-  # and the directory admin token, the api all of them.
-  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_KNOWLEDGE_SEALING_KEY / AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET / AGENTRY_AUTH_OIDC_CLIENT_SECRET / AGENTRY_IDP_ADMIN_TOKEN / AGENTRY_IDP_TRUST_CHECK_TOKEN
-  authentikClientSecret: "" # OIDC client secret for config.social.authentik
+  # git the database URL and the sealing key, the worker also knowledge and
+  # mail, the api all of them.
+  existingSecret: "" # if set, must provide keys: AGENTRY_DATABASE_URL, AGENTRY_AUTH_SEALING_KEY, and optionally AGENTRY_KNOWLEDGE_SEALING_KEY / AGENTRY_REDIS_URL / AGENTRY_SMTP_PASS / AGENTRY_AUTH_OIDC_CLIENT_SECRET
   oidcClientSecret: "" # OIDC client secret for config.auth.oidc
-  idpAdminToken: "" # directory API token for account erasure (config.auth.idpAdminURL)
-  # The secret the directory's sign-in presents to the registry's trust check,
-  # 32+ characters, the same value on the directory's side.
-  # Empty: remembered browsers are off on the directory path. The check lives
-  # at /internal/directory/trusted-device: exclude /internal/ from any
-  # ingress in front of the api, as /metrics must be.
-  idpTrustCheckToken: ""
   databaseUrl: "" # postgres://user:pass@host:5432/agentry?sslmode=require
   redisUrl: "" # rediss://:pass@host:6379/0 (optional)
   sealingKey: "" # base64 32 bytes; required outside dev (config validation)
