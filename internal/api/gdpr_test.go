@@ -69,17 +69,16 @@ func TestAccountErasureFlow(t *testing.T) {
 	assertKnowledgeGone(t, env, kn)
 	// PII is gone; the row survives, pseudonymized.
 	var email, displayName, state string
-	var pwHash *string
 	var tombstone []byte
 	err := env.st.Pool().QueryRow(ctx,
-		`SELECT email::text, display_name, state, password_hash, deleted_tombstone
+		`SELECT email::text, display_name, state, deleted_tombstone
 		 FROM users WHERE deleted_tombstone IS NOT NULL AND email LIKE 'deleted+%' ORDER BY updated_at DESC LIMIT 1`,
-	).Scan(&email, &displayName, &state, &pwHash, &tombstone)
+	).Scan(&email, &displayName, &state, &tombstone)
 	if err != nil {
 		t.Fatalf("pseudonymized row not found: %v", err)
 	}
-	if state != "deleted" || displayName != "deleted user" || pwHash != nil {
-		t.Fatalf("PII not purged: state=%s name=%s pwHash=%v", state, displayName, pwHash)
+	if state != "deleted" || displayName != "deleted user" {
+		t.Fatalf("PII not purged: state=%s name=%s", state, displayName)
 	}
 	if len(tombstone) == 0 {
 		t.Fatal("no tombstone recorded")

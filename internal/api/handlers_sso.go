@@ -380,9 +380,7 @@ type samlSessionLink struct {
 // It stamps users.idp_mfa_at, the evidence the public-publish
 // gate accepts, only on a deployment that has opted into
 // IdP-asserted evidence with auth.requireIdpMFA: the stamp is account-wide and
-// kept, and an organization's IdP is its admins', not the operator's, so on a
-// registry whose gate asks for native TOTP an organization's claim must not
-// stand in for it.
+// kept, and an organization's IdP is its admins', not the operator's.
 func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, orgRow storegen.GetOrgByHandleRow, connID uuid.UUID, providerKind, subject, email string, samlLink *samlSessionLink, next string, mfa bool) {
 	ctx := r.Context()
 	q := s.q()
@@ -519,7 +517,7 @@ func (s *Server) establishSSOSession(w http.ResponseWriter, r *http.Request, org
 		CsrfToken: csrfToken,
 		User: User{
 			Id: u.ID, Handle: u.Handle, Email: u.Email, DisplayName: u.DisplayName,
-			EmailVerified: u.EmailVerifiedAt != nil, TotpEnabled: u.TotpEnabled, CreatedAt: u.CreatedAt,
+			EmailVerified: u.EmailVerifiedAt != nil, CreatedAt: u.CreatedAt,
 		},
 	})
 }

@@ -34,15 +34,15 @@ curl localhost:8080/api/v1/meta
 | `./scripts/acceptance/enterprise-sso.sh` | SAML and OIDC sign-in, enforced SSO with organization-bound tokens, SCIM provisioning, domain verification, webhooks with the SSRF guard, and audit export |
 | `./scripts/acceptance/helm.sh` | the Helm chart lints and renders, and its production shape holds (skipped without `helm`) |
 | `./scripts/acceptance/invariant-test-names.sh` | every test named as evidence for a core security invariant still exists under that name |
-| `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages: sign-in, account, a token, a device authorize and its exchange, sign-out — with curl, no browser |
+| `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages: the sign-in hand-off, a signed-in landing, a device authorize and its exchange, sign-out — with curl, no browser |
 
 ## The server's own pages
 
 `internal/ui` serves `/ui/…` from Go `html/template` files
 (`internal/ui/templates/`, one stylesheet in `internal/ui/static/`): the
-device authorize page the CLI and the desktop app open, sign-in and sign-out,
-the account pages (profile, tokens, SSH keys, sessions), the review queue, the
-staff console and organization administration. Every page calls the API
+device authorize page the CLI and the desktop app open, the hand-off of
+sign-in to the deployment's OpenID provider, sign-out, and the page an
+activation link opens. Every page calls the API
 in-process with the browser's own session, so it can do nothing the API
 refuses; there is no client-side JavaScript to build. `ui.mode` (`full`,
 `authorize`, `off`) selects how much of it a deployment serves; `web.url`

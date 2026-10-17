@@ -35,7 +35,6 @@ type page struct {
 	Error   string
 	CSRF    string
 	Path    string
-	Nav     []navItem
 	Data    any
 	LogoURL string
 	CSSURL  string
@@ -45,44 +44,11 @@ type page struct {
 	CSSVersion string
 }
 
-type navItem struct {
-	Href, Label string
-	Current     bool
-}
-
 type userInfo struct {
-	ID            string    `json:"id"`
-	Handle        string    `json:"handle"`
-	Email         string    `json:"email"`
-	DisplayName   string    `json:"displayName"`
-	EmailVerified bool      `json:"emailVerified"`
-	TotpEnabled   bool      `json:"totpEnabled"`
-	PlatformStaff bool      `json:"platformStaff"`
-	Orgs          []userOrg `json:"orgs"`
-	// PendingOrg is the organization the person is waiting to be
-	// approved by: the layout says so on every page until an admin
-	// approves or declines them.
-	PendingOrg *pendingOrg `json:"pendingOrg"`
-}
-
-type pendingOrg struct {
+	ID          string `json:"id"`
 	Handle      string `json:"handle"`
+	Email       string `json:"email"`
 	DisplayName string `json:"displayName"`
-	Via         string `json:"via"`
-}
-
-// Label is the organization as the notice names it.
-func (o pendingOrg) Label() string {
-	if o.DisplayName != "" && o.DisplayName != o.Handle {
-		return o.DisplayName + " (" + o.Handle + ")"
-	}
-	return o.Handle
-}
-
-type userOrg struct {
-	Handle string `json:"handle"`
-	Role   string `json:"role"`
-	State  string `json:"state"`
 }
 
 var funcs = template.FuncMap{
@@ -162,16 +128,10 @@ func (h *handler) render(w http.ResponseWriter, r *http.Request, status int, nam
 	p.LogoURL = h.opt.Brand.LogoURL
 	p.CSSURL = h.opt.Brand.CSSURL
 	p.CSSVersion = stylesheetVersion
-	if p.User != nil && h.opt.Mode == "full" {
-		for _, n := range []navItem{{Href: "/ui/account", Label: "Account"}, {Href: "/ui/account/tokens", Label: "Tokens"}, {Href: "/ui/account/ssh-keys", Label: "SSH keys"}, {Href: "/ui/account/sessions", Label: "Sessions"}, {Href: "/ui/review", Label: "Review"}, {Href: "/ui/staff", Label: "Staff"}, {Href: "/ui/orgs", Label: "Organizations"}} {
-			n.Current = strings.HasPrefix(r.URL.Path, n.Href) && (n.Href != "/ui/account" || r.URL.Path == "/ui/account")
-			p.Nav = append(p.Nav, n)
-		}
-	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// no-transform: a CDN in front (Cloudflare on the hosted site) must not
 	// rewrite the page — its email obfuscation replaces addresses with a
-	// script this CSP blocks, leaving "[email protected]" on the account page.
+	// script this CSP blocks, leaving "[email protected]" in its place.
 	w.Header().Set("Cache-Control", "no-store, no-transform")
 	w.Header().Set("Content-Security-Policy", h.csp)
 	w.WriteHeader(status)

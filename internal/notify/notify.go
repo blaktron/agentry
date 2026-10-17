@@ -366,10 +366,12 @@ type message struct {
 type renderer struct {
 	registry string
 	baseURL  string
-	// dashboard, verifyEmail and reportCard are the browser destinations the
-	// server resolved for this deployment (a site in front of it, or its own
-	// /ui/ pages); when unset the site's paths under baseURL are
-	// used, so a bare renderer still produces links of the same shape.
+	// dashboard, verifyEmail, reportCard and settings are the browser
+	// destinations the server resolved for this deployment (a site in front
+	// of it, or its own /ui/ pages). An unset verifyEmail or reportCard falls
+	// back to the site's paths under baseURL, so a bare renderer still
+	// produces links of the same shape; an unset dashboard or settings means
+	// the deployment has no such page, and the mail names none.
 	dashboard   string
 	verifyEmail func(token string) string
 	reportCard  func(agent, version string) string
@@ -409,7 +411,7 @@ func (r renderer) footer() string {
 	// Most of these mails can be switched off; the page that does it is
 	// named on every one, since the reader of a mail they did not want is
 	// the reader who needs the line.
-	if u := firstNonEmpty(r.settings, r.link("/settings")); u != "" {
+	if u := r.settings; u != "" {
 		f += "Which of these mails you receive is set in your settings:\n" + u + "\n"
 	}
 	return f
@@ -585,7 +587,7 @@ func (r renderer) mcpAlert(n MCPDependencyAlertNotice) message {
 		"To clear it, publish a new version that pins a fixed server version,\n" +
 		"then yank the affected one. The alert closes when the version leaves\n" +
 		"published.\n"
-	if u := firstNonEmpty(n.AgentURL, r.dashboard, r.link("/dashboard")); u != "" {
+	if u := firstNonEmpty(n.AgentURL, r.dashboard); u != "" {
 		body += "\n" + u + "\n"
 	}
 	return message{

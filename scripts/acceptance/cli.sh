@@ -11,7 +11,7 @@ ROOT="$(pwd)"
 ./scripts/dev/pg.sh up
 DB_URL="$(./scripts/dev/pg.sh url)"
 
-# psql, for the documented email-verification shortcut (same binary discovery
+# psql, for writing the signed-in account (same binary discovery
 # as scripts/dev/pg.sh).
 PGBIN="${PGBIN:-}"
 if [ -z "$PGBIN" ]; then
@@ -71,25 +71,25 @@ done
 SFX="$(python3 -c 'import secrets; print(secrets.token_hex(3))')"
 HANDLE="m3cli$SFX"
 EMAIL="$HANDLE@example.test"
-PASSWORD="m3cli-pass-123456"
 NAME="hello-skill"
 
 jsonfield() { python3 -c 'import sys,json; print(json.load(sys.stdin)[sys.argv[1]])' "$1"; }
 
-echo "== register user $HANDLE =="
-curl -fsS -X POST "$API/auth/register" -H 'Content-Type: application/json' \
-  -d "{\"handle\":\"$HANDLE\",\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" >/dev/null
-
-# Documented shortcut: the verification token only leaves the server through
-# the (dev no-op) email notifier, so mark the address verified directly —
-# exactly what the server's own test suite does. Publishing requires it.
-"$PGBIN/psql" "$DB_URL" -qAt -v ON_ERROR_STOP=1 \
-  -c "UPDATE users SET email_verified_at = now() WHERE id = (SELECT id FROM handles WHERE handle = '$HANDLE')" >/dev/null
-
-echo "== login (session) + mint PAT =="
-CSRF="$(curl -fsS -c "$TMP/cookies" -X POST "$API/auth/login" -H 'Content-Type: application/json' \
-  -d "{\"login\":\"$HANDLE\",\"password\":\"$PASSWORD\"}" | jsonfield csrfToken)"
-PAT="$(curl -fsS -b "$TMP/cookies" -X POST "$API/user/tokens" \
+echo "== account $HANDLE, signed in, and a PAT =="
+# The server keeps no password: an account is made by a first sign-in at the
+# deployment's OpenID provider, which this script has none of. So the
+# account (with the verified address publishing requires) and its session
+# are written directly, as the sign-in callback writes them; only the
+# session token's SHA-256 is stored, as the server stores it.
+SESSION="agys_$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+CSRF="csrf_$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+"$PGBIN/psql" "$DB_URL" -qAt -v ON_ERROR_STOP=1 >/dev/null <<SQL
+INSERT INTO handles (id, handle, kind) VALUES (gen_random_uuid(), '$HANDLE', 'user');
+INSERT INTO users (id, email, display_name, email_verified_at) SELECT id, '$EMAIL', '$HANDLE', now() FROM handles WHERE handle = '$HANDLE';
+INSERT INTO sessions (id, user_id, token_sha256, csrf_token, expires_at)
+  SELECT gen_random_uuid(), id, sha256(convert_to('$SESSION', 'UTF8')), '$CSRF', now() + interval '1 hour' FROM handles WHERE handle = '$HANDLE';
+SQL
+PAT="$(curl -fsS -b "agentry_session=$SESSION" -X POST "$API/user/tokens" \
   -H 'Content-Type: application/json' -H "X-Agentry-CSRF: $CSRF" \
   -d '{"name":"m3-cli","scopes":["agent:publish","agent:read","repo:read","repo:write","user:profile"]}' \
   | jsonfield token)"

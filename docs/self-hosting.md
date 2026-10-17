@@ -26,7 +26,7 @@ front of this same server; a registry does not need one, and
 ```bash
 git clone https://github.com/blaktron/agentry.git
 cd agentry/deploy/compose
-printf 'AGENTRY_AUTH_SEALING_KEY=%s\n' "$(openssl rand -base64 32)" >> .env   # encrypts TOTP seeds and webhook secrets at rest
+printf 'AGENTRY_AUTH_SEALING_KEY=%s\n' "$(openssl rand -base64 32)" >> .env   # encrypts webhook secrets and sign-in state at rest
 printf 'AGENTRY_KNOWLEDGE_SEALING_KEY=%s\n' "$(openssl rand -base64 32)" >> .env   # optional: wraps knowledge packs' keys; a key of its own
 mkdir -p keys && openssl ecparam -name prime256v1 -genkey -noout -out keys/signing-key.pem
 chmod 600 keys/signing-key.pem && sudo chown 65532 keys/signing-key.pem  # the server's uid inside the container
@@ -39,34 +39,42 @@ docker compose --profile server up -d
 
 The stack refuses to start without the sealing key and the signing key in
 `.env`, and the edge needs its certificate pair; all are one-time. **Back up the two keys**: the sealing key is the
-only way to read the TOTP seeds and webhook secrets it encrypted, and every
+only way to read the webhook secrets it encrypted, and every
 attestation the signing key signed verifies only against it. Dev mode
 (`AGENTRY_DEV_MODE=true` in `.env`) does without both — a constant from the
 public source stands in for the sealing key, a signing key is minted at
 every start, 2FA before a public publish is skipped — and is for a
 throwaway stack only; the server refuses it outside `env: dev`.
 
-The server's own pages are at http://localhost:8080/ui/ — sign-in, your
-account, tokens and SSH keys, the review queue, the staff console and
-organization administration. `agentry login` opens `/ui/authorize` there.
-
-Then create the first account:
+The registry keeps no passwords: people sign in through an OpenID provider
+you run (Keycloak, Entra ID, Okta, Google Workspace, authentik, Dex, or any
+other). Configure it before the first sign-in, in `.env`:
 
 ```bash
-curl -sX POST http://localhost:8080/api/v1/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"handle":"you","email":"you@example.com","password":"a-long-passphrase"}'
+cat >> .env <<'ENV'
+AGENTRY_AUTH_OIDC_ISSUER=https://idp.example.com/realms/agentry
+AGENTRY_AUTH_OIDC_CLIENT_ID=agentry
+AGENTRY_AUTH_OIDC_CLIENT_SECRET=…
+AGENTRY_AUTH_OIDC_DISPLAY_NAME=Example SSO
+ENV
+docker compose --profile server up -d
 ```
 
-Email verification is required before publishing. In a dev setup the token is
-logged at debug level and mailpit (http://localhost:8025) catches the message;
-in production configure real SMTP.
+Register the registry with the provider as a confidential client, redirect
+URI `{baseURL}/api/v1/auth/oidc/oidc/callback` ("Sign in with your OpenID
+provider", below, has the details). The first sign-in creates your account.
 
-If you hand sign-in to your OpenID provider with
-`AGENTRY_AUTH_EXTERNAL_ONLY=true` ("Sign in with your OpenID provider",
-below), this curl answers `410 Gone` by design: accounts are then created at
-the first sign-in through the provider, not through the native register
-endpoint.
+The server's own pages are at http://localhost:8080/ui/: the sign-in
+hand-off to that provider, sign-out, the page an activation link opens, and
+`/ui/authorize`, which `agentry login` and the desktop app open. Everything
+else, tokens, SSH keys, organizations and the review queue, is the API's,
+through the CLI, the desktop app or a site in front of the registry.
+
+An account whose provider did not vouch for its address is unactivated until
+it confirms it: it reads but does not write. Ask for a link with
+`POST /api/v1/user/email-verification`; in a dev setup mailpit
+(http://localhost:8025) catches the message, and in production configure
+real SMTP.
 
 ## Quickstart from source
 
@@ -275,7 +283,7 @@ storage:
   s3Region: us-east-1
 
 auth:
-  sealingKey: "<base64 32 bytes>"   # required outside dev; encrypts TOTP seeds
+  sealingKey: "<base64 32 bytes>"   # required outside dev; encrypts webhook secrets
   cookieSecure: true
 
 knowledge:
@@ -291,7 +299,7 @@ web:
 ui:
   mode: full            # full | authorize | off — the server's own browser surface
 brand:
-  name: ""              # emails, authenticator apps and /ui/ call it this (default: the public host)
+  name: ""              # emails and /ui/ call it this (default: the public host)
   logoURL: ""           # optional; the /ui/ pages show it
   cssURL: ""            # optional stylesheet the /ui/ pages load
   supportEmail: ""      # shown where people need help
@@ -546,74 +554,25 @@ chart's `config.idp.logoutUrl`) is where sign-out sends the browser once the
 session is revoked, normally the provider's end-session endpoint, so the next
 sign-in asks again.
 
-With `AGENTRY_AUTH_EXTERNAL_ONLY=true` the native register, password login
-and TOTP endpoints answer 410 Gone (email verification stays open: it is the
-activation link's target), and the sign-in page offers the provider only.
-Turning the flag off (the default) restores the native flows.
+The registry keeps no credentials of its own: no password, no second factor
+and no sign-up form. Every account is made by a first sign-in through this
+provider, and its second factor, if any, is the provider's. Without a
+provider configured the sign-in page says so, and nobody can sign in.
 
-The Helm chart carries the same knobs: `config.auth.externalOnly`,
-`config.auth.oidc`, `secret.oidcClientSecret` (or the `existingSecret` key
+The Helm chart carries the same knobs: `config.auth.oidc`,
+`secret.oidcClientSecret` (or the `existingSecret` key
 `AGENTRY_AUTH_OIDC_CLIENT_SECRET`) and `config.idp.logoutUrl`.
 
-### Social login
-
-Individual accounts can sign in with Google, GitHub, Microsoft, OpenAI, or
-Claude. All are optional and independent: **a provider with no
-client id is not offered at all**. Its start endpoint returns 404, so
-probing cannot distinguish "misconfigured" from "not enabled".
-
-```yaml
-social:
-  google:
-    clientId: "…apps.googleusercontent.com"
-    clientSecret: "…"
-  github:
-    clientId: "Iv1.…"
-    clientSecret: "…"
-  microsoft:
-    clientId: "…"
-    clientSecret: "…"
-  openai:
-    clientId: "…"
-    clientSecret: "…"
-    issuer: "https://your-oidc-issuer.example"   # required for openai/claude
-  claude:
-    clientId: "…"
-    clientSecret: "…"
-    issuer: "https://your-oidc-issuer.example"
-```
-
-Env: `AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID` and `_CLIENT_SECRET` per provider
-(`AGENTRY_SOCIAL_MICROSOFT_CLIENT_ID`, …), plus `_ISSUER` for the OIDC
-providers.
-
-Register the callback with each provider as
-`{baseURL}/api/v1/auth/oidc/{provider}/callback`, so `baseURL` must be
-set correctly for social login to work at all.
-
-`GET /api/v1/meta` lists the configured providers as `signInProviders`
-(an empty list when there are none), so a front end offers them without
-calling `/auth/oidc/{provider}/start`, which begins a flow and is rate
-limited like any anonymous request.
-
-Two behaviours worth knowing before you enable this:
-
-- **Google and Microsoft are real OIDC**: discovery, issuer pinning, PKCE,
-  ID-token signature and nonce verification. Google uses
-  `accounts.google.com`; Microsoft uses the multi-tenant `common` endpoint
-  by default (override `issuer` for a single tenant). **GitHub is an
-  OAuth 2.0 shim**: there is no ID token to verify, so the trust anchor is
-  TLS to `api.github.com` plus your client secret. There is no PKCE; a
-  sealed single-use state cookie is what binds a callback to the browser
-  that started it. An email is recorded only when GitHub reports it both
-  primary *and* verified. **OpenAI and Claude publish no fixed consumer
-  sign-in endpoints**, so they need an `issuer` pointing at an
-  OIDC-compatible endpoint you operate or trust; without one they stay
-  unoffered.
-- **Social login is not a way around 2FA.** A redirect callback has nowhere
-  to carry a TOTP code, so an account with 2FA enrolled receives a sealed
-  five-minute challenge instead of a session, completed at
-  `POST /api/v1/auth/2fa/totp/challenge`.
+Earlier releases also had native accounts (a password, TOTP and a
+remembered browser of their own), the `auth.externalOnly` switch and the
+`social.*` providers (Google, GitHub, Microsoft, OpenAI and Claude). From
+v0.6.15 they are gone: a configuration file that still names
+`auth.externalOnly` or `social` does not load, and the
+`AGENTRY_AUTH_EXTERNAL_ONLY` and `AGENTRY_SOCIAL_*` variables are not read.
+Point a social provider's accounts at your OpenID provider instead; an
+account that only ever had a password keeps its personal access tokens but
+cannot sign in again until it signs in through the provider with the same
+verified address.
 
 ### Audit archive and retention
 
@@ -812,8 +771,8 @@ store's setting.
 
 `/ui/` is the server's own browser surface: the device authorize
 page `agentry login` and the desktop app open, and, on a server without a
-site in front, sign-in, the account pages and the review, staff and
-organization pages. The edge sends it to the API like `/api/`. The handle
+site in front, the sign-in hand-off, sign-out and the page an activation
+link opens. The edge sends it to the API like `/api/`. The handle
 `ui` (and the other root paths of the server and the site) cannot be
 registered.
 
@@ -1088,21 +1047,19 @@ removes personal information has to say so.
 
 ### Two-factor authentication and public publishing
 
-Outside dev mode the registry normally refuses to publish to a public
-namespace until the account has a TOTP factor. With the sign-in provider in
-charge no account can enrol one — the native TOTP endpoints are the ones
-answering 410 — so that gate is **off under `externalOnly`** and the
-requirement is yours to enforce at the provider, which also covers sign-in
-itself rather than only publishing.
+The registry keeps no second factor of its own, so whether people sign in
+with one is your provider's to enforce, where it also covers sign-in itself
+rather than only publishing. By default the registry publishes to a public
+namespace without asking for evidence of one.
 
-To turn trust back into evidence, set `AGENTRY_AUTH_REQUIRE_IDP_MFA=true`.
-The gate is then on under `externalOnly`, and it is satisfied when the
-account has signed in at least once with an ID token whose `amr` claim (RFC 8176)
-names a second factor — `mfa`, `otp`, `hwk`, `webauthn` and the like, never
-`pwd` alone — which the registry records as `users.idp_mfa_at`. Check one
-sign-in's token (or the `user.login` audit row) before enabling the flag,
-because with it on and a provider that never asserts a factor, nobody can
-publish publicly.
+To turn trust into evidence, set `AGENTRY_AUTH_REQUIRE_IDP_MFA=true`.
+Outside dev mode the registry then refuses to publish to a public namespace
+until the account has signed in at least once with an ID token whose `amr`
+claim (RFC 8176) names a second factor — `mfa`, `otp`, `hwk`, `webauthn` and
+the like, never `pwd` alone — which the registry records as
+`users.idp_mfa_at`. Check one sign-in's token (or the `user.login` audit row)
+before enabling the flag, because with it on and a provider that never
+asserts a factor, nobody can publish publicly.
 
 With the same flag set, an organization's own SSO connection is evidence
 too. When a member signs in through the organization's SAML or OIDC
@@ -1110,8 +1067,7 @@ connection and the validated assertion says a second factor was used, the
 registry stamps `users.idp_mfa_at` as it does for the sign-in provider. Only with
 the flag, because the organization's IdP belongs to that organization's
 admins, not to you, and the stamp is account-wide and kept. With the flag
-off, the gate asks for native TOTP, and an organization's claim never stands
-in for it. For OIDC the evidence is the ID token's `amr`, by the list above. For SAML
+off there is no gate, and an organization's claim is not recorded. For OIDC the evidence is the ID token's `amr`, by the list above. For SAML
 it is the signed AuthnStatement's `AuthnContextClassRef`, or Entra ID's
 `http://schemas.microsoft.com/claims/authnmethodsreferences` attribute,
 naming one of:
@@ -1137,49 +1093,44 @@ tells anyone that publishing needs a second factor.
 
 ### Remembered browsers
 
-On a deployment
-running the native flows — `AGENTRY_AUTH_EXTERNAL_ONLY` unset or false —
-`POST /api/v1/auth/login` accepts a `rememberDevice` flag. Set on a sign-in
-that actually answered a TOTP code, it issues an `agentry_trusted_device`
-cookie and records the browser; a later password sign-in presenting that
-cookie is not asked for the code. The flag defaults to false, and nothing is
-remembered unless it is asked for.
+A directory in front of the registry (an extension built on the registry's
+directory port) can let a browser that answered the second factor skip it
+at later sign-ins. The registry keeps the record: the directory asks for one
+from a sign-in whose own verified ID token names a second factor (`amr`)
+answered within the last five minutes (`auth_time`), and later asks whether
+the browser's token is still one of the account's live records. The
+directory sets and reads the cookie; the registry sets none of its own.
 
-The credential is narrow on purpose. It skips the second factor and nothing
-else: the password is still required at every sign-in, it is not a session, it
-does not lengthen one, and it carries no scope. Its lifetime is absolute —
-using it does not extend it — so it expires `AGENTRY_AUTH_TRUSTED_DEVICE_TTL`
-after it was issued. That defaults to 30 days, and 30 days is also the ceiling:
-a larger value is refused at startup rather than honoured, because a deployment
-that raised it would be issuing a credential the threat model never priced in.
-Only the token's SHA-256 is stored, beside the issuing address and user agent;
-those two are recorded so that a page listing remembered browsers can describe
+The credential is narrow on purpose. It skips the second factor at the
+directory and nothing else: it is not a session, it does not lengthen one,
+and it carries no scope. Its lifetime is absolute — using it does not extend
+it — so it expires `AGENTRY_AUTH_TRUSTED_DEVICE_TTL` after it was issued.
+That defaults to 30 days, and 30 days is also the ceiling: a larger value is
+refused at startup rather than honoured, because a deployment that raised it
+would be issuing a credential the threat model never priced in. Only the
+token's SHA-256 is stored, beside the issuing address and user agent; those
+two are recorded so that a page listing remembered browsers can describe
 them to their owner, and neither is consulted in the decision. A lookup that
 cannot be answered — an outage, a revoked record, an expired one, somebody
-else's — demands the code rather than skipping it.
+else's — answers no, and the directory asks for the code.
 
 A remembered browser is a second credential class, not a longer session:
-the 24-hour session cap still binds every session, and a `trusted_devices` record
-lengthens none of them.
+the 24-hour session cap still binds every session, and a `trusted_devices`
+record lengthens none of them.
 
 **Withdrawing it.** `GET /api/v1/user/trusted-devices` answers how many live
 remembered browsers the caller's account has, and `DELETE` on the same path
-revokes all of them, this browser's included, and clears this browser's
-cookie. Both are for a session: a personal access token reads 0
-and is refused the clear. There is no list and no per-browser removal; the
-hosted site offers the clear as one "Clear remembered devices" button. Account
-erasure deletes the account's records in the erasure transaction
-(`handlers_gdpr.go`), and SCIM deactivation revokes them. Every lookup ignores a
-record past its expiry, and an hourly sweep on the worker role
-(`trusted_device.sweep`) deletes those rows, with the address and
-user agent they hold. A revoked record is kept until its own expiry, inert,
-and swept then. Signing out, and "sign out everywhere else", leave remembered
-browsers alone: surviving them is the point, and the clear above is the
-control that ends them.
-
-On the native path nothing mints one unless asked: the flag is per-request and
-no shipped client sends it, so a record is only created by an API call that
-asks for one.
+revokes all of them, this browser's included. Both are for a session: a
+personal access token reads 0 and is refused the clear. There is no list
+and no per-browser removal; the hosted site offers the clear as one "Clear
+remembered devices" button. Account erasure deletes the account's records in
+the erasure transaction, and SCIM deactivation revokes them. Every lookup
+ignores a record past its expiry, and an hourly sweep on the worker role
+(`trusted_device.sweep`) deletes those rows, with the address and user agent
+they hold. A revoked record is kept until its own expiry, inert, and swept
+then. Signing out, and "sign out everywhere else", leave remembered browsers
+alone: surviving them is the point, and the clear above is the control that
+ends them.
 
 ## Hosting the downloads
 
@@ -1282,8 +1233,8 @@ Three notes on the knobs:
 ## Organizations
 
 An organization is a namespace with members. Anyone with a verified
-address creates one from the organizations page (`/ui/orgs`; `POST
-/api/v1/orgs`) and becomes its first **admin**; the other role is
+address creates one (`POST /api/v1/orgs`, or a site's organizations page)
+and becomes its first **admin**; the other role is
 **member**. Admins manage members, teams, settings, policy, SSO, SCIM,
 domains and webhooks and publish to the organization's agents; members
 create agents in its namespace and publish to them. Nobody joins
@@ -1299,18 +1250,19 @@ the domain is recorded, a second organization cannot be created at it,
 and a person who signs up with an address there is pointed to its admins
 (`GET /api/v1/user/domain-org`; `POST …/request-access` mails them, once a
 day). Further domains are claimed and verified over DNS from the
-organization's page; a verified domain also belongs to one organization.
+organization (`/api/v1/orgs/{org}/domain-claims`); a verified domain also belongs
+to one organization.
 
-An admin **decommissions** the organization from its page by typing its
-handle. It is then read-only for its members for the hold below, and
+An admin **decommissions** the organization by naming its handle
+(`POST /api/v1/orgs/{org}/decommission`). It is then read-only for its members for the hold below, and
 when the hold ends a sweep yanks its releases, deletes its archives and
 repositories, ends every membership and releases its handle and domain.
-Platform staff can **suspend** an organization from the same page — it
-and everything under it answer as absent, over the API and over git and
-to staff too, until reinstated — and **reinstate** one, which also
-cancels a hold that has not run. Because a suspended organization's page
-is absent as well, the staff console (`/ui/staff`) carries suspend and
-reinstate by handle.
+Platform staff can **suspend** an organization
+(`POST /api/v1/orgs/{org}/suspend`) — it and everything under it answer as
+absent, over the API and over git and to staff too, until reinstated — and
+**reinstate** one, which also cancels a hold that has not run. Both take the
+organization's handle, since a suspended organization is absent even to
+staff.
 
 When an organization holds a domain, the accounts whose verified address
 is at it **fold in**: at the person's next directory sign-in they become a
@@ -1413,8 +1365,8 @@ host as `${AGENTRY_SSH_PORT:-2222}`; unset it to switch the transport off). Only
 `git-upload-pack` and `git-receive-pack` are served — no shell, no forwarding — through the
 same authorization, hooks and quotas as HTTPS.
 
-- **Credential:** a user's SSH public key, registered on the settings page (or
-  `POST /user/ssh-keys`). A key is worth repository read/write and the release tag the
+- **Credential:** a user's SSH public key, registered with
+  `POST /user/ssh-keys` (or a site's settings page). A key is worth repository read/write and the release tag the
   user's role allows; it never reaches the API. There is no anonymous mode over SSH. Adding
   a key reads the entitlements switch `SSHKeys`: the core always includes it;
   a closed build's resolver may refuse it by subscription (`403 feature-not-included`), and a
@@ -1470,14 +1422,14 @@ entirely configuration:
   site's paths are fixed by convention (`/login`, `/dashboard`,
   `/settings/…`, `/verify-email`); `internal/api/webpaths.go` is the one
   table that knows them.
-- **`ui.mode` / `AGENTRY_UI_MODE`** — `full` serves every `/ui/` page,
-  `authorize` keeps only the device-authorize page the CLI and the desktop
-  app open (the site provides the rest), `off` serves none. A site in front
+- **`ui.mode` / `AGENTRY_UI_MODE`** — `full` serves every `/ui/` page (the
+  device-authorize page, the sign-in hand-off, sign-out and address
+  confirmation), `authorize` keeps only the device-authorize page the CLI
+  and the desktop app open (the site provides the rest), `off` serves none. A site in front
   normally runs `authorize`.
 - **`brand.*` / `AGENTRY_BRAND_NAME`, `AGENTRY_BRAND_LOGO_URL`,
   `AGENTRY_BRAND_CSS_URL`, `AGENTRY_SUPPORT_EMAIL`, `AGENTRY_SECURITY_EMAIL`**
-  — what the server calls the deployment in emails, in authenticator names,
-  and on the `/ui/` pages that remain; the
+  — what the server calls the deployment in emails and on the `/ui/` pages; the
   stylesheet and logo the remaining pages load. `GET /api/v1/meta` reports
   `brand` and `ui` (with `authorizeUrl`) so clients need no other
   configuration.
@@ -1491,8 +1443,7 @@ In compose that is one overlay file: a second `-f` that adds the site's
 services, replaces the edge config, and sets the variables above; the core
 stack is untouched. The site talks to the same API as the CLI, with the
 browser's session cookie, under the same authorization matrix — a front end
-cannot do anything the API refuses, and the server's own `/ui/` pages are the
-proof that the API is enough.
+cannot do anything the API refuses.
 
 A closed build can also extend the server itself: `pkg/extension` lets an
 outside Go module mount routes under `/api/v1/x/<name>/`, run its own

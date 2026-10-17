@@ -10,8 +10,8 @@ import (
 	"fmt"
 )
 
-// Sealer encrypts small secrets at rest (for example TOTP seeds and webhook
-// secrets). AES-256-GCM with a key from configuration; SaaS wraps the key with KMS
+// Sealer encrypts small secrets at rest (for example webhook secrets and
+// sign-in state). AES-256-GCM with a key from configuration; SaaS wraps the key with KMS
 // (envelope encryption is an operational concern, not a code path change).
 type Sealer struct {
 	aead cipher.AEAD
@@ -76,7 +76,7 @@ func (s *Sealer) Open(sealed []byte) ([]byte, error) {
 // purpose (HKDF-SHA256). What it seals this sealer cannot open, nor can a
 // sealer for another purpose, and it opens nothing they sealed: the server
 // hands one to each extension, so an extension's values and the server's
-// own (TOTP seeds, webhook secrets, sign-in state) never share a key.
+// own (webhook secrets, sign-in state) never share a key.
 func (s *Sealer) For(purpose string) (*Sealer, error) {
 	key, err := hkdf.Key(sha256.New, s.key, nil, "agentry sealer: "+purpose, 32)
 	if err != nil {

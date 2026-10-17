@@ -1,9 +1,9 @@
 package api_test
 
-// Social login for individual accounts. The providers are
-// in-process: a scripted GitHub OAuth app and an OIDC
-// provider signing real ID tokens, so the handler chain — state cookie, code
-// exchange, identity linking, session issue — runs exactly as in production.
+// Sign-in for individual accounts through the deployment's OpenID
+// provider. The provider is in-process and signs real ID tokens, so the
+// handler chain — state cookie, code exchange, identity linking, session
+// issue — runs exactly as in production.
 
 import (
 	"context"
@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -28,58 +27,6 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
 )
-
-// ---- in-process GitHub OAuth app ----
-
-type fakeGitHub struct {
-	srv      *httptest.Server
-	userID   int64
-	login    string
-	name     string
-	email    string
-	verified bool
-}
-
-func newFakeGitHub(t *testing.T) *fakeGitHub {
-	t.Helper()
-	// A distinct provider user id per test: identities are keyed on the
-	// namespaced subject in one shared database, so a fixed id would make
-	// each test resolve to the previous one's account.
-	gh := &fakeGitHub{userID: randInt63(), login: "octo", name: "Octo Cat", verified: true}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/login/oauth/authorize", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK) // the browser lands here; the test never follows it
-	})
-	mux.HandleFunc("/login/oauth/access_token", func(w http.ResponseWriter, r *http.Request) {
-		_ = r.ParseForm()
-		if r.FormValue("code") == "" {
-			http.Error(w, "missing code", http.StatusBadRequest)
-			return
-		}
-		writeTestJSON(w, map[string]any{"access_token": "gho_test", "token_type": "bearer"})
-	})
-	mux.HandleFunc("/user", func(w http.ResponseWriter, _ *http.Request) {
-		writeTestJSON(w, map[string]any{"id": gh.userID, "login": gh.login, "name": gh.name})
-	})
-	mux.HandleFunc("/user/emails", func(w http.ResponseWriter, _ *http.Request) {
-		writeTestJSON(w, []map[string]any{
-			{"email": "secondary@example.test", "primary": false, "verified": true},
-			{"email": gh.email, "primary": true, "verified": gh.verified},
-		})
-	})
-	gh.srv = httptest.NewServer(mux)
-	t.Cleanup(gh.srv.Close)
-	return gh
-}
-
-func (gh *fakeGitHub) configure(cfg *config.Config) {
-	cfg.Social.GitHub = config.SocialProvider{
-		ClientID: "gh-client", ClientSecret: "gh-secret",
-		AuthURL:    gh.srv.URL + "/login/oauth/authorize",
-		TokenURL:   gh.srv.URL + "/login/oauth/access_token",
-		APIBaseURL: gh.srv.URL,
-	}
-}
 
 func writeTestJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -139,27 +86,47 @@ func (env *testEnv) socialCallback(t *testing.T, provider, state string, cookie 
 	return res
 }
 
-func (env *testEnv) socialLogin(t *testing.T, provider string) *http.Response {
+// oidcEnv is a test server whose sign-in OpenID provider is idp, served as
+// "oidc".
+func oidcEnv(t *testing.T, idp *fakeOIDC) *testEnv {
 	t.Helper()
-	_, state, cookie := env.socialStart(t, provider)
-	return env.socialCallback(t, provider, state, cookie)
+	return newTestEnvCfg(t, idp.configure, func(s *api.Server) {
+		s.SetOIDCHTTPClient(idp.srv.Client())
+	})
+}
+
+// configure registers the server with idp as its sign-in OpenID provider.
+func (p *fakeOIDC) configure(cfg *config.Config) {
+	cfg.Auth.OIDC = config.OIDCProvider{ClientID: p.clientID, ClientSecret: "oidc-secret", Issuer: p.srv.URL}
+}
+
+// oidcLogin runs the whole flow against idp in API mode: the start, the
+// browser's visit to the provider (where it learns the nonce), the callback.
+func (env *testEnv) oidcLogin(t *testing.T, idp *fakeOIDC) *http.Response {
+	t.Helper()
+	authURL, state, cookie := env.socialStart(t, "oidc")
+	visit, err := idp.srv.Client().Get(authURL.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = visit.Body.Close()
+	return env.socialCallback(t, "oidc", state, cookie)
 }
 
 // ---- tests ----
 
 func TestSocialLoginJITCreatesAccount(t *testing.T) {
-	gh := newFakeGitHub(t)
-	gh.email = "jit-" + randSuffix() + "@github.test"
-	env := newTestEnvCfg(t, gh.configure)
+	idp := newFakeOIDC(t)
+	idp.email = "jit-" + randSuffix() + "@idp.test"
+	env := oidcEnv(t, idp)
 
-	res := env.socialLogin(t, "github")
+	res := env.oidcLogin(t, idp)
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("social callback: got %d want 200", res.StatusCode)
 	}
 	var out struct {
-		TotpRequired bool `json:"totpRequired"`
-		User         struct {
+		User struct {
 			Id            string `json:"id"`
 			Email         string `json:"email"`
 			EmailVerified bool   `json:"emailVerified"`
@@ -169,11 +136,11 @@ func TestSocialLoginJITCreatesAccount(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
 		t.Fatal(err)
 	}
-	if out.TotpRequired || out.CsrfToken == "" {
+	if out.CsrfToken == "" {
 		t.Fatalf("expected a session, got %+v", out)
 	}
-	if out.User.Email != gh.email {
-		t.Fatalf("email = %q, want %q", out.User.Email, gh.email)
+	if out.User.Email != idp.email {
+		t.Fatalf("email = %q, want %q", out.User.Email, idp.email)
 	}
 	if !out.User.EmailVerified {
 		t.Fatal("a provider-verified email must land verified")
@@ -202,21 +169,21 @@ func TestSocialLoginJITCreatesAccount(t *testing.T) {
 	).Scan(&kind, &subject); err != nil {
 		t.Fatal(err)
 	}
-	wantSubject := "github:" + strconv.FormatInt(gh.userID, 10)
+	wantSubject := "oidc:" + idp.sub
 	if kind != "social" || subject != wantSubject {
 		t.Fatalf("identity = %s/%s, want social/%s", kind, subject, wantSubject)
 	}
 
 	// A second login through the same provider reuses the account rather than
 	// creating another.
-	res2 := env.socialLogin(t, "github")
+	res2 := env.oidcLogin(t, idp)
 	_ = res2.Body.Close()
 	if res2.StatusCode != http.StatusOK {
 		t.Fatalf("repeat social login: got %d want 200", res2.StatusCode)
 	}
 	var accounts int64
 	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT count(*) FROM users WHERE email = $1`, gh.email).Scan(&accounts); err != nil {
+		`SELECT count(*) FROM users WHERE email = $1`, idp.email).Scan(&accounts); err != nil {
 		t.Fatal(err)
 	}
 	if accounts != 1 {
@@ -225,16 +192,14 @@ func TestSocialLoginJITCreatesAccount(t *testing.T) {
 }
 
 func TestSocialLoginAutoLinksVerifiedEmail(t *testing.T) {
-	gh := newFakeGitHub(t)
-	env := newTestEnvCfg(t, gh.configure)
+	idp := newFakeOIDC(t)
+	env := oidcEnv(t, idp)
 
 	// An existing account whose OWN email is verified.
 	handle := env.register("soc-link")
-	env.verifyEmail(handle)
-	gh.email = handle + "@example.test"
-	gh.verified = true
+	idp.email = handle + "@example.test"
 
-	res := env.socialLogin(t, "github")
+	res := env.oidcLogin(t, idp)
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("auto-link: got %d want 200", res.StatusCode)
@@ -256,20 +221,18 @@ func TestSocialLoginRefusesUnverifiedLink(t *testing.T) {
 	// An email match is only evidence of ownership when BOTH sides are
 	// verified. Either half missing means an explicit link, not a takeover.
 	t.Run("provider has not verified the address", func(t *testing.T) {
-		gh := newFakeGitHub(t)
-		env := newTestEnvCfg(t, gh.configure)
+		idp := newFakeOIDC(t)
+		env := oidcEnv(t, idp)
 		handle := env.register("soc-unv1")
-		env.verifyEmail(handle)
-		gh.email = handle + "@example.test"
-		gh.verified = false
+		idp.email = handle + "@example.test"
+		idp.emailUnverified = true
 
-		res := env.socialLogin(t, "github")
+		res := env.oidcLogin(t, idp)
 		_ = res.Body.Close()
-		// With no verified provider email the identity is anonymous to us, so
-		// this JIT-creates a separate account rather than touching the
-		// existing one — never a silent takeover.
-		if res.StatusCode != http.StatusOK {
-			t.Fatalf("got %d want 200 (JIT with a synthetic address)", res.StatusCode)
+		// An address the provider does not vouch for is no evidence of
+		// ownership: an explicit link, never a silent takeover.
+		if res.StatusCode != http.StatusConflict {
+			t.Fatalf("got %d want 409 (explicit link required)", res.StatusCode)
 		}
 		var linked int64
 		if err := env.st.Pool().QueryRow(context.Background(),
@@ -283,13 +246,12 @@ func TestSocialLoginRefusesUnverifiedLink(t *testing.T) {
 	})
 
 	t.Run("account has not verified its own address", func(t *testing.T) {
-		gh := newFakeGitHub(t)
-		env := newTestEnvCfg(t, gh.configure)
-		handle := env.register("soc-unv2") // deliberately NOT verified
-		gh.email = handle + "@example.test"
-		gh.verified = true
+		idp := newFakeOIDC(t)
+		env := oidcEnv(t, idp)
+		handle := env.registerUnverified("soc-unv2")
+		idp.email = handle + "@example.test"
 
-		res := env.socialLogin(t, "github")
+		res := env.oidcLogin(t, idp)
 		_ = res.Body.Close()
 		if res.StatusCode != http.StatusConflict {
 			t.Fatalf("got %d want 409 (explicit link required)", res.StatusCode)
@@ -297,103 +259,16 @@ func TestSocialLoginRefusesUnverifiedLink(t *testing.T) {
 	})
 }
 
-func TestSocialLoginStillRequiresTOTP(t *testing.T) {
-	gh := newFakeGitHub(t)
-	env := newTestEnvCfg(t, gh.configure)
-
-	handle := env.register("soc-totp")
-	env.verifyEmail(handle)
-	sess := env.login(handle)
-	var setup struct {
-		Secret string `json:"secret"`
-	}
-	env.doJSON(sess, http.MethodPost, "/api/v1/auth/2fa/totp/setup", nil, &setup, http.StatusOK)
-	code, err := totpCode(setup.Secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	env.doJSON(sess, http.MethodPost, "/api/v1/auth/2fa/totp/verify",
-		map[string]any{"code": code}, nil, http.StatusNoContent)
-
-	gh.email = handle + "@example.test"
-	gh.verified = true
-
-	res := env.socialLogin(t, "github")
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("social callback: got %d want 200", res.StatusCode)
-	}
-	var out struct {
-		TotpRequired bool    `json:"totpRequired"`
-		Challenge    *string `json:"challenge"`
-		CsrfToken    *string `json:"csrfToken"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
-		t.Fatal(err)
-	}
-	if !out.TotpRequired || out.Challenge == nil {
-		t.Fatalf("2FA account got a social login without a challenge: %+v", out)
-	}
-	if out.CsrfToken != nil {
-		t.Fatal("no session may be issued before the second factor")
-	}
-	for _, c := range res.Cookies() {
-		if c.Name == "agentry_session" && c.Value != "" {
-			t.Fatal("a session cookie was set before the second factor")
-		}
-	}
-
-	// A wrong code does not open the session.
-	bad := env.do(anonymous, http.MethodPost, "/api/v1/auth/2fa/totp/challenge",
-		map[string]any{"challenge": *out.Challenge, "code": "000000"})
-	_ = bad.Body.Close()
-	if bad.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("wrong TOTP code: got %d want 401", bad.StatusCode)
-	}
-
-	// The right one does.
-	good, err := totpCode(setup.Secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	done := env.do(anonymous, http.MethodPost, "/api/v1/auth/2fa/totp/challenge",
-		map[string]any{"challenge": *out.Challenge, "code": good})
-	defer func() { _ = done.Body.Close() }()
-	if done.StatusCode != http.StatusOK {
-		t.Fatalf("completing the challenge: got %d want 200", done.StatusCode)
-	}
-	session := ""
-	for _, c := range done.Cookies() {
-		if c.Name == "agentry_session" {
-			session = c.Value
-		}
-	}
-	if session == "" {
-		t.Fatal("completing the challenge issued no session")
-	}
-
-	// A forged challenge is refused: the blob is sealed, not merely opaque.
-	forged := env.do(anonymous, http.MethodPost, "/api/v1/auth/2fa/totp/challenge",
-		map[string]any{"challenge": base64.RawURLEncoding.EncodeToString([]byte("not sealed")), "code": good})
-	_ = forged.Body.Close()
-	if forged.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("forged challenge: got %d want 401", forged.StatusCode)
-	}
-}
-
-// A login begun from the web app carries `next`; the callback then
-// sets the session cookie and 303s into the app instead of answering JSON.
-// The open-redirect shapes fall back to API mode rather than being followed.
 func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
-	gh := newFakeGitHub(t)
-	gh.email = "next-" + randSuffix() + "@github.test"
-	env := newTestEnvCfg(t, gh.configure)
+	idp := newFakeOIDC(t)
+	idp.email = "next-" + randSuffix() + "@idp.test"
+	env := oidcEnv(t, idp)
 
 	startWith := func(next string) (state string, cookie *http.Cookie) {
 		t.Helper()
 		client := *env.srv.Client()
 		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-		res, err := client.Get(env.srv.URL + "/api/v1/auth/oidc/github/start?next=" + url.QueryEscape(next))
+		res, err := client.Get(env.srv.URL + "/api/v1/auth/oidc/oidc/start?next=" + url.QueryEscape(next))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -413,11 +288,16 @@ func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
 		if cookie == nil {
 			t.Fatal("no sealed state cookie")
 		}
+		visit, err := idp.srv.Client().Get(authURL.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = visit.Body.Close()
 		return authURL.Query().Get("state"), cookie
 	}
 
 	state, cookie := startWith("/dashboard?tab=agents")
-	res := env.socialCallback(t, "github", state, cookie)
+	res := env.socialCallback(t, "oidc", state, cookie)
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("browser-mode callback: got %d want 303", res.StatusCode)
@@ -462,7 +342,7 @@ func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
 
 	for _, bad := range []string{"//evil.example/x", "/\\evil.example", "https://evil.example", "/dash\nboard", ""} {
 		state, cookie := startWith(bad)
-		res := env.socialCallback(t, "github", state, cookie)
+		res := env.socialCallback(t, "oidc", state, cookie)
 		_ = res.Body.Close()
 		if res.StatusCode != http.StatusOK {
 			t.Fatalf("next=%q: got %d; an unsafe next must fall back to API mode (200 JSON), never redirect", bad, res.StatusCode)
@@ -479,14 +359,14 @@ func TestSocialLoginBrowserModeRedirectsToNext(t *testing.T) {
 // restart only — with the guard cookie already present the browser gets a
 // message instead of a loop. Non-browser clients keep the 4xx.
 func TestSocialLoginCallbackRestartsBrowserWithoutState(t *testing.T) {
-	gh := newFakeGitHub(t)
-	env := newTestEnvCfg(t, gh.configure)
+	idp := newFakeOIDC(t)
+	env := oidcEnv(t, idp)
 	client := *env.srv.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 	get := func(cookies ...*http.Cookie) *http.Response {
 		req, err := http.NewRequest(http.MethodGet,
-			env.srv.URL+"/api/v1/auth/oidc/github/callback?code=c&state=x", nil)
+			env.srv.URL+"/api/v1/auth/oidc/oidc/callback?code=c&state=x", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -508,7 +388,7 @@ func TestSocialLoginCallbackRestartsBrowserWithoutState(t *testing.T) {
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("browser callback without state: got %d want 303", res.StatusCode)
 	}
-	if loc := res.Header.Get("Location"); loc != "/api/v1/auth/oidc/github/start?next=%2Fui%2Faccount" {
+	if loc := res.Header.Get("Location"); loc != "/api/v1/auth/oidc/oidc/start?next=%2Fui%2F" {
 		t.Fatalf("restart Location = %q", loc)
 	}
 	var guard *http.Cookie
@@ -533,7 +413,7 @@ func TestSocialLoginCallbackRestartsBrowserWithoutState(t *testing.T) {
 
 	// API clients (no navigation headers) keep the 422.
 	req, _ := http.NewRequest(http.MethodGet,
-		env.srv.URL+"/api/v1/auth/oidc/github/callback?code=c&state=x", nil)
+		env.srv.URL+"/api/v1/auth/oidc/oidc/callback?code=c&state=x", nil)
 	res3, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -545,44 +425,44 @@ func TestSocialLoginCallbackRestartsBrowserWithoutState(t *testing.T) {
 }
 
 func TestSocialLoginUnconfiguredProviderIs404(t *testing.T) {
-	gh := newFakeGitHub(t)
-	env := newTestEnvCfg(t, gh.configure) // github only
+	idp := newFakeOIDC(t)
+	env := oidcEnv(t, idp) // served as oidc
 
-	// Every OIDC-proper provider that this deployment did not configure
-	// answers 404, so probing cannot distinguish "misconfigured" from "not
-	// offered" and the page shows no dead buttons.
-	for _, p := range []string{"google", "microsoft", "openai", "claude"} {
+	// The id the provider is not served under answers 404, so probing
+	// cannot distinguish "misconfigured" from "not offered" and the page
+	// shows no dead buttons.
+	res := env.do(anonymous, http.MethodGet, "/api/v1/auth/oidc/authentik/start", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("authentik on a deployment serving oidc: got %d want 404", res.StatusCode)
+	}
+	// The path parameter is a closed enum, so the retired providers and an
+	// unknown one never reach the handler.
+	for _, p := range []string{"google", "github", "microsoft", "openai", "claude", "evilcorp"} {
 		res := env.do(anonymous, http.MethodGet, "/api/v1/auth/oidc/"+p+"/start", nil)
 		_ = res.Body.Close()
-		if res.StatusCode != http.StatusNotFound {
-			t.Fatalf("unconfigured %s: got %d want 404", p, res.StatusCode)
+		if res.StatusCode == http.StatusFound {
+			t.Fatalf("%s started a login", p)
 		}
-	}
-	// The path parameter is a closed enum, so an unknown provider never
-	// reaches the handler.
-	res := env.do(anonymous, http.MethodGet, "/api/v1/auth/oidc/evilcorp/start", nil)
-	_ = res.Body.Close()
-	if res.StatusCode == http.StatusFound {
-		t.Fatal("an unknown provider must not start a login")
 	}
 }
 
 func TestSocialLoginRejectsStateMismatch(t *testing.T) {
-	gh := newFakeGitHub(t)
-	gh.email = "state-" + randSuffix() + "@github.test"
-	env := newTestEnvCfg(t, gh.configure)
+	idp := newFakeOIDC(t)
+	idp.email = "state-" + randSuffix() + "@idp.test"
+	env := oidcEnv(t, idp)
 
-	_, _, cookie := env.socialStart(t, "github")
-	res := env.socialCallback(t, "github", "not-the-state", cookie)
+	_, _, cookie := env.socialStart(t, "oidc")
+	res := env.socialCallback(t, "oidc", "not-the-state", cookie)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("state mismatch: got %d want 401", res.StatusCode)
 	}
 
 	// And without the sealed cookie at all.
-	_, state, _ := env.socialStart(t, "github")
+	_, state, _ := env.socialStart(t, "oidc")
 	req, _ := http.NewRequest(http.MethodGet,
-		env.srv.URL+"/api/v1/auth/oidc/github/callback?code=c&state="+state, nil)
+		env.srv.URL+"/api/v1/auth/oidc/oidc/callback?code=c&state="+state, nil)
 	bare, err := env.srv.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -593,7 +473,7 @@ func TestSocialLoginRejectsStateMismatch(t *testing.T) {
 	}
 }
 
-// ---- google (OIDC proper) ----
+// ---- the stand-in OpenID provider ----
 
 // fakeOIDC is an in-process OIDC provider signing real ID tokens. Its
 // /authorize endpoint records the nonce, as a real IdP does, so the ID token
@@ -630,8 +510,8 @@ func newFakeOIDC(t *testing.T) *fakeOIDC {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &fakeOIDC{key: key, clientID: "google-client", sub: "g-" + randSuffix()}
-	p.email = "google-" + randSuffix() + "@gmail.test"
+	p := &fakeOIDC{key: key, clientID: "oidc-client", sub: "s-" + randSuffix()}
+	p.email = "person-" + randSuffix() + "@idp.test"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
 		writeTestJSON(w, map[string]any{
@@ -711,20 +591,14 @@ func (p *fakeOIDC) hostClient() *http.Client {
 	}}
 }
 
-// TestSocialLoginGoogleOIDC exercises the OIDC-proper provider end to end —
+// TestSocialLoginOpenIDProvider exercises the provider end to end —
 // discovery, issuer pinning, PKCE (the token endpoint refuses a request with
 // no verifier), and the nonce round trip.
-func TestSocialLoginGoogleOIDC(t *testing.T) {
+func TestSocialLoginOpenIDProvider(t *testing.T) {
 	idp := newFakeOIDC(t)
-	env := newTestEnvCfg(t, func(cfg *config.Config) {
-		cfg.Social.Google = config.SocialProvider{
-			ClientID: idp.clientID, ClientSecret: "google-secret", Issuer: idp.srv.URL,
-		}
-	}, func(s *api.Server) {
-		s.SetOIDCHTTPClient(idp.srv.Client())
-	})
+	env := oidcEnv(t, idp)
 
-	authURL, state, cookie := env.socialStart(t, "google")
+	authURL, state, cookie := env.socialStart(t, "oidc")
 	if authURL.Query().Get("code_challenge") == "" {
 		t.Fatal("the authorization URL carries no PKCE challenge")
 	}
@@ -735,10 +609,10 @@ func TestSocialLoginGoogleOIDC(t *testing.T) {
 	}
 	_ = visit.Body.Close()
 
-	res := env.socialCallback(t, "google", state, cookie)
+	res := env.socialCallback(t, "oidc", state, cookie)
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
-		t.Fatalf("google callback: got %d want 200", res.StatusCode)
+		t.Fatalf("callback: got %d want 200", res.StatusCode)
 	}
 	var out struct {
 		User struct {
@@ -757,25 +631,19 @@ func TestSocialLoginGoogleOIDC(t *testing.T) {
 		`SELECT subject FROM identities WHERE user_id = $1::uuid`, out.User.Id).Scan(&subject); err != nil {
 		t.Fatal(err)
 	}
-	if subject != "google:"+idp.sub {
-		t.Fatalf("subject = %q, want google:%s", subject, idp.sub)
+	if subject != "oidc:"+idp.sub {
+		t.Fatalf("subject = %q, want oidc:%s", subject, idp.sub)
 	}
 }
 
-// googleFirstSignIn runs one browser-mode-free sign-in through the google
-// OIDC provider and returns the new account's handle.
-func googleFirstSignIn(t *testing.T, env *testEnv, idp *fakeOIDC) string {
+// firstSignIn runs one API-mode sign-in through idp and returns the
+// account's handle.
+func firstSignIn(t *testing.T, env *testEnv, idp *fakeOIDC) string {
 	t.Helper()
-	authURL, state, cookie := env.socialStart(t, "google")
-	visit, err := idp.srv.Client().Get(authURL.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = visit.Body.Close()
-	res := env.socialCallback(t, "google", state, cookie)
+	res := env.oidcLogin(t, idp)
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
-		t.Fatalf("google callback: got %d want 200", res.StatusCode)
+		t.Fatalf("callback: got %d want 200", res.StatusCode)
 	}
 	var out struct {
 		User struct {
@@ -793,17 +661,11 @@ func googleFirstSignIn(t *testing.T, env *testEnv, idp *fakeOIDC) string {
 // (`blaktron` with chris@… is `blaktron`, not `chris`).
 func TestSocialLoginHandleFromPreferredUsername(t *testing.T) {
 	idp := newFakeOIDC(t)
-	env := newTestEnvCfg(t, func(cfg *config.Config) {
-		cfg.Social.Google = config.SocialProvider{
-			ClientID: idp.clientID, ClientSecret: "google-secret", Issuer: idp.srv.URL,
-		}
-	}, func(s *api.Server) {
-		s.SetOIDCHTTPClient(idp.srv.Client())
-	})
+	env := oidcEnv(t, idp)
 	idp.preferredUsername = "blaktron" + env.sfx
 	idp.email = "chris" + env.sfx + "@example.test"
 
-	if got := googleFirstSignIn(t, env, idp); got != idp.preferredUsername {
+	if got := firstSignIn(t, env, idp); got != idp.preferredUsername {
 		t.Fatalf("handle = %q, want the preferred_username %q", got, idp.preferredUsername)
 	}
 }
@@ -813,18 +675,12 @@ func TestSocialLoginHandleFromPreferredUsername(t *testing.T) {
 // audit event records what was asked for.
 func TestSocialLoginTakenUsernameFallsBackDeterministically(t *testing.T) {
 	idp := newFakeOIDC(t)
-	env := newTestEnvCfg(t, func(cfg *config.Config) {
-		cfg.Social.Google = config.SocialProvider{
-			ClientID: idp.clientID, ClientSecret: "google-secret", Issuer: idp.srv.URL,
-		}
-	}, func(s *api.Server) {
-		s.SetOIDCHTTPClient(idp.srv.Client())
-	})
+	env := oidcEnv(t, idp)
 	taken := env.register("taken")
 	idp.preferredUsername = taken
 	idp.email = "other" + env.sfx + "@example.test"
 
-	got := googleFirstSignIn(t, env, idp)
+	got := firstSignIn(t, env, idp)
 	if got == taken || !strings.HasPrefix(got, taken+"-") {
 		t.Fatalf("handle = %q, want %q with a suffix", got, taken)
 	}
@@ -840,71 +696,17 @@ func TestSocialLoginTakenUsernameFallsBackDeterministically(t *testing.T) {
 	}
 }
 
-// TestSocialLoginMicrosoftOIDC pins the second OIDC-proper provider end to
-// end: same relying-party machinery as google, namespaced under microsoft.
-func TestSocialLoginMicrosoftOIDC(t *testing.T) {
-	idp := newFakeOIDC(t)
-	env := newTestEnvCfg(t, func(cfg *config.Config) {
-		cfg.Social.Microsoft = config.SocialProvider{
-			ClientID: idp.clientID, ClientSecret: "microsoft-secret", Issuer: idp.srv.URL,
-		}
-	}, func(s *api.Server) {
-		s.SetOIDCHTTPClient(idp.srv.Client())
-	})
-
-	authURL, state, cookie := env.socialStart(t, "microsoft")
-	if authURL.Query().Get("code_challenge") == "" {
-		t.Fatal("the authorization URL carries no PKCE challenge")
-	}
-	visit, err := idp.srv.Client().Get(authURL.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = visit.Body.Close()
-
-	res := env.socialCallback(t, "microsoft", state, cookie)
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("microsoft callback: got %d want 200", res.StatusCode)
-	}
-	var out struct {
-		User struct {
-			Id    string `json:"id"`
-			Email string `json:"email"`
-		} `json:"user"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
-		t.Fatal(err)
-	}
-	if out.User.Email != idp.email {
-		t.Fatalf("email = %q, want %q", out.User.Email, idp.email)
-	}
-	var subject string
-	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT subject FROM identities WHERE user_id = $1::uuid`, out.User.Id).Scan(&subject); err != nil {
-		t.Fatal(err)
-	}
-	if subject != "microsoft:"+idp.sub {
-		t.Fatalf("subject = %q, want microsoft:%s", subject, idp.sub)
-	}
-}
-
-// TestSocialLoginGoogleNonceMismatch: an ID token whose nonce does not match
+// TestSocialLoginNonceMismatch: an ID token whose nonce does not match
 // the one this login committed to is refused, so a token minted for another
 // session cannot be replayed into ours.
-func TestSocialLoginGoogleNonceMismatch(t *testing.T) {
+func TestSocialLoginNonceMismatch(t *testing.T) {
 	idp := newFakeOIDC(t)
 	idp.nonce = "a-different-login's-nonce"
-	env := newTestEnvCfg(t, func(cfg *config.Config) {
-		cfg.Social.Google = config.SocialProvider{
-			ClientID: idp.clientID, ClientSecret: "google-secret", Issuer: idp.srv.URL,
-		}
-	}, func(s *api.Server) {
-		s.SetOIDCHTTPClient(idp.srv.Client())
-	})
+	env := oidcEnv(t, idp)
 
 	// Deliberately skip the /authorize leg so the IdP never learns our nonce.
-	res := env.socialLogin(t, "google")
+	_, state, cookie := env.socialStart(t, "oidc")
+	res := env.socialCallback(t, "oidc", state, cookie)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("nonce mismatch: got %d want 401", res.StatusCode)
@@ -917,14 +719,6 @@ func randSuffix() string {
 	var b [6]byte
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
-}
-
-func randInt63() int64 {
-	n, err := rand.Int(rand.Reader, big.NewInt(1<<62))
-	if err != nil {
-		panic(err)
-	}
-	return n.Int64() + 1
 }
 
 var _ = coreoidc.ScopeOpenID

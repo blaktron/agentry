@@ -60,10 +60,6 @@ config:
     cookieSecure: true
     sessionTTL: 24h
     patMaxTTL: 8760h
-    # externalOnly hands passwords, MFA, recovery and sign-up to the OpenID
-    # provider configured under auth.oidc: the native register, password and
-    # TOTP endpoints answer 410.
-    externalOnly: false
     # Platform staff is membership of the staff organization:
     # an active member of staffOrg whose verified address is at exactly
     # staffDomain; the organization admits nobody else. Set both or neither.

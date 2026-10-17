@@ -70,10 +70,9 @@ func (d *presenceDirectory) set(uid string, present bool) {
 	d.present[uid] = present
 }
 
-// activationEnv is a deployment whose credentials live in the directory:
-// the fake IdP signs people in as the directory's provider (and as Google),
-// an extension's directory answers the superseded-account check, and
-// unactivated accounts are read-only.
+// activationEnv is a deployment whose sign-in provider is a directory: the
+// fake IdP signs people in as the directory's provider, and an extension's
+// directory answers the superseded-account check.
 func activationEnv(t *testing.T, idp *fakeOIDC, dir *presenceDirectory) (*testEnv, *activationMails, func() []api.Event) {
 	t.Helper()
 	mails := &activationMails{Notifier: notify.LogNotifier{}}
@@ -82,12 +81,10 @@ func activationEnv(t *testing.T, idp *fakeOIDC, dir *presenceDirectory) (*testEn
 	env := newTestEnvCfg(t, func(cfg *config.Config) {
 		cfg.BaseURL = "http://127.0.0.1"
 		cfg.Auth.OIDC = config.OIDCProvider{ID: config.AuthentikProviderID, ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.origin()}
-		cfg.Social.Google = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.origin()}
 	}, func(s *api.Server) {
 		s.SetOIDCHTTPClient(idp.hostClient())
 		s.SetDirectory(dir)
 		s.SetNotifier(mails)
-		s.SetUnactivatedReadOnly(true)
 		s.AddEventHook(func(_ context.Context, ev api.Event) {
 			mu.Lock()
 			seen = append(seen, ev)
@@ -269,14 +266,16 @@ func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
 	squatterSub := idp.sub
 	_, squatter := signInAs(t, env, idp, "authentik")
 
-	// While the directory still holds it, a verified sign-in is told to link,
-	// as before.
+	// The owner proves the address at the directory, which signs them in as
+	// another of its accounts. While the directory still holds the
+	// squatter's, that verified sign-in is told to link, as before.
 	idp.emailUnverified = false
-	authURL, state, cookie := env.socialStart(t, "google")
+	idp.sub = "s-" + randSuffix()
+	authURL, state, cookie := env.socialStart(t, "authentik")
 	if v, err := idp.hostClient().Get(authURL.String()); err == nil {
 		_ = v.Body.Close()
 	}
-	res := env.socialCallback(t, "google", state, cookie)
+	res := env.socialCallback(t, "authentik", state, cookie)
 	if res.StatusCode != http.StatusConflict {
 		t.Fatalf("verified sign-in while the unactivated account's directory account exists: %d", res.StatusCode)
 	}
@@ -285,7 +284,7 @@ func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
 	// The directory removes it; the next verified sign-in takes the
 	// address, and the squatter's registry account is erased.
 	dir.set(squatterSub, false)
-	_, owner := signInAs(t, env, idp, "google")
+	_, owner := signInAs(t, env, idp, "authentik")
 	if owner == squatter {
 		t.Fatal("signed in as the squatter's account")
 	}
@@ -310,23 +309,18 @@ func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
 func TestActivationDailyCap(t *testing.T) {
 	mails := &activationMails{Notifier: notify.LogNotifier{}}
 	env := newTestEnvWith(t, func(s *api.Server) { s.SetNotifier(mails) })
-	h := env.register("capped")
+	h := env.registerUnverified("capped")
 	c := env.login(h)
 	ctx := context.Background()
 	if _, err := env.st.Pool().Exec(ctx,
-		`UPDATE email_verifications SET created_at = now() - interval '6 minutes'
-		 WHERE user_id = (SELECT id FROM handles WHERE handle = $1)`, h); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := env.st.Pool().Exec(ctx,
 		`INSERT INTO email_verifications (token_sha256, user_id, expires_at, created_at)
 		 SELECT sha256(convert_to(gen_random_uuid()::text, 'UTF8')), id, now() + interval '1 day', now() - interval '6 minutes'
-		 FROM handles, generate_series(1, 9) WHERE handle = $1`, h); err != nil {
+		 FROM handles, generate_series(1, 10) WHERE handle = $1`, h); err != nil {
 		t.Fatal(err)
 	}
 	res := env.do(c, http.MethodPost, "/api/v1/user/email-verification", nil)
 	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusTooManyRequests || len(mails.sent(h+"@example.test")) != 1 {
+	if res.StatusCode != http.StatusTooManyRequests || len(mails.sent(h+"@example.test")) != 0 {
 		t.Fatalf("an eleventh link in a day: %d, %d mails", res.StatusCode, len(mails.sent(h+"@example.test")))
 	}
 }

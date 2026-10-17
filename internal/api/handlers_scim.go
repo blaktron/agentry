@@ -266,7 +266,7 @@ func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, 
 		if err := q.CreateHandle(ctx, storegen.CreateHandleParams{ID: userID, Handle: handle, Kind: "user"}); err != nil {
 			return err
 		}
-		if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: userID, Email: email, DisplayName: dn, PasswordHash: nil}); err != nil {
+		if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: userID, Email: email, DisplayName: dn}); err != nil {
 			return err
 		}
 		// IdP-provisioned via a token an org admin minted: treat as verified.

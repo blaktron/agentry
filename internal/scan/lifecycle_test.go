@@ -638,11 +638,12 @@ func TestOrgOverlayStaysAboveTheStoredBaseline(t *testing.T) {
 
 // ----------------------------------------------------------------- 2FA
 
-// TestPublicPublishRequiresTOTP pins 2FA before public publish.
-// SubmitVersion checks more than EmailVerified.
-// It is enforced in the shared submission path, which is what makes it cover
-// the git-tag auto-publish a push triggers as well as the CLI upload.
-func TestPublicPublishRequiresTOTP(t *testing.T) {
+// TestPublicPublishRequiresASecondFactor pins 2FA before public publish: a
+// second factor the sign-in provider asserted (users.idp_mfa_at), and
+// nothing else. SubmitVersion checks more than EmailVerified. It is enforced
+// in the shared submission path, which is what makes it cover the git-tag
+// auto-publish a push triggers as well as the CLI upload.
+func TestPublicPublishRequiresASecondFactor(t *testing.T) {
 	e := newPipeEnv(t)
 	e.reg.SetPublicPublish2FA(true)
 	ctx := context.Background()
@@ -666,13 +667,24 @@ func TestPublicPublishRequiresTOTP(t *testing.T) {
 		t.Fatalf("private publish blocked by the public-publish gate: %v", err)
 	}
 
-	// With TOTP enrolled, the public publish goes through.
-	if err := e.st.Queries().EnableUserTOTP(ctx, e.owner); err != nil {
+	// users.totp_enabled is no evidence: the server keeps no second factor
+	// of its own.
+	if _, err := e.st.Pool().Exec(ctx, `UPDATE users SET totp_enabled = true WHERE id = $1`, e.owner); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.trySubmitSource("twofanative", "public",
+		benignFiles(u.Handle, "twofanative", "1.0.0"), "cli-upload"); !errors.Is(err, registry.ErrTwoFactorRequired) {
+		t.Fatalf("public publish on the native flag alone: %v, want ErrTwoFactorRequired", err)
+	}
+
+	// With a second factor the sign-in provider asserted, the public
+	// publish goes through.
+	if err := e.st.Queries().SetUserIdPMFA(ctx, e.owner); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.trySubmitSource("twofaok", "public",
 		benignFiles(u.Handle, "twofaok", "1.0.0"), "cli-upload"); err != nil {
-		t.Fatalf("public publish refused with 2FA enabled: %v", err)
+		t.Fatalf("public publish refused with the provider's second factor: %v", err)
 	}
 }
 
