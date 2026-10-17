@@ -50,9 +50,11 @@ const (
 
 // ScanStallAfter is how long a pack waits scanning since its tree was
 // stored, or since the sweep last queued its scan, before the sweep
-// queues the scan again: well past a scan job's whole retry budget, so a
-// scan still being tried is not doubled.
-const ScanStallAfter = time.Hour
+// queues the scan again: past a scan job's whole retry budget (three
+// attempts at the queue's job timeout, about 75 minutes at worst), so a
+// scan still being tried is not doubled, with room for a sandbox queue
+// that is behind.
+const ScanStallAfter = 2 * time.Hour
 
 // scanAttempts is the scan job's retry budget: a scan that did not finish
 // (a stage failed, the judge failed on a chunk) is retried until the last
@@ -473,6 +475,11 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 			defer func() { release(stored) }()
 		}
 	}
+	// A tree is stored only where its scan can be queued: without a queue
+	// the pack would be scanning for good.
+	if s.jobs == nil {
+		return p, errors.New("knowledge: no queue to scan the pack on")
+	}
 	key := objectKey(owner, id)
 	// The blob first: a row never names an object that is not there. An
 	// upload refused below leaves a sealed blob nothing names, which is
@@ -547,7 +554,7 @@ func (s *Service) upload(ctx context.Context, owner Owner, id uuid.UUID, sealed 
 	// scanning for good. A scan that cannot be queued now is logged, and
 	// the sweep queues it.
 	if qerr := s.queueScan(ctx, id, key); qerr != nil {
-		s.log.ErrorContext(ctx, "knowledge: queue a scan; the sweep will", "pack", id, "err", qerr)
+		s.log.ErrorContext(ctx, "knowledge: could not queue the scan; the sweep will queue it", "pack", id, "err", qerr)
 	}
 	return p, nil
 }
@@ -577,9 +584,11 @@ func (s *Service) SweepScans(ctx context.Context, cutoff time.Time) (int, error)
 	}
 	n := 0
 	for _, r := range rows {
-		// Touched first, so a sweep that fails after it does not queue the
-		// same scan again on its next pass before this one has run.
-		touched, err := q.TouchKnowledgeScan(ctx, storegen.TouchKnowledgeScanParams(r))
+		// The touch is the claim: only a pack still stalled past the
+		// cutoff is touched, so of two sweeps at once (one per replica)
+		// one queues it, and a sweep that fails after it does not queue
+		// the same scan again on its next pass before this one has run.
+		touched, err := q.TouchKnowledgeScan(ctx, storegen.TouchKnowledgeScanParams{ID: r.ID, ObjectKey: r.ObjectKey, Cutoff: cutoff})
 		if err != nil {
 			return n, fmt.Errorf("knowledge: touch a stalled scan: %w", err)
 		}

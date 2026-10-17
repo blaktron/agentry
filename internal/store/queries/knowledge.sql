@@ -55,10 +55,12 @@ ORDER BY updated_at
 LIMIT 100;
 
 -- name: TouchKnowledgeScan :execrows
--- The sweep queues this tree's scan again: it waits another stall period
--- before the next sweep looks at it.
+-- The sweep claims this tree's stalled scan to queue it again: it waits
+-- another stall period before the next sweep looks at it, and a sweep
+-- that finds it already touched past the cutoff claims nothing.
 UPDATE knowledge_packs SET updated_at = now()
-WHERE id = sqlc.arg(id) AND object_key = sqlc.arg(object_key) AND state = 'scanning';
+WHERE id = sqlc.arg(id) AND object_key = sqlc.arg(object_key) AND state = 'scanning'
+  AND updated_at < sqlc.arg(cutoff);
 
 -- name: GetKnowledgePackByObject :one
 -- The scan job's read: the pack whose current tree is this object.

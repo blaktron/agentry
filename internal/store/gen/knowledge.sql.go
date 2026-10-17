@@ -627,17 +627,20 @@ func (q *Queries) SumKnowledgeBytesOfPool(ctx context.Context, arg SumKnowledgeB
 const touchKnowledgeScan = `-- name: TouchKnowledgeScan :execrows
 UPDATE knowledge_packs SET updated_at = now()
 WHERE id = $1 AND object_key = $2 AND state = 'scanning'
+  AND updated_at < $3
 `
 
 type TouchKnowledgeScanParams struct {
 	ID        uuid.UUID `json:"id"`
 	ObjectKey string    `json:"object_key"`
+	Cutoff    time.Time `json:"cutoff"`
 }
 
-// The sweep queues this tree's scan again: it waits another stall period
-// before the next sweep looks at it.
+// The sweep claims this tree's stalled scan to queue it again: it waits
+// another stall period before the next sweep looks at it, and a sweep
+// that finds it already touched past the cutoff claims nothing.
 func (q *Queries) TouchKnowledgeScan(ctx context.Context, arg TouchKnowledgeScanParams) (int64, error) {
-	result, err := q.db.Exec(ctx, touchKnowledgeScan, arg.ID, arg.ObjectKey)
+	result, err := q.db.Exec(ctx, touchKnowledgeScan, arg.ID, arg.ObjectKey, arg.Cutoff)
 	if err != nil {
 		return 0, err
 	}

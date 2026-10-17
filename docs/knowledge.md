@@ -262,7 +262,7 @@ after the job, whether it has findings or not: the report is a record,
 never a gate. A pack is unusable only while it is
 `scanning`: its download and export answer 409 `knowledge-scanning`. A
 pack whose stored tree could not be read on the job's last attempt is
-`failed`, with no report. A pack still `scanning` an hour after its tree
+`failed`, with no report. A pack still `scanning` two hours after its tree
 was stored, because its job could not be queued or was lost, has its scan
 queued again by an hourly sweep (`knowledge.scan.sweep`, on the core
 queue), so it ends `ready` or `failed` rather than scanning for good.
