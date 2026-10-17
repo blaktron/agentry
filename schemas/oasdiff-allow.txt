@@ -1,0 +1,9 @@
+# One-time exception to the additive-only rule: User.totpEnabled, always
+# false since the server keeps no second factor of its own, leaves every
+# response that carries a User. CI's oasdiff job ignores exactly these while
+# this file exists.
+GET /auth/oidc/{provider}/callback removed the required property `user/totpEnabled` from the response with the `200` status
+GET /orgs/{org}/sso/oidc/callback removed the required property `user/totpEnabled` from the response with the `200` status
+POST /orgs/{org}/sso/saml/acs removed the required property `user/totpEnabled` from the response with the `200` status
+GET /user removed the required property `totpEnabled` from the response with the `200` status
+PATCH /user removed the required property `totpEnabled` from the response with the `200` status
