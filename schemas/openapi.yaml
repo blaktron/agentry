@@ -49,12 +49,12 @@ tags:
   - name: auth
     description: >-
       Registration, login, sessions, 2FA; sign-in through the
-      directory service and the desktop app's one-time-code
+      deployment's OpenID provider and the desktop app's one-time-code
       exchange.
   - name: users
     description: >-
-      Current user, public profiles, personal access tokens, SSH keys,
-      browser sessions, and the account's directory-service settings.
+      Current user, public profiles, personal access tokens, SSH keys and
+      browser sessions.
   - name: orgs
     description: Organizations, members, teams.
   - name: audit
@@ -475,15 +475,14 @@ paths:
         agents are transferred to an organization the caller administers.
         When the account has published public versions the choice is
         explicit: omitting `publishedContent` is a 400, never a silent yank.
-        When the deployment holds credentials in a directory service and is
-        configured to reach it (`AGENTRY_IDP_ADMIN_URL`), the sign-in account
-        there is deleted in the same step; the outcome is audited as
-        `user.directory_erase` and returned in the `X-Agentry-Directory-Erasure`
-        header. A failed
-        directory attempt does not undo the registry's erasure: it is retried
-        by a job with backoff (each attempt audited) and the response says
-        `pending`; a retry budget that runs out is audited as `abandoned` and
-        raised to the operator. An account that is an organization's last
+        When the deployment holds credentials in a directory service that an
+        extension of the server reaches, the sign-in account there is
+        deleted in the same step; the outcome is audited as
+        `user.directory_erase` and returned in the
+        `X-Agentry-Directory-Erasure` header. A failed directory attempt
+        does not undo the registry's erasure: the directory retries it where
+        it can (`pending`), and one that does not complete is raised to the
+        operator. An account that is an organization's last
         admin is refused (409 last-admin) until another admin is in
         place; a transfer that would put the organization over its
         private-agent cap is refused (422 private-agent-cap) with nothing
@@ -522,10 +521,9 @@ paths:
                 operator is alerted and finishes it by hand.
                 `not-configured`: the deployment reaches no directory, so
                 erasure is registry-only. `pending`: the directory could not
-                be reached; a job retries it with backoff for about four and
-                a half hours, and the operator is alerted if it never
-                succeeds. `failed`: the retry could not be queued; the
-                operator is alerted and finishes it by hand.
+                be reached and retries it; the operator is alerted if it
+                never succeeds. `failed`: the attempt failed and is not
+                retried; the operator is alerted and finishes it by hand.
               schema:
                 type: string
                 enum: [deleted, not-found, unresolved, not-configured, pending, failed]
@@ -1101,57 +1099,6 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
-  /user/directory:
-    get:
-      operationId: getUserDirectory
-      tags: [users]
-      summary: Where the caller manages password, MFA and profile when a directory service owns the account.
-      description: >
-        With auth.externalOnly, credentials live in the directory service
-        (Authentik). This answers the settings page's question "where do I
-        change my password or add an authenticator?" with the directory's
-        flow URLs, and lists the caller's enrolled authenticators when
-        the server has directory admin access (auth.idpAdminURL).
-        Without a directory, `managed` is false and the rest is absent.
-      responses:
-        "200":
-          description: Directory account links and enrolled authenticators.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserDirectory"
-        default:
-          $ref: "#/components/responses/Problem"
-  /user/directory/devices/{kind}/{deviceId}:
-    delete:
-      operationId: deleteUserDirectoryDevice
-      tags: [users]
-      summary: Remove one of the caller's own authenticators from the directory service.
-      description: >
-        With auth.externalOnly and directory admin access, removes the
-        caller's authenticator of this kind and id through the
-        directory's admin API, so the settings page manages MFA without
-        ever showing the directory's own panel. The authenticator must be
-        on the caller's own account: an id that is somebody else's answers 404
-        exactly like a missing one. 404 when the server has no directory
-        admin access; 502 when the directory did not answer.
-      parameters:
-        - name: kind
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [totp, webauthn, static, duo, sms, email]
-        - name: deviceId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: Removed.
-        default:
-          $ref: "#/components/responses/Problem"
   /user/sessions:
     get:
       operationId: listUserSessions
@@ -4940,8 +4887,8 @@ components:
         built-in OIDC endpoints; openai and claude need an operator-set
         issuer. oidc is the deployment's own sign-in OpenID provider, any
         issuer the operator configures; authentik is the same provider on a
-        deployment whose provider is its own directory service. An
-        unconfigured provider answers 404.
+        deployment that registered it under that id, whose accounts are
+        linked under it. An unconfigured provider answers 404.
       schema:
         type: string
         enum: [google, github, microsoft, openai, claude, authentik, oidc]
@@ -5150,71 +5097,6 @@ components:
         otpauthUrl:
           type: string
 
-    UserDirectory:
-      type: object
-      required: [managed]
-      properties:
-        managed:
-          description: True when a directory service owns credentials for this deployment.
-          type: boolean
-        accountUrl:
-          description: >
-            Deprecated and no longer set: the directory's own
-            account page is not offered; every setting lives here.
-          type: string
-          deprecated: true
-        passwordChangeUrl:
-          type: string
-        totpSetupUrl:
-          type: string
-        webauthnSetupUrl:
-          type: string
-        devices:
-          description: >
-            The caller's enrolled authenticators as the directory reports
-            them; absent when the server has no directory admin access.
-          type: array
-          items:
-            type: object
-            required: [kind, name]
-            properties:
-              id:
-                description: The directory's id for the authenticator; pass it to DELETE /user/directory/devices/{kind}/{deviceId}.
-                type: string
-              kind:
-                description: totp | webauthn | static | duo | sms | email | other
-                type: string
-              name:
-                type: string
-              createdAt:
-                type: string
-                format: date-time
-        devicesError:
-          description: Set when the authenticator lookup was attempted and failed; the links still work.
-          type: string
-        firstSocialProvider:
-          description: >
-            The social provider the caller's directory account was first
-            connected to, for the account's profile. Absent when
-            the account has none, the server has no directory admin access,
-            or the directory did not answer.
-          type: object
-          required: [id, name]
-          properties:
-            id:
-              description: The directory's slug for the provider, e.g. google.
-              type: string
-            name:
-              description: The provider's display name, e.g. Google.
-              type: string
-        hasPassword:
-          description: >
-            Whether the caller's directory account has a password:
-            false for an account a social provider created and no password was
-            added to. Absent when the directory did not answer or has not
-            recorded it yet (the account has not signed in or set a password
-            since the directory began recording it).
-          type: boolean
     EmailVerificationSent:
       type: object
       required: [sentTo, resendAfter]

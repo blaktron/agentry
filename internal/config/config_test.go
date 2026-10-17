@@ -77,6 +77,24 @@ func TestLoadRejectsUnknownKeys(t *testing.T) {
 	}
 }
 
+// TestLoadRejectsUnknownNestedKeys: a key the configuration does not have
+// is refused inside a known section too, so a setting nothing reads stops
+// the server rather than being ignored.
+func TestLoadRejectsUnknownNestedKeys(t *testing.T) {
+	for _, doc := range []string{
+		"auth:\n  idpAdminURL: http://directory:9000\n",
+		"social:\n  authentik:\n    clientId: c\n",
+	} {
+		path := filepath.Join(t.TempDir(), "agentry.yaml")
+		if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Load(path); err == nil {
+			t.Errorf("loaded %q, want a refusal", doc)
+		}
+	}
+}
+
 // devDefault is the baseline with dev mode opted in: what a throwaway
 // stack runs, and what tests of the OTHER guards start from.
 func devDefault() Config {
@@ -535,133 +553,6 @@ func TestStaffOrgAcceptsAHandleAndABareDomain(t *testing.T) {
 	}
 }
 
-// TestStaffMirrorGroupNeedsItsWriterAndItsSource: the mirror group is
-// written through the directory's admin API and filled from the staff
-// organization, so it is refused without either, and it can never be the
-// retired group, which is no longer a source of staff.
-func TestStaffMirrorGroupNeedsItsWriterAndItsSource(t *testing.T) {
-	full := func() Config {
-		cfg := devDefault()
-		cfg.Auth.StaffOrg, cfg.Auth.StaffDomain = "agentry", "secureagentry.net"
-		cfg.Auth.IdPAdminURL, cfg.Auth.IdPAdminToken = "http://authentik-server:9000", "token"
-		cfg.Auth.IdPStaffMirrorGroup = "agentry-staff"
-		return cfg
-	}
-	if cfg := full(); cfg.Validate() != nil {
-		t.Fatalf("a complete mirror configuration was refused: %v", cfg.Validate())
-	}
-	for name, edit := range map[string]func(*Config){
-		"no admin URL":      func(c *Config) { c.Auth.IdPAdminURL = "" },
-		"no admin token":    func(c *Config) { c.Auth.IdPAdminToken = "" },
-		"no staff org":      func(c *Config) { c.Auth.StaffOrg, c.Auth.StaffDomain = "", "" },
-		"the retired group": func(c *Config) { c.Auth.IdPStaffGroup = "agentry-staff" },
-	} {
-		cfg := full()
-		edit(&cfg)
-		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "idpStaffMirrorGroup") {
-			t.Errorf("%s: %v, want a refusal naming auth.idpStaffMirrorGroup", name, err)
-		}
-	}
-	t.Setenv("AGENTRY_IDP_STAFF_MIRROR_GROUP", "agentry-staff")
-	got := devDefault()
-	if err := applyEnv(&got); err != nil || got.Auth.IdPStaffMirrorGroup != "agentry-staff" {
-		t.Fatalf("the environment did not set it: %q %v", got.Auth.IdPStaffMirrorGroup, err)
-	}
-}
-
-// TestDirectoryTrustCheckConfiguration: remembered browsers on the
-// directory path need the check's secret, the directory it answers, and a
-// cookie the browser will both accept from the registry's host and send to
-// the directory's. A configuration that cannot give the browser such a
-// cookie is refused at start-up rather than minting cookies the directory
-// never sees.
-func TestDirectoryTrustCheckConfiguration(t *testing.T) {
-	const token = "0123456789abcdef0123456789abcdef"
-	with := func(base, issuer, domain string) Config {
-		cfg := devDefault()
-		cfg.BaseURL = base
-		cfg.Social.Authentik = SocialProvider{ClientID: "id", ClientSecret: "s", Issuer: issuer}
-		cfg.Auth.IdPTrustCheckToken = token
-		cfg.Auth.DirectoryCookieDomain = domain
-		return cfg
-	}
-	if cfg := devDefault(); cfg.Validate() != nil {
-		t.Fatalf("off by default, and the default was refused: %v", cfg.Validate())
-	}
-	for _, tc := range []struct {
-		name, base, issuer, domain, want string
-	}{
-		// dev and production: the directory is a subdomain of the registry.
-		{"subdomain", "https://dev.secureagentry.net", "https://auth.dev.secureagentry.net/application/o/agentry/", "", "dev.secureagentry.net"},
-		// compose without DNS: one host, the directory on another port, and
-		// cookies ignore ports, so a host-only cookie reaches both.
-		{"same host", "http://localhost:8080", "http://localhost:8443/application/o/agentry/", "", ""},
-		{"siblings under a named parent", "https://app.example.com", "https://auth.example.com/application/o/agentry/", "example.com", "example.com"},
-		{"a leading dot is tolerated", "https://app.example.com", "https://auth.example.com/", ".Example.COM", "example.com"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := with(tc.base, tc.issuer, tc.domain)
-			if err := cfg.Validate(); err != nil {
-				t.Fatalf("refused: %v", err)
-			}
-			got, err := cfg.DirectoryTrustCookieDomain()
-			if err != nil || got != tc.want {
-				t.Fatalf("cookie domain = %q, %v; want %q", got, err, tc.want)
-			}
-		})
-	}
-	for _, tc := range []struct {
-		name  string
-		cfg   Config
-		names string
-	}{
-		{"siblings with no parent named", with("https://app.example.com", "https://auth.example.com/", ""), "auth.example.com"},
-		{"a parent that does not cover the directory", with("https://app.example.com", "https://auth.other.com/", "example.com"), "directoryCookieDomain"},
-		{"a parent that does not cover the registry", with("https://app.other.com", "https://auth.example.com/", "example.com"), "directoryCookieDomain"},
-		{"a bare top-level label", with("https://app.example", "https://auth.app.example/", "example"), "directoryCookieDomain"},
-		{"an address for a parent", with("http://10.0.0.1:8080", "http://10.0.0.1:8443/", "10.0.0.1"), "directoryCookieDomain"},
-		{"no public origin", with("", "https://auth.example.com/", ""), "baseURL"},
-		{"no directory", func() Config {
-			c := with("https://example.com", "", "")
-			c.Social.Authentik = SocialProvider{}
-			return c
-		}(), "social.authentik"},
-		{"a short secret", func() Config {
-			c := with("https://example.com", "https://auth.example.com/", "")
-			c.Auth.IdPTrustCheckToken = "short"
-			return c
-		}(), "idpTrustCheckToken"},
-	} {
-		t.Run("refuses "+tc.name, func(t *testing.T) {
-			if err := tc.cfg.Validate(); err == nil || !strings.Contains(err.Error(), tc.names) {
-				t.Fatalf("%v, want a refusal naming %s", err, tc.names)
-			}
-		})
-	}
-	t.Setenv("AGENTRY_IDP_TRUST_CHECK_TOKEN", token)
-	t.Setenv("AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN", "example.com")
-	got := devDefault()
-	if err := applyEnv(&got); err != nil || got.Auth.IdPTrustCheckToken != token || got.Auth.DirectoryCookieDomain != "example.com" {
-		t.Fatalf("the environment did not set them: %q %q %v", got.Auth.IdPTrustCheckToken, got.Auth.DirectoryCookieDomain, err)
-	}
-}
-
-// TestRetiredStaffKeysAreNamed: the group and the domain-alone
-// keys still load, grant nothing, and are named for the start-up warning.
-func TestRetiredStaffKeysAreNamed(t *testing.T) {
-	cfg := devDefault()
-	if keys := cfg.RetiredStaffKeys(); len(keys) != 0 {
-		t.Fatalf("nothing set, yet %v", keys)
-	}
-	cfg.Auth.IdPStaffGroup, cfg.Auth.IdPStaffDomain = "agentry-platform-staff", "secureagentry.net"
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("a configuration still setting the retired keys must load: %v", err)
-	}
-	if keys := cfg.RetiredStaffKeys(); len(keys) != 2 {
-		t.Fatalf("retired keys = %v", keys)
-	}
-}
-
 func TestParseCIDRs(t *testing.T) {
 	ok := []struct{ in, want string }{
 		{"10.0.0.0/8", "10.0.0.0/8"},
@@ -737,9 +628,8 @@ func TestKnowledgeSealingKeyFromEnv(t *testing.T) {
 }
 
 // TestSignInOIDCIsOneProvider: the sign-in OpenID provider is auth.oidc,
-// "oidc" unless it says otherwise, or the social.authentik keys read
-// as the same provider under "authentik", the prefix their accounts are
-// linked by. The directory's issuer comes from it only under that id.
+// "oidc" unless it says otherwise; "authentik" is the one other id, which
+// a deployment whose accounts are linked under it keeps.
 func TestSignInOIDCIsOneProvider(t *testing.T) {
 	cfg := devDefault()
 	if _, ok := cfg.SignInOIDC(); ok {
@@ -751,36 +641,22 @@ func TestSignInOIDCIsOneProvider(t *testing.T) {
 	if !ok || p.ID != OIDCProviderID || p.Issuer != "https://idp.example/" || p.DisplayName != "Example SSO" || len(p.Scopes) != 1 {
 		t.Fatalf("auth.oidc: %+v %v", p, ok)
 	}
-	if cfg.DirectoryIssuer() != "" {
-		t.Error("a provider that is no directory gave a directory issuer")
-	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("auth.oidc refused: %v", err)
 	}
 
-	cfg.Auth.OIDC.ID = DirectoryProviderID
-	if p, _ := cfg.SignInOIDC(); p.ID != DirectoryProviderID || cfg.DirectoryIssuer() != "https://idp.example/" {
-		t.Fatalf("auth.oidc with id authentik: %+v, issuer %q", p, cfg.DirectoryIssuer())
+	cfg.Auth.OIDC.ID = AuthentikProviderID
+	if p, _ := cfg.SignInOIDC(); p.ID != AuthentikProviderID {
+		t.Fatalf("auth.oidc with id authentik: %+v", p)
 	}
-
-	legacy := devDefault()
-	legacy.Social.Authentik = SocialProvider{ClientID: "c", ClientSecret: "s", Issuer: "https://auth.example/application/o/agentry/"}
-	p, ok = legacy.SignInOIDC()
-	if !ok || p.ID != DirectoryProviderID || p.ClientID != "c" || p.Issuer != legacy.Social.Authentik.Issuer {
-		t.Fatalf("social.authentik read as %+v %v", p, ok)
-	}
-	if legacy.DirectoryIssuer() != legacy.Social.Authentik.Issuer {
-		t.Fatalf("the directory issuer under social.authentik is %q", legacy.DirectoryIssuer())
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("auth.oidc with id authentik refused: %v", err)
 	}
 
 	for name, tc := range map[string]struct {
 		cfg   func(*Config)
 		names string
 	}{
-		"both named": {func(c *Config) {
-			c.Auth.OIDC = OIDCProvider{Issuer: "https://idp.example/", ClientID: "c", ClientSecret: "s"}
-			c.Social.Authentik = SocialProvider{ClientID: "c", ClientSecret: "s", Issuer: "https://auth.example/"}
-		}, "social.authentik"},
 		"an id no route serves": {func(c *Config) {
 			c.Auth.OIDC = OIDCProvider{ID: "google", Issuer: "https://idp.example/", ClientID: "c", ClientSecret: "s"}
 		}, "auth.oidc.id"},

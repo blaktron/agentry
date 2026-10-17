@@ -12,9 +12,8 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"net/http/httptest"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -47,78 +46,46 @@ func (n *activationMails) sent(to string) []string {
 	return append([]string(nil), n.tokens[to]...)
 }
 
-// fakeDirectoryUsers is authentik's users admin API as activation and the
-// superseded-account check use it: read one account by id and search by
-// address. PATCH is refused, as the registry's restricted token refuses
-// directory writes. failing makes every call answer 503.
-type fakeDirectoryUsers struct {
-	mu       sync.Mutex
-	accounts map[int]map[string]any // pk → the account as the API returns it
-	failing  bool
+// presenceDirectory is a directory an extension supplies, as the
+// superseded-account check asks it: an account is there while its uid is
+// present. failing makes every call fail.
+type presenceDirectory struct {
+	fakeDirectory
+	present map[string]bool // uid → still in the directory
+	failing bool
 }
 
-func (d *fakeDirectoryUsers) handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v3/core/users/{pk}/", func(w http.ResponseWriter, r *http.Request) {
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		if d.failing {
-			http.Error(w, "down", http.StatusServiceUnavailable)
-			return
-		}
-		pk, _ := strconv.Atoi(r.PathValue("pk"))
-		u, ok := d.accounts[pk]
-		if !ok {
-			http.Error(w, "{}", http.StatusNotFound)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(u)
-	})
-	mux.HandleFunc("PATCH /api/v3/core/users/{pk}/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	})
-	mux.HandleFunc("GET /api/v3/core/users/", func(w http.ResponseWriter, r *http.Request) {
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		q := strings.ToLower(r.URL.Query().Get("search"))
-		results := []map[string]any{}
-		for _, u := range d.accounts {
-			if e, _ := u["email"].(string); q != "" && strings.Contains(strings.ToLower(e), q) {
-				results = append(results, u)
-			}
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"pagination": map[string]any{"next": 0}, "results": results})
-	})
-	return mux
-}
-
-func (d *fakeDirectoryUsers) attributes(pk int) map[string]any {
+func (d *presenceDirectory) AccountGone(_ context.Context, l api.DirectoryLink) (bool, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	a, _ := d.accounts[pk]["attributes"].(map[string]any)
-	return a
+	if d.failing {
+		return false, errors.New("the directory is down")
+	}
+	return l.UID != "" && !d.present[l.UID], nil
+}
+
+func (d *presenceDirectory) set(uid string, present bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.present[uid] = present
 }
 
 // activationEnv is a deployment whose credentials live in the directory:
-// the fake IdP signs people in as the directory (and as Google), the fake
-// users API is the directory's admin API, and unactivated accounts are
-// read-only.
-func activationEnv(t *testing.T, idp *fakeOIDC, dir *fakeDirectoryUsers) (*testEnv, *activationMails, func() []api.Event) {
+// the fake IdP signs people in as the directory's provider (and as Google),
+// an extension's directory answers the superseded-account check, and
+// unactivated accounts are read-only.
+func activationEnv(t *testing.T, idp *fakeOIDC, dir *presenceDirectory) (*testEnv, *activationMails, func() []api.Event) {
 	t.Helper()
-	dsrv := httptest.NewServer(dir.handler())
-	t.Cleanup(dsrv.Close)
 	mails := &activationMails{Notifier: notify.LogNotifier{}}
 	var mu sync.Mutex
 	var seen []api.Event
 	env := newTestEnvCfg(t, func(cfg *config.Config) {
 		cfg.BaseURL = "http://127.0.0.1"
-		cfg.Social.Authentik = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.origin()}
+		cfg.Auth.OIDC = config.OIDCProvider{ID: config.AuthentikProviderID, ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.origin()}
 		cfg.Social.Google = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.origin()}
-		cfg.Auth.IdPAdminURL = dsrv.URL
-		cfg.Auth.IdPAdminToken = "tok"
-		cfg.Auth.IdPTrustCheckToken = directoryTrustToken
 	}, func(s *api.Server) {
 		s.SetOIDCHTTPClient(idp.hostClient())
+		s.SetDirectory(dir)
 		s.SetNotifier(mails)
 		s.SetUnactivatedReadOnly(true)
 		s.AddEventHook(func(_ context.Context, ev api.Event) {
@@ -132,66 +99,6 @@ func activationEnv(t *testing.T, idp *fakeOIDC, dir *fakeDirectoryUsers) (*testE
 		defer mu.Unlock()
 		return append([]api.Event(nil), seen...)
 	}
-}
-
-// TestDirectoryEmailVerification answers only for the directory identity's
-// exact confirmed address, and only to the directory on the private network.
-func TestDirectoryEmailVerification(t *testing.T) {
-	idp := newFakeOIDC(t)
-	dir := &fakeDirectoryUsers{accounts: map[int]map[string]any{}}
-	env, mails, _ := activationEnv(t, idp, dir)
-	idp.email, idp.emailUnverified = "activation"+env.sfx+"@example.test", true
-	_, userID := signInAs(t, env, idp, "authentik")
-	check := func(secret, sub, email string, headers map[string]string, wantStatus int, wantVerified bool) {
-		t.Helper()
-		body, _ := json.Marshal(map[string]string{"sub": sub, "email": email})
-		req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/internal/directory/email-verification", strings.NewReader(string(body)))
-		req.Header.Set("Authorization", "Bearer "+secret)
-		for k, v := range headers {
-			req.Header.Set(k, v)
-		}
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = res.Body.Close() }()
-		if res.StatusCode != wantStatus {
-			t.Fatalf("check: status %d, want %d", res.StatusCode, wantStatus)
-		}
-		if wantStatus == http.StatusOK {
-			var answer struct {
-				Verified *bool `json:"verified"`
-			}
-			if err := json.NewDecoder(res.Body).Decode(&answer); err != nil || answer.Verified == nil || *answer.Verified != wantVerified {
-				t.Fatalf("check: %+v (%v), want verified=%v", answer, err, wantVerified)
-			}
-		}
-	}
-	check(directoryTrustToken, idp.sub, idp.email, nil, http.StatusOK, false)
-	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/verify-email", map[string]any{"token": mails.sent(idp.email)[0]}, nil, http.StatusNoContent)
-	check(directoryTrustToken, idp.sub, strings.ToUpper(idp.email), nil, http.StatusOK, true)
-	check(directoryTrustToken, "another-subject", idp.email, nil, http.StatusOK, false)
-	check(directoryTrustToken, idp.sub, "somebody-else@example.test", nil, http.StatusOK, false)
-	check("wrong", idp.sub, idp.email, nil, http.StatusUnauthorized, false)
-	check(directoryTrustToken, "", idp.email, nil, http.StatusBadRequest, false)
-	check(directoryTrustToken, idp.sub, "", nil, http.StatusBadRequest, false)
-	for _, h := range []string{"X-Forwarded-For", "Forwarded"} {
-		check(directoryTrustToken, idp.sub, idp.email, map[string]string{h: "for=203.0.113.9"}, http.StatusNotFound, false)
-	}
-	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE users SET state = 'suspended' WHERE id = $1::uuid`, userID); err != nil {
-		t.Fatal(err)
-	}
-	check(directoryTrustToken, idp.sub, idp.email, nil, http.StatusOK, false)
-	// An unavailable store must never become an affirmative answer.
-	if _, err := env.st.Pool().Exec(context.Background(), `ALTER TABLE identities RENAME TO identities_hidden`); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := env.st.Pool().Exec(context.Background(), `ALTER TABLE identities_hidden RENAME TO identities`); err != nil {
-			t.Fatal(err)
-		}
-	})
-	check(directoryTrustToken, idp.sub, idp.email, nil, http.StatusServiceUnavailable, false)
 }
 
 // signInAs completes a sign-in through the fake IdP and returns the session
@@ -243,23 +150,15 @@ func problemType(t *testing.T, res *http.Response) string {
 
 func TestUnactivatedAccountUntilActivated(t *testing.T) {
 	idp := newFakeOIDC(t)
-	dir := &fakeDirectoryUsers{accounts: map[int]map[string]any{}}
+	dir := &presenceDirectory{present: map[string]bool{}}
 	env, mails, events := activationEnv(t, idp, dir)
 
 	// A self-enrolled directory account: the token says the address is not
-	// confirmed, and carries the directory's id for the account.
+	// confirmed.
 	email := "ada" + env.sfx + "@example.test"
 	idp.email, idp.emailUnverified = email, true
-	idp.extra = map[string]any{"agentry_directory_id": 4242}
-	dir.accounts[4242] = map[string]any{"pk": 4242, "uid": "", "email": email, "type": "internal", "is_active": true,
-		"attributes": map[string]any{"agentry_email_verified": false, "agentry_promo_code": "LAUNCH-1"}}
+	dir.set(idp.sub, true)
 	c, userID := signInAs(t, env, idp, "authentik")
-	var uid string
-	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT substring(subject from 11) FROM identities WHERE user_id = $1::uuid`, userID).Scan(&uid); err != nil {
-		t.Fatal(err)
-	}
-	dir.accounts[4242]["uid"] = uid
 
 	// The first link went out with the sign-in that made the account.
 	if got := mails.sent(email); len(got) != 1 {
@@ -321,17 +220,15 @@ func TestUnactivatedAccountUntilActivated(t *testing.T) {
 	_ = res.Body.Close()
 
 	// Activation belongs to the registry: it works while the directory is
-	// unavailable, and does not change the directory's attributes.
+	// unavailable.
+	dir.mu.Lock()
 	dir.failing = true
+	dir.mu.Unlock()
 	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/verify-email", map[string]any{"token": links[0]}, nil, http.StatusNoContent)
 	me.EmailVerificationResendAfter = nil
 	env.doJSON(c, http.MethodGet, "/api/v1/user", nil, &me, http.StatusOK)
 	if !me.EmailVerified || me.EmailVerificationResendAfter != nil {
 		t.Fatalf("after activation: %+v", me)
-	}
-	attrs := dir.attributes(4242)
-	if attrs["agentry_email_verified"] != false || attrs["agentry_promo_code"] != "LAUNCH-1" {
-		t.Fatalf("the directory account's attributes after activation: %v", attrs)
 	}
 	var heard int
 	for _, ev := range events() {
@@ -362,26 +259,19 @@ func TestUnactivatedAccountUntilActivated(t *testing.T) {
 // the registry account it leaves behind gives the address up.
 func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
 	idp := newFakeOIDC(t)
-	dir := &fakeDirectoryUsers{accounts: map[int]map[string]any{}}
+	dir := &presenceDirectory{present: map[string]bool{}}
 	env, _, _ := activationEnv(t, idp, dir)
 	email := "squat" + env.sfx + "@example.test"
 
 	// The squatter's unactivated account, signed in once through the directory.
 	idp.email, idp.emailUnverified = email, true
-	idp.extra = map[string]any{"agentry_directory_id": 5151}
-	dir.accounts[5151] = map[string]any{"pk": 5151, "uid": "", "email": email, "type": "internal", "is_active": true}
+	dir.set(idp.sub, true)
+	squatterSub := idp.sub
 	_, squatter := signInAs(t, env, idp, "authentik")
-	var uid string
-	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT substring(subject from 11) FROM identities WHERE user_id = $1::uuid`, squatter).Scan(&uid); err != nil {
-		t.Fatal(err)
-	}
-	dir.accounts[5151]["uid"] = uid
 
 	// While the directory still holds it, a verified sign-in is told to link,
 	// as before.
 	idp.emailUnverified = false
-	idp.extra = nil
 	authURL, state, cookie := env.socialStart(t, "google")
 	if v, err := idp.hostClient().Get(authURL.String()); err == nil {
 		_ = v.Body.Close()
@@ -394,7 +284,7 @@ func TestUnactivatedSupersededByVerifiedSignIn(t *testing.T) {
 
 	// The directory removes it; the next verified sign-in takes the
 	// address, and the squatter's registry account is erased.
-	delete(dir.accounts, 5151)
+	dir.set(squatterSub, false)
 	_, owner := signInAs(t, env, idp, "google")
 	if owner == squatter {
 		t.Fatal("signed in as the squatter's account")

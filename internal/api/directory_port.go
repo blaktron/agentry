@@ -11,17 +11,16 @@ import (
 )
 
 // Directory is the registry's port to the directory service that holds
-// people's sign-in accounts: everything the registry asks of it or tells
-// it. The registry keeps the rules (when an account is erased, which
-// devices a caller may remove, who is platform staff); the directory
-// carries them out on its own records.
+// people's sign-in accounts. The registry asks it to erase an account and
+// whether an account is still there (EraseAccount, AccountGone); the other
+// methods are the directory's own surface, which an extension that is the
+// directory implements and serves. The registry keeps the rules (when an
+// account is erased, who is platform staff); the directory carries them out
+// on its own records.
 //
-// A server has at most one. The built-in one speaks authentik's API with
-// auth.idpAdminURL and auth.idpAdminToken; an extension supplies its own
-// with SetDirectory (pkg/extension.ManagesDirectory), which replaces it.
-// With none, erasure stops at the registry ("not-configured"), the
-// settings page lists no authenticators and the staff mirror does
-// nothing.
+// A server has at most one, which an extension supplies with SetDirectory
+// (pkg/extension.ManagesDirectory). With none, erasure stops at the
+// registry ("not-configured").
 //
 // Every method reads the account a DirectoryLink names and never another:
 // a link the directory cannot tell apart from somebody else's account is
@@ -54,48 +53,25 @@ type Directory interface {
 	SetMember(ctx context.Context, groupID string, accountPK int, member bool) error
 }
 
-var _ Directory = (*authentikEraser)(nil)
-
-// SetDirectory makes d the server's directory in place of the built-in
-// one, for every caller: erasure (by d's own DirectoryErasure where it has
-// one, else by the core's attempt and retries through d), the settings page
-// and the superseded-account check. Under auth.externalOnly the settings
-// page then reports the account as the directory's (managed), with or
-// without a directory sign-in provider to link to.
-//
-// An extension's directory takes the directory's whole path, so the core
-// stops doing the directory's own work beside it: it reads none of the
-// directory's claims at sign-in (its account id, the sign-up promo code,
-// the remember-this-browser request), mints no remembered browser for the
-// directory and answers its /internal/directory/ checks 404, and keeps no
-// staff mirror group. The extension does each of these itself, through
-// the sign-in hook, its callback mount and staff.changed. A nil d leaves
-// the server with no directory.
-func (s *Server) SetDirectory(d Directory) {
-	s.dirSet = d != nil
-	s.dirGroups = nil
-	if d == nil {
-		s.dirEraser = nil
-		return
-	}
-	s.dirEraser = d
-}
-
-// builtInDirectory reports whether the directory path is the core's own:
-// no extension supplied the directory. The directory's claims, its trust
-// and verification checks and the staff mirror are read only then.
-func (s *Server) builtInDirectory() bool { return !s.dirSet }
+// SetDirectory makes d the server's directory, for every caller: erasure
+// (by d's own DirectoryErasure where it has one, else by one attempt
+// through d) and the superseded-account check. Under auth.externalOnly the
+// account is the directory's. The directory's own sign-in work (its claims,
+// remembered browsers, its callbacks, a staff mirror) is d's, through the
+// sign-in hook, its callback mount and staff.changed. A nil d leaves the
+// server with no directory.
+func (s *Server) SetDirectory(d Directory) { s.directory = d }
 
 // DirectoryErasure is the optional interface for a directory that carries
 // out the directory half of an account's erasure itself, retries included.
 // The core then calls EraseErased once, after the registry's erasure has
-// committed, in place of its own attempt and retry job, and reports the
+// committed, in place of its own attempt, and reports the
 // outcome it returns on the erasure's response (X-Agentry-Directory-Erasure),
 // which the site reads to tell the person where their sign-in account
 // stands. EraseErased is called in the request, so it makes at most one
 // quick attempt and queues the rest. The directory records each attempt
 // as a user.directory_erase audit event and raises one that never
-// completes, as the core does for its own. An outcome outside the set below
+// completes. An outcome outside the set below
 // is reported as failed and raised.
 type DirectoryErasure interface {
 	EraseErased(r *http.Request, a ErasedAccount) string
@@ -131,19 +107,14 @@ func knownDirectoryErasure(outcome string) bool {
 }
 
 // eraseInDirectory is the directory half of a person's erasure, after the
-// registry's has committed: handed to an extension's directory that carries
-// it out itself, else the core's first attempt with its retry queued on
-// failure. It returns what the response reports.
+// registry's has committed: handed to a directory that carries it out
+// itself, else the core's one attempt. It returns what the response
+// reports.
 func (s *Server) eraseInDirectory(r *http.Request, base audit.Event, userID uuid.UUID, email string) string {
-	ctx := r.Context()
-	if de, ok := s.dirEraser.(DirectoryErasure); ok && s.dirSet {
+	if de, ok := s.directory.(DirectoryErasure); ok {
 		return s.delegateErasure(r, de, userID, email)
 	}
-	dir, derr := s.eraseDirectoryAccount(ctx, base, userID, email, 0)
-	if derr != nil {
-		dir = s.scheduleDirectoryErasure(ctx, userID, email, derr)
-	}
-	return dir
+	return s.eraseDirectoryAccount(r.Context(), base, userID, email)
 }
 
 // delegateErasure hands the directory half to the directory. An outcome the
@@ -158,18 +129,17 @@ func (s *Server) delegateErasure(r *http.Request, de DirectoryErasure, userID uu
 	}
 	defer func() {
 		if rec := recover(); rec != nil {
-			s.alertDirectoryErasure(ctx, userID, 0, fmt.Errorf("the directory's erasure panicked: %v", rec))
+			s.alertDirectoryErasure(ctx, userID, fmt.Errorf("the directory's erasure panicked: %v", rec))
 			outcome = dirEraseFailed
 		}
 	}()
 	outcome = de.EraseErased(r, ErasedAccount{UserID: userID, Identities: subjects, Email: email})
 	if !knownDirectoryErasure(outcome) {
-		s.alertDirectoryErasure(ctx, userID, 0, fmt.Errorf("the directory's erasure answered %q, which is no outcome the response defines", outcome))
+		s.alertDirectoryErasure(ctx, userID, fmt.Errorf("the directory's erasure answered %q, which is no outcome the response defines", outcome))
 		return dirEraseFailed
 	}
 	return outcome
 }
 
-// HasDirectory reports whether the server has a directory, built in or an
-// extension's.
-func (s *Server) HasDirectory() bool { return s.dirEraser != nil }
+// HasDirectory reports whether the server has a directory.
+func (s *Server) HasDirectory() bool { return s.directory != nil }

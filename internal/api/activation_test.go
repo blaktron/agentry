@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,65 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/blaktron/agentry/internal/auth"
-	"github.com/blaktron/agentry/internal/config"
 )
-
-func TestDirectoryEmailVerificationGate(t *testing.T) {
-	for _, tc := range []struct {
-		name, secret, auth, body, forwarded string
-		status                              int
-	}{
-		{"off", "", "", `{}`, "", http.StatusNotFound},
-		{"wrong bearer", "directory-secret", "Bearer wrong", `{}`, "", http.StatusUnauthorized},
-		{"through a proxy", "directory-secret", "Bearer directory-secret", `{}`, "for=203.0.113.9", http.StatusNotFound},
-		{"invalid JSON", "directory-secret", "Bearer directory-secret", `invalid`, "", http.StatusBadRequest},
-		{"empty subject", "directory-secret", "Bearer directory-secret", `{"email":"a@example.test"}`, "", http.StatusBadRequest},
-		{"empty address", "directory-secret", "Bearer directory-secret", `{"sub":"a"}`, "", http.StatusBadRequest},
-		{"oversized", "directory-secret", "Bearer directory-secret", `{"sub":"` + strings.Repeat("a", 4096) + `","email":"a@example.test"}`, "", http.StatusBadRequest},
-		{"no store", "directory-secret", "Bearer directory-secret", `{"sub":"a","email":"a@example.test"}`, "", http.StatusServiceUnavailable},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := config.Default()
-			cfg.Auth.IdPTrustCheckToken = tc.secret
-			s := &Server{cfg: cfg}
-			w := httptest.NewRecorder()
-			r := httptest.NewRequest(http.MethodPost, "/internal/directory/email-verification", strings.NewReader(tc.body))
-			r.Header.Set("Authorization", tc.auth)
-			r.Header.Set("Forwarded", tc.forwarded)
-			s.directoryEmailVerification(w, r)
-			if w.Code != tc.status {
-				t.Fatalf("status %d, want %d", w.Code, tc.status)
-			}
-		})
-	}
-}
-
-// TestDirectoryAccountGone: only an account
-// the directory no longer holds is gone, and doubt is not gone.
-func TestDirectoryAccountGone(t *testing.T) {
-	a, _ := fakeAuthentik(t)
-	ctx := context.Background()
-	for _, tc := range []struct {
-		name string
-		link DirectoryLink
-		gone bool
-	}{
-		{"the id answers 404", DirectoryLink{AccountID: 999, UID: "uid-x"}, true},
-		{"the id holds another account now", DirectoryLink{AccountID: 12, UID: "uid-old"}, true},
-		{"the id holds it", DirectoryLink{AccountID: 7, UID: "uid-alice"}, false},
-		{"an inactive account is still there", DirectoryLink{AccountID: 20, UID: "uid-gone"}, false},
-		{"no id, the uid at the address", DirectoryLink{UID: "uid-bob", Email: "bob@example.test"}, false},
-		{"no id, the uid nowhere at the address", DirectoryLink{UID: "uid-old", Email: "bob@example.test"}, true},
-		{"nothing to go on", DirectoryLink{Email: "bob@example.test"}, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			gone, err := a.AccountGone(ctx, tc.link)
-			if err != nil || gone != tc.gone {
-				t.Fatalf("gone %v (%v), want %v", gone, err, tc.gone)
-			}
-		})
-	}
-}
 
 // TestUnactivated: an unconfirmed real address is unactivated; a confirmed
 // one, or a placeholder no link can reach, is not.
@@ -107,7 +48,7 @@ var unactivatedOperations = map[string]bool{
 	"sendEmailVerification": true, "updateCurrentUser": true,
 	"deleteCurrentUser": true, "clearCurrentUserData": true,
 	"revokeOtherUserSessions": true, "revokeUserSession": true, "clearTrustedDevices": true,
-	"deleteUserDirectoryDevice": true, "revokeToken": true, "removeSshKey": true, "createDesktopGrant": true,
+	"revokeToken": true, "removeSshKey": true, "createDesktopGrant": true,
 	"acceptInvitation": true, "samlAcs": true, "samlSloPost": true,
 }
 

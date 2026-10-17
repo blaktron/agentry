@@ -34,7 +34,7 @@ which entry points run; a listed support file is not another executed test.
 | Compiled process and generated client | `scripts/acceptance/smoke.sh`; `TestSmoke` also runs in the Go suite |
 | Actual headless UI flows | `scripts/acceptance/ui.sh`; page rendering is tested independently |
 | Published envelopes verified by independent code | `scripts/dev/attest-interop.sh` |
-| Directory integration and cleanup | `scripts/acceptance/directory-*.sh`, their Python drivers and cleanup self-tests; consult CI for the required jobs |
+| Edge request budgets | `scripts/acceptance/edge.sh` against the real `deploy/compose/edge/nginx.conf` |
 | End-to-end acceptance | `scripts/acceptance/auth.sh`, `git.sh`, `publish-install.sh`, `cli.sh`, `gate.sh`, `enterprise-sso.sh`; filtered Go evidence must name actual passing tests through `gotest` |
 | Helm and deployment configuration | `scripts/acceptance/helm.sh` and CI's render/config checks |
 | Release behavior | `scripts/release/selftest.sh` and signing/release workflows |

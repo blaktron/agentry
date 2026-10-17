@@ -32,7 +32,6 @@ var unactivatedWrites = []string{
 	"DELETE /user/sessions",
 	"DELETE /user/sessions/{}",
 	"DELETE /user/trusted-devices",
-	"DELETE /user/directory/devices/{}/{}",
 	"DELETE /user/tokens/{}",
 	"DELETE /user/ssh-keys/{}",
 	"POST /user/tokens/desktop-grant",

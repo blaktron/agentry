@@ -51,13 +51,9 @@ func (s *Server) fireAccountErased(ctx context.Context, userID uuid.UUID, email 
 }
 
 // staffChanged is the registry's staff hook (registry.Service.SetStaffChanged).
-// It runs inside the transaction that changed a flag, so it only queues:
-// the directory's mirror, where one is kept, and the staff.changed event,
-// where an extension listens.
+// It runs inside the transaction that changed a flag, so it only queues
+// the staff.changed event, where an extension listens.
 func (s *Server) staffChanged() {
-	if s.cfg.Auth.IdPStaffMirrorGroup != "" && s.dirGroups != nil {
-		s.nudgeStaffMirror()
-	}
 	if len(s.eventHooks) == 0 || s.jobs == nil {
 		return
 	}

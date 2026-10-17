@@ -13,6 +13,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/testidp"
 )
@@ -61,47 +63,48 @@ func TestOIDCProviderSignsPeopleIn(t *testing.T) {
 	}
 }
 
-// TestExistingDirectoryIdentitiesKeepTheirAccounts: every account the
-// directory linked as "authentik:<sub>" under the social.authentik
-// keys is the same account when the same provider is configured as the
-// generic one with the id "authentik": no account is re-created or
-// re-linked.
+// TestExistingDirectoryIdentitiesKeepTheirAccounts: every account linked as
+// "authentik:<sub>" is the same account at every later sign-in through the
+// generic provider configured with the id "authentik", on this server or a
+// new one: no account is re-created or re-linked.
 func TestExistingDirectoryIdentitiesKeepTheirAccounts(t *testing.T) {
 	idp := testidp.New(t)
-	legacy := newTestEnvCfg(t, func(c *config.Config) {
-		c.Social.Authentik = config.SocialProvider{ClientID: idp.ClientID, ClientSecret: idp.ClientSecret, Issuer: idp.URL}
-	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.Client()) })
-	generic := newTestEnvCfg(t, func(c *config.Config) {
-		c.Auth.OIDC = config.OIDCProvider{ID: config.DirectoryProviderID, Issuer: idp.URL, ClientID: idp.ClientID, ClientSecret: idp.ClientSecret}
-	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.Client()) })
+	cfg := func(c *config.Config) {
+		c.Auth.OIDC = config.OIDCProvider{ID: config.AuthentikProviderID, Issuer: idp.URL, ClientID: idp.ClientID, ClientSecret: idp.ClientSecret}
+	}
+	first := newTestEnvCfg(t, cfg, func(s *api.Server) { s.SetOIDCHTTPClient(idp.Client()) })
+	second := newTestEnvCfg(t, cfg, func(s *api.Server) { s.SetOIDCHTTPClient(idp.Client()) })
 
 	ctx := context.Background()
 	count := func(sql string, args ...any) int {
 		t.Helper()
 		var n int
-		if err := legacy.st.Pool().QueryRow(ctx, sql, args...).Scan(&n); err != nil {
+		if err := first.st.Pool().QueryRow(ctx, sql, args...).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
 	}
 	people := []testidp.Person{
-		{Subject: "keep-a-" + legacy.sfx, Email: "keep-a-" + legacy.sfx + "@example.test", EmailVerified: true, Username: "keep-a-" + legacy.sfx},
-		{Subject: "keep-b-" + legacy.sfx, Email: "keep-b-" + legacy.sfx + "@example.test", EmailVerified: true},
+		{Subject: "keep-a-" + first.sfx, Email: "keep-a-" + first.sfx + "@example.test", EmailVerified: true, Username: "keep-a-" + first.sfx},
+		{Subject: "keep-b-" + first.sfx, Email: "keep-b-" + first.sfx + "@example.test", EmailVerified: true},
 		// An unverified address: the account is linked by its subject alone.
-		{Subject: "keep-c-" + legacy.sfx, Email: "keep-c-" + legacy.sfx + "@example.test"},
+		{Subject: "keep-c-" + first.sfx, Email: "keep-c-" + first.sfx + "@example.test"},
 	}
 	accounts := map[string]string{}
 	for _, p := range people {
-		in := legacy.signInOIDC(t, idp, "authentik", p)
+		in := first.signInOIDC(t, idp, "authentik", p)
 		if in.status != http.StatusOK {
-			t.Fatalf("legacy sign-in %s: %d %s", p.Subject, in.status, in.body)
+			t.Fatalf("first sign-in %s: %d %s", p.Subject, in.status, in.body)
 		}
 		accounts[p.Subject] = in.userID
+		if n := count(`SELECT count(*) FROM identities WHERE user_id = $1::uuid AND subject = $2`, in.userID, "authentik:"+p.Subject); n != 1 {
+			t.Fatalf("%s is not linked as authentik:<sub>", p.Subject)
+		}
 	}
 	users := count(`SELECT count(*) FROM users`)
 	idents := count(`SELECT count(*) FROM identities`)
 
-	for _, env := range []*testEnv{generic, legacy} {
+	for _, env := range []*testEnv{second, first} {
 		for _, p := range people {
 			in := env.signInOIDC(t, idp, "authentik", p)
 			if in.status != http.StatusOK || in.userID != accounts[p.Subject] {
@@ -129,6 +132,8 @@ type fakeDirectory struct {
 	erased  []api.DirectoryLink
 	removed []string
 	fail    error
+	// lookup, when set, is how every lookup ends, with nothing erased.
+	lookup api.DirectoryLookup
 }
 
 func (d *fakeDirectory) owns(l api.DirectoryLink) bool {
@@ -140,6 +145,9 @@ func (d *fakeDirectory) owns(l api.DirectoryLink) bool {
 func (d *fakeDirectory) EraseAccount(_ context.Context, l api.DirectoryLink) (bool, api.DirectoryLookup, error) {
 	if d.fail != nil {
 		return false, "", d.fail
+	}
+	if d.lookup != "" {
+		return false, d.lookup, nil
 	}
 	if !d.owns(l) {
 		return false, api.DirectoryLookupByAddress, nil
@@ -197,12 +205,10 @@ func (d *fakeDirectory) SetMember(context.Context, string, int, bool) error { re
 var _ api.Directory = (*fakeDirectory)(nil)
 
 // TestADirectoryFromAnExtensionServesTheRegistry: with a directory set by
-// an extension, the settings page lists the account's authenticators and
-// removes the caller's own, erasure deletes the directory account and says
-// so, and the extensions hear the erasure with the identities and the
-// address it held.
+// an extension, erasure deletes the directory account and says so, and the
+// extensions hear the erasure with the identities and the address it held.
 func TestADirectoryFromAnExtensionServesTheRegistry(t *testing.T) {
-	dir := &fakeDirectory{devices: []api.DirectoryDevice{{ID: "7", Kind: "totp", Name: "Phone"}}}
+	dir := &fakeDirectory{}
 	var mu sync.Mutex
 	var heard []api.Event
 	env, idp := newOIDCTestEnv(t, func(c *config.Config) { c.Auth.ExternalOnly = true },
@@ -219,25 +225,6 @@ func TestADirectoryFromAnExtensionServesTheRegistry(t *testing.T) {
 	dir.mu.Lock()
 	dir.email = c.name + "@example.test"
 	dir.mu.Unlock()
-
-	var got struct {
-		Managed           bool    `json:"managed"`
-		PasswordChangeUrl *string `json:"passwordChangeUrl"`
-		HasPassword       *bool   `json:"hasPassword"`
-		Devices           []struct {
-			ID   string `json:"id"`
-			Kind string `json:"kind"`
-		} `json:"devices"`
-	}
-	env.doJSON(c, http.MethodGet, "/api/v1/user/directory", nil, &got, http.StatusOK)
-	if !got.Managed || got.PasswordChangeUrl != nil || len(got.Devices) != 1 || got.Devices[0].ID != "7" || got.HasPassword == nil || !*got.HasPassword {
-		t.Fatalf("settings through the extension's directory: %+v", got)
-	}
-	env.doJSON(c, http.MethodDelete, "/api/v1/user/directory/devices/totp/8", nil, nil, http.StatusNotFound)
-	env.doJSON(c, http.MethodDelete, "/api/v1/user/directory/devices/totp/7", nil, nil, http.StatusNoContent)
-	if len(dir.removed) != 1 || dir.removed[0] != "totp/7" {
-		t.Fatalf("removed %v, want totp/7 alone", dir.removed)
-	}
 
 	if got := eraseAndReadOutcome(t, env, c); got != "deleted" {
 		t.Fatalf("X-Agentry-Directory-Erasure = %q, want deleted", got)
@@ -263,21 +250,42 @@ func TestADirectoryFromAnExtensionServesTheRegistry(t *testing.T) {
 }
 
 // TestWithNoDirectoryTheRegistryStandsAlone: a deployment whose credentials
-// live at an OpenID provider that is no directory, with no extension's
-// directory, says the account is not the directory's and erases at the
-// registry alone.
+// live at an OpenID provider, with no extension's directory, erases at the
+// registry alone, and says and audits so.
 func TestWithNoDirectoryTheRegistryStandsAlone(t *testing.T) {
 	env, idp := newOIDCTestEnv(t, func(c *config.Config) { c.Auth.ExternalOnly = true })
 	c := env.mintAccount(t, idp, "no-dir")
-	var got map[string]any
-	env.doJSON(c, http.MethodGet, "/api/v1/user/directory", nil, &got, http.StatusOK)
-	if got["managed"] != false || len(got) != 1 {
-		t.Fatalf("GET /user/directory = %v, want managed:false alone", got)
-	}
-	env.doJSON(c, http.MethodDelete, "/api/v1/user/directory/devices/totp/1", nil, nil, http.StatusNotFound)
+	uid := env.selfID(c)
 	if got := eraseAndReadOutcome(t, env, c); got != "not-configured" {
 		t.Fatalf("X-Agentry-Directory-Erasure = %q, want not-configured", got)
 	}
+	if outcome, _ := lastDirectoryErasure(t, env, uid); outcome != "not-configured" {
+		t.Fatalf("the erasure's audit row says %q, want not-configured", outcome)
+	}
+}
+
+// eraseAndReadOutcome erases the caller's account and returns the
+// directory outcome the 204 carries.
+func eraseAndReadOutcome(t *testing.T, env *testEnv, c caller) string {
+	t.Helper()
+	res := env.do(c, http.MethodPost, "/api/v1/user/delete", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("erase: %d, want 204", res.StatusCode)
+	}
+	return res.Header.Get("X-Agentry-Directory-Erasure")
+}
+
+// lastDirectoryErasure is the outcome and lookup of the person's latest
+// user.directory_erase audit row.
+func lastDirectoryErasure(t *testing.T, env *testEnv, userID string) (outcome, lookup string) {
+	t.Helper()
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT detail->>'directoryErasure', coalesce(detail->>'directoryLookup', '') FROM audit_events
+		 WHERE action = 'user.directory_erase' AND target_id = $1::uuid ORDER BY occurred_at DESC LIMIT 1`, userID).Scan(&outcome, &lookup); err != nil {
+		t.Fatal(err)
+	}
+	return outcome, lookup
 }
 
 // TestSignInHookHearsTheClaimsAndMayRememberTheBrowser: an extension hears
@@ -454,46 +462,68 @@ func TestAccountErasedCarriesTheIdentitiesWithoutAnyDirectory(t *testing.T) {
 	}
 }
 
-// TestAnExtensionsDirectoryErasesAsTheBuiltInOneDoes: the same erasure
-// through the built-in directory and through an extension's reports the
-// same outcome, on the response and in the audit row, and each deletes the
-// one account at the address.
-func TestAnExtensionsDirectoryErasesAsTheBuiltInOneDoes(t *testing.T) {
-	type result struct{ header, outcome, lookup string }
-	erase := func(t *testing.T, builtIn bool) result {
-		var at string
-		url, deleted, _ := erasureDirectory(t, func(a string) []map[string]any {
-			return []map[string]any{{"pk": 41, "uid": "uid-41", "email": a, "type": "internal", "is_superuser": false}}
-		}, &at)
-		dir := &fakeDirectory{}
-		env, idp := newOIDCTestEnv(t, func(c *config.Config) {
-			if builtIn {
-				c.Auth.IdPAdminURL = url
-				c.Auth.IdPAdminToken = "idp-admin-token"
+// TestADirectoryWithoutItsOwnErasureIsAskedOnce: a directory that does not
+// erase on its own is asked once through the port, and the outcome is
+// reported on the response and in the audit row; a failure is reported as
+// failed, never retried by the core.
+func TestADirectoryWithoutItsOwnErasureIsAskedOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		fail            error
+		lookup          api.DirectoryLookup
+		header, outcome string
+	}{
+		{"deleted", nil, "", "deleted", "deleted"},
+		{"the directory fails", errors.New("the directory is down"), "", "failed", "failed"},
+		{"an account it cannot tell apart", nil, api.DirectoryLookupAddressShared, "unresolved", "unresolved"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := &fakeDirectory{fail: tc.fail, lookup: tc.lookup}
+			mx, err := metrics.New(context.Background(), metrics.Config{ServiceName: "agentryd", Role: "all", Env: "dev"})
+			if err != nil {
+				t.Fatal(err)
 			}
-		}, func(s *api.Server) {
-			if !builtIn {
+			t.Cleanup(func() { _ = mx.Shutdown(context.Background()) })
+			env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) {
 				s.SetDirectory(dir)
+				s.SetMetrics(mx)
+			})
+			c := env.mintAccount(t, idp, "asked-once")
+			dir.mu.Lock()
+			dir.email = c.name + "@example.test"
+			dir.mu.Unlock()
+			uid := env.selfID(c)
+			if got := eraseAndReadOutcome(t, env, c); got != tc.header {
+				t.Fatalf("X-Agentry-Directory-Erasure = %q, want %q", got, tc.header)
+			}
+			outcome, lookup := lastDirectoryErasure(t, env, uid)
+			wantLookup := map[bool]string{true: "address", false: string(tc.lookup)}[tc.lookup == ""]
+			if outcome != tc.outcome || (tc.fail == nil && lookup != wantLookup) {
+				t.Fatalf("the audit row says %q by %q, want %q", outcome, lookup, tc.outcome)
+			}
+			dir.mu.Lock()
+			erased := len(dir.erased)
+			dir.mu.Unlock()
+			if want := map[bool]int{true: 1, false: 0}[tc.fail == nil && tc.lookup == ""]; erased != want {
+				t.Fatalf("the directory erased %d accounts, want %d", erased, want)
+			}
+			// A directory half that did not happen is raised: the fail-open
+			// count the operator's alarm reads.
+			b, err := mx.Gather(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if raised := strings.Contains(string(b), metrics.FailOpenDirectoryErasure); raised != (tc.outcome != "deleted") {
+				t.Fatalf("fail-open %s raised = %v for %s", metrics.FailOpenDirectoryErasure, raised, tc.outcome)
+			}
+			var jobs int
+			if err := env.st.Pool().QueryRow(context.Background(),
+				`SELECT count(*) FROM river_job WHERE args->>'userId' = $1 AND kind LIKE '%directory%'`, uid).Scan(&jobs); err != nil {
+				t.Fatal(err)
+			}
+			if jobs != 0 {
+				t.Fatalf("the core queued %d directory jobs", jobs)
 			}
 		})
-		c := env.mintAccount(t, idp, "same-erasure")
-		at = c.name + "@example.test"
-		dir.mu.Lock()
-		dir.email = at
-		dir.mu.Unlock()
-		uid := env.selfID(c)
-		r := result{header: eraseAndReadOutcome(t, env, c)}
-		r.outcome, r.lookup = lastDirectoryErasure(t, env, uid)
-		if builtIn && len(*deleted) != 1 {
-			t.Fatalf("the built-in directory deleted %v", *deleted)
-		}
-		if !builtIn && len(dir.erased) != 1 {
-			t.Fatalf("the extension's directory erased %v", dir.erased)
-		}
-		return r
-	}
-	builtIn, ext := erase(t, true), erase(t, false)
-	if builtIn != ext || builtIn.header != "deleted" || builtIn.lookup != "address" {
-		t.Fatalf("built-in %+v, extension %+v: want both deleted by address", builtIn, ext)
 	}
 }

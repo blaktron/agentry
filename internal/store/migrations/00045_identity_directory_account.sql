@@ -1,12 +1,7 @@
 -- +goose Up
--- The directory's own id for the account a directory sign-in is linked to:
--- the directory's `agentry` scope sends it in the ID token, and the registry
--- records it on the `authentik:` identity at every sign-in. Every directory
--- lookup the registry makes (the settings page's sign-in facts and
--- authenticators, account erasure) reads the account by it instead of
--- narrowing by an address the directory does not keep unique. NULL for an
--- identity that has not signed in since, and for every identity of another
--- provider.
+-- The directory's own id for the account a sign-in is linked to, where one
+-- was recorded: a directory reads the account by it instead of narrowing by
+-- an address it does not keep unique. NULL where none was recorded.
 ALTER TABLE identities ADD COLUMN directory_account_id bigint
   CHECK (directory_account_id IS NULL OR directory_account_id > 0);
 

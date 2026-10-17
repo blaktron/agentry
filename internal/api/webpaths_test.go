@@ -19,7 +19,6 @@ func TestWebPaths(t *testing.T) {
 		dashURL       string
 		home          string
 		verify        string
-		account       string
 		authorize     string
 		report        string
 	}{
@@ -32,7 +31,6 @@ func TestWebPaths(t *testing.T) {
 			dashURL:   "https://reg.example/ui/account",
 			home:      "https://reg.example/ui/",
 			verify:    "https://reg.example/ui/verify-email?token=t%2F1",
-			account:   "https://reg.example/ui/account/directory",
 			authorize: "https://reg.example/ui/authorize",
 			report:    "https://reg.example/api/v1/agents/acme/widget/versions/1.0.0+build/report",
 		},
@@ -52,7 +50,6 @@ func TestWebPaths(t *testing.T) {
 			dashURL:   "https://site.example/dashboard",
 			home:      "https://site.example/",
 			verify:    "https://site.example/auth/verify-email?token=t%2F1",
-			account:   "https://site.example/settings/authentication",
 			authorize: "https://reg.example/ui/authorize",
 			report:    "https://site.example/acme/widget/versions/1.0.0+build",
 		},
@@ -72,7 +69,6 @@ func TestWebPaths(t *testing.T) {
 			check("dashboardURL", p.dashboardURL(), c.dashURL)
 			check("homeURL", p.homeURL(), c.home)
 			check("verifyEmailURL", p.verifyEmailURL("t/1"), c.verify)
-			check("accountSettingsURL", p.accountSettingsURL(), c.account)
 			check("authorizeURL", p.authorizeURL(), c.authorize)
 			check("reportCardURL", p.reportCardURL("acme/widget", "1.0.0+build"), c.report)
 		})

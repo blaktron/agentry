@@ -11,7 +11,6 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
-	"github.com/blaktron/agentry/internal/auth/social"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -138,19 +137,6 @@ func setTrustedDeviceCookieAt(w http.ResponseWriter, token string, ttl time.Dura
 	})
 }
 
-// The directory path. A deployment with a directory signs in through it,
-// and the directory shows the "Remember this device for 30 days" box on its
-// own code page and passes the choice on as the ID-token claim
-// agentry_remember_device. The registry mints the same record as above on the
-// OIDC callback, and the directory asks the registry about it (the check
-// route, directory_trust.go) before asking for the code.
-
-// directoryFlowExecutorPath is where authentik's flow executor serves, and so
-// the one path the directory-path cookie is scoped to. The directory's policy
-// reads the cookie on the executor's requests; nothing of the registry's
-// ever needs it, so no request to the registry carries it.
-const directoryFlowExecutorPath = "/api/v3/flows/executor/"
-
 // rememberWindow is how recent a sign-in must be for its token to earn a
 // remembered browser: the seconds between answering the code and arriving
 // at the callback, with room for clock skew. A token an IdP mints silently
@@ -158,48 +144,6 @@ const directoryFlowExecutorPath = "/api/v3/flows/executor/"
 // without this every sign-in against one IdP session would mint a fresh
 // lifetime, and trust would renew itself.
 const rememberWindow = 5 * time.Minute
-
-// directoryRemembers reports whether this directory sign-in earned a
-// remembered browser. Everything must hold:
-//
-//   - the directory path is on (auth.idpTrustCheckToken is set) and is the
-//     core's own: an extension's directory remembers browsers itself, from
-//     the sign-in hook;
-//   - the token is the directory's own: another provider asserting the claim
-//     is not the directory the registry takes it from;
-//   - the claim asks, and `amr` names a second factor;
-//   - `auth_time` is within rememberWindow of now. The claim and
-//     `amr` both come from the directory session's login event, so a later
-//     authorize that a live directory session answers silently repeats them
-//     with no code asked. Only auth_time, which is that event's time, says
-//     the sign-in is old. Without this, each registry sign-in against one
-//     directory session would mint a fresh 30 days and trust would renew
-//     itself, which the absolute lifetime forbids.
-//
-// A sign-in the directory let skip the factor carries no `mfa`, so a skip
-// can never mint either: trust stays absolute.
-func (s *Server) directoryRemembers(provider string, id *social.Identity) bool {
-	if s.cfg.Auth.IdPTrustCheckToken == "" || provider != social.ProviderAuthentik || !s.builtInDirectory() {
-		return false
-	}
-	if !directoryRememberDevice(id.Claims) || !id.MFAAsserted() || id.AuthTime.IsZero() {
-		return false
-	}
-	age := time.Since(id.AuthTime)
-	return age <= rememberWindow && age >= -rememberWindow
-}
-
-// setDirectoryTrustedDeviceCookie sets the directory path's cookie, scoped
-// to the directory's flow executor and, when the directory is a subdomain of
-// the registry, set for the domain that covers both (config's
-// DirectoryTrustCookieDomain; "" is host-only). That domain also covers the
-// registry's other subdomains, so on a deployment whose dev or staging host
-// sits under the production registry's name, the token reaches their flow
-// executors too; that is accepted where every such host is the operator's
-// own.
-func setDirectoryTrustedDeviceCookie(w http.ResponseWriter, token string, ttl time.Duration, secure bool, domain string) {
-	setTrustedDeviceCookieAt(w, token, ttl, secure, directoryFlowExecutorPath, domain)
-}
 
 // The account's control over remembered browsers: one
 // count and one clear, on the session routes' rule. A remembered browser is a
@@ -273,22 +217,9 @@ func (s *Server) ClearTrustedDevices(w http.ResponseWriter, r *http.Request) {
 }
 
 // clearTrustedDeviceCookies expires this browser's remembered-browser cookie
-// wherever this server may have set it, with the attributes it was set with:
-// the native path's, host-wide, and the directory path's,
-// scoped to the directory's flow executor. A clear that named another path
-// or domain would be a different cookie to the browser.
+// with the attributes it was set with: host-wide on the server's own host.
+// A browser a directory remembers on its own sign-in carries the directory's
+// cookie, which the revoked records leave inert.
 func (s *Server) clearTrustedDeviceCookies(w http.ResponseWriter) {
-	secure := s.cfg.Auth.CookieSecure
-	setTrustedDeviceCookieAt(w, "", -time.Second, secure, "/", "")
-	if s.cfg.Auth.IdPTrustCheckToken == "" {
-		return
-	}
-	domain, err := s.cfg.DirectoryTrustCookieDomain()
-	if err != nil {
-		// Validated at start-up, so this cannot happen in a running server;
-		// the records are revoked either way, and the cookie is only inert.
-		s.log.Warn("clear remembered browsers: not clearing the directory-path cookie", "err", err)
-		return
-	}
-	setTrustedDeviceCookieAt(w, "", -time.Second, secure, directoryFlowExecutorPath, domain)
+	setTrustedDeviceCookieAt(w, "", -time.Second, s.cfg.Auth.CookieSecure, "/", "")
 }

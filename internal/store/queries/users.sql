@@ -33,40 +33,18 @@ UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() 
 UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1;
 
 -- name: ListUserDirectoryLinks :many
--- The directory accounts the account is linked to by directory sign-ins,
--- oldest first: each one's subject, "authentik:" stripped (the uid the
--- directory reports for it), and the directory's own id for it, learnt at
--- sign-in (0 until the identity signs in under a directory that sends it).
--- The settings page reads the oldest, so its answer does not move while the
--- account keeps one; erasure takes them all.
-SELECT substring(i.subject from 11)::text AS directory_subject,
+-- The directory accounts the account is linked to by sign-ins through the
+-- sign-in provider whose id is provider_id, oldest first: each one's subject
+-- with "<provider_id>:" stripped (the uid the directory reports for it), and
+-- the directory's own id for it where one was recorded (0 otherwise).
+-- Erasure takes them all.
+SELECT substring(i.subject from char_length(sqlc.arg(provider_id)::text) + 2)::text AS directory_subject,
        COALESCE(i.directory_account_id, 0)::bigint AS directory_account_id
 FROM identities i
-WHERE i.user_id = $1 AND i.provider_kind = 'social'
-  AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
+WHERE i.user_id = sqlc.arg(user_id) AND i.provider_kind = 'social'
+  AND i.sso_connection_id IS NULL
+  AND i.subject LIKE sqlc.arg(provider_id)::text || ':%'
 ORDER BY i.created_at, i.id;
-
--- name: SetSocialIdentityDirectoryAccount :exec
--- Records the directory's id for the account a directory identity signs in
--- as, from the directory's signed ID token; moves it when the directory
--- reports another.
-UPDATE identities SET directory_account_id = $2
-WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1
-  AND directory_account_id IS DISTINCT FROM $2;
-
--- name: ListStaffMirrorAccounts :many
--- Every account that is platform staff and active, with its verified address
--- (lower-cased; the directory's match is case-blind) and each directory
--- subject it is linked to by a directory sign-in, "authentik:" stripped
--- (empty when it has none): the set the directory's staff mirror group is
--- kept equal to.
-SELECT u.id, lower(u.email)::text AS email,
-       coalesce(substring(i.subject from 11), '')::text AS directory_subject
-FROM users u
-LEFT JOIN identities i ON i.user_id = u.id AND i.provider_kind = 'social'
-     AND i.sso_connection_id IS NULL AND i.subject LIKE 'authentik:%'
-WHERE u.platform_staff AND u.state = 'active' AND u.email_verified_at IS NOT NULL
-ORDER BY 2, 3;
 
 -- name: ListPlatformStaff :many
 -- Every account that is platform staff and active, with its handle and its

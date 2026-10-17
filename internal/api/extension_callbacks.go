@@ -35,8 +35,7 @@ const extensionCallbackPrefix = "/internal/x/"
 // request came through a proxy.
 const GateExtensionSecret MountGate = "extension-secret"
 
-// minCallbackSecret is the shortest secret a callback mount accepts, the
-// length auth.idpTrustCheckToken is held to.
+// minCallbackSecret is the shortest secret a callback mount accepts.
 const minCallbackSecret = 32
 
 // ExtensionCallbacks is an extension's callback mount.

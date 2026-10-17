@@ -26,7 +26,6 @@ front of this same server; a registry does not need one, and
 ```bash
 git clone https://github.com/blaktron/agentry.git
 cd agentry/deploy/compose
-printf 'AUTHENTIK_SECRET_KEY=%s\n' "$(openssl rand -base64 48)" >> .env
 printf 'AGENTRY_AUTH_SEALING_KEY=%s\n' "$(openssl rand -base64 32)" >> .env   # encrypts TOTP seeds and webhook secrets at rest
 printf 'AGENTRY_KNOWLEDGE_SEALING_KEY=%s\n' "$(openssl rand -base64 32)" >> .env   # optional: wraps knowledge packs' keys; a key of its own
 mkdir -p keys && openssl ecparam -name prime256v1 -genkey -noout -out keys/signing-key.pem
@@ -34,13 +33,12 @@ chmod 600 keys/signing-key.pem && sudo chown 65532 keys/signing-key.pem  # the s
 printf 'AGENTRY_SIGNING_KEY_FILE=/etc/agentry/signing-key.pem\nAGENTRY_SIGNING_KEY_DIR=%s/keys\n' "$PWD" >> .env
 mkdir -p edge/certs                # edge.crt + edge.key for the edge (self-signed is fine locally),
                                    # or point AGENTRY_EDGE_CERT_DIR at yours
-docker compose up -d               # postgres, minio, mailpit, authentik
+docker compose up -d               # postgres, minio, mailpit
 docker compose --profile server up -d
 ```
 
-The stack refuses to start without `AUTHENTIK_SECRET_KEY`, the sealing
-key and the signing key in `.env`, and the edge needs its certificate
-pair; all are one-time. **Back up the two keys**: the sealing key is the
+The stack refuses to start without the sealing key and the signing key in
+`.env`, and the edge needs its certificate pair; all are one-time. **Back up the two keys**: the sealing key is the
 only way to read the TOTP seeds and webhook secrets it encrypted, and every
 attestation the signing key signed verifies only against it. Dev mode
 (`AGENTRY_DEV_MODE=true` in `.env`) does without both — a constant from the
@@ -64,10 +62,11 @@ Email verification is required before publishing. In a dev setup the token is
 logged at debug level and mailpit (http://localhost:8025) catches the message;
 in production configure real SMTP.
 
-If you enable the directory service below with
-`AGENTRY_AUTH_EXTERNAL_ONLY=true`, this curl answers `410 Gone` by design —
-accounts are then created on the sign-up page the directory service serves,
-not through the native register endpoint.
+If you hand sign-in to your OpenID provider with
+`AGENTRY_AUTH_EXTERNAL_ONLY=true` ("Sign in with your OpenID provider",
+below), this curl answers `410 Gone` by design: accounts are then created at
+the first sign-in through the provider, not through the native register
+endpoint.
 
 ## Quickstart from source
 
@@ -192,19 +191,12 @@ reference:
 - `secret.existingSecret` (or the chart's own Secret) — each role gets only
   the keys it uses. The git role, which takes untrusted
   pushes, gets `AGENTRY_DATABASE_URL` and `AGENTRY_AUTH_SEALING_KEY`. The
-  worker also gets `AGENTRY_KNOWLEDGE_SEALING_KEY`, `AGENTRY_SMTP_PASS` and
-  `AGENTRY_IDP_ADMIN_TOKEN`: it sends the digest and billing mail, retries
-  account erasure and scans knowledge packs. The api gets every key,
-  including the directory's `AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET` and
-  `AGENTRY_IDP_TRUST_CHECK_TOKEN`. With `config.auth.idpStaffMirrorGroup`
-  set, every role gets the admin token too, because config validation
-  requires it wherever the mirror is named. A key passed through the
-  chart-wide `extraEnv` still reaches every role, so pass a secret through
-  the role's own `extraEnv` instead. Settings that validation ties to a key
-  must go the same way: `AGENTRY_IDP_STAFF_MIRROR_GROUP` in the chart-wide
-  `extraEnv` stops the git role from starting (set
-  `config.auth.idpStaffMirrorGroup` instead), and so does
-  `AGENTRY_IDP_TRUST_CHECK_TOKEN` anywhere but `api.extraEnv`.
+  worker also gets `AGENTRY_KNOWLEDGE_SEALING_KEY` and `AGENTRY_SMTP_PASS`:
+  it sends the digest and billing mail and scans knowledge packs. The api
+  gets every key, including the sign-in provider's
+  `AGENTRY_AUTH_OIDC_CLIENT_SECRET`. A key passed through the chart-wide
+  `extraEnv` still reaches every role, so pass a secret through the role's
+  own `extraEnv` instead.
 - `databaseCA.existingSecret` and `databaseCA.key` — the database's CA,
   projected to `/etc/agentry-db-ca/ca.crt`, so the DSN can carry
   `sslmode=verify-full&sslrootcert=/etc/agentry-db-ca/ca.crt`.
@@ -300,7 +292,7 @@ ui:
   mode: full            # full | authorize | off — the server's own browser surface
 brand:
   name: ""              # emails, authenticator apps and /ui/ call it this (default: the public host)
-  logoURL: ""           # optional; the /ui/ pages and the directory show it
+  logoURL: ""           # optional; the /ui/ pages show it
   cssURL: ""            # optional stylesheet the /ui/ pages load
   supportEmail: ""      # shown where people need help
   securityEmail: ""     # shown on the security notes
@@ -539,13 +531,29 @@ verified; otherwise it is refused with `409 sso-link-required`, never linked.
 evidence for `auth.requireIdpMFA`.
 
 `auth.oidc.id` names the provider in its routes and in every account it
-links, and is `oidc` unless you set it. The `social.authentik` keys configure
-the same provider as the deployment's own directory service, under the id
-`authentik`: moving them to `auth.oidc` keeps every account linked only with
-`id: authentik`. The registry refuses
-to start with both `auth.oidc` and `social.authentik` set, and never change
-the id of a provider whose accounts exist: each would be signed in as
-somebody new.
+links, and is `oidc` unless you set it. The one other id it takes is
+`authentik`, for a deployment whose accounts are already linked as
+`authentik:<sub>`. Never change the id of a provider whose accounts exist:
+each would be signed in as somebody new.
+
+Sign-in from a browser runs in the API's browser mode: the server's
+`/ui/login` (or a site's own sign-in page) forwards to
+`/api/v1/auth/oidc/<id>/start?next=<path>` and the callback answers a 303
+back to that path (or to the sign-in page with `?error=…`) once the session
+cookie is set; without `next` the same callback returns the JSON result the
+CLI and tests consume. `auth.idpLogoutURL` (`AGENTRY_IDP_LOGOUT_URL`, the
+chart's `config.idp.logoutUrl`) is where sign-out sends the browser once the
+session is revoked, normally the provider's end-session endpoint, so the next
+sign-in asks again.
+
+With `AGENTRY_AUTH_EXTERNAL_ONLY=true` the native register, password login
+and TOTP endpoints answer 410 Gone (email verification stays open: it is the
+activation link's target), and the sign-in page offers the provider only.
+Turning the flag off (the default) restores the native flows.
+
+The Helm chart carries the same knobs: `config.auth.externalOnly`,
+`config.auth.oidc`, `secret.oidcClientSecret` (or the `existingSecret` key
+`AGENTRY_AUTH_OIDC_CLIENT_SECRET`) and `config.idp.logoutUrl`.
 
 ### Social login
 
@@ -672,9 +680,8 @@ Env: `AGENTRY_SMTP_HOST`, `AGENTRY_SMTP_PORT`, `AGENTRY_SMTP_USER`,
 
 In dev the compose stack's **mailpit** (http://localhost:8025) is the default
 target and catches everything, so nothing leaves the machine. The compose
-file reads all of these (and the directory service's `AUTHENTIK_EMAIL_*`
-set) from `.env`, so switching both senders to a real provider is an `.env`
-edit plus recreating the `server` and `authentik-*` containers. With
+file reads all of these from `.env`, so switching the sender to a real
+provider is an `.env` edit plus recreating the `server` container. With
 Postmark, the server token is both SMTP username and password, and until
 the account is approved it only delivers to recipients on the sending
 domain. With no SMTP configured at all, the server logs that a verification
@@ -839,8 +846,8 @@ served these ports, treat the compose defaults (`agentry` / `agentry`,
 
 The Postgres and MinIO passwords come from `.env` — `AGENTRY_PG_PASSWORD`
 and `AGENTRY_MINIO_SECRET`, defaulting to the development values — and
-reach every place they are used (the services, agentryd's DSN, authentik's
-database, the bucket bootstrap). Set both before the first `up` on any
+reach every place they are used (the services, agentryd's DSN, the bucket
+bootstrap). Set both before the first `up` on any
 stack that is not a throwaway; on a stack that already has data, change
 the stored password first (`ALTER USER agentry PASSWORD …` in Postgres,
 `mc admin user` for MinIO) and then `.env`, since the volumes keep what
@@ -858,13 +865,9 @@ thirty seconds under load, and a slow write is better than a refused one.
 
 agentryd applies per-IP limits to the API; the edge adds `limit_req`
 zones (keyed on the resolved visitor address) for the routes that do work for
-strangers: the sign-in page `/ui/login`, `/api/v1/auth/*`, and the directory's
-flow pages and executor API (`/if/flow` and `/api/v3/flows/executor`, 30/min,
-burst 30). Those directory paths share the authentication budget by visitor
-address; direct executor requests cannot skip it by never opening the page.
-The directory's OIDC token exchange and other API routes stay outside that
-visitor budget, because service-to-service traffic shares a server address.
-The git endpoints have their own budget (120/min, burst 60). Over the limit is `429` with
+strangers: the sign-in page `/ui/login` and `/api/v1/auth/*` (30/min, burst
+30), which share one budget by visitor address. The other API routes stay
+outside it. The git endpoints have their own budget (120/min, burst 60). Over the limit is `429` with
 `Retry-After: 6`: six seconds is one interval of the slowest headless zone
 (10/min), a conservative pause before another request. Git also permits eight
 active requests per visitor; a concurrency refusal is `429` with
@@ -980,7 +983,7 @@ alone (`AGENTRY_INGRESS_SUBNET`, default `172.16.255.240/28`, outside
 docker's own address pool; if you change it, change
 `set_real_ip_from` in `deploy/compose/edge/nginx.conf` to match), and it
 writes the resolved address as the single `X-Forwarded-For` entry agentryd
-and authentik read. Keep `AGENTRY_TRUSTED_PROXIES=1`; a direct connection
+reads. Keep `AGENTRY_TRUSTED_PROXIES=1`; a direct connection
 to the edge — from the internet or from another container on the host —
 cannot forge the header, because the edge replaces it rather than
 appending to it and ignores `CF-Connecting-IP` from any other peer.
@@ -996,69 +999,9 @@ TLS to the edge verifies. Running
 `docker run … --token …` by hand holds the terminal because cloudflared runs
 in the foreground; the service is the way to run it.
 
-### The directory service
+### Platform staff
 
-The compose stack ships Authentik as the account directory: passwords,
-MFA, recovery, and sign-up live there, and the registry consumes it as
-the `authentik` OIDC provider while keeping sessions, PATs, and RBAC
-native. The edge serves it as `auth.<your-domain>` and, when no such DNS
-name exists (dev), on `https://<host>:8443`.
-
-First boot, in `deploy/compose/.env`:
-
-```bash
-AUTHENTIK_SECRET_KEY=…        # openssl rand -base64 48
-AUTHENTIK_BOOTSTRAP_PASSWORD=…   # akadmin's password
-AUTHENTIK_BOOTSTRAP_TOKEN=…      # API token for the bootstrap script
-AUTHENTIK_BOOTSTRAP_EMAIL=akadmin@example.com
-```
-
-then bring the stack up and run `scripts/dev/authentik-bootstrap.sh`
-(idempotent — creates the OAuth2 provider `agentry-registry` and the
-`agentry` application), and point the registry at the result. The provider
-allows one grant, the authorization code (with PKCE), the only one the
-registry uses. authentik 2026.8 made a provider's grants explicit: one the
-API creates gets none and refuses every sign-in with `invalid_request`,
-and one migrated from an older release gets all of them, including
-`password` and `client_credentials`, which hand out tokens to anyone
-holding the client secret, with no browser flow. Re-running the script
-after such an upgrade narrows the provider.
-
-```bash
-AGENTRY_AUTH_EXTERNAL_ONLY=true
-AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID=agentry-registry
-AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET=…   # what you gave the bootstrap script
-AGENTRY_SOCIAL_AUTHENTIK_ISSUER=https://<host>:8443/application/o/agentry/
-AGENTRY_IDP_LOGOUT_URL=https://<host>:8443/flows/-/cancel/?next=/application/o/agentry/end-session/
-```
-
-The sign-out URL is the provider's `end-session/` endpoint wrapped in
-authentik's cancel view. authentik answers an empty page, and does not sign
-out, when the directory session still holds a flow plan (a flow the person
-walked away from, for one); the cancel view drops that plan first and then
-continues to `next`. The bootstrap script prints the value.
-
-The bootstrap script attaches the `openid`, `profile`, and `email`
-scope mappings to the provider — without them authentik issues an ID
-token carrying `sub` alone and the registry can only create a placeholder
-account (`<handle>@authentik.social.local`) instead of linking to the
-existing one. For `email` it attaches the account-flows blueprint's
-`agentry-verified-email` mapping instead of authentik's managed one,
-which hard-codes `email_verified: false` (2026.8); the registry's
-auto-link rule only links an IdP identity to an existing account
-when *both* sides' addresses are verified. The blueprint's mapping
-reports confirmation: `false` for a
-self-enrolled account until the registry's activation link confirms it
-(marked by `agentry_email_verified: false`), `true` once it has,
-and `true` for an account without the attribute — one created by an
-operator, provisioned from an upstream directory, or enrolled before the
-activation link existed. While the false marker is set, the mapping reads the
-registry for the linked subject and same address; activation never changes that marker.
-An earlier version of the script made its own mapping that
-asserted `true` for everyone; re-running the script moves the provider
-onto the blueprint's (the old mapping is left unused).
-
-**Platform staff is membership of the staff organization.** Name the
+Name the
 deployment's staff organization and its domain with `AGENTRY_STAFF_ORG` and
 `AGENTRY_STAFF_DOMAIN` (the chart's `config.auth.staffOrg` and
 `config.auth.staffDomain`); set both or neither. An account is platform
@@ -1099,11 +1042,11 @@ The rule rests on facts nobody sets about themselves:
 
 - **Membership** is granted by the organization's admins.
 - **The organization itself** can be founded only by platform staff.
-- **A stored address** changes only at erasure (SCIM refuses a change, and
-  the directory denies self-service changes).
+- **A stored address** changes only at erasure (SCIM refuses a change). Use
+  a sign-in provider that does not let people change their own address.
 
 An address counts as verified when the registry's mailed link was
-followed, the directory or a social provider asserted it at sign-in, an
+followed, the sign-in provider or a social provider asserted it at sign-in, an
 invitation at an organization's verified domain was accepted, or an
 organization's SCIM provisioned it. So an address at the staff domain in
 the registry is not proof by itself that its holder controls the mailbox.
@@ -1112,58 +1055,6 @@ It is the membership an admin grants that makes staff.
 A registry-side service account needs an address at the domain and a
 membership like anyone else. With neither key set, nothing syncs and
 existing flags stay as they are.
-
-**The directory's mirror of platform staff.** An application
-that signs in through the directory and should admit staff alone, such as
-an OpenSearch Dashboards, can read only what the directory's
-tokens carry. Set `AGENTRY_IDP_STAFF_MIRROR_GROUP` (the chart's
-`config.auth.idpStaffMirrorGroup`), say `agentry-staff`, and the registry
-keeps that directory group equal to its platform staff: for every active
-account with the flag and a verified address, the directory account it
-signed in with, and nobody else. That account is the registry's own record
-of the person's directory sign-in (its subject, which is authentik's `uid`
-under the `hashed_user_id` subject mode the bootstrap script sets). It is
-found by address and added only when its `uid` matches and the account is
-active, so a second directory account at a staff member's address gains
-nothing. It needs the
-staff organization and `AGENTRY_IDP_ADMIN_URL`/`AGENTRY_IDP_ADMIN_TOKEN`,
-which it writes the group through; the token needs rights over groups as
-well as users. The group is a mirror, never a source of staff: anyone
-added to it in the directory by hand is removed at its next run, and each
-change the registry makes is audited as `directory.staff_mirror`. It runs a
-few seconds after any staff change, every ten minutes, and soon after the
-server starts. So a removal reaches the directory within seconds when the
-directory answers. While runs fail (the directory unreachable from the
-registry, or an admin token without rights over groups), a removed member
-keeps the group until a run succeeds: every failure is logged, and runs are
-retried every ten minutes. A directory
-session or an application session already open is not ended by it. Where
-an extension supplies the directory (see the extension section below), the
-registry keeps no mirror of its own and the extension keeps the group. Staff
-who have not yet signed in to the registry through the directory are added
-after their first such sign-in.
-
-`scripts/dev/authentik-bootstrap.sh` makes the Dashboards side when
-`AGENTRY_DASHBOARDS_URL` is set (idempotent, like the rest):
-
-- the mirror group (`AGENTRY_IDP_STAFF_MIRROR_GROUP`, default
-  `agentry-staff`; give the server the same value);
-- a `roles` scope mapping whose claim is `["agentry-reader"]` for a member
-  of that group and `[]` for anyone else;
-- the OAuth2 provider `agentry-dashboards` (authorization code only,
-  redirect `<url>/auth/openid/login`) and its application, which admits
-  members of the group alone. The application uses an expression policy
-  rather than a group binding, because authentik deletes a group's
-  bindings along with the group, and the expression then fails closed. Its
-  policy engine mode is `all`, so a policy bound later cannot admit anyone
-  by itself;
-- the client id and secret, written to `AGENTRY_DASHBOARDS_SECRET_FILE`
-  (default `~/.config/agentry/dashboards-oidc.env`, mode 0600, outside any
-  checkout) and never printed. A re-run keeps the secret in an existing
-  file.
-
-It prints the provider's OpenID configuration URL, which Dashboards'
-OpenID settings take.
 
 **Moving a deployment onto the rule, in this order.**
 
@@ -1177,339 +1068,46 @@ The first start recomputes every flagged account: anyone not yet a member
 loses staff, audited. If nobody is a member, nobody is staff, and only an
 operator writing to the database can seed the first one again.
 
-The directory group (`AGENTRY_IDP_STAFF_GROUP`) and the domain-alone rule
-(`AGENTRY_IDP_STAFF_DOMAIN`) grant nothing, and the server logs a warning at
-start-up while either is set.
+### Account erasure
 
-**Provisioning org members from Authentik (SCIM).** The registry's SCIM
-endpoint is per organisation and authenticated by a token an org admin
-mints (`POST /api/v1/orgs/{org}/scim/tokens`, or the org admin console).
-In Authentik create a *SCIM provider* with URL
-`https://<host>/scim/v2` and that token, attach it to the `agentry`
-application as a backchannel provider, and scope it to the group(s) that
-should become org members. Users then arrive as **pending** members and
-Authentik groups as teams: the IdP says who exists, an admin says who is a
-member, so each provisioned person waits for an approval (which is also
-where their seat is taken) and holds nothing of the organisation until
-then. Declining removes them. The registry keeps ownership of roles. A single Authentik
-instance can provision several orgs — one SCIM provider per org, each
-with its own token. This is deliberately not a blueprint: the token is
-org-scoped and minted by the org, not by the platform.
-
-The Helm chart carries the same knobs (`config.auth.externalOnly`,
-`config.social.authentik`, `config.auth.staffOrg`,
-`config.auth.staffDomain`,
-`config.idp.logoutUrl`, `secret.authentikClientSecret`,
-`secret.idpAdminToken`); the hosted service's Terraform (kept with the
-site) carries them as `idp_client_id`, `idp_issuer` and `idp_logout_url`,
-with the client secret in Secrets Manager.
-
-**Account flows.** `deploy/compose/authentik/blueprints/agentry-account-flows.yaml`
-is mounted into authentik as a blueprint and applied automatically on
-boot. It defines both self-service routes and the controls on them, and
-adds the "Sign up" and "Forgot username or password?" links to the login
-page. The flow page's template (below, with the remembered browser) also puts
-"Need an account? Sign up." on the password page that follows the first one,
-and both sign-up links carry what was typed into the sign-in's field: a name
-opens the form with the username filled in, an address with the email
-(`/if/flow/agentry-enrollment/?username=…` or `?email=…`, the sign-in's own
-query kept). The link shows whether or not the name exists, so
-it reveals nothing about which accounts do. A filled-in value is validated
-like anything typed:
-
-- **Sign-up** — CAPTCHA, then a form (username, an optional display name,
-  email, password), then the deployment's Terms of Service where it has
-  them (below), then the account written **active but unactivated**
-  (`agentry_email_verified: false`), then authenticator setup and
-  sign-in, with no mail to wait for. That is **registry
-  activation**, on where `AGENTRY_DIRECTORY_REGISTRY_ACTIVATION` is set to
-  any non-empty value in the directory's environment (server and worker;
-  the compose file defaults it to `true`). Set it only where the
-  registry's provider uses the blueprint's `agentry-verified-email`
-  mapping (the bootstrap script attaches it): a mapping that asserts every
-  address verified would vouch for unconfirmed accounts. Unset, sign-up
-  writes the account inactive and the directory's own confirmation mail
-  activates it. With it on, the registry mails the
-  activation link at that first sign-in, through its own SMTP settings
-  (`AGENTRY_SMTP_*`): with none set the link is only logged, and nobody
-  can activate. Until the link is followed the account is **read-only**
-  in the registry: it reads everything, and refuses every write except
-  signing in and out, asking for another link (`POST
-  /api/v1/user/email-verification`, at most one every five minutes), its
-  display name and cookie choice, deleting or clearing itself, and
-  removing its own sessions, authenticators, tokens and SSH keys
-  (`403 account-unactivated`; git pushes are refused too). A link works
-  once, for 24 hours, and an earlier one keeps working after a new one is
-  sent. Following it (`POST /api/v1/auth/verify-email`, which stays open
-  under `externalOnly`) confirms the address in the registry. The directory
-  reads that confirmation through `POST /internal/directory/email-verification`
-  on `AGENTRY_REGISTRY_INTERNAL_URL`, with `AGENTRY_IDP_TRUST_CHECK_TOKEN`
-  (the remembered-browser check's URL and secret). It requires the exact linked
-  authentik subject and the same address, and withholds verification on a
-  refused, unreachable or malformed answer. The false attribute stays
-  unchanged; activation needs no directory write or `change_user`.
-  The read-only rule applies where the directory owns credentials
-  (`AGENTRY_AUTH_EXTERNAL_ONLY=true`); a native deployment keeps its
-  narrower gates on an unverified address (no publishing, QuickAgents or
-  organizations). The username
-  becomes the registry handle at the first sign-in, so the form refuses
-  one that is not a valid handle (letters, digits and hyphens, at most
-  39) or that the registry reserves for its own paths and names
-  Any case is accepted and the username is written in
-  lower case, so `ChrisY` becomes `chrisy`; a blank display name keeps
-  the case it was typed in, and a username that differs from an existing
-  one only by case is refused as taken. Users created in the directory some other way are not
-  checked; the registry maps such a username to a valid handle and
-  records the one asked for.
-- **The promo code field** — an optional field at the end of
-  the sign-up form, shown only when `AGENTRY_DIRECTORY_PROMO_FIELD` is set
-  to any non-empty value in the directory's environment (the worker reads
-  it when it applies the blueprint; compose passes it through, empty by
-  default). Leave it unset unless an extension redeems codes: the core
-  attaches no meaning to one. Off, the field is a hidden input, and
-  authentik resets a hidden field to its empty default whatever is posted.
-  On, the form holds a code to 4–32 letters, digits and hyphens, writes it
-  to the account's `agentry_promo_code` attribute (so it survives a
-  confirmation link opened on another device), and fills it in from the
-  page's `?promo=` when the flow is opened as
-  `/if/flow/agentry-enrollment/?promo=CODE`. The `agentry` scope sends it
-  as the `agentry_promo_code` claim, and the registry passes it to its
-  extensions as `promoCode` in `user.registered`, upper-cased, only on the
-  sign-in that creates the account and only from the directory's token.
-- **The display name** is optional. Left blank, the account
-  is written with its username as its name, which is what the registry
-  shows until the person changes it.
-- **The Terms of Service step** — shown only when
-  `AGENTRY_DIRECTORY_TERMS_FILE` names a file in the directory server's
-  environment (compose passes it through, empty by default). The file is an
-  HTML fragment with your terms, its root element carrying
-  `data-terms-version="<version>"`, for example
-  `<article data-terms-version="2026-09-30">…</article>`; mount it into the
-  server and the worker, readable by the directory's user (authentik runs
-  as uid 1000), and point the variable at it. The step follows the
-  form: the terms in a scrolling box, and an "I have read and agree" box
-  that the page enables, with Continue, only once the box has been scrolled
-  to the end. The directory refuses a submission without the agreement
-  whatever the page does, and refuses every sign-up while the file cannot be
-  read or has no version. The account records `agentry_terms_accepted`,
-  `agentry_terms_version` (from the text it was shown) and
-  `agentry_terms_accepted_at` in its attributes. A static flow script supplies
-  the scroll courtesy, with no inline event handler. The policy below allows
-  that script by its hash. Without JavaScript the scroll courtesy is absent;
-  agreement and a readable, versioned file are still required by the server.
-  Accounts
-  that existed before you set the variable are not asked.
-- **Password recovery** — identification, an emailed reset link, then a
-  new password. The identification stage runs with `pretend_user_exists`,
-  so an unknown address gets the same answer a real one does and the form
-  cannot be used to discover who has an account. Recovery deliberately
-  does **not** activate an inactive account: an operator-deactivated user
-  must not be able to reactivate themselves by requesting a reset. (With
-  registry activation on, a self-enrolled account is active from the start,
-  and confirming its address is the registry's link, not this flow.)
-- **The two mails** (the sign-up confirmation and the reset link) are the
-  core's own templates in `deploy/compose/authentik/templates/agentry/`
-  (with registry activation on, the confirmation is sent only by an
-  enrolment that still binds the stage, such as the site's untrusted social providers;
-  self-enrolment's activation mail is the registry's),
-  mounted read-only at `/templates`, not authentik's stock ones: they say
-  Agentry and use the core's palette. Their header shows the Agentry mark
-  inline: the HTML names `cid:logo`, and authentik attaches
-  the PNG at its logo path, `/web/dist/assets/icons/icon_left_brand.png`,
-  where the compose file mounts the core's
-  `deploy/compose/authentik/brand/mail-logo.png` in the server and the
-  worker. Nothing is a remote image. A deployment that sets
-  `AGENTRY_BRAND_NAME` to another name mounts its own copies of those
-  files, and its own logo, at the same paths (the subjects already follow
-  the variable). An authentik upgrade that moves its logo path would
-  attach authentik's own logo instead, so check the path in the new
-  image's `authentik/stages/email/utils.py` when bumping it. The logo is a
-  single-file bind mount, so a changed PNG reaches authentik only when the
-  server and the worker are recreated (`up -d --force-recreate --no-deps
-  authentik-server authentik-worker`).
-  `scripts/acceptance/directory-email.sh` renders the mails in the pinned
-  image and checks that the attached logo is the core's.
-  A stack created by an earlier compose file keeps an unused named volume,
-  `authentik-templates` (`docker volume rm <project>_authentik-templates`
-  removes it), and a template an operator had put in it is no longer
-  mounted.
-- **No authentik device cookie.** authentik's User Login stage writes its
-  own "known device" cookie, `authentik_device`, for 30 days by default. It
-  is a signed token the directory keeps no record of: it cannot be listed,
-  cannot be revoked per browser, and survives a password change, a logout
-  and a rotation of `AUTHENTIK_SECRET_KEY`, because its key derives from the
-  installation's identifier and the stage. The blueprint sets
-  `remember_device: seconds=0` on every login stage, the sign-in's,
-  sign-up's and recovery's and authentik's two source stages, so the
-  directory never writes it. A cookie written before the blueprint set this
-  is not revoked, since
-  nothing can revoke it: it expires within its 30 days, and nothing in
-  Agentry reads it. authentik also uses the cookie to refresh a person's
-  other open sign-in tabs once they have signed in, which no longer
-  happens. The one browser credential is the remembered browser
-  below, which the registry records and a person can clear. Leave each
-  stage's `remember_me_offset` at zero as well: above zero authentik shows
-  its own "Remember me" box beside the remembered-browser one, and a login
-  made with that box's answer never writes the device cookie at all, so
-  the two settings interact without saying so.
-  `TestDirectoryIssuesNoDeviceCookie` fails if a login stage is added to
-  the blueprint, or changed in it, without both; a stage made in the admin
-  interface or by an example blueprint is not covered.
-- Both forms enforce the **same password policy** (12 characters minimum
-  plus a zxcvbn strength score), because a password chosen during a reset
-  should be held to the same bar as one chosen at sign-up. There is no
-  Have I Been Pwned lookup: it needs egress from the container, and an
-  outage there would block sign-ups and resets outright.
-
-To run invite-only instead, delete the blueprint file (or disable its
-instance in authentik's admin UI); operator-created accounts are
-unaffected. Both mails go through authentik's own SMTP settings
-(`AUTHENTIK_EMAIL__*` — mailpit on the dev stack), which are separate from
-the registry's `AGENTRY_SMTP_*`.
-
-**Abuse controls on those flows.** Two layers, and the defaults are not
-production values:
-
-- A **CAPTCHA** stage guards sign-up. It ships configured for Cloudflare
-  Turnstile using Cloudflare's published *test* keys, which always pass —
-  that keeps a dev stack working out of the box and stops nobody. Set
-  `AUTHENTIK_CAPTCHA_SITE_KEY` and `AUTHENTIK_CAPTCHA_SECRET_KEY` (compose
-  passes both through) before opening sign-up to the internet;
-  `AUTHENTIK_CAPTCHA_JS_URL` / `_API_URL` point it at a different provider.
-- A **per-IP rate limit** caps how much work one address can cause: once
-  it has caused 10 accounts created plus mails sent in the last hour, a new
-  sign-up or reset from it is refused at the start, counted from authentik's
-  own event log. An account is the `user_write` event a flow records with
-  `created` and the client's address; a mail is the budget's own
-  `custom_agentry_account_mail` event, which the sign-up's and the reset's
-  mail stages record with the client's address for a flow's first mail and
-  for each resend from the "check your mail" page. The budget records its own because authentik 2026.8 sends mail
-  from its worker, and that `email_sent` event carries no address
-  Ordinary use costs 2
-  (an account and its confirmation mail) to sign up and 1 to reset a
-  password, so the budget is generous for a shared office address while
-  ending bulk account creation. Where registry activation is on, the
-  confirmation mail is the registry's, held to its own per-account limit,
-  and a sign-up costs 1 here. The check is made when a flow
-  starts, so a flow already open finishes, and its resends are held by the
-  mail stage's own per-account limit rather than refused by this one. Recovery also keeps authentik's
-  own per-user control on the email stage (`recovery_max_attempts`,
-  `recovery_cache_timeout`); the per-IP limit is what stops one source
-  mailing a thousand different victims. `scripts/acceptance/directory-budget.sh`
-  proves both counts and the refusal on a throwaway directory.
-  The policy **fails open** on an unexpected error (a broken counter must
-  not become an outage on the only route into the product); the directory's
-  server logs it as `agentry: rate limit check failed, allowing`, and a mail
-  that could not be counted as `agentry: counting the account flow's mail
-  failed`, which are the things to alert on — the registry's `FailOpenEvents` metric covers
-  the registry's own fail-open paths, not this one.
-
-`AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR` sets that budget (default 10):
-compose passes it through, and the blueprint formats it into the policy at
-apply time. Enrollment ends by offering authenticator (TOTP) setup: the
-person sets one up there, or skips it and adds one later from their
-settings. An account without an authenticator signs in with
-its password alone and has no second factor for the public-publish gate
-until it adds one. Recovery verifies the authenticator before the password
-may change, and a user who has none is sent through the same setup stage. Lost-authenticator recovery is an
-operator action in the Authentik admin UI; email alone never resets both
-factors.
-
-Sign-in from a browser runs in the API's browser mode: the server's
-`/ui/login` (or a site's own sign-in page) forwards to
-`/api/v1/auth/oidc/authentik/start?next=<path>` and the callback answers
-a 303 back to that path (or to the sign-in page with `?error=…`) once the
-session cookie is set; without `next` the same callback returns the JSON
-result the CLI and tests consume.
-
-With `AGENTRY_AUTH_EXTERNAL_ONLY=true` the native register, password
-login and TOTP endpoints answer 410 Gone (email-verify stays open: it is
-the activation link's target), and the web
-login page offers the directory service only. Turning the flag off (the
-default) restores the native flows — nothing was removed.
-
-**How a person signs in, on the settings page.** With the same admin URL
-and token, `GET /api/v1/user/directory` also reports the social provider
-the caller's directory account was first connected to
-(`firstSocialProvider`) and whether it has a password (`hasPassword`), so a
-front end can say "Signed up with Google" and offer "Add a password". For
-these two fields the account is the one carrying the caller's linked
-directory `uid`, never one found by address alone, since authentik does not
-keep addresses unique. Only OAuth sources count as a social provider. The
-provider comes from authentik's OAuth source connections, so the token
-needs to view them (`authentik_sources_oauth.view_useroauthsourceconnection`)
-as well as users.
-The password answer is the account's `agentry_has_password` attribute,
-which the account-flows blueprint's `agentry-record-has-password` policy
-keeps: set when a flow writes a password, refreshed from the account at
-every sign-in (an account a social provider created holds an empty
-password, which counts as none). authentik's API has no such field, and
-its property-mapping test endpoint, the other way to ask, needs the right
-to create property mappings for any token that is not a superuser. Until an
-account has signed in or written a password under this blueprint the field
-is absent, and so is either field when the directory does not answer.
-
-**Account erasure spans both systems.** `POST /user/delete` pseudonymizes the
-registry account; the sign-in account — email, display name,
-password hash — lives in authentik. Set `AGENTRY_IDP_ADMIN_URL` (the API
-origin as the server reaches it: `http://authentik-server:9000` on the
-compose stack) and `AGENTRY_IDP_ADMIN_TOKEN` (an authentik API token with
-rights to view and delete users, and to view
-OAuth source connections for the settings page below; the bootstrap token
-works) and erasure also deletes the
-person's directory account — never a superuser or a service account. The
-account is the one the directory's own id names, which the registry records
-on the person's directory identity at every sign-in (the `agentry` scope's
-`agentry_directory_id` claim, below), confirmed by its `uid`; for an
-identity that has not signed in since, the account at the registry's
-address carrying that `uid`; and for an account that never signed in
-through the directory, the account at its address only when exactly one
-account holds it (authentik does not keep addresses unique). The settings
-page's authenticators and sign-in facts read the account by the same rule.
-Each attempt is recorded as its own `user.directory_erase` audit
-event (`deleted`, `not-found`, `unresolved`, `failed`, `not-configured`, or
-`abandoned`, with `directoryLookup` naming the rule each linked account was
-found by),
-beside the `user.delete` event, and the erasure's 204 carries the
-outcome in the `X-Agentry-Directory-Erasure` header. A failure does not undo the registry
-erasure: the request answers `pending` and a `gdpr.directory_erase` job on
-the worker retries with backoff (fourteen attempts, about four and a half
-hours; the queued address is sealed with the sealing key) until the
-directory deletes the account or finds none. When the
-retries run out the last attempt is audited `abandoned` and the server
-logs `failopen.directory_erasure` at ERROR and counts
+`POST /user/delete` pseudonymizes the registry account. Where an extension
+of the server is the deployment's directory (the service that holds people's
+sign-in accounts), the erasure also reaches it: the directory deletes the
+person's sign-in account, retrying on its own where it can. The outcome is
+recorded as a `user.directory_erase` audit event and carried on the
+erasure's 204 in the `X-Agentry-Directory-Erasure` header: `deleted`,
+`not-found`, `unresolved` (an account the directory could not tell apart as
+this person's, left in place), `pending` (the directory retries it),
+`failed` or `not-configured` (no directory: erasure is registry-only). An
+erasure whose directory half does not complete is logged as
+`failopen.directory_erasure` at ERROR and counted as
 `FailOpenEvents{path="directory_erasure"}`: alert on either, then delete the
-sign-in account in authentik by hand. An erasure that could not tell the
-person's directory account apart (two accounts at the address, a recorded
-account id that now names an account with another `uid`, or a superuser) is
-`unresolved`: nothing is deleted, it is not retried, and it is raised the
-same way. Leave the variables unset and the privacy
-policy's promise that deletion removes personal information is one you
-have to keep manually.
+sign-in account by hand. With no directory, deleting the sign-in account at
+your provider is yours to do, and the privacy policy's promise that deletion
+removes personal information has to say so.
 
-**Two-factor authentication and public publishing.** Outside dev mode the
-registry normally refuses to publish to a public namespace until the
-account has a TOTP factor. With the directory service in
+### Two-factor authentication and public publishing
+
+Outside dev mode the registry normally refuses to publish to a public
+namespace until the account has a TOTP factor. With the sign-in provider in
 charge no account can enrol one — the native TOTP endpoints are the ones
 answering 410 — so that gate is **off under `externalOnly`** and the
-requirement is yours to enforce in authentik. Bind an MFA policy (or an
-authenticator-validation stage) to the authentication flow or to the
-`agentry` application, which also covers sign-in itself rather than only
-publishing.
+requirement is yours to enforce at the provider, which also covers sign-in
+itself rather than only publishing.
 
 To turn trust back into evidence, set `AGENTRY_AUTH_REQUIRE_IDP_MFA=true`.
 The gate is then on under `externalOnly`, and it is satisfied when the
 account has signed in at least once with an ID token whose `amr` claim (RFC 8176)
 names a second factor — `mfa`, `otp`, `hwk`, `webauthn` and the like, never
-`pwd` alone — which the registry records as `users.idp_mfa_at`. authentik
-emits `amr` on its ID tokens; check one sign-in's token (or the
-`user.login` audit row) before enabling the flag, because with it on and a
-directory that never asserts a factor, nobody can publish publicly.
+`pwd` alone — which the registry records as `users.idp_mfa_at`. Check one
+sign-in's token (or the `user.login` audit row) before enabling the flag,
+because with it on and a provider that never asserts a factor, nobody can
+publish publicly.
 
 With the same flag set, an organization's own SSO connection is evidence
 too. When a member signs in through the organization's SAML or OIDC
 connection and the validated assertion says a second factor was used, the
-registry stamps `users.idp_mfa_at` as it does for the directory. Only with
+registry stamps `users.idp_mfa_at` as it does for the sign-in provider. Only with
 the flag, because the organization's IdP belongs to that organization's
 admins, not to you, and the stamp is account-wide and kept. With the flag
 off, the gate asks for native TOTP, and an organization's claim never stands
@@ -1537,7 +1135,9 @@ Whichever way it is set, `GET /api/v1/meta` reports the gate's state as
 `features.publicPublish2FA`, which is what a front end reads before it
 tells anyone that publishing needs a second factor.
 
-**Remembering a browser that answered the second factor.** On a deployment
+### Remembered browsers
+
+On a deployment
 running the native flows — `AGENTRY_AUTH_EXTERNAL_ONLY` unset or false —
 `POST /api/v1/auth/login` accepts a `rememberDevice` flag. Set on a sign-in
 that actually answered a TOTP code, it issues an `agentry_trusted_device`
@@ -1580,213 +1180,6 @@ control that ends them.
 On the native path nothing mints one unless asked: the flag is per-request and
 no shipped client sends it, so a record is only created by an API call that
 asks for one.
-
-**Remembering a browser on the directory's sign-in.** Under
-`AGENTRY_AUTH_EXTERNAL_ONLY=true` the native login answers 410 and the
-directory asks for the second factor, so the choice and the skip both happen
-there. The registry keeps the same record, with the same
-lifetime, ceiling and fail-closed lookup:
-
-- **Minting.** The registry asks the directory for one more scope, `agentry`.
-  The directory's flow shows "Remember this device for 30 days" on its code
-  page (unticked), and its `agentry` scope mapping passes the choice back as
-  the ID-token claim `agentry_remember_device`. On the OIDC callback the
-  registry mints a record only when that claim is `true`, the token's `amr`
-  names a second factor, **and** its `auth_time` is within five minutes. The
-  last matters because a live directory session answers a later sign-in
-  silently, repeating the claim and the `amr` of the sign-in that started it;
-  only `auth_time` shows it is old. So a sign-in whose code was skipped, or
-  never asked, cannot extend its own trust. The cookie is httpOnly and scoped
-  to the directory's flow executor (`Path=/api/v3/flows/executor/`); no route
-  of the registry reads it. The `user.trusted_device_add` row carries
-  `"via": "directory"`.
-- **The check.** Before asking for the code, the directory's flow calls
-  `POST /internal/directory/trusted-device` with `{token, sub}` and the bearer
-  secret `AGENTRY_IDP_TRUST_CHECK_TOKEN` (at least 32 characters; the
-  directory holds the same value). The answer is `{"trusted": true}` only for
-  a live record owned by the active account linked to that directory subject;
-  anything else is `false`, and a store that cannot answer is a 503, which
-  the directory treats as "ask for the code". A `true` records the use
-  (`last_seen_at`, and a `user.trusted_device_use` audit row) before it is
-  given. The route answers 404 while the secret is unset.
-- **Keep `/internal/` private.** The route is for the directory on the private
-  network, calling the api directly. The compose edge answers `/internal/`
-  with 404, and the server itself answers 404 to any request carrying
-  `X-Forwarded-For` or `Forwarded`, which is what an ingress or a proxy in
-  front of the api adds. So a directory that reaches the api through a proxy
-  of its own is refused too, and asks for the code.
-- **The cookie's domain.** The registry sets the cookie on the callback, at
-  `AGENTRY_PUBLIC_URL`'s host, and the directory has to receive it. A
-  directory on the same host (another port) gets a host-only cookie; one on a
-  subdomain of the registry's host (`auth.example.com` under
-  `example.com`) gets a cookie for the registry's host. For sibling hosts set
-  `AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN` to a parent domain of both. A
-  configuration that cannot work is refused at startup. A parent-domain
-  cookie reaches every host under that domain at the executor's path, not
-  only the directory: if a staging or development deployment runs under the
-  production registry's name, production's tokens reach its directory too.
-  Keep such deployments on a name of their own, or accept that they receive
-  those tokens (the hosted deployment accepts it).
-
-The directory's half ships with the compose stack:
-
-- **The checkbox.** `deploy/compose/authentik/templates/if/flow.html` is
-  authentik's own flow page, byte for byte, plus one marked block that draws
-  an unticked "Remember this device for 30 days" on the code page. authentik
-  reads it from the `/templates` mount the mails already use. The box is
-  offered on the sign-in flow only. A ticked box becomes a ten-minute
-  `agentry_remember_intent` cookie on the directory's host, `__Host-`
-  prefixed on https so no other host under the same parent domain can set
-  it, and every load of the flow page clears it. The label says 30 days, the
-  default and the ceiling; a deployment that shortens
-  `AGENTRY_AUTH_TRUSTED_DEVICE_TTL` should change the label to match.
-- **The claim.** The account-flows blueprint's `agentry-remember-intent`
-  policy, on the sign-in's login stage, copies that choice into the sign-in's
-  record, but only when a second factor was validated in the same flow. Its
-  `agentry-remember-device` scope mapping answers the `agentry` scope with
-  `agentry_remember_device`, and with `agentry_directory_id`, the signed-in
-  account's directory id, which the registry records on the identity and
-  reads the account by. `scripts/dev/authentik-bootstrap.sh` attaches the
-  mapping to the registry's provider; re-run it once after upgrading.
-- **The skip.** The blueprint's `agentry-remembered-browser-skip` policy, on
-  the sign-in's MFA stage, calls the check before the code page. It reads
-  `AGENTRY_IDP_TRUST_CHECK_TOKEN` and `AGENTRY_REGISTRY_INTERNAL_URL`
-  (default `http://server:8080`) from the directory containers' environment
-  when it runs, so the secret is never stored in the directory's database. It
-  skips the code only on the registry's explicit `trusted: true`. The
-  blueprint restates the MFA binding in policy mode `all`, and binds the
-  policy with `failure_result: true`. Without both, the stock passwordless
-  policy would hide the skip, and a policy error would skip the code. Do
-  not run the directory with `AUTHENTIK_DEBUG` where the secret matters:
-  authentik's debug HTTP session logs outgoing requests with their headers.
-
-With the secret unset on either side, the code is asked every time. After an
-authentik upgrade, compare the new image's `flows/templates/if/flow.html`
-and `core/templates/base/header_js.html`. Two reviewed bootstraps now read
-escaped JSON data instead of interpolating runtime values into executable
-scripts. `scripts/acceptance/directory-remember.sh` checks the rest of the
-flow template against the image and pins both upstream bootstrap contracts.
-An upgrade must review those contracts before updating their hashes. It
-also checks that the code stage the block writes
-into still exists, and that the password page and first page the sign-up
-link writes into still have what its script reads. The checkbox is not offered on a passkey sign-in or on
-authentik's simplified flow page for old browsers, which asks for the code
-as before. The directory's own remember-this-device behaviour is a
-different thing and is not used: it keeps no server-side record of the
-browsers it remembers, so they could be neither cleared nor individually
-revoked.
-
-**A Content Security Policy for public directory flows.**
-The templates support a policy that rejects arbitrary inline scripts and
-event handlers. Generate it from the same core checkout as the templates:
-
-```bash
-python3 scripts/directory-csp.py --origin https://auth.example.com
-```
-
-Set the emitted value as `Content-Security-Policy` at the reverse proxy on
-HTML responses under `/if/flow/`, including flow error responses. Deploy
-the policy and templates together: the eight SHA-256 permissions authorize
-only the static script bodies in that checkout. Dynamic directory config,
-brand and flow values remain escaped JSON data; never generate permissions
-by hashing a rendered response or values supplied by a user. The policy
-permits the directory's own scripts and Cloudflare Turnstile, disables
-script attributes, and permits same-origin WebSockets for flow updates.
-The stylesheet exception `style-src 'self' 'unsafe-inline'` is required by
-the upstream Lit components and their shadow trees; it grants no script
-permission. Same-origin frames support upstream flow embedding.
-
-Interactive Turnstile renders directly in its flow card through a static
-adapter. It uses the vendor SDK and the existing stage
-callback and server verifier, without a blob document or inline renderer.
-The adapter follows the stage's theme, language, retry and teardown
-lifecycle. The upstream static theme bootstrap is included verbatim so its
-permission can also be derived from reviewed source. The pinned-image
-acceptance checks both that template and the CAPTCHA controller contracts;
-an image upgrade requires reviewing them and running the real widget test.
-
-Keep the upstream policy on `/media/` and other routes. This helper does
-not replace their policies or install a header in the headless edge.
-Operators with additional CAPTCHA or external assets must review their
-origins separately. `scripts/acceptance/directory-terms.sh` uses a real
-browser and a private pinned directory to check the intended scripts,
-terms courtesy and refusal, remembered-browser choice, recovery page and
-text-only display names while arbitrary injected scripts and event
-handlers are denied. The server-side agreement tests also submit directly,
-without the courtesy script. The registry's `/ui/` policy stays separate.
-
-The directory's flows are unbranded here and call the deployment
-`AGENTRY_BRAND_NAME`; a site that fronts the registry applies its own
-brand (title, wordmark, favicon, flow background, custom CSS) through the
-directory's API — the hosted site's repository carries that script and
-stylesheet.
-
-**Upgrading the directory service.** Authentik refuses to skip a release
-line: every `YYYY.M` line between the running version and the target
-must be passed through in order, and the check runs before any migration
-(a refused container crash-loops with "Major version skips are not
-allowed" and leaves the database untouched). So to move, say, 2025.6 →
-2026.8 the path is 2025.12 → 2026.2 → 2026.5 → 2026.8: `pg_dump` the
-`authentik` database first, then for each hop set the image tag in
-`docker-compose.yaml`, `docker compose --profile server up -d
-authentik-server authentik-worker`, and wait for the server container to
-report healthy before the next hop. Finish by restoring the committed
-tag+digest pin (bump it when the target is new) and `docker image prune
--a` — each hop's image is ~1.4 GB and a full chain has filled a small
-root volume. The registry needs no restart: the OIDC issuer, client, and
-brand ride the database.
-
-**The directory stays behind the scenes.** Nobody browses it directly:
-the edge sends `auth.<site>/` and the directory's user panel
-(`/if/user/…`) back to the site, and the registry's Settings page is
-where a person changes their password, adds an authenticator app or
-security key, or removes one — each is one short step in the directory
-that returns to Settings. For that the directory needs to know the site.
-Two variables tell it where its flows return: sign-out lands on
-`AGENTRY_PUBLIC_WEB_URL` and a password change or an authenticator
-enrolment on `AGENTRY_ACCOUNT_URL`. Both default to the server's own pages
-(`<AGENTRY_PUBLIC_URL>/ui/` and `…/ui/account/directory`); a site in front
-sets them to its home and its Settings → Authentication page. The flows'
-titles and mail subjects call the deployment `AGENTRY_BRAND_NAME`
-(default `Agentry`). `AGENTRY_PUBLIC_WEB_URL` (the same value the registry
-uses) is passed to the `authentik-*` containers and read by the
-account-flows blueprint.
-`scripts/dev/authentik-bootstrap.sh` points the application's launch
-URL at the registry's sign-in start and the brand's default application
-at it, so a sign-in, sign-up or recovery that ends without a return lands
-in the app signed in. Sign-out goes through the blueprint's
-`agentry-invalidation` flow, which ends the directory session and
-redirects to the site; `AGENTRY_IDP_LOGOUT_URL` is the provider's
-`end-session/` endpoint wrapped in authentik's cancel view (above). The
-password-change and authenticator flows return to `AGENTRY_ACCOUNT_URL`
-through the flow plan's `redirect`, set by the blueprint's
-`agentry-return-to-settings` policy, not through a redirect stage: a
-redirect stage leaves the flow's plan parked in the session, and the next
-sign-out then answers an empty page. The blueprint also
-unsets the brand's user-settings flow. Re-run the bootstrap script after
-upgrading an older deployment.
-`scripts/acceptance/directory-signout.py` proves sign-out against a live
-directory — after a fresh sign-in, after an abandoned authenticator flow
-and after a completed one — with a throwaway user it deletes on the way
-out; it needs the directory's URL, the bootstrap token and
-`AGENTRY_ACCOUNT_URL`.
-
-Nobody changes their own directory email. The registry links accounts by
-the address the directory holds, and the provider asserts it verified, so a
-self-service change would let a person sign in as whoever owns the address
-they typed. authentik's own `default-user-settings-flow` has an email field
-and stays reachable by URL even with the settings panel unset; the only
-thing refusing a change there is the system setting "Allow users to change
-email" (off by default), which blueprints cannot pin. The account-flows
-blueprint therefore binds a policy that always denies to that flow:
-nobody can run it, whatever the setting says. Display name
-and handle are the registry's; an operator who must correct an address
-does it in the directory's admin console, and should confirm the new
-address belongs to the person first.
-`scripts/acceptance/directory-user-settings.py` proves the refusal against
-a live directory with a throwaway user it deletes on the way out; it needs
-the directory's URL and the bootstrap token, and never changes the system
-settings.
 
 ## Hosting the downloads
 
@@ -2083,18 +1476,13 @@ entirely configuration:
   normally runs `authorize`.
 - **`brand.*` / `AGENTRY_BRAND_NAME`, `AGENTRY_BRAND_LOGO_URL`,
   `AGENTRY_BRAND_CSS_URL`, `AGENTRY_SUPPORT_EMAIL`, `AGENTRY_SECURITY_EMAIL`**
-  — what the server calls the deployment in emails, in the directory's flow
-  titles and authenticator names, and on the `/ui/` pages that remain; the
+  — what the server calls the deployment in emails, in authenticator names,
+  and on the `/ui/` pages that remain; the
   stylesheet and logo the remaining pages load. `GET /api/v1/meta` reports
   `brand` and `ui` (with `authorizeUrl`) so clients need no other
   configuration.
-- **The directory's returns** — `AGENTRY_PUBLIC_WEB_URL` (where sign-out
-  lands) and `AGENTRY_ACCOUNT_URL` (where a password or authenticator change
-  returns) default to the server's own pages; a site sets them to its home
-  and its settings page, and applies its own brand object to the directory
-  through the directory's API (the flows stay the core's blueprint).
-  `AGENTRY_IDP_LOGOUT_URL` is the provider's end-session endpoint behind
-  authentik's cancel view.
+- **Sign-out** — `AGENTRY_IDP_LOGOUT_URL` is the sign-in provider's
+  end-session endpoint, where sign-out sends the browser.
 - **The edge** — a site replaces `edge/nginx.conf` with one that sends
   `/api/`, git, `/ui/` and `/downloads/` to the server and everything else to
   the site, and adds rate-limit zones for its own forms.
@@ -2121,11 +1509,9 @@ run a job on a period, and register audit actions under its own name.
 
 An extension can also be the deployment's directory, the service that holds
 people's sign-in accounts. It supplies the directory the registry erases
-accounts in, lists and removes authenticators through, and mirrors platform
-staff into (`ManagesDirectory`), replacing the built-in one. Its directory
-then takes the whole directory path: the registry reads none of the built-in
-directory's own claims at sign-in, mints no remembered browser for it,
-answers `/internal/directory/` with 404 and keeps no staff mirror group. A
+accounts in and asks whether an account is still there (`ManagesDirectory`);
+the directory's own work at sign-in (its claims, remembered browsers, the
+checks its flows make, a mirror of platform staff) is the extension's. A
 directory that also carries out an erasure's directory half itself, retries
 included (`DirectoryErasure`), is handed the erased account once the
 registry's erasure has committed, and the outcome it returns is what

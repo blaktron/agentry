@@ -356,7 +356,7 @@ func TestRefusalsRenderInsideTheLayout(t *testing.T) {
 	}
 }
 
-func TestAccountPagesAndTheDirectoryRedirect(t *testing.T) {
+func TestAccountPageSavesAndFlashes(t *testing.T) {
 	h := newUI(t, Options{Brand: Brand{Name: "Acme Registry", SupportEmail: "help@example.test"}})
 	w := get(h, "/ui/account", sessCookie, csrfCookieV)
 	body := w.Body.String()
@@ -714,15 +714,13 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 	var status int
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method + " " + r.URL.Path {
-		case "GET /api/v1/user/tokens", "GET /api/v1/user/ssh-keys", "GET /api/v1/user/sessions", "GET /api/v1/user/directory", "GET /api/v1/user/notifications", "GET /api/v1/knowledge/usage":
+		case "GET /api/v1/user/tokens", "GET /api/v1/user/ssh-keys", "GET /api/v1/user/sessions", "GET /api/v1/user/notifications", "GET /api/v1/knowledge/usage":
 			w.Header().Set("Content-Type", "application/json")
 			if status == http.StatusOK {
 				w.WriteHeader(http.StatusOK)
 				switch r.URL.Path {
 				case "/api/v1/user/sessions":
 					_, _ = io.WriteString(w, `{"sessions":[]}`)
-				case "/api/v1/user/directory":
-					_, _ = io.WriteString(w, `{"passwordChangeUrl":"https://idp.example/password"}`)
 				case "/api/v1/user/notifications":
 					_, _ = io.WriteString(w, `{"email":{"dependencyAlerts":true,"quarantine":true,"reviewDecisions":true,"advisories":true,"orgInvites":true},"web":{"dependencyAlerts":true}}`)
 				case "/api/v1/knowledge/usage":
@@ -742,7 +740,6 @@ func TestAccountPagesTellCouldNotLookFromEmpty(t *testing.T) {
 		{"/ui/account/tokens", "your tokens", "No tokens."},
 		{"/ui/account/ssh-keys", "your SSH keys", "No SSH keys."},
 		{"/ui/account/sessions", "your sessions", "No sessions are recorded."},
-		{"/ui/account", "the password and authenticator links", "Change password"},
 		{"/ui/account", "your notification settings", "Save notifications"},
 		{"/ui/account", "your knowledge allocation", "0 packs kept here, 0.0 MB, with no cap on this registry."},
 	}
