@@ -8,10 +8,12 @@
 //
 //   - S3 (ScanS3) is a set of deterministic detectors for hidden and
 //     obfuscated content: zero-width characters, bidi controls (Trojan
-//     Source), the Unicode tag block (ASCII smuggling), private-use runs,
-//     mixed-script confusable tokens, HTML comments, CSS-hidden markup,
-//     oversized data: URIs, entropy-gated base64/hex blobs, trailing
-//     whitespace columns, and NFC-normalization deltas. No configuration:
+//     Source), the Unicode tag block (ASCII smuggling), variation
+//     selectors outside a variation sequence (emoji smuggling),
+//     private-use runs, mixed-script confusable tokens, HTML comments,
+//     CSS-hidden markup, oversized data: URIs, entropy-gated base64/hex
+//     blobs, trailing whitespace columns, and NFC-normalization deltas.
+//     No configuration:
 //     the rules are the code.
 //
 //   - S4 (Bundle) is a signature engine that loads a versioned YAML rule
