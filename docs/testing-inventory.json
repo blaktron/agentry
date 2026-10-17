@@ -1730,6 +1730,21 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/api/queue_rescue_test.go",
+          "tests": [
+            "TestARescuedLastScanFailsThePack",
+            "TestARescuedFinalAttemptIsNotQueuedAgain",
+            "TestARescuedLastDirectoryErasureIsAbandonedAndRaised"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/quota_test.go",
           "tests": [
             "TestWebhookDeliveriesAreRateLimitedPerOrg",
