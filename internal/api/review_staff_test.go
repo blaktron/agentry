@@ -9,7 +9,9 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -265,26 +267,46 @@ func (env *testEnv) itemFindings(t *testing.T, c caller, itemID string) []string
 // decision holds for a finding's verdict. An organization's admin who
 // submitted the version reads its item on the organization's queue but is
 // refused a verdict on its findings, a false positive and an accepted risk
-// alike; platform staff who submitted a platform-queue version keep their
-// exception, and the verdict's audit event marks it as theirs, while
-// another staff member's verdict carries no mark.
+// alike, through a session or a PAT, while another admin of the
+// organization records one. A non-staff author of a platform-queue version
+// records none either. Platform staff who submitted a platform-queue
+// version keep their exception, and the verdict's audit event marks it as
+// theirs, while another staff member's verdict carries no mark.
 func TestAnAuthorSetsNoVerdictOnTheirOwnFindings(t *testing.T) {
 	env := newTestEnv(t)
 
-	_, _, owner, _, orgItem := setupOrgReviewItem(t, env, "avo", true)
+	org, _, owner, _, orgItem := setupOrgReviewItem(t, env, "avo", true)
 	f := env.itemFindings(t, owner, orgItem)[0]
-	for _, verdict := range []string{"dismissed_false_positive", "dismissed_accepted_risk", "confirmed"} {
-		res := env.do(owner, http.MethodPost, "/api/v1/findings/"+f+"/verdict", map[string]any{"verdict": verdict, "reason": "mine"})
-		_ = res.Body.Close()
-		if res.StatusCode != http.StatusForbidden {
-			t.Fatalf("the organization's admin set %s on their own finding: %d, want 403", verdict, res.StatusCode)
+	_, tok := env.mintPAT(owner, "rev", "review:act")
+	for _, c := range []caller{owner, {name: "owner-pat", pat: tok}} {
+		for _, verdict := range []string{"dismissed_false_positive", "dismissed_accepted_risk", "confirmed"} {
+			res := env.do(c, http.MethodPost, "/api/v1/findings/"+f+"/verdict", map[string]any{"verdict": verdict, "reason": "mine"})
+			body, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			if res.StatusCode != http.StatusForbidden || !strings.Contains(string(body), "Authors cannot") {
+				t.Fatalf("%s: the organization's admin set %s on their own finding: %d %s, want the author rule's 403", c.name, verdict, res.StatusCode, body)
+			}
 		}
+	}
+	other := env.register("avo-adm")
+	env.joinOrg(owner, org, other)
+	env.seedMembership(org, other, "admin", "active")
+	env.doJSON(env.login(other), http.MethodPost, "/api/v1/findings/"+f+"/verdict",
+		map[string]any{"verdict": "dismissed_false_positive", "reason": "another admin's review"}, nil, http.StatusNoContent)
+	if d := env.findingAudit(t, f); d["self_decision"] != nil {
+		t.Fatalf("another admin's verdict is marked: %v", d)
 	}
 
 	author, itemID, staffSess := setupReviewItem(t, env, "avs")
+	own := env.itemFindings(t, staffSess, itemID)
+	res := env.do(env.login(author), http.MethodPost, "/api/v1/findings/"+own[0]+"/verdict",
+		map[string]any{"verdict": "dismissed_false_positive", "reason": "mine"})
+	_ = res.Body.Close()
+	if res.StatusCode == http.StatusNoContent {
+		t.Fatal("a non-staff author set a verdict on their own platform-queue finding")
+	}
 	env.makePlatformStaff(t, author)
 	authorSess := env.login(author)
-	own := env.itemFindings(t, authorSess, itemID)
 	env.doJSON(authorSess, http.MethodPost, "/api/v1/findings/"+own[0]+"/verdict",
 		map[string]any{"verdict": "dismissed_false_positive", "reason": "the built-in package's own test fixture"}, nil, http.StatusNoContent)
 	if d := env.findingAudit(t, own[0]); d["self_decision"] != true || d["verdict"] != "dismissed_false_positive" {
