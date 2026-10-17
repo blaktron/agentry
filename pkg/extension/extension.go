@@ -495,19 +495,29 @@ type Hooks struct {
 	Event func(ctx context.Context, ev Event)
 }
 
-// Job is a queue handler the worker registers under Kind. Queue names
-// the queue it is claimed from ("core" unless the work is untrusted
-// content). A positive Every makes the worker enqueue Kind on that
-// period, and once at start-up, the way the core's own watchdog and
-// sweep run. Every worker replica enqueues on its own clock and the
-// queue's claim runs each row once, so the handler must be idempotent —
-// a cycle closer that finds nothing to close does nothing.
+// Job is a queue handler registered under Kind. Queue names the queue
+// it is claimed from: "core" unless the work is untrusted content
+// ("sandbox") or must run in the api role (QueueAPI). A positive Every
+// makes the role that drains the queue enqueue Kind on that period, and
+// once at start-up, the way the core's own watchdog and sweep run.
+// Every replica enqueues on its own clock and the queue's claim runs
+// each row once, so the handler must be idempotent — a cycle closer
+// that finds nothing to close does nothing.
 type Job struct {
 	Kind    string
 	Queue   string
 	Handler queue.Handler
 	Every   time.Duration
 }
+
+// QueueAPI is the queue the api role drains, for a Job that must reach
+// a service only the api may reach: an admin API behind a network
+// policy that admits the api alone, kept from the worker because the
+// worker opens untrusted archives. The worker neither registers nor
+// enqueues such a job; the single-process `all` role drains this queue
+// beside its worker's. A job here runs beside the api's requests, so it
+// should be light.
+const QueueAPI = "api"
 
 // Deps is what the core hands an extension at start-up, once per
 // process, before its routes mount and its jobs register. DB is the
