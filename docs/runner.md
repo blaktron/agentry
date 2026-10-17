@@ -791,9 +791,11 @@ runner drives that API: containerd with nerdctl (and so Rancher Desktop's
 containerd backend), Apple's `container` and `wslc`. An engine that answers
 `docker version` with any server but Docker Engine or podman is refused,
 naming what it reported. Rancher Desktop on its containerd backend keeps its
-socket file with nothing answering behind it, so a run stops with exit 13
-and `agentry doctor` reports the socket (below): choose the dockerd backend
-in its settings.
+socket file with nothing answering behind it, so a run stops with exit 13.
+On macOS `agentry doctor` (CLI v0.6.131 or later) and the desktop app (0.6.126
+or later) name it from Rancher Desktop's settings: "Rancher Desktop runs its
+containerd backend, which serves no Docker API". Choose dockerd (moby) under
+Rancher Desktop's Preferences, Container Engine.
 
 **Which engine.** By default the CLI drives the `docker` CLI against its
 current context, so `DOCKER_HOST`, `DOCKER_CONTEXT` and `docker context use`
@@ -866,9 +868,11 @@ later) catch what an engine change leaves behind:
   engine, since it does not read that file.
 - `docker:socket`, only when no engine answers, names each known engine
   socket file with nothing answering behind it (Docker Desktop's, Colima's,
-  Lima's, OrbStack's, Rancher Desktop's and Podman Desktop's on macOS;
-  Docker Engine's, Docker Desktop's and podman's on Linux), with "start it,
-  or remove the file". An engine is known by its answer, never by its
+  Lima's, OrbStack's, Rancher Desktop's and each podman machine's, under
+  `$TMPDIR/podman/`, on macOS; Docker Engine's, Docker Desktop's and
+  podman's on Linux), with "start it, or remove the file". Rancher Desktop's
+  socket on its containerd backend is named as that backend instead (CLI
+  v0.6.131 or later, macOS). An engine is known by its answer, never by its
   socket file.
 
 **The sandbox on podman.** A policy that names [`docker.runtime`](#the-oci-runtime-dockerruntime)
