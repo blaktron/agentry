@@ -46,6 +46,20 @@ UPDATE knowledge_packs
 SET state = sqlc.arg(state), scan_report = sqlc.arg(report), scanned_at = now(), updated_at = now()
 WHERE id = sqlc.arg(id) AND object_key = sqlc.arg(object_key) AND state = 'scanning';
 
+-- name: ListStalledKnowledgeScans :many
+-- Packs still scanning since before the cutoff: a scan never queued, or a
+-- job lost. The sweep queues their scans again.
+SELECT id, object_key FROM knowledge_packs
+WHERE state = 'scanning' AND object_key <> '' AND updated_at < sqlc.arg(cutoff)
+ORDER BY updated_at
+LIMIT 100;
+
+-- name: TouchKnowledgeScan :execrows
+-- The sweep queues this tree's scan again: it waits another stall period
+-- before the next sweep looks at it.
+UPDATE knowledge_packs SET updated_at = now()
+WHERE id = sqlc.arg(id) AND object_key = sqlc.arg(object_key) AND state = 'scanning';
+
 -- name: GetKnowledgePackByObject :one
 -- The scan job's read: the pack whose current tree is this object.
 SELECT * FROM knowledge_packs WHERE id = $1 AND object_key = $2;

@@ -815,6 +815,19 @@
           ]
         },
         {
+          "path": "internal/api/knowledge_scan_queue_test.go",
+          "tests": [
+            "TestAScanTakenAtOnceFindsItsTree",
+            "TestTheSweepQueuesALostScanAgain"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
           "path": "internal/api/knowledge_seam_test.go",
           "tests": [
             "TestKnowledgeKeyWrapperSeam",
