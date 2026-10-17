@@ -579,7 +579,7 @@ func (s *Service) SweepScans(ctx context.Context, cutoff time.Time) (int, error)
 	for _, r := range rows {
 		// Touched first, so a sweep that fails after it does not queue the
 		// same scan again on its next pass before this one has run.
-		touched, err := q.TouchKnowledgeScan(ctx, storegen.TouchKnowledgeScanParams{ID: r.ID, ObjectKey: r.ObjectKey})
+		touched, err := q.TouchKnowledgeScan(ctx, storegen.TouchKnowledgeScanParams(r))
 		if err != nil {
 			return n, fmt.Errorf("knowledge: touch a stalled scan: %w", err)
 		}
