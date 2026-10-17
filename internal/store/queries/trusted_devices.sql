@@ -1,5 +1,5 @@
 -- Trusted devices. The credential a browser earns by answering the second
--- factor, so a later password sign-in from it skips the code.
+-- factor at a directory, so a later sign-in from it skips the code.
 --
 -- The credential's queries: establish and touch it, take it away when access
 -- is taken away (SCIM, erasure), the account's own count and clear, and the
@@ -37,17 +37,16 @@ UPDATE trusted_devices SET last_seen_at = now() WHERE id = $1;
 --
 -- That deactivation is what makes this load-bearing rather than tidy: it
 -- drops the membership, revokes the org-bound PATs and kills the sessions,
--- but it deliberately does not change the account's state or clear its
--- password, since the person may exist outside the organization. So without
--- this, a deprovisioned user could sign straight back in with their password
--- from a remembered browser and be asked for *less* than before — the second
--- factor skipped — which is the opposite of the guarantee scimDeactivate
--- exists to make.
+-- but it deliberately does not change the account's state, since the
+-- person may exist outside the organization. So without this, a
+-- deprovisioned user could sign straight back in from a remembered browser
+-- and be asked for *less* than before — the second factor skipped — which is
+-- the opposite of the guarantee scimDeactivate exists to make.
 --
 -- Erasure is the other place access is taken away, and it uses
--- DeleteTrustedDevicesForUser below instead: erasure sets state='deleted' and
--- nulls the password hash, so its rows are already inert as credentials, and
--- what it owes is the removal of the personal data they hold.
+-- DeleteTrustedDevicesForUser below instead: erasure sets state='deleted', so
+-- its rows are already inert as credentials, and what it owes is the removal
+-- of the personal data they hold.
 --
 -- The account-facing clear is ClearLiveTrustedDevicesForUser below, which
 -- touches live records only so that what it reports matches the count.

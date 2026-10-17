@@ -100,33 +100,25 @@ func (q *Queries) CreateHandle(ctx context.Context, arg CreateHandleParams) erro
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, email, display_name, password_hash)
-VALUES ($1, $2, $3, $4)
-RETURNING id, email, email_verified_at, display_name, password_hash, totp_secret_enc, totp_enabled, state, deleted_tombstone, created_at, updated_at, platform_staff, cookie_ack_at, idp_mfa_at
+INSERT INTO users (id, email, display_name)
+VALUES ($1, $2, $3)
+RETURNING id, email, email_verified_at, display_name, totp_enabled, state, deleted_tombstone, created_at, updated_at, platform_staff, cookie_ack_at, idp_mfa_at
 `
 
 type CreateUserParams struct {
-	ID           uuid.UUID `json:"id"`
-	Email        string    `json:"email"`
-	DisplayName  string    `json:"display_name"`
-	PasswordHash *string   `json:"password_hash"`
+	ID          uuid.UUID `json:"id"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser,
-		arg.ID,
-		arg.Email,
-		arg.DisplayName,
-		arg.PasswordHash,
-	)
+	row := q.db.QueryRow(ctx, createUser, arg.ID, arg.Email, arg.DisplayName)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DisplayName,
-		&i.PasswordHash,
-		&i.TotpSecretEnc,
 		&i.TotpEnabled,
 		&i.State,
 		&i.DeletedTombstone,
@@ -150,15 +142,6 @@ func (q *Queries) DeleteEmailVerificationsForUser(ctx context.Context, userID uu
 	return err
 }
 
-const enableUserTOTP = `-- name: EnableUserTOTP :exec
-UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1
-`
-
-func (q *Queries) EnableUserTOTP(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, enableUserTOTP, id)
-	return err
-}
-
 const getHandle = `-- name: GetHandle :one
 SELECT id, handle, kind, reserved, created_at FROM handles WHERE handle = $1
 `
@@ -177,7 +160,7 @@ func (q *Queries) GetHandle(ctx context.Context, handle string) (Handle, error) 
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT u.id, u.email, u.email_verified_at, u.display_name, u.password_hash, u.totp_secret_enc, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.email = $1
+SELECT u.id, u.email, u.email_verified_at, u.display_name, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.email = $1
 `
 
 type GetUserByEmailRow struct {
@@ -185,8 +168,6 @@ type GetUserByEmailRow struct {
 	Email            string     `json:"email"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
 	DisplayName      string     `json:"display_name"`
-	PasswordHash     *string    `json:"password_hash"`
-	TotpSecretEnc    []byte     `json:"totp_secret_enc"`
 	TotpEnabled      bool       `json:"totp_enabled"`
 	State            string     `json:"state"`
 	DeletedTombstone []byte     `json:"deleted_tombstone"`
@@ -206,8 +187,6 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DisplayName,
-		&i.PasswordHash,
-		&i.TotpSecretEnc,
 		&i.TotpEnabled,
 		&i.State,
 		&i.DeletedTombstone,
@@ -222,7 +201,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 }
 
 const getUserByHandle = `-- name: GetUserByHandle :one
-SELECT u.id, u.email, u.email_verified_at, u.display_name, u.password_hash, u.totp_secret_enc, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE h.handle = $1 AND h.kind = 'user'
+SELECT u.id, u.email, u.email_verified_at, u.display_name, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE h.handle = $1 AND h.kind = 'user'
 `
 
 type GetUserByHandleRow struct {
@@ -230,8 +209,6 @@ type GetUserByHandleRow struct {
 	Email            string     `json:"email"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
 	DisplayName      string     `json:"display_name"`
-	PasswordHash     *string    `json:"password_hash"`
-	TotpSecretEnc    []byte     `json:"totp_secret_enc"`
 	TotpEnabled      bool       `json:"totp_enabled"`
 	State            string     `json:"state"`
 	DeletedTombstone []byte     `json:"deleted_tombstone"`
@@ -251,8 +228,6 @@ func (q *Queries) GetUserByHandle(ctx context.Context, handle string) (GetUserBy
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DisplayName,
-		&i.PasswordHash,
-		&i.TotpSecretEnc,
 		&i.TotpEnabled,
 		&i.State,
 		&i.DeletedTombstone,
@@ -267,7 +242,7 @@ func (q *Queries) GetUserByHandle(ctx context.Context, handle string) (GetUserBy
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT u.id, u.email, u.email_verified_at, u.display_name, u.password_hash, u.totp_secret_enc, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.id = $1
+SELECT u.id, u.email, u.email_verified_at, u.display_name, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.id = $1
 `
 
 type GetUserByIDRow struct {
@@ -275,8 +250,6 @@ type GetUserByIDRow struct {
 	Email            string     `json:"email"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
 	DisplayName      string     `json:"display_name"`
-	PasswordHash     *string    `json:"password_hash"`
-	TotpSecretEnc    []byte     `json:"totp_secret_enc"`
 	TotpEnabled      bool       `json:"totp_enabled"`
 	State            string     `json:"state"`
 	DeletedTombstone []byte     `json:"deleted_tombstone"`
@@ -296,8 +269,6 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DisplayName,
-		&i.PasswordHash,
-		&i.TotpSecretEnc,
 		&i.TotpEnabled,
 		&i.State,
 		&i.DeletedTombstone,
@@ -566,8 +537,6 @@ UPDATE users SET
   email = $2,
   email_verified_at = NULL,
   display_name = 'deleted user',
-  password_hash = NULL,
-  totp_secret_enc = NULL,
   totp_enabled = false,
   state = 'deleted',
   deleted_tombstone = $3,
@@ -626,20 +595,6 @@ func (q *Queries) SetUserIdPMFA(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const setUserPasswordHash = `-- name: SetUserPasswordHash :exec
-UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1
-`
-
-type SetUserPasswordHashParams struct {
-	ID           uuid.UUID `json:"id"`
-	PasswordHash *string   `json:"password_hash"`
-}
-
-func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error {
-	_, err := q.db.Exec(ctx, setUserPasswordHash, arg.ID, arg.PasswordHash)
-	return err
-}
-
 const setUserPlatformStaff = `-- name: SetUserPlatformStaff :exec
 UPDATE users SET platform_staff = $2, updated_at = now() WHERE id = $1
 `
@@ -652,20 +607,6 @@ type SetUserPlatformStaffParams struct {
 // The staff rule decides platform staff (registry.SyncStaffIn).
 func (q *Queries) SetUserPlatformStaff(ctx context.Context, arg SetUserPlatformStaffParams) error {
 	_, err := q.db.Exec(ctx, setUserPlatformStaff, arg.ID, arg.PlatformStaff)
-	return err
-}
-
-const setUserTOTPSecret = `-- name: SetUserTOTPSecret :exec
-UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() WHERE id = $1
-`
-
-type SetUserTOTPSecretParams struct {
-	ID            uuid.UUID `json:"id"`
-	TotpSecretEnc []byte    `json:"totp_secret_enc"`
-}
-
-func (q *Queries) SetUserTOTPSecret(ctx context.Context, arg SetUserTOTPSecretParams) error {
-	_, err := q.db.Exec(ctx, setUserTOTPSecret, arg.ID, arg.TotpSecretEnc)
 	return err
 }
 

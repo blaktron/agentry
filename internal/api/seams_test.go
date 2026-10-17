@@ -216,7 +216,7 @@ func TestUserRegisteredFiresForDirectoryAccounts(t *testing.T) {
 	var mu sync.Mutex
 	var seen []api.Event
 	env := newTestEnvCfg(t, func(cfg *config.Config) {
-		cfg.Social.Google = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
+		cfg.Auth.OIDC = config.OIDCProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
 	}, func(s *api.Server) {
 		s.SetOIDCHTTPClient(idp.srv.Client())
 		s.AddEventHook(func(_ context.Context, ev api.Event) {
@@ -235,7 +235,7 @@ func TestUserRegisteredFiresForDirectoryAccounts(t *testing.T) {
 		ev = seen[0]
 	}
 	mu.Unlock()
-	if n != 1 || ev.UserID.String() != userID || ev.Payload["via"] != "social" || ev.Payload["provider"] != "google" || ev.Payload["handle"] == "" {
+	if n != 1 || ev.UserID.String() != userID || ev.Payload["via"] != "social" || ev.Payload["provider"] != "oidc" || ev.Payload["handle"] == "" {
 		t.Fatalf("user.registered for a JIT account: %d event(s) %+v", n, ev)
 	}
 	loginThroughFakeOIDC(t, env, idp)

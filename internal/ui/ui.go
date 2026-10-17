@@ -1,7 +1,8 @@
-// Package ui is the server's own browser surface: the pages a registry
-// needs to be usable without a site in front of it — the device-authorize
-// page the CLI and the desktop app open, sign-in, and the account basics —
-// served by agentryd at /ui/.
+// Package ui is the server's own browser surface, served by agentryd at
+// /ui/: the device-authorize page the CLI and the desktop app open, and,
+// without a site in front, the hand-off to the deployment's OpenID provider,
+// sign-out and the page an activation link opens. Everything else a person
+// does is the API's, through the CLI, the desktop app or a site.
 //
 // It is deliberately plain: server-rendered html/template, no JavaScript,
 // one stylesheet, brand from config. Every page acts through the API's own
@@ -35,7 +36,7 @@ type Brand struct {
 	TermsURL      string
 }
 
-// Provider is a sign-in provider the login page offers (config social.*).
+// Provider is the sign-in provider the login page offers (config auth.oidc).
 type Provider struct {
 	ID    string
 	Label string
@@ -48,18 +49,14 @@ type Options struct {
 	API http.Handler
 	// Mode is config ui.mode: full or authorize (off is never mounted).
 	Mode string
-	// SiteURL is config web.url: when set, sign-in and the account pages
-	// are the site's, and only the authorize page is served here.
+	// SiteURL is config web.url: when set, sign-in is the site's, and only
+	// the authorize page is served here.
 	SiteURL string
 	// BaseURL is the server's public origin (for absolute links); may be "".
 	BaseURL string
 	Brand   Brand
-	// Providers are the configured social/OIDC providers, in display order.
+	// Providers are the configured sign-in providers, in display order.
 	Providers []Provider
-	// ExternalOnly says a directory service owns credentials: no password
-	// form, sign-in goes through a provider, password/MFA live in the
-	// directory.
-	ExternalOnly bool
 	// IdPLogoutURL, when set, is where sign-out sends the browser after the
 	// session is revoked (the directory's end-session flow).
 	IdPLogoutURL string
@@ -102,34 +99,8 @@ func New(opt Options) http.Handler {
 	m.HandleFunc("GET /ui", h.landing)
 	if opt.Mode == "full" {
 		m.HandleFunc("GET /ui/login", h.loginPage)
-		m.HandleFunc("POST /ui/login", h.loginSubmit)
 		m.HandleFunc("POST /ui/logout", h.logout)
 		m.HandleFunc("GET /ui/verify-email", h.verifyEmail)
-		m.HandleFunc("GET /ui/account", h.accountPage)
-		m.HandleFunc("POST /ui/account", h.accountSave)
-		m.HandleFunc("POST /ui/account/activation", h.activationResend)
-		m.HandleFunc("POST /ui/account/notifications", h.notificationsSave)
-		m.HandleFunc("GET /ui/account/tokens", h.tokensPage)
-		m.HandleFunc("POST /ui/account/tokens", h.tokensSubmit)
-		m.HandleFunc("GET /ui/account/ssh-keys", h.sshKeysPage)
-		m.HandleFunc("POST /ui/account/ssh-keys", h.sshKeysSubmit)
-		m.HandleFunc("GET /ui/account/sessions", h.sessionsPage)
-		m.HandleFunc("POST /ui/account/sessions", h.sessionsSubmit)
-		m.HandleFunc("GET /ui/review", h.reviewQueue)
-		m.HandleFunc("GET /ui/review/{id}", h.reviewItemPage)
-		m.HandleFunc("POST /ui/review/{id}/decision", h.reviewDecide)
-		m.HandleFunc("POST /ui/review/{id}/findings/{fid}/verdict", h.findingVerdict)
-		m.HandleFunc("GET /ui/staff", h.staffPage)
-		m.HandleFunc("POST /ui/staff/abuse", h.staffAbuseTriage)
-		m.HandleFunc("POST /ui/staff/agent-action", h.staffAgentAction)
-		m.HandleFunc("POST /ui/staff/org", h.staffOrgAction)
-		m.HandleFunc("POST /ui/staff/ruleset-release", h.staffRulesetRelease)
-		m.HandleFunc("GET /ui/invitations/{token}", h.invitationPage)
-		m.HandleFunc("POST /ui/invitations/{token}", h.invitationAccept)
-		m.HandleFunc("GET /ui/orgs", h.orgsIndex)
-		m.HandleFunc("POST /ui/orgs", h.orgsCreate)
-		m.HandleFunc("GET /ui/orgs/{org}", h.orgPage)
-		m.HandleFunc("POST /ui/orgs/{org}", h.orgAction)
 	}
 	return h
 }
@@ -285,16 +256,6 @@ func (h *handler) homeURL() string {
 		return h.opt.SiteURL + "/"
 	}
 	return "/ui/"
-}
-
-// requireUser redirects a signed-out browser to sign-in (remembering where
-// it was) and returns nil.
-func (h *handler) requireUser(w http.ResponseWriter, r *http.Request) *userInfo {
-	u := h.currentUser(r)
-	if u == nil {
-		http.Redirect(w, r, h.loginURL(r.URL.RequestURI()), http.StatusSeeOther)
-	}
-	return u
 }
 
 // sameOrigin is the same rule the hosted site applies to its form posts:

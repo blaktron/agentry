@@ -15,10 +15,8 @@
   </nav>{{end}}
 </header>
 <main>
-  {{if .Nav}}<nav class="sections">{{range .Nav}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
   {{if .Flash}}<p class="flash ok">{{.Flash}}</p>{{end}}
   {{if .Error}}<p class="flash error">{{.Error}}</p>{{end}}
-  {{if and .User .User.PendingOrg}}{{with .User.PendingOrg}}<p class="flash notice">{{if eq .Via "scim"}}The <strong>{{.Label}}</strong> organization's identity provider has provisioned this account: its administrators have been asked to add you.{{else}}Your email domain is registered to the <strong>{{.Label}}</strong> organization: its administrators have been asked to add you.{{end}} Until they do you keep working on your own plan, and you hold nothing of the organization.</p>{{end}}{{end}}
   {{template "content" .}}
 </main>
 <footer>

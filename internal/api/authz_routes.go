@@ -18,10 +18,11 @@ type RouteDecl struct {
 	// Anonymous routes are readable without credentials.
 	Anonymous bool
 	// SessionOnly routes reject PATs regardless of scope (token minting,
-	// 2FA, logout) — enforced by the action's absence from auth scope map.
+	// logout) — enforced by the action's absence from auth scope map.
 	SessionOnly bool
 	// NoAuthz marks routes outside the chokepoint: credential-establishing
-	// endpoints (register/login/verify) that are rate-limited instead.
+	// endpoints (sign-in, address confirmation) that are rate-limited
+	// instead.
 	NoAuthz bool
 	// AgentScoped routes resolve {ns}/{name} and check the caller's
 	// effective agent role via auth.CheckAgent.
@@ -145,11 +146,10 @@ var routeAuthz = map[string]RouteDecl{
 	"listRulesetReleases":  {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listPlatformAudit":    {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"listRedTeamReports":   {Action: auth.ActPublicRead, SelfAuthorized: true},
-	// Social login establishes a credential (like login/register), so it sits
-	// outside the chokepoint and is rate-limited instead.
+	// Sign-in establishes a credential, so it sits outside the chokepoint
+	// and is rate-limited instead.
 	"socialOidcStart":      {NoAuthz: true, Anonymous: true},
 	"socialOidcCallback":   {NoAuthz: true, Anonymous: true},
-	"totpChallenge":        {NoAuthz: true, Anonymous: true},
 	"getAgentReadme":       {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"deleteCurrentUser":    {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"clearCurrentUserData": {Action: auth.ActUserSecurityManage, SessionOnly: true},
@@ -285,10 +285,8 @@ var routeAuthz = map[string]RouteDecl{
 	// discloses nothing that shipping the binary did not.
 	"getLatestRulesetBundle":      {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
 	"getLatestRulesetAttestation": {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
-	"login":                       {NoAuthz: true, Anonymous: true},
 	"exchangeDesktopCode":         {NoAuthz: true, Anonymous: true},
 	"logout":                      {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"register":                    {NoAuthz: true, Anonymous: true},
 	"removeOrgMember":             {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for admin targets
 	"removeTeamMember":            {Action: auth.ActOrgTeamsManage, OrgScoped: true},
 	"revokeToken":                 {Action: auth.ActUserTokensManage, SessionOnly: true},
@@ -304,8 +302,6 @@ var routeAuthz = map[string]RouteDecl{
 	// handler makes with the row in hand, like the review surface's.
 	"getInvitation":     {SelfAuthorized: true},
 	"acceptInvitation":  {SelfAuthorized: true},
-	"totpSetup":         {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"totpVerify":        {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"updateCurrentUser": {Action: auth.ActUserSelfUpdate},
 	// A new activation link: the site's Dashboard asks for it
 	// with the session; one of the writes an unactivated account may make.

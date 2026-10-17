@@ -1,3 +1,7 @@
+// Package auth implements authentication and authorization primitives: PAT
+// and session token handling, PAT scopes, sealing of small secrets, and the
+// single authorization chokepoint. People sign in through an OpenID provider;
+// the server stores no password and no second factor of its own.
 package auth
 
 import (
@@ -19,7 +23,7 @@ const (
 	InvitePrefix       = "agyi_"
 	VerificationPrefix = "agyv_"
 	// TrustedDevicePrefix marks the cookie a browser earns by answering the
-	// second factor, so a later password sign-in from it skips the code.
+	// second factor at a directory, so a later sign-in from it skips the code.
 	// A distinct prefix so a leaked string identifies itself
 	// as a 30-day browser credential rather than a session or a PAT.
 	TrustedDevicePrefix = "agyd_"

@@ -77,10 +77,8 @@ is a name missing from this table.
 |---|---|---|---|
 | `http.request` | INFO | the access line | see above |
 | `http.rate_limited` | INFO | a request refused by a rate class | `class` (`login`, `anon`, `authed`, `abuse_reports`, `scim`, an organization's SCIM data plane over its budget, and `model-input`, a model-input caller or an address presenting job credentials over its budget), `route`; for the git transports, `class` `push` with `agent` (the repository's push budget, over HTTP or SSH), `class` `ssh-key-offer` with `source` (the address's public-key offers to the SSH listener), and `class` `git-concurrent` with `source` (the client address, as resolved through the declared proxies, at its budget of concurrent git operations, over HTTP or SSH) |
-| `auth.login_failed` | INFO | a native sign-in failed | `user` (the id when the login named an account; the zero id otherwise). The login as typed is on the audit row, not here |
-| `auth.social_rejected` | WARN | a sign-in through the OpenID provider or a social one was rejected at the token exchange | `provider`, `err` |
+| `auth.social_rejected` | WARN | a sign-in through the OpenID provider was rejected at the token exchange | `provider`, `err` |
 | `saml.state_unavailable` | ERROR | a SAML login refused because the shared state behind it could not be read or written; the fail-closed opposite of `failopen.*` | `set` (`assertions`, `requests`), `err` |
-| `auth.totp_challenge_unavailable` | ERROR | a 2FA social login's second leg refused because its challenge could not be recorded as consumed in the shared set; fail closed, as `saml.state_unavailable` is. A request that had already ended logs a WARN without the event | `err` |
 | `ssrf.refused` | WARN | the private-range guard refused a webhook target | `org`, `delivery`, `endpoint`, `host` |
 | `gate.verdict` | INFO | the gate decided a version | `outcome` (`published`, `rejected`, `needs_review`), `version`, `agent`, `run`, `worst_severity`, `findings`, `reason`; and `ruleset` when a new ruleset's redo of the review queue published a held version |
 | `gate.error` | WARN | the platform's own failure sent a version to review: stage errors, an unusable policy, the watchdog | `version`, `run`, and `stage_errors` or `kind` + `err` |

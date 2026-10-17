@@ -72,7 +72,7 @@ const (
 	ActUserSelfUpdate     Action = "user.self.update"
 	ActUserTokensRead     Action = "user.tokens.read"
 	ActUserTokensManage   Action = "user.tokens.manage"   // session-only (a PAT cannot mint or revoke PATs)
-	ActUserSecurityManage Action = "user.security.manage" // session-only: logout, 2FA enrollment
+	ActUserSecurityManage Action = "user.security.manage" // session-only: logout, sessions, remembered browsers
 	// ActUserOrgRequest asks the administrators of the organization at the
 	// caller's email domain for access: session only, since
 	// it mails people on the caller's behalf.

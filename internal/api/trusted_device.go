@@ -2,12 +2,10 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
@@ -17,52 +15,18 @@ import (
 // Trusted devices.
 //
 // A trusted device is a credential of its own class: a browser that answered
-// the second factor once may be remembered, so a later password sign-in from
-// it skips the code. It is not a session, does not extend one, and grants
-// nothing beyond that skip — a session still has to be earned by password on
-// every sign-in, and the 24h absolute cap on sessions is untouched.
+// the second factor once may be remembered by the directory that asked for
+// it, so a later sign-in from it skips the code. It is not a session, does
+// not extend one, and grants nothing beyond that skip. The server keeps the
+// record (minted through SignIn.RememberBrowser, checked through
+// UseRememberedBrowser); the directory sets and reads the cookie.
 //
 // Two rules shape everything below. The token is the whole decision: the
 // issuing address and user agent are recorded so the account page can describe
-// the browser to its owner, and neither is consulted here, so nothing the
-// client can choose influences trust. And the lifetime is absolute, not
-// sliding: use refreshes last_seen_at and never moves expires_at, so a
-// stolen cookie does not become immortal by being used.
-
-// trustedDeviceSkip reports whether this request carries a trusted-device
-// cookie that is userID's and still live.
-//
-// It fails closed. An absent, empty, malformed, expired or revoked cookie, one
-// belonging to somebody else, and — the case that matters most — a store that
-// cannot be read, all answer false, and the caller demands the second factor.
-// An outage must never be the way past a factor (the rule the SAML
-// state sets follow too, and the reason the record lives in the database
-// rather than in a signed cookie nobody can revoke).
-//
-// The caller has already verified the password by the time this runs: the
-// cookie skips the second factor and is never itself an authentication.
-func (s *Server) trustedDeviceSkip(ctx context.Context, r *http.Request, userID uuid.UUID) bool {
-	c, err := r.Cookie(trustedDeviceCookieName)
-	if err != nil || c.Value == "" {
-		return false
-	}
-	row, err := s.q().GetTrustedDeviceByHash(ctx, storegen.GetTrustedDeviceByHashParams{
-		TokenSha256: auth.HashToken(c.Value),
-		UserID:      userID,
-	})
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			s.log.WarnContext(ctx, "trusted device: lookup failed, demanding the code", "err", err)
-		}
-		return false
-	}
-	if err := s.q().TouchTrustedDevice(ctx, row.ID); err != nil {
-		// A touch that fails does not undo the skip: the record was read and
-		// is live. last_seen_at is a display fact, not part of the decision.
-		s.log.WarnContext(ctx, "trusted device: touch", "err", err)
-	}
-	return true
-}
+// the browser to its owner, and neither is consulted when it is used, so
+// nothing the client can choose influences trust. And the lifetime is
+// absolute, not sliding: use refreshes last_seen_at and never moves
+// expires_at, so a stolen cookie does not become immortal by being used.
 
 // createTrustedDevice records a new trusted device inside the caller's
 // transaction — the same one that creates the session and writes the sign-in
@@ -82,8 +46,8 @@ func (s *Server) trustedDeviceSkip(ctx context.Context, r *http.Request, userID 
 // say — turns a sign-in that asked to be remembered into a 500 while one that
 // did not still works. That asymmetry is the tell, and it points at the table.
 //
-// detail rides the user.trusted_device_add row: the directory path marks its
-// records {"via": "directory"}, so an investigator can tell which sign-in
+// detail rides the user.trusted_device_add row: an extension's mint marks
+// its records with its name, so an investigator can tell which sign-in
 // earned one.
 func (s *Server) createTrustedDevice(ctx context.Context, q *storegen.Queries, r *http.Request, userID uuid.UUID, detail map[string]any) (string, error) {
 	token, err := auth.NewToken(auth.TrustedDevicePrefix)
@@ -109,32 +73,6 @@ func (s *Server) createTrustedDevice(ctx context.Context, q *storegen.Queries, r
 		return "", err
 	}
 	return token, nil
-}
-
-// setTrustedDeviceCookie sets the cookie with the attributes every cookie this
-// server sets, and a Max-Age equal to the record's lifetime so the browser
-// drops it when the trust expires rather than presenting a dead token.
-//
-// clearCookie expires it with the same attributes: a clear written bare
-// carries nothing today and a value the day someone edits it.
-func setTrustedDeviceCookie(w http.ResponseWriter, token string, ttl time.Duration, secure bool) {
-	setTrustedDeviceCookieAt(w, token, ttl, secure, "/", "")
-}
-
-// setTrustedDeviceCookieAt is the one place the cookie's flags are written;
-// the native path scopes it to the whole host, the directory path to the
-// directory's flow executor.
-func setTrustedDeviceCookieAt(w http.ResponseWriter, token string, ttl time.Duration, secure bool, path, domain string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     trustedDeviceCookieName,
-		Value:    token,
-		Path:     path,
-		Domain:   domain,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(ttl.Seconds()),
-	})
 }
 
 // rememberWindow is how recent a sign-in must be for its token to earn a
@@ -175,7 +113,8 @@ func (s *Server) CountTrustedDevices(w http.ResponseWriter, r *http.Request) {
 
 // ClearTrustedDevices implements DELETE /user/trusted-devices: every live
 // remembered browser of the caller's account is revoked, this one included,
-// so each is asked for the second factor at its next sign-in. Sessions and
+// so each is asked for the second factor at its next sign-in (its cookie is
+// the directory's, and finds no record behind it). Sessions and
 // authenticators are untouched. Revoked rather than deleted: the rows keep
 // what an investigator may need until the sweep removes them.
 // One audit row carries the count; a clear that found nothing writes none,
@@ -212,14 +151,5 @@ func (s *Server) ClearTrustedDevices(w http.ResponseWriter, r *http.Request) {
 		problemInternal(w, r)
 		return
 	}
-	s.clearTrustedDeviceCookies(w)
 	writeJSON(w, http.StatusOK, TrustedDevicesCleared{Cleared: int(cleared)})
-}
-
-// clearTrustedDeviceCookies expires this browser's remembered-browser cookie
-// with the attributes it was set with: host-wide on the server's own host.
-// A browser a directory remembers on its own sign-in carries the directory's
-// cookie, which the revoked records leave inert.
-func (s *Server) clearTrustedDeviceCookies(w http.ResponseWriter) {
-	setTrustedDeviceCookieAt(w, "", -time.Second, s.cfg.Auth.CookieSecure, "/", "")
 }

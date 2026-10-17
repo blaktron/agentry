@@ -9,14 +9,10 @@ import (
 // token creation are listed with where they came from, and nobody sees
 // anyone else's.
 func TestUserActivityFeed(t *testing.T) {
-	env := newTestEnv(t)
-	u := env.register("act-user")
-	env.verifyEmail(u)
-	sess := env.login(u)
+	env, idp := newOIDCTestEnv(t, nil)
+	sess := env.mintAccount(t, idp, "act-user")
 	_, _ = env.mintPAT(sess, "scripts", "agent:read")
-	other := env.register("act-other")
-	env.verifyEmail(other)
-	otherSess := env.login(other)
+	otherSess := env.mintAccount(t, idp, "act-other")
 
 	var page struct {
 		Events []struct {

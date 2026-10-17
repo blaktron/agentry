@@ -1,51 +1,42 @@
 package api_test
 
-// Trusted devices: a browser that
-// answered the second factor may be remembered, so a later password sign-in
-// from it is not asked for the code.
+// Trusted devices (remembered browsers): a browser that answered the second
+// factor at the sign-in provider may be remembered, so a later sign-in from
+// it is not asked for the code. The server keeps the record: it is minted
+// through the sign-in hook's RememberBrowser, from that sign-in's own
+// verified token, and checked through UseRememberedBrowser. The directory
+// that asked for the code sets and reads the cookie.
 //
 // These tests are written to be mutation-checked. Each names the control
 // it proves, so breaking the control breaks a named test:
 //
-//	mint only after the factor was answered  → TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor
-//	the opt-in defaults to off               → TestTrustedDeviceIsNotMintedUnlessAskedFor
-//	the cookie is never itself a credential  → TestTrustedDeviceCookieAuthenticatesNothingOnItsOwn
+//	mint only from a fresh second factor     → TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor
+//	a sign-in mints nothing unless asked     → TestTrustedDeviceIsNotMintedUnlessAskedFor
+//	the token is never itself a credential   → TestTrustedDeviceCookieAuthenticatesNothingOnItsOwn
 //	the record is bound to its owner in SQL  → TestTrustedDeviceIsBoundToItsOwner
 //	expired / revoked / unknown are refused  → TestTrustedDeviceRefusesADeadCredential
 //	a store that cannot be read fails closed → TestTrustedDeviceStoreFailureDemandsTheCode
 //	the lifetime is absolute, not sliding    → TestTrustedDeviceExpiryIsAbsoluteNotSliding
 //	only the hash is stored                  → TestTrustedDeviceStoresOnlyTheHash
-//	the cookie carries its attributes        → TestTrustedDeviceCookieAttributes
+//	the token says what it is                → TestTrustedDeviceTokenIdentifiesItself
 //	deactivation takes the browser away      → TestSCIMDeactivationRevokesTrustedDevices
 //	erasure removes the row, not just trust  → TestErasureDeletesTrustedDevices
 //	the sweep deletes only what has expired  → TestTrustedDeviceSweepDeletesOnlyWhatHasExpired
 //	logout leaves the browser remembered     → TestTrustedDeviceSurvivesLogout
 //	so does "sign out everywhere else"       → TestTrustedDeviceSurvivesSignOutEverywhereElse
 //
-// Each control was broken in turn and the named test failed; then the
-// control was restored and the suite went green again. The dead-credential
-// control takes two mutations, one for expiry and one for revocation. The
-// last three are caught by a sweep that also deletes revoked rows, one that
-// deletes everything, one that spares revoked rows past their expiry, a
-// logout that revokes, and a "sign out everywhere else" that revokes. Two
-// results are worth keeping, because each is a trap.
-//
 // Deleting "AND user_id = $2" from the lookup does NOT prove the owner scoping.
 // The generated Go still passes two arguments, so pgx rejects the query, the
 // lookup fails closed, and TestTrustedDeviceIsBoundToItsOwner passes for the
 // wrong reason. Making the scoping vacuous while keeping the argument count
 // valid — "AND (user_id = $2 OR user_id IS NOT NULL)" — is the mutation that
-// actually exercises it, and the test catches that one with "status 200, want
-// 401".
-//
-// The controls "the cookie is never itself a credential" and "only the hash
-// is stored" are checked by disabling the password comparison, and by
-// storing the token in the clear, and each fails its named test.
+// actually exercises it.
 
 import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -56,18 +47,19 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/testidp"
 )
 
 const trustedDeviceCookie = "agentry_trusted_device"
 
 // deviceTTL is the lifetime this file's server is configured with. It is
-// deliberately not the 30-day default: a cookie whose Max-Age matches a
+// deliberately not the 30-day default: a mint that answers with a
 // distinctive value proves the server read the configuration rather than
 // hard-coding the ceiling. The default and the ceiling are config's own tests.
 const deviceTTL = 100 * time.Hour
 
 // newTrustedDeviceEnv builds a server whose trusted-device lifetime is
-// distinctive, so the issued cookie's Max-Age is checkable.
+// distinctive.
 func newTrustedDeviceEnv(t *testing.T) *testEnv {
 	t.Helper()
 	return newTestEnvCfg(t, func(c *config.Config) {
@@ -75,52 +67,72 @@ func newTrustedDeviceEnv(t *testing.T) *testEnv {
 	})
 }
 
-// enrolTOTP turns the second factor on for a registered account and returns its
-// secret so a test can compute live codes. It goes through the real setup and
-// verify endpoints rather than writing the row, because what is under test is
-// what a sign-in does once the factor exists.
-func enrolTOTP(t *testing.T, env *testEnv, handle string) string {
+// userIDOf is the account id behind a handle.
+func userIDOf(t *testing.T, env *testEnv, handle string) uuid.UUID {
 	t.Helper()
-	sess := env.login(handle)
-	var setup struct {
-		Secret string `json:"secret"`
+	var id uuid.UUID
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT id FROM handles WHERE handle = $1`, handle).Scan(&id); err != nil {
+		t.Fatalf("no account %s: %v", handle, err)
 	}
-	env.doJSON(sess, http.MethodPost, "/api/v1/auth/2fa/totp/setup", nil, &setup, http.StatusOK)
-	if setup.Secret == "" {
-		t.Fatal("TOTP setup returned no secret")
-	}
-	code, err := totpCode(setup.Secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	env.doJSON(sess, http.MethodPost, "/api/v1/auth/2fa/totp/verify",
-		map[string]any{"code": code}, nil, http.StatusNoContent)
-	return setup.Secret
+	return id
 }
 
-// earnTrustedDevice enrols the second factor on a fresh account and signs in
-// answering it with the opt-in set, returning the handle, the TOTP secret and
-// the issued cookie. Every test here needs exactly that, and needing it is the
-// point: the credential cannot be obtained any other way.
-func earnTrustedDevice(t *testing.T, env *testEnv, handle string) (string, string, caller) {
+// signInRequest stands in for the sign-in callback's request, which the
+// mint and the use record facts from.
+func signInRequest() *http.Request {
+	return httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/oidc/callback", nil)
+}
+
+// earnTrustedDevice makes a fresh account and remembers a browser for it the
+// one way there is: the mint a sign-in hook reaches, with evidence of a second
+// factor answered just now. It returns the handle, the account id and the
+// token the directory would set as its cookie.
+func earnTrustedDevice(t *testing.T, env *testEnv, handle string) (string, uuid.UUID, string) {
 	t.Helper()
 	h := env.register(handle)
-	secret := enrolTOTP(t, env, h)
-	code, err := totpCode(secret)
+	id := userIDOf(t, env, h)
+	token, ttl, err := env.srvObj.MintRememberedBrowser(signInRequest(), id, []string{"pwd", "otp"}, time.Now(), map[string]any{"via": "test"})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("a fresh second factor earned no remembered browser: %v", err)
 	}
-	c, cookies := env.loginWith(h, loginOpts{totpCode: code, rememberDevice: true})
-	if c.device == "" {
-		t.Fatal("answering the second factor with the opt-in set issued no trusted-device cookie")
+	if ttl != deviceTTL {
+		t.Fatalf("the mint's lifetime is %s, want the configured %s", ttl, deviceTTL)
 	}
-	requireSetCookie(t, cookies, trustedDeviceCookie, int(deviceTTL.Seconds()), false)
-	return h, secret, c
+	return h, id, token
 }
 
-// deviceRow is the stored record behind a handle's most recent trusted device.
-// It reads the table directly because what a test needs to know is what was
-// persisted, not what the API said it persisted.
+// useDevice asks the server whether token is a live remembered browser of
+// id's account, as a directory's check does.
+func useDevice(t *testing.T, env *testEnv, id uuid.UUID, token string) (bool, error) {
+	t.Helper()
+	return env.srvObj.UseRememberedBrowser(signInRequest(), id, token, map[string]any{"via": "test"})
+}
+
+func requireRemembered(t *testing.T, env *testEnv, id uuid.UUID, token string, want bool) {
+	t.Helper()
+	got, err := useDevice(t, env, id, token)
+	if err != nil {
+		t.Fatalf("use: %v", err)
+	}
+	if got != want {
+		t.Fatalf("remembered = %v, want %v", got, want)
+	}
+}
+
+func countDevices(t *testing.T, env *testEnv, id uuid.UUID) int {
+	t.Helper()
+	var n int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM trusted_devices WHERE user_id = $1`, id).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// deviceRow is the stored record behind an account's most recent trusted
+// device. It reads the table directly because what a test needs to know is
+// what was persisted, not what the API said it persisted.
 type deviceRow struct {
 	id         uuid.UUID
 	tokenHash  []byte
@@ -129,187 +141,159 @@ type deviceRow struct {
 	revokedAt  *time.Time
 }
 
-func fetchDeviceRow(t *testing.T, env *testEnv, handle string) deviceRow {
+func fetchDeviceRow(t *testing.T, env *testEnv, userID uuid.UUID) deviceRow {
 	t.Helper()
 	var d deviceRow
 	err := env.st.Pool().QueryRow(context.Background(),
 		`SELECT id, token_sha256, expires_at, last_seen_at, revoked_at
-		   FROM trusted_devices
-		  WHERE user_id = (SELECT id FROM handles WHERE handle = $1)
-		  ORDER BY created_at DESC, id DESC LIMIT 1`, handle).
+		   FROM trusted_devices WHERE user_id = $1
+		  ORDER BY created_at DESC, id DESC LIMIT 1`, userID).
 		Scan(&d.id, &d.tokenHash, &d.expiresAt, &d.lastSeenAt, &d.revokedAt)
 	if err != nil {
-		t.Fatalf("no trusted_devices row for %s: %v", handle, err)
+		t.Fatalf("no trusted_devices row for %s: %v", userID, err)
 	}
 	return d
 }
 
-// requireRefused proves a sign-in was turned away: a 401 and no session. It is
-// deliberately not named for the reason, because the point of several of these
-// cases is that a dead credential, a missing one and a wrong password are all
-// refused the same way, and nothing about the refusal says which happened.
-func requireRefused(t *testing.T, res *http.Response) {
-	t.Helper()
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status %d, want 401", res.StatusCode)
+// TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor is the positive
+// path and the mint rule at once: evidence of a second factor answered just
+// now earns a record, and nothing less does. A token whose `amr` names no
+// factor, or whose `auth_time` is old (an IdP re-issuing a token against a
+// session of its own), mints nothing; using the record mints nothing more.
+func TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor(t *testing.T) {
+	env := newTrustedDeviceEnv(t)
+	h := env.register("td-earn")
+	id := userIDOf(t, env, h)
+	for name, ev := range map[string]struct {
+		amr      []string
+		authTime time.Time
+	}{
+		"no second factor":           {[]string{"pwd"}, time.Now()},
+		"no amr at all":              {nil, time.Now()},
+		"no auth_time":               {[]string{"otp"}, time.Time{}},
+		"a factor answered long ago": {[]string{"otp"}, time.Now().Add(-time.Hour)},
+	} {
+		if _, _, err := env.srvObj.MintRememberedBrowser(signInRequest(), id, ev.amr, ev.authTime, nil); !errors.Is(err, api.ErrNoSecondFactor) {
+			t.Errorf("%s: mint err = %v, want ErrNoSecondFactor", name, err)
+		}
 	}
-	for _, ck := range res.Cookies() {
-		if ck.Name == "agentry_session" && ck.Value != "" && ck.MaxAge >= 0 {
-			t.Fatal("a session was issued on a sign-in that should have been refused")
+	if n := countDevices(t, env, id); n != 0 {
+		t.Fatalf("%d records minted without a fresh second factor", n)
+	}
+
+	_, other, token := earnTrustedDevice(t, env, "td-earn2")
+	requireRemembered(t, env, other, token, true)
+	// The use did not mint a second credential, which is what keeps the
+	// lifetime absolute: one browser earns one record.
+	if n := countDevices(t, env, other); n != 1 {
+		t.Fatalf("%d trusted-device rows after one earn and one use, want exactly 1", n)
+	}
+}
+
+// TestTrustedDeviceIsNotMintedUnlessAskedFor: a sign-in through the
+// provider, second factor and all, leaves no record and sets no cookie
+// unless a sign-in hook asks for one.
+func TestTrustedDeviceIsNotMintedUnlessAskedFor(t *testing.T) {
+	env, idp := newOIDCTestEnv(t, func(c *config.Config) { c.Auth.TrustedDeviceTTL = deviceTTL })
+	h := "td-optin" + env.sfx
+	in := env.signInOIDC(t, idp, config.OIDCProviderID, testidp.Person{
+		Subject: "sub-" + h, Email: h + "@example.test", EmailVerified: true, Username: h,
+		AMR: []string{"pwd", "otp"}, AuthTime: time.Now(),
+	})
+	if in.status != http.StatusOK {
+		t.Fatalf("sign-in: %d %s", in.status, in.body)
+	}
+	requireNoCookie(t, in.cookies, trustedDeviceCookie)
+	if n := countDevices(t, env, uuid.MustParse(in.userID)); n != 0 {
+		t.Fatalf("%d trusted-device rows recorded for a sign-in that never asked for one", n)
+	}
+}
+
+// TestTrustedDeviceCookieAuthenticatesNothingOnItsOwn proves the credential is
+// narrow. It stands in for the second factor at the directory and grants
+// nothing here: no session, no scope, no access to an authenticated route,
+// whether it arrives as the cookie or as a bearer.
+func TestTrustedDeviceCookieAuthenticatesNothingOnItsOwn(t *testing.T) {
+	env := newTrustedDeviceEnv(t)
+	_, _, token := earnTrustedDevice(t, env, "td-narrow")
+	for name, set := range map[string]func(*http.Request){
+		"as the cookie": func(r *http.Request) { r.AddCookie(&http.Cookie{Name: trustedDeviceCookie, Value: token}) },
+		"as a bearer":   func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+token) },
+	} {
+		req, err := http.NewRequest(http.MethodGet, env.srv.URL+"/api/v1/user/sessions", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		set(req)
+		res, err := env.srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnauthorized {
+			t.Errorf("%s: %d, want 401", name, res.StatusCode)
 		}
 	}
 }
 
-func passwordOnly(handle string) map[string]any {
-	return map[string]any{"login": handle, "password": "hunter2hunter2"}
-}
-
-// TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor is the positive path
-// and the mint rule at once: answering the code with the opt-in set issues the
-// cookie, and a later sign-in presenting it is not asked for the code.
-func TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor(t *testing.T) {
-	env := newTrustedDeviceEnv(t)
-	h, _, c := earnTrustedDevice(t, env, "td-earn")
-
-	// A later sign-in presents the cookie and no code, and is let through.
-	res := env.do(caller{device: c.device}, http.MethodPost, "/api/v1/auth/login", passwordOnly(h))
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("a sign-in from a trusted device was refused: %d", res.StatusCode)
-	}
-
-	// The skip did not mint a second credential, which is what keeps the
-	// lifetime absolute: one browser earns one record, and using it does not
-	// produce another or extend the first.
-	requireNoCookie(t, res.Cookies(), trustedDeviceCookie)
-	var n int
-	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT count(*) FROM trusted_devices WHERE user_id = (SELECT id FROM handles WHERE handle = $1)`, h).
-		Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 {
-		t.Fatalf("%d trusted-device rows after one earn and one skip, want exactly 1", n)
-	}
-}
-
-// TestTrustedDeviceIsNotMintedUnlessAskedFor proves the opt-in defaults to off.
-// A correct code with no rememberDevice must leave nothing behind, and the next
-// sign-in must be asked again.
-func TestTrustedDeviceIsNotMintedUnlessAskedFor(t *testing.T) {
-	env := newTrustedDeviceEnv(t)
-	h := env.register("td-optin")
-	secret := enrolTOTP(t, env, h)
-
-	code, err := totpCode(secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, cookies := env.loginWith(h, loginOpts{totpCode: code})
-	requireNoCookie(t, cookies, trustedDeviceCookie)
-
-	var n int
-	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT count(*) FROM trusted_devices WHERE user_id = (SELECT id FROM handles WHERE handle = $1)`, h).
-		Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("%d trusted-device rows recorded for a sign-in that never asked for one", n)
-	}
-
-	res := env.do(anonymous, http.MethodPost, "/api/v1/auth/login", passwordOnly(h))
-	requireRefused(t, res)
-}
-
-// TestTrustedDeviceCookieAuthenticatesNothingOnItsOwn proves the credential is
-// narrow. It stands in for the second factor at sign-in and grants nothing
-// else: no session, no scope, no access to an authenticated route. Without
-// this, "skips the second factor" could quietly become "is a session".
-func TestTrustedDeviceCookieAuthenticatesNothingOnItsOwn(t *testing.T) {
-	env := newTrustedDeviceEnv(t)
-	h, _, c := earnTrustedDevice(t, env, "td-narrow")
-
-	// The cookie alone is not a credential: an authenticated route refuses it.
-	env.doJSON(caller{device: c.device}, http.MethodGet, "/api/v1/user/sessions", nil, nil, http.StatusUnauthorized)
-
-	// And it does not survive a wrong password. The factor is skipped only
-	// after the password is verified, never instead of verifying it.
-	res := env.do(caller{device: c.device}, http.MethodPost, "/api/v1/auth/login",
-		map[string]any{"login": h, "password": "wrong-password"})
-	requireRefused(t, res)
-}
-
 // TestTrustedDeviceIsBoundToItsOwner proves the lookup is scoped by user_id in
-// SQL rather than by a branch above it: one user's cookie is worth nothing to
-// another, and the refusal is the same one an unknown cookie gets.
+// SQL rather than by a branch above it: one account's record is worth nothing
+// to another, and the answer is the same one an unknown token gets.
 func TestTrustedDeviceIsBoundToItsOwner(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
-	_, _, owner := earnTrustedDevice(t, env, "td-owner")
-
-	other := env.register("td-other")
-	enrolTOTP(t, env, other)
-
-	// The other account presents the owner's cookie and no code. It must be
-	// asked for its own, and the answer must not distinguish "that is someone
-	// else's record" from "that record does not exist".
-	res := env.do(caller{device: owner.device}, http.MethodPost, "/api/v1/auth/login", passwordOnly(other))
-	requireRefused(t, res)
+	_, _, token := earnTrustedDevice(t, env, "td-owner")
+	other := userIDOf(t, env, env.register("td-other"))
+	requireRemembered(t, env, other, token, false)
 }
 
-// TestTrustedDeviceRefusesADeadCredential walks every way a presented cookie
-// can fail to be live. Each must demand the code, and each must be refused the
-// same way as an absent one.
+// TestTrustedDeviceRefusesADeadCredential walks every way a presented token
+// can fail to be live. Each is refused the same way as an absent one.
 func TestTrustedDeviceRefusesADeadCredential(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
 	ctx := context.Background()
-	h, _, c := earnTrustedDevice(t, env, "td-dead")
+	_, id, token := earnTrustedDevice(t, env, "td-dead")
 
 	cases := []struct {
-		name string
-		// cookie is what the browser presents; empty means it presents none.
-		cookie string
-		// kill mutates the stored row before the sign-in, for the cases where
-		// the cookie is genuine but the record behind it is not live.
+		name  string
+		token string
+		// kill mutates the stored row before the use, for the cases where
+		// the token is genuine but the record behind it is not live.
 		kill func(t *testing.T)
 	}{
-		{name: "no cookie at all"},
-		{name: "a value that was never issued", cookie: "agyd_neverissued"},
-		{name: "another credential's prefix", cookie: "agys_notasession"},
+		{name: "no token at all"},
+		{name: "a value that was never issued", token: "agyd_neverissued"},
+		{name: "another credential's prefix", token: "agys_notasession"},
 		{
-			name:   "revoked",
-			cookie: c.device,
+			name:  "revoked",
+			token: token,
 			kill: func(t *testing.T) {
 				if _, err := env.st.Pool().Exec(ctx,
 					`UPDATE trusted_devices SET revoked_at = now() WHERE token_sha256 = $1`,
-					auth.HashToken(c.device)); err != nil {
+					auth.HashToken(token)); err != nil {
 					t.Fatal(err)
 				}
 			},
 		},
 		{
-			name:   "expired",
-			cookie: c.device,
+			name:  "expired",
+			token: token,
 			kill: func(t *testing.T) {
 				// Undo the revoke first, so this case fails for its own
 				// reason and not because an earlier one still applies.
 				if _, err := env.st.Pool().Exec(ctx,
 					`UPDATE trusted_devices SET revoked_at = NULL, expires_at = now() - interval '1 second'
-					  WHERE token_sha256 = $1`, auth.HashToken(c.device)); err != nil {
+					  WHERE token_sha256 = $1`, auth.HashToken(token)); err != nil {
 					t.Fatal(err)
 				}
 			},
 		},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.kill != nil {
 				tc.kill(t)
 			}
-			res := env.do(caller{device: tc.cookie}, http.MethodPost, "/api/v1/auth/login", passwordOnly(h))
-			requireRefused(t, res)
+			requireRemembered(t, env, id, tc.token, false)
 		})
 	}
 }
@@ -317,12 +301,12 @@ func TestTrustedDeviceRefusesADeadCredential(t *testing.T) {
 // TestTrustedDeviceStoreFailureDemandsTheCode is the fail-closed control, and
 // the one that matters most: an outage must never be the way past a factor.
 // The table is renamed out from under the lookup so the query errors with
-// something other than "no rows", and the sign-in must demand the code rather
-// than skip it or answer 500.
+// something other than "no rows", and the use must answer no, with the error
+// the caller treats as no.
 func TestTrustedDeviceStoreFailureDemandsTheCode(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
 	ctx := context.Background()
-	h, secret, c := earnTrustedDevice(t, env, "td-failclosed")
+	_, id, token := earnTrustedDevice(t, env, "td-failclosed")
 
 	// No test in internal/api calls t.Parallel(), so the rename cannot race
 	// another test's query. It is restored before the test ends either way.
@@ -335,21 +319,17 @@ func TestTrustedDeviceStoreFailureDemandsTheCode(t *testing.T) {
 	}
 	t.Cleanup(restore)
 
-	// The control: with the store unreadable, the second factor is demanded.
-	// Skipping here would make an outage a bypass; a 500 would make it an
-	// outage. Demanding the code is the only acceptable answer.
-	res := env.do(caller{device: c.device}, http.MethodPost, "/api/v1/auth/login", passwordOnly(h))
-	requireRefused(t, res)
-
-	// And the sign-in still works once the store is back and the code is
-	// supplied, so the failure is contained to the skip and does not take the
-	// factor down with it.
-	restore()
-	code, err := totpCode(secret)
-	if err != nil {
-		t.Fatal(err)
+	if ok, err := useDevice(t, env, id, token); ok || err == nil {
+		t.Fatalf("with the store unreadable the use answered %v, %v: want no, with an error", ok, err)
 	}
-	env.loginWith(h, loginOpts{totpCode: code})
+	if _, _, err := env.srvObj.MintRememberedBrowser(signInRequest(), id, []string{"otp"}, time.Now(), nil); err == nil {
+		t.Fatal("with the store unreadable a mint succeeded")
+	}
+
+	// And the record works once the store is back, so the failure is
+	// contained to the answer and did not damage the record.
+	restore()
+	requireRemembered(t, env, id, token, true)
 }
 
 // TestTrustedDeviceExpiryIsAbsoluteNotSliding proves the lifetime is absolute. Using
@@ -358,24 +338,11 @@ func TestTrustedDeviceStoreFailureDemandsTheCode(t *testing.T) {
 // in daily is still asked again on day thirty.
 func TestTrustedDeviceExpiryIsAbsoluteNotSliding(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
-	h, _, c := earnTrustedDevice(t, env, "td-absolute")
+	_, id, token := earnTrustedDevice(t, env, "td-absolute")
 
-	before := fetchDeviceRow(t, env, h)
-
-	// The skip is asked to remember the browser as well. It must not: trust is
-	// earned by answering the factor, and letting a skip re-mint would turn an
-	// absolute lifetime into a sliding one that never expires for as long as
-	// the cookie is used at least once every thirty days.
-	body := passwordOnly(h)
-	body["rememberDevice"] = true
-	res := env.do(caller{device: c.device}, http.MethodPost, "/api/v1/auth/login", body)
-	requireNoCookie(t, res.Cookies(), trustedDeviceCookie)
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("a sign-in from a trusted device was refused: %d", res.StatusCode)
-	}
-
-	after := fetchDeviceRow(t, env, h)
+	before := fetchDeviceRow(t, env, id)
+	requireRemembered(t, env, id, token, true)
+	after := fetchDeviceRow(t, env, id)
 	if !after.expiresAt.Equal(before.expiresAt) {
 		t.Fatalf("using the credential moved its expiry from %s to %s: the lifetime is sliding, and it must be absolute",
 			before.expiresAt.Format(time.RFC3339Nano), after.expiresAt.Format(time.RFC3339Nano))
@@ -385,7 +352,7 @@ func TestTrustedDeviceExpiryIsAbsoluteNotSliding(t *testing.T) {
 			after.lastSeenAt.Format(time.RFC3339Nano))
 	}
 	if after.id != before.id {
-		t.Fatalf("using the credential replaced the record (%s → %s): a skip must not mint", before.id, after.id)
+		t.Fatalf("using the credential replaced the record (%s → %s): a use must not mint", before.id, after.id)
 	}
 	// Neither read may find the row revoked: use is not revocation, and a
 	// record that came back revoked here would make every assertion above
@@ -393,14 +360,8 @@ func TestTrustedDeviceExpiryIsAbsoluteNotSliding(t *testing.T) {
 	if before.revokedAt != nil || after.revokedAt != nil {
 		t.Fatalf("the record is revoked (before=%v after=%v) while still being honoured", before.revokedAt, after.revokedAt)
 	}
-	var n int
-	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT count(*) FROM trusted_devices WHERE user_id = (SELECT id FROM handles WHERE handle = $1)`, h).
-		Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 {
-		t.Fatalf("%d records after one earn and one skip that asked to be remembered, want exactly 1", n)
+	if n := countDevices(t, env, id); n != 1 {
+		t.Fatalf("%d records after one earn and one use, want exactly 1", n)
 	}
 }
 
@@ -409,10 +370,10 @@ func TestTrustedDeviceExpiryIsAbsoluteNotSliding(t *testing.T) {
 // credential. This is the rule every other token in the registry follows.
 func TestTrustedDeviceStoresOnlyTheHash(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
-	h, _, c := earnTrustedDevice(t, env, "td-hash")
+	_, id, token := earnTrustedDevice(t, env, "td-hash")
 
-	row := fetchDeviceRow(t, env, h)
-	want := auth.HashToken(c.device)
+	row := fetchDeviceRow(t, env, id)
+	want := auth.HashToken(token)
 	if len(row.tokenHash) != len(want) {
 		t.Fatalf("stored hash is %d bytes, want %d", len(row.tokenHash), len(want))
 	}
@@ -430,33 +391,31 @@ func TestTrustedDeviceStoresOnlyTheHash(t *testing.T) {
 		Scan(&whole); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(whole, c.device) {
+	if strings.Contains(whole, token) {
 		t.Fatal("the issued token is recoverable from the stored row")
 	}
 }
 
-// TestTrustedDeviceCookieAttributes proves the cookie is issued with the
-// attributes every cookie this server carries, and a Max-Age that comes from
-// the configuration rather than from a literal. HttpOnly is the load-bearing
-// one: auth material must not be reachable by browser JavaScript.
-func TestTrustedDeviceCookieAttributes(t *testing.T) {
+// TestTrustedDeviceTokenIdentifiesItself: the token the directory sets as
+// its cookie carries its own prefix, so a leaked string says what it is,
+// and enough of it to carry 32 bytes of entropy.
+func TestTrustedDeviceTokenIdentifiesItself(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
-	_, _, c := earnTrustedDevice(t, env, "td-attrs")
-
-	if !strings.HasPrefix(c.device, auth.TrustedDevicePrefix) {
+	_, _, token := earnTrustedDevice(t, env, "td-attrs")
+	if !strings.HasPrefix(token, auth.TrustedDevicePrefix) {
 		t.Fatalf("the issued token has prefix %q, want %q so a leaked string identifies itself",
-			c.device[:min(len(c.device), 8)], auth.TrustedDevicePrefix)
+			token[:min(len(token), 8)], auth.TrustedDevicePrefix)
 	}
-	if len(c.device) <= len(auth.TrustedDevicePrefix) {
-		t.Fatalf("the issued token is %d characters: too short to carry 32 bytes of entropy", len(c.device))
+	if len(token) <= len(auth.TrustedDevicePrefix) {
+		t.Fatalf("the issued token is %d characters: too short to carry 32 bytes of entropy", len(token))
 	}
 }
 
 // insertTrustedDevice records one directly, the way insertSession and insertPAT
 // do for the credentials they stand in for. It exists for the paths that take
-// trust away rather than grant it: a SCIM-provisioned account has no password
-// and so cannot earn a record by signing in, and what deactivation does to one
-// is the thing under test.
+// trust away rather than grant it: a SCIM-provisioned account never signed in
+// and so cannot have earned a record, and what deactivation does to one is
+// the thing under test.
 func insertTrustedDevice(t *testing.T, env *testEnv, userID string) string {
 	t.Helper()
 	tok, err := auth.NewToken(auth.TrustedDevicePrefix)
@@ -499,13 +458,13 @@ func deviceState(t *testing.T, env *testEnv, token string) string {
 // remembered browser away as well as the sessions.
 //
 // Deactivation drops the membership, revokes the org-bound PATs and kills the
-// sessions, but it deliberately leaves the account's password and state alone,
-// because the person may exist outside the organization. So a surviving record
-// would let a deprovisioned user sign straight back in and be asked for *less*
-// than before them — the second factor skipped — which is the opposite of what
+// sessions, but it deliberately leaves the account's state alone, because the
+// person may exist outside the organization. So a surviving record would let a
+// deprovisioned user sign straight back in and be asked for *less* than before
+// them — the second factor skipped — which is the opposite of what
 // scimDeactivate promises. TestTrustedDeviceRefusesADeadCredential already
-// proves a revoked record is refused at sign-in; this proves deactivation is
-// what revokes it, and the two together are the property.
+// proves a revoked record is refused at use; this proves deactivation is what
+// revokes it, and the two together are the property.
 func TestSCIMDeactivationRevokesTrustedDevices(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
 	scim, _ := env.scimOrg(t, "td-scim")
@@ -544,15 +503,15 @@ func TestSCIMDeactivationRevokesTrustedDevices(t *testing.T) {
 // the audit log, so deleting the row loses no record.
 func TestErasureDeletesTrustedDevices(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
-	_, _, c := earnTrustedDevice(t, env, "td-erase")
+	h, _, token := earnTrustedDevice(t, env, "td-erase")
 
-	if got := deviceState(t, env, c.device); got != "live" {
+	if got := deviceState(t, env, token); got != "live" {
 		t.Fatalf("before erasure the record is %s, want live", got)
 	}
 
-	env.doJSON(c, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
+	env.doJSON(env.login(h), http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
 
-	if got := deviceState(t, env, c.device); got != "gone" {
+	if got := deviceState(t, env, token); got != "gone" {
 		t.Fatalf("after erasure the record is %s, want gone: a revoked row would still hold an address and a user agent belonging to a person who asked to be deleted", got)
 	}
 }
@@ -620,22 +579,14 @@ func TestTrustedDeviceSweepDeletesOnlyWhatHasExpired(t *testing.T) {
 // of the feature. A future reader who "fixes" logout to revoke it fails here.
 func TestTrustedDeviceSurvivesLogout(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
-	h, _, c := earnTrustedDevice(t, env, "td-logout")
-	out := env.do(c, http.MethodPost, "/api/v1/auth/logout", nil)
+	h, id, token := earnTrustedDevice(t, env, "td-logout")
+	out := env.do(env.login(h), http.MethodPost, "/api/v1/auth/logout", nil)
 	_ = out.Body.Close()
 	if out.StatusCode != http.StatusNoContent {
 		t.Fatalf("logout: %d", out.StatusCode)
 	}
-	// The browser keeps its cookie: logout ends the session, not the trust.
 	requireNoCookie(t, out.Cookies(), trustedDeviceCookie)
-	if got := deviceState(t, env, c.device); got != "live" {
-		t.Fatalf("the remembered browser after logout: %s, want live", got)
-	}
-	res := env.do(caller{device: c.device}, http.MethodPost, "/api/v1/auth/login", passwordOnly(h))
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("a sign-in from the remembered browser after logout was refused: %d", res.StatusCode)
-	}
+	requireRemembered(t, env, id, token, true)
 }
 
 // TestTrustedDeviceSurvivesSignOutEverywhereElse: "sign out
@@ -644,20 +595,8 @@ func TestTrustedDeviceSurvivesLogout(t *testing.T) {
 // (DELETE /user/trusted-devices), which says so.
 func TestTrustedDeviceSurvivesSignOutEverywhereElse(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
-	h, secret, c := earnTrustedDevice(t, env, "td-elsewhere")
-	code, err := totpCode(secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// A second browser's session, which the control ends.
-	other, _ := env.loginWith(h, loginOpts{totpCode: code})
-	env.doJSON(other, http.MethodDelete, "/api/v1/user/sessions", nil, nil, http.StatusNoContent)
-	if got := deviceState(t, env, c.device); got != "live" {
-		t.Fatalf("the remembered browser after signing out everywhere else: %s, want live", got)
-	}
-	res := env.do(caller{device: c.device}, http.MethodPost, "/api/v1/auth/login", passwordOnly(h))
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("a sign-in from the remembered browser after signing out everywhere else was refused: %d", res.StatusCode)
-	}
+	h, id, token := earnTrustedDevice(t, env, "td-elsewhere")
+	env.login(h)
+	env.doJSON(env.login(h), http.MethodDelete, "/api/v1/user/sessions", nil, nil, http.StatusNoContent)
+	requireRemembered(t, env, id, token, true)
 }

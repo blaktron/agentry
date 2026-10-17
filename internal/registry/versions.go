@@ -762,9 +762,10 @@ func (s *Service) enterPipeline(ctx context.Context, a Agent, versionID uuid.UUI
 }
 
 // checkPublicPublish2FA enforces the 2FA gate: publishing to a public
-// namespace requires TOTP on the submitting account. Enabled by the api/worker wiring
-// outside dev mode — a dev instance has no enrollment flow to
-// satisfy, and config validation already forbids devMode in a prod env.
+// namespace requires a second factor the sign-in provider asserted for the
+// submitting account. Enabled by the api/worker wiring under
+// auth.requireIdpMFA outside dev mode; config validation already forbids
+// devMode in a prod env.
 func (s *Service) checkPublicPublish2FA(ctx context.Context, p *auth.Principal, a Agent) error {
 	if !s.require2FAPublic || a.Visibility != "public" {
 		return nil
@@ -774,10 +775,10 @@ func (s *Service) checkPublicPublish2FA(ctx context.Context, p *auth.Principal, 
 		// Fail closed: we could not establish that 2FA is on.
 		return fmt.Errorf("registry: verify two-factor enrollment: %w", err)
 	}
-	// Native TOTP, or a second factor the directory service asserted at
-	// sign-in (users.idp_mfa_at): either is evidence.
-	if !u.TotpEnabled && u.IdpMfaAt == nil {
-		return fmt.Errorf("%w: a public namespace needs two-factor authentication on the account — native TOTP, or a second factor the sign-in provider asserts", ErrTwoFactorRequired)
+	// A second factor the sign-in provider asserted (users.idp_mfa_at) is
+	// the evidence.
+	if u.IdpMfaAt == nil {
+		return fmt.Errorf("%w: a public namespace needs two-factor authentication on the account: sign in with a second factor at your sign-in provider", ErrTwoFactorRequired)
 	}
 	return nil
 }

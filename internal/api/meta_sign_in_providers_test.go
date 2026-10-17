@@ -78,56 +78,43 @@ func metaAgreesWithStart(t *testing.T, env *testEnv, want []string) {
 }
 
 func TestMetaListsTheSignInProvidersStartRedirectsFor(t *testing.T) {
-	gh := newFakeGitHub(t)
 	idp := newFakeOIDC(t)
 	env := newTestEnvCfg(t, func(cfg *config.Config) {
-		gh.configure(cfg)
 		cfg.Auth.OIDC = config.OIDCProvider{
 			ID: config.AuthentikProviderID, ClientID: idp.clientID, ClientSecret: "authentik-secret", Issuer: idp.srv.URL,
 		}
-		// A client without the issuer it needs cannot start, so it is not
-		// offered either.
-		cfg.Social.OpenAI = config.SocialProvider{ClientID: "openai-client", ClientSecret: "openai-secret"}
 	}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
-	metaAgreesWithStart(t, env, []string{"github", "authentik"})
+	metaAgreesWithStart(t, env, []string{"authentik"})
 
-	// The core's own sign-in page offers the same providers: no button that
+	// The core's own sign-in page offers the same provider: no button that
 	// would answer 404.
-	res := env.do(anonymous, http.MethodGet, "/ui/login", nil)
+	res := env.do(anonymous, http.MethodGet, "/ui/login?error=x", nil)
 	body, _ := io.ReadAll(res.Body)
 	_ = res.Body.Close()
 	for _, p := range specSignInProviders(t) {
 		offered := strings.Contains(string(body), "/api/v1/auth/oidc/"+p+"/start")
-		if want := p == "github" || p == "authentik"; offered != want {
+		if want := p == "authentik"; offered != want {
 			t.Errorf("/ui/login offers %s: %v, want %v", p, offered, want)
 		}
 	}
 }
 
-// Every provider the spec names can be listed, in the spec's order. The
-// sign-in OpenID provider is one provider under one of two ids, "authentik"
-// where its accounts are linked under that id and "oidc" otherwise, so each is
-// listed in a deployment of its own, with every other provider beside it.
+// Every id the spec names can be listed. The sign-in OpenID provider is one
+// provider under one of two ids, "authentik" where its accounts are linked
+// under that id and "oidc" otherwise, so each is listed in a deployment of
+// its own, and the other id is not.
 func TestMetaListsEveryConfiguredSignInProvider(t *testing.T) {
 	for _, id := range []string{"authentik", "oidc"} {
 		t.Run(id, func(t *testing.T) {
-			gh := newFakeGitHub(t)
 			idp := newFakeOIDC(t)
 			env := newTestEnvCfg(t, func(cfg *config.Config) {
-				gh.configure(cfg)
-				oidc := config.SocialProvider{ClientID: idp.clientID, ClientSecret: "secret", Issuer: idp.srv.URL}
-				cfg.Social.Google, cfg.Social.Microsoft, cfg.Social.OpenAI, cfg.Social.Claude = oidc, oidc, oidc, oidc
 				cfg.Auth.OIDC = config.OIDCProvider{ID: id, Issuer: idp.srv.URL, ClientID: idp.clientID, ClientSecret: "secret"}
 			}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
-			other := map[string]string{"authentik": "oidc", "oidc": "authentik"}[id]
-			var want []string
-			for _, p := range specSignInProviders(t) {
-				if p != other {
-					want = append(want, p)
-				}
-			}
-			metaAgreesWithStart(t, env, want)
+			metaAgreesWithStart(t, env, []string{id})
 		})
+	}
+	if ids := specSignInProviders(t); !slices.Equal(ids, []string{"authentik", "oidc"}) {
+		t.Fatalf("the spec's provider ids are %v, want the one provider's two ids", ids)
 	}
 }
 

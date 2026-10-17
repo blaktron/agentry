@@ -178,13 +178,13 @@ func (s *Server) signedInDirectoryLinks(ctx context.Context, userID uuid.UUID, e
 
 // unactivatedSuperseded reports that an unconfirmed registry account's
 // every directory account is gone: the directory removed it for a
-// provider that proved the address. Only where unactivated accounts are
-// read-only, so the account can have made nothing, and never an
-// organization's last admin. An account with no directory sign-in, a
-// directory that cannot be asked, or any doubt, is not superseded, and the
-// caller keeps today's answer (link it explicitly).
+// provider that proved the address. An unactivated account is read-only, so
+// it can have made nothing, and it is never an organization's last admin.
+// An account with no directory sign-in, a directory that cannot be asked, or
+// any doubt, is not superseded, and the caller keeps today's answer (link it
+// explicitly).
 func (s *Server) unactivatedSuperseded(ctx context.Context, userID uuid.UUID, email string) bool {
-	if s.directory == nil || !s.unactivatedReadOnly {
+	if s.directory == nil {
 		return false
 	}
 	if _, err := s.q().GetOrgWhereUserIsLastAdmin(ctx, userID); !errors.Is(err, pgx.ErrNoRows) {

@@ -6,11 +6,12 @@ package api_test
 
 import (
 	"context"
-	"github.com/blaktron/agentry/internal/config"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/blaktron/agentry/internal/config"
 )
 
 func TestSubmissionRecordsIPClusterHash(t *testing.T) {

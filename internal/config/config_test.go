@@ -84,6 +84,8 @@ func TestLoadRejectsUnknownNestedKeys(t *testing.T) {
 	for _, doc := range []string{
 		"auth:\n  idpAdminURL: http://directory:9000\n",
 		"social:\n  authentik:\n    clientId: c\n",
+		"social:\n  google:\n    clientId: c\n",
+		"auth:\n  externalOnly: true\n",
 	} {
 		path := filepath.Join(t.TempDir(), "agentry.yaml")
 		if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
@@ -278,7 +280,7 @@ func TestValidateGuardsTheNewSurfaces(t *testing.T) {
 		{"zero quota", func(c *Config) { c.Limits.GitPushesPerHour = 0 }},
 		{"negative knowledge cap", func(c *Config) { c.Limits.KnowledgeBytesPerAccount = -1 }},
 		{"a short knowledge sealing key", func(c *Config) { c.Knowledge.SealingKey = "c2hvcnQ=" }},
-		// A key of its own: the one that opens TOTP seeds
+		// A key of its own: the one that opens webhook secrets
 		// must not also open every knowledge pack.
 		{"the knowledge key is the auth key", func(c *Config) {
 			c.Auth.SealingKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
@@ -504,38 +506,6 @@ func TestWebSearchEnvConfig(t *testing.T) {
 	t.Setenv("AGENTRY_LIMITS_MODEL_INPUT_PER_MIN", "0")
 	if _, err := Load(""); err == nil {
 		t.Error("a zero model-input budget must fail validation")
-	}
-}
-
-// The five social providers all wire from env: id/secret everywhere, plus
-// the endpoint overrides each protocol needs (issuer for the OIDC-proper
-// set, explicit URLs for the github shim).
-func TestSocialProviderEnv(t *testing.T) {
-	t.Setenv("AGENTRY_SOCIAL_GOOGLE_CLIENT_ID", "g-id")
-	t.Setenv("AGENTRY_SOCIAL_GITHUB_CLIENT_ID", "gh-id")
-	t.Setenv("AGENTRY_SOCIAL_MICROSOFT_CLIENT_ID", "ms-id")
-	t.Setenv("AGENTRY_SOCIAL_MICROSOFT_ISSUER", "https://issuer.example/ms")
-	t.Setenv("AGENTRY_SOCIAL_OPENAI_CLIENT_ID", "oai-id")
-	t.Setenv("AGENTRY_SOCIAL_OPENAI_ISSUER", "https://issuer.example/oai")
-	t.Setenv("AGENTRY_SOCIAL_CLAUDE_CLIENT_ID", "claude-id")
-	t.Setenv("AGENTRY_SOCIAL_CLAUDE_ISSUER", "https://issuer.example/claude")
-	t.Setenv("AGENTRY_DEV_MODE", "true") // the knobs under test, on the dev baseline
-
-	cfg, err := Load("")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Social.Google.ClientID != "g-id" || cfg.Social.GitHub.ClientID != "gh-id" {
-		t.Errorf("google/github env not applied: %+v", cfg.Social)
-	}
-	if cfg.Social.Microsoft.ClientID != "ms-id" || cfg.Social.Microsoft.Issuer != "https://issuer.example/ms" {
-		t.Errorf("microsoft env not applied: %+v", cfg.Social.Microsoft)
-	}
-	if cfg.Social.OpenAI.ClientID != "oai-id" || cfg.Social.OpenAI.Issuer != "https://issuer.example/oai" {
-		t.Errorf("openai env not applied: %+v", cfg.Social.OpenAI)
-	}
-	if cfg.Social.Claude.ClientID != "claude-id" || cfg.Social.Claude.Issuer != "https://issuer.example/claude" {
-		t.Errorf("claude env not applied: %+v", cfg.Social.Claude)
 	}
 }
 

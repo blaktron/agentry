@@ -3,7 +3,7 @@ package api_test
 // The directory's `amr` claim is evidence for the public-publish gate:
 // a sign-in whose ID token names a second factor stamps
 // users.idp_mfa_at; one that names only a password does not; and the gate,
-// when on, accepts the stamp in place of native TOTP.
+// when on, accepts the stamp and nothing else.
 
 import (
 	"context"
@@ -17,13 +17,13 @@ import (
 
 func loginThroughFakeOIDC(t *testing.T, env *testEnv, idp *fakeOIDC) string {
 	t.Helper()
-	authURL, state, cookie := env.socialStart(t, "google")
+	authURL, state, cookie := env.socialStart(t, "oidc")
 	visit, err := idp.srv.Client().Get(authURL.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = visit.Body.Close()
-	res := env.socialCallback(t, "google", state, cookie)
+	res := env.socialCallback(t, "oidc", state, cookie)
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("callback: got %d want 200", res.StatusCode)
@@ -54,7 +54,7 @@ func TestSocialLoginRecordsIdPMFA(t *testing.T) {
 			idp := newFakeOIDC(t)
 			idp.amr = tc.amr
 			env := newTestEnvCfg(t, func(cfg *config.Config) {
-				cfg.Social.Google = config.SocialProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
+				cfg.Auth.OIDC = config.OIDCProvider{ClientID: idp.clientID, ClientSecret: "s", Issuer: idp.srv.URL}
 			}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
 			userID := loginThroughFakeOIDC(t, env, idp)
 			var stamped bool
@@ -93,7 +93,7 @@ func TestPublicPublishGateAcceptsIdPMFA(t *testing.T) {
 		"SKILL.md":   "Summarize politely.\n",
 		"LICENSE":    "Apache-2.0\n",
 	}
-	// Neither native TOTP nor a directory-asserted factor: refused.
+	// No factor the provider asserted: refused.
 	if status, body := env.uploadVersionCLI(user, "gated", pat, files); status != http.StatusForbidden {
 		t.Fatalf("without any second factor: %d %s (want 403)", status, body)
 	}

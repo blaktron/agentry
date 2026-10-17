@@ -11,7 +11,10 @@ type Action string
 
 // The v1 action catalog. Append-only: never rename or reuse an id.
 const (
-	// Auth & account.
+	// Auth & account. Nothing writes user.register, user.login_failed or
+	// user.totp_enabled (the server keeps no credentials of its own); they
+	// are catalogued because audit rows may carry them and the log is
+	// queried by action.
 	ActionUserRegister      Action = "user.register"
 	ActionUserLogin         Action = "user.login"
 	ActionUserLoginFailed   Action = "user.login_failed"

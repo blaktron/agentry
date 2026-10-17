@@ -17,7 +17,7 @@ import (
 func TestExtensionRoutesMetaAndHooks(t *testing.T) {
 	var mu sync.Mutex
 	var seen []string
-	env := newTestEnvWith(t, func(s *api.Server) {
+	env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) {
 		s.RegisterExtension("probe", func(mux *http.ServeMux) {
 			mux.HandleFunc("GET /whoami", func(w http.ResponseWriter, r *http.Request) {
 				p := api.PrincipalFrom(r.Context())
@@ -52,9 +52,8 @@ func TestExtensionRoutesMetaAndHooks(t *testing.T) {
 	if who.Who != "anonymous" {
 		t.Fatalf("anonymous whoami = %q", who.Who)
 	}
-	handle := env.register("ext")
-	env.verifyEmail(handle) // creating an organization needs it
-	sess := env.login(handle)
+	sess := env.mintAccount(t, idp, "ext") // a verified address: creating an organization needs it
+	handle := sess.name
 	env.doJSON(sess, http.MethodGet, "/api/v1/x/probe/whoami", nil, &who, http.StatusOK)
 	if who.Who != handle {
 		t.Fatalf("session whoami = %q", who.Who)
@@ -68,7 +67,7 @@ func TestExtensionRoutesMetaAndHooks(t *testing.T) {
 	}
 	env.doJSON(sess, http.MethodPost, "/api/v1/x/probe/mark", nil, nil, http.StatusNoContent)
 
-	// Hooks: the registration above and an org creation.
+	// Hooks: the sign-up above and an org creation.
 	org := "ext-co" + env.sfx
 	env.doJSON(sess, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": org, "displayName": "Ext"}, nil, http.StatusCreated)
 	mu.Lock()

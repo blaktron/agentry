@@ -101,8 +101,7 @@ func (e *pipeEnv) seedUser(handle string) uuid.UUID {
 	if err := q.CreateHandle(ctx, storegen.CreateHandleParams{ID: id, Handle: handle, Kind: "user"}); err != nil {
 		e.t.Fatal(err)
 	}
-	hash := "x"
-	if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: id, Email: handle + "@example.test", DisplayName: handle, PasswordHash: &hash}); err != nil {
+	if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: id, Email: handle + "@example.test", DisplayName: handle}); err != nil {
 		e.t.Fatal(err)
 	}
 	if err := q.MarkEmailVerified(ctx, id); err != nil {
