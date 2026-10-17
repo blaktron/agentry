@@ -152,7 +152,8 @@ chart, signed with cosign like the image. The heads of `dev` and `main` are
 published shortly after they move: the image as `agentryd:<branch>` and
 `agentryd:sha-<sha>`, and the chart
 `oci://ghcr.io/blaktron/agentry/charts/agentry` at a prerelease version,
-`0.1.0-<branch>.<n>.g<sha>`, whose default image is that `agentryd:sha-<sha>`.
+`0.1.0-<branch>.<n>.g<sha>`, where `n` counts the publishing runs and the
+default image is that `agentryd:sha-<sha>`.
 A release publishes the tagged version: a `main` release as chart `0.6.15`
 with image `v0.6.15`, a `dev` prerelease as chart `0.6.16-dev.1` with image
 `v0.6.16-dev.1`. Only the newest `main` release moves the image's `latest`.
@@ -168,7 +169,7 @@ identity of what you mean to accept:
 | --- | --- |
 | a `vX.Y.Z` release, from v0.6.15 | `https://github.com/blaktron/agentry-release/.github/workflows/core.yaml@refs/heads/main` |
 | a `vX.Y.Z-dev.N` prerelease, from v0.6.15-dev.112 | `https://github.com/blaktron/agentry-release/.github/workflows/core-dev.yaml@refs/heads/main` |
-| a branch head's image and chart (`agentryd:dev`, `:main`, `:sha-<sha>`, chart `0.1.0-<branch>.<n>.g<sha>` from `n` 1001) | `https://github.com/blaktron/agentry-release/.github/workflows/core-images.yaml@refs/heads/main` |
+| a branch head's image and chart (`agentryd:<branch>`, `:sha-<sha>`, chart `0.1.0-<branch>.<n>.g<sha>` with `n` of 1001 or more) | `https://github.com/blaktron/agentry-release/.github/workflows/core-images.yaml@refs/heads/main` |
 
 The release identities tell a `main` release from a prerelease: each
 signature is refused under the other channel's identity. A branch head's
@@ -176,10 +177,10 @@ identity is the same for `dev` and `main`, so the tag or the chart version
 is what says which branch it is. Earlier releases (v0.6.14 and before,
 v0.6.15-dev.111 and before) were signed as
 `https://github.com/blaktron/agentry/.github/workflows/release.yaml@refs/heads/main`
-(`@refs/heads/dev` for a prerelease), and earlier branch builds (`n` below
-1001) by a workflow of this repository on that branch, which
+(`@refs/heads/dev` for a prerelease). Earlier branch builds, with `n` below
+1001, were signed by a workflow in `blaktron/agentry` on their own branch;
 `--certificate-identity-regexp '^https://github.com/blaktron/agentry/'`
-accepts.
+accepts them.
 
 A release's binaries are covered by its `SHA256SUMS`, which is signed the
 same way; its notes give the commands for that release:
