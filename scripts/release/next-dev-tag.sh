@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # next-dev-tag.sh — the tag a dev prerelease of HEAD gets, or nothing when
-# HEAD needs none. dev-release.yaml runs it on every
-# push to dev. Needs git and jq; reads release-please-config.json.
+# HEAD needs none. Needs git and jq; reads release-please-config.json.
 #
 #   next-dev-tag.sh [--force]
 #
