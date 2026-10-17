@@ -216,6 +216,20 @@ func TestIntakeRules(t *testing.T) {
 		{"empty choice", []IntakeQuestion{q("a", IntakeChoice, "x", "")}, "intake[0].choices[1]"},
 		{"duplicate choice", []IntakeQuestion{q("a", IntakeChoice, "x", "x")}, "intake[0].choices[1]"},
 		{"unknown type", []IntakeQuestion{q("a", "date")}, "intake[0].type"},
+		// A prompt and a choice are printed to the person before the run:
+		// no control character (a terminal escape, a carriage return, a
+		// newline) and no format character (a bidi override, a zero-width
+		// space).
+		{"escape in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Which repo?\x1b]52;c;cGF5bG9hZA==\a"}}, "intake[0].prompt"},
+		{"carriage return in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Name\rDelete everything"}}, "intake[0].prompt"},
+		{"newline in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Name\nsecond line"}}, "intake[0].prompt"},
+		{"NUL in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Name\x00"}}, "intake[0].prompt"},
+		{"DEL in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Name\x7f"}}, "intake[0].prompt"},
+		{"C1 control in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Name\u009b31m"}}, "intake[0].prompt"},
+		{"bidi override in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Approve \u202edeleted\u202c?"}}, "intake[0].prompt"},
+		{"zero-width space in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Name\u200b"}}, "intake[0].prompt"},
+		{"escape in a choice", []IntakeQuestion{q("a", IntakeChoice, "x", "y\x1b[2J")}, "intake[0].choices[1]"},
+		{"bidi override in a choice", []IntakeQuestion{q("a", IntakeChoice, "\u2066x\u2069")}, "intake[0].choices[0]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -249,6 +263,24 @@ func TestInteractiveHints(t *testing.T) {
 		m := validV2Manifest(t)
 		m.Interactive.Opening = strings.Repeat("x", MaxOpeningChars+1)
 		wantIssue(t, Validate(m), "V10", SeverityError, "interactive.opening")
+	})
+	for name, opening := range map[string]string{
+		"an escape":          "Hello\x1b]0;title\a",
+		"a carriage return":  "Hello\rgone",
+		"a C1 control":       "Hello\u0085",
+		"a bidi override":    "Hello \u202eworld",
+		"a zero-width space": "Hello\u200bworld",
+	} {
+		t.Run("opening with "+name, func(t *testing.T) {
+			m := validV2Manifest(t)
+			m.Interactive.Opening = opening
+			wantIssue(t, Validate(m), "V10", SeverityError, "interactive.opening")
+		})
+	}
+	t.Run("opening keeps newlines and tabs", func(t *testing.T) {
+		m := validV2Manifest(t)
+		m.Interactive.Opening = "Hello.\n\n\tWhat should I review first?"
+		wantClean(t, Validate(m))
 	})
 	t.Run("negative idle timeout", func(t *testing.T) {
 		m := validV2Manifest(t)
