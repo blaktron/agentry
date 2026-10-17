@@ -144,9 +144,16 @@ func (e *envelope) UnmarshalJSON(b []byte) error {
 }
 
 // jobMeta is what Enqueue records in river_job.metadata: the agentry job id
-// handed back to the caller and to the handler as Job.ID.
+// handed back to the caller and to the handler as Job.ID. A final attempt
+// queued for a rescued job (SettleRescued) also names the job it settles
+// and the attempts that job had already used, so its handler sees it as
+// that job's last attempt.
 type jobMeta struct {
 	ID string `json:"id"`
+	// FinalOf is the agentry id of the job this final attempt settles.
+	FinalOf string `json:"finalOf,omitempty"`
+	// AttemptOffset is added to River's attempt count for the handler.
+	AttemptOffset int `json:"attemptOffset,omitempty"`
 }
 
 // Enqueue durably records a job.
@@ -250,7 +257,7 @@ func (w *riverWorker) Work(ctx context.Context, job *river.Job[envelope]) error 
 	_ = json.Unmarshal(job.Metadata, &meta)
 	id, _ := uuid.Parse(meta.ID)
 	started := time.Now()
-	err := c.runHandler(ctx, h, Job{ID: id, Kind: job.Kind, Queue: job.Queue, Args: job.Args.raw, Attempt: job.Attempt})
+	err := c.runHandler(ctx, h, Job{ID: id, Kind: job.Kind, Queue: job.Queue, Args: job.Args.raw, Attempt: job.Attempt + meta.AttemptOffset})
 	elapsed := time.Since(started)
 	switch {
 	case err == nil:
@@ -431,4 +438,99 @@ func (c *RiverClient) sampleBacklog(ctx context.Context, queues []string) {
 		}
 		c.mx.RecordQueueStats(ctx, q, depth, time.Duration(oldest*float64(time.Second)))
 	}
+}
+
+// JobSettleRescued is the periodic job that runs SettleRescued, on the core
+// queue.
+const JobSettleRescued = "queue.settle_rescued"
+
+// rescuedMarker is the error River's rescuer records on a job whose worker
+// died or hung past the rescue cutoff.
+const rescuedMarker = "Stuck job rescued by JobRescuer"
+
+// RegisterRescueSettling wires JobSettleRescued onto this client.
+func (c *RiverClient) RegisterRescueSettling() {
+	c.Register(JobSettleRescued, func(ctx context.Context, _ Job) error {
+		_, err := c.SettleRescued(ctx)
+		return err
+	})
+}
+
+// SettleRescued gives each job River's rescuer discarded at its last attempt
+// the last attempt it never had, and reports how many it queued. The
+// rescuer discards a stuck job already at MaxAttempts without calling its
+// handler again, so the settling a handler does on its last attempt (fail
+// the knowledge pack, audit and raise an abandoned erasure, queue the next
+// link of a chain) would never run. Each such job is queued once more, in
+// the same transaction that marks it settled, as a single attempt whose
+// handler sees the job's own last attempt number. A final attempt that is
+// itself rescued is not queued again: it is logged, and the job ends there.
+func (c *RiverClient) SettleRescued(ctx context.Context) (int, error) {
+	cl, err := c.insertClient()
+	if err != nil {
+		return 0, err
+	}
+	tx, err := c.st.Pool().Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("queue: settle rescued: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rows, err := tx.Query(ctx, `
+		SELECT id, kind, queue, args, metadata, max_attempts FROM river_job
+		WHERE state = 'discarded' AND cardinality(errors) > 0
+		  AND errors[cardinality(errors)]->>'error' = $1
+		  AND NOT (metadata ? 'rescueSettled')
+		ORDER BY id LIMIT 100
+		FOR UPDATE SKIP LOCKED`, rescuedMarker)
+	if err != nil {
+		return 0, fmt.Errorf("queue: list rescued jobs: %w", err)
+	}
+	type rescued struct {
+		id          int64
+		kind, queue string
+		args, meta  []byte
+		maxAttempts int
+	}
+	var jobs []rescued
+	for rows.Next() {
+		var r rescued
+		if err := rows.Scan(&r.id, &r.kind, &r.queue, &r.args, &r.meta, &r.maxAttempts); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("queue: read a rescued job: %w", err)
+		}
+		jobs = append(jobs, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("queue: list rescued jobs: %w", err)
+	}
+	queued := 0
+	for _, r := range jobs {
+		var meta jobMeta
+		_ = json.Unmarshal(r.meta, &meta)
+		if meta.FinalOf == "" {
+			id, err := uuid.NewV7()
+			if err != nil {
+				return 0, err
+			}
+			final, _ := json.Marshal(jobMeta{ID: id.String(), FinalOf: meta.ID, AttemptOffset: max(r.maxAttempts-1, 0)})
+			if _, err := cl.InsertTx(ctx, tx, envelope{kind: r.kind, raw: r.args}, &river.InsertOpts{Queue: r.queue, MaxAttempts: 1, Metadata: final}); err != nil {
+				return 0, fmt.Errorf("queue: queue a rescued job's last attempt: %w", err)
+			}
+			queued++
+		} else {
+			c.log.ErrorContext(ctx, "queue: a rescued job's last attempt was rescued too; it ends here",
+				"kind", r.kind, "job", meta.FinalOf)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE river_job SET metadata = metadata || '{"rescueSettled": true}'::jsonb WHERE id = $1`, r.id); err != nil {
+			return 0, fmt.Errorf("queue: mark a rescued job settled: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("queue: settle rescued: %w", err)
+	}
+	if queued > 0 {
+		c.log.InfoContext(ctx, "queue: rescued jobs given their last attempt", "count", queued)
+	}
+	return queued, nil
 }

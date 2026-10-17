@@ -737,7 +737,12 @@ runs. `queue.workers` (`AGENTRY_QUEUE_WORKERS`, default 1) is how many jobs
 one worker process runs at once per queue: 1 runs jobs serially; raise it on a worker with the memory for parallel scans.
 A job that fails retries with exponential backoff up to five attempts, a
 job a crashed worker held is rescued after 30 minutes, and every outcome is
-counted (see Metrics). River is the only driver: a configuration that
+counted (see Metrics). A job rescued at its last attempt is run once more
+as that last attempt, within ten minutes (`queue.settle_rescued` on the core
+queue), so what its handler does when it gives up still happens: a
+knowledge pack is marked failed, an unfinished directory erasure is audited
+as abandoned and raised. A last attempt that is itself rescued is logged and
+not run again. River is the only driver: a configuration that
 names `queue.driver: pg` is refused at start, and the migrator drops the
 legacy `jobs` table.
 
