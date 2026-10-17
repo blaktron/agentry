@@ -36,10 +36,11 @@
 # RELEASE_PLEASE_TOKEN a maintainer might add is still used first: its PR's
 # runs would start by themselves, and its tags start nothing that is not
 # already called here.
+#
+# Run by hand only: the maintainers' release pipeline cuts the releases.
 name: release-please
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
