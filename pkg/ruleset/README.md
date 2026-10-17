@@ -33,7 +33,7 @@ as its snapshot. So "which ruleset published this" always has an answer.
 ## Tags: reading an old ruleset back
 
 The first `main` commit that carries a version is tagged `ruleset/v<semver>`
-by `.github/workflows/ruleset-tag.yaml`. The tag holds that bundle and the Go
+by the maintainers' release pipeline. The tag holds that bundle and the Go
 stages of its day (which assign the S1–S3 and S5–S9 severities the bundle does
 not hold).
 

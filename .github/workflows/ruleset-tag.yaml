@@ -4,14 +4,12 @@
 # new version in rules/bundle.yaml is tagged ruleset/v<version>, so the bundle
 # (and the Go stages of its day) can be read back and the row's digest
 # checked against it (pkg/ruleset/README.md). A tag that exists is left where
-# it is. workflow_dispatch on main tags a version a missed run left untagged.
+# it is. Run by hand only, on main: the maintainers' release pipeline makes
+# these tags after each merge into main.
 # The tag is made through the API with the job's token, which starts no
 # other workflow; nothing listens for these tags.
 name: ruleset-tag
 on:
-  push:
-    branches: [main]
-    paths: [rules/bundle.yaml]
   workflow_dispatch:
 permissions:
   contents: read
