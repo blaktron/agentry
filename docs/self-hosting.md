@@ -177,7 +177,9 @@ is what says which branch it is. Earlier releases (v0.6.14 and before,
 v0.6.15-dev.111 and before) were signed as
 `https://github.com/blaktron/agentry/.github/workflows/release.yaml@refs/heads/main`
 (`@refs/heads/dev` for a prerelease), and earlier branch builds (`n` below
-1001) as `https://github.com/blaktron/agentry/.github/workflows/image-main.yaml@refs/heads/<branch>`.
+1001) by a workflow of this repository on that branch, which
+`--certificate-identity-regexp '^https://github.com/blaktron/agentry/'`
+accepts.
 
 A release's binaries are covered by its `SHA256SUMS`, which is signed the
 same way; its notes give the commands for that release:
