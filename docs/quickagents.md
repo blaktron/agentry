@@ -186,9 +186,9 @@ intake:
 | Rule | |
 |---|---|
 | `id` | `[a-z0-9_]{1,64}`, unique within the manifest |
-| `prompt` | required |
+| `prompt` | required; one plain line, with no control character (an escape, a carriage return, a newline) and no format character (a bidi override, a zero-width space), since the CLI prints it on the terminal before the run and the desktop shows it as written (V10) |
 | `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or the run refuses it; and `required` must agree with that secret: `true` for a required secret, absent or `false` for one under `capabilities.optionalSecrets`, or publishing refuses it, V10), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder), `host` (a target host, below), `repository` and `url` (an input source, below) |
-| `choices` | only with `type: choice` |
+| `choices` | only with `type: choice`; each one plain line, as `prompt` |
 | at most 20 questions | |
 
 Non-secret answers are part of the run's receipts.
@@ -370,7 +370,9 @@ interactive:
 ```
 
 `opening` is the assistant's first message when a session starts with no
-task text. Everything else about a session — budgets, idle timeout, wall
+task text. It may span lines and use tabs, and carries no other control
+character and no format character, as the guide's overview (V10).
+Everything else about a session — budgets, idle timeout, wall
 time — is the operator's runner policy, which a manifest can only
 tighten. A release that does not list `interactive` may still declare
 hints: validation warns, and they never apply.
