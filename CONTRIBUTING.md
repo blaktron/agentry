@@ -55,9 +55,6 @@ Everyday commands:
 | `./scripts/acceptance/helm.sh` | the Helm chart lints and renders, and its production shape holds |
 | `./scripts/acceptance/invariant-test-names.sh` | every test named as evidence for a security invariant still exists under that name |
 | `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages, driven with curl and a cookie jar |
-| `./scripts/acceptance/directory-signout.py` | sign-out against a live directory (needs its URL and the bootstrap token; a throwaway user it deletes) |
-| `./scripts/acceptance/directory-email.sh` | the directory's sign-up and reset mails render as Agentry through authentik's own mail class, in the pinned image (needs docker; no directory) |
-| `./scripts/acceptance/directory-remember.sh` | remembered browsers on the directory's sign-in: the flow template still matches the pinned image, and a throwaway directory asks for the code unless a stand-in registry says the browser is remembered, failing closed on every error (needs docker; about ten minutes) |
 
 Docker is optional; `scripts/dev/pg.sh` manages a private Postgres cluster if
 you would rather not run a container.

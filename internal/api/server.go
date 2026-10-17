@@ -54,35 +54,23 @@ type Server struct {
 	// paths is where this server sends browsers (a site in front of it, or
 	// its own /ui/ pages).
 	paths webPaths
-	// dirEraser is the directory (directory_port.go): the built-in one when
-	// auth.idpAdminURL is set, an extension's once SetDirectory is called,
-	// nil with neither. The settings page and the superseded check read
-	// its other methods by assertion.
-	dirEraser directoryEraser
-	// dirSet is SetDirectory having been called: the directory is an
-	// extension's.
-	dirSet bool
+	// directory is the directory (directory_port.go) an extension supplied
+	// with SetDirectory; nil without one.
+	directory Directory
 	// unactivatedReadOnly makes an unactivated account read-only:
 	// where the directory owns credentials (externalOnly),
 	// a self-enrolled account reaches the registry before its address is
 	// confirmed. A native deployment keeps its narrower gates on an
 	// unverified address (no publishing, agents or organizations).
 	unactivatedReadOnly bool
-	// dirGroups writes the directory's mirror of platform staff
-	// (staff_mirror.go); nil unless auth.idpStaffMirrorGroup is set and
-	// there is a directory.
-	dirGroups directoryGroups
-	// dirEraseAttempts overrides the directory erasure retry budget
-	// (directory_erasure.go; 0 is the default).
-	dirEraseAttempts int
-	sealer           *auth.Sealer
-	signer           scan.Signer
-	limits           *ratelimit.Buckets
-	classes          limitClasses
-	reg              *registry.Service
-	blobs            registry.BlobStore
-	pipeline         *scan.Pipeline
-	renderer         *render.Renderer
+	sealer              *auth.Sealer
+	signer              scan.Signer
+	limits              *ratelimit.Buckets
+	classes             limitClasses
+	reg                 *registry.Service
+	blobs               registry.BlobStore
+	pipeline            *scan.Pipeline
+	renderer            *render.Renderer
 	// knowledge is the store of accounts' knowledge packs;
 	// nil without a database, and off (every route 503) with no wrapper.
 	// knowledgeAdmit is the extension that admits an upload's scan.
@@ -386,15 +374,8 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		// README images route through the same-origin proxy;
 		// the renderer needs the server's signing key, so it is built here.
 		srv.renderer = render.NewWithOptions(render.Options{ImageProxy: srv.imageProxyURL})
-		if cfg.Auth.IdPAdminURL != "" && cfg.Auth.IdPAdminToken != "" {
-			ak := newAuthentikEraser(cfg.Auth.IdPAdminURL, cfg.Auth.IdPAdminToken)
-			srv.dirEraser = ak
-			if cfg.Auth.IdPStaffMirrorGroup != "" {
-				srv.dirGroups = ak
-			}
-		}
-		// On every role: a membership change on an API replica nudges the
-		// mirror and tells the extensions as one on the worker does.
+		// On every role: a membership change on an API replica tells the
+		// extensions as one on the worker does.
 		srv.reg.SetStaffChanged(srv.staffChanged)
 		srv.reg.SetLogger(log)
 		// A ruleset semver we have never seen means the catalogue was judged
@@ -669,8 +650,6 @@ func (s *Server) RegisterQueueHandlers(q queue.Client) {
 	s.registerRedTeam(q)            // report-only red-team job (handlers_redteam.go)
 	s.registerOrgLifecycle(q)       // the decommission sweep (handlers_org_lifecycle.go)
 	s.registerFoldIn(q)             // the fold-in sweep and the pending members digest (handlers_fold_in.go)
-	s.registerDirectoryErasure(q)   // erasure's directory half, retried (directory_erasure.go)
-	s.registerStaffMirror(q)        // the directory's mirror of platform staff (staff_mirror.go)
 	s.registerStaffChangedEvent(q)  // staff.changed for the extensions (identity_events.go)
 	s.registerTrustedDeviceSweep(q) // remembered browsers past their expiry (trusted_device_sweep.go)
 	if s.knowledge != nil {
@@ -1019,14 +998,9 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	// SCIM — it is a browser destination, not part of the JSON API surface.
 	s.mountSSOLanding(mux)
 
-	// The directory's trust check: the directory's sign-in
-	// asks whether a browser is remembered. A root mount outside /api/ that
-	// no edge routes to the registry, gated by its own secret.
-	s.mountDirectoryTrust(mux)
-
 	// Extension callbacks (extension_callbacks.go): /internal/x/<name>/,
-	// the same kind of mount as the directory's trust check, for a service
-	// an extension owns, gated by the extension's own secret.
+	// a root mount outside /api/ that no edge routes to the registry, for a
+	// service an extension owns, gated by the extension's own secret.
 	s.mountExtensionCallbacks(mux)
 
 	// Extension routes (extensions.go): /api/v1/x/<name>/ behind
@@ -1105,8 +1079,6 @@ func (s *Server) socialProviders() []ui.Provider {
 	signIn := "your OpenID provider"
 	if p, ok := s.cfg.SignInOIDC(); ok && p.DisplayName != "" {
 		signIn = p.DisplayName
-	} else if ok && p.ID == config.DirectoryProviderID {
-		signIn = "your " + s.cfg.DisplayName() + " account"
 	}
 	all := []struct{ id, label string }{
 		{"authentik", signIn},

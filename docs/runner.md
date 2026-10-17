@@ -3498,7 +3498,7 @@ and in-app runs with task input, file/folder pickers for `/inputs` and the
 output folder, a keep-profile toggle, a live log stream, and the result
 envelope. An interactive release opens as a chat in the same run panel,
 over the same session API the CLI uses. It signs in through the browser —
-the registry's directory service handles the login, one explicit approval
+the registry's sign-in handles the login, one explicit approval
 page hands the app a one-time code on a loopback listener, and the app
 exchanges the code for a scoped token from its own process (the token
 never appears in the browser); a sign-in that stalls can be cancelled

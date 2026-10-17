@@ -43,22 +43,14 @@ const (
 	ProviderMicrosoft = "microsoft"
 	ProviderOpenAI    = "openai"
 	ProviderClaude    = "claude"
-	// ProviderAuthentik is the deployment's own directory service:
-	// an Authentik instance shipped with the stack. OIDC proper, no default
-	// issuer — the operator points it at their instance's application slug
-	// (e.g. https://auth.example/application/o/agentry/).
+	// ProviderAuthentik is the deployment's generic sign-in provider under
+	// the id authentik, where its accounts are linked under that id: the
+	// same provider as ProviderOIDC, with no defaults.
 	ProviderAuthentik = "authentik"
 	// ProviderOIDC is the deployment's generic sign-in provider: any OpenID
 	// Connect issuer the operator points it at, with no defaults.
 	ProviderOIDC = "oidc"
 )
-
-// ScopeAgentry is the scope the directory's `agentry_remember_device`
-// mapping answers to. Only the directory is asked for it: no other provider
-// has such a mapping, and one that invented the claim would still not be
-// the directory the registry trusts it from. authentik drops a requested scope its provider has no mapping for, so asking before
-// the directory's flow carries the mapping is harmless.
-const ScopeAgentry = "agentry"
 
 // Providers lists the supported provider ids, in the order the sign-in
 // page offers them. The API layer validates provider names against its
@@ -154,18 +146,10 @@ func New(ctx context.Context, name string, cfg Config, redirectURL string) (Prov
 		return newOIDC(ctx, ProviderOpenAI, "", cfg, redirectURL)
 	case ProviderClaude:
 		return newOIDC(ctx, ProviderClaude, "", cfg, redirectURL)
-	case ProviderAuthentik:
-		// The stack's own directory service. No default issuer:
-		// every deployment's Authentik lives at its own URL. It is also the
-		// one provider asked for the agentry scope (ScopeAgentry).
-		if len(cfg.Scopes) == 0 {
-			cfg.Scopes = []string{coreoidc.ScopeOpenID, "email", "profile", ScopeAgentry}
-		}
-		return newOIDC(ctx, ProviderAuthentik, "", cfg, redirectURL)
-	case ProviderOIDC:
+	case ProviderAuthentik, ProviderOIDC:
 		// Whatever issuer the operator names, asked for the scopes they
 		// configured or the standard three.
-		return newOIDC(ctx, ProviderOIDC, "", cfg, redirectURL)
+		return newOIDC(ctx, name, "", cfg, redirectURL)
 	case ProviderGitHub:
 		return newGitHub(cfg, redirectURL), nil
 	default:

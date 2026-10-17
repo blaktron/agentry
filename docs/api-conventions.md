@@ -8,10 +8,9 @@ schema cannot express.
 Base path is `/api/v1`. Three surfaces sit deliberately outside it: `/scim/v2`
 (the SCIM 2.0 spec fixes that path), `/sso/{org}` (a browser destination
 people paste into address bars and IdP consoles, not a JSON operation), and
-`/internal/directory/trusted-device` (the directory's own trust check on the
-private network, gated by a shared secret and never routed by an edge; see
-`docs/self-hosting.md`). The last is not part of the public API
-and answers bare status codes.
+`/internal/x/<name>/` (an extension's callbacks from a service of its own on
+the private network, gated by a shared secret and never routed by an edge).
+The last is not part of the public API and answers bare status codes.
 
 ## Versioning
 
@@ -464,21 +463,15 @@ gain it: sign in again.
 ## Native credentials vs an external directory
 
 A deployment can hand its account directory to an external IdP
-(`AGENTRY_AUTH_EXTERNAL_ONLY=true` — the shipped compose stack
-runs authentik this way). The five native credential endpoints —
+(`AGENTRY_AUTH_EXTERNAL_ONLY=true`, with the sign-in provider of
+`docs/self-hosting.md` "Sign in with your OpenID provider"). The five native credential endpoints —
 `POST /auth/register`, `POST /auth/login`, `POST /auth/verify-email`, and
 the TOTP setup/verify pair — then answer **`410 Gone`**: the surface is
 switched off, not missing. Sign-in happens through
 `GET /auth/oidc/{provider}/start`, and sessions, PATs, and every
 authorization decision stay the registry's own either way.
 
-Two surfaces exist only for that arrangement. **Account settings**:
-`GET /user/directory` reports whether the account is directory-managed and,
-when it is, the URLs of the directory's password-change and authenticator
-enrolment flows (each returns to the registry's Settings when it finishes)
-plus the enrolled authenticators; `DELETE
-/user/directory/devices/{kind}/{deviceId}` removes one of the caller's own.
-**Desktop sign-in**: a signed-in browser records a grant with
+One surface exists for that arrangement. **Desktop sign-in**: a signed-in browser records a grant with
 `POST /user/tokens/desktop-grant` (the app's `state` nonce), and the app
 exchanges the resulting one-time code for its PAT at `POST
 /auth/desktop/exchange` from its own process — the code is single-use and

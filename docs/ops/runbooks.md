@@ -341,15 +341,15 @@ publisher locked out (check `user.login_failed` audit volume by handle).
    trust & safety with a written rationale, not an erasure step.
 5. Audit events keep the opaque user id. Do not delete audit rows; the table
    rejects it at the database level anyway.
-6. The directory half (the sign-in account in authentik) follows the
-   registry erasure. When the directory is unreachable the response header
-   `X-Agentry-Directory-Erasure` says `pending` and a worker job retries for about four
-   and a half hours. A `failopen.directory_erasure` line (or a
-   `FailOpenEvents{path="directory_erasure"}` increment, or a
-   `user.directory_erase` audit row with `abandoned`) means it gave up:
-   delete the authentik user with the account's former address by hand
-   (the requester supplies it; the registry no longer holds it), and never
-   a superuser or a service account.
+6. Where an extension is the deployment's directory, the directory half (the
+   sign-in account) follows the registry erasure, and the response header
+   `X-Agentry-Directory-Erasure` says how it went (`pending` while the
+   directory retries). A `failopen.directory_erasure` line (or a
+   `FailOpenEvents{path="directory_erasure"}` increment) means it did not
+   complete: delete the sign-in account with the account's former address by
+   hand (the requester supplies it; the registry does not hold it), and
+   never an administrator's or a service account. Without a directory, the
+   sign-in account at your provider is yours to delete.
 
 **Verify:** the account cannot log in, the handle shows as retired, published
 versions read `yanked` (or are owned by the destination org, if the requester
@@ -375,49 +375,28 @@ disposition.
 
 ---
 
-## 11. Directory service unavailable or misconfigured
+## 11. Sign-in provider unavailable or misconfigured
 
 **Trigger:** sign-in fails or loops, `/ui/login?error=…` (or the site's
-`/login?error=…`), sign-out lands on a second login screen, or the
-account page's password/authenticator actions error.
-Existing registry sessions and PATs keep working throughout — the directory
-is consulted at sign-in, not per request — so the API is not down; people
+`/login?error=…`), or sign-out lands on a second login screen. Existing
+registry sessions and PATs keep working throughout — the provider is
+consulted at sign-in, not per request — so the API is not down; people
 cannot sign in.
 
-1. Is authentik up? `curl -fsS https://auth.<site>/-/health/ready/` and
-   `docker compose ps authentik-server authentik-worker`. A crash loop
-   after an upgrade that says "Major version skips are not allowed" is the
-   release-line rule in the self-hosting guide: step through each line.
-2. Did the blueprint apply? Authentik's admin console → Customisation →
-   Blueprints: "Agentry - Account flows" must be *successful*, and
-   the `agentry-invalidation` flow must exist. A blueprint that fails to
-   apply names the offending entry in the worker log.
-3. Is the registry's OIDC client still what authentik has? Re-run
-   `scripts/dev/authentik-bootstrap.sh` (idempotent): it restores the
-   provider's redirect URIs (authorization *and* logout), the scope
-   mappings, its one grant (the authorization code; a provider with none
-   answers every sign-in with `invalid_request`), the
-   application's launch URL, and the brand's default
-   application and unset user-settings flow. It needs `AGENTRY_PUBLIC_WEB_URL` and the
-   bootstrap token from `.env`; read individual keys from that file rather
-   than `source`-ing it (values with spaces are not shell-quoted).
-4. Do the containers know where to return? `AGENTRY_PUBLIC_WEB_URL` (sign-out)
-   and `AGENTRY_ACCOUNT_URL` (password and authenticator changes) must reach
-   the `authentik-*` containers (compose passes them through, defaulting to
-   the server's own `/ui/` pages; a site's overlay sets its own); the
-   account-flows blueprint formats them into sign-out's redirect stage and
-   the settings flows' return-to-settings policy. After changing
-   them, recreate the authentik containers, not the registry alone.
-5. A user who cannot complete MFA is an operator action in the authentik
-   admin console (`/if/admin/` still serves); email alone never resets both
-   factors.
+1. Is the provider up? Its discovery document,
+   `<issuer>/.well-known/openid-configuration`, must answer from the
+   registry's host.
+2. Is the registry's client still what the provider has? The redirect URI is
+   `{baseURL}/api/v1/auth/oidc/<id>/callback`, the client secret is
+   `AGENTRY_AUTH_OIDC_CLIENT_SECRET`, and the grant is the authorization code
+   with PKCE.
+3. Is the id unchanged? `auth.oidc.id` prefixes every account the provider
+   linked: a changed id signs everyone in as somebody new.
+4. Does sign-out return? `AGENTRY_IDP_LOGOUT_URL` must be the provider's
+   end-session endpoint.
 
-**Verify:** `GET https://<host>/api/v1/auth/oidc/authentik/start?next=%2Fui%2Faccount`
-(or the site's dashboard path) in a browser ends on that page with no
-directory screen in between; `https://auth.<host>/` answers 302 to the
-registry's home (`/ui/`, or the site); the provider's end-session URL lands
-in the `agentry-invalidation` flow whose first challenge (the executor API)
-is a redirect to the same home.
+**Verify:** `GET https://<host>/api/v1/auth/oidc/<id>/start?next=%2Fui%2Faccount`
+in a browser ends on that page after the provider's sign-in.
 
 ---
 
