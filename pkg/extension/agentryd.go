@@ -331,6 +331,10 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// hourly, and once at start; a judge that could not answer is asked
 	// again, never skipped.
 	go periodicTicker(ctx, q, voice.JobSweep, "core", time.Hour, log)
+	// Knowledge packs left scanning by a scan never queued or a job lost:
+	// hourly, and once at start; the handler queues only what has waited
+	// past the stall period.
+	go periodicTicker(ctx, q, knowledge.JobScanSweep, "core", time.Hour, log)
 	return q, nil
 }
 
