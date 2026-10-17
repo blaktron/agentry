@@ -4,7 +4,7 @@ The whole registry is open source: the scanners, the review queue, SSO and
 SCIM, signing with your own key, and the server's own browser pages. There
 is no "community edition" with the security features removed; a registry you
 cannot audit is one you have to take on faith. What is *not* in this
-repository is the hosted service's site — a closed front end that runs in
+repository is SecureAgentry's site — a closed front end that runs in
 front of this same server; a registry does not need one, and
 [the last section](#fronting-it-with-a-site) says how one plugs in.
 
@@ -130,7 +130,7 @@ tokens](https://docs.secureagentry.net/agentry/accounts/)).
 |---|---|---|
 | **Single process** | `agentryd all` + Postgres | evaluation, small teams |
 | **HA** | Helm chart: `api`×N, `git`×N (shared RWX volume), `worker`×N; a site in front is its own deployment | production self-host |
-| **AWS reference** | the hosted service's Terraform, kept with the site (not in this repository) | mirrors how the hosted service runs |
+| **AWS reference** | an ECS layout in Terraform, kept with the site (not in this repository) | a worked AWS shape to adapt |
 
 The same binary serves every role; `agentryd api|git|worker|all` selects it.
 The `git` role is the only one that needs repo storage mounted, and the
@@ -474,9 +474,9 @@ signing:
 Env equivalents: `AGENTRY_STORAGE_KIND`, `AGENTRY_STORAGE_S3_BUCKET`,
 `AGENTRY_STORAGE_S3_REGION`, `AGENTRY_SIGNING_KIND`,
 `AGENTRY_SIGNING_KMS_KEY_ARN`. Credentials come from the ambient AWS chain:
-an instance or task role, not keys in this file. The hosted service's
-Terraform provisions both the bucket and a key whose `kms:Sign` permission
-is restricted to the worker task role.
+an instance or task role, not keys in this file. Restrict the key's
+`kms:Sign` permission to the worker task role; the AWS reference's Terraform
+does.
 
 An S3-compatible store that is not AWS takes its endpoint and path-style
 addressing: `s3Endpoint` (for example `https://ewr1.vultrobjects.com`) and
@@ -1320,7 +1320,7 @@ Running your own registry means you own the trust decisions:
 - keeping the ruleset current; a scanner from a year ago is a scanner that
   has not seen this year's techniques.
 
-None of that is different from the hosted service; self-hosting makes it
+None of that is different on SecureAgentry; self-hosting makes it
 visible.
 
 ## Who reads an agent's repository over git
@@ -1409,7 +1409,7 @@ same authorization, hooks and quotas as HTTPS.
 
 ## Fronting it with a site
 
-Everything above is a complete registry. The hosted service puts a site in
+Everything above is a complete registry. SecureAgentry puts a site in
 front of the same server — a closed front end that renders the catalogue,
 the report cards, the Builder and the account pages in its own brand — and
 so can you. The contract between a front end and this server is small and
@@ -1495,9 +1495,9 @@ answers `402`.
 
 A registry built from this repository needs none of this section either. It
 concerns a deployment of the closed enterprise build that runs
-[hosted runs](hosted-runs.md) on the push path, and it is Agentry's own
-shape ([the execution plane](hosted-runs.md#the-execution-plane)) without
-Vultr.
+[hosted runs](hosted-runs.md) on the push path, and it describes the hosts
+([the execution plane](hosted-runs.md#the-execution-plane)) made by hand on
+any provider.
 
 **What the registry needs.** The CA and the runs store, both, or no run is
 pushed:
@@ -1558,10 +1558,10 @@ sandbox.
 **Taking a host out.** Retire it as platform staff, unless it is the last
 host taking runs (`409 last-host`): the registry calls it no more, closes
 and refunds a run it held once the stale window passes, and never enrols its
-name again. Then stop it. A machine rebuilt comes back under a new name. The registry's
-fleet, which makes and destroys hosts itself, speaks Vultr's API alone; with
-`AGENTRY_RUNS_FLEET_PROVIDER` unset, every host is made and taken down this
-way, by hand.
+name again. Then stop it. A machine rebuilt comes back under a new name. The enterprise
+build's fleet, which makes and destroys hosts itself, speaks Vultr's API
+alone ([its settings](https://docs.secureagentry.net/ops/deployment/#the-runs-fleets-settings));
+without it, every host is made and taken down this way, by hand.
 
 ## OpenBao, the key service for hosted-run secrets
 

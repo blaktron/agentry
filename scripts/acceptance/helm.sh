@@ -34,7 +34,10 @@ KMS=(--set config.signing.kmsKeyARN='arn:aws:kms:us-east-1:111122223333:key/x')
 helm template acc "$HELM_DIR" "${BASE[@]}" "${KMS[@]}" >/dev/null
 echo "helm template (kms): OK"
 
-# The file-key shape with every production knob (the Vultr cluster).
+# The file-key shape with every optional knob set: a file signing key, existing
+# Secrets for the object store and the database CA, a worker egress policy and
+# proxy, and one git pod that is replaced rather than rolled, with an
+# ownership init container.
 PROD=("${BASE[@]}"
   --set config.git.sshAddr=':2222'
   --set config.signing.kind=file --set signingKey.existingSecret=agentry-signing
