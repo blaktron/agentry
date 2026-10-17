@@ -779,8 +779,10 @@ the receipt, and decides from it where the run's docker filter runs.
 | Docker Desktop | Linux | running, its context selected | sidecar | expected to work, not yet tested |
 | Colima | macOS | `colima start`; Agentry Desktop can install and run it for you | sidecar | supported |
 | Lima, the `docker-rootful` template | macOS | its context selected | sidecar | expected to work, not yet tested |
-| Rancher Desktop, dockerd (moby) backend | macOS, Windows | the dockerd backend chosen in its settings | sidecar | expected to work, not yet tested |
-| Podman Desktop (a podman machine) | macOS, Windows | the `docker` CLI pointed at the machine's socket | sidecar | not yet tested; no policy runtime |
+| Rancher Desktop, dockerd (moby) backend | macOS | the dockerd backend chosen in its settings; its socket is `~/.rd/docker.sock` | sidecar | supported (tested with 1.24.0) |
+| Rancher Desktop, dockerd (moby) backend | Windows | the dockerd backend chosen in its settings | sidecar | expected to work, not yet tested |
+| Podman Desktop (a podman machine) | macOS | the `docker` CLI installed and pointed at the machine's API socket (`podman machine inspect` names it) | sidecar | supported (tested with podman 6.1.4); no policy runtime |
+| Podman Desktop (a podman machine) | Windows | the `docker` CLI pointed at the machine's socket | sidecar | not yet tested; no policy runtime |
 | OrbStack | macOS | running | sidecar | expected to work, not yet tested |
 | Docker Engine inside WSL 2 | Windows | the Linux CLI, run inside the WSL 2 distribution | in-process | the Linux case |
 
@@ -788,7 +790,10 @@ The engines that serve no Docker Engine API are not supported, since the
 runner drives that API: containerd with nerdctl (and so Rancher Desktop's
 containerd backend), Apple's `container` and `wslc`. An engine that answers
 `docker version` with any server but Docker Engine or podman is refused,
-naming what it reported.
+naming what it reported. Rancher Desktop on its containerd backend keeps its
+socket file with nothing answering behind it, so a run stops with exit 13
+and `agentry doctor` reports the socket (below): choose the dockerd backend
+in its settings.
 
 **Which engine.** By default the CLI drives the `docker` CLI against its
 current context, so `DOCKER_HOST`, `DOCKER_CONTEXT` and `docker context use`
@@ -814,7 +819,10 @@ for rootless podman, `systemctl enable --now podman.socket` for rootful.
 `agentry doctor` says so when it does not answer. The images a run uses live
 in podman's own store, so `agentry setup` pulls and builds them there once.
 The `docker` CLI pointed at podman's socket (`DOCKER_HOST`) also runs, but
-it is not the supported route.
+on Linux it is not the supported route. A podman machine (Podman Desktop on
+macOS) is the exception: podman's own client reaches it as a remote service,
+which the run refuses, so there the `docker` CLI at the machine's socket is
+the route, and the run's docker filter runs in a container.
 
 **The endpoint.** The engine must be on a Unix socket on this machine (or,
 on Windows, Docker Desktop's named pipe). A `tcp://` or `ssh://` endpoint is
