@@ -262,12 +262,13 @@ No release is 1.x until a maintainer enables it.
   2. Merging the release PR creates the `vX.Y.Z` tag and a **draft** GitHub
      release whose body is the changelog, and `release-please.yaml` then calls
      `release.yaml`.
-- **`dev` prereleases, `vX.Y.Z-dev.N`**, go to dev. Every push to `dev` that
-  brings a commit of a type the changelog shows (`feat`, `fix`, `perf`,
-  `security`, `deps`, `revert`) is tagged with the next version's Nth
-  prerelease by `dev-release.yaml` (`scripts/release/next-dev-tag.sh` says how
-  the tag is picked), which then calls `release.yaml`. Dispatching
-  `dev-release` on `dev` cuts one without such a commit.
+- **`dev` prereleases, `vX.Y.Z-dev.N`**, are cut from `dev`'s head when a
+  maintainer dispatches one; a merge into `dev` tags nothing. A prerelease is
+  the next version's Nth: its assets are `agentryd-<version>-<os>-<arch>`,
+  `BUILD-INFO` and the SBOM under `SHA256SUMS`, which is signed keyless by
+  `https://github.com/blaktron/agentry-release/.github/workflows/core-dev.yaml@refs/heads/main`.
+  The image and the chart at the tag are signed with the same identity, and
+  the prerelease's notes give the `cosign verify-blob` command.
 
 **Versions.** Every release is a patch bump, whatever the commit types
 (`"versioning": "always-bump-patch"`). A `feat:` or a breaking change does not
@@ -297,8 +298,8 @@ published at the tag, signed. Only the newest `main` release becomes the
 latest release and moves the image's `latest`; a `-dev.N` release is marked
 prerelease. The signing identity names the channel:
 `https://github.com/blaktron/agentry/.github/workflows/release.yaml@refs/heads/main`
-for a `main` release, `…@refs/heads/dev` for a prerelease. Each release's
-notes give the `cosign verify-blob` command.
+for a `main` release (a prerelease's is above). Each release's notes give the
+`cosign verify-blob` command.
 
 **Tokens.** The release PR, the tags and the releases are made with the
 workflow's own `GITHUB_TOKEN`. Its events start no other workflow, so the two
