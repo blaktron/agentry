@@ -57,20 +57,14 @@ type Server struct {
 	// directory is the directory (directory_port.go) an extension supplied
 	// with SetDirectory; nil without one.
 	directory Directory
-	// unactivatedReadOnly makes an unactivated account read-only:
-	// where the directory owns credentials (externalOnly),
-	// a self-enrolled account reaches the registry before its address is
-	// confirmed. A native deployment keeps its narrower gates on an
-	// unverified address (no publishing, agents or organizations).
-	unactivatedReadOnly bool
-	sealer              *auth.Sealer
-	signer              scan.Signer
-	limits              *ratelimit.Buckets
-	classes             limitClasses
-	reg                 *registry.Service
-	blobs               registry.BlobStore
-	pipeline            *scan.Pipeline
-	renderer            *render.Renderer
+	sealer    *auth.Sealer
+	signer    scan.Signer
+	limits    *ratelimit.Buckets
+	classes   limitClasses
+	reg       *registry.Service
+	blobs     registry.BlobStore
+	pipeline  *scan.Pipeline
+	renderer  *render.Renderer
 	// knowledge is the store of accounts' knowledge packs;
 	// nil without a database, and off (every route 503) with no wrapper.
 	// knowledgeAdmit is the extension that admits an upload's scan.
@@ -96,9 +90,6 @@ type Server struct {
 	// another implementation.
 	samlReplay   samlsp.ReplayCache
 	samlRequests samlsp.RequestTracker
-	// totpConsumeTimeout bounds the write that records a 2FA challenge as
-	// consumed; SetTOTPConsumeTimeout shortens it in a test.
-	totpConsumeTimeout time.Duration
 	// jobs is the enqueue-side queue client (webhook deliveries, audit
 	// exports). The worker role drains it; nil without a database.
 	jobs queue.Client
@@ -192,18 +183,17 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		panic(nerr) // startup-time config failure, never mid-request
 	}
 	srv := &Server{
-		cfg:                 cfg,
-		unactivatedReadOnly: cfg.Auth.ExternalOnly,
-		paths:               paths,
-		st:                  st,
-		log:                 log,
-		auditW:              aud,
-		notifier:            notifier,
-		sealer:              sealer,
-		renderer:            render.New(),
-		limits:              ratelimit.New(ratelimit.DefaultIdleTTL),
-		classes:             classesFromConfig(cfg.Limits),
-		ents:                entitlements.NewConfigResolver(cfg.Limits),
+		cfg:      cfg,
+		paths:    paths,
+		st:       st,
+		log:      log,
+		auditW:   aud,
+		notifier: notifier,
+		sealer:   sealer,
+		renderer: render.New(),
+		limits:   ratelimit.New(ratelimit.DefaultIdleTTL),
+		classes:  classesFromConfig(cfg.Limits),
+		ents:     entitlements.NewConfigResolver(cfg.Limits),
 	}
 	srv.coreEnts = srv.ents
 	if fs, ok := auditStream.(*audit.FileStream); ok {
@@ -216,7 +206,6 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 	srv.resolver = dnsx.NewSystemResolver()
 	srv.samlReplay = samlsp.NewMemoryReplayCache()
 	srv.samlRequests = samlsp.NewMemoryRequestTracker()
-	srv.totpConsumeTimeout = defaultTOTPConsumeTimeout
 	srv.SetOIDCEgressGuard(webhook.Guard{AllowLoopback: cfg.DevMode})
 	srv.imgKey = newImgProxyKey(cfg.Auth.SealingKey)
 	// The model-input routes need no database: the scanner
@@ -507,11 +496,6 @@ func (s *Server) Metrics() *metrics.Metrics { return s.mx }
 // Notifier exposes the configured notifier so other roles share one instance.
 func (s *Server) Notifier() notify.Notifier { return s.notifier }
 
-// SetUnactivatedReadOnly overrides whether an unactivated account is
-// read-only (tests: a native test server registers accounts, and turns the
-// gate on to see it work).
-func (s *Server) SetUnactivatedReadOnly(on bool) { s.unactivatedReadOnly = on }
-
 // SetNotifier overrides the notifier (tests).
 func (s *Server) SetNotifier(n notify.Notifier) {
 	s.notifier = n
@@ -598,10 +582,6 @@ func (s *Server) SetSAMLReplayCache(c samlsp.ReplayCache) { s.samlReplay = c }
 // SetSAMLRequestTracker replaces the record of outstanding SAML
 // AuthnRequests, the replay cache's mirror image.
 func (s *Server) SetSAMLRequestTracker(t samlsp.RequestTracker) { s.samlRequests = t }
-
-// SetTOTPConsumeTimeout replaces how long the write that records a 2FA
-// challenge as consumed may take before the challenge is refused.
-func (s *Server) SetTOTPConsumeTimeout(d time.Duration) { s.totpConsumeTimeout = d }
 
 // SetOIDCEgressGuard replaces the egress policy OIDC requests go through
 // (tests answer a name with an address of their choosing through the
@@ -709,14 +689,10 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		"signing": s.cfg.Signing.Kind != "none",
 		"judge":   s.cfg.Judge.Provider != "none",
 		"s3":      s.cfg.Storage.Kind == "s3",
-		// externalOnly tells front ends and clients that accounts live in
-		// a directory service: the native credential surface is
-		// gone, so do not offer password or TOTP forms.
-		"externalOnly": s.cfg.Auth.ExternalOnly,
 		// publicPublish2FA says whether the second-factor gate on public
-		// publishing is enforced here (publish_gate.go: off in dev mode, and
-		// off under externalOnly unless requireIdpMFA), so a front end states
-		// the requirement only where the server holds it.
+		// publishing is enforced here (publish_gate.go: on under
+		// auth.requireIdpMFA, never in dev mode), so a front end states the
+		// requirement only where the server holds it.
 		"publicPublish2FA": publicPublish2FAEnabled(s.cfg),
 		// knowledge says the store of knowledge packs is on:
 		// a key to wrap with, from the deployment or an extension.
@@ -1038,7 +1014,6 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 			BaseURL:      s.cfg.BaseURL,
 			Brand:        s.uiBrand(),
 			Providers:    s.socialProviders(),
-			ExternalOnly: s.cfg.Auth.ExternalOnly,
 			IdPLogoutURL: s.cfg.Auth.IdPLogoutURL,
 			CookieSecure: s.cfg.Auth.CookieSecure,
 			Log:          s.log,
@@ -1069,30 +1044,19 @@ func (s *Server) uiBrand() ui.Brand {
 	return ui.Brand{Name: s.cfg.DisplayName(), LogoURL: b.LogoURL, CSSURL: b.CSSURL, SupportEmail: b.SupportEmail, SecurityEmail: b.SecurityEmail, PrivacyURL: b.PrivacyURL, TermsURL: b.TermsURL}
 }
 
-// socialProviders lists the configured individual-login providers in the
-// order the sign-in page offers them: the sign-in OpenID provider first when
-// there is one (it is THE way in under externalOnly), under its display
-// name, then the rest.
-// "Configured" is socialProviderConfig's, the start route's own check, as
-// /meta's list is, so the page offers no button that 404s.
+// socialProviders lists the sign-in provider the sign-in page offers: the
+// deployment's OpenID provider, under its display name, when the start route
+// would redirect for it (socialProviderConfig, as /meta's list is), so the
+// page offers no button that 404s.
 func (s *Server) socialProviders() []ui.Provider {
-	signIn := "your OpenID provider"
+	label := "your OpenID provider"
 	if p, ok := s.cfg.SignInOIDC(); ok && p.DisplayName != "" {
-		signIn = p.DisplayName
-	}
-	all := []struct{ id, label string }{
-		{"authentik", signIn},
-		{"oidc", signIn},
-		{"google", "Google"},
-		{"github", "GitHub"},
-		{"microsoft", "Microsoft"},
-		{"openai", "OpenAI"},
-		{"claude", "Claude"},
+		label = p.DisplayName
 	}
 	var out []ui.Provider
-	for _, p := range all {
-		if _, ok := s.socialProviderConfig(p.id); ok {
-			out = append(out, ui.Provider{ID: p.id, Label: p.label})
+	for _, id := range socialProviderIDs {
+		if _, ok := s.socialProviderConfig(id); ok {
+			out = append(out, ui.Provider{ID: id, Label: label})
 		}
 	}
 	return out

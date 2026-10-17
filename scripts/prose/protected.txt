@@ -56,11 +56,8 @@ docs/trust.md :: Scanning happens at publication, not at push and not at run tim
 docs/trust.md :: The shipped scanners are good, not identical to the established tools they stand in for.
 docs/trust.md :: Review is human, and humans are the ones deciding.
 
-# 6. The pages and the mails that carry the same posture. Read by the reader,
-# not by a reviewer of the docs, and just as easy to soften into nothing.
-internal/ui/templates/review_item.html :: Authors cannot decide their own submissions, unless they are platform staff. The server enforces this.
-internal/ui/templates/org.html :: Organization policy may only tighten the platform baseline.
-internal/ui/templates/sshkeys.html :: A key is worth repository read/write and the release tag your role allows — never the API.
+# 6. The mails that carry the same posture. Read by the reader, not by a
+# reviewer of the docs, and just as easy to soften into nothing.
 internal/notify/notify.go :: not certify that nothing was missed.
 internal/notify/notify.go :: are not reached by this change.
 internal/notify/notify.go :: Nothing in the registry reaches copies that are already installed.

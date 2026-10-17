@@ -267,7 +267,7 @@ func TestFoldInSweepAndDecisions(t *testing.T) {
 	env.verifyEmail(bobH)
 	carolH := env.registerEmail("sw-carol", "carol@"+domain)
 	env.verifyEmail(carolH)
-	daveH := env.registerEmail("sw-dave", "dave@"+domain)
+	daveH := env.registerEmailUnverified("sw-dave", "dave@"+domain)
 	erinH := env.registerEmail("sw-erin", "erin@"+domain)
 	env.verifyEmail(erinH)
 	env.doJSON(env.login(erinH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "erins" + env.sfx, "displayName": "Erin's", "domain": "none"}, nil, http.StatusCreated)
@@ -432,7 +432,7 @@ func TestPendingMembersDigestIsBatchedAndVerifiedOnly(t *testing.T) {
 	// A second admin whose address was never verified: the rule says no
 	// mail to them. Made an admin directly — the doors need a verified
 	// address, which is the point.
-	otherH := env.registerEmail("dg-other", "other@"+domain)
+	otherH := env.registerEmailUnverified("dg-other", "other@"+domain)
 	if _, err := env.st.Pool().Exec(context.Background(),
 		`INSERT INTO memberships (org_id, user_id, role, state) SELECT $1, id, 'admin', 'active' FROM handles WHERE handle = $2`, orgID, otherH); err != nil {
 		t.Fatal(err)

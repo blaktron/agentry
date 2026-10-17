@@ -199,8 +199,10 @@ func (n *accessNotifier) OrgAccessRequest(_ context.Context, r notify.AccessRequ
 // ask.
 func TestDomainOrgLookupAndRequestAccess(t *testing.T) {
 	mails := &accessNotifier{Notifier: notify.LogNotifier{}}
-	env := newTestEnvCfg(t, func(c *config.Config) { c.BaseURL = "https://registry.example" },
-		func(s *api.Server) { s.SetNotifier(mails) })
+	env := newTestEnvCfg(t, func(c *config.Config) {
+		c.BaseURL = "https://registry.example"
+		c.Web.URL = "https://site.example"
+	}, func(s *api.Server) { s.SetNotifier(mails) })
 	domain := "corp" + env.sfx + ".io"
 	adminH := env.registerEmail("dq-admin", "admin@"+domain)
 	env.verifyEmail(adminH)
@@ -216,7 +218,7 @@ func TestDomainOrgLookupAndRequestAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newH := env.registerEmail("dq-new", "new@"+domain)
+	newH := env.registerEmailUnverified("dq-new", "new@"+domain)
 	newc := env.login(newH)
 	res := env.do(newc, http.MethodGet, "/api/v1/user/domain-org", nil)
 	if code, slug, _ := problemOf(t, res); code != http.StatusForbidden || slug != "email-unverified" {
@@ -251,7 +253,7 @@ func TestDomainOrgLookupAndRequestAccess(t *testing.T) {
 	sent := append([]notify.AccessRequestNotice(nil), mails.requests...)
 	mails.mu.Unlock()
 	if len(sent) != 1 || sent[0].ToEmail != "admin@"+domain || sent[0].Requester != newH || sent[0].RequesterEmail != "new@"+domain ||
-		sent[0].Org != orgH || !strings.Contains(sent[0].ConsoleURL, "/ui/orgs/"+orgH) {
+		sent[0].Org != orgH || sent[0].ConsoleURL != "https://site.example/orgs/"+orgH+"/admin" {
 		t.Fatalf("mail: %+v", sent)
 	}
 	// Once a day: the audit row is the record.

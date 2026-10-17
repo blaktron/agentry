@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -202,45 +203,68 @@ func TestRequestIDReachesTheAuditRow(t *testing.T) {
 	}
 }
 
-// A failed native sign-in is named (`auth.login_failed`) and, with the audit
-// mirror on, its audit event is a line too (`audit.user.login_failed`) — both
-// under the request's id, beside the access line. Needs the database. Native
-// sign-in answers 410 under a directory service, so this test is where the
-// criterion is proved.
+// A sign-in the provider's token exchange rejects is named
+// (`auth.social_rejected`, with the provider) under the request's id,
+// beside the access line, and with the audit mirror on a sign-in's audit
+// event is a line too (`audit.user.login`). Needs the database.
 func TestFailedSignInIsNamedAndMirrored(t *testing.T) {
 	var buf bytes.Buffer
 	old := slog.Default()
 	slog.SetDefault(logx.New(logx.Options{W: &buf}))
 	t.Cleanup(func() { slog.SetDefault(old) })
-	env := newTestEnvCfg(t, func(c *config.Config) { c.Audit.StreamKind = "log" })
-	h := env.register("named")
-	res := env.do(anonymous, http.MethodPost, "/api/v1/auth/login", map[string]any{"login": h, "password": "wrong-password-x"})
+	env, idp := newOIDCTestEnv(t, func(c *config.Config) { c.Audit.StreamKind = "log" })
+
+	_, state, cookie := env.socialStart(t, config.OIDCProviderID)
+	req, err := http.NewRequest(http.MethodGet, env.srv.URL+"/api/v1/auth/oidc/oidc/callback?code=never-issued&state="+url.QueryEscape(state), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.AddCookie(cookie)
+	res, err := env.srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("wrong password: %d", res.StatusCode)
+		t.Fatalf("a code the provider never issued: %d", res.StatusCode)
 	}
 	id := res.Header.Get("X-Request-Id")
-	events := map[string]map[string]any{}
-	for _, l := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
-		var m map[string]any
-		if json.Unmarshal([]byte(l), &m) == nil && m["request_id"] == id {
-			if ev, _ := m["event"].(string); ev != "" {
-				events[ev] = m
+	lines := func() []map[string]any {
+		var out []map[string]any
+		for _, l := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+			var m map[string]any
+			if json.Unmarshal([]byte(l), &m) == nil {
+				out = append(out, m)
 			}
 		}
+		return out
 	}
-	for _, want := range []string{"http.request", "auth.login_failed", "audit.user.login_failed"} {
+	events := map[string]map[string]any{}
+	for _, m := range lines() {
+		if ev, _ := m["event"].(string); ev != "" && m["request_id"] == id {
+			events[ev] = m
+		}
+	}
+	for _, want := range []string{"http.request", "auth.social_rejected"} {
 		if events[want] == nil {
 			t.Errorf("no %s line under request %s; events seen: %v", want, id, events)
 		}
 	}
-	if l := events["auth.login_failed"]; l != nil && (l["user"] == nil || l["user"] == "00000000-0000-0000-0000-000000000000") {
-		t.Errorf("auth.login_failed should name the account the login matched: %v", l)
+	if l := events["auth.social_rejected"]; l != nil && l["provider"] != config.OIDCProviderID {
+		t.Errorf("auth.social_rejected should name the provider: %v", l)
 	}
-	if l := events["audit.user.login_failed"]; l != nil {
-		if d, _ := l["detail"].(map[string]any); d == nil || d["login"] != h || d["request_id"] != id {
-			t.Errorf("the mirror carries the record's detail with the request id: %v", l["detail"])
+
+	c := env.mintAccount(t, idp, "named")
+	var mirrored bool
+	for _, m := range lines() {
+		if m["event"] == "audit.user.login" {
+			if d, _ := m["detail"].(map[string]any); d != nil && d["provider"] == config.OIDCProviderID && m["request_id"] != nil && m["request_id"] != "" {
+				mirrored = true
+			}
 		}
+	}
+	if !mirrored {
+		t.Errorf("no audit.user.login line for %s's sign-in, with its detail and request id", c.name)
 	}
 }
 

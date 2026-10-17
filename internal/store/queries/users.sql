@@ -7,8 +7,8 @@ INSERT INTO handles (id, handle, kind) VALUES ($1, $2, $3);
 SELECT * FROM handles WHERE handle = $1;
 
 -- name: CreateUser :one
-INSERT INTO users (id, email, display_name, password_hash)
-VALUES ($1, $2, $3, $4)
+INSERT INTO users (id, email, display_name)
+VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: GetUserByID :one
@@ -22,15 +22,6 @@ SELECT u.*, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE h.handle =
 
 -- name: UpdateUserDisplayName :one
 UPDATE users SET display_name = $2, updated_at = now() WHERE id = $1 RETURNING id;
-
--- name: SetUserPasswordHash :exec
-UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1;
-
--- name: SetUserTOTPSecret :exec
-UPDATE users SET totp_secret_enc = $2, totp_enabled = false, updated_at = now() WHERE id = $1;
-
--- name: EnableUserTOTP :exec
-UPDATE users SET totp_enabled = true, updated_at = now() WHERE id = $1;
 
 -- name: ListUserDirectoryLinks :many
 -- The directory accounts the account is linked to by sign-ins through the
@@ -152,8 +143,6 @@ UPDATE users SET
   email = $2,
   email_verified_at = NULL,
   display_name = 'deleted user',
-  password_hash = NULL,
-  totp_secret_enc = NULL,
   totp_enabled = false,
   state = 'deleted',
   deleted_tombstone = $3,

@@ -40,7 +40,8 @@ func orgHandleReserved(h string, staff bool) bool {
 
 // unreservedHandle returns h, or h with a numeric suffix when h is
 // reserved — for handles derived from an email or an IdP claim rather
-// than chosen (SSO and social sign-up), where refusing is not an option.
+// than chosen (a first sign-in through an IdP), where refusing is not an
+// option.
 func unreservedHandle(h string) string {
 	if !handleReserved(h) {
 		return h

@@ -54,16 +54,16 @@ middleware. Each test keeps its own server and objects; fixtures are not
 shared between these three permission contracts.
 
 The read test reuses one real member session for its two PAT issuances and
-its read grid. The seeded accounts share one real password hash per process
-with other `seedCaller` fixtures. Seeding callers saves setup work only; it
-removes no permission case.
+its read grid. Seeding callers saves setup work only; it removes no
+permission case.
 
-Members still register and join through the invitation endpoints. Staff still
-register, receive the staff fixture flag and sign in. Organization creation,
+Members still join through the invitation endpoints. Staff still receive the
+staff fixture flag and sign in. Organization creation,
 grants, PAT issuance, suspension and all asserted requests retain their real
 HTTP paths. The seeded accounts are active and verified; these tests do not
-own the unactivated-account contract. `TestAuthLifecycle` keeps real
-registration, password failure, session issuance, CSRF and logout evidence;
+own the unactivated-account contract. `TestAuthLifecycle` keeps a real
+sign-in through the stand-in OpenID provider, session issuance, CSRF and
+logout evidence;
 `TestUnactivatedAccountUntilActivated` keeps activation/refused-write evidence.
 
 Other family fixtures remain: the generic matrix's per-operation disposable

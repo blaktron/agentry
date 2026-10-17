@@ -460,18 +460,17 @@ organization, and no other setting of the agent, grant or organization
 route is open to it. A token minted before the grant carried it does not
 gain it: sign in again.
 
-## Native credentials vs an external directory
+## Signing in
 
-A deployment can hand its account directory to an external IdP
-(`AGENTRY_AUTH_EXTERNAL_ONLY=true`, with the sign-in provider of
-`docs/self-hosting.md` "Sign in with your OpenID provider"). The five native credential endpoints —
-`POST /auth/register`, `POST /auth/login`, `POST /auth/verify-email`, and
-the TOTP setup/verify pair — then answer **`410 Gone`**: the surface is
-switched off, not missing. Sign-in happens through
-`GET /auth/oidc/{provider}/start`, and sessions, PATs, and every
-authorization decision stay the registry's own either way.
+The registry keeps no credentials of its own: there is no register, password
+or second-factor endpoint. People sign in through the deployment's OpenID
+provider (`docs/self-hosting.md` "Sign in with your OpenID provider") at
+`GET /auth/oidc/{provider}/start`, and a first sign-in creates the account.
+Sessions, PATs and every authorization decision are the registry's own.
+`POST /auth/verify-email` confirms an address from the link
+`POST /user/email-verification` mails.
 
-One surface exists for that arrangement. **Desktop sign-in**: a signed-in browser records a grant with
+**Desktop sign-in**: a signed-in browser records a grant with
 `POST /user/tokens/desktop-grant` (the app's `state` nonce), and the app
 exchanges the resulting one-time code for its PAT at `POST
 /auth/desktop/exchange` from its own process — the code is single-use and

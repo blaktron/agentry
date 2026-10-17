@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# Core UI acceptance: boot the API the
-# way smoke.sh does and drive the server's own browser surface with curl and a
-# cookie jar — sign in through the form, read the account, mint a token,
-# authorize a device and exchange its code from "the app", sign out. No
-# browser, no Node: this is the headless registry's own check.
+# Core UI acceptance: boot the API the way smoke.sh does and drive the
+# server's own browser surface with curl and a cookie jar: the sign-in
+# hand-off with no provider configured, a signed-in landing, authorize a
+# device and exchange its code from "the app", sign out. The account and its
+# session are seeded (lib.sh seed_session); the sign-in round trip through an
+# OpenID provider is the Go suite's (internal/api). No browser, no Node: this
+# is the headless registry's own check.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
+. scripts/acceptance/lib.sh
 PORT="${AGENTRY_ACCEPT_PORT:-$(python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()")}"
 echo "== core UI acceptance =="
 if [ -z "${AGENTRY_TEST_DATABASE_URL:-}" ]; then
@@ -29,46 +32,24 @@ for i in $(seq 1 50); do
   [ "$i" = 50 ] && { echo "server did not become healthy"; exit 1; }
 done
 SFX="$(python3 -c "import secrets; print(secrets.token_hex(3))")"
-HANDLE="uiacc$SFX"; PASS="hunter2hunter2"
-curl -fsS -o /dev/null -X POST "$BASE/api/v1/auth/register" -H 'Content-Type: application/json' \
-  -d "{\"handle\":\"$HANDLE\",\"email\":\"$HANDLE@example.test\",\"password\":\"$PASS\"}"
-echo "register: OK ($HANDLE)"
+HANDLE="uiacc$SFX"
+# Signed out: the hand-off page, which has no form, and says plainly that
+# there is no provider to hand off to.
+page=$(curl -fsS "$BASE/ui/login")
+grep 'has not configured one' <<<"$page" >/dev/null || { echo "sign-in page: $page"; exit 1; }
+if grep -q '<form' <<<"$page"; then echo "sign-in page carries a form"; exit 1; fi
+code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/ui/login" --data-urlencode "login=$HANDLE" --data-urlencode "password=x")
+[ "$code" = "405" ] || { echo "POST /ui/login: $code"; exit 1; }
+echo "sign-in hand-off: OK"
+for path in /ui/account /ui/account/tokens /ui/review /ui/staff /ui/orgs; do
+  code=$(curl -sS -o /dev/null -w '%{http_code}' "$BASE$path")
+  [ "$code" = "404" ] || { echo "$path: $code, want 404"; exit 1; }
+done
+echo "only the sign-in and authorize pages are served: OK"
+seed_session "$HANDLE"
+printf 'localhost\tFALSE\t/\tFALSE\t0\tagentry_session\t%s\nlocalhost\tFALSE\t/\tFALSE\t0\tagentry_csrf\t%s\n' "$SESSION" "$CSRF" >"$JAR"
 csrf() { awk '$6=="agentry_csrf"{print $7}' "$JAR" | tail -1; }
-loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -c "$JAR" -b "$JAR" -H 'Sec-Fetch-Site: same-origin' \
-  --data-urlencode "login=$HANDLE" --data-urlencode "password=$PASS" --data-urlencode "next=/ui/account" "$BASE/ui/login")
-[ "$loc" = "$BASE/ui/account" ] || { echo "sign-in: redirect $loc"; exit 1; }
-[ -n "$(csrf)" ] || { echo "sign-in: no csrf cookie"; exit 1; }
-echo "sign-in form: OK"
-curl -fsS -b "$JAR" "$BASE/ui/account" | grep "$HANDLE" >/dev/null && echo "account page: OK"
-# Activation: an unconfirmed account is told so and offered a
-# new link; one asked for straight after sign-up is refused (the first went
-# out moments ago) and the page says so, back on the account page.
-curl -fsS -b "$JAR" "$BASE/ui/account" | grep 'action="/ui/account/activation"' >/dev/null && echo "activation offered: OK"
-loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" "$BASE/ui/account/activation")
-[ "$loc" = "$BASE/ui/account" ] || { echo "activation resend: redirect $loc"; exit 1; }
-curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/account" | grep "recently" >/dev/null && echo "activation resend refused inside five minutes: OK"
-# Organizations: the create form, then the decommission form.
-# Creating one needs a verified address, and the verification token never
-# leaves the server, so the address is marked verified directly, as
-# cli.sh does — through the Go toolchain rather than psql.
-go run ./scripts/dev/dbexec "UPDATE users SET email_verified_at = now() WHERE id = (SELECT id FROM handles WHERE handle = '$HANDLE')" >/dev/null
-ORG="uiorg$SFX"
-loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \
-  --data-urlencode "handle=$ORG" --data-urlencode "displayName=Acceptance Org" "$BASE/ui/orgs")
-[ "$loc" = "$BASE/ui/orgs/$ORG" ] || { echo "create org form: redirect $loc"; exit 1; }
-curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/orgs/$ORG" | grep "Acceptance Org" >/dev/null && echo "org created from the form: OK"
-loc=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \
-  --data-urlencode "section=decommission" --data-urlencode "confirm=$ORG" "$BASE/ui/orgs/$ORG")
-[ "$loc" = "$BASE/ui/orgs/$ORG" ] || { echo "decommission form: redirect $loc"; exit 1; }
-curl -fsS -b "$JAR" -c "$JAR" "$BASE/ui/orgs/$ORG" | grep "being decommissioned" >/dev/null && echo "org decommissioned from the form: OK"
-curl -fsS -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" --data-urlencode "action=create" \
-  --data-urlencode "name=acceptance" --data-urlencode "scopes=agent:read" "$BASE/ui/account/tokens" | grep "agy_" >/dev/null && echo "token shown once: OK"
-curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep "acceptance" >/dev/null && echo "token listed: OK"
-# The hosted-run scopes are on the form and travel to the token.
-curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep 'value="run:write"' >/dev/null && echo "run scopes offered: OK"
-curl -fsS -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" --data-urlencode "action=create" \
-  --data-urlencode "name=acceptance-run" --data-urlencode "scopes=run:read" --data-urlencode "scopes=run:write" "$BASE/ui/account/tokens" | grep "agy_" >/dev/null && echo "run-scoped token shown once: OK"
-curl -fsS -b "$JAR" "$BASE/ui/account/tokens" | grep "run:read run:write" >/dev/null && echo "run-scoped token listed with its scopes: OK"
+curl -fsS -b "$JAR" "$BASE/ui/" | grep "signed in as $HANDLE" >/dev/null && echo "landing names the account: OK"
 STATE="state_$SFX$SFX"
 curl -fsS -b "$JAR" "$BASE/ui/authorize?port=40123&state=$STATE" | grep "127.0.0.1:40123" >/dev/null && echo "authorize page: OK"
 cb=$(curl -sS -o /dev/null -w '%{redirect_url}' -b "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" \
@@ -80,6 +61,6 @@ TOKEN=$(curl -fsS -X POST "$BASE/api/v1/auth/desktop/exchange" -H 'Content-Type:
 curl -fsS -o /dev/null -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/user" && echo "device authorize + exchange: OK"
 loc=$(curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" -c "$JAR" -H 'Sec-Fetch-Site: same-origin' --data-urlencode "_csrf=$(csrf)" "$BASE/ui/logout")
 [ "$loc" = "303" ] || { echo "sign-out: $loc"; exit 1; }
-code=$(curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" "$BASE/ui/account")
-[ "$code" = "303" ] && echo "sign-out: OK"
+code=$(curl -sS -o /dev/null -w '%{http_code}' -b "agentry_session=$SESSION" "$BASE/api/v1/user")
+[ "$code" = "401" ] && echo "sign-out revokes the session: OK"
 echo "== core UI acceptance PASSED =="

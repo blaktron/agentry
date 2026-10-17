@@ -35,7 +35,6 @@ data:
       cookieSecure: {{ .Values.config.auth.cookieSecure }}
       sessionTTL: {{ .Values.config.auth.sessionTTL }}
       patMaxTTL: {{ .Values.config.auth.patMaxTTL }}
-      externalOnly: {{ .Values.config.auth.externalOnly }}
       {{- with .Values.config.idp.logoutUrl }}
       idpLogoutURL: {{ . | quote }}
       {{- end }}

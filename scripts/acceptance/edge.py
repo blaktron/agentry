@@ -26,7 +26,7 @@ else:
     raise SystemExit("FAIL: edge or upstream did not become ready")
 
 if sys.argv[1] == "exhaust":
-    responses = [exchange("/api/v1/auth/login", "POST") for _ in range(40)]
+    responses = [exchange("/api/v1/auth/desktop/exchange", "POST") for _ in range(40)]
     statuses = [response[0] for response in responses]
     assert 429 in statuses, "FAIL: sign-in requests never exhausted the edge budget"
     for status, _, headers in responses:
@@ -35,7 +35,7 @@ if sys.argv[1] == "exhaust":
             assert headers.get("Retry-After") == "6", "FAIL: request refusal must carry the conservative six-second retry delay"
         else:
             assert "Retry-After" not in headers, "successful request received retry instructions"
-    for path in ["/api/v1/auth/login", "/ui/login"]:
+    for path in ["/api/v1/auth/oidc/oidc/start", "/ui/login"]:
         status, _, headers = exchange(path)
         assert status == 429 and headers.get_all("Retry-After") == ["6"], f"shared sign-in budget or retry header lost at {path}"
         assert headers.get("Strict-Transport-Security") == "max-age=31536000", "HSTS lost on a sign-in refusal"
@@ -48,7 +48,7 @@ if sys.argv[1] == "exhaust":
     assert status == 200 and "Retry-After" not in headers, "traffic did not resume after the advertised retry delay"
     print("ok edge refusals carry Retry-After and HSTS; traffic resumes after the delay")
 elif sys.argv[1] == "fresh":
-    assert exchange("/api/v1/auth/login", "POST")[0] == 200, "a second client shares the first client's budget"
+    assert exchange("/api/v1/auth/desktop/exchange", "POST")[0] == 200, "a second client shares the first client's budget"
     print("ok a second client keeps an independent sign-in budget")
     for path in ["/internal/x/anything/check", "/metrics"]:
         assert exchange(path, "POST" if path.startswith("/internal/") else "GET")[0] == 404, f"{path} reached the server through the edge"

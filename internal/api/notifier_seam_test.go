@@ -135,7 +135,7 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 
 	// An unverified address gets nothing, and the extension is
 	// told only that nothing went — not why.
-	unverifiedH := env.register("ns-unverified")
+	unverifiedH := env.registerUnverified("ns-unverified")
 	code, out, _ = send(t, env.userID(unverifiedH), "billing", "Your payment failed", "x")
 	if code != http.StatusOK || out.Sent {
 		t.Fatalf("an unverified address: %d sent=%t, want 200 and not sent", code, out.Sent)

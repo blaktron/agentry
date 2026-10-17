@@ -106,7 +106,7 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 		// The agent was deleted while the submission was on its way.
 		problemNotFound(w, r)
 	case errors.Is(err, registry.ErrTwoFactorRequired):
-		problemForbidden(w, r, "Enable two-factor authentication before publishing to a public namespace.")
+		problemForbidden(w, r, "Sign in with a second factor at your sign-in provider before publishing to a public namespace.")
 	case errors.Is(err, registry.ErrScanNotScheduled):
 		// The version row exists and is in `scanning`; the watchdog will route
 		// it to review. Say so rather than implying nothing happened.
