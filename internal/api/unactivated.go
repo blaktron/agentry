@@ -9,9 +9,10 @@ import (
 
 // An unactivated account is signed in and may read everything a
 // signed-in account may, but it changes
-// nothing until it follows the activation link the registry mailed it: a
-// self-enrolled directory account reaches the site before its address is
-// confirmed, and an address nobody confirmed must not own anything.
+// nothing until it follows the activation link the registry mailed it: an
+// account whose sign-in provider did not vouch for its address reaches the
+// registry before the address is confirmed, and an address nobody confirmed
+// must not own anything.
 //
 // unactivatedWrites is what it may still do: sign itself in and out,
 // ask for another activation mail and follow one, set its display name and
@@ -24,7 +25,9 @@ import (
 // Patterns are "METHOD /path" under /api/v1, a {} segment matching one
 // path segment; a trailing /* matches the rest.
 var unactivatedWrites = []string{
-	"POST /auth/*",
+	"POST /auth/verify-email",
+	"POST /auth/logout",
+	"POST /auth/desktop/exchange",
 	"POST /user/email-verification",
 	"PATCH /user",
 	"POST /user/delete",

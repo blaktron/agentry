@@ -63,17 +63,21 @@ The store's fresh/concurrent migration tests keep their actual migration paths.
 
 ## Ordinary callers and real account lifecycles
 
-`seedCaller` builds a valid active, verified account with a real password hash
-and hashed session credential through the store's generated queries. It is for
-tests whose subject is authorization or resource behavior. Requests still pass
-through the real HTTP authentication, CSRF and authorization middleware.
+`seedCaller` builds a valid active, verified account and a hashed session
+credential through the store's generated queries. `register` (and
+`registerUnverified`, for an unconfirmed address) and `login` do the same in
+two steps, for a test that needs the account before its session: the server
+keeps no password, so an account and a session are what a sign-in through the
+OpenID provider leaves behind. They are for tests whose subject is
+authorization or resource behavior. Requests still pass through the real HTTP
+authentication, CSRF and authorization middleware.
 
-Use `register`, `login`, `joinOrg` and the real endpoints when their side
-effects are the subject: registration, password verification, staff syncing,
-second factors, remembered browsers, session/PAT issuance, account erasure or
-invitation acceptance. The authorization matrix and the private-reader fixtures
-use seedCaller; invitations and sign-in lifecycle tests use the real
-endpoints. Seeding is not evidence those lifecycle endpoints work.
+When the sign-in itself is the subject (account creation, linking, the
+provider's claims, staff syncing, second-factor evidence, remembered
+browsers), sign in through the stand-in OpenID provider (`internal/testidp`,
+with `newOIDCTestEnv`, `signInOIDC` and `mintAccount`). Use `joinOrg` and the
+real endpoints for invitation acceptance, session/PAT issuance and account
+erasure. Seeding is not evidence those lifecycle endpoints work.
 
 ## Consolidating a behavior family
 

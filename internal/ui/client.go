@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 )
 
 // apiCall is one in-process request to the API on behalf of the browser
@@ -53,15 +52,6 @@ func (res response) detail() string {
 		}
 	}
 	return http.StatusText(res.Status)
-}
-
-// problemType is the problem+json `type`, "" when the body is not one.
-func (res response) problemType() string {
-	var p struct {
-		Type string `json:"type"`
-	}
-	_ = json.Unmarshal(res.Body, &p)
-	return p.Type
 }
 
 func (c apiCall) do(method, path string, body any) (response, error) {
@@ -118,64 +108,9 @@ func (rec *recorder) Write(b []byte) (int, error) {
 	return rec.body.Write(b)
 }
 
-// forwardCookies copies the API's Set-Cookie headers onto the browser
-// response: a sign-in's session cookie, a sign-out's clearing. The API chose
-// the attributes (HttpOnly, SameSite, Secure, lifetime); nothing is rewritten.
-func forwardCookies(w http.ResponseWriter, from http.Header) {
-	for _, c := range from.Values("Set-Cookie") {
-		w.Header().Add("Set-Cookie", c)
-	}
-}
-
-// setCookieLike sets name=value with the attributes of a Set-Cookie line
-// the API issued (the CSRF cookie mirrors the session cookie's).
-func setCookieLike(w http.ResponseWriter, name, value, like string, secure bool) {
-	c := &http.Cookie{Name: name, Value: value, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: secure}
-	if like != "" {
-		for _, part := range strings.Split(like, ";") {
-			kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
-			if strings.EqualFold(kv[0], "Max-Age") && len(kv) == 2 {
-				var n int
-				for _, ch := range kv[1] {
-					if ch < '0' || ch > '9' {
-						n = -1
-						break
-					}
-					n = n*10 + int(ch-'0')
-				}
-				if n >= 0 {
-					c.MaxAge = n
-				}
-			}
-			if strings.EqualFold(kv[0], "Secure") {
-				c.Secure = true
-			}
-		}
-	}
-	http.SetCookie(w, c)
-}
-
 func cookieValue(r *http.Request, name string) string {
 	if c, err := r.Cookie(name); err == nil {
 		return c.Value
-	}
-	return ""
-}
-
-func findSetCookie(h http.Header, name string) string {
-	for _, c := range h.Values("Set-Cookie") {
-		if strings.HasPrefix(c, name+"=") {
-			return c
-		}
-	}
-	return ""
-}
-
-func cookieValueOf(setCookie string) string {
-	first := strings.SplitN(setCookie, ";", 2)[0]
-	kv := strings.SplitN(first, "=", 2)
-	if len(kv) == 2 {
-		return kv[1]
 	}
 	return ""
 }

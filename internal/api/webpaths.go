@@ -15,7 +15,10 @@ import (
 // With web.url set — a site fronts this server — they are that site's
 // pages, absolute. Without it they are the server's own pages under /ui/:
 // relative for redirects (same origin by construction) and absolute from
-// baseURL for links that leave the browser (emails, clients).
+// baseURL for links that leave the browser (emails, clients). The server's
+// own pages are only sign-in, address confirmation and device authorize, so
+// a destination a site would serve (a dashboard, settings, an invitation, an
+// organization console) is "" without one, and a mail then names no link.
 type webPaths struct {
 	web  string // the site's origin without a trailing slash; "" = none
 	base string // this server's public origin without a trailing slash; "" = unknown
@@ -57,25 +60,26 @@ func (p webPaths) dashboardPath() string {
 	if p.site() {
 		return "/dashboard"
 	}
-	return "/ui/account"
+	return "/ui/"
 }
 
-// dashboardURL is the same destination for an email.
+// dashboardURL is the same destination for an email: the site's dashboard,
+// "" without a site.
 func (p webPaths) dashboardURL() string {
 	if p.site() {
 		return p.web + "/dashboard"
 	}
-	return p.abs("/ui/account")
+	return ""
 }
 
 // settingsURL is the page where a person switches the registry's mails on
-// and off: the site's settings page, or this server's account page, which
-// carries the same switches.
+// and off: the site's settings page, "" without a site (the switches are
+// the API's, PUT /user/notifications).
 func (p webPaths) settingsURL() string {
 	if p.site() {
 		return p.web + "/settings"
 	}
-	return p.abs("/ui/account")
+	return ""
 }
 
 // homeURL is where sign-out ends; "" when neither a site nor a public
@@ -100,16 +104,13 @@ func (p webPaths) verifyEmailURL(token string) string {
 }
 
 // invitationURL is where an invited person accepts an organization
-// invitation; "" when no absolute origin is known, in which case the admin
-// conveys the token itself.
+// invitation: the site's page, "" without a site, in which case the admin
+// conveys the token itself and it is accepted through the API.
 func (p webPaths) invitationURL(token string) string {
 	if p.site() {
 		return p.web + "/invitations/" + url.PathEscape(token)
 	}
-	if p.base == "" {
-		return ""
-	}
-	return p.base + "/ui/invitations/" + url.PathEscape(token)
+	return ""
 }
 
 // reportCardURL is where an author is sent to read a version's report card
@@ -133,11 +134,11 @@ func (p webPaths) authorizeURL() string {
 }
 
 // orgConsoleURL is where an organization's admins manage it: the site's
-// organization console, or the server's own page. "" when neither origin
-// is configured, in which case a mail names the organization and no link.
+// organization console. "" without a site, in which case a mail names the
+// organization and no link.
 func (p webPaths) orgConsoleURL(handle string) string {
 	if p.site() {
 		return p.web + "/orgs/" + url.PathEscape(handle) + "/admin"
 	}
-	return p.abs("/ui/orgs/" + url.PathEscape(handle))
+	return ""
 }

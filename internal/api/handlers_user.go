@@ -30,7 +30,7 @@ func (s *Server) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	u := User{
 		Id: row.ID, Handle: row.Handle, Email: row.Email,
 		DisplayName: row.DisplayName, EmailVerified: row.EmailVerifiedAt != nil,
-		TotpEnabled: row.TotpEnabled, CreatedAt: row.CreatedAt,
+		CreatedAt:     row.CreatedAt,
 		PlatformStaff: &row.PlatformStaff,
 		CookieAckAt:   row.CookieAckAt,
 	}

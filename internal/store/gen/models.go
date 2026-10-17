@@ -553,11 +553,6 @@ type TeamMember struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type TotpConsumedChallenge struct {
-	ID        string    `json:"id"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
 type TrustedDevice struct {
 	ID          uuid.UUID   `json:"id"`
 	UserID      uuid.UUID   `json:"user_id"`
@@ -575,8 +570,6 @@ type User struct {
 	Email            string     `json:"email"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
 	DisplayName      string     `json:"display_name"`
-	PasswordHash     *string    `json:"password_hash"`
-	TotpSecretEnc    []byte     `json:"totp_secret_enc"`
 	TotpEnabled      bool       `json:"totp_enabled"`
 	State            string     `json:"state"`
 	DeletedTombstone []byte     `json:"deleted_tombstone"`

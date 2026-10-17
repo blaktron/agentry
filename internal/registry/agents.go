@@ -102,7 +102,7 @@ type PolicySubmission struct {
 func (s *Service) SetPolicyGate(g PolicyGate) { s.policyGate = g }
 
 // SetPublicPublish2FA enables the 2FA gate: publishing to a public
-// namespace requires TOTP on the submitting account.
+// namespace requires a second factor the sign-in provider asserted.
 func (s *Service) SetPublicPublish2FA(on bool) { s.require2FAPublic = on }
 
 // SetLogger overrides the service logger (defaults to slog.Default).

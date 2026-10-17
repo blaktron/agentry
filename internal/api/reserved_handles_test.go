@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/testidp"
 )
 
 // Root paths of the server and the site are not handles: `ui` is
@@ -12,13 +15,15 @@ import (
 // page. The product's own names are reserved too, so nobody can pass
 // content off as first-party.
 func TestReservedHandlesAreRefused(t *testing.T) {
-	env := newTestEnv(t)
+	env, idp := newOIDCTestEnv(t, nil)
+	// A first sign-in asking for a reserved name as its username is given
+	// another handle, never the reserved one.
 	for _, h := range []string{"ui", "settings", "api", "agentry", "secureagentry"} {
-		res := env.do(anonymous, http.MethodPost, "/api/v1/auth/register", map[string]any{"handle": h, "email": h + env.sfx + "@example.test", "password": "hunter2hunter2"})
-		b, _ := io.ReadAll(res.Body)
-		_ = res.Body.Close()
-		if res.StatusCode < 400 || res.StatusCode >= 500 || !strings.Contains(string(b), "reserved") {
-			t.Fatalf("register %q: %d %s", h, res.StatusCode, b)
+		in := env.signInOIDC(t, idp, config.OIDCProviderID, testidp.Person{
+			Subject: "sub-resv-" + h + env.sfx, Email: h + env.sfx + "@example.test", EmailVerified: true, Username: h,
+		})
+		if in.status != http.StatusOK || in.handle == "" || in.handle == h {
+			t.Fatalf("sign-in asking for %q: %d, handle %q", h, in.status, in.handle)
 		}
 	}
 	owner := env.register("resv")

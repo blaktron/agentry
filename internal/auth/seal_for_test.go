@@ -21,7 +21,7 @@ func TestSealerForIsItsOwnKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fromRoot, _ := root.Seal([]byte("a TOTP seed"))
+	fromRoot, _ := root.Seal([]byte("a webhook secret"))
 	fromA, _ := a.Seal([]byte("an address"))
 	if _, err := a.Open(fromRoot); err == nil {
 		t.Error("a purpose's sealer opened the server's value")

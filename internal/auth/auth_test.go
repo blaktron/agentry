@@ -2,30 +2,10 @@ package auth
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 )
-
-func TestPasswordHashRoundTrip(t *testing.T) {
-	h, err := HashPassword("correct horse battery staple")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.HasPrefix(h, "$argon2id$") {
-		t.Fatalf("not PHC argon2id: %s", h)
-	}
-	if !VerifyPassword("correct horse battery staple", h) {
-		t.Fatal("verify failed for correct password")
-	}
-	if VerifyPassword("wrong", h) {
-		t.Fatal("verify passed for wrong password")
-	}
-	if VerifyPassword("anything", "$bcrypt$whatever") {
-		t.Fatal("unknown format must verify false")
-	}
-}
 
 func TestTokens(t *testing.T) {
 	tok, err := NewToken(PATPrefix)
@@ -55,12 +35,12 @@ func TestSealerRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ct, err := s.Seal([]byte("totp-secret"))
+	ct, err := s.Seal([]byte("a webhook secret"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	pt, err := s.Open(ct)
-	if err != nil || string(pt) != "totp-secret" {
+	if err != nil || string(pt) != "a webhook secret" {
 		t.Fatalf("roundtrip failed: %v %q", err, pt)
 	}
 	ct[len(ct)-1] ^= 0xff
@@ -69,19 +49,6 @@ func TestSealerRoundTrip(t *testing.T) {
 	}
 	if _, err := NewSealer("", false); err == nil {
 		t.Fatal("empty key outside dev must fail")
-	}
-}
-
-func TestTOTPRoundTrip(t *testing.T) {
-	secret, url, err := GenerateTOTP("", "tester")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if secret == "" || !strings.HasPrefix(url, "otpauth://") {
-		t.Fatalf("bad enrollment: %q %q", secret, url)
-	}
-	if ValidateTOTP("000000", secret) && ValidateTOTP("111111", secret) {
-		t.Fatal("both fixed codes valid — validation broken")
 	}
 }
 

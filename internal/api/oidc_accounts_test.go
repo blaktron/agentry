@@ -7,6 +7,7 @@ package api_test
 // server stops shipping.
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/testidp"
 )
@@ -110,4 +112,31 @@ func (env *testEnv) mintAccount(t *testing.T, idp *testidp.IdP, handle string) c
 		t.Fatalf("mint %s: the account is %q", h, in.handle)
 	}
 	return in.caller
+}
+
+// TestAnAssertedPlaceholderAddressIsNoAddress: an address carrying the
+// registry's own placeholder suffix, which marks an account signed in with
+// no address, is not taken from a provider. The account gets the registry's
+// placeholder instead, and no activation link is made for an address nobody
+// could confirm.
+func TestAnAssertedPlaceholderAddressIsNoAddress(t *testing.T) {
+	env, idp := newOIDCTestEnv(t, nil)
+	h := "phold" + env.sfx
+	asserted := "someone" + env.sfx + "@oidc" + auth.SyntheticAddressSuffix
+	in := env.signInOIDC(t, idp, config.OIDCProviderID, testidp.Person{
+		Subject: "sub-" + h, Email: asserted, EmailVerified: false, Username: h,
+	})
+	if in.status != http.StatusOK {
+		t.Fatalf("sign-in: %d %s", in.status, in.body)
+	}
+	var email string
+	var links int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT u.email::text, (SELECT count(*) FROM email_verifications v WHERE v.user_id = u.id) FROM users u WHERE u.id = $1::uuid`,
+		in.userID).Scan(&email, &links); err != nil {
+		t.Fatal(err)
+	}
+	if email == asserted || !auth.SyntheticAddress(email) || links != 0 {
+		t.Fatalf("account address %q with %d activation links, want the registry's own placeholder and none", email, links)
+	}
 }

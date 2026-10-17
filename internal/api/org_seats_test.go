@@ -310,7 +310,7 @@ func TestInvitationIsACredential(t *testing.T) {
 
 	// An account whose address is not verified cannot accept, even when it
 	// is the invited one.
-	unverifiedH := env.register("iv-unverified")
+	unverifiedH := env.registerUnverified("iv-unverified")
 	unverifiedToken := inviteTo(t, env, admin, orgH, unverifiedH+"@example.test")
 	res = env.do(env.login(unverifiedH), http.MethodPost, "/api/v1/invitations/"+unverifiedToken, nil)
 	if code, _, detail := problemOf(t, res); code != http.StatusForbidden || !strings.Contains(detail, "Verify") {
@@ -656,10 +656,11 @@ func (n *invitationNotifier) sentTo(email string) *notify.InviteOffer {
 func TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress(t *testing.T) {
 	mails := &invitationNotifier{Notifier: notify.LogNotifier{}}
 	env := newTestEnvCfg(t, func(c *config.Config) {
-		// An absolute origin, so the offer carries a link a person can open
-		// (webPaths.invitationURL answers "" without one, as every other
-		// emailed link does).
+		// A site in front, so the offer carries a link a person can open
+		// (webPaths.invitationURL answers "" without one: the server has no
+		// invitation page of its own).
 		c.BaseURL = "https://registry.example"
+		c.Web.URL = "https://site.example"
 	}, func(s *api.Server) { s.SetNotifier(mails) })
 	adminH := env.register("od-admin")
 	env.verifyEmail(adminH)
@@ -720,7 +721,7 @@ func TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress(t *testing.T)
 
 	// An invitation to an address NOT at the organization's domain still
 	// needs the account's own verified address.
-	elseH := env.registerEmail("od-else", "else@elsewhere.example")
+	elseH := env.registerEmailUnverified("od-else", "else@elsewhere.example")
 	elseToken := inviteTo(t, env, admin, orgH, "else@elsewhere.example")
 	res := env.do(env.login(elseH), http.MethodPost, "/api/v1/invitations/"+elseToken, nil)
 	if code, _, detail := problemOf(t, res); code != http.StatusForbidden || !strings.Contains(detail, "Verify") {

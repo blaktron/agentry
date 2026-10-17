@@ -72,7 +72,7 @@ func (s *Server) foldInAtSignIn(r *http.Request, userID uuid.UUID, id *social.Id
 		UserID: userID, Email: id.Email, EmailVerified: id.EmailVerified, Actor: actor,
 	})
 	if err != nil {
-		s.log.ErrorContext(r.Context(), "social login: fold-in", "err", err, "user", userID)
+		s.log.ErrorContext(r.Context(), "sign-in: fold-in", "err", err, "user", userID)
 		return
 	}
 	if res.Fired {

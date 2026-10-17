@@ -105,7 +105,8 @@ func TestClearTrustedDevices(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&cleared); err != nil || cleared.Cleared == nil || *cleared.Cleared != 2 {
 		t.Fatalf("cleared = %s (%v), want 2", intOrNil(cleared.Cleared), err)
 	}
-	requireClearedCookieAt(t, res.Cookies(), trustedDeviceCookie, "/", "", false)
+	// The cookie is the directory's: the clear sets none of its own.
+	requireNoCookie(t, res.Cookies(), trustedDeviceCookie)
 
 	env.doJSON(caller, http.MethodGet, "/api/v1/user/trusted-devices", nil, &count, http.StatusOK)
 	if count.Count == nil || *count.Count != 0 {
