@@ -102,7 +102,7 @@ func (q *Queries) CreateHandle(ctx context.Context, arg CreateHandleParams) erro
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, email, display_name)
 VALUES ($1, $2, $3)
-RETURNING id, email, email_verified_at, display_name, totp_enabled, state, deleted_tombstone, created_at, updated_at, platform_staff, cookie_ack_at, idp_mfa_at
+RETURNING id, email, email_verified_at, display_name, state, deleted_tombstone, created_at, updated_at, platform_staff, cookie_ack_at, idp_mfa_at
 `
 
 type CreateUserParams struct {
@@ -119,7 +119,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DisplayName,
-		&i.TotpEnabled,
 		&i.State,
 		&i.DeletedTombstone,
 		&i.CreatedAt,
@@ -160,7 +159,7 @@ func (q *Queries) GetHandle(ctx context.Context, handle string) (Handle, error) 
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT u.id, u.email, u.email_verified_at, u.display_name, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.email = $1
+SELECT u.id, u.email, u.email_verified_at, u.display_name, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.email = $1
 `
 
 type GetUserByEmailRow struct {
@@ -168,7 +167,6 @@ type GetUserByEmailRow struct {
 	Email            string     `json:"email"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
 	DisplayName      string     `json:"display_name"`
-	TotpEnabled      bool       `json:"totp_enabled"`
 	State            string     `json:"state"`
 	DeletedTombstone []byte     `json:"deleted_tombstone"`
 	CreatedAt        time.Time  `json:"created_at"`
@@ -187,7 +185,6 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DisplayName,
-		&i.TotpEnabled,
 		&i.State,
 		&i.DeletedTombstone,
 		&i.CreatedAt,
@@ -201,7 +198,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 }
 
 const getUserByHandle = `-- name: GetUserByHandle :one
-SELECT u.id, u.email, u.email_verified_at, u.display_name, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE h.handle = $1 AND h.kind = 'user'
+SELECT u.id, u.email, u.email_verified_at, u.display_name, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE h.handle = $1 AND h.kind = 'user'
 `
 
 type GetUserByHandleRow struct {
@@ -209,7 +206,6 @@ type GetUserByHandleRow struct {
 	Email            string     `json:"email"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
 	DisplayName      string     `json:"display_name"`
-	TotpEnabled      bool       `json:"totp_enabled"`
 	State            string     `json:"state"`
 	DeletedTombstone []byte     `json:"deleted_tombstone"`
 	CreatedAt        time.Time  `json:"created_at"`
@@ -228,7 +224,6 @@ func (q *Queries) GetUserByHandle(ctx context.Context, handle string) (GetUserBy
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DisplayName,
-		&i.TotpEnabled,
 		&i.State,
 		&i.DeletedTombstone,
 		&i.CreatedAt,
@@ -242,7 +237,7 @@ func (q *Queries) GetUserByHandle(ctx context.Context, handle string) (GetUserBy
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT u.id, u.email, u.email_verified_at, u.display_name, u.totp_enabled, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.id = $1
+SELECT u.id, u.email, u.email_verified_at, u.display_name, u.state, u.deleted_tombstone, u.created_at, u.updated_at, u.platform_staff, u.cookie_ack_at, u.idp_mfa_at, h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.id = $1
 `
 
 type GetUserByIDRow struct {
@@ -250,7 +245,6 @@ type GetUserByIDRow struct {
 	Email            string     `json:"email"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
 	DisplayName      string     `json:"display_name"`
-	TotpEnabled      bool       `json:"totp_enabled"`
 	State            string     `json:"state"`
 	DeletedTombstone []byte     `json:"deleted_tombstone"`
 	CreatedAt        time.Time  `json:"created_at"`
@@ -269,7 +263,6 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DisplayName,
-		&i.TotpEnabled,
 		&i.State,
 		&i.DeletedTombstone,
 		&i.CreatedAt,
@@ -537,7 +530,6 @@ UPDATE users SET
   email = $2,
   email_verified_at = NULL,
   display_name = 'deleted user',
-  totp_enabled = false,
   state = 'deleted',
   deleted_tombstone = $3,
   updated_at = now()

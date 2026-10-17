@@ -570,7 +570,6 @@ type User struct {
 	Email            string     `json:"email"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
 	DisplayName      string     `json:"display_name"`
-	TotpEnabled      bool       `json:"totp_enabled"`
 	State            string     `json:"state"`
 	DeletedTombstone []byte     `json:"deleted_tombstone"`
 	CreatedAt        time.Time  `json:"created_at"`

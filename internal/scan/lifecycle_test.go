@@ -667,16 +667,6 @@ func TestPublicPublishRequiresASecondFactor(t *testing.T) {
 		t.Fatalf("private publish blocked by the public-publish gate: %v", err)
 	}
 
-	// users.totp_enabled is no evidence: the server keeps no second factor
-	// of its own.
-	if _, err := e.st.Pool().Exec(ctx, `UPDATE users SET totp_enabled = true WHERE id = $1`, e.owner); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := e.trySubmitSource("twofanative", "public",
-		benignFiles(u.Handle, "twofanative", "1.0.0"), "cli-upload"); !errors.Is(err, registry.ErrTwoFactorRequired) {
-		t.Fatalf("public publish on the native flag alone: %v, want ErrTwoFactorRequired", err)
-	}
-
 	// With a second factor the sign-in provider asserted, the public
 	// publish goes through.
 	if err := e.st.Queries().SetUserIdPMFA(ctx, e.owner); err != nil {
