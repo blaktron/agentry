@@ -3,7 +3,7 @@
 # emoji-variation-sequences.txt (https://www.unicode.org/Public/<version>/ucd/ and
 # ucd/emoji/):
 #   scripts/dev/variation-sequences.py StandardizedVariants.txt emoji-variation-sequences.txt pkg/rules/variation_bases.go
-import sys, re, collections
+import sys, collections
 std, emo, out = sys.argv[1], sys.argv[2], sys.argv[3]
 mask = collections.defaultdict(int)
 def read(path):
