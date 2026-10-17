@@ -6,9 +6,7 @@ then the steps, and ends with the check that proves it worked.
 Conventions: `agentryd` is the server binary; `$DB` is the database URL;
 `psql "$DB"` assumes the app role. Anything destructive says so in bold.
 "The status page" is where a deployment tells its users about an outage, on a
-host other than its own: for the hosted service it is
-[status.secureagentry.net](https://status.secureagentry.net); a self-hosted
-deployment names its own.
+host other than its own; each deployment names its own.
 
 ---
 
@@ -21,8 +19,7 @@ project is additive-or-compatible so old and new code can run side by side
 during a rollout:
 
 1. Review the infrastructure change first (`helm diff`, `docker compose
-   config`, or the deployment's own plan step — the hosted service's
-   Terraform lives with its site); a change that touches the database, the
+   config`, or the deployment's own plan step); a change that touches the database, the
    repo storage or the signing key stops here and gets a second pair of
    eyes.
 2. Apply migrations: `agentryd migrate` (idempotent; takes a session lock, so
@@ -174,8 +171,7 @@ against its release first and never changed). A client that pins today
 verifies everything; a client that pinned the old key keeps verifying the
 original signatures.
 
-1. Create the new key (your KMS or a new file key; on the hosted deployment
-   the site's Terraform). Keep the old key material: an
+1. Create the new key (your KMS or a new file key). Keep the old key material: an
    attestation it signed stays verifiable through its own signature for
    clients that pinned it, and **never schedule deletion of a key that
    signed a published version**.
@@ -227,7 +223,7 @@ after the warning.
    a site in front) up: it will show errors, which is better than silent
    divergence.
 2. Restore to a new instance at the chosen timestamp — from your Postgres
-   backups, or on the AWS reference deployment `aws rds
+   backups, or on AWS `aws rds
    restore-db-instance-to-point-in-time`. Never restore over the live one.
 3. Point the app at the restored endpoint, run `agentryd migrate` (no-op if
    the restore is post-migration), scale `api`/`worker` back up.
@@ -249,22 +245,6 @@ after the warning.
 **Verify:** `/readyz` green, a test publish reaches `published`, `agentry
 verify` passes on a pre-incident version.
 
-**On the Vultr production** (Vultr Managed Databases): the point-in-time history
-is the managed service's own, and the call that restores from it to a new
-cluster is its **fork**. Give it the source database, a label, the plan, the
-region, `type: pitr`, and a date and time; the result is a new cluster with
-production's roles and passwords. Allowlist it before anything connects.
-Point the DSN (terraform's `agentry-app` Secret) at the fork, or restore in
-place with the service's restore call once the fork has shown that the
-chosen time is right. The history covers two days on the Startup plan and
-fourteen on Business. It lives in the same region as the database, so it
-does not survive the loss of that region. Two scripts in the site's repository exercise it. One proves the recovery:
-it forks to a chosen second between two audited requests and checks that the
-fork holds the first and not the second. The other runs the whole restore
-beside production. Its runs and times are in the
-[deployment guide](https://docs.secureagentry.net/ops/deployment/), "Production
-on Vultr: backups and the restore drill".
-
 ---
 
 ## 7. Repo storage restore
@@ -273,8 +253,8 @@ on Vultr: backups and the restore drill".
 
 1. Repos are keyed by immutable UUID (`repos.id`), so a restore never has to
    guess ownership.
-2. Restore the storage snapshot (the volume's own snapshot; on the AWS
-   reference deployment the EFS recovery point from AWS Backup) to a new
+2. Restore the storage snapshot (the volume's own snapshot; on AWS the
+   EFS recovery point from AWS Backup) to a new
    file system, mount it read-only alongside, and copy only the affected
    `{uuid[0:2]}/{uuid}.git` directories back.
 3. A missing repo is recoverable from any clone: `git push --mirror`. Release
@@ -284,18 +264,6 @@ on Vultr: backups and the restore drill".
 
 **Verify:** `git clone` of an affected agent works; `agentry install` of its
 published version was never affected.
-
-**On the Vultr production** the repositories are on a Vultr File System
-claim, of which Vultr states no snapshot. The nightly `backup-git` job
-(in the hosted site's Helm chart) copies each repository to the backup bucket in
-a second region, as a `git bundle --all` with the repository's `config`,
-`HEAD` and pre-receive shim beside it, and the git role's SSH host key. To
-restore a repository, stop the git role and run the site's
-`restore-git` Job pointed at the claim. It makes each
-repository as `InitBare` would (`git init --bare`, then the saved config,
-`HEAD` and shim), fetches the bundle and checks connectivity. The copy is
-nightly, so the RPO is a day: pushes since the last bundle come back only
-from a clone.
 
 ---
 
