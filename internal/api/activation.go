@@ -158,10 +158,14 @@ func (s *Server) SendEmailVerification(w http.ResponseWriter, r *http.Request) {
 }
 
 // signedInDirectoryLinks names the directory accounts the person signed in
-// with, none for an account that never did (unlike directoryLinksFor, which
-// falls back to the address for erasure).
+// with through the sign-in provider, none for an account that never did
+// (unlike directoryLinksFor, which falls back to the address for erasure).
 func (s *Server) signedInDirectoryLinks(ctx context.Context, userID uuid.UUID, email string) ([]DirectoryLink, error) {
-	rows, err := s.q().ListUserDirectoryLinks(ctx, userID)
+	p, ok := s.cfg.SignInOIDC()
+	if !ok {
+		return nil, nil
+	}
+	rows, err := s.q().ListUserDirectoryLinks(ctx, storegen.ListUserDirectoryLinksParams{ProviderID: p.ID, UserID: userID})
 	if err != nil {
 		return nil, fmt.Errorf("read the account's directory links: %w", err)
 	}
@@ -172,41 +176,6 @@ func (s *Server) signedInDirectoryLinks(ctx context.Context, userID uuid.UUID, e
 	return links, nil
 }
 
-// directoryPresence tells whether a directory account a link names still
-// exists.
-type directoryPresence interface {
-	// AccountGone reports that the account is no longer in the directory.
-	// False when it cannot tell.
-	AccountGone(ctx context.Context, link DirectoryLink) (bool, error)
-}
-
-// AccountGone implements directoryPresence. A recorded id that answers 404,
-// or now holds an account with another uid, is gone; without an id, the
-// uid found at no account at the address is gone. A link with neither says
-// nothing, and is not gone.
-func (a *authentikEraser) AccountGone(ctx context.Context, link DirectoryLink) (bool, error) {
-	if link.AccountID > 0 {
-		u, err := a.accountByID(ctx, link.AccountID)
-		if err != nil {
-			return false, err
-		}
-		return u == nil || (link.UID != "" && u.UID != link.UID), nil
-	}
-	if link.UID == "" || link.Email == "" {
-		return false, nil
-	}
-	accounts, err := a.accountsAt(ctx, link.Email)
-	if err != nil {
-		return false, err
-	}
-	for _, u := range accounts {
-		if u.UID == link.UID {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 // unactivatedSuperseded reports that an unconfirmed registry account's
 // every directory account is gone: the directory removed it for a
 // provider that proved the address. Only where unactivated accounts are
@@ -215,8 +184,7 @@ func (a *authentikEraser) AccountGone(ctx context.Context, link DirectoryLink) (
 // directory that cannot be asked, or any doubt, is not superseded, and the
 // caller keeps today's answer (link it explicitly).
 func (s *Server) unactivatedSuperseded(ctx context.Context, userID uuid.UUID, email string) bool {
-	pres, ok := s.dirEraser.(directoryPresence)
-	if !ok || !s.unactivatedReadOnly {
+	if s.directory == nil || !s.unactivatedReadOnly {
 		return false
 	}
 	if _, err := s.q().GetOrgWhereUserIsLastAdmin(ctx, userID); !errors.Is(err, pgx.ErrNoRows) {
@@ -227,7 +195,7 @@ func (s *Server) unactivatedSuperseded(ctx context.Context, userID uuid.UUID, em
 		return false
 	}
 	for _, link := range links {
-		gone, err := pres.AccountGone(ctx, link)
+		gone, err := s.directory.AccountGone(ctx, link)
 		if err != nil {
 			s.log.WarnContext(ctx, "superseded check: directory", "err", err)
 			return false

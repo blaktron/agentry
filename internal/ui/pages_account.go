@@ -8,30 +8,16 @@ import (
 	"time"
 )
 
-// The account basics: who you are, the directory's password/MFA links (or
-// the native TOTP state), personal access tokens, SSH keys, sessions. Each
-// page reads through the API and each form posts through it.
-
-type directoryInfo struct {
-	Managed           bool   `json:"managed"`
-	PasswordChangeUrl string `json:"passwordChangeUrl"`
-	TotpSetupUrl      string `json:"totpSetupUrl"`
-	WebauthnSetupUrl  string `json:"webauthnSetupUrl"`
-	DevicesError      string `json:"devicesError"`
-	Devices           *[]struct {
-		ID        string     `json:"id"`
-		Kind      string     `json:"kind"`
-		Name      string     `json:"name"`
-		CreatedAt *time.Time `json:"createdAt"`
-	} `json:"devices"`
-}
+// The account basics: who you are, where the password and second factor
+// live (the sign-in provider, or the native TOTP state), personal access
+// tokens, SSH keys, sessions. Each page reads through the API and each form
+// posts through it.
 
 type accountData struct {
-	Directory *directoryInfo
-	// DirectoryError is set when the directory read failed: the page says
-	// it could not look rather than rendering the non-directory account.
-	DirectoryError string
-	Support        string
+	// External says the sign-in provider keeps the password and the second
+	// factor (auth.externalOnly).
+	External bool
+	Support  string
 	// Notifications is the person's mail and in-app switches, shown and
 	// set here so the mails' footer has a page to name; NotificationsError
 	// says the read failed.
@@ -98,7 +84,7 @@ func (h *handler) accountPage(w http.ResponseWriter, r *http.Request) {
 	if u == nil {
 		return
 	}
-	d := accountData{Support: h.opt.Brand.SupportEmail}
+	d := accountData{External: h.opt.ExternalOnly, Support: h.opt.Brand.SupportEmail}
 	if res, err := h.call(r).do(http.MethodGet, "/user/notifications", nil); err != nil || !res.OK() {
 		d.NotificationsError = readFailed("your notification settings", res, err)
 	} else {
@@ -116,17 +102,6 @@ func (h *handler) accountPage(w http.ResponseWriter, r *http.Request) {
 		var ku knowledgeUsage
 		if res.decode(&ku) == nil {
 			d.Knowledge = &ku
-		}
-	}
-	if h.opt.ExternalOnly {
-		res, err := h.call(r).do(http.MethodGet, "/user/directory", nil)
-		if err != nil || !res.OK() {
-			d.DirectoryError = readFailed("the password and authenticator links", res, err)
-		} else {
-			var dir directoryInfo
-			if res.decode(&dir) == nil {
-				d.Directory = &dir
-			}
 		}
 	}
 	h.render(w, r, http.StatusOK, "account", page{Title: "Account", User: u, Data: d})
@@ -157,23 +132,6 @@ func (h *handler) activationResend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.back(w, r, "/ui/account", "A new activation link is on its way. It works once, for 24 hours.", "")
-}
-
-func (h *handler) directoryDeviceRemove(w http.ResponseWriter, r *http.Request) {
-	if !h.acceptForm(w, r) {
-		return
-	}
-	kind, id := r.PostFormValue("kind"), r.PostFormValue("deviceId")
-	if kind == "" || id == "" {
-		h.back(w, r, "/ui/account", "", "The form did not say which authenticator to remove.")
-		return
-	}
-	res, err := h.call(r).do(http.MethodDelete, "/user/directory/devices/"+url.PathEscape(kind)+"/"+url.PathEscape(id), nil)
-	if err != nil || !res.OK() {
-		h.back(w, r, "/ui/account", "", failMsg(res, err))
-		return
-	}
-	h.back(w, r, "/ui/account", "Authenticator removed. Sign-in no longer accepts it.", "")
 }
 
 type token struct {

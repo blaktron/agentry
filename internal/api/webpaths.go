@@ -112,15 +112,6 @@ func (p webPaths) invitationURL(token string) string {
 	return p.base + "/ui/invitations/" + url.PathEscape(token)
 }
 
-// accountSettingsURL is where the directory's flows return a browser after
-// a password change or an authenticator enrolment.
-func (p webPaths) accountSettingsURL() string {
-	if p.site() {
-		return p.web + "/settings/authentication"
-	}
-	return p.abs("/ui/account/directory")
-}
-
 // reportCardURL is where an author is sent to read a version's report card
 // from a quarantine or review email. With a site it is the
 // site's version page, which carries the full report. The server's own

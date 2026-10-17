@@ -190,33 +190,13 @@ type Auth struct {
 	// session. The lifetime is absolute — using it does not extend it — and
 	// the ceiling below is a hard product limit like the others.
 	TrustedDeviceTTL time.Duration `yaml:"trustedDeviceTTL"`
-	// IdPTrustCheckToken turns on remembered browsers on the directory's
-	// sign-in: the directory's sign-in flow presents
-	// it as a bearer secret when it asks the registry whether a browser's
-	// cookie is a live record, and the registry mints records from a
-	// directory sign-in only while it is set. Empty means the directory path
-	// is off: nothing is minted there and the check route answers 404. At
-	// least 32 characters; the directory's side holds the same value.
-	// Where an extension supplies the directory, it remembers browsers and
-	// answers the check itself, and the core's route answers 404; the core
-	// still expires the cookie when an account clears its remembered
-	// browsers.
-	IdPTrustCheckToken string `yaml:"idpTrustCheckToken"`
-	// DirectoryCookieDomain is the parent domain the remembered-browser
-	// cookie of the directory path is set on (the native path's cookie is
-	// always host-only), when the directory and the registry are sibling
-	// hosts (app.example.com and auth.example.com under example.com). Empty
-	// derives it: a directory on the registry's own host gets a host-only
-	// cookie, and one on a subdomain of it gets the registry's host. See
-	// DirectoryTrustCookieDomain.
-	DirectoryCookieDomain string `yaml:"directoryCookieDomain"`
 	// CookieSecure marks session cookies Secure (default true outside dev).
 	CookieSecure bool `yaml:"cookieSecure"`
 	// SealingKey is a base64 32-byte key encrypting small secrets at rest
 	// (TOTP seeds). Empty is allowed only in dev (a fixed insecure key).
 	SealingKey string `yaml:"sealingKey"`
 	// ExternalOnly hands credentials and the account directory to an
-	// external IdP (the stack's Authentik instance). When true the
+	// external IdP (the sign-in OpenID provider, auth.oidc). When true the
 	// native register / password-login / email-verify / TOTP endpoints
 	// answer 410 Gone and sign-in happens only through a configured social
 	// or SSO provider. Sessions, PATs, and RBAC stay native: the IdP owns
@@ -225,25 +205,17 @@ type Auth struct {
 	// can enrol a native TOTP factor while this is set (see
 	// internal/api/publish_gate.go).
 	ExternalOnly bool `yaml:"externalOnly"`
-	// IdPLogoutURL is the directory's sign-out URL: where sign-out sends the
-	// browser once the session is revoked, so the next sign-in asks again.
-	// For authentik that is the provider's end-session endpoint behind the
-	// cancel view (docs/self-hosting.md). Empty means sign-out ends on the
-	// home page.
+	// IdPLogoutURL is the sign-in provider's sign-out URL: where sign-out
+	// sends the browser once the session is revoked, so the next sign-in
+	// asks again (the provider's end-session endpoint). Empty means sign-out
+	// ends on the home page.
 	IdPLogoutURL string `yaml:"idpLogoutURL"`
-	// IdPAdminURL / IdPAdminToken let account erasure reach into the
-	// directory service and delete the sign-in account there too — authentik's
-	// API, as a bearer token with rights over users. Empty means
-	// erasure stops at the registry, which docs/self-hosting.md and the
-	// privacy policy then have to say. The URL is the API origin as the
-	// server reaches it (compose: http://authentik-server:9000).
-	IdPAdminURL   string `yaml:"idpAdminURL"`
-	IdPAdminToken string `yaml:"idpAdminToken"`
 	// StaffOrg is the handle of the staff organization:
 	// platform staff is exactly an active account with a verified address
 	// at StaffDomain that is an active member of this organization, and
 	// the organization admits nobody else. Membership is granted by the
-	// organization's admins; the address is verified by the directory. The
+	// organization's admins; the address is verified by the sign-in
+	// provider. The
 	// flag is recomputed at every membership change, at sign-in and once
 	// when the server starts. Set both or neither; with neither the flag
 	// is left as it is.
@@ -252,29 +224,9 @@ type Auth struct {
 	// DNS name, matched exactly (no subdomain) against the account's
 	// verified address.
 	StaffDomain string `yaml:"staffDomain"`
-	// IdPStaffMirrorGroup names the directory group the registry keeps equal
-	// to its platform staff: every active account with the platform_staff
-	// flag, and nobody else, matched by verified address. It is a mirror,
-	// written by the registry through IdPAdminURL/IdPAdminToken, never read
-	// back as a source: the flag stays the staff organization's. A directory
-	// application that should admit staff alone, such as an OpenSearch
-	// Dashboards, reads membership of this group from its tokens. Empty means no mirror. It needs the admin URL and token and
-	// the staff organization. Where an extension supplies the directory,
-	// the core keeps no mirror and the extension keeps its own.
-	IdPStaffMirrorGroup string `yaml:"idpStaffMirrorGroup"`
-	// IdPStaffGroup is retired: the directory group no longer grants
-	// platform staff. It is still read, so a
-	// configuration that sets it loads, and the server warns at start-up.
-	IdPStaffGroup string `yaml:"idpStaffGroup"`
-	// IdPStaffDomain is retired: being at a domain makes an account
-	// eligible to join the staff organization (StaffDomain), not staff by
-	// itself. Read and warned about like
-	// IdPStaffGroup.
-	IdPStaffDomain string `yaml:"idpStaffDomain"`
 	// OIDC is the deployment's one "sign in with your OpenID provider": any
 	// OpenID Connect issuer the operator registers the registry with. See
-	// OIDCProvider, and SignInOIDC for how the social.authentik keys
-	// name the same provider.
+	// OIDCProvider.
 	OIDC OIDCProvider `yaml:"oidc"`
 	// RequireIdPMFA re-enables the "2FA before public publish" gate
 	// under externalOnly, satisfied by evidence rather than trust: the
@@ -455,66 +407,6 @@ type Brand struct {
 	TermsURL      string `yaml:"termsURL"`
 }
 
-// DirectoryTrustCookieDomain says where the remembered-browser cookie of the
-// directory path is set. The registry sets it on the OIDC
-// callback, on its own host, and the browser has to send it to the
-// directory's flow executor, which is where the directory asks the registry
-// about it. Cookies ignore ports, so:
-//
-//   - a directory on the registry's own host gets a host-only cookie ("");
-//   - a directory on a subdomain of the registry's host gets a cookie for
-//     the registry's host, which covers its subdomains;
-//   - sibling hosts need auth.directoryCookieDomain, a parent domain of
-//     both, and a browser refuses one that does not cover the host setting
-//     it, so this refuses it first.
-//
-// An explicit domain must be a DNS name with at least two labels: a browser
-// ignores a Domain attribute that is an address or a public suffix, and the
-// cookie would then silently be host-only.
-func (c Config) DirectoryTrustCookieDomain() (string, error) {
-	issuer := c.DirectoryIssuer()
-	if issuer == "" {
-		return "", fmt.Errorf("config: auth.idpTrustCheckToken needs the directory configured (social.authentik, or auth.oidc with id authentik, with its issuer): it is the directory that asks")
-	}
-	registry := hostOf(c.BaseURL)
-	if registry == "" {
-		return "", fmt.Errorf("config: auth.idpTrustCheckToken needs baseURL: the registry sets the cookie on the callback at its public origin, and the directory has to be able to receive it")
-	}
-	directory := hostOf(issuer)
-	if directory == "" {
-		return "", fmt.Errorf("config: the directory's issuer %q has no host", issuer)
-	}
-	covers := func(parent, host string) bool { return host == parent || strings.HasSuffix(host, "."+parent) }
-	d := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(c.Auth.DirectoryCookieDomain), "."))
-	if d == "" {
-		switch {
-		case directory == registry:
-			return "", nil
-		case covers(registry, directory):
-			return registry, nil
-		default:
-			return "", fmt.Errorf("config: the directory (%s) is not on the registry's host (%s) or under it: set auth.directoryCookieDomain to a parent domain of both", directory, registry)
-		}
-	}
-	if _, err := netip.ParseAddr(d); err == nil || !strings.Contains(d, ".") {
-		return "", fmt.Errorf("config: auth.directoryCookieDomain %q must be a domain name of at least two labels; a browser ignores an address or a bare label there", d)
-	}
-	if !covers(d, registry) || !covers(d, directory) {
-		return "", fmt.Errorf("config: auth.directoryCookieDomain %q must cover both the registry (%s) and the directory (%s)", d, registry, directory)
-	}
-	return d, nil
-}
-
-// hostOf is the lower-cased host name of a URL, without its port; "" when
-// the URL has none.
-func hostOf(raw string) string {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return ""
-	}
-	return strings.ToLower(u.Hostname())
-}
-
 // DisplayName is what notification bodies, authenticator apps and the
 // server's own pages call this deployment: brand.name, else the public
 // origin's host, else "Agentry".
@@ -608,10 +500,6 @@ type Social struct {
 	Microsoft SocialProvider `yaml:"microsoft"`
 	OpenAI    SocialProvider `yaml:"openai"`
 	Claude    SocialProvider `yaml:"claude"`
-	// Authentik is the deployment's own directory service. Like
-	// openai/claude it has no default issuer; the operator points it at the
-	// instance's application (…/application/o/<slug>/).
-	Authentik SocialProvider `yaml:"authentik"`
 }
 
 // SocialProvider is one provider's OAuth client registration.
@@ -633,9 +521,11 @@ func (p SocialProvider) Configured() bool { return p.ClientID != "" && p.ClientS
 const (
 	// OIDCProviderID is the generic provider's id.
 	OIDCProviderID = "oidc"
-	// DirectoryProviderID is the id of a provider that is the deployment's
-	// own directory: its accounts are linked as "authentik:<sub>".
-	DirectoryProviderID = "authentik"
+	// AuthentikProviderID is the id an authentik directory's provider is
+	// registered under where its accounts are linked as "authentik:<sub>":
+	// every identity carries its provider's id, so such a deployment keeps
+	// it.
+	AuthentikProviderID = "authentik"
 )
 
 // OIDCProvider is the sign-in OpenID provider: an issuer with a discovery
@@ -644,20 +534,18 @@ const (
 type OIDCProvider struct {
 	// ID names the provider: the segment of its sign-in routes and the
 	// prefix of every identity it links ("<id>:<sub>"). "oidc" by default;
-	// "authentik" for a deployment whose provider is its own directory,
-	// whose accounts are linked under that prefix already. Changing it
-	// on a deployment with accounts unlinks every one of them.
+	// "authentik" for a deployment whose accounts are linked under that
+	// prefix already. Changing it on a deployment with accounts unlinks
+	// every one of them.
 	ID           string `yaml:"id"`
 	Issuer       string `yaml:"issuer"`
 	ClientID     string `yaml:"clientId"`
 	ClientSecret string `yaml:"clientSecret"`
 	// Scopes are asked for at sign-in; empty asks for openid, email and
-	// profile (and, for the directory, the agentry scope its own claims
-	// come with).
+	// profile.
 	Scopes []string `yaml:"scopes"`
 	// DisplayName is what the sign-in page calls it ("Continue with …");
-	// empty names it after the deployment for the directory and "your
-	// OpenID provider" otherwise.
+	// empty calls it "your OpenID provider".
 	DisplayName string `yaml:"displayName"`
 }
 
@@ -665,10 +553,7 @@ type OIDCProvider struct {
 func (p OIDCProvider) Configured() bool { return p.ClientID != "" && p.ClientSecret != "" }
 
 // SignInOIDC is the deployment's sign-in OpenID provider, when it has one:
-// auth.oidc as configured, with its id defaulted, or else the
-// social.authentik keys read as that provider under the id "authentik",
-// which every identity they linked carries. The two are never both set
-// (validate refuses it).
+// auth.oidc as configured, with its id defaulted.
 func (c Config) SignInOIDC() (OIDCProvider, bool) {
 	if p := c.Auth.OIDC; p.Configured() {
 		if p.ID == "" {
@@ -676,20 +561,7 @@ func (c Config) SignInOIDC() (OIDCProvider, bool) {
 		}
 		return p, true
 	}
-	if a := c.Social.Authentik; a.Configured() {
-		return OIDCProvider{ID: DirectoryProviderID, Issuer: a.Issuer, ClientID: a.ClientID, ClientSecret: a.ClientSecret}, true
-	}
 	return OIDCProvider{}, false
-}
-
-// DirectoryIssuer is the issuer of the sign-in provider when that provider
-// is the deployment's own directory, "" otherwise: where the directory's
-// settings links and the remembered browser's cookie domain come from.
-func (c Config) DirectoryIssuer() string {
-	if p, ok := c.SignInOIDC(); ok && p.ID == DirectoryProviderID {
-		return strings.TrimSpace(p.Issuer)
-	}
-	return ""
 }
 
 // RedTeam configures the scheduled red-team job: corpus
@@ -979,24 +851,14 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SOCIAL_CLAUDE_CLIENT_ID", &c.Social.Claude.ClientID)
 	str("AGENTRY_SOCIAL_CLAUDE_CLIENT_SECRET", &c.Social.Claude.ClientSecret)
 	str("AGENTRY_SOCIAL_CLAUDE_ISSUER", &c.Social.Claude.Issuer)
-	str("AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID", &c.Social.Authentik.ClientID)
-	str("AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET", &c.Social.Authentik.ClientSecret)
-	str("AGENTRY_SOCIAL_AUTHENTIK_ISSUER", &c.Social.Authentik.Issuer)
 	str("AGENTRY_AUTH_OIDC_ID", &c.Auth.OIDC.ID)
 	str("AGENTRY_AUTH_OIDC_ISSUER", &c.Auth.OIDC.Issuer)
 	str("AGENTRY_AUTH_OIDC_CLIENT_ID", &c.Auth.OIDC.ClientID)
 	str("AGENTRY_AUTH_OIDC_CLIENT_SECRET", &c.Auth.OIDC.ClientSecret)
 	list("AGENTRY_AUTH_OIDC_SCOPES", &c.Auth.OIDC.Scopes)
 	str("AGENTRY_AUTH_OIDC_DISPLAY_NAME", &c.Auth.OIDC.DisplayName)
-	str("AGENTRY_IDP_ADMIN_URL", &c.Auth.IdPAdminURL)
-	str("AGENTRY_IDP_ADMIN_TOKEN", &c.Auth.IdPAdminToken)
-	str("AGENTRY_IDP_TRUST_CHECK_TOKEN", &c.Auth.IdPTrustCheckToken)
-	str("AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN", &c.Auth.DirectoryCookieDomain)
 	str("AGENTRY_STAFF_ORG", &c.Auth.StaffOrg)
 	str("AGENTRY_STAFF_DOMAIN", &c.Auth.StaffDomain)
-	str("AGENTRY_IDP_STAFF_GROUP", &c.Auth.IdPStaffGroup)
-	str("AGENTRY_IDP_STAFF_MIRROR_GROUP", &c.Auth.IdPStaffMirrorGroup)
-	str("AGENTRY_IDP_STAFF_DOMAIN", &c.Auth.IdPStaffDomain)
 	if err := boolean("AGENTRY_AUTH_REQUIRE_IDP_MFA", &c.Auth.RequireIdPMFA); err != nil {
 		return err
 	}
@@ -1153,19 +1015,6 @@ func integer64(key string, dst *int64) error {
 // staffOrgRE is a lower-case handle as an organization's is written.
 var staffOrgRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,37}[a-z0-9])?$`)
 
-// RetiredStaffKeys names the retired staff keys this configuration still
-// sets, for the start-up warning: they grant nothing now.
-func (c *Config) RetiredStaffKeys() []string {
-	var out []string
-	if c.Auth.IdPStaffGroup != "" {
-		out = append(out, "auth.idpStaffGroup (AGENTRY_IDP_STAFF_GROUP)")
-	}
-	if c.Auth.IdPStaffDomain != "" {
-		out = append(out, "auth.idpStaffDomain (AGENTRY_IDP_STAFF_DOMAIN)")
-	}
-	return out
-}
-
 // staffDomainRE is a bare lower-case DNS name of at least two labels.
 var staffDomainRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
 
@@ -1194,34 +1043,8 @@ func (c Config) Validate() error {
 		// anyone, and a domain with no organization names nobody.
 		return fmt.Errorf("config: auth.staffOrg and auth.staffDomain are set together or not at all (got %q and %q)", c.Auth.StaffOrg, c.Auth.StaffDomain)
 	}
-	if g := c.Auth.IdPStaffMirrorGroup; g != "" {
-		// The mirror is written through the directory's admin API and filled
-		// from the staff organization: without either it would be a group
-		// nobody keeps, which an application would still read as staff.
-		if c.Auth.IdPAdminURL == "" || c.Auth.IdPAdminToken == "" {
-			return fmt.Errorf("config: auth.idpStaffMirrorGroup needs auth.idpAdminURL and auth.idpAdminToken, which the registry writes the group through")
-		}
-		if c.Auth.StaffOrg == "" {
-			return fmt.Errorf("config: auth.idpStaffMirrorGroup needs auth.staffOrg and auth.staffDomain: the group mirrors the staff organization's platform staff")
-		}
-		if g == c.Auth.IdPStaffGroup {
-			return fmt.Errorf("config: auth.idpStaffMirrorGroup must not be the retired auth.idpStaffGroup (%q): that group was a source of staff, the mirror is written by the registry", g)
-		}
-	}
 	if err := c.validateSignInOIDC(); err != nil {
 		return err
-	}
-	if c.Auth.IdPTrustCheckToken != "" {
-		// Remembered browsers on the directory path: refused
-		// here rather than discovered at the first sign-in, where a cookie
-		// the directory never receives would look like a feature that
-		// silently does nothing.
-		if len(c.Auth.IdPTrustCheckToken) < 32 {
-			return fmt.Errorf("config: auth.idpTrustCheckToken must be at least 32 characters (got %d)", len(c.Auth.IdPTrustCheckToken))
-		}
-		if _, err := c.DirectoryTrustCookieDomain(); err != nil {
-			return err
-		}
 	}
 	if o := c.Auth.StaffOrg; o != "" && !staffOrgRE.MatchString(o) {
 		return fmt.Errorf("config: auth.staffOrg must be an organization handle like agentry, got %q", o)
@@ -1551,19 +1374,15 @@ func InCIDRs(prefixes []netip.Prefix, addr netip.Addr) bool {
 	return false
 }
 
-// validateSignInOIDC refuses a sign-in provider that would be ambiguous or
-// unreachable: named twice (auth.oidc beside social.authentik),
+// validateSignInOIDC refuses a sign-in provider that would be unreachable:
 // under an id its routes do not serve, or configured without an issuer.
 func (c Config) validateSignInOIDC() error {
 	p := c.Auth.OIDC
-	if p.ID != "" && p.ID != OIDCProviderID && p.ID != DirectoryProviderID {
-		return fmt.Errorf("config: auth.oidc.id must be %q or %q, got %q", OIDCProviderID, DirectoryProviderID, p.ID)
+	if p.ID != "" && p.ID != OIDCProviderID && p.ID != AuthentikProviderID {
+		return fmt.Errorf("config: auth.oidc.id must be %q or %q, got %q", OIDCProviderID, AuthentikProviderID, p.ID)
 	}
 	if !p.Configured() {
 		return nil
-	}
-	if c.Social.Authentik.Configured() {
-		return fmt.Errorf("config: auth.oidc and social.authentik both name the sign-in provider; keep one (auth.oidc with id %q keeps social.authentik's accounts linked)", DirectoryProviderID)
 	}
 	if strings.TrimSpace(p.Issuer) == "" {
 		return fmt.Errorf("config: auth.oidc needs an issuer: the registry discovers the provider's endpoints from it")

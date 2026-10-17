@@ -44,13 +44,11 @@ type Claims struct {
 	// AMR as evidence that a second factor was used.
 	AMR []string
 	ACR string
-	// Groups is the token's `groups` claim (authentik's profile scope puts
-	// the user's group names there); nil when absent. The registry maps
-	// one configured group onto platform staff.
+	// Groups is the token's `groups` claim; nil when absent. It grants
+	// nothing: platform staff is membership of the staff organization.
 	Groups []string
 	// PreferredUsername is the `preferred_username` claim: the name the
-	// person chose at the IdP (authentik's profile scope puts the
-	// directory's username there); "" when absent. It is a seed for a new
+	// person chose at the IdP; "" when absent. It is a seed for a new
 	// account's handle, never an identifier: OIDC Core §5.7 does not make
 	// it unique or stable, so nothing is looked up by it.
 	PreferredUsername string

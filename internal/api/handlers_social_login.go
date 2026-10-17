@@ -364,17 +364,6 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			s.log.WarnContext(r.Context(), "social login: record idp mfa", "err", err)
 		}
 	}
-	// The directory's own id for the account: every later
-	// directory lookup reads the account by it. Only the directory's token
-	// is believed, and it is recorded on the identity this token signed in,
-	// so it is a directory fact and never one a person sets.
-	if dirID := directoryAccountID(id.Claims); s.builtInDirectory() && name == social.ProviderAuthentik && dirID > 0 {
-		if err := s.q().SetSocialIdentityDirectoryAccount(r.Context(), storegen.SetSocialIdentityDirectoryAccountParams{
-			Subject: id.NamespacedSubject, DirectoryAccountID: &dirID,
-		}); err != nil {
-			s.log.WarnContext(r.Context(), "social login: record the directory account id", "err", err)
-		}
-	}
 	// Platform staff is membership of the staff organization,
 	// recomputed at every sign-in, from facts nobody sets
 	// about themselves.
@@ -427,7 +416,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			return s.mintRememberedBrowser(r, userID, id.AMR, id.AuthTime, detail)
 		},
 	})
-	s.issueSocialSession(w, r, user, name, st.Next, id.AMR, s.directoryRemembers(name, id))
+	s.issueSocialSession(w, r, user, name, st.Next, id.AMR)
 }
 
 // readSocialState opens and clears the single-use state cookie.
@@ -561,9 +550,6 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 		for k, v := range handleRequestedDetail(id.Username, handle) {
 			e.Detail[k] = v
 		}
-		if promo := signupPromoCode(id); promo != "" && s.builtInDirectory() {
-			e.Detail["promoCode"] = promo
-		}
 		return s.auditW.Write(ctx, tq, e)
 	})
 	if err != nil {
@@ -582,28 +568,11 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	for k, v := range handleRequestedDetail(id.Username, handle) {
 		payload[k] = v
 	}
-	// The promo code typed at sign-up: the core names it and
-	// the billing extension decides what it is worth. Only here, on the
-	// sign-in that makes the account: the claim rides every later token of
-	// the account too, and a linked account or a returning one is not new.
-	if promo := signupPromoCode(id); promo != "" && s.builtInDirectory() {
-		payload["promoCode"] = promo
-	}
 	s.fireEvent(r.Context(), Event{Kind: "user.registered", UserID: newUserID, Payload: payload})
 	if activation != "" {
 		s.mailActivation(ctx, email, handle, activation)
 	}
 	return newUserID, true, nil
-}
-
-// signupPromoCode is the promo code a new account's first token carries,
-// believed from the directory alone: another provider asserting the claim
-// is a claim about nothing it holds.
-func signupPromoCode(id *social.Identity) string {
-	if id.Provider != social.ProviderAuthentik {
-		return ""
-	}
-	return PromoCodeClaim(id.Claims[claimPromoCode])
 }
 
 // sealTOTPChallenge mints the opaque challenge for a pending 2FA login.
@@ -709,7 +678,7 @@ func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
 			"This two-factor challenge was already used. Start the sign-in again.")
 		return
 	}
-	s.issueSocialSession(w, r, user, blob.Provider, "", nil, false)
+	s.issueSocialSession(w, r, user, blob.Provider, "", nil)
 }
 
 // consumeTOTPChallenge records the challenge's id in the consumed set every
@@ -748,22 +717,9 @@ func (s *Server) auditTOTPChallengeFailure(r *http.Request, userID uuid.UUID, pr
 // issueSocialSession opens an ordinary session (no org SSO tag) and answers:
 // a 303 to next in browser mode (next non-empty, already validated by
 // safeNextPath), else the LoginResult-shaped body both social endpoints
-// return. remember mints a remembered browser in the same transaction
-// (directoryRemembers decided it).
-func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string, remember bool) {
+// return.
+func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string) {
 	ctx := r.Context()
-	var cookieDomain string
-	if remember {
-		// Validated at start-up, so this cannot fail in a running server; if
-		// it somehow did, the sign-in still completes and simply is not
-		// remembered, rather than minting a cookie the directory never sees.
-		d, derr := s.cfg.DirectoryTrustCookieDomain()
-		if derr != nil {
-			s.log.WarnContext(ctx, "directory sign-in: not remembering the browser", "err", derr)
-			remember = false
-		}
-		cookieDomain = d
-	}
 	sessToken, err := auth.NewToken(auth.SessionPrefix)
 	if err != nil {
 		problemInternal(w, r)
@@ -779,7 +735,6 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		ipPtr = &ip
 	}
 	ua := r.UserAgent()
-	var deviceToken string
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		if _, err := q.CreateSession(ctx, storegen.CreateSessionParams{
 			ID: newUUID(), TokenSha256: auth.HashToken(sessToken), UserID: user.ID,
@@ -792,7 +747,7 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		e.Actor, e.ActorKind = user.ID, audit.ActorUser
 		e.TargetKind, e.TargetID = "user", user.ID
 		e.Detail = map[string]any{"method": "social", "provider": provider}
-		// What the directory said about the sign-in's factors:
+		// What the provider said about the sign-in's factors:
 		// the operator reads this row before turning on
 		// auth.requireIdpMFA, and an empty value is itself the finding.
 		if amr != nil {
@@ -800,19 +755,7 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		} else {
 			e.Detail["amr"] = []string{}
 		}
-		if err := s.auditW.Write(ctx, q, e); err != nil {
-			return err
-		}
-		if remember {
-			// Inside the session's transaction, like the native mint: a
-			// sign-in that asked to be remembered is remembered or fails.
-			tok, err := s.createTrustedDevice(ctx, q, r, user.ID, map[string]any{"via": "directory", "provider": provider})
-			if err != nil {
-				return err
-			}
-			deviceToken = tok
-		}
-		return nil
+		return s.auditW.Write(ctx, q, e)
 	})
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "social session", "err", err)
@@ -824,9 +767,6 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		Secure: s.cfg.Auth.CookieSecure, SameSite: http.SameSiteLaxMode,
 		MaxAge: int(s.cfg.Auth.SessionTTL.Seconds()),
 	})
-	if deviceToken != "" {
-		setDirectoryTrustedDeviceCookie(w, deviceToken, s.cfg.Auth.TrustedDeviceTTL, s.cfg.Auth.CookieSecure, cookieDomain)
-	}
 	if next != "" {
 		// Browser mode has no JSON body to carry the CSRF token, and the web
 		// tier can only echo what it holds: set it as the cookie the web

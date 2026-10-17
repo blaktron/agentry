@@ -78,7 +78,7 @@ is a name missing from this table.
 | `http.request` | INFO | the access line | see above |
 | `http.rate_limited` | INFO | a request refused by a rate class | `class` (`login`, `anon`, `authed`, `abuse_reports`, `scim`, an organization's SCIM data plane over its budget, and `model-input`, a model-input caller or an address presenting job credentials over its budget), `route`; for the git transports, `class` `push` with `agent` (the repository's push budget, over HTTP or SSH), `class` `ssh-key-offer` with `source` (the address's public-key offers to the SSH listener), and `class` `git-concurrent` with `source` (the client address, as resolved through the declared proxies, at its budget of concurrent git operations, over HTTP or SSH) |
 | `auth.login_failed` | INFO | a native sign-in failed | `user` (the id when the login named an account; the zero id otherwise). The login as typed is on the audit row, not here |
-| `auth.social_rejected` | WARN | a social or directory sign-in was rejected at the token exchange | `provider`, `err` |
+| `auth.social_rejected` | WARN | a sign-in through the OpenID provider or a social one was rejected at the token exchange | `provider`, `err` |
 | `saml.state_unavailable` | ERROR | a SAML login refused because the shared state behind it could not be read or written; the fail-closed opposite of `failopen.*` | `set` (`assertions`, `requests`), `err` |
 | `auth.totp_challenge_unavailable` | ERROR | a 2FA social login's second leg refused because its challenge could not be recorded as consumed in the shared set; fail closed, as `saml.state_unavailable` is. A request that had already ended logs a WARN without the event | `err` |
 | `ssrf.refused` | WARN | the private-range guard refused a webhook target | `org`, `delivery`, `endpoint`, `host` |
@@ -90,7 +90,7 @@ is a name missing from this table.
 | `failopen.osv_not_checked` | WARN | a dependency set S7 did not check against OSV | `stage`, `scanner`, `title` |
 | `failopen.version_not_checked` | WARN | declared MCP server versions S7 did not check against their package registry: the check is off (`AGENTRY_SCAN_NPM_REGISTRY=none`), or npm or PyPI gave no answer, and the version publishes (`scanner` is `S7/version-not-checked`) | `stage`, `scanner`, `title` |
 | `failopen.osv_error` | WARN | an OSV lookup errored and left a declared server with no data (`scanner` is `S7/osv-no-data`; a server S7 does not cover makes the same finding and is not counted here) | `stage`, `scanner`, `title` |
-| `failopen.directory_erasure` | ERROR | an account erasure's directory half did not happen: its retries ran out, or the retry could not be queued; the sign-in account is left for the operator to delete | `user`, `attempts`, `err` |
+| `failopen.directory_erasure` | ERROR | an account erasure's directory half did not happen: the attempt failed, the directory could not tell the account apart, or a directory that erases on its own answered no outcome the response defines; the sign-in account is left for the operator to delete | `user`, `err` |
 | `git.push_refused` | WARN | the git door refused a submission after a tag push | `agent`, `tag`, `err` |
 | `mail.suppressed` | INFO | a notification was withheld from an unverified address (WARN when the user row could not be read) | `user`, `kind` |
 | `webhook.delivered` | INFO | a webhook delivery attempt finished | `outcome` (`ok`, `error`), `org`, `delivery`, `attempt`, `status` or `err` |

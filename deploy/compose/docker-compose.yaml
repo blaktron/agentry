@@ -6,8 +6,8 @@
 #
 # Credentials. The Postgres and MinIO passwords default to development
 # values and are read from .env (AGENTRY_PG_PASSWORD, AGENTRY_MINIO_SECRET)
-# everywhere they appear — the services, the DSN agentryd uses, authentik's
-# database, the bucket bootstrap — so a self-hoster sets them once without
+# everywhere they appear — the services, the DSN agentryd uses, the bucket
+# bootstrap — so a self-hoster sets them once without
 # editing this tracked file, and rotating after an exposure is a .env edit.
 # Changing them on a stack that already has data: postgres
 # and minio keep the OLD value in their volumes; run ALTER USER / `mc admin
@@ -89,183 +89,6 @@ services:
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:1025:1025"   # SMTP
       - "${AGENTRY_BIND:-127.0.0.1}:8025:8025"   # web UI
-
-  # ── Directory service ──────────────────────────────────────────
-  # Authentik owns accounts, passwords, and MFA; the registry consumes it as
-  # an OIDC provider (social provider id `authentik`) and keeps sessions,
-  # PATs, and RBAC native. Bootstrap the OAuth2 provider + application with
-  # scripts/dev/authentik-bootstrap.sh (idempotent, uses the bootstrap
-  # token). The edge serves it as auth.* and on :8443.
-  redis:
-    logging: *rotated
-    profiles: ["server"]
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: --save 60 1 --loglevel warning
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  # One-shot: authentik wants its own database in the shared postgres.
-  authentik-db-init:
-    logging: *rotated
-    profiles: ["server"]
-    image: postgres:16
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PGPASSWORD: ${AGENTRY_PG_PASSWORD:-agentry}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - psql -h postgres -U agentry -d agentry_dev -tc "SELECT 1 FROM pg_database WHERE datname='authentik'" | grep -q 1 ||
-        psql -h postgres -U agentry -d agentry_dev -c "CREATE DATABASE authentik"
-
-  authentik-server:
-    logging: *rotated
-    profiles: ["server"]
-    # Pinned by tag AND digest (2026.8.4, released 2026-10-14). Bump both
-    # together; the digest is what makes the pin a supply-chain fact.
-    # Upgrades must pass through every YYYY.M release line in order (the
-    # image refuses skips before migrating) — see docs/self-hosting.md,
-    # "Upgrading the directory service".
-    image: ghcr.io/goauthentik/server:2026.8.4@sha256:e7226ae116dac5aa0a5643803e735b010038f492c401e08e16b3bf1ac54c090c
-    restart: unless-stopped
-    command: server
-    environment: &authentik-env
-      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?generate once (openssl rand -base64 48) and set in .env}
-      AUTHENTIK_POSTGRESQL__HOST: postgres
-      AUTHENTIK_POSTGRESQL__USER: agentry
-      AUTHENTIK_POSTGRESQL__PASSWORD: ${AGENTRY_PG_PASSWORD:-agentry}
-      AUTHENTIK_POSTGRESQL__NAME: authentik
-      AUTHENTIK_REDIS__HOST: redis
-      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
-      # Where the directory's flows return, read by
-      # the account-flows blueprint via !Env: sign-out to
-      # AGENTRY_PUBLIC_WEB_URL (its redirect stage), password/authenticator
-      # changes to AGENTRY_ACCOUNT_URL (the return-to-settings policy).
-      # Both default to the server's own /ui/ pages; a site in
-      # front sets them to its own (its compose overlay does).
-      AGENTRY_PUBLIC_WEB_URL: ${AGENTRY_PUBLIC_WEB_URL:-${AGENTRY_PUBLIC_URL:-http://localhost:8080}/ui/}
-      AGENTRY_ACCOUNT_URL: ${AGENTRY_ACCOUNT_URL:-${AGENTRY_PUBLIC_URL:-http://localhost:8080}/ui/account/directory}
-      # What the flows call this deployment (titles, mail subjects).
-      AGENTRY_BRAND_NAME: ${AGENTRY_BRAND_NAME:-Agentry}
-      # Per-IP budget for the enrollment/recovery flows (emails sent +
-      # accounts created per hour); formatted into the
-      # account-flows blueprint's rate-limit policy at apply time.
-      AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR: ${AUTHENTIK_ACCOUNT_FLOW_MAX_PER_HOUR:-10}
-      # Remembered browsers: the sign-in's MFA-stage
-      # policy asks the registry, at this address and with the same secret
-      # the server holds, whether a browser is remembered, before it asks
-      # for the code. Read when the policy runs, never written into the
-      # directory's database. Unset, the code is always asked.
-      AGENTRY_IDP_TRUST_CHECK_TOKEN: ${AGENTRY_IDP_TRUST_CHECK_TOKEN:-}
-      AGENTRY_REGISTRY_INTERNAL_URL: ${AGENTRY_REGISTRY_INTERNAL_URL:-http://server:8080}
-      # Where on the registry those calls go: its own routes, or the
-      # callback mount of the extension that is the directory
-      # (/internal/x/directory in an enterprise build).
-      AGENTRY_REGISTRY_CALLBACK_PATH: ${AGENTRY_REGISTRY_CALLBACK_PATH:-/internal/directory}
-      # The sign-up form's optional promo code field: any
-      # non-empty value shows it; unset or empty leaves it a hidden input the
-      # form never shows. Only a deployment whose billing extension redeems
-      # codes turns it on (a front end's overlay can); the core alone
-      # forwards a code and attaches no meaning to it. Read by the worker when
-      # it applies the account-flows blueprint.
-      AGENTRY_DIRECTORY_PROMO_FIELD: ${AGENTRY_DIRECTORY_PROMO_FIELD:-}
-      # The sign-up's Terms of Service step: the path, inside
-      # the server and the worker, of an HTML fragment holding the
-      # deployment's terms, its root carrying data-terms-version="…". Set,
-      # every sign-up shows it after the form and must agree to it; unset,
-      # there is no terms step. The core ships no terms: a deployment mounts
-      # its own (a front end's overlay can mount one). Read by the
-      # server when the step is reached.
-      AGENTRY_DIRECTORY_TERMS_FILE: ${AGENTRY_DIRECTORY_TERMS_FILE:-}
-      # Registry activation: a self-enrolled account
-      # reaches the site at once, unactivated and read-only until the
-      # registry's mailed link confirms its address, instead of waiting at
-      # the directory's confirmation mail. On by default here, where
-      # scripts/dev/authentik-bootstrap.sh gives the registry's provider the
-      # blueprint's agentry-verified-email mapping; empty turns it off. Set
-      # it only together with that mapping: a provider whose mapping says
-      # every address is verified would vouch for unconfirmed accounts.
-      # Read by the worker when it applies the account-flows blueprint and
-      # by the server when an account is written.
-      AGENTRY_DIRECTORY_REGISTRY_ACTIVATION: ${AGENTRY_DIRECTORY_REGISTRY_ACTIVATION-true}
-      # First boot creates akadmin with this password, and an API token
-      # (intent api) with this value — what the bootstrap script uses.
-      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
-      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:-}
-      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-}
-      # Recovery/verification mail lands in the same mailpit as the registry's.
-      # Defaults land in mailpit; set the AUTHENTIK_EMAIL_* values in .env
-      # for a real provider (Postmark: host smtp.postmarkapp.com, port 587,
-      # the server token as both username and password, USE_TLS for
-      # STARTTLS).
-      AUTHENTIK_EMAIL__HOST: ${AUTHENTIK_EMAIL_HOST:-mailpit}
-      AUTHENTIK_EMAIL__PORT: ${AUTHENTIK_EMAIL_PORT:-1025}
-      AUTHENTIK_EMAIL__USERNAME: ${AUTHENTIK_EMAIL_USERNAME:-}
-      AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL_PASSWORD:-}
-      AUTHENTIK_EMAIL__USE_TLS: ${AUTHENTIK_EMAIL_USE_TLS:-false}
-      AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL_FROM:-authentik@agentry.localhost}
-      # Sign-up CAPTCHA. Defaults are Cloudflare's published
-      # Turnstile TEST keys, which always pass — fine for dev, useless as a
-      # control. Set real keys in .env for anything with public sign-up.
-      AUTHENTIK_CAPTCHA_SITE_KEY: ${AUTHENTIK_CAPTCHA_SITE_KEY:-1x00000000000000000000AA}
-      AUTHENTIK_CAPTCHA_SECRET_KEY: ${AUTHENTIK_CAPTCHA_SECRET_KEY:-1x0000000000000000000000000000000AA}
-      AUTHENTIK_CAPTCHA_JS_URL: ${AUTHENTIK_CAPTCHA_JS_URL:-https://challenges.cloudflare.com/turnstile/v0/api.js}
-      AUTHENTIK_CAPTCHA_API_URL: ${AUTHENTIK_CAPTCHA_API_URL:-https://challenges.cloudflare.com/turnstile/v0/siteverify}
-    volumes:
-      - authentik-media:/media
-      # The mails the directory sends a person: the account
-      # flows' email stages name agentry/*.html here, not authentik's stock
-      # templates.
-      - ./authentik/templates:/templates:ro
-      # The mark the mails show inline: authentik attaches the
-      # PNG at this path as cid:logo, so the core's mark replaces authentik's.
-      - ./authentik/brand/mail-logo.png:/web/dist/assets/icons/icon_left_brand.png:ro
-      # Declarative configuration, applied on boot and re-applied when the
-      # files change (idempotent): the enrollment flow lives here.
-      - ./authentik/blueprints:/blueprints/custom:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      authentik-db-init:
-        condition: service_completed_successfully
-
-  authentik-worker:
-    logging: *rotated
-    profiles: ["server"]
-    # Pinned by tag AND digest (2026.8.4, released 2026-10-14). Bump both
-    # together; the digest is what makes the pin a supply-chain fact.
-    image: ghcr.io/goauthentik/server:2026.8.4@sha256:e7226ae116dac5aa0a5643803e735b010038f492c401e08e16b3bf1ac54c090c
-    restart: unless-stopped
-    command: worker
-    environment: *authentik-env
-    volumes:
-      - authentik-media:/media
-      # The mails the directory sends a person: the account
-      # flows' email stages name agentry/*.html here, not authentik's stock
-      # templates.
-      - ./authentik/templates:/templates:ro
-      # The mark the mails show inline: authentik attaches the
-      # PNG at this path as cid:logo, so the core's mark replaces authentik's.
-      - ./authentik/brand/mail-logo.png:/web/dist/assets/icons/icon_left_brand.png:ro
-      # Declarative configuration, applied on boot and re-applied when the
-      # files change (idempotent): the enrollment flow lives here.
-      - ./authentik/blueprints:/blueprints/custom:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      authentik-db-init:
-        condition: service_completed_successfully
 
   # One-shot: minio starts with no buckets, and the S3 blob store does not
   # create its bucket on demand (write-once semantics assume it exists, as in
@@ -356,10 +179,9 @@ services:
       # own directory, NOT the cwd) or export it in the shell before `up`.
       AGENTRY_BASE_URL: ${AGENTRY_PUBLIC_URL:-http://localhost:8080}
       # A site fronting this server, how much of the server's own
-      # /ui/ surface to serve, what it calls itself, and the directory's
-      # sign-out URL (the provider's end-session endpoint behind authentik's
-      # cancel view — docs/self-hosting.md). All optional; empty
-      # = the server on its own.
+      # /ui/ surface to serve, what it calls itself, and the sign-in
+      # provider's sign-out URL (its end-session endpoint —
+      # docs/self-hosting.md). All optional; empty = the server on its own.
       AGENTRY_WEB_URL: ${AGENTRY_WEB_URL:-}
       AGENTRY_UI_MODE: ${AGENTRY_UI_MODE:-full}
       AGENTRY_BRAND_NAME: ${AGENTRY_BRAND_NAME:-}
@@ -391,51 +213,23 @@ services:
       # docs/self-hosting.md "Audit archive and retention".
       AGENTRY_LOG_LEVEL: ${AGENTRY_LOG_LEVEL:-info}
       AGENTRY_AUDIT_STREAM_KIND: ${AGENTRY_AUDIT_STREAM_KIND:-none}
-      # Directory service: hand credentials to Authentik. When
-      # AGENTRY_AUTH_EXTERNAL_ONLY=true the native register/password/TOTP
-      # endpoints answer 410 and sign-in goes through the authentik provider.
+      # Sign in through any OpenID provider (docs/self-hosting.md "Sign in
+      # with your OpenID provider"). With AGENTRY_AUTH_EXTERNAL_ONLY=true the
+      # native register, password and TOTP endpoints answer 410 and sign-in
+      # goes through that provider alone.
       AGENTRY_AUTH_EXTERNAL_ONLY: ${AGENTRY_AUTH_EXTERNAL_ONLY:-false}
-      AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID: ${AGENTRY_SOCIAL_AUTHENTIK_CLIENT_ID:-}
-      AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET: ${AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET:-}
-      AGENTRY_SOCIAL_AUTHENTIK_ISSUER: ${AGENTRY_SOCIAL_AUTHENTIK_ISSUER:-}
-      # Sign in with any OpenID provider instead (docs/self-hosting.md); set
-      # these or the AGENTRY_SOCIAL_AUTHENTIK_* three, not both.
       AGENTRY_AUTH_OIDC_ID: ${AGENTRY_AUTH_OIDC_ID:-}
       AGENTRY_AUTH_OIDC_ISSUER: ${AGENTRY_AUTH_OIDC_ISSUER:-}
       AGENTRY_AUTH_OIDC_CLIENT_ID: ${AGENTRY_AUTH_OIDC_CLIENT_ID:-}
       AGENTRY_AUTH_OIDC_CLIENT_SECRET: ${AGENTRY_AUTH_OIDC_CLIENT_SECRET:-}
       AGENTRY_AUTH_OIDC_SCOPES: ${AGENTRY_AUTH_OIDC_SCOPES:-}
       AGENTRY_AUTH_OIDC_DISPLAY_NAME: ${AGENTRY_AUTH_OIDC_DISPLAY_NAME:-}
-      # Account erasure reaches into the directory too: the
-      # server deletes the sign-in account through authentik's API. The
-      # bootstrap token works; a dedicated token with rights over users is
-      # better. Empty leaves erasure registry-only (the privacy policy then
-      # has to say so).
-      AGENTRY_IDP_ADMIN_URL: ${AGENTRY_IDP_ADMIN_URL:-}
-      AGENTRY_IDP_ADMIN_TOKEN: ${AGENTRY_IDP_ADMIN_TOKEN:-}
-      # Remembered browsers on the directory's sign-in: the
-      # secret the directory's flow presents when it asks the server whether
-      # a browser is remembered. At least 32 characters; the directory holds
-      # the same value. Empty turns the directory path off. The cookie's
-      # domain is derived from AGENTRY_PUBLIC_URL and the directory's issuer;
-      # the override below is needed only when the two are sibling hosts.
-      AGENTRY_IDP_TRUST_CHECK_TOKEN: ${AGENTRY_IDP_TRUST_CHECK_TOKEN:-}
-      AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN: ${AGENTRY_AUTH_DIRECTORY_COOKIE_DOMAIN:-}
       # Platform staff is membership of the staff organization:
       # an active member of AGENTRY_STAFF_ORG whose verified address is at
       # exactly AGENTRY_STAFF_DOMAIN, and the organization admits nobody
       # else. Set both or neither; empty leaves the flag as it is.
       AGENTRY_STAFF_ORG: ${AGENTRY_STAFF_ORG:-}
       AGENTRY_STAFF_DOMAIN: ${AGENTRY_STAFF_DOMAIN:-}
-      # The directory group the registry keeps equal to its platform staff,
-      # written through the admin URL and token above; a
-      # directory application that should admit staff alone (an OpenSearch
-      # Dashboards, say) reads it. Empty means no mirror.
-      AGENTRY_IDP_STAFF_MIRROR_GROUP: ${AGENTRY_IDP_STAFF_MIRROR_GROUP:-}
-      # Retired: these grant nothing and the server warns at
-      # start-up while either is set.
-      AGENTRY_IDP_STAFF_GROUP: ${AGENTRY_IDP_STAFF_GROUP:-}
-      AGENTRY_IDP_STAFF_DOMAIN: ${AGENTRY_IDP_STAFF_DOMAIN:-}
       # Archive store against minio (S3-compatible), exercising the same code
       # path SaaS uses rather than the local-FS one.
       AGENTRY_STORAGE_KIND: s3
@@ -490,12 +284,11 @@ services:
         condition: service_completed_successfully
 
   # The edge: TLS termination and the one public origin of the server —
-  # API, git, the server's own /ui/ pages, the downloads directory — with
-  # the directory service on auth.* (the headless stack; a site in front is
-  # an overlay from its own repository, which replaces this config with the
-  # full-site one). edge/nginx.conf explains why TLS is
-  # load-bearing (browsers send no same-origin signal to a plain-http
-  # hostname). Certificates come from AGENTRY_EDGE_CERT_DIR as edge.crt +
+  # API, git, the server's own /ui/ pages, the downloads directory (the
+  # headless stack; a site in front is an overlay from its own repository,
+  # which replaces this config with the full-site one). edge/nginx.conf
+  # explains why TLS is load-bearing (browsers send no same-origin signal to
+  # a plain-http hostname). Certificates come from AGENTRY_EDGE_CERT_DIR as edge.crt +
   # edge.key; on a Tailscale host `tailscale cert` issues a real one,
   # otherwise a self-signed pair bootstraps the stack. Once the edge is the
   # entry point, set AGENTRY_PUBLIC_URL to its https origin.
@@ -514,7 +307,6 @@ services:
     ports:
       - "${AGENTRY_EDGE_BIND:-0.0.0.0}:80:80"
       - "${AGENTRY_EDGE_BIND:-0.0.0.0}:443:443"
-      - "${AGENTRY_EDGE_BIND:-0.0.0.0}:8443:8443"   # the directory service, when no auth.* DNS name exists (dev)
     volumes:
       - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
       - ${AGENTRY_EDGE_CERT_DIR:-./edge/certs}:/etc/nginx/certs:ro
@@ -574,8 +366,6 @@ volumes:
   miniodata:
   gitdata:
   edgecache:
-  redisdata:
   # Mounted at /etc/agentry when no signing key directory is configured.
   signing-placeholder:
-  authentik-media:
   downloads:

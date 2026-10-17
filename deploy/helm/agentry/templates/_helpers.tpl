@@ -86,13 +86,11 @@ truncation never makes two roles' names one. */ -}}
   plus the secret references that role uses, and nothing more.
   Every role holds the database URL and the auth sealing key (config
   validation requires the key outside dev, and git keys its tag-push hash from
-  it). The api and the worker also send mail, run account erasure and unwrap
-  the knowledge scan; the api alone exchanges the directory's OIDC code, answers
-  its trust check and reports features.redis. So the git role, which takes
-  untrusted pushes, holds no directory, mail or knowledge credential, and the
-  worker none of the api's OIDC ones. The one tie config validation makes
-  across roles is kept: with auth.idpStaffMirrorGroup set, every role needs
-  the directory admin token to start.
+  it). The api and the worker also send mail and unwrap the knowledge scan;
+  the api alone exchanges the sign-in provider's OIDC code and reports
+  features.redis. So the git role, which takes untrusted pushes, holds no
+  mail, knowledge or sign-in credential, and the worker none of the api's
+  OIDC ones.
   Include with: {{- include "agentry.agentrydEnv" (dict "ctx" . "role" "api") | nindent 12 }}
 */}}
 {{- define "agentry.agentrydEnv" -}}
@@ -141,36 +139,12 @@ truncation never makes two roles' names one. */ -}}
       key: AGENTRY_SMTP_PASS
       optional: true
 {{- end }}
-{{- if and $api (or $ctx.Values.secret.authentikClientSecret $existing) }}
-- name: AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET
-  valueFrom:
-    secretKeyRef:
-      name: {{ $secret }}
-      key: AGENTRY_SOCIAL_AUTHENTIK_CLIENT_SECRET
-      optional: true
-{{- end }}
 {{- if and $api (or $ctx.Values.secret.oidcClientSecret $existing) }}
 - name: AGENTRY_AUTH_OIDC_CLIENT_SECRET
   valueFrom:
     secretKeyRef:
       name: {{ $secret }}
       key: AGENTRY_AUTH_OIDC_CLIENT_SECRET
-      optional: true
-{{- end }}
-{{- if and (or $apiOrWorker $ctx.Values.config.auth.idpStaffMirrorGroup) (or $ctx.Values.secret.idpAdminToken $existing) }}
-- name: AGENTRY_IDP_ADMIN_TOKEN
-  valueFrom:
-    secretKeyRef:
-      name: {{ $secret }}
-      key: AGENTRY_IDP_ADMIN_TOKEN
-      optional: true
-{{- end }}
-{{- if and $api (or $ctx.Values.secret.idpTrustCheckToken $existing) }}
-- name: AGENTRY_IDP_TRUST_CHECK_TOKEN
-  valueFrom:
-    secretKeyRef:
-      name: {{ $secret }}
-      key: AGENTRY_IDP_TRUST_CHECK_TOKEN
       optional: true
 {{- end }}
 {{- with $ctx.Values.extraEnv }}
