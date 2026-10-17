@@ -1085,8 +1085,9 @@ What staff can do in review: every item on the platform queue and on every
 organization's queue, private QuickAgents included. They read it, decide it
 and record a false-positive verdict on its findings; accepting risk on an
 organization's QuickAgent stays that organization's reviewers'. Staff may
-also decide versions they submitted themselves, which no one else may: such
-a decision is marked `self_decision: true` in its `review.decision` audit
+also decide versions they submitted themselves, and set verdicts on their
+findings, which no one else may: such a decision or verdict is marked
+`self_decision: true` in its `review.decision` or `finding.verdict` audit
 event. Give the staff role to people you trust with both.
 
 The rule rests on facts nobody sets about themselves:
