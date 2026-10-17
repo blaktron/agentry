@@ -87,6 +87,7 @@ One QuickAgent, one job, one container tree, then gone.
 | `--report-theme NAME` | the [report theme](#the-report-theme) this run's PDFs take, for this run alone: `plain`, `formal`, `brief`, `technical` or `letter` (default: the signed-in account's, else `report.theme` in the CLI's config, else `plain`); any other name refuses the run (exit 2) |
 | `--voice-file FILE` | attach the `VOICE.md` in FILE instead of the one kept here: a regular file, never through a link, at most 32 KiB (for a driver such as a sandbox host) |
 | `--out DIR` | output folder (default `./agentry-out/<ns>-<name>-<runid>/`) |
+| `--deliver-to DIR` | copy the run's [deliverables](#deliverables), the files it was for, to `DIR/<QuickAgent>/<date time> <title>/` once it succeeds (default: `deliver.folder` in the CLI's config, else nowhere; needs agentry-cli v0.6.138 or later) |
 | `--output-format text\|json` | stdout carries the result text, or the full envelope |
 | `--keep-profile true\|false` | this run's MCP-profile completion choice (default: the profile's own setting, else policy) |
 | `--reconfigure-profile` | re-run guided profile setup over an existing profile |
@@ -221,6 +222,27 @@ fetched before the run into `/inputs/<id>/`; a `host` answer is a
 [target host](#target-hosts-a-server-named-at-run-time), a machine the
 run reaches over SSH from the host link; a type the CLI does not know
 is refused, never taken as text.
+
+### `agentry deliver <run folder>`
+
+Copies the [deliverables](#deliverables) of a run you already made, from its
+output folder, to the folder `--to DIR` names, or to `deliver.folder` in the
+CLI's config when `--to` is not given. It is the same copy `agentry run
+--deliver-to` makes, taken from `result.json` afterwards, so a run made
+without a folder can be delivered later, and a delivery that failed can be
+made again.
+
+| Flag | Meaning |
+|---|---|
+| `--to DIR` | the folder to copy to (default: `deliver.folder` in the config; with neither, exit 2) |
+| `--json` | print each file's record, as the envelope's `deliveries` block spells it, instead of one line a file |
+
+It exits 1 when a file could not be copied, and when the folder is not a
+run's output folder, the run did not succeed (a run that failed lists no
+deliverables) or it lists none. The run folder is left as it is: the only
+file written in it is `receipts/deliveries.ndjson`, which gains a line for
+each file, and `result.json` is not rewritten. It needs agentry-cli v0.6.138
+or later.
 
 ### `agentry schedule`
 
@@ -2275,10 +2297,12 @@ assumes.
 
 ### PDF reports: `export_pdf`
 
-`export_pdf {source, path?}` turns a Markdown file the agent wrote into a
+`export_pdf {source, path?, deliverable?, title?}` turns a Markdown file the agent wrote into a
 PDF in `reports/`. `source` is `reports/<path>` (a report written with
 `write_report`) or `scratch/<path>`; `path` is the PDF under `reports/`, by
-default the source's name with `.pdf`. The Markdown stays where it was.
+default the source's name with `.pdf`. `deliverable` and `title` mark the
+PDF as what the run was for, as `write_report`'s do ([deliverables](#deliverables)).
+The Markdown stays where it was.
 The answer names the PDF, its pages, its size and the theme (`report
 written: reports/x.pdf (12 pages, 184 KiB; plain theme)`), or says what to
 fix: a line, a limit, an image.
@@ -2518,6 +2542,155 @@ keep it. The envelope gains a `fetchSaves` block counting it:
 A run that saved nothing has no `fetchSaves` block (and an empty ledger),
 and a run without egress has no ledger at all.
 
+## Deliverables
+
+A run's **deliverables** are the files it was for. The output folder holds
+everything a run wrote, `reports/` among it, as the proof of the run; the
+deliverables are the part a person came for, named in the envelope so that a
+client can show them first and copy them out. From agentry-cli v0.6.138 the
+envelope lists them and the CLI can copy them to a folder.
+
+### How a run marks them
+
+`write_report` and `export_pdf` take two optional arguments:
+
+| Argument | Meaning |
+|---|---|
+| `deliverable` | `true` when the file is what the person asked the run for. `false` takes a mark off a file the run marked earlier. |
+| `title` | with `deliverable: true`, a name for the file: one line of plain text of at most 120 characters, with no control, line-break or bidirectional formatting character. Without a title the file's name, less its extension, is the title. A title without `deliverable: true`, or one that is not one line of plain text, is refused before anything is written. |
+
+The [System Prompt](#the-system-prompt) tells the agent to mark the file the
+person asked for and to leave working notes, drafts and data it only used
+unmarked. The tools server records each mark in `receipts/deliverables.ndjson`
+(the tools spec is version 13). That ledger is the agent's word and nothing
+more: the runner reads it again once the run has ended and its containers are
+gone, and lists a file only if it can stand behind it:
+
+- the path is a regular file beneath `reports/` (never `reports/browser/`),
+  reached through no link, and its name holds none of the run's secret
+  values;
+- a PDF is listed only when the [`pdfs` block](#what-the-receipt-records)
+  names it with the same SHA-256, so a PDF is listed only if `export_pdf`
+  wrote it;
+- the SHA-256 and the size are the runner's own, measured on the file as it
+  is then, and the title is held to its rule again.
+
+### When nothing is marked
+
+The runner picks, so a run that never heard of marking still shows its work:
+
+1. every PDF in the `pdfs` block;
+2. otherwise every regular file in `reports/` outside `reports/browser/`, in
+   path order, except a PDF that block does not name;
+3. otherwise, when the final message is plain text and not empty, the
+   message itself, which the runner writes to `reports/deliverable.md` and
+   lists with the title `Result`. A structured result (a QuickAgent with an
+   output schema) and an interactive session's last message are never
+   written down.
+
+A file the runner picked has `"marked": false`. A run that failed lists no
+deliverables and writes no `deliverable.md`, and neither does a run whose
+teardown could not delete a secret and so ended as a failure.
+
+### The envelope's `deliverables` block
+
+```json
+"deliverables": {
+  "files": [
+    {"path": "reports/weekly summary.md", "title": "Weekly summary", "sha256": "…", "bytes": 41, "type": "md", "marked": true}
+  ]
+}
+```
+
+`path` is relative to the output folder. `type` is the file name's extension
+in lower case, without its dot, when it is one to ten letters or digits, and
+empty otherwise; it says nothing about the bytes. The block lists at most 200
+files and says `"truncated": true` when there were more; the runner reads
+`reports/` in path order and stops after 10,000 files. A run with nothing to
+list has no block. A client that opens, copies or sends a deliverable checks
+the file against `sha256` first: the block is the runner's record, and the
+folder is not.
+
+### Copying them out
+
+`agentry run --deliver-to DIR` copies each deliverable once the run has
+succeeded. So does `deliver.folder` in `~/.config/agentry/config.yaml`, for
+every run, a [scheduled](#agentry-schedule) one included, when `--deliver-to`
+is not given; the flag wins:
+
+```yaml
+deliver:
+  folder: ~/Documents/Agentry   # an absolute path, or one beginning with ~
+```
+
+A relative `deliver.folder` refuses the run before it starts (exit 2),
+because it would mean another folder wherever the run began. Nothing is
+delivered unless the person gives a folder: no manifest, QuickAgent or
+schedule names one.
+
+Each file goes to
+
+```
+DIR/<QuickAgent name>/<YYYY-MM-DD HHmm> <title>/<file name>
+```
+
+where `<title>` is the deliverable's title when the run has one deliverable
+and the run id otherwise, and the time is the delivery's. What a delivery
+guarantees:
+
+- **The file is the one the envelope lists.** The source is opened through no
+  link, and the copy is made under a hidden name while its SHA-256 is
+  computed; it takes its name only when that equals the envelope's. A file
+  that changed is refused (`changed`) and no copy of it is left.
+- **Nothing is moved, rewritten or deleted.** The copy is a copy, the output
+  folder is never written into (a destination inside it is refused), and a
+  file already at the destination is never replaced: the new one is named
+  `name (2).md`, `name (3).md`, and so on.
+- **Names are made plain.** The file name is the last part of its path in
+  `reports/`; path separators and the characters Windows reserves, control,
+  format, line-break and bidirectional formatting characters become `_`,
+  leading and trailing dots and spaces are dropped (a name of dots is
+  `deliverable`), a Windows device name (`CON`, `NUL`, `COM1`, …, with any
+  extension) is given a `_` first, and a name is cut at 200 bytes. The same
+  rules make the folder names.
+- **Some types are not copied.** The types a file manager acts on when a
+  folder is viewed, with no one opening the file, are refused (`type`) and
+  stay listed in the envelope: `lnk`, `scf`, `url`, `library-ms`,
+  `searchconnector-ms`, `appref-ms`, `glk`, `desktop`, `webloc` and `fileloc`.
+- **A copy is marked as a download** on Windows (the Mark-of-the-Web, a
+  `Zone.Identifier` stream) and on macOS (the `com.apple.quarantine`
+  attribute), so the system treats it as a file from outside. A file system
+  that cannot hold the flag, FAT or a network share, still gets the copy,
+  and the record says `not-marked`.
+
+A delivery never changes how the run ended. Each copy is recorded in the
+envelope's `deliveries` block and, one line a file, in
+`receipts/deliveries.ndjson`:
+
+```json
+"deliveries": [
+  {"destination": "/home/ana/Documents/Agentry", "kind": "folder",
+   "object": "/home/ana/Documents/Agentry/weekly/2026-10-17 1504 Weekly summary/weekly summary.md",
+   "sha256": "…", "status": "delivered"}
+]
+```
+
+`status` is `delivered`, `refused` (the file was not the one listed, or not
+one a delivery may make) or `failed` (it could not be written), and `error`
+is then one word: `changed`, `missing`, `outside-reports`, `link`,
+`unreadable`, `type`, `destination` or `write`, never a system's own text. A
+run whose copy failed is still `ok` with exit 0, and the CLI says on stderr
+what was not copied. The run lists and delivers once its containers have
+stopped, so `result.json` is written when the run ends and again, with both
+blocks, after teardown.
+
+`agentry deliver` makes the same copy from a folder a run already made, and
+only adds its lines to `receipts/deliveries.ndjson`.
+
+A hosted run's envelope lists its deliverables the same way, once its
+sandbox host carries a CLI of v0.6.138 or later. A hosted run copies them
+nowhere: `--deliver-to` is a flag of the CLI on a person's own computer.
+
 ## Searching files: `grep` and `glob`
 
 From agentry-cli v0.6.114 every release's run and session has two search
@@ -2667,6 +2840,7 @@ result, the network (none,
   (marking the optional ones and naming those this run was not given), the
   MCP servers, and the output schema. It also covers the two modes, the
   inputs, how to read a knowledge pack's wiki, the output (`write_report`,
+  marking the file the person asked for as a [deliverable](#deliverables),
   and when to call `export_pdf`), and working within the run's limits.
 
 After the System Prompt comes a `----` line, then the heading
@@ -3374,10 +3548,12 @@ asks for the model.
   result.json            the machine-readable envelope (status, exit class,
                          stage and reason when it failed, digest,
                          attestation state, capabilities_enforced, usage,
-                         run-plan hash, and the pdfs block when the run
-                         exported a PDF)
+                         run-plan hash, the pdfs block when the run
+                         exported a PDF, the deliverables block, and the
+                         deliveries block when the run copied them)
   reports/…              whatever the QuickAgent wrote via write_report, and
                          the PDFs export_pdf rendered
+  reports/deliverable.md the final message, when it was all the run produced
   reports/browser/       a browser's screenshots, PDFs and saved files
   receipts/
     events.ndjson        the raw harness event stream
@@ -3389,6 +3565,8 @@ asks for the model.
     meta.json, task.txt  run identity, timing, budgets, the task input
     intake.json          the non-secret intake answers (when the release asks any)
     pdfs.ndjson          each PDF export_pdf wrote: path, SHA-256, pages, size
+    deliverables.ndjson  each file the agent marked as a deliverable (or took the mark off): path, title
+    deliveries.ndjson    each copy of a deliverable made to a folder: where, SHA-256, how it ended
     calls.ndjson         an autonomous run's runner-tool calls: a start line, then
                          each call's tool and whether it answered, never its
                          arguments, and the agent's end_blocked sentence
@@ -3788,7 +3966,7 @@ key variable's **name** only.
 | `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
-| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
+| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made: `destination`, `kind`, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
 | `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts), `corrections` (how many slips were corrected), `repaired` (whether the one repair turn ran) and `check` (AI Review's check as one word: `pass`, `flagged`, `not_scanned`, or `unanswered`; absent for a draft that could not be rendered). The envelope's usage is both turns' together. A draft that stops before the Drafter runs still writes one envelope with its class and stage |
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
