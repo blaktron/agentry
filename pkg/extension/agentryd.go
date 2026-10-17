@@ -303,15 +303,9 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// Enterprise async handlers: webhook delivery and audit export.
 	srv.RegisterQueueHandlers(q)
 	// Extension jobs, on the queue each names; a periodic one is
-	// enqueued on its period like the core's own tickers.
-	for _, e := range exts {
-		for _, j := range e.Jobs() {
-			q.Register(j.Kind, j.Handler)
-			if j.Every > 0 {
-				go periodicTicker(ctx, q, j.Kind, j.Queue, j.Every, log)
-			}
-		}
-	}
+	// enqueued on its period like the core's own tickers. The api
+	// queue's are the api role's (apiQueue).
+	registerJobs(ctx, q, extensionJobs(exts, false), log)
 
 	// Watchdog. Enqueued rather than called inline so that across
 	// worker replicas exactly one runs it per interval (SKIP LOCKED),
@@ -648,6 +642,58 @@ func (b serverRememberedBrowsers) Use(r *http.Request, userID uuid.UUID, token s
 	return b.srv.UseRememberedBrowser(r, userID, token, map[string]any{"via": "extension", "extension": b.name})
 }
 
+// extensionJobs returns the extensions' jobs on the api queue (api) or
+// on every other queue (!api): the api role's and the worker's halves.
+func extensionJobs(exts []Extension, api bool) []Job {
+	var out []Job
+	for _, e := range exts {
+		for _, j := range e.Jobs() {
+			if (j.Queue == QueueAPI) == api {
+				out = append(out, j)
+			}
+		}
+	}
+	return out
+}
+
+// registerJobs registers each job's handler on q and enqueues a
+// periodic one on its period.
+func registerJobs(ctx context.Context, q queue.Worker, jobs []Job, log *slog.Logger) {
+	for _, j := range jobs {
+		q.Register(j.Kind, j.Handler)
+		if j.Every > 0 {
+			go periodicTicker(ctx, q, j.Kind, j.Queue, j.Every, log)
+		}
+	}
+}
+
+// apiQueue drains the api queue in the api role: the extension jobs that
+// must reach what only the api may reach (QueueAPI), and nothing else.
+// It returns a func that waits for the queue to stop once ctx ends, and
+// a nil queue when no extension names the api queue or there is no
+// database.
+func apiQueue(ctx context.Context, cfg config.Config, st *store.Store, log *slog.Logger, mx *metrics.Metrics, exts []Extension) (func(), error) {
+	jobs := extensionJobs(exts, true)
+	if len(jobs) == 0 || st == nil {
+		return func() {}, nil
+	}
+	q, err := queue.Open(cfg.Queue.Driver, cfg.Queue.Workers, st, log)
+	if err != nil {
+		return nil, err
+	}
+	q.SetMetrics(mx, cfg.Telemetry.QueueSampleInterval)
+	registerJobs(ctx, q, jobs, log)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		log.Info("api queue started", "queue", QueueAPI, "jobs", len(jobs))
+		if err := q.Work(ctx, QueueAPI); err != nil && ctx.Err() == nil {
+			log.Error("api queue stopped", "err", err)
+		}
+	}()
+	return func() { <-done }, nil
+}
+
 // periodicTicker enqueues a job once now and then on its period. Every
 // replica running this enqueues on its own clock; the queue's claim runs
 // each row once, so the handler must tolerate a run that finds nothing to
@@ -759,7 +805,12 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		applyExtensions(s, exts)
 		s.HandOffScans() // a submission is the worker's to scan
 		staffAtStart(ctx, cfg, s, log)
-		return api.NewHandler(s), s.Close, nil
+		wait, err := apiQueue(ctx, cfg, st, log, mx, exts)
+		if err != nil {
+			_ = s.Close()
+			return nil, nil, err
+		}
+		return api.NewHandler(s), func() error { wait(); return s.Close() }, nil
 	case "git", "all":
 		if st == nil {
 			return nil, nil, errors.New("the git role requires a database")
@@ -864,9 +915,15 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		if err != nil {
 			return nil, nil, err
 		}
+		// `all` is the api role too, so it drains the api queue as well.
+		queues := workerQueues
+		if apiJobs := extensionJobs(exts, true); len(apiJobs) > 0 {
+			registerJobs(ctx, q, apiJobs, log)
+			queues = append(slices.Clone(workerQueues), QueueAPI)
+		}
 		go func() {
-			log.Info("in-process worker started", "queues", strings.Join(workerQueues, ","))
-			if err := q.Work(ctx, workerQueues...); err != nil && ctx.Err() == nil {
+			log.Info("in-process worker started", "queues", strings.Join(queues, ","))
+			if err := q.Work(ctx, queues...); err != nil && ctx.Err() == nil {
 				log.Error("in-process worker stopped", "err", err)
 			}
 		}()
