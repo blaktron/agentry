@@ -12,20 +12,16 @@ on:
     # dev is the integration branch; main takes only promotions from it.
     branches: [main, dev]
   pull_request:
-  # release-please's release PR is opened with GITHUB_TOKEN, so its
-  # pull_request runs wait for approval. Dispatching this workflow on the
-  # release branch runs every job a push runs on that head (oasdiff alone is
-  # pull_request-only, and the release PR touches no schema), which is how
-  # that PR is gated before it merges.
+  # A dispatch runs every job a push runs on that head (oasdiff alone is
+  # pull_request-only).
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# The CI tools' versions, in one place: no step installs
-# anything unpinned, release.yaml reads its versions from these lines, and
-# scripts/pins-check.sh (the daily pins workflow) reads them to report newer
-# releases. GITLEAKS_SHA256 is the checksum of
+# The CI tools' versions, in one place: no step installs anything unpinned,
+# and scripts/pins-check.sh (the daily pins workflow) reads them to report
+# newer releases. GITLEAKS_SHA256 is the checksum of
 # gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz from the release's own
 # gitleaks_${GITLEAKS_VERSION}_checksums.txt.
 env:
@@ -36,9 +32,6 @@ env:
   SQLC_VERSION: v1.31.1
   OSV_SCANNER_VERSION: v2.6.0
   OASDIFF_VERSION: v1.32.1
-  # Read by release.yaml's SBOM step (anchore/sbom-action would fetch the
-  # newest syft otherwise).
-  SYFT_VERSION: v1.52.0
 
 # One run per ref: a new push to a PR cancels the superseded run (self-hosted
 # capacity is a handful of runners, not a cloud).
@@ -143,10 +136,6 @@ jobs:
       # exists under that name.
       - name: acceptance helper refuses an empty match
         run: ./scripts/acceptance/lib-selftest.sh
-      # The release tag rules: the next dev prerelease, and every tag the
-      # release guard refuses.
-      - name: release tag rules
-        run: ./scripts/release/selftest.sh
       - name: security invariant test names exist
         run: ./scripts/acceptance/invariant-test-names.sh
       - name: acceptance smoke
@@ -385,7 +374,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
             range="$PR_BASE..$PR_HEAD"
           elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            # A dispatched run (the release PR's gate): what the ref brings
+            # A dispatched run: what the ref brings
             # over main, as its pull request would.
             range="origin/main..$PUSH_AFTER"
           elif [ -n "$PUSH_BEFORE" ] && ! grep -qE '^0+$' <<<"$PUSH_BEFORE" && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then

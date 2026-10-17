@@ -8,7 +8,7 @@
 #      exactly what a pin protects against, so it is an error, not a note.
 #   2. Each pinned action and each CI tool in ci.yaml's `env:` block
 #      (GOLANGCI_LINT_VERSION, GOVULNCHECK_VERSION, GITLEAKS_VERSION,
-#      SQLC_VERSION, OSV_SCANNER_VERSION, OASDIFF_VERSION, SYFT_VERSION) is
+#      SQLC_VERSION, OSV_SCANNER_VERSION, OASDIFF_VERSION) is
 #      compared with the newest release tag upstream. A newer release in the
 #      same major is an error (bump the pin: a new SHA and its tag comment,
 #      or the version in ci.yaml, plus GITLEAKS_SHA256 for gitleaks). A new
@@ -91,7 +91,6 @@ check_tool GITLEAKS_VERSION gitleaks/gitleaks v
 check_tool SQLC_VERSION sqlc-dev/sqlc v
 check_tool OSV_SCANNER_VERSION google/osv-scanner v
 check_tool OASDIFF_VERSION oasdiff/oasdiff v
-check_tool SYFT_VERSION anchore/syft v
 
 # Nothing installs at an unpinned version.
 if grep -nE '@latest|version: *latest' "$wf_dir"/*.yaml; then
