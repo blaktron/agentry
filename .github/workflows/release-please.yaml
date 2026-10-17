@@ -4,8 +4,8 @@
 # rewrites CHANGELOG.md. Merging that PR tags vX.Y.Z and creates its GitHub
 # release as a draft, with the changelog as its body. This workflow then calls
 # release.yaml, which verifies, builds, signs and attaches the artifacts, and
-# only then publishes the release. dev's prereleases (vX.Y.Z-dev.N) come from
-# dev-release.yaml through the same release.yaml.
+# only then publishes the release. dev's prereleases (vX.Y.Z-dev.N) are not
+# cut here.
 #
 # The release PR is the one pull request main takes that is not a promotion
 # from dev: it carries only CHANGELOG.md and the manifest,

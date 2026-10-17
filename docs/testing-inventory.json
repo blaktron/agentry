@@ -4947,15 +4947,6 @@
       ]
     },
     {
-      "path": ".github/workflows/dev-release.yaml",
-      "disposition": "retain",
-      "kind": "workflow",
-      "jobs": [
-        "tag",
-        "release"
-      ]
-    },
-    {
       "path": ".github/workflows/image-main.yaml",
       "disposition": "retain",
       "kind": "workflow",

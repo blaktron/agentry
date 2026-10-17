@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # tag-guard.sh — refuses a release tag of the wrong shape, one on the wrong
 # branch, and any 1.x or later without the maintainers' go-ahead.
-# release.yaml's first job runs it, and dev-release.yaml runs it before it
-# creates a tag.
+# release.yaml's first job runs it.
 #
 #   tag-guard.sh <tag> [<commit>]
 #
