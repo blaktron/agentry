@@ -230,6 +230,9 @@ func TestIntakeRules(t *testing.T) {
 		{"zero-width space in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Name\u200b"}}, "intake[0].prompt"},
 		{"escape in a choice", []IntakeQuestion{q("a", IntakeChoice, "x", "y\x1b[2J")}, "intake[0].choices[1]"},
 		{"bidi override in a choice", []IntakeQuestion{q("a", IntakeChoice, "\u2066x\u2069")}, "intake[0].choices[0]"},
+		// The zero-width joiner is a format character, so an emoji ZWJ
+		// sequence is refused here as it is in the guide's one-line parts.
+		{"emoji ZWJ sequence in a prompt", []IntakeQuestion{{ID: "a", Prompt: "Which engineer \U0001F469\u200d\U0001F4BB?"}}, "intake[0].prompt"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
