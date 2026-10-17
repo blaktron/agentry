@@ -2089,7 +2089,8 @@
             "TestStaffDecideTheirOwnPlatformItem",
             "TestStaffReviewAnyOrganizationsQueue",
             "TestStaffAuthorRejectsTheirOwnOrganizationItem",
-            "TestStaffSetFindingVerdictsOnAnOrganizationItem"
+            "TestStaffSetFindingVerdictsOnAnOrganizationItem",
+            "TestAnAuthorSetsNoVerdictOnTheirOwnFindings"
           ],
           "fuzz": [],
           "benchmarks": [],

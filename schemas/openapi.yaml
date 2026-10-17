@@ -2954,7 +2954,12 @@ paths:
     post:
       operationId: setFindingVerdict
       tags: [reviews]
-      summary: Confirm or dismiss a finding.
+      summary: Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
+      description: >-
+        An author cannot set a verdict on a finding of their own version
+        (403), whatever their organization role, as with a review decision.
+        Platform staff may, their own versions included; the verdict's audit
+        event then carries `self_decision: true`.
       parameters:
         - name: id
           in: path
