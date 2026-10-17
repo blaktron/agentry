@@ -315,7 +315,8 @@ flood.
    endpoint you least want unthrottled.
 
 **Verify:** 5xx back to baseline, publish pipeline unaffected, no legitimate
-publisher locked out (check `user.login_failed` audit volume by handle).
+publisher locked out (check the 401s in the access lines, `event=http.request`
+by `client_ip`, and the sign-in provider's own failed-sign-in events).
 
 ---
 
@@ -395,8 +396,11 @@ cannot sign in.
 4. Does sign-out return? `AGENTRY_IDP_LOGOUT_URL` must be the provider's
    end-session endpoint.
 
-**Verify:** `GET https://<host>/api/v1/auth/oidc/<id>/start?next=%2Fui%2Faccount`
-in a browser ends on that page after the provider's sign-in.
+**Verify:** `GET https://<host>/api/v1/auth/oidc/<id>/start?next=%2Fui%2F`
+in a browser ends, after the provider's sign-in, on `/ui/`, which says
+"You are signed in as <handle>". Where `ui.mode` is `authorize`, `/ui/` is
+not served: open `https://<host>/api/v1/user` in the same browser instead,
+which answers with the signed-in account.
 
 ---
 
