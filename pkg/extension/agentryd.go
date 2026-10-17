@@ -331,6 +331,17 @@ func newWorkerQueue(ctx context.Context, cfg config.Config, srv *api.Server, st 
 	// hourly, and once at start; a judge that could not answer is asked
 	// again, never skipped.
 	go periodicTicker(ctx, q, voice.JobSweep, "core", time.Hour, log)
+	// Jobs River's rescuer discarded at their last attempt, without
+	// calling their handler: every ten minutes, and once at start, each is
+	// given that last attempt, so its handler's settling runs.
+	if rc, ok := q.(*queue.RiverClient); ok {
+		rc.RegisterRescueSettling()
+		go periodicTicker(ctx, q, queue.JobSettleRescued, "core", 10*time.Minute, log)
+	}
+	// Knowledge packs left scanning by a scan never queued or a job lost:
+	// hourly, and once at start; the handler queues only what has waited
+	// past the stall period.
+	go periodicTicker(ctx, q, knowledge.JobScanSweep, "core", time.Hour, log)
 	return q, nil
 }
 

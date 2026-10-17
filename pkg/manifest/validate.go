@@ -471,6 +471,8 @@ func validateIntake(s *issues, m *Manifest) {
 		seen[q.ID] = true
 		if strings.TrimSpace(q.Prompt) == "" {
 			s.errf("V10", p+".prompt", "prompt is required")
+		} else {
+			plainLine(s, p+".prompt", "prompt", q.Prompt)
 		}
 		switch {
 		case q.Type == IntakeChoice:
@@ -481,6 +483,8 @@ func validateIntake(s *issues, m *Manifest) {
 			for j, c := range q.Choices {
 				if c == "" {
 					s.errf("V10", fmt.Sprintf("%s.choices[%d]", p, j), "choice must not be empty")
+				} else {
+					plainLine(s, fmt.Sprintf("%s.choices[%d]", p, j), "choice", c)
 				}
 				if dup[c] {
 					s.errf("V10", fmt.Sprintf("%s.choices[%d]", p, j), "duplicate choice %q", c)
@@ -542,6 +546,10 @@ func validateInteractive(s *issues, m *Manifest) {
 	if n := utf8.RuneCountInString(h.Opening); n > MaxOpeningChars {
 		s.errf("V10", "interactive.opening", "opening is %d characters; the maximum is %d", n, MaxOpeningChars)
 	}
+	// The opening is the session's first message, shown to the person as
+	// the release wrote it: it may span lines, and carries nothing else a
+	// reader does not see as itself.
+	guideMarkdownRunes(s, "interactive.opening", "opening", h.Opening)
 	if h.IdleTimeoutSeconds < 0 {
 		s.errf("V10", "interactive.idleTimeoutSeconds", "idleTimeoutSeconds must be positive")
 	}
@@ -641,9 +649,20 @@ func guideLine(s *issues, p, what, v string, maxChars int, required bool) {
 	if !guideText(s, p, what, v, maxChars, required) {
 		return
 	}
+	plainLine(s, p, what, v)
+}
+
+// plainLine checks that v is one plain line: no C0 control, no DEL, no C1
+// control and no format character. It is the rule for the author's text a
+// person reads before a run, the guide's one-line parts and the intake's
+// prompts and choices alike: a terminal that prints an escape sequence (a
+// colour, a window title, a link, a clipboard write) or a bidi override
+// shows something other than what the release says. It reports the part
+// once.
+func plainLine(s *issues, p, what, v string) {
 	for _, r := range v {
 		if r < 0x20 || r == 0x7f || hiddenRune(r) {
-			s.errf("V10", p, "%s must be plain single-line text (no control or format characters)", what)
+			s.errf("V10", p, "%s must be plain single-line text (no control or format characters; found U+%04X)", what, r)
 			return
 		}
 	}

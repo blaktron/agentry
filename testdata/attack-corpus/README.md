@@ -80,7 +80,9 @@ S3 (hidden & obfuscated content, one per S3 technique class):
 `s3-zero-width`, `s3-bidi` (Trojan Source), `s3-tag-block` (ASCII smuggling),
 `s3-private-use`, `s3-mixed-script` (confusables), `s3-html-comment`,
 `s3-css-hidden`, `s3-data-uri`, `s3-encoded-blob` (entropy-gated base64),
-`s3-trailing-whitespace`, `s3-nfc-delta`.
+`s3-trailing-whitespace`, `s3-nfc-delta`, `s3-variation-selector` (emoji
+smuggling; its benign twin `s3-variation-selector-benign` keeps the standard
+variation sequences: emoji and text presentation, keycaps, a ZWJ flag).
 
 The **EXIF / image-metadata** class of S3 has no directory here: this tree
 is text-only by policy, and a committed binary would be the one fixture nobody

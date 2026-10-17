@@ -26,6 +26,7 @@ var s3Checks = []s3Check{
 	detectZeroWidth,
 	detectBidiControls,
 	detectTagBlock,
+	detectVariationSelectors,
 	detectPrivateUse,
 	detectMixedScript,
 	detectHTMLComment,
@@ -270,6 +271,94 @@ var extendedPictographic = &unicode.RangeTable{
 		{0x1F90C, 0x1F93A, 1}, {0x1F93C, 0x1F945, 1}, {0x1F947, 0x1FAFF, 1}, {0x1FC00, 0x1FFFD, 1},
 	},
 	LatinOffset: 2,
+}
+
+// --- variation selectors (emoji smuggling) --------------------------------
+
+// isVariationSelector reports whether r is a variation selector: U+FE00..
+// U+FE0F, or the supplement U+E0100..U+E01EF. Each is invisible and attaches
+// to the character before it, so a run of them after an ordinary letter or
+// an emoji carries one byte each, an arbitrary payload no reader sees.
+func isVariationSelector(r rune) bool {
+	return (r >= 0xFE00 && r <= 0xFE0F) || (r >= 0xE0100 && r <= 0xE01EF)
+}
+
+// variationBase is a base character of a variation sequence and the
+// selectors U+FE00..U+FE0F it takes, as a bit mask (bit n is U+FE00+n).
+type variationBase struct {
+	base rune
+	mask uint16
+}
+
+// takesSelector reports whether base followed by vs is a standardized or an
+// emoji variation sequence: the text and emoji presentation selectors after
+// a character that has both presentations (the copyright sign, the heavy
+// heart), and the selectors Unicode standardizes after a mathematical
+// symbol, a CJK compatibility ideograph and the like.
+func takesSelector(base, vs rune) bool {
+	if vs < 0xFE00 || vs > 0xFE0F {
+		return false
+	}
+	i := sort.Search(len(variationBases), func(i int) bool { return variationBases[i].base >= base })
+	return i < len(variationBases) && variationBases[i].base == base && variationBases[i].mask&(1<<(vs-0xFE00)) != 0
+}
+
+// detectVariationSelectors flags variation selectors outside a variation
+// sequence. High/high, as the other invisible carriers: one selector after
+// a base that takes it is how ordinary text picks a glyph (U+2764 U+FE0F,
+// the red heart; U+263A U+FE0E, the text smiley) and is not a finding.
+// Anything else fires: a selector from the supplement, a second selector
+// in a row, and a selector after a character that has no such sequence,
+// which is the shape a smuggled payload takes. The Detail decodes the
+// selectors as the bytes they would carry (U+FE00+n is n, U+E0100+n is
+// 16+n), where those bytes are printable ASCII.
+func detectVariationSelectors(path string, content []byte, lm *lineMap) []Finding {
+	hits := map[int][]rune{}
+	runes, offsets := decodeRunes(content)
+	for i, r := range runes {
+		if !isVariationSelector(r) {
+			continue
+		}
+		if i > 0 && !isVariationSelector(runes[i-1]) && takesSelector(runes[i-1], r) {
+			continue
+		}
+		line := lm.lineOf(offsets[i])
+		hits[line] = append(hits[line], r)
+	}
+	var out []Finding
+	for _, line := range sortedLines(hits) {
+		f := lineRuneFinding(path, "S3/variation-selector",
+			"Variation selectors outside a variation sequence (emoji smuggling)", SeverityHigh, ConfidenceHigh, line, lm, hits[line])
+		if decoded := decodeVariationSelectors(hits[line]); decoded != "" {
+			f.Detail["decoded"] = decoded
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// decodeVariationSelectors reads selectors as the bytes they encode, and
+// answers them when every one is printable ASCII and there are at least
+// four, so a stray selector or two decodes to nothing.
+func decodeVariationSelectors(runes []rune) string {
+	if len(runes) < 4 {
+		return ""
+	}
+	b := make([]byte, 0, len(runes))
+	for _, r := range runes {
+		var v rune
+		switch {
+		case r >= 0xFE00 && r <= 0xFE0F:
+			v = r - 0xFE00
+		default:
+			v = r - 0xE0100 + 16
+		}
+		if v < 0x20 || v > 0x7E {
+			return ""
+		}
+		b = append(b, byte(v))
+	}
+	return string(b)
 }
 
 // --- (b) bidi controls (Trojan Source) -----------------------------------

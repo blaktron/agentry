@@ -737,7 +737,12 @@ runs. `queue.workers` (`AGENTRY_QUEUE_WORKERS`, default 1) is how many jobs
 one worker process runs at once per queue: 1 runs jobs serially; raise it on a worker with the memory for parallel scans.
 A job that fails retries with exponential backoff up to five attempts, a
 job a crashed worker held is rescued after 30 minutes, and every outcome is
-counted (see Metrics). River is the only driver: a configuration that
+counted (see Metrics). A job rescued at its last attempt is run once more
+as that last attempt, within ten minutes (`queue.settle_rescued` on the core
+queue), so what its handler does when it gives up still happens: a
+knowledge pack is marked failed, an unfinished directory erasure is audited
+as abandoned and raised. A last attempt that is itself rescued is logged and
+not run again. River is the only driver: a configuration that
 names `queue.driver: pg` is refused at start, and the migrator drops the
 legacy `jobs` table.
 
@@ -1085,8 +1090,9 @@ What staff can do in review: every item on the platform queue and on every
 organization's queue, private QuickAgents included. They read it, decide it
 and record a false-positive verdict on its findings; accepting risk on an
 organization's QuickAgent stays that organization's reviewers'. Staff may
-also decide versions they submitted themselves, which no one else may: such
-a decision is marked `self_decision: true` in its `review.decision` audit
+also decide versions they submitted themselves, and set verdicts on their
+findings, which no one else may: such a decision or verdict is marked
+`self_decision: true` in its `review.decision` or `finding.verdict` audit
 event. Give the staff role to people you trust with both.
 
 The rule rests on facts nobody sets about themselves:

@@ -1,0 +1,7 @@
+# Fixture expectation (see README.md).
+technique: "S3 variation selectors in standard variation sequences: emoji and text presentation, keycaps, a ZWJ flag (benign)"
+expect: []
+forbid:
+  - S3/variation-selector
+expectClean: true
+expectOutcome: published
