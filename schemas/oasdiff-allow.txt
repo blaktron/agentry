@@ -1,6 +1,22 @@
-# One-time exception to the additive-only rule: the directory's account
-# settings routes leave the server (a directory extension serves them under
-# /api/v1/x/directory/). CI's oasdiff job ignores exactly these while this
-# file exists.
-GET /user/directory api path removed without deprecation
-DELETE /user/directory/devices/{kind}/{deviceId} api path removed without deprecation
+# One-time exception to the additive-only rule: the server keeps no
+# credentials of its own. The register, password sign-in and TOTP
+# operations leave the server, the sign-in provider id names only the
+# deployment's one OpenID provider, and a sign-in's answer no longer carries
+# a pending second-factor challenge. CI's oasdiff job ignores exactly these
+# while this file exists.
+GET /auth/oidc/{provider}/callback removed the enum value `claude` from the `path` request parameter `provider`
+GET /auth/oidc/{provider}/callback removed the enum value `github` from the `path` request parameter `provider`
+GET /auth/oidc/{provider}/callback removed the enum value `google` from the `path` request parameter `provider`
+GET /auth/oidc/{provider}/callback removed the enum value `microsoft` from the `path` request parameter `provider`
+GET /auth/oidc/{provider}/callback removed the enum value `openai` from the `path` request parameter `provider`
+GET /auth/oidc/{provider}/callback removed the required property `totpRequired` from the response with the `200` status
+GET /auth/oidc/{provider}/start removed the enum value `claude` from the `path` request parameter `provider`
+GET /auth/oidc/{provider}/start removed the enum value `github` from the `path` request parameter `provider`
+GET /auth/oidc/{provider}/start removed the enum value `google` from the `path` request parameter `provider`
+GET /auth/oidc/{provider}/start removed the enum value `microsoft` from the `path` request parameter `provider`
+GET /auth/oidc/{provider}/start removed the enum value `openai` from the `path` request parameter `provider`
+POST /auth/2fa/totp/challenge api path removed without deprecation
+POST /auth/2fa/totp/setup api path removed without deprecation
+POST /auth/2fa/totp/verify api path removed without deprecation
+POST /auth/login api path removed without deprecation
+POST /auth/register api path removed without deprecation

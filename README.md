@@ -53,8 +53,10 @@ make dev        # migrations, then agentryd (all roles) on :8080
 curl localhost:8080/api/v1/meta
 ```
 
-Open http://localhost:8080/ui/ for sign-in, account and tokens, the review
-queue, the staff console and organization administration. Configuration is
+People sign in through an OpenID provider you configure (`auth.oidc`); the
+server keeps no passwords. http://localhost:8080/ui/ hands sign-in to that
+provider, and `/ui/authorize` is the page the CLI and the desktop app open.
+Configuration is
 `agentry.yaml` (copy `agentry.yaml.example`) with `AGENTRY_*` environment
 overrides; the environment wins. `deploy/compose` runs the whole registry
 with no site in front: Postgres, object storage, mail, `agentryd` and an
@@ -71,7 +73,7 @@ nginx edge. For a real deployment, see
 | `internal/gitsrv` | git smart-HTTP, repository storage, policy hooks |
 | `internal/api` `internal/auth` `internal/store` | HTTP layer, identity and authorization, Postgres |
 | `internal/render` | the only path by which author markdown reaches a browser |
-| `internal/ui` | the server's own pages at `/ui/` (Go templates): device authorize, sign-in, account, review, staff, organizations |
+| `internal/ui` | the server's own pages at `/ui/` (Go templates): device authorize, the sign-in hand-off, sign-out, address confirmation |
 | `pkg/extension` | the seam an outside Go module extends the server through: routes, migrations, entitlements, hooks, jobs |
 | `pkg/judge` `pkg/websearch` | the AI Review client and its question sets, and the web search clients |
 | `pkg/` | the public surface the CLI and third parties build on: manifest spec and refs, rules engine, embedded ruleset, deterministic archives and extractor, attestation verification, the generated API client |

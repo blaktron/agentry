@@ -43,8 +43,7 @@ func TestUnactivated(t *testing.T) {
 // with a writing method. Every other
 // writing operation in the spec is refused, so a new one starts refused.
 var unactivatedOperations = map[string]bool{
-	"register": true, "verifyEmail": true, "login": true, "logout": true,
-	"totpSetup": true, "totpVerify": true, "totpChallenge": true, "exchangeDesktopCode": true,
+	"verifyEmail": true, "logout": true, "exchangeDesktopCode": true,
 	"sendEmailVerification": true, "updateCurrentUser": true,
 	"deleteCurrentUser": true, "clearCurrentUserData": true,
 	"revokeOtherUserSessions": true, "revokeUserSession": true, "clearTrustedDevices": true,
@@ -115,7 +114,7 @@ func TestRefuseUnactivated(t *testing.T) {
 		{"unactivated read", &auth.Principal{Unactivated: true}, http.MethodGet, "/api/v1/user", false},
 		{"unactivated resend", &auth.Principal{Unactivated: true}, http.MethodPost, "/api/v1/user/email-verification", false},
 		{"activated star", &auth.Principal{EmailVerified: true}, http.MethodPut, "/api/v1/user/stars/acme/agent", false},
-		{"anonymous", &auth.Principal{Anonymous: true}, http.MethodPost, "/api/v1/auth/login", false},
+		{"anonymous", &auth.Principal{Anonymous: true}, http.MethodPost, "/api/v1/auth/desktop/exchange", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()

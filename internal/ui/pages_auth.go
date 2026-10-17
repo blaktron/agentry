@@ -10,106 +10,69 @@ import (
 	"github.com/blaktron/agentry/internal/auth"
 )
 
-// landing: /ui/ — the signed-in go to their account, the signed-out to
-// sign-in (or, with a site in front, to the site).
+// notSent says an in-process call did not reach the API (it cannot be
+// read as an answer), so nothing the form asked for happened.
+const notSent = "The request was not sent. Nothing changed."
+
+// landing: /ui/ — the signed-out go to sign-in (or, with a site in front,
+// to the site); the signed-in are told who they are, since every page they
+// would use here is the device-authorize page the program opens for them.
 func (h *handler) landing(w http.ResponseWriter, r *http.Request) {
 	if h.opt.Mode != "full" {
 		http.Redirect(w, r, h.homeURL(), http.StatusSeeOther)
 		return
 	}
-	if h.currentUser(r) != nil {
-		http.Redirect(w, r, "/ui/account", http.StatusSeeOther)
+	u := h.currentUser(r)
+	if u == nil {
+		http.Redirect(w, r, h.loginURL(""), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, h.loginURL(""), http.StatusSeeOther)
+	h.render(w, r, http.StatusOK, "message", page{
+		Title: "Signed in",
+		User:  u,
+		Flash: "You are signed in as " + u.Handle + ". The command line and the desktop app sign in through this registry's device-authorize page, which they open for you.",
+	})
 }
 
 type loginData struct {
-	Next         string
-	Login        string
-	TOTP         bool
 	Providers    []Provider
 	ProviderHref map[string]string
-	ExternalOnly bool
 }
 
+// loginPage is the sign-in hand-off: the registry keeps no credentials, so
+// signing in is the deployment's OpenID provider's. With one provider and
+// nothing to show, the browser goes straight there.
 func (h *handler) loginPage(w http.ResponseWriter, r *http.Request) {
-	next := safeNext(r.URL.Query().Get("next"), "/ui/account")
+	next := safeNext(r.URL.Query().Get("next"), "/ui/")
 	if h.currentUser(r) != nil {
 		http.Redirect(w, r, next, http.StatusSeeOther)
 		return
 	}
-	d := loginData{Next: next, Login: r.URL.Query().Get("login"), TOTP: r.URL.Query().Get("totp") == "1", Providers: h.opt.Providers, ExternalOnly: h.opt.ExternalOnly, ProviderHref: map[string]string{}}
+	d := loginData{Providers: h.opt.Providers, ProviderHref: map[string]string{}}
 	for _, p := range h.opt.Providers {
 		d.ProviderHref[p.ID] = "/api/v1/auth/oidc/" + p.ID + "/start?next=" + url.QueryEscape(next)
 	}
 	// The signed-out entrance is the one page another component addresses
-	// with a message: on a headless deployment the API's social-login
-	// callback sends a failed sign-in here as ?error= (internal/api
-	// webPaths.login), as the site's /login reads it. Honoured on this
-	// page alone, as text; every other notice rides the flash cookie.
+	// with a message: on a headless deployment the API's sign-in callback
+	// sends a failed sign-in here as ?error= (internal/api webPaths.login),
+	// as the site's /login reads it. Honoured on this page alone, as text;
+	// every other notice rides the flash cookie.
 	pg := page{Title: "Sign in", Data: d, Error: r.URL.Query().Get("error")}
-	// One directory and nothing else: the directory IS the way in, so go
-	// there directly unless the page has something to show:
-	// that message, or a notice a redirect left for this render.
+	// One provider is the way in, so go there directly unless the page has
+	// something to show: that message, or a notice a redirect left for this
+	// render.
 	_, hasFlash := r.Cookie(flashCookie)
-	if h.opt.ExternalOnly && len(h.opt.Providers) == 1 && pg.Error == "" && hasFlash != nil {
+	if len(h.opt.Providers) == 1 && pg.Error == "" && hasFlash != nil {
 		http.Redirect(w, r, d.ProviderHref[h.opt.Providers[0].ID], http.StatusSeeOther)
 		return
 	}
 	h.render(w, r, http.StatusOK, "login", pg)
 }
 
-// loginSubmit posts the native credentials to POST /auth/login in-process
-// and mirrors the session it issued onto the browser, with the CSRF cookie
-// the form posts need.
-func (h *handler) loginSubmit(w http.ResponseWriter, r *http.Request) {
-	if !sameOrigin(r) {
-		h.refuseCrossOrigin(w, r)
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		h.refuseBadForm(w, r)
-		return
-	}
-	next := safeNext(r.PostFormValue("next"), "/ui/account")
-	body := map[string]string{"login": r.PostFormValue("login"), "password": r.PostFormValue("password")}
-	if code := strings.TrimSpace(r.PostFormValue("totpCode")); code != "" {
-		body["totpCode"] = code
-	}
-	res, err := h.call(r).do(http.MethodPost, "/auth/login", body)
-	if err != nil {
-		h.refuse(w, r, http.StatusBadGateway, "Sign-in unavailable", notSent)
-		return
-	}
-	if !res.OK() {
-		q := url.Values{"next": {next}, "login": {body["login"]}}
-		if strings.HasSuffix(res.problemType(), "totp-required") {
-			q.Set("totp", "1")
-			h.setFlash(w, "", "Enter your two-factor code.")
-		} else {
-			h.setFlash(w, "", res.detail())
-		}
-		http.Redirect(w, r, "/ui/login?"+q.Encode(), http.StatusSeeOther)
-		return
-	}
-	var out struct {
-		CsrfToken string `json:"csrfToken"`
-	}
-	_ = res.decode(&out)
-	sess := findSetCookie(res.Header, sessionCookie)
-	if sess == "" || cookieValueOf(sess) == "" || out.CsrfToken == "" {
-		h.back(w, r, "/ui/login", "", "Sign-in succeeded but no session was issued. You are not signed in.")
-		return
-	}
-	forwardCookies(w, res.Header)
-	setCookieLike(w, csrfCookie, out.CsrfToken, sess, h.opt.CookieSecure)
-	http.Redirect(w, r, next, http.StatusSeeOther)
-}
-
 // logout revokes the session through POST /auth/logout and clears both
-// cookies whatever the API said; a directory-owned account is sent through
-// the directory's end-session flow so the next sign-in asks again.
+// cookies whatever the API said; the browser is then sent through the
+// provider's end-session flow, where one is configured, so the next sign-in
+// asks again.
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 	if !h.acceptForm(w, r) {
 		return
@@ -148,7 +111,7 @@ func (h *handler) verifyEmail(w http.ResponseWriter, r *http.Request) {
 		p.Error = notSent
 		h.render(w, r, http.StatusBadGateway, "message", p)
 	case res.OK():
-		p.Flash = "Your email address is confirmed and your account is activated. You can sign in."
+		p.Flash = "Your email address is confirmed and your account is activated."
 		p.Data = map[string]string{"Link": h.loginURL(""), "LinkText": "Sign in"}
 		h.render(w, r, http.StatusOK, "message", p)
 	default:

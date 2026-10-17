@@ -1578,12 +1578,7 @@ func (e WebSearchResultFlagged) Valid() bool {
 // Defines values for SocialProvider.
 const (
 	SocialProviderAuthentik SocialProvider = "authentik"
-	SocialProviderClaude    SocialProvider = "claude"
-	SocialProviderGithub    SocialProvider = "github"
-	SocialProviderGoogle    SocialProvider = "google"
-	SocialProviderMicrosoft SocialProvider = "microsoft"
 	SocialProviderOidc      SocialProvider = "oidc"
-	SocialProviderOpenai    SocialProvider = "openai"
 )
 
 // Valid indicates whether the value is a known member of the SocialProvider enum.
@@ -1591,17 +1586,7 @@ func (e SocialProvider) Valid() bool {
 	switch e {
 	case SocialProviderAuthentik:
 		return true
-	case SocialProviderClaude:
-		return true
-	case SocialProviderGithub:
-		return true
-	case SocialProviderGoogle:
-		return true
-	case SocialProviderMicrosoft:
-		return true
 	case SocialProviderOidc:
-		return true
-	case SocialProviderOpenai:
 		return true
 	default:
 		return false
@@ -1740,12 +1725,7 @@ func (e ReportAbuseJSONBodyCategory) Valid() bool {
 // Defines values for SocialOidcCallbackParamsProvider.
 const (
 	SocialOidcCallbackParamsProviderAuthentik SocialOidcCallbackParamsProvider = "authentik"
-	SocialOidcCallbackParamsProviderClaude    SocialOidcCallbackParamsProvider = "claude"
-	SocialOidcCallbackParamsProviderGithub    SocialOidcCallbackParamsProvider = "github"
-	SocialOidcCallbackParamsProviderGoogle    SocialOidcCallbackParamsProvider = "google"
-	SocialOidcCallbackParamsProviderMicrosoft SocialOidcCallbackParamsProvider = "microsoft"
 	SocialOidcCallbackParamsProviderOidc      SocialOidcCallbackParamsProvider = "oidc"
-	SocialOidcCallbackParamsProviderOpenai    SocialOidcCallbackParamsProvider = "openai"
 )
 
 // Valid indicates whether the value is a known member of the SocialOidcCallbackParamsProvider enum.
@@ -1753,17 +1733,7 @@ func (e SocialOidcCallbackParamsProvider) Valid() bool {
 	switch e {
 	case SocialOidcCallbackParamsProviderAuthentik:
 		return true
-	case SocialOidcCallbackParamsProviderClaude:
-		return true
-	case SocialOidcCallbackParamsProviderGithub:
-		return true
-	case SocialOidcCallbackParamsProviderGoogle:
-		return true
-	case SocialOidcCallbackParamsProviderMicrosoft:
-		return true
 	case SocialOidcCallbackParamsProviderOidc:
-		return true
-	case SocialOidcCallbackParamsProviderOpenai:
 		return true
 	default:
 		return false
@@ -1773,12 +1743,7 @@ func (e SocialOidcCallbackParamsProvider) Valid() bool {
 // Defines values for SocialOidcStartParamsProvider.
 const (
 	SocialOidcStartParamsProviderAuthentik SocialOidcStartParamsProvider = "authentik"
-	SocialOidcStartParamsProviderClaude    SocialOidcStartParamsProvider = "claude"
-	SocialOidcStartParamsProviderGithub    SocialOidcStartParamsProvider = "github"
-	SocialOidcStartParamsProviderGoogle    SocialOidcStartParamsProvider = "google"
-	SocialOidcStartParamsProviderMicrosoft SocialOidcStartParamsProvider = "microsoft"
 	SocialOidcStartParamsProviderOidc      SocialOidcStartParamsProvider = "oidc"
-	SocialOidcStartParamsProviderOpenai    SocialOidcStartParamsProvider = "openai"
 )
 
 // Valid indicates whether the value is a known member of the SocialOidcStartParamsProvider enum.
@@ -1786,17 +1751,7 @@ func (e SocialOidcStartParamsProvider) Valid() bool {
 	switch e {
 	case SocialOidcStartParamsProviderAuthentik:
 		return true
-	case SocialOidcStartParamsProviderClaude:
-		return true
-	case SocialOidcStartParamsProviderGithub:
-		return true
-	case SocialOidcStartParamsProviderGoogle:
-		return true
-	case SocialOidcStartParamsProviderMicrosoft:
-		return true
 	case SocialOidcStartParamsProviderOidc:
-		return true
-	case SocialOidcStartParamsProviderOpenai:
 		return true
 	default:
 		return false
@@ -2879,21 +2834,6 @@ type KnowledgeWrappedKey struct {
 	Recipient string `json:"recipient"`
 }
 
-// LoginRequest defines model for LoginRequest.
-type LoginRequest struct {
-	// Login Handle or email.
-	Login    string `json:"login"`
-	Password string `json:"password"`
-
-	// RememberDevice Remember this browser as a trusted device, so a later password sign-in from it skips the TOTP code. Defaults to false.
-	//
-	// What it does: on a sign-in that answered the code, issues an opaque httpOnly cookie recorded against the account, and later password sign-ins presenting it are not asked for the code. What it does not do: it is not a session, does not lengthen one, and carries no scope — the password is still required on every sign-in. It cannot be earned by a sign-in that skipped the code, so its lifetime is absolute rather than sliding, and it expires after auth.trustedDeviceTTL (30 days by default and by maximum). It has no effect on an account with no TOTP factor, where no code was answered, and on a deployment whose credentials are delegated to an external directory, where this endpoint answers 410.
-	RememberDevice *bool `json:"rememberDevice,omitempty"`
-
-	// TotpCode Required when the account has TOTP enabled.
-	TotpCode *string `json:"totpCode,omitempty"`
-}
-
 // LoginResult defines model for LoginResult.
 type LoginResult struct {
 	// CsrfToken Echo in X-Agentry-CSRF on cookie-authenticated mutations.
@@ -2985,7 +2925,7 @@ type Meta struct {
 	// Extensions Names of the extensions this build mounts under `/api/v1/x/<name>/` (registered through pkg/extension); absent on the core build.
 	Extensions *[]string `json:"extensions,omitempty"`
 
-	// Features Self-host feature flags: `judge`, `signing`, `redis`, `s3`, `externalOnly` (accounts live in an external directory service; the native register/password/TOTP surface answers 410 — clients should not offer those forms) and `publicPublish2FA` (the server refuses a public publish from an account it holds no second-factor evidence for — an enrolled TOTP, or under `auth.requireIdpMFA` an IdP sign-in whose `amr` named a factor; false in dev mode and under `externalOnly` without `auth.requireIdpMFA` — a client states that requirement only when this is true), and `knowledge` (the store of knowledge packs is on: the registry has a knowledge sealing key or an extension that wraps keys, so `/knowledge/…` answers rather than 503).
+	// Features Self-host feature flags: `judge`, `signing`, `redis`, `s3`, `publicPublish2FA` (the server refuses a public publish from an account it holds no second-factor evidence for, an OpenID provider sign-in whose `amr` named a factor; on only under `auth.requireIdpMFA` and never in dev mode, so a client states that requirement only when this is true), and `knowledge` (the store of knowledge packs is on: the registry has a knowledge sealing key or an extension that wraps keys, so `/knowledge/…` answers rather than 503).
 	Features map[string]bool `json:"features"`
 
 	// MinCLIVersion Oldest supported agentry CLI version.
@@ -2994,7 +2934,7 @@ type Meta struct {
 	// SignInProviders The individual sign-in providers this registry has configured (the `provider` ids of `/auth/oidc/{provider}/start`, in that enum's order), so a front end can offer them without starting a flow to find out. Empty when none is configured. A provider is listed when its client id and secret are set, and an issuer where it has no default; a listed provider's start redirects and an unlisted one's answers 404. A listed provider whose issuer cannot be reached at that moment also answers 404 there, since its discovery fails.
 	SignInProviders *[]string `json:"signInProviders,omitempty"`
 
-	// Ui The server's own browser surface under `/ui/`. `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
+	// Ui The server's own browser surface under `/ui/`. `mode` is `full` (device authorize, plus the sign-in hand-off to the OpenID provider, sign-out and the address-confirmation page), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
 	Ui *UIInfo `json:"ui,omitempty"`
 
 	// Version agentryd semantic version (build-stamped).
@@ -3230,14 +3170,6 @@ type RedTeamReport struct {
 	// Report The full report (byMutator tallies and every evasion).
 	Report        map[string]interface{} `json:"report"`
 	RulesetSemver string                 `json:"rulesetSemver"`
-}
-
-// RegisterRequest defines model for RegisterRequest.
-type RegisterRequest struct {
-	DisplayName *string             `json:"displayName,omitempty"`
-	Email       openapi_types.Email `json:"email"`
-	Handle      string              `json:"handle"`
-	Password    string              `json:"password"`
 }
 
 // ReportDesign A report design, the theme document version 2. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB.
@@ -3585,17 +3517,6 @@ type ShippedKnowledgeScan struct {
 	Report KnowledgeScanReport `json:"report"`
 }
 
-// SocialLoginResult Outcome of a social-login callback: either a session (like password login) or a pending TOTP challenge to complete at POST /auth/2fa/totp/challenge.
-type SocialLoginResult struct {
-	// Challenge Single-use, five-minute challenge; present iff totpRequired.
-	Challenge *string `json:"challenge,omitempty"`
-
-	// CsrfToken Echo in X-Agentry-CSRF on cookie-authenticated mutations.
-	CsrfToken    *string `json:"csrfToken,omitempty"`
-	TotpRequired bool    `json:"totpRequired"`
-	User         *User   `json:"user,omitempty"`
-}
-
 // SshKey defines model for SshKey.
 type SshKey struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -3659,14 +3580,6 @@ type Team struct {
 	Slug string             `json:"slug"`
 }
 
-// TotpSetupResult defines model for TotpSetupResult.
-type TotpSetupResult struct {
-	OtpauthUrl string `json:"otpauthUrl"`
-
-	// Secret Base32 TOTP secret (display once for authenticator apps).
-	Secret string `json:"secret"`
-}
-
 // TrustedDevicesCleared defines model for TrustedDevicesCleared.
 type TrustedDevicesCleared struct {
 	// Cleared Remembered browsers revoked by this request.
@@ -3679,7 +3592,7 @@ type TrustedDevicesCount struct {
 	Count int `json:"count"`
 }
 
-// UIInfo The server's own browser surface under `/ui/`. `mode` is `full` (device authorize, sign-in, account, review, staff, org admin), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
+// UIInfo The server's own browser surface under `/ui/`. `mode` is `full` (device authorize, plus the sign-in hand-off to the OpenID provider, sign-out and the address-confirmation page), `authorize` (only the device-authorize page — a site fronts this server) or `off`. `authorizeUrl` is the absolute page a CLI or the desktop app opens for browser sign-in, when served.
 type UIInfo struct {
 	AuthorizeUrl *string    `json:"authorizeUrl,omitempty"`
 	Mode         UIInfoMode `json:"mode"`
@@ -3719,7 +3632,10 @@ type User struct {
 	// PendingOrg The organization the caller is waiting to be approved by (present on GET /user only, and only while a pending membership exists): the domain folded them in at a sign-in, or the organization's IdP provisioned them. Every page and client can say it until an admin approves or declines them; until then they keep working on their own tier.
 	PendingOrg    *PendingOrg `json:"pendingOrg,omitempty"`
 	PlatformStaff *bool       `json:"platformStaff,omitempty"`
-	TotpEnabled   bool        `json:"totpEnabled"`
+
+	// TotpEnabled Always false: the server keeps no second factor of its own, and the field goes in a later release. A sign-in's second factor is the OpenID provider's.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
+	TotpEnabled bool `json:"totpEnabled"`
 }
 
 // VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
@@ -4093,17 +4009,6 @@ type YankVersionJSONBody struct {
 	Reason string `json:"reason"`
 }
 
-// TotpChallengeJSONBody defines parameters for TotpChallenge.
-type TotpChallengeJSONBody struct {
-	Challenge string `json:"challenge"`
-	Code      string `json:"code"`
-}
-
-// TotpVerifyJSONBody defines parameters for TotpVerify.
-type TotpVerifyJSONBody struct {
-	Code string `json:"code"`
-}
-
 // SocialOidcCallbackParams defines parameters for SocialOidcCallback.
 type SocialOidcCallbackParams struct {
 	Code  *string `form:"code,omitempty" json:"code,omitempty"`
@@ -4115,7 +4020,7 @@ type SocialOidcCallbackParamsProvider string
 
 // SocialOidcStartParams defines parameters for SocialOidcStart.
 type SocialOidcStartParams struct {
-	// Next Browser mode. An in-app, path-absolute return target (e.g. `/dashboard` on the site, `/ui/account` on the server's own pages). When present and valid, the callback answers the browser with a 303 to it instead of the JSON result, and a failed login 303s to the sign-in page with `?error=…` (the site's `/login`, or `/ui/login`). Anything that is not a single-slash path on this origin is ignored (open-redirect guard), which leaves the API behaviour unchanged.
+	// Next Browser mode. An in-app, path-absolute return target (e.g. `/dashboard` on the site, `/ui/authorize?…` on the server's own pages). When present and valid, the callback answers the browser with a 303 to it instead of the JSON result, and a failed login 303s to the sign-in page with `?error=…` (the site's `/login`, or `/ui/login`). Anything that is not a single-slash path on this origin is ignored (open-redirect guard), which leaves the API behaviour unchanged.
 	Next *string `form:"next,omitempty" json:"next,omitempty"`
 }
 
@@ -4453,20 +4358,8 @@ type SubmitVersionMultipartRequestBody SubmitVersionMultipartBody
 // YankVersionJSONRequestBody defines body for YankVersion for application/json ContentType.
 type YankVersionJSONRequestBody YankVersionJSONBody
 
-// TotpChallengeJSONRequestBody defines body for TotpChallenge for application/json ContentType.
-type TotpChallengeJSONRequestBody TotpChallengeJSONBody
-
-// TotpVerifyJSONRequestBody defines body for TotpVerify for application/json ContentType.
-type TotpVerifyJSONRequestBody TotpVerifyJSONBody
-
 // ExchangeDesktopCodeJSONRequestBody defines body for ExchangeDesktopCode for application/json ContentType.
 type ExchangeDesktopCodeJSONRequestBody = DesktopExchangeRequest
-
-// LoginJSONRequestBody defines body for Login for application/json ContentType.
-type LoginJSONRequestBody = LoginRequest
-
-// RegisterJSONRequestBody defines body for Register for application/json ContentType.
-type RegisterJSONRequestBody = RegisterRequest
 
 // VerifyEmailJSONRequestBody defines body for VerifyEmail for application/json ContentType.
 type VerifyEmailJSONRequestBody VerifyEmailJSONBody
@@ -4931,49 +4824,6 @@ type ClientInterface interface {
 	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
 	YankVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// TotpChallengeWithBody Complete a pending 2FA challenge and open the session.
-	//
-	// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
-	TotpChallengeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// TotpChallenge Complete a pending 2FA challenge and open the session.
-	//
-	// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
-	TotpChallenge(ctx context.Context, body TotpChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
-	TotpSetup(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// TotpVerifyWithBody Confirm TOTP enrollment with a current code.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
-	TotpVerifyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// TotpVerify Confirm TOTP enrollment with a current code.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
-	TotpVerify(ctx context.Context, body TotpVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ExchangeDesktopCodeWithBody Exchange a desktop sign-in code for the PAT it granted.
 	//
 	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
@@ -4992,66 +4842,30 @@ type ClientInterface interface {
 	// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
 	ExchangeDesktopCode(ctx context.Context, body ExchangeDesktopCodeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// LoginWithBody Password (+TOTP when enabled) login; sets the session cookie.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /auth/login (the `Login` operationId).
-	LoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// Login Password (+TOTP when enabled) login; sets the session cookie.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /auth/login (the `Login` operationId).
-	Login(ctx context.Context, body LoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// Logout Revoke the current session.
 	//
-	// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
+	// Answers 204 for a session opened through an OpenID provider. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
 	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SocialOidcCallback Social login redirect URI: establish a session.
+	// SocialOidcCallback Sign-in redirect URI: establish a session.
 	//
-	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
+	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 	//
 	// Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
 	SocialOidcCallback(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SocialOidcStart Begin social login with a configured provider.
+	// SocialOidcStart Begin sign-in with the deployment's OpenID provider.
 	//
-	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso.
+	// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership. Org SSO lives under /orgs/{org}/sso.
 	//
 	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 	SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RegisterWithBody Create an individual account (email+password).
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /auth/register (the `Register` operationId).
-	RegisterWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// Register Create an individual account (email+password).
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /auth/register (the `Register` operationId).
-	Register(ctx context.Context, body RegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// VerifyEmailWithBody Confirm an email address with the mailed token.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// Activates the account whose address the mailed link was sent to (POST /user/email-verification sends it).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5060,7 +4874,7 @@ type ClientInterface interface {
 
 	// VerifyEmail Confirm an email address with the mailed token.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// Activates the account whose address the mailed link was sent to (POST /user/email-verification sends it).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6214,7 +6028,7 @@ type ClientInterface interface {
 
 	// ClearTrustedDevices Clear every remembered browser of the caller's account.
 	//
-	// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
+	// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in, since the directory that set its cookie finds no record behind it. Sessions and authenticators are untouched. Session-only: a PAT is refused (403), as on the session-revoking routes.
 	//
 	// Corresponds with DELETE /user/trusted-devices (the `ClearTrustedDevices` operationId).
 	ClearTrustedDevices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6930,99 +6744,6 @@ func (c *Client) YankVersion(ctx context.Context, ns Namespace, name AgentName, 
 	return c.Client.Do(req)
 }
 
-// TotpChallengeWithBody Complete a pending 2FA challenge and open the session.
-//
-// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
-func (c *Client) TotpChallengeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTotpChallengeRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// TotpChallenge Complete a pending 2FA challenge and open the session.
-//
-// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
-func (c *Client) TotpChallenge(ctx context.Context, body TotpChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTotpChallengeRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// TotpSetup Begin TOTP enrollment; returns the provisioning secret.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
-func (c *Client) TotpSetup(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTotpSetupRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// TotpVerifyWithBody Confirm TOTP enrollment with a current code.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
-func (c *Client) TotpVerifyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTotpVerifyRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// TotpVerify Confirm TOTP enrollment with a current code.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
-func (c *Client) TotpVerify(ctx context.Context, body TotpVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTotpVerifyRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 // ExchangeDesktopCodeWithBody Exchange a desktop sign-in code for the PAT it granted.
 //
 // Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
@@ -7061,47 +6782,9 @@ func (c *Client) ExchangeDesktopCode(ctx context.Context, body ExchangeDesktopCo
 	return c.Client.Do(req)
 }
 
-// LoginWithBody Password (+TOTP when enabled) login; sets the session cookie.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /auth/login (the `Login` operationId).
-func (c *Client) LoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLoginRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// Login Password (+TOTP when enabled) login; sets the session cookie.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /auth/login (the `Login` operationId).
-func (c *Client) Login(ctx context.Context, body LoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLoginRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 // Logout Revoke the current session.
 //
-// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
+// Answers 204 for a session opened through an OpenID provider. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
 //
 // Corresponds with POST /auth/logout (the `Logout` operationId).
 func (c *Client) Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7116,9 +6799,9 @@ func (c *Client) Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*ht
 	return c.Client.Do(req)
 }
 
-// SocialOidcCallback Social login redirect URI: establish a session.
+// SocialOidcCallback Sign-in redirect URI: establish a session.
 //
-// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
+// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 //
 // Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
 func (c *Client) SocialOidcCallback(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7133,9 +6816,9 @@ func (c *Client) SocialOidcCallback(ctx context.Context, provider SocialOidcCall
 	return c.Client.Do(req)
 }
 
-// SocialOidcStart Begin social login with a configured provider.
+// SocialOidcStart Begin sign-in with the deployment's OpenID provider.
 //
-// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso.
+// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership. Org SSO lives under /orgs/{org}/sso.
 //
 // Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7150,47 +6833,9 @@ func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartPa
 	return c.Client.Do(req)
 }
 
-// RegisterWithBody Create an individual account (email+password).
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /auth/register (the `Register` operationId).
-func (c *Client) RegisterWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRegisterRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// Register Create an individual account (email+password).
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /auth/register (the `Register` operationId).
-func (c *Client) Register(ctx context.Context, body RegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRegisterRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 // VerifyEmailWithBody Confirm an email address with the mailed token.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// Activates the account whose address the mailed link was sent to (POST /user/email-verification sends it).
 //
 // Takes any type of body and a specified content type.
 //
@@ -7209,7 +6854,7 @@ func (c *Client) VerifyEmailWithBody(ctx context.Context, contentType string, bo
 
 // VerifyEmail Confirm an email address with the mailed token.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// Activates the account whose address the mailed link was sent to (POST /user/email-verification sends it).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -10043,7 +9688,7 @@ func (c *Client) RevokeToken(ctx context.Context, tokenId openapi_types.UUID, re
 
 // ClearTrustedDevices Clear every remembered browser of the caller's account.
 //
-// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
+// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in, since the directory that set its cookie finds no record behind it. Sessions and authenticators are untouched. Session-only: a PAT is refused (403), as on the session-revoking routes.
 //
 // Corresponds with DELETE /user/trusted-devices (the `ClearTrustedDevices` operationId).
 func (c *Client) ClearTrustedDevices(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11854,113 +11499,6 @@ func NewYankVersionRequestWithBody(server string, ns Namespace, name AgentName, 
 	return req, nil
 }
 
-// NewTotpChallengeRequest calls the generic TotpChallenge builder with application/json body
-func NewTotpChallengeRequest(server string, body TotpChallengeJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewTotpChallengeRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewTotpChallengeRequestWithBody constructs an http.Request for the TotpChallenge method, with any body, and a specified content type
-func NewTotpChallengeRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/auth/2fa/totp/challenge")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewTotpSetupRequest constructs an http.Request for the TotpSetup method
-func NewTotpSetupRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/auth/2fa/totp/setup")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewTotpVerifyRequest calls the generic TotpVerify builder with application/json body
-func NewTotpVerifyRequest(server string, body TotpVerifyJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewTotpVerifyRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewTotpVerifyRequestWithBody constructs an http.Request for the TotpVerify method, with any body, and a specified content type
-func NewTotpVerifyRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/auth/2fa/totp/verify")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewExchangeDesktopCodeRequest calls the generic ExchangeDesktopCode builder with application/json body
 func NewExchangeDesktopCodeRequest(server string, body ExchangeDesktopCodeJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -11982,46 +11520,6 @@ func NewExchangeDesktopCodeRequestWithBody(server string, contentType string, bo
 	}
 
 	operationPath := fmt.Sprintf("/auth/desktop/exchange")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewLoginRequest calls the generic Login builder with application/json body
-func NewLoginRequest(server string, body LoginJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewLoginRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewLoginRequestWithBody constructs an http.Request for the Login method, with any body, and a specified content type
-func NewLoginRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/auth/login")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -12198,46 +11696,6 @@ func NewSocialOidcStartRequest(server string, provider SocialOidcStartParamsProv
 	if err != nil {
 		return nil, err
 	}
-
-	return req, nil
-}
-
-// NewRegisterRequest calls the generic Register builder with application/json body
-func NewRegisterRequest(server string, body RegisterJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewRegisterRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewRegisterRequestWithBody constructs an http.Request for the Register method, with any body, and a specified content type
-func NewRegisterRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/auth/register")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -18437,51 +17895,6 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/yank (the `YankVersion` operationId).
 	YankVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, body YankVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*YankVersionResponse, error)
 
-	// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session.
-	//
-	// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
-	TotpChallengeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TotpChallengeResponse, error)
-
-	// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session.
-	//
-	// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
-	TotpChallengeWithResponse(ctx context.Context, body TotpChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*TotpChallengeResponse, error)
-
-	// TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
-	TotpSetupWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*TotpSetupResponse, error)
-
-	// TotpVerifyWithBodyWithResponse Confirm TOTP enrollment with a current code.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
-	TotpVerifyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TotpVerifyResponse, error)
-
-	// TotpVerifyWithResponse Confirm TOTP enrollment with a current code.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
-	TotpVerifyWithResponse(ctx context.Context, body TotpVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*TotpVerifyResponse, error)
-
 	// ExchangeDesktopCodeWithBodyWithResponse Exchange a desktop sign-in code for the PAT it granted.
 	//
 	// Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
@@ -18500,72 +17913,36 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /auth/desktop/exchange (the `ExchangeDesktopCode` operationId).
 	ExchangeDesktopCodeWithResponse(ctx context.Context, body ExchangeDesktopCodeJSONRequestBody, reqEditors ...RequestEditorFn) (*ExchangeDesktopCodeResponse, error)
 
-	// LoginWithBodyWithResponse Password (+TOTP when enabled) login; sets the session cookie.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /auth/login (the `Login` operationId).
-	LoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LoginResponse, error)
-
-	// LoginWithResponse Password (+TOTP when enabled) login; sets the session cookie.
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /auth/login (the `Login` operationId).
-	LoginWithResponse(ctx context.Context, body LoginJSONRequestBody, reqEditors ...RequestEditorFn) (*LoginResponse, error)
-
 	// LogoutWithResponse Revoke the current session.
 	//
-	// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
+	// Answers 204 for a session opened through an OpenID provider. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	LogoutWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*LogoutResponse, error)
 
-	// SocialOidcCallbackWithResponse Social login redirect URI: establish a session.
+	// SocialOidcCallbackWithResponse Sign-in redirect URI: establish a session.
 	//
-	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
+	// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /auth/oidc/{provider}/callback (the `SocialOidcCallback` operationId).
 	SocialOidcCallbackWithResponse(ctx context.Context, provider SocialOidcCallbackParamsProvider, params *SocialOidcCallbackParams, reqEditors ...RequestEditorFn) (*SocialOidcCallbackResponse, error)
 
-	// SocialOidcStartWithResponse Begin social login with a configured provider.
+	// SocialOidcStartWithResponse Begin sign-in with the deployment's OpenID provider.
 	//
-	// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso.
+	// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership. Org SSO lives under /orgs/{org}/sso.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 	SocialOidcStartWithResponse(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*SocialOidcStartResponse, error)
 
-	// RegisterWithBodyWithResponse Create an individual account (email+password).
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /auth/register (the `Register` operationId).
-	RegisterWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterResponse, error)
-
-	// RegisterWithResponse Create an individual account (email+password).
-	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /auth/register (the `Register` operationId).
-	RegisterWithResponse(ctx context.Context, body RegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterResponse, error)
-
 	// VerifyEmailWithBodyWithResponse Confirm an email address with the mailed token.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// Activates the account whose address the mailed link was sent to (POST /user/email-verification sends it).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18574,7 +17951,7 @@ type ClientWithResponsesInterface interface {
 
 	// VerifyEmailWithResponse Confirm an email address with the mailed token.
 	//
-	// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+	// Activates the account whose address the mailed link was sent to (POST /user/email-verification sends it).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19902,7 +19279,7 @@ type ClientWithResponsesInterface interface {
 
 	// ClearTrustedDevicesWithResponse Clear every remembered browser of the caller's account.
 	//
-	// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
+	// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in, since the directory that set its cookie finds no record behind it. Sessions and authenticators are untouched. Session-only: a PAT is refused (403), as on the session-revoking routes.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -21383,143 +20760,6 @@ func (r YankVersionResponse) ContentType() string {
 	return ""
 }
 
-type TotpChallengeResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *LoginResult
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r TotpChallengeResponse) GetJSON200() *LoginResult {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r TotpChallengeResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r TotpChallengeResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r TotpChallengeResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r TotpChallengeResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r TotpChallengeResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type TotpSetupResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *TotpSetupResult
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r TotpSetupResponse) GetJSON200() *TotpSetupResult {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r TotpSetupResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r TotpSetupResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r TotpSetupResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r TotpSetupResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r TotpSetupResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type TotpVerifyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r TotpVerifyResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r TotpVerifyResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r TotpVerifyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r TotpVerifyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r TotpVerifyResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type ExchangeDesktopCodeResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -21562,54 +20802,6 @@ func (r ExchangeDesktopCodeResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ExchangeDesktopCodeResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type LoginResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *LoginResult
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r LoginResponse) GetJSON200() *LoginResult {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r LoginResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r LoginResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r LoginResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r LoginResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r LoginResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -21668,13 +20860,13 @@ type SocialOidcCallbackResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *SocialLoginResult
+	JSON200 *LoginResult
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r SocialOidcCallbackResponse) GetJSON200() *SocialLoginResult {
+func (r SocialOidcCallbackResponse) GetJSON200() *LoginResult {
 	return r.JSON200
 }
 
@@ -21747,54 +20939,6 @@ func (r SocialOidcStartResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SocialOidcStartResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type RegisterResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *User
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r RegisterResponse) GetJSON201() *User {
-	return r.JSON201
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r RegisterResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r RegisterResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r RegisterResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r RegisterResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r RegisterResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -28845,81 +27989,6 @@ func (c *ClientWithResponses) YankVersionWithResponse(ctx context.Context, ns Na
 	return ParseYankVersionResponse(rsp)
 }
 
-// TotpChallengeWithBodyWithResponse Complete a pending 2FA challenge and open the session.
-//
-// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
-func (c *ClientWithResponses) TotpChallengeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TotpChallengeResponse, error) {
-	rsp, err := c.TotpChallengeWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseTotpChallengeResponse(rsp)
-}
-
-// TotpChallengeWithResponse Complete a pending 2FA challenge and open the session.
-//
-// Second leg of a login that could not carry a TOTP code inline. The only such login is social login: its callback is a browser redirect. The challenge is opaque and expires in five minutes; it proves nothing on its own, so a valid TOTP code is still required. It is single use: completing it records it as consumed in the database every replica reads, so a second completion is refused with 401 `totp-challenge-used`, and an expired one with 401 `totp-challenge-expired`. A wrong code does not consume it; attempts are held to the login rate limit. When the consumed record cannot be written, the challenge is refused with 503 and no session is opened.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /auth/2fa/totp/challenge (the `TotpChallenge` operationId).
-func (c *ClientWithResponses) TotpChallengeWithResponse(ctx context.Context, body TotpChallengeJSONRequestBody, reqEditors ...RequestEditorFn) (*TotpChallengeResponse, error) {
-	rsp, err := c.TotpChallenge(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseTotpChallengeResponse(rsp)
-}
-
-// TotpSetupWithResponse Begin TOTP enrollment; returns the provisioning secret.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /auth/2fa/totp/setup (the `TotpSetup` operationId).
-func (c *ClientWithResponses) TotpSetupWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*TotpSetupResponse, error) {
-	rsp, err := c.TotpSetup(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseTotpSetupResponse(rsp)
-}
-
-// TotpVerifyWithBodyWithResponse Confirm TOTP enrollment with a current code.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
-func (c *ClientWithResponses) TotpVerifyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TotpVerifyResponse, error) {
-	rsp, err := c.TotpVerifyWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseTotpVerifyResponse(rsp)
-}
-
-// TotpVerifyWithResponse Confirm TOTP enrollment with a current code.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /auth/2fa/totp/verify (the `TotpVerify` operationId).
-func (c *ClientWithResponses) TotpVerifyWithResponse(ctx context.Context, body TotpVerifyJSONRequestBody, reqEditors ...RequestEditorFn) (*TotpVerifyResponse, error) {
-	rsp, err := c.TotpVerify(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseTotpVerifyResponse(rsp)
-}
-
 // ExchangeDesktopCodeWithBodyWithResponse Exchange a desktop sign-in code for the PAT it granted.
 //
 // Unauthenticated; the code is the credential. Single use, bound to the `state` nonce the desktop app generated, and valid for 60 seconds from the grant. The PAT is minted at this moment and returned exactly once, like `createToken`. Rate-limited with the login class.
@@ -28950,39 +28019,9 @@ func (c *ClientWithResponses) ExchangeDesktopCodeWithResponse(ctx context.Contex
 	return ParseExchangeDesktopCodeResponse(rsp)
 }
 
-// LoginWithBodyWithResponse Password (+TOTP when enabled) login; sets the session cookie.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /auth/login (the `Login` operationId).
-func (c *ClientWithResponses) LoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LoginResponse, error) {
-	rsp, err := c.LoginWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseLoginResponse(rsp)
-}
-
-// LoginWithResponse Password (+TOTP when enabled) login; sets the session cookie.
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /auth/login (the `Login` operationId).
-func (c *ClientWithResponses) LoginWithResponse(ctx context.Context, body LoginJSONRequestBody, reqEditors ...RequestEditorFn) (*LoginResponse, error) {
-	rsp, err := c.Login(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseLoginResponse(rsp)
-}
-
 // LogoutWithResponse Revoke the current session.
 //
-// Answers 204 for a native or OIDC session. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
+// Answers 204 for a session opened through an OpenID provider. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -28995,9 +28034,9 @@ func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, reqEditors
 	return ParseLogoutResponse(rsp)
 }
 
-// SocialOidcCallbackWithResponse Social login redirect URI: establish a session.
+// SocialOidcCallbackWithResponse Sign-in redirect URI: establish a session.
 //
-// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. When the account has TOTP enabled the response is a pending 2FA challenge rather than a session. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
+// Exchanges the code, verifies the identity, then links or JIT-creates an individual account (`identities.provider_kind='social'`). Auto-linking to an existing account happens only when the provider asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked explicitly. A login begun with `next` (browser mode) answers 303 to that in-app path once the session cookie is set, or to `/login?error=…` on failure; the JSON result is the API mode, used when `next` was absent.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29010,9 +28049,9 @@ func (c *ClientWithResponses) SocialOidcCallbackWithResponse(ctx context.Context
 	return ParseSocialOidcCallbackResponse(rsp)
 }
 
-// SocialOidcStartWithResponse Begin social login with a configured provider.
+// SocialOidcStartWithResponse Begin sign-in with the deployment's OpenID provider.
 //
-// Individual-account login through a social identity provider (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is not an OIDC issuer). Providers must be configured on the server (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured providers return 404. This is individual login and never grants org membership. Org SSO lives under /orgs/{org}/sso.
+// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership. Org SSO lives under /orgs/{org}/sso.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29025,39 +28064,9 @@ func (c *ClientWithResponses) SocialOidcStartWithResponse(ctx context.Context, p
 	return ParseSocialOidcStartResponse(rsp)
 }
 
-// RegisterWithBodyWithResponse Create an individual account (email+password).
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /auth/register (the `Register` operationId).
-func (c *ClientWithResponses) RegisterWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterResponse, error) {
-	rsp, err := c.RegisterWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRegisterResponse(rsp)
-}
-
-// RegisterWithResponse Create an individual account (email+password).
-//
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /auth/register (the `Register` operationId).
-func (c *ClientWithResponses) RegisterWithResponse(ctx context.Context, body RegisterJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterResponse, error) {
-	rsp, err := c.Register(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRegisterResponse(rsp)
-}
-
 // VerifyEmailWithBodyWithResponse Confirm an email address with the mailed token.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// Activates the account whose address the mailed link was sent to (POST /user/email-verification sends it).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29072,7 +28081,7 @@ func (c *ClientWithResponses) VerifyEmailWithBodyWithResponse(ctx context.Contex
 
 // VerifyEmailWithResponse Confirm an email address with the mailed token.
 //
-// When the deployment delegates accounts to an external directory (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone; sign in through /auth/oidc/{provider}/start instead.
+// Activates the account whose address the mailed link was sent to (POST /user/email-verification sends it).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31408,7 +30417,7 @@ func (c *ClientWithResponses) RevokeTokenWithResponse(ctx context.Context, token
 
 // ClearTrustedDevicesWithResponse Clear every remembered browser of the caller's account.
 //
-// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in. Sessions and authenticators are untouched. The response clears this browser's remembered-browser cookie, since its record is gone. Session-only: a PAT is refused (403), as on the session-revoking routes.
+// Revokes all of the caller's remembered browsers, this one included: each is asked for the second factor at its next sign-in, since the directory that set its cookie finds no record behind it. Sessions and authenticators are untouched. Session-only: a PAT is refused (403), as on the session-revoking routes.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -32552,101 +31561,6 @@ func ParseYankVersionResponse(rsp *http.Response) (*YankVersionResponse, error) 
 	return response, nil
 }
 
-// ParseTotpChallengeResponse parses an HTTP response from a TotpChallengeWithResponse call
-func ParseTotpChallengeResponse(rsp *http.Response) (*TotpChallengeResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &TotpChallengeResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest LoginResult
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseTotpSetupResponse parses an HTTP response from a TotpSetupWithResponse call
-func ParseTotpSetupResponse(rsp *http.Response) (*TotpSetupResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &TotpSetupResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest TotpSetupResult
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseTotpVerifyResponse parses an HTTP response from a TotpVerifyWithResponse call
-func ParseTotpVerifyResponse(rsp *http.Response) (*TotpVerifyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &TotpVerifyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseExchangeDesktopCodeResponse parses an HTTP response from a ExchangeDesktopCodeWithResponse call
 func ParseExchangeDesktopCodeResponse(rsp *http.Response) (*ExchangeDesktopCodeResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -32667,39 +31581,6 @@ func ParseExchangeDesktopCodeResponse(rsp *http.Response) (*ExchangeDesktopCodeR
 			return nil, err
 		}
 		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseLoginResponse parses an HTTP response from a LoginWithResponse call
-func ParseLoginResponse(rsp *http.Response) (*LoginResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &LoginResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest LoginResult
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -32764,7 +31645,7 @@ func ParseSocialOidcCallbackResponse(rsp *http.Response) (*SocialOidcCallbackRes
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SocialLoginResult
+		var dest LoginResult
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -32804,39 +31685,6 @@ func ParseSocialOidcStartResponse(rsp *http.Response) (*SocialOidcStartResponse,
 	switch {
 	case rsp.StatusCode == 302:
 		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseRegisterResponse parses an HTTP response from a RegisterWithResponse call
-func ParseRegisterResponse(rsp *http.Response) (*RegisterResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &RegisterResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest User
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

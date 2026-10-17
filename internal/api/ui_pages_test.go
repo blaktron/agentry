@@ -7,19 +7,50 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/blaktron/agentry/internal/testidp"
 )
 
-// The server's own browser surface (internal/ui) against the real
-// API: sign in through the form, read the account, mint a token, authorize
-// a device and exchange its code, sign out — every step through the same
-// handlers and the same session the API issues.
+// The server's own browser surface (internal/ui) against the real API and a
+// stand-in OpenID provider: the device-authorize page sends a signed-out
+// browser to sign in, the sign-in page hands it to the provider, the
+// callback brings it back signed in, the page approves the device, the app
+// exchanges the code, and sign-out ends the session — every step through the
+// same handlers and the same session the API issues.
 func TestCoreUISignInAccountAndDeviceAuthorize(t *testing.T) {
-	env := newTestEnv(t)
-	handle := env.register("uiuser")
+	env, idp := newOIDCTestEnv(t, nil)
+	handle := "uiuser" + env.sfx
+	idp.SignInAs(testidp.Person{Subject: "sub-" + handle, Email: handle + "@example.test", EmailVerified: true, Username: handle})
 
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	base, _ := url.Parse(env.srv.URL)
+	// follow walks the redirects a browser would, the provider's included,
+	// and returns the first answer that is not one.
+	follow := func(to string) (*http.Response, string) {
+		t.Helper()
+		for range 10 {
+			u, err := base.Parse(to)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := client
+			if u.Host != base.Host {
+				c = &http.Client{Transport: idp.Client().Transport, CheckRedirect: client.CheckRedirect}
+			}
+			res, err := c.Get(u.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.StatusCode != http.StatusSeeOther && res.StatusCode != http.StatusFound {
+				return res, u.String()
+			}
+			_ = res.Body.Close()
+			to = res.Header.Get("Location")
+		}
+		t.Fatal("too many redirects")
+		return nil, ""
+	}
 	postForm := func(path string, form url.Values) *http.Response {
 		t.Helper()
 		if c := csrfCookie(jar, base); c != "" {
@@ -34,51 +65,27 @@ func TestCoreUISignInAccountAndDeviceAuthorize(t *testing.T) {
 		}
 		return res
 	}
-	getPage := func(path string) (int, string) {
-		t.Helper()
-		res, err := client.Get(env.srv.URL + path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = res.Body.Close() }()
-		b, _ := io.ReadAll(res.Body)
-		return res.StatusCode, string(b)
-	}
 
-	// Signed out: the account page sends you to sign in, remembering where.
-	if res, _ := client.Get(env.srv.URL + "/ui/account"); res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/ui/login?next=%2Fui%2Faccount" {
-		t.Fatalf("signed out: %d %s", res.StatusCode, res.Header.Get("Location"))
-	}
-	res := postForm("/ui/login", url.Values{"login": {handle}, "password": {"hunter2hunter2"}, "next": {"/ui/account"}})
-	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/ui/account" {
-		b, _ := io.ReadAll(res.Body)
-		t.Fatalf("login: %d %s %s", res.StatusCode, res.Header.Get("Location"), b)
+	// Signed out: the device page goes through sign-in and comes back.
+	res, landed := follow("/ui/authorize?port=40123&state=state_abcdefgh")
+	b, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK || !strings.HasSuffix(landed, "/ui/authorize?port=40123&state=state_abcdefgh") ||
+		!strings.Contains(string(b), "127.0.0.1:40123") || !strings.Contains(string(b), handle) {
+		t.Fatalf("authorize after sign-in: %d at %s: %s", res.StatusCode, landed, b)
 	}
 	if csrfCookie(jar, base) == "" {
 		t.Fatal("no csrf cookie after sign-in")
 	}
-	if code, body := getPage("/ui/account"); code != http.StatusOK || !strings.Contains(body, handle) {
-		t.Fatalf("account: %d %s", code, body)
+	res, _ = follow("/ui/")
+	b, _ = io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK || !strings.Contains(string(b), "signed in as "+handle) {
+		t.Fatalf("landing: %d %s", res.StatusCode, b)
 	}
 
-	// A token, shown once on the POST's own page.
-	res = postForm("/ui/account/tokens", url.Values{"action": {"create"}, "name": {"ci"}, "scopes": {"agent:read"}})
-	b, _ := io.ReadAll(res.Body)
-	if res.StatusCode != http.StatusOK || !strings.Contains(string(b), "agy_") {
-		t.Fatalf("token: %d %s", res.StatusCode, b)
-	}
-	if code, body := getPage("/ui/account/tokens"); code != http.StatusOK || !strings.Contains(body, "<strong>ci</strong>") {
-		t.Fatalf("tokens list: %d %s", code, body)
-	}
-	if code, body := getPage("/ui/account/sessions"); code != http.StatusOK || !strings.Contains(body, "this browser") {
-		t.Fatalf("sessions: %d %s", code, body)
-	}
-
-	// The device flow: the page, the approval, the loopback redirect with a
-	// code, the exchange from "the app".
-	if code, body := getPage("/ui/authorize?port=40123&state=state_abcdefgh"); code != http.StatusOK || !strings.Contains(body, "127.0.0.1:40123") {
-		t.Fatalf("authorize page: %d %s", code, body)
-	}
+	// The approval, the loopback redirect with a code, the exchange from
+	// "the app".
 	res = postForm("/ui/authorize", url.Values{"port": {"40123"}, "state": {"state_abcdefgh"}})
 	loc := res.Header.Get("Location")
 	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(loc, "http://127.0.0.1:40123/callback?") {
@@ -99,13 +106,18 @@ func TestCoreUISignInAccountAndDeviceAuthorize(t *testing.T) {
 	}
 	env.doJSON(caller{name: "app", pat: minted.Token}, http.MethodGet, "/api/v1/user", nil, nil, http.StatusOK)
 
-	// Sign out clears the cookies; the account page is closed again.
+	// Sign out clears the cookies; the device page asks for sign-in again.
 	res = postForm("/ui/logout", url.Values{})
 	if res.StatusCode != http.StatusSeeOther {
 		t.Fatalf("logout: %d", res.StatusCode)
 	}
-	if res, _ := client.Get(env.srv.URL + "/ui/account"); res.StatusCode != http.StatusSeeOther {
-		t.Fatalf("after logout: %d", res.StatusCode)
+	res, err := client.Get(env.srv.URL + "/ui/authorize?port=40123&state=state_abcdefgh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), "/ui/login?next=") {
+		t.Fatalf("after logout: %d %s", res.StatusCode, res.Header.Get("Location"))
 	}
 }
 

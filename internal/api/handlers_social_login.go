@@ -1,6 +1,6 @@
 package api
 
-// Social login for individual accounts
+// Sign-in for individual accounts through the deployment's OpenID provider
 // (GET /auth/oidc/{provider}/{start,callback}).
 //
 // The identity rules are the account-takeover guard, restated for a
@@ -17,12 +17,11 @@ package api
 //     make the user link explicitly while signed in.
 //  4. Otherwise JIT-create an individual account.
 //
-// The session issued is an ordinary password-login session: no org
-// membership, no SSO freshness tag, and 2FA still applies — an account that
-// enabled TOTP does not lose it by signing in with Google.
+// The session issued is an ordinary individual session: no org membership
+// and no SSO freshness tag. The second factor is the provider's; its `amr`
+// claim is the evidence the publish gate reads.
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -39,7 +38,6 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/auth/social"
-	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/logevent"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
@@ -52,15 +50,6 @@ const (
 	// browser that cannot hold cookies gets an error page instead of a
 	// redirect loop.
 	socialRestartCookie = "agentry_social_restart"
-	// totpChallengeTTL bounds the second leg of a 2FA social login.
-	totpChallengeTTL = 5 * time.Minute
-	// maxTOTPChallengeID bounds a challenge's id as the consumed set's
-	// table does; the server mints 52 characters (auth.NewToken).
-	maxTOTPChallengeID = 64
-	// defaultTOTPConsumeTimeout bounds the consumed set's write, so a
-	// database that does not answer refuses the challenge rather than
-	// holding the sign-in.
-	defaultTOTPConsumeTimeout = 5 * time.Second
 )
 
 // isBrowserNavigation reports whether the request is a top-level browser
@@ -117,25 +106,10 @@ func safeNextPath(v string) string {
 // near 4 KB.
 const maxNextPathBytes = 512
 
-// totpChallengeBlob is the sealed payload behind a pending 2FA challenge. It
-// names the user and expires; possessing it is not authentication, which is
-// why the code is still required. ID is random and is recorded in the
-// database when the challenge completes, which is what makes it single use
-// at every replica.
-type totpChallengeBlob struct {
-	ID        string    `json:"i"`
-	UserID    uuid.UUID `json:"u"`
-	ExpiresAt time.Time `json:"e"`
-	Provider  string    `json:"p"`
-}
-
-// socialProviderIDs is the closed set of individual sign-in providers, in the
-// order the spec's provider enum lists them.
-var socialProviderIDs = []string{
-	social.ProviderGoogle, social.ProviderGitHub, social.ProviderMicrosoft,
-	social.ProviderOpenAI, social.ProviderClaude, social.ProviderAuthentik,
-	social.ProviderOIDC,
-}
+// socialProviderIDs is the closed set of individual sign-in provider ids, in
+// the order the spec's provider enum lists them: the one OpenID provider,
+// under whichever id the deployment serves it.
+var socialProviderIDs = []string{social.ProviderAuthentik, social.ProviderOIDC}
 
 // configuredSocialProviders lists the providers socialProviderConfig accepts,
 // which are the ones SocialOidcStart can redirect for. /meta reports it so a
@@ -151,39 +125,16 @@ func (s *Server) configuredSocialProviders() []string {
 }
 
 // socialProviderConfig returns a provider's settings, and whether they are
-// enough to start a sign-in with (social.Startable: a client id and secret,
-// and an issuer where the provider has no default). "authentik" and "oidc"
-// are the deployment's one sign-in OpenID provider (config.SignInOIDC),
-// answered under whichever of the two ids it has.
+// enough to start a sign-in with (social.Startable: a client id, a secret and
+// an issuer). "authentik" and "oidc" are the deployment's one sign-in OpenID
+// provider (config.SignInOIDC), answered under whichever of the two ids it
+// has.
 func (s *Server) socialProviderConfig(name string) (social.Config, bool) {
-	var pc config.SocialProvider
-	var scopes []string
-	switch name {
-	case social.ProviderGoogle:
-		pc = s.cfg.Social.Google
-	case social.ProviderGitHub:
-		pc = s.cfg.Social.GitHub
-	case social.ProviderMicrosoft:
-		pc = s.cfg.Social.Microsoft
-	case social.ProviderOpenAI:
-		pc = s.cfg.Social.OpenAI
-	case social.ProviderClaude:
-		pc = s.cfg.Social.Claude
-	case social.ProviderAuthentik, social.ProviderOIDC:
-		p, ok := s.cfg.SignInOIDC()
-		if !ok || p.ID != name {
-			return social.Config{}, false
-		}
-		pc = config.SocialProvider{ClientID: p.ClientID, ClientSecret: p.ClientSecret, Issuer: p.Issuer}
-		scopes = p.Scopes
-	default:
+	p, ok := s.cfg.SignInOIDC()
+	if !ok || p.ID != name {
 		return social.Config{}, false
 	}
-	c := social.Config{
-		ClientID: pc.ClientID, ClientSecret: pc.ClientSecret,
-		Issuer: pc.Issuer, AuthURL: pc.AuthURL, TokenURL: pc.TokenURL,
-		APIBaseURL: pc.APIBaseURL, Scopes: scopes,
-	}
+	c := social.Config{ClientID: p.ClientID, ClientSecret: p.ClientSecret, Issuer: p.Issuer, Scopes: p.Scopes}
 	return c, social.Startable(name, c)
 }
 
@@ -332,7 +283,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	}
 	id, err := rp.Exchange(r.Context(), *params.Code, st.Verifier, st.Nonce)
 	if err != nil {
-		s.log.WarnContext(r.Context(), "social login rejected", logevent.AuthSocialRejected.Attr(), "provider", name, "err", err)
+		s.log.WarnContext(r.Context(), "sign-in rejected", logevent.AuthSocialRejected.Attr(), "provider", name, "err", err)
 		if st.Next != "" {
 			browserFail("Sign-in with " + name + " failed. Try again.")
 			return
@@ -361,7 +312,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 	// `amr` named a second factor, so record it on the account.
 	if id.MFAAsserted() {
 		if err := s.q().SetUserIdPMFA(r.Context(), userID); err != nil {
-			s.log.WarnContext(r.Context(), "social login: record idp mfa", "err", err)
+			s.log.WarnContext(r.Context(), "sign-in: record idp mfa", "err", err)
 		}
 	}
 	// Platform staff is membership of the staff organization,
@@ -371,7 +322,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		actor := auditEvent(r, audit.ActionUserStaffSync)
 		actor.Actor, actor.ActorKind = userID, audit.ActorUser
 		if err := s.reg.SyncStaff(r.Context(), userID, registry.StaffSyncSignIn, actor); err != nil {
-			s.log.ErrorContext(r.Context(), "social login: platform staff sync", "err", err, "user", userID)
+			s.log.ErrorContext(r.Context(), "sign-in: platform staff sync", "err", err, "user", userID)
 		}
 	}
 	// The fold-in: an account at an organization's domain
@@ -390,21 +341,6 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			return
 		}
 		problemUnauthorized(w, r, "This account is not active.")
-		return
-	}
-
-	// 2FA still applies: social login is an authentication method,
-	// not an exemption. A redirect callback has nowhere to carry a code, so
-	// the session is withheld behind a sealed challenge the client completes
-	// at POST /auth/2fa/totp/challenge.
-	if user.TotpEnabled {
-		challenge, cerr := s.sealTOTPChallenge(userID, name)
-		if cerr != nil {
-			problemInternal(w, r)
-			return
-		}
-		required := true
-		writeJSON(w, http.StatusOK, SocialLoginResult{TotpRequired: required, Challenge: &challenge})
 		return
 	}
 
@@ -450,6 +386,13 @@ func (s *Server) peekSocialState(w http.ResponseWriter, r *http.Request, provide
 func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.UUID, bool, error) {
 	ctx := r.Context()
 	q := s.q()
+	// The placeholder suffix is the registry's own, for an account signed in
+	// with no address; an asserted address carrying it is no address at all.
+	// Taken as given, it would make an account the unactivated gate exempts
+	// without anyone having confirmed anything.
+	if auth.SyntheticAddress(id.Email) {
+		id.Email, id.EmailVerified = "", false
+	}
 
 	// 1. Known identity.
 	if row, err := q.GetSocialIdentity(ctx, id.NamespacedSubject); err == nil {
@@ -519,7 +462,7 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 			return err
 		}
 		if _, err := tq.CreateUser(ctx, storegen.CreateUserParams{
-			ID: newUserID, Email: email, DisplayName: displayName, PasswordHash: nil,
+			ID: newUserID, Email: email, DisplayName: displayName,
 		}); err != nil {
 			return err
 		}
@@ -555,11 +498,9 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	if err != nil {
 		return uuid.Nil, false, err
 	}
-	// The same event the native register handler fires: an extension that
-	// provisions something per account (a subscription tier's allowance)
-	// hears every new account, whichever door created it (under
-	// externalOnly this is the door). The
-	// email is the IdP's assertion and emailVerified says whether it was
+	// An extension that provisions something per account (a subscription
+	// tier's allowance) hears every new account, whichever door created it.
+	// The email is the IdP's assertion and emailVerified says whether it was
 	// asserted verified — a hook must not mail an unverified one.
 	payload := map[string]any{
 		"handle": handle, "email": email, "emailVerified": id.EmailVerified && id.Email != "",
@@ -575,149 +516,9 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	return newUserID, true, nil
 }
 
-// sealTOTPChallenge mints the opaque challenge for a pending 2FA login.
-func (s *Server) sealTOTPChallenge(userID uuid.UUID, provider string) (string, error) {
-	return s.sealTOTPChallengeAt(userID, provider, time.Now().Add(totpChallengeTTL))
-}
-
-func (s *Server) sealTOTPChallengeAt(userID uuid.UUID, provider string, expiresAt time.Time) (string, error) {
-	id, err := auth.NewToken("")
-	if err != nil {
-		return "", err
-	}
-	blob, err := json.Marshal(totpChallengeBlob{
-		ID: id, UserID: userID, ExpiresAt: expiresAt, Provider: provider,
-	})
-	if err != nil {
-		return "", err
-	}
-	sealed, err := s.sealer.Seal(blob)
-	if err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(sealed), nil
-}
-
-// TotpChallenge implements POST /auth/2fa/totp/challenge.
-func (s *Server) TotpChallenge(w http.ResponseWriter, r *http.Request) {
-	if !s.allowLogin(w, r) {
-		return
-	}
-	if !s.requireDB(w, r) {
-		return
-	}
-	var req TotpChallengeJSONRequestBody
-	if !readJSON(w, r, &req) {
-		return
-	}
-	sealed, err := base64.RawURLEncoding.DecodeString(req.Challenge)
-	if err != nil {
-		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
-		return
-	}
-	raw, err := s.sealer.Open(sealed)
-	if err != nil {
-		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
-		return
-	}
-	var blob totpChallengeBlob
-	if err := json.Unmarshal(raw, &blob); err != nil || blob.ID == "" || len(blob.ID) > maxTOTPChallengeID {
-		// A challenge that carries no id cannot be held to single use: it is
-		// refused, and the sign-in starts again.
-		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
-		return
-	}
-	expired := time.Now().After(blob.ExpiresAt)
-	user, err := s.q().GetUserByID(r.Context(), blob.UserID)
-	if err != nil || user.State != "active" || !user.TotpEnabled {
-		if expired {
-			// The expiry is answered the same either way; only an account that
-			// still signs in has the refusal written to its audit trail.
-			writeProblem(w, r, http.StatusUnauthorized, "totp-challenge-expired", "Two-factor challenge expired",
-				"The two-factor challenge expired. Start the sign-in again.")
-			return
-		}
-		problemUnauthorized(w, r, "The two-factor challenge is invalid. Start the sign-in again.")
-		return
-	}
-	if expired {
-		s.auditTOTPChallengeFailure(r, user.ID, blob.Provider, "expired")
-		writeProblem(w, r, http.StatusUnauthorized, "totp-challenge-expired", "Two-factor challenge expired",
-			"The two-factor challenge expired. Start the sign-in again.")
-		return
-	}
-	secret, err := s.sealer.Open(user.TotpSecretEnc)
-	if err != nil {
-		s.log.ErrorContext(r.Context(), "totp challenge: unseal", "err", err)
-		problemInternal(w, r)
-		return
-	}
-	if !auth.ValidateTOTP(req.Code, string(secret)) {
-		s.auditTOTPChallengeFailure(r, user.ID, blob.Provider, "code")
-		problemUnauthorized(w, r, "That code did not match. Try the current code from the authenticator app.")
-		return
-	}
-	// The challenge is consumed only once its code is right, so a mistyped
-	// code can be tried again; a second completion is refused. A store that
-	// cannot record it refuses the challenge, as the SAML consumed set does.
-	consumed, err := s.consumeTOTPChallenge(r.Context(), blob)
-	if err != nil {
-		// A request that had already ended is a refusal, not an outage: a
-		// rolling deploy must not emit a burst of the alert's line.
-		if r.Context().Err() != nil {
-			s.log.WarnContext(r.Context(), "totp challenge: the sign-in ended while recording it as consumed", "err", err)
-		} else {
-			s.log.ErrorContext(r.Context(), "totp challenge: recording it as consumed", logevent.TOTPChallengeUnavailable.Attr(), "err", err)
-		}
-		problemUnavailable(w, r, "The sign-in cannot be completed right now. Try again in a moment.")
-		return
-	}
-	if !consumed {
-		s.auditTOTPChallengeFailure(r, user.ID, blob.Provider, "replayed")
-		writeProblem(w, r, http.StatusUnauthorized, "totp-challenge-used", "Two-factor challenge already used",
-			"This two-factor challenge was already used. Start the sign-in again.")
-		return
-	}
-	s.issueSocialSession(w, r, user, blob.Provider, "", nil)
-}
-
-// consumeTOTPChallenge records the challenge's id in the consumed set every
-// replica reads, and says whether this was its first completion. The row is
-// kept a TTL past the challenge's own expiry, a margin for the replicas'
-// clocks, then swept here.
-func (s *Server) consumeTOTPChallenge(reqCtx context.Context, blob totpChallengeBlob) (bool, error) {
-	ctx, cancel := context.WithTimeout(reqCtx, s.totpConsumeTimeout)
-	defer cancel()
-	q := s.q()
-	n, err := q.ConsumeTOTPChallenge(ctx, storegen.ConsumeTOTPChallengeParams{
-		ID: blob.ID, ExpiresAt: blob.ExpiresAt.Add(totpChallengeTTL),
-	})
-	if err != nil {
-		return false, err
-	}
-	if _, err := q.DeleteExpiredTOTPChallenges(ctx); err != nil {
-		s.log.WarnContext(ctx, "totp challenge: dropping expired consumed challenges", "err", err)
-	}
-	return n == 1, nil
-}
-
-// auditTOTPChallengeFailure records a refused second leg; reason tells a
-// wrong code, an expired challenge and a replayed one apart.
-func (s *Server) auditTOTPChallengeFailure(r *http.Request, userID uuid.UUID, provider, reason string) {
-	e := auditEvent(r, audit.ActionUserLoginFailed)
-	e.Actor, e.ActorKind = userID, audit.ActorUser
-	e.Detail = map[string]any{"stage": "totp_challenge", "provider": provider, "reason": reason}
-	if werr := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
-		return s.auditW.Write(r.Context(), q, e)
-	}); werr != nil {
-		s.log.WarnContext(r.Context(), "audit totp challenge failure", "err", werr)
-	}
-}
-
 // issueSocialSession opens an ordinary session (no org SSO tag) and answers:
 // a 303 to next in browser mode (next non-empty, already validated by
-// safeNextPath), else the LoginResult-shaped body both social endpoints
-// return.
+// safeNextPath), else the LoginResult body.
 func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string) {
 	ctx := r.Context()
 	sessToken, err := auth.NewToken(auth.SessionPrefix)
@@ -770,9 +571,9 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 	if next != "" {
 		// Browser mode has no JSON body to carry the CSRF token, and the web
 		// tier can only echo what it holds: set it as the cookie the web
-		// tier's apiSend reads (the same double-submit shape the native
-		// login route produces). httpOnly: page script never needs it, and
-		// a cross-site page can neither read the cookie nor set the header.
+		// tier's apiSend reads (a double submit). httpOnly: page script never
+		// needs it, and a cross-site page can neither read the cookie nor set
+		// the header.
 		// Without this every cookie-authenticated mutation from a
 		// directory-signed-in browser would 403.
 		http.SetCookie(w, &http.Cookie{
@@ -785,12 +586,7 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 	}
 	apiUser := User{
 		Id: user.ID, Handle: user.Handle, Email: user.Email, DisplayName: user.DisplayName,
-		EmailVerified: user.EmailVerifiedAt != nil, TotpEnabled: user.TotpEnabled,
-		CreatedAt: user.CreatedAt,
+		EmailVerified: user.EmailVerifiedAt != nil, CreatedAt: user.CreatedAt,
 	}
-	// Both endpoints answer with the same body shape; TotpChallenge's spec
-	// response is LoginResult, which SocialLoginResult is a superset of.
-	writeJSON(w, http.StatusOK, SocialLoginResult{
-		TotpRequired: false, User: &apiUser, CsrfToken: &csrfToken,
-	})
+	writeJSON(w, http.StatusOK, LoginResult{User: apiUser, CsrfToken: csrfToken})
 }

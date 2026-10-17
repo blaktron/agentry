@@ -54,7 +54,7 @@ Everyday commands:
 | `./scripts/acceptance/enterprise-sso.sh` | SAML and OIDC sign-in, enforced SSO, SCIM, domain verification, webhooks and audit export |
 | `./scripts/acceptance/helm.sh` | the Helm chart lints and renders, and its production shape holds |
 | `./scripts/acceptance/invariant-test-names.sh` | every test named as evidence for a security invariant still exists under that name |
-| `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages, driven with curl and a cookie jar |
+| `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages (the sign-in hand-off, device authorize and its exchange, sign-out), driven with curl and a cookie jar |
 
 Docker is optional; `scripts/dev/pg.sh` manages a private Postgres cluster if
 you would rather not run a container.

@@ -9,7 +9,9 @@ import (
 // The one table every browser destination goes through: with a
 // site in front the destinations are the site's pages; without one they
 // are the server's own /ui/ pages, relative for redirects and absolute
-// from baseURL for links that leave the browser.
+// from baseURL for links that leave the browser, and nothing where only a
+// site has the page (a dashboard, settings, invitations, an organization
+// console).
 func TestWebPaths(t *testing.T) {
 	cases := []struct {
 		name          string
@@ -17,6 +19,9 @@ func TestWebPaths(t *testing.T) {
 		login, loginE string
 		dashPath      string
 		dashURL       string
+		settings      string
+		invitation    string
+		orgConsole    string
 		home          string
 		verify        string
 		authorize     string
@@ -27,8 +32,7 @@ func TestWebPaths(t *testing.T) {
 			cfg:       config.Config{BaseURL: "https://reg.example/"},
 			login:     "/ui/login",
 			loginE:    "/ui/login?error=nope+%26+no",
-			dashPath:  "/ui/account",
-			dashURL:   "https://reg.example/ui/account",
+			dashPath:  "/ui/",
 			home:      "https://reg.example/ui/",
 			verify:    "https://reg.example/ui/verify-email?token=t%2F1",
 			authorize: "https://reg.example/ui/authorize",
@@ -39,19 +43,22 @@ func TestWebPaths(t *testing.T) {
 			cfg:      config.Config{},
 			login:    "/ui/login",
 			loginE:   "/ui/login?error=nope+%26+no",
-			dashPath: "/ui/account",
+			dashPath: "/ui/",
 		},
 		{
-			name:      "a site in front",
-			cfg:       config.Config{BaseURL: "https://reg.example", Web: config.Web{URL: "https://site.example/"}},
-			login:     "https://site.example/login",
-			loginE:    "https://site.example/login?error=nope+%26+no",
-			dashPath:  "/dashboard",
-			dashURL:   "https://site.example/dashboard",
-			home:      "https://site.example/",
-			verify:    "https://site.example/auth/verify-email?token=t%2F1",
-			authorize: "https://reg.example/ui/authorize",
-			report:    "https://site.example/acme/widget/versions/1.0.0+build",
+			name:       "a site in front",
+			cfg:        config.Config{BaseURL: "https://reg.example", Web: config.Web{URL: "https://site.example/"}},
+			login:      "https://site.example/login",
+			loginE:     "https://site.example/login?error=nope+%26+no",
+			dashPath:   "/dashboard",
+			dashURL:    "https://site.example/dashboard",
+			settings:   "https://site.example/settings",
+			invitation: "https://site.example/invitations/tok",
+			orgConsole: "https://site.example/orgs/acme/admin",
+			home:       "https://site.example/",
+			verify:     "https://site.example/auth/verify-email?token=t%2F1",
+			authorize:  "https://reg.example/ui/authorize",
+			report:     "https://site.example/acme/widget/versions/1.0.0+build",
 		},
 	}
 	for _, c := range cases {
@@ -67,6 +74,9 @@ func TestWebPaths(t *testing.T) {
 			check("login(error)", p.login("nope & no"), c.loginE)
 			check("dashboardPath", p.dashboardPath(), c.dashPath)
 			check("dashboardURL", p.dashboardURL(), c.dashURL)
+			check("settingsURL", p.settingsURL(), c.settings)
+			check("invitationURL", p.invitationURL("tok"), c.invitation)
+			check("orgConsoleURL", p.orgConsoleURL("acme"), c.orgConsole)
 			check("homeURL", p.homeURL(), c.home)
 			check("verifyEmailURL", p.verifyEmailURL("t/1"), c.verify)
 			check("authorizeURL", p.authorizeURL(), c.authorize)

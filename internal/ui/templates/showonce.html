@@ -1,8 +1,0 @@
-{{define "content"}}
-<h1>{{.Title}}</h1>
-{{with .Data}}
-<p><a href="{{.Back}}">&larr; Back</a></p>
-<p>{{.Intro}}</p>
-{{range .Lines}}<p><strong>{{.Label}}</strong></p><pre class="secret">{{.Value}}</pre>{{end}}
-{{end}}
-{{end}}

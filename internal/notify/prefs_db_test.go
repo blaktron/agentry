@@ -43,8 +43,7 @@ func TestAllowsEmailFailureDirections(t *testing.T) {
 	if err := q.CreateHandle(ctx, storegen.CreateHandleParams{ID: id, Handle: handle, Kind: "user"}); err != nil {
 		t.Fatal(err)
 	}
-	hash := "x"
-	if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: id, Email: handle + "@example.test", DisplayName: handle, PasswordHash: &hash}); err != nil {
+	if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: id, Email: handle + "@example.test", DisplayName: handle}); err != nil {
 		t.Fatal(err)
 	}
 

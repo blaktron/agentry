@@ -46,7 +46,6 @@ type Config struct {
 	Judge     Judge     `yaml:"judge"`
 	WebSearch WebSearch `yaml:"webSearch"`
 	Scan      Scan      `yaml:"scan"`
-	Social    Social    `yaml:"social"`
 	Audit     Audit     `yaml:"audit"`
 	Orgs      Orgs      `yaml:"orgs"`
 	RedTeam   RedTeam   `yaml:"redTeam"`
@@ -185,7 +184,7 @@ type Auth struct {
 	// TrustedDeviceTTL is how long a browser remembered at sign-in skips the
 	// second factor. This is a second
 	// browser credential class and it deliberately outlives the session cap:
-	// a session still has to be earned by password on every sign-in and is
+	// a session still has to be earned by a sign-in every time and is
 	// still capped at MaxSessionTTL, so raising this does not lengthen any
 	// session. The lifetime is absolute — using it does not extend it — and
 	// the ceiling below is a hard product limit like the others.
@@ -193,18 +192,9 @@ type Auth struct {
 	// CookieSecure marks session cookies Secure (default true outside dev).
 	CookieSecure bool `yaml:"cookieSecure"`
 	// SealingKey is a base64 32-byte key encrypting small secrets at rest
-	// (TOTP seeds). Empty is allowed only in dev (a fixed insecure key).
+	// (webhook secrets, sign-in state). Empty is allowed only in dev (a fixed
+	// insecure key).
 	SealingKey string `yaml:"sealingKey"`
-	// ExternalOnly hands credentials and the account directory to an
-	// external IdP (the sign-in OpenID provider, auth.oidc). When true the
-	// native register / password-login / email-verify / TOTP endpoints
-	// answer 410 Gone and sign-in happens only through a configured social
-	// or SSO provider. Sessions, PATs, and RBAC stay native: the IdP owns
-	// who you are, this server owns what you may do. The "2FA before
-	// public publish" gate is delegated to the IdP as well, since no account
-	// can enrol a native TOTP factor while this is set (see
-	// internal/api/publish_gate.go).
-	ExternalOnly bool `yaml:"externalOnly"`
 	// IdPLogoutURL is the sign-in provider's sign-out URL: where sign-out
 	// sends the browser once the session is revoked, so the next sign-in
 	// asks again (the provider's end-session endpoint). Empty means sign-out
@@ -228,11 +218,11 @@ type Auth struct {
 	// OpenID Connect issuer the operator registers the registry with. See
 	// OIDCProvider.
 	OIDC OIDCProvider `yaml:"oidc"`
-	// RequireIdPMFA re-enables the "2FA before public publish" gate
-	// under externalOnly, satisfied by evidence rather than trust: the
-	// account must have signed in at least once with an ID token whose
-	// `amr` names a second factor (users.idp_mfa_at). Off by default because
-	// it is only honest once the directory actually enforces MFA.
+	// RequireIdPMFA turns on the "2FA before public publish" gate,
+	// satisfied by evidence rather than trust: the account must have signed
+	// in at least once with an ID token whose `amr` names a second factor
+	// (users.idp_mfa_at). Off by default because it is only honest once the
+	// sign-in provider actually enforces MFA.
 	RequireIdPMFA bool `yaml:"requireIdpMFA"`
 }
 
@@ -407,8 +397,8 @@ type Brand struct {
 	TermsURL      string `yaml:"termsURL"`
 }
 
-// DisplayName is what notification bodies, authenticator apps and the
-// server's own pages call this deployment: brand.name, else the public
+// DisplayName is what notification bodies and the server's own pages call
+// this deployment: brand.name, else the public
 // origin's host, else "Agentry".
 func (c Config) DisplayName() string {
 	if c.Brand.Name != "" {
@@ -488,34 +478,6 @@ type Scan struct {
 	NPMRegistryURL string `yaml:"npmRegistryUrl"`
 	PyPIURL        string `yaml:"pypiUrl"`
 }
-
-// Social configures social login for individual accounts. A provider
-// with no client id is simply not offered: the start endpoint 404s, so an
-// unconfigured deployment advertises nothing it cannot complete. Google and
-// Microsoft have built-in OIDC endpoints; OpenAI and Claude publish no fixed
-// consumer sign-in endpoints, so they additionally need an issuer override.
-type Social struct {
-	Google    SocialProvider `yaml:"google"`
-	GitHub    SocialProvider `yaml:"github"`
-	Microsoft SocialProvider `yaml:"microsoft"`
-	OpenAI    SocialProvider `yaml:"openai"`
-	Claude    SocialProvider `yaml:"claude"`
-}
-
-// SocialProvider is one provider's OAuth client registration.
-type SocialProvider struct {
-	ClientID     string `yaml:"clientId"`
-	ClientSecret string `yaml:"clientSecret"`
-	// Issuer/AuthURL/TokenURL/APIBaseURL override the provider's endpoints.
-	// Empty in production; tests point them at an in-process provider.
-	Issuer     string `yaml:"issuer"`
-	AuthURL    string `yaml:"authURL"`
-	TokenURL   string `yaml:"tokenURL"`
-	APIBaseURL string `yaml:"apiBaseURL"`
-}
-
-// Configured reports whether the provider can be offered.
-func (p SocialProvider) Configured() bool { return p.ClientID != "" && p.ClientSecret != "" }
 
 // The ids the sign-in OIDC provider may have.
 const (
@@ -832,25 +794,6 @@ func applyEnv(c *Config) error {
 		}
 	}
 
-	// Social login. Listed one variable per field on purpose: the
-	// same "boring and greppable" rule the rest of this function follows.
-	str("AGENTRY_SOCIAL_GOOGLE_CLIENT_ID", &c.Social.Google.ClientID)
-	str("AGENTRY_SOCIAL_GOOGLE_CLIENT_SECRET", &c.Social.Google.ClientSecret)
-	str("AGENTRY_SOCIAL_GOOGLE_ISSUER", &c.Social.Google.Issuer)
-	str("AGENTRY_SOCIAL_GITHUB_CLIENT_ID", &c.Social.GitHub.ClientID)
-	str("AGENTRY_SOCIAL_GITHUB_CLIENT_SECRET", &c.Social.GitHub.ClientSecret)
-	str("AGENTRY_SOCIAL_GITHUB_AUTH_URL", &c.Social.GitHub.AuthURL)
-	str("AGENTRY_SOCIAL_GITHUB_TOKEN_URL", &c.Social.GitHub.TokenURL)
-	str("AGENTRY_SOCIAL_GITHUB_API_BASE_URL", &c.Social.GitHub.APIBaseURL)
-	str("AGENTRY_SOCIAL_MICROSOFT_CLIENT_ID", &c.Social.Microsoft.ClientID)
-	str("AGENTRY_SOCIAL_MICROSOFT_CLIENT_SECRET", &c.Social.Microsoft.ClientSecret)
-	str("AGENTRY_SOCIAL_MICROSOFT_ISSUER", &c.Social.Microsoft.Issuer)
-	str("AGENTRY_SOCIAL_OPENAI_CLIENT_ID", &c.Social.OpenAI.ClientID)
-	str("AGENTRY_SOCIAL_OPENAI_CLIENT_SECRET", &c.Social.OpenAI.ClientSecret)
-	str("AGENTRY_SOCIAL_OPENAI_ISSUER", &c.Social.OpenAI.Issuer)
-	str("AGENTRY_SOCIAL_CLAUDE_CLIENT_ID", &c.Social.Claude.ClientID)
-	str("AGENTRY_SOCIAL_CLAUDE_CLIENT_SECRET", &c.Social.Claude.ClientSecret)
-	str("AGENTRY_SOCIAL_CLAUDE_ISSUER", &c.Social.Claude.Issuer)
 	str("AGENTRY_AUTH_OIDC_ID", &c.Auth.OIDC.ID)
 	str("AGENTRY_AUTH_OIDC_ISSUER", &c.Auth.OIDC.Issuer)
 	str("AGENTRY_AUTH_OIDC_CLIENT_ID", &c.Auth.OIDC.ClientID)
@@ -890,9 +833,6 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := boolean("AGENTRY_DATABASE_MIGRATE_ON_START", &c.Database.MigrateOnStart); err != nil {
-		return err
-	}
-	if err := boolean("AGENTRY_AUTH_EXTERNAL_ONLY", &c.Auth.ExternalOnly); err != nil {
 		return err
 	}
 	if err := boolean("AGENTRY_AUTH_COOKIE_SECURE", &c.Auth.CookieSecure); err != nil {
@@ -1255,7 +1195,7 @@ func (c Config) validateNotify() error {
 
 // validateKnowledge refuses a knowledge sealing key that is not 32 bytes of
 // base64, or that is the auth sealing key: a key of its own, so that what
-// opens the TOTP seeds does not also open every pack, and a negative cap.
+// opens the webhook secrets does not also open every pack, and a negative cap.
 func (c Config) validateKnowledge() error {
 	if c.Limits.KnowledgeBytesPerAccount < 0 {
 		return fmt.Errorf("config: limits.knowledgeBytesPerAccount must be >= 0 (0 is no cap)")

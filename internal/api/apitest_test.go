@@ -49,19 +49,11 @@ func TestAPITestsRunInTheirOwnDatabase(t *testing.T) {
 }
 
 // Authorization fixtures need an ordinary active account and session, not
-// another exercise of registration, password hashing and sign-in side effects.
-// The password is still a real hash; lifecycle tests keep register/login.
-var fixturePassword = sync.OnceValues(func() (string, error) {
-	return auth.HashPassword("hunter2hunter2")
-})
-
+// another exercise of sign-in and its side effects; the sign-in lifecycle
+// is tested through the stand-in provider (oidc_accounts_test.go).
 func (env *testEnv) seedCaller(handle string) caller {
 	env.t.Helper()
 	h := handle + env.sfx
-	hash, err := fixturePassword()
-	if err != nil {
-		env.t.Fatal(err)
-	}
 	user, err := uuid.NewV7()
 	if err != nil {
 		env.t.Fatal(err)
@@ -79,7 +71,7 @@ func (env *testEnv) seedCaller(handle string) caller {
 		if err := q.CreateHandle(ctx, storegen.CreateHandleParams{ID: user, Handle: h, Kind: "user"}); err != nil {
 			return err
 		}
-		if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: user, Email: h + "@example.test", DisplayName: h, PasswordHash: &hash}); err != nil {
+		if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: user, Email: h + "@example.test", DisplayName: h}); err != nil {
 			return err
 		}
 		if err := q.MarkEmailVerified(ctx, user); err != nil {
@@ -175,7 +167,7 @@ func newTestEnvWith(t *testing.T, opts ...func(*api.Server)) *testEnv {
 }
 
 // newTestEnvCfg additionally lets a test mutate the config BEFORE api.New
-// reads it (social login providers, audit stream, rate classes).
+// reads it (the sign-in provider, audit stream, rate classes).
 func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.Server)) *testEnv {
 	t.Helper()
 	url := os.Getenv("AGENTRY_TEST_DATABASE_URL")
@@ -232,9 +224,7 @@ func testConfig() config.Config {
 // authenticate puts a caller's credential on a request the way do does,
 // for a test that builds its own request (a multipart upload, say): a
 // PAT as the bearer, else a session as the cookie with the CSRF header a
-// mutation needs. The trusted-device cookie rides alongside either, because
-// the request that presents one is an anonymous sign-in — it has no session
-// yet, and that is the whole point of the credential.
+// mutation needs.
 func (env *testEnv) authenticate(req *http.Request, c caller) {
 	if c.pat != "" {
 		req.Header.Set("Authorization", "Bearer "+c.pat)
@@ -244,9 +234,6 @@ func (env *testEnv) authenticate(req *http.Request, c caller) {
 			req.Header.Set("X-Agentry-CSRF", c.csrf)
 		}
 	}
-	if c.device != "" {
-		req.AddCookie(&http.Cookie{Name: "agentry_trusted_device", Value: c.device})
-	}
 }
 
 // caller carries credentials for requests.
@@ -255,11 +242,6 @@ type caller struct {
 	session string // session cookie value
 	csrf    string
 	pat     string // bearer token
-	// device is a trusted-device cookie value: a browser
-	// remembered after it answered the second factor, so a later password
-	// sign-in from it is not asked for the code. Empty means the request
-	// carries none, which is what an unremembered browser looks like.
-	device string
 }
 
 var anonymous = caller{name: "anonymous"}
@@ -414,26 +396,68 @@ func (env *testEnv) doJSON(c caller, method, path string, body any, out any, wan
 	}
 }
 
-// register creates a user and returns its handle.
+// register creates an account and returns its handle: what a first
+// sign-in through the deployment's OpenID provider makes when the provider
+// vouches for the address (a verified address at example.test). Tests of
+// the sign-in itself go through the stand-in provider instead
+// (oidc_accounts_test.go).
 func (env *testEnv) register(handle string) string {
 	env.t.Helper()
 	h := handle + env.sfx
-	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/register", map[string]any{
-		"handle": h, "email": h + "@example.test", "password": "hunter2hunter2",
-	}, nil, http.StatusCreated)
+	env.createAccount(h, h+"@example.test", true)
 	return h
 }
 
-// registerEmail registers an account at a chosen address, for a fixture
-// whose subject is an IdP assertion about that address rather than the
-// address the register helper would invent.
+// registerEmail creates an account at a chosen address, verified, for a
+// fixture whose subject is an IdP assertion about that address rather than
+// the address register would invent.
 func (env *testEnv) registerEmail(handle, email string) string {
 	env.t.Helper()
 	h := handle + env.sfx
-	env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/register", map[string]any{
-		"handle": h, "email": email, "password": "hunter2hunter2",
-	}, nil, http.StatusCreated)
+	env.createAccount(h, email, true)
 	return h
+}
+
+// registerUnverified creates an account whose address is unconfirmed: what a
+// first sign-in makes when the provider does not vouch for the address. It
+// is unactivated, so it reads but does not write until verifyEmail.
+func (env *testEnv) registerUnverified(handle string) string {
+	env.t.Helper()
+	return env.registerEmailUnverified(handle, handle+env.sfx+"@example.test")
+}
+
+// registerEmailUnverified is registerUnverified at a chosen address.
+func (env *testEnv) registerEmailUnverified(handle, email string) string {
+	env.t.Helper()
+	h := handle + env.sfx
+	env.createAccount(h, email, false)
+	return h
+}
+
+// createAccount writes the handle and the account as the sign-in callback's
+// first sign-in does, with no identity link: a fixture account signs in
+// through login, not through a provider.
+func (env *testEnv) createAccount(handle, email string, verified bool) {
+	env.t.Helper()
+	id, err := uuid.NewV7()
+	if err != nil {
+		env.t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := env.st.WithTx(ctx, func(q *storegen.Queries) error {
+		if err := q.CreateHandle(ctx, storegen.CreateHandleParams{ID: id, Handle: handle, Kind: "user"}); err != nil {
+			return err
+		}
+		if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: id, Email: email, DisplayName: handle}); err != nil {
+			return err
+		}
+		if verified {
+			return q.MarkEmailVerified(ctx, id)
+		}
+		return nil
+	}); err != nil {
+		env.t.Fatalf("create account %s: %v", handle, err)
+	}
 }
 
 // verifyOrgDomain records that the organization proved control of a
@@ -499,67 +523,38 @@ func (env *testEnv) seedMembership(org, handle, role, state string) {
 	}
 }
 
-// login opens a session for a registered user.
+// login opens a session for a registered user, as the sign-in callback
+// does once the provider has vouched for the person. It fails the test for
+// an account that is not active, which a sign-in would refuse too.
 func (env *testEnv) login(handle string) caller {
 	env.t.Helper()
-	c, _ := env.loginWith(handle, loginOpts{})
-	return c
-}
-
-// loginOpts are the optional parts of a password sign-in: a second-factor
-// code, and the opt-in that asks the server to remember this browser.
-// The zero value is the plain sign-in, no code and nothing
-// remembered, which is what makes the opt-in's default testable.
-type loginOpts struct {
-	totpCode       string
-	rememberDevice bool
-}
-
-// loginWith signs in and returns the caller plus every cookie the server set,
-// so a test can assert on the attributes of a cookie being issued and not only
-// read the session value it already knew about. It fails the test on a non-200;
-// a sign-in that is expected to be refused goes through do() instead.
-func (env *testEnv) loginWith(handle string, o loginOpts) (caller, []*http.Cookie) {
-	env.t.Helper()
-	body := map[string]any{"login": handle, "password": "hunter2hunter2"}
-	if o.totpCode != "" {
-		body["totpCode"] = o.totpCode
-	}
-	if o.rememberDevice {
-		body["rememberDevice"] = true
-	}
-	req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/api/v1/auth/login",
-		bytes.NewReader(mustJSON(body)))
-	req.Header.Set("Content-Type", "application/json")
-	res, err := env.srv.Client().Do(req)
+	session, err := auth.NewToken(auth.SessionPrefix)
 	if err != nil {
 		env.t.Fatal(err)
 	}
-	defer func() { _ = res.Body.Close() }()
-	raw, _ := io.ReadAll(res.Body)
-	if res.StatusCode != http.StatusOK {
-		env.t.Fatalf("login %s: %d %s", handle, res.StatusCode, raw)
-	}
-	var out struct {
-		CsrfToken string `json:"csrfToken"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
+	csrf, err := auth.NewToken("csrf_")
+	if err != nil {
 		env.t.Fatal(err)
 	}
-	cookies := res.Cookies()
-	c := caller{name: handle, csrf: out.CsrfToken}
-	for _, ck := range cookies {
-		switch ck.Name {
-		case "agentry_session":
-			c.session = ck.Value
-		case "agentry_trusted_device":
-			c.device = ck.Value
+	ctx := context.Background()
+	ua := "Go-http-client/1.1"
+	if err := env.st.WithTx(ctx, func(q *storegen.Queries) error {
+		u, err := q.GetUserByHandle(ctx, handle)
+		if err != nil {
+			return err
 		}
+		if u.State != "active" {
+			return fmt.Errorf("account %s is %s", handle, u.State)
+		}
+		_, err = q.CreateSession(ctx, storegen.CreateSessionParams{
+			ID: uuid.New(), UserID: u.ID, TokenSha256: auth.HashToken(session),
+			CsrfToken: csrf, UserAgent: &ua, ExpiresAt: time.Now().Add(time.Hour),
+		})
+		return err
+	}); err != nil {
+		env.t.Fatalf("login %s: %v", handle, err)
 	}
-	if c.session == "" {
-		env.t.Fatal("login: no session cookie")
-	}
-	return c, cookies
+	return caller{name: handle, session: session, csrf: csrf}
 }
 
 // mintPAT creates a PAT via the caller's session.
@@ -584,12 +579,4 @@ func (env *testEnv) verifyEmail(handle string) {
 	if err != nil {
 		env.t.Fatal(err)
 	}
-}
-
-func mustJSON(v any) []byte {
-	b, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return b
 }

@@ -55,11 +55,10 @@ type Directory interface {
 
 // SetDirectory makes d the server's directory, for every caller: erasure
 // (by d's own DirectoryErasure where it has one, else by one attempt
-// through d) and the superseded-account check. Under auth.externalOnly the
-// account is the directory's. The directory's own sign-in work (its claims,
-// remembered browsers, its callbacks, a staff mirror) is d's, through the
-// sign-in hook, its callback mount and staff.changed. A nil d leaves the
-// server with no directory.
+// through d) and the superseded-account check. The directory's own sign-in
+// work (its claims, remembered browsers, its callbacks, a staff mirror) is
+// d's, through the sign-in hook, its callback mount and staff.changed. A nil
+// d leaves the server with no directory.
 func (s *Server) SetDirectory(d Directory) { s.directory = d }
 
 // DirectoryErasure is the optional interface for a directory that carries

@@ -19,5 +19,5 @@ gotest "route declarations complete" -timeout 20m ./internal/api -run TestRouteD
 gotest "authz matrix" -timeout 20m ./internal/api -run TestAuthzMatrix -count=1
 gotest "PAT lifecycle e2e" -timeout 20m ./internal/api -run TestPATLifecycle -count=1
 gotest "audit coverage + append-only" -timeout 20m ./internal/api -run TestAuditCoverage -count=1
-gotest "auth flows (login/TOTP/CSRF)" -timeout 20m ./internal/api -run 'TestAuthLifecycle|TestTOTPFlow' -count=1
+gotest "auth flows (OpenID sign-in, CSRF, no native credentials)" -timeout 20m ./internal/api -run 'TestAuthLifecycle|TestTheServerKeepsNoCredentialsOfItsOwn' -count=1
 echo "== auth acceptance PASSED =="

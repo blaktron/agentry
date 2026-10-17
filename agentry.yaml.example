@@ -33,14 +33,12 @@ auth:
   sessionTTL: 24h
   patMaxTTL: 8760h   # 1 year
   trustedDeviceTTL: 720h  # 30 days, and 30 days is also the ceiling: how long
-                          # a browser that answered the second factor may skip
-                          # it. A second credential class — it never lengthens
-                          # a session.
+                          # a browser that answered the second factor at a
+                          # directory may skip it. A second credential class —
+                          # it never lengthens a session.
   cookieSecure: false  # true outside local dev
-  # true hands credentials to an external sign-in provider — native
-  # register/password/TOTP endpoints answer 410; configure auth.oidc.
-  externalOnly: false
-  # Sign in with your OpenID provider: any OIDC issuer. The redirect URI is
+  # Sign in with your OpenID provider: any OIDC issuer. The server keeps no
+  # passwords, so this is how people sign in. The redirect URI is
   # {baseURL}/api/v1/auth/oidc/<id>/callback. Leave id at oidc unless the
   # deployment's accounts are already linked under the id authentik.
   oidc:
@@ -57,7 +55,7 @@ web:
 ui:
   mode: full           # full | authorize | off — the server's own browser surface under /ui/
 brand:
-  name: ""             # what emails, authenticator apps and /ui/ call this deployment (default: the public host)
+  name: ""             # what emails and /ui/ call this deployment (default: the public host)
   logoURL: ""
   cssURL: ""
   supportEmail: ""
@@ -80,25 +78,3 @@ judge:
   baseUrl: ""        # e.g. https://api.openai.com or https://llm.gateway.internal
   apiKey: ""
   model: ""          # optional; defaults per protocol when empty
-
-# Social login for individual accounts. All five are optional; a
-# provider without credentials is simply not offered. google and microsoft
-# have built-in OIDC endpoints; openai and claude need an issuer override.
-social:
-  google:
-    clientId: ""
-    clientSecret: ""
-  github:
-    clientId: ""
-    clientSecret: ""
-  microsoft:
-    clientId: ""
-    clientSecret: ""
-  openai:
-    clientId: ""
-    clientSecret: ""
-    issuer: ""     # OIDC issuer serving the sign-in flow (required)
-  claude:
-    clientId: ""
-    clientSecret: ""
-    issuer: ""     # OIDC issuer serving the sign-in flow (required)

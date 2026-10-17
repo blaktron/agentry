@@ -211,7 +211,7 @@ func TestADirectoryFromAnExtensionServesTheRegistry(t *testing.T) {
 	dir := &fakeDirectory{}
 	var mu sync.Mutex
 	var heard []api.Event
-	env, idp := newOIDCTestEnv(t, func(c *config.Config) { c.Auth.ExternalOnly = true },
+	env, idp := newOIDCTestEnv(t, nil,
 		func(s *api.Server) {
 			s.SetDirectory(dir)
 			s.AddEventHook(func(_ context.Context, ev api.Event) {
@@ -253,7 +253,7 @@ func TestADirectoryFromAnExtensionServesTheRegistry(t *testing.T) {
 // live at an OpenID provider, with no extension's directory, erases at the
 // registry alone, and says and audits so.
 func TestWithNoDirectoryTheRegistryStandsAlone(t *testing.T) {
-	env, idp := newOIDCTestEnv(t, func(c *config.Config) { c.Auth.ExternalOnly = true })
+	env, idp := newOIDCTestEnv(t, nil)
 	c := env.mintAccount(t, idp, "no-dir")
 	uid := env.selfID(c)
 	if got := eraseAndReadOutcome(t, env, c); got != "not-configured" {

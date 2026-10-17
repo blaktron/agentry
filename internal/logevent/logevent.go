@@ -18,16 +18,12 @@ const (
 	HTTPRequest Event = "http.request"
 	// HTTPRateLimited is a request refused by a rate class.
 	HTTPRateLimited Event = "http.rate_limited"
-	// AuthLoginFailed is a native sign-in that failed.
-	AuthLoginFailed Event = "auth.login_failed"
-	// AuthSocialRejected is a social or directory sign-in the server rejected.
+	// AuthSocialRejected is a sign-in through the OpenID provider the server
+	// rejected.
 	AuthSocialRejected Event = "auth.social_rejected"
 	// SAMLStateUnavailable is a SAML login refused because the shared state
 	// behind it could not be read or written.
 	SAMLStateUnavailable Event = "saml.state_unavailable"
-	// TOTPChallengeUnavailable is a 2FA social login's second leg refused
-	// because its challenge could not be recorded as consumed.
-	TOTPChallengeUnavailable Event = "auth.totp_challenge_unavailable"
 	// SSRFRefused is an outbound target the private-range guard refused.
 	SSRFRefused Event = "ssrf.refused"
 	// GateVerdict is the gate deciding a version: published, rejected or
@@ -76,7 +72,7 @@ func Audit(action string) Event { return Event(AuditPrefix + action) }
 
 // All lists every catalogued name, for the completeness test and the docs.
 var All = []Event{
-	HTTPRequest, HTTPRateLimited, AuthLoginFailed, AuthSocialRejected, SAMLStateUnavailable, TOTPChallengeUnavailable, SSRFRefused,
+	HTTPRequest, HTTPRateLimited, AuthSocialRejected, SAMLStateUnavailable, SSRFRefused,
 	GateVerdict, GateError, ScanStage,
 	FailOpenAuditStreamDrop, FailOpenHistoryNotScanned, FailOpenOSVNotChecked, FailOpenOSVError, FailOpenVersionNotChecked, FailOpenDirectoryErasure,
 	GitPushRefused, MailSuppressed, WebhookDelivered, ModelInput,
