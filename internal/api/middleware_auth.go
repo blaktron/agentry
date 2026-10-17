@@ -19,14 +19,6 @@ const (
 	// body carries the token.
 	csrfCookieName = "agentry_csrf"
 	csrfHeader     = "X-Agentry-CSRF"
-	// trustedDeviceCookieName carries the credential a browser earns by
-	// answering the second factor. It is not the session
-	// cookie and never stands in for one: it skips the second factor on a
-	// password sign-in and grants nothing else. The name says "trusted
-	// device" rather than "device" because a *device* elsewhere is an
-	// authenticator enrolled in the external directory, and the two are
-	// kept apart.
-	trustedDeviceCookieName = "agentry_trusted_device"
 )
 
 type principalKeyType struct{}
@@ -138,7 +130,7 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 		}
 
 		// An unactivated account reads but does not write.
-		if s.unactivatedReadOnly && refuseUnactivated(w, r, p) {
+		if refuseUnactivated(w, r, p) {
 			return
 		}
 

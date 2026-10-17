@@ -1053,7 +1053,7 @@ agent's auto-publish-tags setting). Whichever door, the submission is
 identical server-side: manifest validation, content scanning against the
 declared capabilities, human review where findings demand it, and DSSE
 signing. A publish to a public namespace needs a second factor on the
-account (a TOTP app, or an identity provider that did MFA) when the
+account, asserted by the identity provider you sign in with, when the
 registry has that on — `/meta` reports it as `features.publicPublish2FA`.
 Published releases are immutable and content-addressed. The language rule
 applies to QuickAgents as it does to everything here: a release is

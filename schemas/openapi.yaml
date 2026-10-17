@@ -132,39 +132,12 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
-  /auth/register:
-    post:
-      operationId: register
-      tags: [auth]
-      summary: Create an individual account (email+password).
-      description: >
-        When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
-        sign in through /auth/oidc/{provider}/start instead.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RegisterRequest"
-      responses:
-        "201":
-          description: Account created; verification email queued.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
-        default:
-          $ref: "#/components/responses/Problem"
-
   /auth/verify-email:
     post:
       operationId: verifyEmail
       description: >
-        When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
-        sign in through /auth/oidc/{provider}/start instead.
+        Activates the account whose address the mailed link was sent to
+        (POST /user/email-verification sends it).
       tags: [auth]
       summary: Confirm an email address with the mailed token.
       security: []
@@ -184,41 +157,13 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
-  /auth/login:
-    post:
-      operationId: login
-      description: >
-        When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
-        sign in through /auth/oidc/{provider}/start instead.
-      tags: [auth]
-      summary: Password (+TOTP when enabled) login; sets the session cookie.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LoginRequest"
-      responses:
-        "200":
-          description: Session established. The response sets the
-            `agentry_session` cookie; `csrfToken` must be echoed in the
-            `X-Agentry-CSRF` header on all cookie-authenticated mutations.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResult"
-        default:
-          $ref: "#/components/responses/Problem"
-
   /auth/logout:
     post:
       operationId: logout
       tags: [auth]
       summary: Revoke the current session.
       description: >-
-        Answers 204 for a native or OIDC session. For a session established
+        Answers 204 for a session opened through an OpenID provider. For a session established
         through an organization's SAML connection whose IdP publishes a
         Single Logout endpoint, answers 200 with the IdP logout URL the
         browser should be sent to next (SP-initiated SLO); the
@@ -232,90 +177,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LogoutResult"
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /auth/2fa/totp/setup:
-    post:
-      operationId: totpSetup
-      description: >
-        When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
-        sign in through /auth/oidc/{provider}/start instead.
-      tags: [auth]
-      summary: Begin TOTP enrollment; returns the provisioning secret.
-      responses:
-        "200":
-          description: Enrollment secret (confirm with /auth/2fa/totp/verify).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TotpSetupResult"
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /auth/2fa/totp/verify:
-    post:
-      operationId: totpVerify
-      description: >
-        When the deployment delegates accounts to an external directory
-        (`AGENTRY_AUTH_EXTERNAL_ONLY`), this endpoint answers 410 Gone;
-        sign in through /auth/oidc/{provider}/start instead.
-      tags: [auth]
-      summary: Confirm TOTP enrollment with a current code.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [code]
-              properties:
-                code:
-                  type: string
-      responses:
-        "204":
-          description: TOTP enabled.
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /auth/2fa/totp/challenge:
-    post:
-      operationId: totpChallenge
-      tags: [auth]
-      summary: Complete a pending 2FA challenge and open the session.
-      description: >
-        Second leg of a login that could not carry a TOTP code inline. The
-        only such login is social login: its callback is a browser
-        redirect. The challenge is opaque and expires in five minutes; it
-        proves nothing on its own, so a valid TOTP code is still required. It
-        is single use: completing it records it as consumed in the database
-        every replica reads, so a second completion is refused
-        with 401 `totp-challenge-used`, and an expired one with 401
-        `totp-challenge-expired`. A wrong code does not consume it; attempts are
-        held to the login rate limit. When the
-        consumed record cannot be written, the challenge is refused with 503
-        and no session is opened.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [challenge, code]
-              properties:
-                challenge:
-                  type: string
-                code:
-                  type: string
-      responses:
-        "200":
-          description: Session established.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResult"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -350,14 +211,13 @@ paths:
     get:
       operationId: socialOidcStart
       tags: [auth]
-      summary: Begin social login with a configured provider.
+      summary: Begin sign-in with the deployment's OpenID provider.
       description: >
-        Individual-account login through a social identity provider
-        (`google` = OIDC proper; `github` = an OAuth2 shim, since GitHub is
-        not an OIDC issuer). Providers must be configured on the server
-        (`AGENTRY_SOCIAL_<PROVIDER>_CLIENT_ID`/`_SECRET`); unconfigured
-        providers return 404. This is individual login and never grants org
-        membership. Org SSO lives under /orgs/{org}/sso.
+        Individual-account sign-in through the OpenID provider the server is
+        configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a
+        verified ID token). A provider id the server does not serve answers
+        404. This is individual sign-in and never grants org membership.
+        Org SSO lives under /orgs/{org}/sso.
       security: []
       parameters:
         - $ref: "#/components/parameters/SocialProvider"
@@ -365,8 +225,8 @@ paths:
           in: query
           description: >
             Browser mode. An in-app, path-absolute return target (e.g.
-            `/dashboard` on the site, `/ui/account` on the server's own
-            pages). When present and valid, the callback answers the
+            `/dashboard` on the site, `/ui/authorize?…` on the server's
+            own pages). When present and valid, the callback answers the
             browser with a 303 to it instead of the JSON result, and a
             failed login 303s to the sign-in page with `?error=…` (the
             site's `/login`, or `/ui/login`). Anything that is not a
@@ -384,14 +244,13 @@ paths:
     get:
       operationId: socialOidcCallback
       tags: [auth]
-      summary: "Social login redirect URI: establish a session."
+      summary: "Sign-in redirect URI: establish a session."
       description: >
         Exchanges the code, verifies the identity, then links or JIT-creates
         an individual account (`identities.provider_kind='social'`).
         Auto-linking to an existing account happens only when the provider
         asserts a verified email that matches a verified account email; otherwise the response is 409 and the accounts must be linked
-        explicitly. When the account has TOTP enabled the response is a
-        pending 2FA challenge rather than a session. A login begun with
+        explicitly. A login begun with
         `next` (browser mode) answers 303 to that in-app path once the
         session cookie is set, or to `/login?error=…` on failure; the JSON
         result is the API mode, used when `next` was absent.
@@ -408,11 +267,11 @@ paths:
             type: string
       responses:
         "200":
-          description: Session established, or a pending TOTP challenge.
+          description: Session established.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SocialLoginResult"
+                $ref: "#/components/schemas/LoginResult"
         "303":
           description: Browser mode — session cookie set, redirect to `next`.
         "409":
@@ -1158,10 +1017,10 @@ paths:
       summary: Clear every remembered browser of the caller's account.
       description: >
         Revokes all of the caller's remembered browsers, this one included:
-        each is asked for the second factor at its next sign-in. Sessions and
-        authenticators are untouched. The response clears this browser's
-        remembered-browser cookie, since its record is gone. Session-only: a
-        PAT is refused (403), as on the session-revoking routes.
+        each is asked for the second factor at its next sign-in, since the
+        directory that set its cookie finds no record behind it. Sessions and
+        authenticators are untouched. Session-only: a PAT is refused (403),
+        as on the session-revoking routes.
       responses:
         "200":
           description: The number of remembered browsers cleared (0 when there were none).
@@ -4883,15 +4742,14 @@ components:
       in: path
       required: true
       description: >
-        Social identity provider id. google and microsoft use their
-        built-in OIDC endpoints; openai and claude need an operator-set
-        issuer. oidc is the deployment's own sign-in OpenID provider, any
-        issuer the operator configures; authentik is the same provider on a
-        deployment that registered it under that id, whose accounts are
-        linked under it. An unconfigured provider answers 404.
+        The deployment's sign-in OpenID provider, any issuer the operator
+        configures (`auth.oidc`). It is served as `oidc`, or as `authentik`
+        on a deployment that registered it under that id, whose accounts
+        are linked under it. The id it is not served under, and either id
+        while no provider is configured, answers 404.
       schema:
         type: string
-        enum: [google, github, microsoft, openai, claude, authentik, oidc]
+        enum: [authentik, oidc]
     Cursor:
       name: cursor
       in: query
@@ -4933,15 +4791,11 @@ components:
           type: object
           description: >
             Self-host feature flags: `judge`, `signing`, `redis`, `s3`,
-            `externalOnly` (accounts live in an external directory service;
-            the native register/password/TOTP surface answers 410 — clients
-            should not offer those forms) and `publicPublish2FA` (the server
-            refuses a public publish from an account it holds no second-factor
-            evidence for — an enrolled TOTP, or under `auth.requireIdpMFA` an
-            IdP sign-in whose `amr` named a factor;
-            false in dev mode and under `externalOnly` without
-            `auth.requireIdpMFA` — a client states that requirement only
-            when this is true), and `knowledge` (the store of knowledge
+            `publicPublish2FA` (the server refuses a public publish from an
+            account it holds no second-factor evidence for, an OpenID
+            provider sign-in whose `amr` named a factor; on only under
+            `auth.requireIdpMFA` and never in dev mode, so a client states
+            that requirement only when this is true), and `knowledge` (the store of knowledge
             packs is on: the registry has a knowledge sealing key or an
             extension that wraps keys, so `/knowledge/…` answers rather
             than 503).
@@ -4997,9 +4851,10 @@ components:
       required: [mode]
       description: >
         The server's own browser surface under `/ui/`. `mode` is
-        `full` (device authorize, sign-in, account, review, staff, org
-        admin), `authorize` (only the device-authorize page — a site fronts
-        this server) or `off`. `authorizeUrl` is the absolute page a CLI or
+        `full` (device authorize, plus the sign-in hand-off to the OpenID
+        provider, sign-out and the address-confirmation page), `authorize`
+        (only the device-authorize page — a site fronts this server) or
+        `off`. `authorizeUrl` is the absolute page a CLI or
         the desktop app opens for browser sign-in, when served.
       properties:
         mode:
@@ -5008,55 +4863,6 @@ components:
         authorizeUrl:
           type: string
           format: uri
-
-    RegisterRequest:
-      type: object
-      required: [handle, email, password]
-      properties:
-        handle:
-          type: string
-          pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          minLength: 10
-          maxLength: 256
-        displayName:
-          type: string
-          maxLength: 120
-
-    LoginRequest:
-      type: object
-      required: [login, password]
-      properties:
-        login:
-          type: string
-          description: Handle or email.
-        password:
-          type: string
-        totpCode:
-          type: string
-          description: Required when the account has TOTP enabled.
-        rememberDevice:
-          type: boolean
-          description: >
-            Remember this browser as a trusted device, so a later password
-            sign-in from it skips the TOTP code. Defaults to false.
-
-
-            What it does: on a sign-in that answered the code, issues an
-            opaque httpOnly cookie recorded against the account, and later
-            password sign-ins presenting it are not asked for the code. What
-            it does not do: it is not a session, does not lengthen one, and
-            carries no scope — the password is still required on every
-            sign-in. It cannot be earned by a sign-in that skipped the code,
-            so its lifetime is absolute rather than sliding, and it expires
-            after auth.trustedDeviceTTL (30 days by default and by maximum).
-            It has no effect on an account with no TOTP factor, where no code
-            was answered, and on a deployment whose credentials are delegated
-            to an external directory, where this endpoint answers 410.
 
     LoginResult:
       type: object
@@ -5067,35 +4873,6 @@ components:
         csrfToken:
           type: string
           description: Echo in X-Agentry-CSRF on cookie-authenticated mutations.
-
-    SocialLoginResult:
-      type: object
-      description: >
-        Outcome of a social-login callback: either a session (like password
-        login) or a pending TOTP challenge to complete at
-        POST /auth/2fa/totp/challenge.
-      required: [totpRequired]
-      properties:
-        totpRequired:
-          type: boolean
-        challenge:
-          type: string
-          description: Single-use, five-minute challenge; present iff totpRequired.
-        user:
-          $ref: "#/components/schemas/User"
-        csrfToken:
-          type: string
-          description: Echo in X-Agentry-CSRF on cookie-authenticated mutations.
-
-    TotpSetupResult:
-      type: object
-      required: [secret, otpauthUrl]
-      properties:
-        secret:
-          type: string
-          description: Base32 TOTP secret (display once for authenticator apps).
-        otpauthUrl:
-          type: string
 
     EmailVerificationSent:
       type: object
@@ -5125,6 +4902,11 @@ components:
           type: boolean
         totpEnabled:
           type: boolean
+          deprecated: true
+          description: >
+            Always false: the server keeps no second factor of its own, and
+            the field goes in a later release. A sign-in's second factor is
+            the OpenID provider's.
         cookieAckAt:
           description: When this account acknowledged the cookie notice.
           type: string

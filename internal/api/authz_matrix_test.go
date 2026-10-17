@@ -10,10 +10,11 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/crypto/ssh"
 	"net/http"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/ssh"
 
 	"github.com/google/uuid"
 
@@ -385,9 +386,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				// invitation door is exercised by its own tests, and one
 				// organization per person would refuse a second
 				// active membership for a matrix caller anyway.
-				s.env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/register", map[string]any{
-					"handle": caseID, "email": caseID + "@example.test", "password": "hunter2hunter2",
-				}, nil, http.StatusCreated)
+				s.env.createAccount(caseID, caseID+"@example.test", true)
 				s.env.seedMembership(s.orgH, caseID, "member", "active")
 				return ""
 			},
@@ -657,12 +656,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				return ""
 			},
 		},
-		"logout":    {method: "POST", path: sPath("/api/v1/auth/logout"), skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "pending": true, "outsider": true}},
-		"totpSetup": {method: "POST", path: sPath("/api/v1/auth/2fa/totp/setup")},
-		"totpVerify": {
-			method: "POST", path: sPath("/api/v1/auth/2fa/totp/verify"),
-			body: func(*matrixSeed, string) any { return map[string]any{"code": "000000"} },
-		},
+		"logout": {method: "POST", path: sPath("/api/v1/auth/logout"), skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "pending": true, "outsider": true}},
 
 		// Enterprise: SSO/SCIM config = admin; webhooks/domains =
 		// admin+; audit export = admin+ (audit:read). Allowed callers may still

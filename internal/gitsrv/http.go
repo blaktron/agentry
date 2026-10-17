@@ -337,7 +337,7 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 
 	// An unactivated account reads but does not write: the API's gate does
 	// not see git.
-	if act == auth.ActAgentRepoWrite && principal.Unactivated && h.cfg.Auth.ExternalOnly {
+	if act == auth.ActAgentRepoWrite && principal.Unactivated {
 		return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusForbidden, "forbidden: activate your account first, from the link we emailed you"}
 	}
 

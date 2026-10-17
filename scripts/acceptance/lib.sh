@@ -55,3 +55,23 @@ gotest() {
   fi
   echo "$label: OK"
 }
+
+# seed_session HANDLE
+#
+# Makes an account HANDLE with a verified address at example.test and opens
+# a session for it, straight in the acceptance database through
+# scripts/dev/dbexec, as the sign-in callback does once the deployment's
+# OpenID provider has vouched for the person: the server keeps no password
+# to sign in with, and a script has no provider to sign in at. Sets SESSION
+# and CSRF; only the session token's SHA-256 is stored, as the server
+# stores it.
+seed_session() {
+  local handle=$1
+  SESSION="agys_$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  CSRF="csrf_$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  go run ./scripts/dev/dbexec \
+    "INSERT INTO handles (id, handle, kind) VALUES (gen_random_uuid(), '$handle', 'user')" \
+    "INSERT INTO users (id, email, display_name, email_verified_at) SELECT id, '$handle@example.test', '$handle', now() FROM handles WHERE handle = '$handle'" \
+    "INSERT INTO sessions (id, user_id, token_sha256, csrf_token, expires_at) SELECT gen_random_uuid(), id, sha256(convert_to('$SESSION', 'UTF8')), '$CSRF', now() + interval '1 hour' FROM handles WHERE handle = '$handle'" \
+    >/dev/null
+}

@@ -140,10 +140,6 @@ func problemTooMany(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusTooManyRequests, "rate-limited", "Too many requests", detail)
 }
 
-func problemGone(w http.ResponseWriter, r *http.Request, detail string) {
-	writeProblem(w, r, http.StatusGone, "gone", "No longer available", detail)
-}
-
 // problemAdmissionRefused answers a registry admission refusal with the refusal's own status and slug — 402
 // credits-exhausted from the billing extension, which says so explicitly —
 // and its fields at top level. A refusal that names no status is a 403

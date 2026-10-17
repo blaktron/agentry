@@ -1,19 +1,30 @@
 #!/usr/bin/env bash
-# End-to-end smoke for the containerized dev stack: register → email verify
-# (REAL email, read back from mailpit) → PAT → create agent → git push + tag
-# → publish through the real pipeline → resolve → download (S3/minio path).
+# End-to-end smoke for the containerized dev stack: an account and its
+# session → activation by email (REAL email, read back from mailpit) → PAT →
+# create agent → git push + tag → publish through the real pipeline →
+# resolve → download (S3/minio path). The server keeps no password, and the
+# stack has no OpenID provider to sign in at, so the account and its session
+# are written into the stack's database as the sign-in callback writes them.
 set -euo pipefail
 API=http://localhost:8080/api/v1
 GITBASE=http://localhost:8080
 MAILPIT=http://localhost:8025
 SFX=$(date +%s | tail -c 6)
-H="smoke$SFX"; E="$H@dev.local"; PW="devsmoke-pass-$SFX"
+H="smoke$SFX"; E="$H@dev.local"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 jf() { python3 -c "import sys,json;print(json.load(sys.stdin)$1)"; }
 
-echo "== register $H =="
-curl -fsS -X POST "$API/auth/register" -H 'Content-Type: application/json' \
-  -d "{\"handle\":\"$H\",\"email\":\"$E\",\"password\":\"$PW\"}" >/dev/null
+COMPOSE="${COMPOSE:-docker compose --project-directory $(cd "$(dirname "$0")/../../deploy/compose" && pwd)}"
+SESSION="agys_$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+CSRF="csrf_$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+echo "== account $H, unconfirmed, signed in =="
+$COMPOSE exec -T postgres psql -U agentry -d agentry_dev -qAt -v ON_ERROR_STOP=1 >/dev/null <<SQL
+INSERT INTO handles (id, handle, kind) VALUES (gen_random_uuid(), '$H', 'user');
+INSERT INTO users (id, email, display_name) SELECT id, '$E', '$H' FROM handles WHERE handle = '$H';
+INSERT INTO sessions (id, user_id, token_sha256, csrf_token, expires_at)
+  SELECT gen_random_uuid(), id, sha256(convert_to('$SESSION', 'UTF8')), '$CSRF', now() + interval '1 hour' FROM handles WHERE handle = '$H';
+SQL
+curl -fsS -b "agentry_session=$SESSION" -H "X-Agentry-CSRF: $CSRF" -X POST "$API/user/email-verification" -o /dev/null -w 'activation link: %{http_code}\n'
 
 echo "== pull the verification token out of the real email (mailpit) =="
 TOKEN=""
@@ -35,10 +46,8 @@ done
 curl -fsS -X POST "$API/auth/verify-email" -H 'Content-Type: application/json' \
   -d "{\"token\":\"$TOKEN\"}" -o /dev/null -w 'verify-email: %{http_code}\n'
 
-echo "== login + mint PAT =="
-CSRF=$(curl -fsS -c "$TMP/jar" -X POST "$API/auth/login" -H 'Content-Type: application/json' \
-  -d "{\"login\":\"$H\",\"password\":\"$PW\"}" | jf "['csrfToken']")
-PAT=$(curl -fsS -b "$TMP/jar" -H "X-Agentry-CSRF: $CSRF" -X POST "$API/user/tokens" \
+echo "== mint PAT =="
+PAT=$(curl -fsS -b "agentry_session=$SESSION" -H "X-Agentry-CSRF: $CSRF" -X POST "$API/user/tokens" \
   -H 'Content-Type: application/json' \
   -d '{"name":"stack-smoke","scopes":["agent:publish","agent:read","repo:read","repo:write","user:profile"]}' \
   | jf "['token']")

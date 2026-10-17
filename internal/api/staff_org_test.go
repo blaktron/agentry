@@ -16,6 +16,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/testidp"
 )
 
 // staffFixture is a test env whose configuration names a staff organization
@@ -23,6 +24,7 @@ import (
 // staff domain.
 type staffFixture struct {
 	env     *testEnv
+	idp     *testidp.IdP
 	srv     *api.Server
 	org     string // the staff organization's handle
 	domain  string // the staff domain
@@ -41,7 +43,7 @@ func newStaffFixtureWith(t *testing.T, more func(cfg *config.Config, org string)
 	t.Helper()
 	tag := fmt.Sprintf("%06x", rand.Int63n(1<<24)) //nolint:gosec // test fixture names
 	f := &staffFixture{org: "staff" + tag, domain: "staff" + tag + ".test"}
-	f.env = newTestEnvCfg(t, func(cfg *config.Config) {
+	f.env, f.idp = newOIDCTestEnv(t, func(cfg *config.Config) {
 		cfg.Auth.StaffOrg, cfg.Auth.StaffDomain = f.org, f.domain
 		if more != nil {
 			more(cfg, f.org)
@@ -62,6 +64,24 @@ func (f *staffFixture) person(prefix string) string {
 	h := f.env.registerEmail(prefix, prefix+"-"+f.env.sfx+"@"+f.domain)
 	f.env.verifyEmail(h)
 	return h
+}
+
+// signIn signs a person in through the stand-in provider, at the address
+// they were registered with, as a real sign-in does (which recomputes the
+// staff flag).
+func (f *staffFixture) signIn(handle string) {
+	f.env.t.Helper()
+	var addr string
+	if err := f.env.st.Pool().QueryRow(context.Background(),
+		`SELECT email::text FROM users WHERE id = (SELECT id FROM handles WHERE handle = $1)`, handle).Scan(&addr); err != nil {
+		f.env.t.Fatal(err)
+	}
+	in := f.env.signInOIDC(f.env.t, f.idp, config.OIDCProviderID, testidp.Person{
+		Subject: "sub-" + handle, Email: addr, EmailVerified: true, Username: handle,
+	})
+	if in.status != http.StatusOK || in.handle != handle {
+		f.env.t.Fatalf("sign-in as %s: %d %s", handle, in.status, in.body)
+	}
 }
 
 // invite has the founder invite an address to the staff organization and
@@ -287,7 +307,7 @@ func TestStaffFollowsSignInAndStartup(t *testing.T) {
 	f := newStaffFixture(t)
 	hank := f.person("hank")
 	f.env.makePlatformStaff(t, hank)
-	f.env.login(hank)
+	f.signIn(hank)
 	if f.staff(hank) {
 		t.Fatal("a sign-in must revoke a flag the rule does not grant")
 	}

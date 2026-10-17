@@ -5,8 +5,8 @@ package api_test
 // Entra ID's authnmethodsreferences attribute naming multi-factor, an OIDC
 // ID token whose `amr` names a factor. It counts only on a deployment that
 // accepts IdP-asserted evidence (auth.requireIdpMFA): an organization's IdP
-// is its admins', and the stamp is account-wide, so on a registry whose gate
-// asks for native TOTP an organization cannot stand in for it. A password-only
+// is its admins', and the stamp is account-wide, so on a registry that did
+// not opt in an organization's claim is not recorded. A password-only
 // sign-in, and a refused one, stamp nothing.
 
 import (

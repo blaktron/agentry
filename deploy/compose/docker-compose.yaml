@@ -120,7 +120,7 @@ services:
       # bytes base64 — `openssl rand -base64 32`) and a signing key
       # (AGENTRY_SIGNING_KIND=file plus the two lines below it), and refuses
       # to start without them, naming the one it lacks. On, it encrypts
-      # TOTP seeds and webhook secrets with a constant from the public
+      # webhook secrets and sign-in state with a constant from the public
       # source, mints a signing key at every start, skips 2FA before a
       # public publish, and lets a `none` judge pass as `static`: a
       # throwaway stack, never one anyone installs from.
@@ -214,10 +214,8 @@ services:
       AGENTRY_LOG_LEVEL: ${AGENTRY_LOG_LEVEL:-info}
       AGENTRY_AUDIT_STREAM_KIND: ${AGENTRY_AUDIT_STREAM_KIND:-none}
       # Sign in through any OpenID provider (docs/self-hosting.md "Sign in
-      # with your OpenID provider"). With AGENTRY_AUTH_EXTERNAL_ONLY=true the
-      # native register, password and TOTP endpoints answer 410 and sign-in
-      # goes through that provider alone.
-      AGENTRY_AUTH_EXTERNAL_ONLY: ${AGENTRY_AUTH_EXTERNAL_ONLY:-false}
+      # with your OpenID provider"): the server keeps no passwords, so this
+      # is how people sign in to it.
       AGENTRY_AUTH_OIDC_ID: ${AGENTRY_AUTH_OIDC_ID:-}
       AGENTRY_AUTH_OIDC_ISSUER: ${AGENTRY_AUTH_OIDC_ISSUER:-}
       AGENTRY_AUTH_OIDC_CLIENT_ID: ${AGENTRY_AUTH_OIDC_CLIENT_ID:-}

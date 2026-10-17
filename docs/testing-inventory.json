@@ -123,18 +123,6 @@
           "dependencyHints": []
         },
         {
-          "path": "internal/api/login_timing_test.go",
-          "tests": [
-            "TestLoginMissCostsAsMuchAsAWrongPassword"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture"
-          ]
-        },
-        {
           "path": "internal/api/reserved_handles_test.go",
           "tests": [
             "TestReservedHandlesAreRefused",
@@ -154,16 +142,14 @@
             "TestSocialLoginJITCreatesAccount",
             "TestSocialLoginAutoLinksVerifiedEmail",
             "TestSocialLoginRefusesUnverifiedLink",
-            "TestSocialLoginStillRequiresTOTP",
             "TestSocialLoginBrowserModeRedirectsToNext",
             "TestSocialLoginCallbackRestartsBrowserWithoutState",
             "TestSocialLoginUnconfiguredProviderIs404",
             "TestSocialLoginRejectsStateMismatch",
-            "TestSocialLoginGoogleOIDC",
+            "TestSocialLoginOpenIDProvider",
             "TestSocialLoginHandleFromPreferredUsername",
             "TestSocialLoginTakenUsernameFallsBackDeterministically",
-            "TestSocialLoginMicrosoftOIDC",
-            "TestSocialLoginGoogleNonceMismatch"
+            "TestSocialLoginNonceMismatch"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -171,24 +157,6 @@
           "dependencyHints": [
             "database fixture",
             "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/totp_challenge_single_use_test.go",
-          "tests": [
-            "TestTOTPChallengeIsRefusedWhenReplayed",
-            "TestTOTPChallengeReplayIsRefusedAtAnotherReplica",
-            "TestTOTPChallengeSingleUseHoldsUnderConcurrentCompletions",
-            "TestTOTPChallengeFailsClosedWhenTheStoreDoesNotAnswer",
-            "TestTOTPChallengeExpiryIsRefusedAndAuditedApartFromAReplay"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport",
-            "real-time wait"
           ]
         },
         {
@@ -202,7 +170,7 @@
             "TestTrustedDeviceStoreFailureDemandsTheCode",
             "TestTrustedDeviceExpiryIsAbsoluteNotSliding",
             "TestTrustedDeviceStoresOnlyTheHash",
-            "TestTrustedDeviceCookieAttributes",
+            "TestTrustedDeviceTokenIdentifiesItself",
             "TestSCIMDeactivationRevokesTrustedDevices",
             "TestErasureDeletesTrustedDevices",
             "TestTrustedDeviceSweepDeletesOnlyWhatHasExpired",
@@ -383,19 +351,6 @@
           ]
         },
         {
-          "path": "internal/api/ui_orgs_test.go",
-          "tests": [
-            "TestCoreUIOrgAdmin"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
           "path": "internal/api/ui_pages_test.go",
           "tests": [
             "TestCoreUISignInAccountAndDeviceAuthorize"
@@ -404,7 +359,6 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
-            "database fixture",
             "HTTP transport"
           ]
         },
@@ -1146,9 +1100,9 @@
           "path": "internal/api/auth_flows_test.go",
           "tests": [
             "TestAuthLifecycle",
+            "TestTheServerKeepsNoCredentialsOfItsOwn",
             "TestPATLifecycle",
-            "TestAuditCoverage",
-            "TestTOTPFlow"
+            "TestAuditCoverage"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1156,18 +1110,6 @@
           "dependencyHints": [
             "database fixture",
             "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/authenticator_copy_test.go",
-          "tests": [
-            "TestEnrolledAuthenticatorProseSaysAuthenticator"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "source/file contract"
           ]
         },
         {
@@ -1277,7 +1219,6 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
-            "database fixture",
             "HTTP transport"
           ]
         },
@@ -1419,9 +1360,9 @@
           ]
         },
         {
-          "path": "internal/api/meta_external_only_test.go",
+          "path": "internal/api/meta_features_test.go",
           "tests": [
-            "TestMetaReportsExternalOnly",
+            "TestMetaAdvertisesNoNativeCredentials",
             "TestMetaReportsPublicPublish2FA"
           ],
           "fuzz": [],
@@ -1466,7 +1407,9 @@
         },
         {
           "path": "internal/api/oidc_accounts_test.go",
-          "tests": [],
+          "tests": [
+            "TestAnAssertedPlaceholderAddressIsNoAddress"
+          ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
@@ -1678,7 +1621,6 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
-            "database fixture",
             "HTTP transport"
           ]
         },
@@ -1969,19 +1911,6 @@
           ]
         },
         {
-          "path": "internal/api/ui_review_test.go",
-          "tests": [
-            "TestCoreUIReviewAndStaff"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
           "path": "internal/api/unscanned_agents_test.go",
           "tests": [
             "TestPipelineSkipIsRefusedWhereItMustBe",
@@ -2167,14 +2096,15 @@
     },
     {
       "owner": "internal/auth/social",
-      "behavior": "Closed provider catalogue and issuer requirements",
+      "behavior": "The one sign-in provider's ids and its issuer requirement",
       "disposition": "retain",
       "files": [
         {
           "path": "internal/auth/social/social_test.go",
           "tests": [
-            "TestProvidersIsAClosedSeven",
-            "TestProvidersWithoutDefaultsRequireAnIssuer"
+            "TestProvidersIsTheOneOpenIDProvider",
+            "TestAProviderNeedsAnIssuer",
+            "TestRetiredProvidersAreUnknown"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2185,16 +2115,14 @@
     },
     {
       "owner": "internal/auth",
-      "behavior": "Password, credential, scope, seal and authentication rules",
+      "behavior": "Credential, scope, seal and authentication rules",
       "disposition": "retain",
       "files": [
         {
           "path": "internal/auth/auth_test.go",
           "tests": [
-            "TestPasswordHashRoundTrip",
             "TestTokens",
             "TestSealerRoundTrip",
-            "TestTOTPRoundTrip",
             "TestCheckTruthTable",
             "TestCheckPATScopes",
             "TestCheckRefusesAPrincipalWithNoCredential",
@@ -2205,16 +2133,6 @@
             "TestAgentRoleLadder",
             "TestHoldPermits",
             "TestAgentManageScope"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/auth/decoy_test.go",
-          "tests": [
-            "TestDecoyHashUsesTheRealParameters"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2266,7 +2184,6 @@
             "TestNewEnvOverridesApply",
             "TestJudgeEnvConfig",
             "TestWebSearchEnvConfig",
-            "TestSocialProviderEnv",
             "TestStaffOrgAcceptsAHandleAndABareDomain",
             "TestParseCIDRs",
             "TestSSHProxyProtocolCIDRsFromEnv",
@@ -3133,7 +3050,7 @@
             "TestUnparseableOrgPolicyFailsClosed",
             "TestPolicyKnobsRejectSubmissions",
             "TestOrgOverlayStaysAboveTheStoredBaseline",
-            "TestPublicPublishRequiresTOTP",
+            "TestPublicPublishRequiresASecondFactor",
             "TestRetriedScanResumesInsteadOfDuplicating",
             "TestRescanUsesResultsCache",
             "TestJudgePromptHashIsRecorded",
@@ -3898,44 +3815,23 @@
     },
     {
       "owner": "internal/ui",
-      "behavior": "Core pages through the in-process API and browser credentials",
+      "behavior": "The sign-in hand-off and device-authorize pages through the in-process API",
       "disposition": "retain",
       "files": [
-        {
-          "path": "internal/ui/display_name_test.go",
-          "tests": [
-            "TestAccountHTMLDisplayNameIsText"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
         {
           "path": "internal/ui/ui_test.go",
           "tests": [
             "TestAuthorizeNeedsASession",
             "TestAuthorizeApproveHandsTheLoopbackACode",
-            "TestLoginMirrorsTheSessionOntoTheBrowser",
             "TestModeAuthorizeServesOnlyTheAuthorizePage",
             "TestRefusalsRenderInsideTheLayout",
-            "TestAccountPageSavesAndFlashes",
-            "TestSSHKeysPageRendersTheKeyAndItsLimits",
-            "TestReviewQueueNamesAnOrganizationOnlyWhenChosen",
-            "TestReviewPages",
-            "TestStaffEnforcementFlashesNameTheConsequence",
-            "TestOrgAdminPage",
-            "TestAccountPagesTellCouldNotLookFromEmpty",
             "TestLoginPageIsTheOneThatReadsAnErrorFromTheURL",
-            "TestReviewDecisionFlashNamesTheConsequence",
-            "TestAccountNotificationSettings",
-            "TestOrgsIndexCreateForm",
-            "TestStaffOrgFormSuspendsAndReinstates",
-            "TestLayoutNamesThePendingOrganization",
-            "TestCSPAdmitsTheSignOutOrigin",
-            "TestAccountShowsTheKnowledgeMeter",
-            "TestTokenFormOffersEveryScope",
-            "TestAccountActivationResend"
+            "TestLoginIsAHandOffToTheProvider",
+            "TestOnlyTheSignInAndAuthorizePagesAreServed",
+            "TestLandingSaysWhoIsSignedIn",
+            "TestLogoutRevokesAndClears",
+            "TestVerifyEmailConfirmsThroughTheAPI",
+            "TestCSPAdmitsTheSignOutOrigin"
           ],
           "fuzz": [],
           "benchmarks": [],

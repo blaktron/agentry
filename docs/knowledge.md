@@ -145,8 +145,7 @@ a pool is then reserved under a lock on the pool's key and counted
 against every pooled owner's packs. Every owner in a pool sees the pool's
 total, in the meter and in a refusal; that is what sharing a cap means.
 
-The meter (`GET /knowledge/usage`, and the account page under
-`/ui/account`) reports the caller's own packs (`bytes`, `packs`), what
+The meter (`GET /knowledge/usage`) reports the caller's own packs (`bytes`, `packs`), what
 counts against the allocation (`used`, the pool's total when `pooled`),
 and the cap (`max`).
 

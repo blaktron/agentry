@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/auth"
 )
 
 // problemOf reads a problem response's status, slug and detail.
@@ -194,15 +195,23 @@ func TestSecurityReviewerIsFirstPartyOnly(t *testing.T) {
 	env.doJSON(staff, http.MethodDelete, "/api/v1/orgs/secureagentry/members/"+memberH, nil, nil, http.StatusNoContent)
 }
 
-// TestCreateOrgRequiresVerifiedEmail: an unverified account is refused with
-// its own slug before the body is read; verifying is all it takes.
+// TestCreateOrgRequiresVerifiedEmail: an account with no verified address
+// is refused before the body is read. One with an unconfirmed real address
+// is unactivated and refused as such; one the provider gave no address at
+// all (a placeholder, which no link can confirm) is refused with its own
+// slug. Verifying is all it takes.
 func TestCreateOrgRequiresVerifiedEmail(t *testing.T) {
 	env := newTestEnv(t)
-	h := env.register("co-unverified")
+	h := env.registerUnverified("co-unverified")
 	sess := env.login(h)
 	res := env.do(sess, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "coorg" + env.sfx, "displayName": "Co"})
+	if code, slug, _ := problemOf(t, res); code != http.StatusForbidden || slug != "account-unactivated" {
+		t.Fatalf("unactivated createOrg: %d %s, want 403 account-unactivated", code, slug)
+	}
+	placeholder := env.registerEmailUnverified("co-noaddr", "co-noaddr"+env.sfx+"@oidc"+auth.SyntheticAddressSuffix)
+	res = env.do(env.login(placeholder), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "coorg2" + env.sfx, "displayName": "Co"})
 	if code, slug, _ := problemOf(t, res); code != http.StatusForbidden || slug != "email-unverified" {
-		t.Fatalf("unverified createOrg: %d %s, want 403 email-unverified", code, slug)
+		t.Fatalf("createOrg with no address: %d %s, want 403 email-unverified", code, slug)
 	}
 	env.verifyEmail(h)
 	env.createOrg(sess, "coorg"+env.sfx)

@@ -60,12 +60,10 @@ type SignIn struct {
 // AddSignInHook registers a listener for every sign-in through an
 // individual provider that the callback gives a session, called once the
 // account is resolved and active and before the session is issued, so a
-// cookie it sets rides the same response. A sign-in that must still answer
-// the account's own TOTP code is given no session there and is not heard.
-// The hook runs synchronously in the callback and cannot refuse the
-// sign-in; a slow hook slows it. Each hook gets its own copy of the claims,
-// so none changes what the core or another hook reads. A panic is recovered
-// and logged.
+// cookie it sets rides the same response. The hook runs synchronously in
+// the callback and cannot refuse the sign-in; a slow hook slows it. Each hook
+// gets its own copy of the claims, so none changes what the core or another
+// hook reads. A panic is recovered and logged.
 func (s *Server) AddSignInHook(h func(ctx context.Context, in SignIn)) {
 	s.signInHooks = append(s.signInHooks, h)
 }
@@ -151,8 +149,8 @@ func (s *Server) UseRememberedBrowser(r *http.Request, userID uuid.UUID, token s
 	return s.useTrustedDevice(r.Context(), r, userID, token, detail)
 }
 
-// useTrustedDevice is the use of a remembered browser by something other
-// than the native password sign-in: the directory's check, an extension's.
+// useTrustedDevice is the use of a remembered browser: a directory's check,
+// through an extension.
 // The account must be active, and GetTrustedDeviceByHash filters owner,
 // revocation and expiry in one statement. last_seen_at moves; expires_at
 // never does. The audit row carries detail and the record's id.
