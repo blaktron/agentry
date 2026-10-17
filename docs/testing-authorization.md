@@ -95,9 +95,10 @@ refusal and restores the constraint afterwards. Preserve its serialization.
 `TestAnAuthorSetsNoVerdictOnTheirOwnFindings` holds the finding route to the
 review decision's author rule: an organization's admin who submitted the
 version is refused a verdict on its findings, and a staff author's verdict is
-recorded with `self_decision` in its audit event. Extension adapters exercised through
-bound `Deps` are a separate boundary; the API probe tests here exercise the
-server seam, so they do not replace it.
+recorded with `self_decision` in its audit event.
+
+Extension adapters exercised through bound `Deps` are a separate boundary;
+the API probe tests here exercise the server seam, so they do not replace it.
 
 The [coverage guide](testing.md) gives the consolidation and verification
 rules.
