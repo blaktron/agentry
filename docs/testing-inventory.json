@@ -171,7 +171,6 @@
             "TestTrustedDeviceExpiryIsAbsoluteNotSliding",
             "TestTrustedDeviceStoresOnlyTheHash",
             "TestTrustedDeviceTokenIdentifiesItself",
-            "TestSCIMDeactivationRevokesTrustedDevices",
             "TestErasureDeletesTrustedDevices",
             "TestTrustedDeviceSweepDeletesOnlyWhatHasExpired",
             "TestTrustedDeviceSurvivesLogout",
@@ -706,14 +705,26 @@
     },
     {
       "owner": "internal/api",
-      "behavior": "Organization and SSO/SCIM lifecycles",
+      "behavior": "Organization and membership lifecycles",
       "disposition": "retain",
       "files": [
         {
+          "path": "internal/api/members_seam_test.go",
+          "tests": [
+            "TestTheMembersSeamProvisionsAPendingMemberOnly",
+            "TestTheMembersSeamDeprovisionTakesEverythingAway"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/org_identity_entitlement_test.go",
           "tests": [
-            "TestIdentityDoorsAreGatedOnTheTier",
-            "TestIdentityDoorsFailClosed",
             "TestDowngradeNeverLoosensIdentity"
           ],
           "fuzz": [],
@@ -783,7 +794,6 @@
             "TestSecurityReviewerIsFirstPartyOnly",
             "TestCreateOrgRequiresVerifiedEmail",
             "TestOnePendingOrgPerAccount",
-            "TestSCIMCannotDeactivateTheLastAdmin",
             "TestLastAdminGuardHoldsUnderConcurrentDemotions"
           ],
           "fuzz": [],
@@ -804,174 +814,10 @@
             "TestInvitationIsACredential",
             "TestOneOrgPerPerson",
             "TestOneOrgPerPersonHoldsUnderConcurrentDoors",
-            "TestSCIMProvisionsPending",
+            "TestProvisioningMakesPendingMembers",
             "TestAddingByHandleIsRetired",
             "TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress",
-            "TestPendingMemberHoldsNothing",
-            "TestOrgSSODoesNotLinkAnAccountOutsideTheVerifiedDomain"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/org_sso_browser_test.go",
-          "tests": [
-            "TestOrgOIDCBrowserModeReturnsToNext",
-            "TestOrgOIDCBrowserModeRefusesAnOffsiteNext",
-            "TestOrgOIDCBrowserModeFailsToTheLoginPage",
-            "TestOrgOIDCWithoutNextStillAnswersJSON",
-            "TestSamlAcsBrowserModeUsesRelayState",
-            "TestOrgOIDCBrowserModePinsTheNonce",
-            "TestSsoLandingCarriesNextIntoTheFlow",
-            "TestSsoNextIsBounded"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/org_sso_mfa_test.go",
-          "tests": [
-            "TestOrgSAMLSignInRecordsIdPMFA",
-            "TestOrgOIDCSignInRecordsIdPMFA"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/saml_setters_test.go",
-          "tests": [
-            "TestSAMLSettersReplaceTheSets"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/saml_store_sets_test.go",
-          "tests": [
-            "TestSAMLStoreSetsAreSharedAndExpire",
-            "TestSAMLReplayRefusalHoldsUnderConcurrentPresentations",
-            "TestSAMLLoginStartedOnOneReplicaCompletesOnAnother"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/saml_test.go",
-          "tests": [
-            "TestSAMLACSEndpoint",
-            "TestSAMLSingleLogout",
-            "TestSAMLReplayIsRefusedAcrossServers"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/scim_put_test.go",
-          "tests": [
-            "TestSCIMPutDeactivatesOktaShape",
-            "TestSCIMPutUpdatesAndReinstates",
-            "TestSCIMGroupSyncFailurePropagates"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/scim_ratelimit_test.go",
-          "tests": [
-            "TestSCIMBudgetAdmitsASyncAndRefusesTheBurstPerOrganization"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/scim_test.go",
-          "tests": [
-            "TestSCIMProvisionAndDeactivate",
-            "TestSCIMDeleteDeactivates",
-            "TestSCIMUnauthorized"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/sso_connection_test_test.go",
-          "tests": [
-            "TestSsoConnectionProbe"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/sso_issuer_guard_test.go",
-          "tests": [
-            "TestOIDCIssuerIsValidatedAtWrite",
-            "TestOIDCIssuerLoopbackAllowanceIsDevModeOnly",
-            "TestOIDCDiscoveryGoesThroughTheEgressGuard",
-            "TestOIDCProbeNeverReflectsTheUpstreamBody"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/sso_landing_test.go",
-          "tests": [
-            "TestSSOLandingStartsSPInitiatedSAML",
-            "TestSSOLandingFallsBackToOIDCAndRefusesUnconfigured"
+            "TestPendingMemberHoldsNothing"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -987,7 +833,7 @@
             "TestStaffIsMembershipOfTheStaffOrg",
             "TestStaffOrgAdmitsOnlyItsDomain",
             "TestStaffOrgFoundingIsReservedToStaffAtItsDomain",
-            "TestStaffOrgSCIMProvisionsOnlyItsDomain",
+            "TestStaffOrgProvisionsOnlyItsDomain",
             "TestStaffEndsWithErasure",
             "TestStaffFollowsSignInAndStartup",
             "TestStaffUnconfiguredLeavesTheFlag",
@@ -1309,6 +1155,7 @@
             "TestAccessLineCarriesTheContract",
             "TestProbesAreNotAccessLogged",
             "TestInboundRequestIDHonouredOnlyWhenTheHopSetsIt",
+            "TestUICallsLogAndCountOnce",
             "TestWrapMiddlewareGivesABareMuxTheContract",
             "TestRequestIDReachesTheAuditRow",
             "TestFailedSignInIsNamedAndMirrored",
@@ -1344,20 +1191,6 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
-            "HTTP transport"
-          ]
-        },
-        {
-          "path": "internal/api/members_seam_test.go",
-          "tests": [
-            "TestTheMembersSeamProvisionsAPendingMemberOnly",
-            "TestTheMembersSeamDeprovisionTakesEverythingAway"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
             "HTTP transport"
           ]
         },
@@ -1430,20 +1263,6 @@
           "fixtureEntryPoint": false,
           "dependencyHints": [
             "database fixture"
-          ]
-        },
-        {
-          "path": "internal/api/oidc_test.go",
-          "tests": [
-            "TestOIDCEndpointFlow",
-            "TestPutSsoConnectionKeepsSecretWhenOmitted"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": [
-            "database fixture",
-            "HTTP transport"
           ]
         },
         {
@@ -2041,75 +1860,6 @@
       ]
     },
     {
-      "owner": "internal/auth/saml",
-      "behavior": "Signed SAML, replay, request correlation and logout",
-      "disposition": "retain",
-      "files": [
-        {
-          "path": "internal/auth/saml/mfa_test.go",
-          "tests": [
-            "TestResultMFAAsserted"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/auth/saml/replay_test.go",
-          "tests": [
-            "TestSAMLReplayFloorOutlivesTheAcceptanceWindow"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/auth/saml/saml_test.go",
-          "tests": [
-            "TestSAML_AcceptsSignedAssertion",
-            "TestSAML_RejectsBadSignature",
-            "TestSAML_RejectsUnsignedAssertion",
-            "TestSAML_RejectsWrongAudience",
-            "TestSAML_RejectsExpiredNotOnOrAfter",
-            "TestSAML_RejectsReplayedAssertionID"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/auth/saml/slo_test.go",
-          "tests": [
-            "TestSLO_MetadataAdvertisesEndpointAndIdPSupport",
-            "TestSLO_PostBindingAcceptsSignedRefusesTamperedUnsignedForeignReplayed",
-            "TestSLO_RedirectBindingVerifiesQuerySignature"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        },
-        {
-          "path": "internal/auth/saml/spinit_test.go",
-          "tests": [
-            "TestSAML_AuthnRequestIsTracked",
-            "TestSAML_SPInitiatedRoundTrip",
-            "TestSAML_InResponseToMismatchRejected",
-            "TestSAML_IDPInitiatedStillAllowed",
-            "TestSAML_InResponseToRejectedWithoutTracker",
-            "TestSAML_RequestTrackerExpires"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        }
-      ]
-    },
-    {
       "owner": "internal/auth/social",
       "behavior": "The one sign-in provider's ids and its issuer requirement",
       "disposition": "retain",
@@ -2358,6 +2108,19 @@
             "child process",
             "source/file contract",
             "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/hook_policy_test.go",
+          "tests": [
+            "TestHookProtectsVersionTagsInEveryCase",
+            "TestHookTreeCheckFailsClosed"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process"
           ]
         },
         {
@@ -2818,6 +2581,18 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/registry/published_callers_test.go",
+          "tests": [
+            "TestEveryCallerOfAnEdgeIntoPublishedPassedAGate"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/registry/staff_internal_test.go",
           "tests": [
             "TestAtStaffDomainComparesAsASCII"
@@ -3177,6 +2952,16 @@
           ]
         },
         {
+          "path": "internal/scan/publish_verdict_internal_test.go",
+          "tests": [
+            "TestPublishUnderLockRefusesAVerdictThatIsNotPublish"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/reattest_test.go",
           "tests": [
             "TestSignPayloadIsSignOverTheEncodedStatement",
@@ -3206,6 +2991,23 @@
             "TestANewRulesetEnqueuesTheSweepAndTheRedo",
             "TestARulesetJobRunsOnlyUnderItsOwnRuleset",
             "TestANewRulesetsJobsOutlastARollingDeploy"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/reinstate_test.go",
+          "tests": [
+            "TestReinstatePublishesOnlyWhatTheGateNowPasses",
+            "TestReinstateLeavesAQuarantineTheGateStillHolds",
+            "TestReinstateGivesAHeldVersionAReviewItem",
+            "TestReinstateQueuesTheScansAndMovesNothing",
+            "TestAReinstateBlockedAgainBeforeItsScanPublishesNothing",
+            "TestReinstateLeavesAnUnscannedVersionHeld"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3778,6 +3580,16 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/store/org_sso_dropped_migration_test.go",
+          "tests": [
+            "TestOrgSSOAndSCIMDroppedMigration"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/store/pqarray_test.go",
           "tests": [],
           "fuzz": [],
@@ -3857,7 +3669,9 @@
             "TestLandingSaysWhoIsSignedIn",
             "TestLogoutRevokesAndClears",
             "TestVerifyEmailConfirmsThroughTheAPI",
-            "TestCSPAdmitsTheSignOutOrigin"
+            "TestCSPAdmitsTheSignOutOrigin",
+            "TestCSPIsExactlyThisString",
+            "TestAPICallRunsUnderTheBrowserRequestsContext"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4434,7 +4248,9 @@
             "TestGuideIsAV2Field",
             "TestGuideChangesNothingAboutTheContract",
             "TestGuideDecodingStaysStrict",
-            "TestV2SchemaGuideShape"
+            "TestV2SchemaGuideShape",
+            "TestGuideConnectTakesAServerThatSignsIn",
+            "TestGuideConnectRefusesAServerThatAsksNoSignIn"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5021,11 +4837,6 @@
     },
     {
       "path": "scripts/acceptance/edge.sh",
-      "disposition": "retain",
-      "kind": "acceptance or self-test support"
-    },
-    {
-      "path": "scripts/acceptance/enterprise-sso.sh",
       "disposition": "retain",
       "kind": "acceptance or self-test support"
     },

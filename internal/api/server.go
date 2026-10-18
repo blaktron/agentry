@@ -20,7 +20,6 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
-	samlsp "github.com/blaktron/agentry/internal/auth/saml"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/dnsx"
 	"github.com/blaktron/agentry/internal/entitlements"
@@ -83,13 +82,6 @@ type Server struct {
 	// verification.
 	webhooks *webhook.Dispatcher
 	resolver dnsx.Resolver
-	// samlReplay and samlRequests are the sets every API replica must
-	// see alike: the assertions consumed, the logins started. In the
-	// database whenever there is one; in memory for a server without.
-	// SetSAMLReplayCache and SetSAMLRequestTracker take
-	// another implementation.
-	samlReplay   samlsp.ReplayCache
-	samlRequests samlsp.RequestTracker
 	// jobs is the enqueue-side queue client (webhook deliveries, audit
 	// exports). The worker role drains it; nil without a database.
 	jobs queue.Client
@@ -102,13 +94,6 @@ type Server struct {
 	// oidcHTTPClient, when set, is the HTTP client OIDC discovery/JWKS/token
 	// calls use (tests point it at an httptest IdP). nil = default client.
 	oidcHTTPClient *http.Client
-	// oidcGuard is the egress policy OIDC discovery, JWKS and token
-	// requests obey when no oidcHTTPClient is injected: the production
-	// guard, loopback allowed in dev mode so a local IdP works. An
-	// organization's issuer is an address any org admin can name, so it is
-	// fetched like a webhook, never with http.DefaultClient.
-	oidcGuard  webhook.Guard
-	oidcEgress *http.Client
 	// imgHTTPClient overrides the image proxy's guarded client (tests).
 	imgHTTPClient *http.Client
 	// imgKey signs image-proxy URLs (newImgProxyKey).
@@ -204,9 +189,6 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 	}
 	// Enterprise defaults, set regardless of database presence.
 	srv.resolver = dnsx.NewSystemResolver()
-	srv.samlReplay = samlsp.NewMemoryReplayCache()
-	srv.samlRequests = samlsp.NewMemoryRequestTracker()
-	srv.SetOIDCEgressGuard(webhook.Guard{AllowLoopback: cfg.DevMode})
 	srv.imgKey = newImgProxyKey(cfg.Auth.SealingKey)
 	// The model-input routes need no database: the scanner
 	// asks the deployment's judge when it is Jev, and the search route
@@ -228,11 +210,6 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 		srv.SetWebSearch(ws)
 	}
 	if st != nil {
-		// With a database the SAML sets live there, so a second replica
-		// refuses what the first consumed and completes what the first
-		// started.
-		srv.samlReplay = samlsp.NewStoreReplayCache(st.Queries(), srv.log)
-		srv.samlRequests = samlsp.NewStoreRequestTracker(st.Queries(), srv.log)
 		srv.reg = registry.NewService(st, aud)
 		// Webhook fan-out: enqueue deliveries onto the Postgres queue;
 		// the worker role runs the delivery handler. Wired before the blobs
@@ -573,23 +550,6 @@ func (s *Server) SetWebhookDispatcher(d *webhook.Dispatcher) { s.webhooks = d }
 // SetOIDCHTTPClient overrides the HTTP client used for OIDC discovery/JWKS/
 // token calls (tests point it at an in-process IdP).
 func (s *Server) SetOIDCHTTPClient(c *http.Client) { s.oidcHTTPClient = c }
-
-// SetSAMLReplayCache replaces the record of consumed SAML assertions (the
-// database's by default; a deployment may bring its own, shared the same
-// way across replicas).
-func (s *Server) SetSAMLReplayCache(c samlsp.ReplayCache) { s.samlReplay = c }
-
-// SetSAMLRequestTracker replaces the record of outstanding SAML
-// AuthnRequests, the replay cache's mirror image.
-func (s *Server) SetSAMLRequestTracker(t samlsp.RequestTracker) { s.samlRequests = t }
-
-// SetOIDCEgressGuard replaces the egress policy OIDC requests go through
-// (tests answer a name with an address of their choosing through the
-// guard's resolver seam; production keeps the default).
-func (s *Server) SetOIDCEgressGuard(g webhook.Guard) {
-	s.oidcGuard = g
-	s.oidcEgress = webhook.NewHTTPClient(g, nil)
-}
 
 // SetImageProxyClient overrides the guarded client the README image proxy
 // fetches with (tests point it at an in-process server).
@@ -963,17 +923,6 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	// public listener at the proxy. docs/ops/deployment.md says so too.
 	Mount(mux, "GET /metrics", s.metricsHandler())
 
-	// SCIM 2.0 data plane. Mounted outside the generated /api/v1
-	// handler: it uses its own base path, application/scim+json media type, and
-	// authenticates by SCIM bearer token (not the RBAC chokepoint), so it is
-	// deliberately not part of the OpenAPI surface (see handlers_scim.go).
-	s.mountSCIM(mux)
-
-	// Org SSO landing (endpoint list): `https://…/sso/{org}` starts the
-	// org's configured SAML/OIDC login. Root-mounted for the same reason as
-	// SCIM — it is a browser destination, not part of the JSON API surface.
-	s.mountSSOLanding(mux)
-
 	// Extension callbacks (extension_callbacks.go): /internal/x/<name>/,
 	// a root mount outside /api/ that no edge routes to the registry, for a
 	// service an extension owns, gated by the extension's own secret.
@@ -997,7 +946,7 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 
 	// The server's own browser surface (internal/ui): the device
 	// authorize page, sign-in, the account basics and the operator pages,
-	// served at /ui/ and acting through the same handler chain in-process.
+	// served at /ui/ and acting through the same API routes in-process.
 	// Off by config, or down to the authorize page when a site fronts this
 	// server. It is dispatched by prefix in front of the mux rather than
 	// registered on it: a "/ui/" pattern and git's "GET /{ns}/{repo}/info/refs"
@@ -1006,9 +955,13 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	// with it.
 	root := apiHandler
 	if s.cfg.UI.Mode != "off" {
-		var final http.Handler // bound below; the UI calls the full chain
+		// The page's in-process API calls go straight to the generated
+		// routes: they run inside the browser request's middleware, under
+		// its context, so the request has one id, one access line and one
+		// set of RED samples, and the actor the API resolves reaches the
+		// request's access line.
 		uiH := ui.New(ui.Options{
-			API:          http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { final.ServeHTTP(w, r) }),
+			API:          apiHandler,
 			Mode:         s.cfg.UI.Mode,
 			SiteURL:      s.cfg.Web.URL,
 			BaseURL:      s.cfg.BaseURL,
@@ -1025,8 +978,6 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 			}
 			apiHandler.ServeHTTP(w, r)
 		})
-		final = withMiddleware(root, s.log, s.Metrics, newProxyTrust(s.cfg.HTTP), s.cfg.HTTP.ProxyRequestID)
-		return final
 	}
 	return withMiddleware(root, s.log, s.Metrics, newProxyTrust(s.cfg.HTTP), s.cfg.HTTP.ProxyRequestID)
 }

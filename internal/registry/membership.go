@@ -2,7 +2,7 @@ package registry
 
 // The membership chokepoint. Every path that makes someone an active
 // member of an organization — accepting an invitation, an admin approving
-// a SCIM-provisioned or domain-folded person, an admin changing a role —
+// a provisioned or domain-folded person, an admin changing a role —
 // comes through ActivateMember. It is one function so the things that must
 // be true of every door are true by construction rather than by each
 // door's diligence: the seat count is taken under the organization's row
@@ -87,7 +87,7 @@ const (
 )
 
 // DoorOf names the provisioning door a membership row records, from its
-// two flags: the IdP's door first, since SCIM provisioning is the
+// two flags: the IdP's door first, since provisioning is the
 // organization's own act and the domain is the registry's inference. An
 // admin-granted membership has neither and is "".
 func DoorOf(viaSCIM, viaDomain bool) MembershipVia {

@@ -8,14 +8,18 @@ package api_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/testidp"
 )
 
@@ -182,7 +186,7 @@ func TestStaffOrgAdmitsOnlyItsDomain(t *testing.T) {
 	}
 
 	// An account whose address is outside the domain cannot be approved in
-	// either: seeded pending (the fold-in's or SCIM's row), the approval is
+	// either: seeded pending (the fold-in's or provisioning's row), the approval is
 	// the chokepoint and refuses it.
 	carol := f.env.registerEmail("carol", "carol-"+f.env.sfx+"@elsewhere.test")
 	f.env.verifyEmail(carol)
@@ -240,39 +244,29 @@ func TestStaffOrgFoundingIsReservedToStaffAtItsDomain(t *testing.T) {
 	wantProblem(t, env.do(sess, http.MethodPost, "/api/v1/orgs", body), http.StatusConflict, "staff-org-domain")
 }
 
-// TestStaffOrgSCIMProvisionsOnlyItsDomain: the IdP's door refuses an
-// address outside the domain before any account is made for it.
-func TestStaffOrgSCIMProvisionsOnlyItsDomain(t *testing.T) {
+// TestStaffOrgProvisionsOnlyItsDomain: the members seam refuses to
+// provision an address outside the staff organization's domain before any
+// account is made for it.
+func TestStaffOrgProvisionsOnlyItsDomain(t *testing.T) {
 	f := newStaffFixture(t)
-	var tok struct {
-		Token string `json:"token"`
+	ctx := context.Background()
+	var orgID uuid.UUID
+	if err := f.env.st.Pool().QueryRow(ctx, `SELECT id FROM handles WHERE handle = $1`, f.org).Scan(&orgID); err != nil {
+		t.Fatal(err)
 	}
-	f.env.doJSON(f.founder, http.MethodPost, "/api/v1/orgs/"+f.org+"/scim/tokens", map[string]any{}, &tok, http.StatusCreated)
-	scim := caller{name: "scim", pat: tok.Token}
-	user := func(email string) map[string]any {
-		return map[string]any{
-			"schemas":  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
-			"userName": email, "active": true,
-			"emails": []map[string]any{{"value": email, "primary": true}},
-		}
-	}
-	res := f.env.do(scim, http.MethodPost, "/scim/v2/Users", user("dave-"+f.env.sfx+"@elsewhere.test"))
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusConflict {
-		t.Fatalf("SCIM outside the domain: got %d want 409", res.StatusCode)
+	outside := "dave-" + f.env.sfx + "@elsewhere.test"
+	if _, err := f.env.srvObj.ProvisionMember(ctx, "probe", orgID, api.ProvisionedMember{Email: outside}); !errors.Is(err, registry.ErrStaffOrgDomain) {
+		t.Fatalf("provisioning outside the domain: %v, want ErrStaffOrgDomain", err)
 	}
 	var made int
-	if err := f.env.st.Pool().QueryRow(context.Background(),
-		`SELECT count(*) FROM users WHERE email = $1`, "dave-"+f.env.sfx+"@elsewhere.test").Scan(&made); err != nil {
+	if err := f.env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM users WHERE email = $1`, outside).Scan(&made); err != nil {
 		t.Fatal(err)
 	}
 	if made != 0 {
-		t.Fatal("a refused SCIM create must make no account")
+		t.Fatal("a refused provisioning must make no account")
 	}
-	res = f.env.do(scim, http.MethodPost, "/scim/v2/Users", user("erin-"+f.env.sfx+"@"+f.domain))
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("SCIM at the domain: got %d want 201", res.StatusCode)
+	if _, err := f.env.srvObj.ProvisionMember(ctx, "probe", orgID, api.ProvisionedMember{Email: "erin-" + f.env.sfx + "@" + f.domain}); err != nil {
+		t.Fatalf("provisioning at the domain: %v", err)
 	}
 }
 

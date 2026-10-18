@@ -562,7 +562,9 @@ func validateInteractive(s *issues, m *Manifest) {
 // setup. The overview and each key's connect help are markdown and may
 // span lines; every other part is one plain line. A connect key must be
 // a secret the release declares, in capabilities.secrets or a declared
-// MCP server's secrets, so help never names a key the run cannot take.
+// MCP server's secrets, or the id of a declared server that signs in by
+// OAuth (MCPServer.SourceID), so help never names a key the run cannot
+// take or a server that asks for no sign-in.
 // No part may carry a format character (a bidi override, a zero-width
 // space) or a C1 control: the guide is read by a person deciding what
 // to hand a run, and the connect help is read by one deciding where to
@@ -589,7 +591,12 @@ func validateGuide(s *issues, m *Manifest) {
 	guideLine(s, "guide.files", "files", g.Files, MaxGuideFilesChars, false)
 	guideLine(s, "guide.task", "task", g.Task, MaxGuideTaskChars, false)
 
-	declared := declaredSecretNames(m.Capabilities)
+	keys := declaredSecretNames(m.Capabilities)
+	for _, srv := range m.Capabilities.MCPServers {
+		if srv.NeedsConnection() {
+			keys[srv.SourceID()] = true
+		}
+	}
 	names := make([]string, 0, len(g.Connect))
 	for n := range g.Connect {
 		names = append(names, n)
@@ -597,8 +604,8 @@ func validateGuide(s *issues, m *Manifest) {
 	sort.Strings(names)
 	for _, n := range names {
 		p := "guide.connect." + n
-		if !declared[n] {
-			s.errf("V10", p, "%q is not a secret this release declares (capabilities.secrets or an MCP server's secrets)", n)
+		if !keys[n] {
+			s.errf("V10", p, "%q is neither a secret this release declares (capabilities.secrets or an MCP server's secrets) nor a declared server that signs in by OAuth (url:…, npm:… or pypi:…)", n)
 		}
 		what := "connect help for " + n
 		if guideText(s, p, what, g.Connect[n], MaxGuideConnectChars, true) {

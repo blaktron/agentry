@@ -905,7 +905,7 @@ the receipt, and decides from it where the run's docker filter runs.
 | Colima | macOS | `colima start`; Agentry Desktop can install and run it for you | sidecar | supported |
 | Lima, the `docker-rootful` template | macOS | its context selected | sidecar | expected to work, not yet tested |
 | Rancher Desktop, dockerd (moby) backend | macOS | the dockerd backend chosen in its settings; its socket is `~/.rd/docker.sock` | sidecar | supported (tested with 1.24.0) |
-| Rancher Desktop, dockerd (moby) backend | Windows | the dockerd backend chosen in its settings | sidecar | expected to work, not yet tested |
+| Rancher Desktop, dockerd (moby) backend | Windows | the dockerd backend chosen in its settings | sidecar | supported (tested with 1.24.0) |
 | Podman Desktop (a podman machine) | macOS | the `docker` CLI installed and pointed at the machine's API socket (`podman machine inspect` names it) | sidecar | supported (tested with podman 6.1.4); no policy runtime |
 | Podman Desktop (a podman machine) | Windows | the `docker` CLI pointed at the machine's socket | sidecar | not yet tested; no policy runtime |
 | OrbStack | macOS | running | sidecar | expected to work, not yet tested |
@@ -2360,13 +2360,14 @@ The save keeps `fetch`'s rules and adds its own:
 - **Credentials through `auth` alone.** An `Authorization`, `Cookie` or
   `Proxy-Authorization` header is refused, as for any `fetch`.
 - **No granted secret is kept.** A body that holds a granted secret's
-  value byte for byte, found even where it straddles the parts the body
-  is copied in, stops the save, and nothing is left at the path. (A body a
-  host sends encoded, say gzip asked for in `headers`, is saved as sent,
-  and an echoed value inside it is not seen.)
+  value, found even where it straddles the parts the body is copied in,
+  stops the save, and nothing is left at the path. A body the host sends
+  encoded is decoded first, so the value is looked for in the bytes that
+  would be saved ([encoded bodies](#encoded-response-bodies)).
 - **Inside the folder, never executable.** The path is resolved beneath
-  `/scratch` through the folder's `os.Root`: a path that climbs out, or a
-  link a declared command planted that points out, is refused. The body is
+  `/scratch`, every element of it held beneath the folder by the kernel
+  (`openat2` with `RESOLVE_BENEATH`, under gVisor too): a path that climbs
+  out, or a link a declared command planted that points out, is refused. The body is
   written to a new file of its own beside the path, made mode 0666, then
   renamed over the path, so a file already there is replaced, never written
   through. A `HEAD` request has no body and is refused with `saveTo`.
@@ -2384,6 +2385,34 @@ is recorded in the run's fetch ledger
 ledger cannot record is removed rather than kept. The System
 Prompt's data rule names whatever is downloaded into the scratch folder as
 data, never instructions.
+
+### Encoded response bodies
+
+A host sends a response body encoded (the `Content-Encoding` header) when
+the request asked for it in `headers`, say `Accept-Encoding: gzip`, and
+some hosts do so unasked. `fetch` decodes the body before anything else
+sees it, so the scrub of an answer, the check of a body saved because it
+was larger than one result, and the watch behind `saveTo` all look for a
+granted secret's value in the bytes the agent would read:
+
+- **gzip, deflate and br are decoded.** The saved file, and the bytes and
+  SHA-256 on its line of the fetch ledger, are the decoded body, and the
+  answer to a `saveTo` says so in a `content-encoding` line instead of
+  giving the encoded length as the file's.
+- **One coding at most.** A body sent in more than one coding, whether in
+  one header value or in several, is refused, and so is a body in any
+  coding other than those three: it is not passed through as bytes.
+  `identity` is no coding.
+- **A decoded size limit.** A body may decode to at most 64 times
+  `fetch`'s 512 KiB reply cap, 32 MiB. A `saveTo` of a body that decodes
+  past it is refused and nothing is left at the path. An answer without
+  `saveTo` reads the decoded body up to the reply cap, as for any body.
+- **A refusal says what to do.** It tells the agent to ask with the header
+  `Accept-Encoding: identity`.
+
+The value is looked for as it is written. A host that echoes it re-encoded
+some other way (base64, say) shows the agent that form, which the checks do
+not recognise.
 
 ### One tool result at a time: pages
 

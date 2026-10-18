@@ -71,19 +71,14 @@ tags:
     description: Platform baseline and org policy overlays.
   - name: platform
     description: Trust & safety actions and advisories.
-  - name: sso
-    description: "Enterprise SSO: SAML 2.0 SP and OIDC RP."
-  - name: scim
-    description: SCIM 2.0 provisioning tokens.
   - name: webhooks
     description: Org webhook endpoints and deliveries.
   - name: domains
     description: >-
       Domain verification. A verified domain is what an
-      organization proves it controls, and three things rest on it: linking
-      an SSO identity to an existing member's account for the first time,
-      mailing an invitation to an address there, and treating that address
-      as confirmed when its invitation is accepted.
+      organization proves it controls, and two things rest on it: mailing
+      an invitation to an address there, and treating that address as
+      confirmed when its invitation is accepted.
   - name: mcp-servers
     description: >-
       The registry of scanned MCP server package versions S7 keeps and the
@@ -162,21 +157,9 @@ paths:
       operationId: logout
       tags: [auth]
       summary: Revoke the current session.
-      description: >-
-        Answers 204 for a session opened through an OpenID provider. For a session established
-        through an organization's SAML connection whose IdP publishes a
-        Single Logout endpoint, answers 200 with the IdP logout URL the
-        browser should be sent to next (SP-initiated SLO); the
-        registry session is revoked either way.
       responses:
         "204":
           description: Session revoked.
-        "200":
-          description: Session revoked; continue the logout at the IdP.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LogoutResult"
         default:
           $ref: "#/components/responses/Problem"
 
@@ -217,7 +200,6 @@ paths:
         configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a
         verified ID token). A provider id the server does not serve answers
         404. This is individual sign-in and never grants org membership.
-        Org SSO lives under /orgs/{org}/sso.
       security: []
       parameters:
         - $ref: "#/components/parameters/SocialProvider"
@@ -1460,8 +1442,9 @@ paths:
       tags: [orgs]
       summary: >
         Approve a pending member (admin). The seat check fires here: a
-        person provisioned by SCIM, or folded in from the organization's
-        domain, holds no seat until an admin approves them.
+        person provisioned by the organization's identity provider, or
+        folded in from the organization's domain, holds no seat until an
+        admin approves them.
       parameters:
         - $ref: "#/components/parameters/OrgHandle"
         - $ref: "#/components/parameters/Handle"
@@ -3510,301 +3493,6 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
-  /orgs/{org}/sso/connections:
-    get:
-      operationId: listSsoConnections
-      tags: [sso]
-      summary: List the org's SSO connections (admin).
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-      responses:
-        "200":
-          description: Connections (secrets redacted).
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/SsoConnection"
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /orgs/{org}/sso/connections/{kind}:
-    put:
-      operationId: putSsoConnection
-      description: >
-        403 `feature-not-included` while the organization's subscription
-        does not include single sign-on. An existing connection is left
-        alone by a subscription change and works again the moment the
-        subscription includes SSO.
-      tags: [sso]
-      summary: Create or update a SAML/OIDC connection (admin).
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-        - $ref: "#/components/parameters/SsoKind"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SsoConnectionInput"
-      responses:
-        "200":
-          description: Connection stored.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SsoConnection"
-        default:
-          $ref: "#/components/responses/Problem"
-    delete:
-      operationId: deleteSsoConnection
-      tags: [sso]
-      summary: Delete a connection (admin).
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-        - $ref: "#/components/parameters/SsoKind"
-      responses:
-        "204":
-          description: Deleted.
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /orgs/{org}/sso/connections/{kind}/test:
-    post:
-      operationId: testSsoConnection
-      tags: [sso]
-      summary: Probe a stored connection without signing in (admin).
-      description: >
-        OIDC: runs discovery against the stored issuer and reports the
-        endpoints it advertises. SAML: parses the stored IdP metadata and
-        reports entity id, sign-on URLs and signing-certificate expiry.
-        Neither contacts the IdP's sign-in flow or uses the client secret.
-        A failed probe is a 200 with ok=false and the reason, so the admin
-        page can show it inline.
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-        - $ref: "#/components/parameters/SsoKind"
-      responses:
-        "200":
-          description: Probe outcome.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SsoConnectionTest"
-        default:
-          $ref: "#/components/responses/Problem"
-  /orgs/{org}/sso/saml/metadata:
-    get:
-      operationId: getSamlMetadata
-      tags: [sso]
-      summary: SP SAML metadata for this org's connection.
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-      responses:
-        "200":
-          description: SP metadata XML.
-          content:
-            application/samlmetadata+xml:
-              schema:
-                type: string
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /orgs/{org}/sso/saml/acs:
-    post:
-      operationId: samlAcs
-      tags: [sso]
-      summary: "SAML Assertion Consumer Service: consume a signed assertion."
-      description: >
-        A `RelayState` form field holding a same-origin path puts this in
-        browser mode: the session and CSRF cookies are set and the answer
-        is a 303 to that path, and a failure is a 303 to the sign-in page
-        carrying the reason, because a browser cannot read a problem
-        document. Anything else in `RelayState` is ignored. Without one the
-        answer is the JSON below. 404 while the organization's subscription
-        does not include SSO.
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-      responses:
-        "200":
-          description: SSO session established.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResult"
-        "303":
-          description: Browser mode — the session is set and the browser returns to the path RelayState named, or to the sign-in page on a failure.
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /orgs/{org}/sso/saml/slo:
-    get:
-      operationId: samlSloRedirect
-      tags: [sso]
-      summary: "SAML Single Logout endpoint, HTTP-Redirect binding."
-      description: >-
-        Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it
-        names and answers the IdP with a LogoutResponse) or the IdP's
-        LogoutResponse to an SP-initiated logout (validated, then the browser
-        is sent home).
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-      responses:
-        "303":
-          description: Redirect to the IdP's SLO endpoint (LogoutResponse) or home.
-        "200":
-          description: Logged out; the IdP publishes no endpoint to answer to.
-        default:
-          $ref: "#/components/responses/Problem"
-    post:
-      operationId: samlSloPost
-      tags: [sso]
-      summary: "SAML Single Logout endpoint, HTTP-POST binding."
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-      responses:
-        "303":
-          description: Redirect to the IdP's SLO endpoint (LogoutResponse) or home.
-        "200":
-          description: Logged out; the IdP publishes no endpoint to answer to.
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /orgs/{org}/sso/oidc/start:
-    get:
-      operationId: oidcStart
-      tags: [sso]
-      summary: Begin the OIDC auth-code + PKCE flow (redirect to IdP).
-      description: >
-        404 while the organization's subscription does not include SSO: the
-        door is not there to be started. `next` puts the callback in
-        browser mode.
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-        - name: next
-          in: query
-          description: >
-            Where the browser returns after a successful sign-in. A
-            same-origin path only (leading `/`, not `//`); anything else is
-            ignored. It is sealed into the state the callback reads, so the
-            identity provider's round trip cannot change it.
-          schema:
-            type: string
-      responses:
-        "302":
-          description: Redirect to the IdP authorization endpoint.
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /orgs/{org}/sso/oidc/callback:
-    get:
-      operationId: oidcCallback
-      tags: [sso]
-      summary: "OIDC redirect URI: exchange the code and establish a session."
-      description: >
-        When the start carried a `next`, this is browser mode: the session
-        and CSRF cookies are set and the answer is a 303 to that path, and
-        a failure is a 303 to the sign-in page carrying the reason.
-        Otherwise the answer is the JSON below. 404 while the
-        organization's subscription does not include SSO.
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-        - name: code
-          in: query
-          schema:
-            type: string
-        - name: state
-          in: query
-          schema:
-            type: string
-      responses:
-        "200":
-          description: SSO session established.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LoginResult"
-        "303":
-          description: Browser mode — the session is set and the browser returns to the path `next` named, or to the sign-in page on a failure.
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /orgs/{org}/scim/tokens:
-    get:
-      operationId: listScimTokens
-      tags: [scim]
-      summary: List active SCIM provisioning tokens (admin).
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-      responses:
-        "200":
-          description: SCIM tokens (secret shown only at creation).
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ScimToken"
-        default:
-          $ref: "#/components/responses/Problem"
-    post:
-      operationId: createScimToken
-      description: >
-        403 `feature-not-included` while the organization's subscription
-        does not include directory provisioning. Tokens already issued are
-        left alone by a subscription change and provision again the moment
-        it includes SCIM.
-      tags: [scim]
-      summary: Mint a SCIM bearer token (admin).
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                expiresInDays:
-                  type: integer
-                  minimum: 1
-                  maximum: 730
-      responses:
-        "201":
-          description: Token created; the token value is returned once.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ScimTokenCreated"
-        default:
-          $ref: "#/components/responses/Problem"
-
-  /orgs/{org}/scim/tokens/{tokenId}:
-    delete:
-      operationId: revokeScimToken
-      tags: [scim]
-      summary: Revoke a SCIM token (admin).
-      parameters:
-        - $ref: "#/components/parameters/OrgHandle"
-        - name: tokenId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "204":
-          description: Revoked.
-        default:
-          $ref: "#/components/responses/Problem"
-
   /orgs/{org}/webhooks:
     get:
       operationId: listWebhooks
@@ -4164,6 +3852,16 @@ paths:
       operationId: platformAgentAction
       tags: [platform]
       summary: Quarantine, block, or reinstate an agent (platform staff).
+      description: |
+        Quarantine and block take effect before the response. Reinstate clears
+        the agent's flag and asks for a fresh scan of each of its blocked and
+        quarantined versions, then returns; it publishes nothing itself. A
+        version is published again, signed as any publication is, only when the
+        gate's verdict on its new scan is publish, and its open review item is
+        closed with the reinstate's reason. Every other version stays held: a
+        blocked one becomes quarantined once its verdict exists, and each has an
+        open platform review item for a person to decide against the new scan.
+        A version admitted without a scan has no scan to judge and stays as it is.
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -4185,8 +3883,16 @@ paths:
                   type: string
                   maxLength: 1000
       responses:
+        "202":
+          description: >-
+            Reinstate accepted: the agent's flag is cleared and each blocked or
+            quarantined version has a scan queued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformReinstateAccepted"
         "204":
-          description: Action applied.
+          description: Quarantine or block applied.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -4723,13 +4429,6 @@ components:
       schema:
         type: string
         pattern: "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"
-    SsoKind:
-      name: kind
-      in: path
-      required: true
-      schema:
-        type: string
-        enum: [saml, oidc]
     WebhookID:
       name: id
       in: path
@@ -4949,7 +4648,7 @@ components:
           type: string
         via:
           type: string
-          description: The door — `domain` (their verified address is at the organization's domain) or `scim`.
+          description: The door — `domain` (their verified address is at the organization's domain) or `scim` (the organization's identity provider provisioned them).
           enum: [domain, scim]
 
     PublicUser:
@@ -5519,7 +5218,7 @@ components:
       description: >
         An organization role, ordered admin > security_reviewer | member.
         Admins manage the organization,
-        its members, settings, SSO and SCIM, and hold the security
+        its members, settings and sign-in policy, and hold the security
         reviewer's powers; security_reviewer is a platform-internal role
         that exists only inside a first-party organization; there is no owner
         role, only admins. An organization always
@@ -5975,6 +5674,14 @@ components:
           type: string
           description: User-Agent recorded at session creation.
 
+    PlatformReinstateAccepted:
+      type: object
+      required: [queued]
+      properties:
+        queued:
+          type: integer
+          minimum: 0
+          description: How many blocked or quarantined versions have a scan queued.
     RulesetRelease:
       type: object
       required: [id, semver, bundleDigest, publishedAt]
@@ -5991,15 +5698,6 @@ components:
         publishedAt:
           type: string
           format: date-time
-
-    LogoutResult:
-      type: object
-      required: [idpLogoutUrl]
-      properties:
-        idpLogoutUrl:
-          type: string
-          format: uri
-          description: Send the browser here to end the IdP session too (SAML SLO).
 
     RedTeamReport:
       type: object
@@ -7470,83 +7168,6 @@ components:
                 type: string
               message:
                 type: string
-
-    SsoConnectionTest:
-      type: object
-      required: [ok, kind, summary, checkedAt]
-      properties:
-        ok:
-          type: boolean
-        kind:
-          type: string
-          enum: [saml, oidc]
-        summary:
-          description: One line for the admin page.
-          type: string
-        details:
-          description: Discovered endpoints / metadata facts (strings only).
-          type: object
-          additionalProperties:
-            type: string
-        warnings:
-          type: array
-          items:
-            type: string
-        checkedAt:
-          type: string
-          format: date-time
-    SsoConnection:
-      type: object
-      required: [kind, enabled]
-      properties:
-        kind:
-          type: string
-          enum: [saml, oidc]
-        enabled:
-          type: boolean
-        config:
-          type: object
-          additionalProperties: true
-          description: Non-secret connection settings (client secrets are redacted).
-
-    SsoConnectionInput:
-      type: object
-      required: [enabled, config]
-      properties:
-        enabled:
-          type: boolean
-        config:
-          type: object
-          additionalProperties: true
-          description: SAML (idpMetadataXml or idpEntityId+idpCertificatePem+idpSsoUrl) or OIDC (issuer, clientId, clientSecret) settings. An OIDC save that omits clientSecret keeps the stored one; to drop the secret, delete the connection.
-
-    ScimToken:
-      type: object
-      required: [id, createdAt]
-      properties:
-        id:
-          type: string
-          format: uuid
-        createdAt:
-          type: string
-          format: date-time
-        expiresAt:
-          type: string
-          format: date-time
-
-    ScimTokenCreated:
-      type: object
-      required: [id, token]
-      properties:
-        id:
-          type: string
-          format: uuid
-        token:
-          type: string
-          description: The SCIM bearer token; shown once.
-        expiresAt:
-          type: string
-          format: date-time
 
     WebhookEndpoint:
       type: object

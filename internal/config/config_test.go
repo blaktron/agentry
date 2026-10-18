@@ -286,7 +286,6 @@ func TestValidateGuardsTheNewSurfaces(t *testing.T) {
 			c.Auth.SealingKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 			c.Knowledge.SealingKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 		}},
-		{"zero scim budget", func(c *Config) { c.Limits.SCIMPerMin = 0 }},
 		{"zero git concurrency per IP", func(c *Config) { c.Limits.GitConcurrentPerIP = 0 }},
 		{"unparseable signing window", func(c *Config) { c.Signing.NotAfter = "next tuesday" }},
 		{"inverted signing window", func(c *Config) {
@@ -340,7 +339,6 @@ func TestDefaultLimits(t *testing.T) {
 		{"webhook endpoints per org", int64(l.WebhookEndpointsPerOrg), 20},
 		{"webhook deliveries per second", int64(l.WebhookDeliveriesPerSecond), 5},
 		{"git pushes per hour", int64(l.GitPushesPerHour), 60},
-		{"scim per minute per organization", int64(l.SCIMPerMin), 600},
 		{"git concurrent per IP", int64(l.GitConcurrentPerIP), 20},
 		{"archive max bytes", l.ArchiveMaxBytes, 10 << 20},
 		{"archive max files", int64(l.ArchiveMaxFiles), 2000},

@@ -31,7 +31,7 @@ import (
 // anything else is a typo that reads as a claim about enforcement.
 var rateClasses = map[string]bool{
 	"login": true, "anon": true, "authed": true, "abuse_reports": true,
-	"push": true, "ssh-key-offer": true, "scim": true, "git-concurrent": true,
+	"push": true, "ssh-key-offer": true, "git-concurrent": true,
 	api.RateNone: true, api.RatePerPrincipal: true,
 }
 
@@ -40,8 +40,8 @@ var rateClasses = map[string]bool{
 // every declaration names a pattern the mux serves. The generated surface
 // declares through RouteDecl, keyed by operationId; a root mount declares
 // through MountDecl, keyed by its pattern. The gate walks the mux rather
-// than the spec, because the root mounts — SCIM, the image proxy, git smart
-// HTTP, the SSO landing, the probes, /metrics, the .well-known documents —
+// than the spec, because the root mounts — the image proxy, git smart
+// HTTP, the probes, /metrics, the .well-known documents —
 // are not in the spec, and a new one would otherwise ship with no
 // declaration and no failure.
 func TestRouteDeclarationsComplete(t *testing.T) {
@@ -658,30 +658,10 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		},
 		"logout": {method: "POST", path: sPath("/api/v1/auth/logout"), skipCallers: map[string]bool{"admin": true, "security_reviewer": true, "member": true, "pending": true, "outsider": true}},
 
-		// Enterprise: SSO/SCIM config = admin; webhooks/domains =
-		// admin+; audit export = admin+ (audit:read). Allowed callers may still
-		// get 404/422 (missing target / invalid config) — the matrix only
-		// asserts the authz outcome (not 401/403), so these are fine.
-		"listSsoConnections": {method: "GET", path: orgPath("/sso/connections")},
-		"putSsoConnection": {
-			method: "PUT", path: orgPath("/sso/connections/oidc"),
-			body: func(*matrixSeed, string) any {
-				return map[string]any{"enabled": false, "config": map[string]any{"issuer": "https://idp.example", "clientId": "x"}}
-			},
-		},
-		"deleteSsoConnection": {method: "DELETE", path: orgPath("/sso/connections/oidc")},
-		"testSsoConnection":   {method: "POST", path: orgPath("/sso/connections/oidc/test")},
-		"listScimTokens":      {method: "GET", path: orgPath("/scim/tokens")},
-		"createScimToken": {
-			method: "POST", path: orgPath("/scim/tokens"),
-			body: func(*matrixSeed, string) any { return map[string]any{} },
-		},
-		"revokeScimToken": {
-			method: "DELETE",
-			path: func(s *matrixSeed, _ string) string {
-				return "/api/v1/orgs/" + s.orgH + "/scim/tokens/" + uuid.NewString()
-			},
-		},
+		// Enterprise: webhooks/domains = admin+; audit export = admin+
+		// (audit:read). Allowed callers may still get 404/422 (missing
+		// target / invalid config) — the matrix only asserts the authz
+		// outcome (not 401/403), so these are fine.
 		"listWebhooks": {method: "GET", path: orgPath("/webhooks")},
 		"createWebhook": {
 			method: "POST", path: orgPath("/webhooks"),
