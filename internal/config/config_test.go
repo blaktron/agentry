@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"io/fs"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -10,9 +12,13 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	cfg, err := Load(filepath.Join(t.TempDir(), "nonexistent-means-defaults-only.yaml"))
-	if err == nil {
-		t.Fatalf("expected error for explicit missing file")
+	// A file named explicitly must exist: its absence is the reading
+	// refusal itself, not a later default-validation error (the defaults
+	// alone are refused too, below, so any error would not tell them apart).
+	missing := filepath.Join(t.TempDir(), "nonexistent-means-defaults-only.yaml")
+	cfg, err := Load(missing)
+	if !errors.Is(err, fs.ErrNotExist) || !strings.Contains(err.Error(), "reading "+missing) {
+		t.Fatalf("Load of an explicit missing file: err = %v, want the reading refusal for it", err)
 	}
 	// Empty path with no agentry.yaml in cwd yields pure defaults — and the
 	// pure defaults refuse to run: dev mode is opt-in, so with no
@@ -69,11 +75,21 @@ func TestLoadFileAndEnvPrecedence(t *testing.T) {
 func TestLoadRejectsUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "agentry.yaml")
-	if err := os.WriteFile(path, []byte("bogusKey: true\n"), 0o644); err != nil {
+	// Everything but the unknown key would load (dev mode opted in), so no
+	// other guard can answer for the refusal.
+	if err := os.WriteFile(path, []byte("devMode: true\nbogusKey: true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(path); err == nil {
-		t.Fatal("unknown config keys must be rejected")
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "parsing "+path) || !strings.Contains(err.Error(), "bogusKey") {
+		t.Fatalf("Load with an unknown key: err = %v, want the parsing refusal naming bogusKey", err)
+	}
+	// The same file without the key loads.
+	if err := os.WriteFile(path, []byte("devMode: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err != nil {
+		t.Fatalf("Load without the unknown key: %v", err)
 	}
 }
 
