@@ -308,10 +308,9 @@ func (s *Server) RunOrgDecommissionSweep(ctx context.Context) (int, error) {
 // return: it checks the state and the hold again (a reinstatement that
 // landed meanwhile stops it whole, before anything is touched), defers on
 // a version still in the pipeline, deletes invitations, memberships, teams,
-// webhooks, SSO connections and identities, SCIM tokens, domain claims,
-// the policy and the audit exports, revokes org-bound tokens, retires the
-// agents private, scrubs the row as decommissioned, releases the handle
-// and audits org.erase. The second phase, which the sweep resumes if it is
+// webhooks, domain claims, the policy and the audit exports, revokes
+// org-bound tokens, retires the agents private, scrubs the row as
+// decommissioned, releases the handle and audits org.erase. The second phase, which the sweep resumes if it is
 // interrupted, yanks every published or quarantined version and rejects
 // every one under review (version rows are immutable and are never
 // deleted), deletes the archives and the export objects from the blob
@@ -363,9 +362,6 @@ func (s *Server) eraseOrg(ctx context.Context, orgID uuid.UUID, handle string) e
 			{"fold_in_declines", func() (int64, error) { return tq.DeleteOrgFoldInDeclines(ctx, orgID) }},
 			{"teams", func() (int64, error) { return tq.DeleteOrgTeams(ctx, orgID) }},
 			{"webhook_endpoints", func() (int64, error) { return tq.DeleteOrgWebhookEndpoints(ctx, orgID) }},
-			{"identities", func() (int64, error) { return tq.DeleteOrgSSOIdentities(ctx, orgID) }},
-			{"sso_connections", func() (int64, error) { return tq.DeleteOrgSSOConnections(ctx, orgID) }},
-			{"scim_tokens", func() (int64, error) { return tq.DeleteOrgSCIMTokens(ctx, orgID) }},
 			{"domain_claims", func() (int64, error) { return tq.DeleteOrgDomainClaims(ctx, orgID) }},
 			{"policies", func() (int64, error) { return tq.DeleteOrgPolicy(ctx, &orgID) }},
 			{"audit_exports", func() (int64, error) { return tq.DeleteOrgAuditExports(ctx, orgID) }},

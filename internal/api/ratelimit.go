@@ -24,8 +24,6 @@ type limitClasses struct {
 	anonBurst   int
 	login       rate.Limit
 	loginBurst  int
-	scim        rate.Limit
-	scimBurst   int
 }
 
 func classesFromConfig(l config.Limits) limitClasses {
@@ -36,8 +34,6 @@ func classesFromConfig(l config.Limits) limitClasses {
 		anonBurst:   l.AnonymousPerMin,
 		login:       ratelimit.PerMinute(l.LoginPerMin),
 		loginBurst:  l.LoginPerMin,
-		scim:        ratelimit.PerMinute(l.SCIMPerMin),
-		scimBurst:   l.SCIMPerMin,
 	}
 }
 
@@ -47,9 +43,9 @@ type limitResult = ratelimit.Result
 
 // allowLogin applies the login/register class limit (per client IP),
 // writes the RateLimit-* headers, and on refusal writes the 429 problem.
-// Credential-establishing endpoints — register, login, SSO/social start and
-// callback, the SSO landing — sit outside the chokepoint, so this is the one
-// budget standing between them and a password-spraying client.
+// Credential-establishing endpoints — the sign-in start and callback — sit
+// outside the chokepoint, so this is the one budget standing between them
+// and a client hammering them.
 func (s *Server) allowLogin(w http.ResponseWriter, r *http.Request) bool {
 	res := s.limits.Allow("login", clientIP(r), s.classes.login, s.classes.loginBurst)
 	writeRateLimitHeaders(w, res)
