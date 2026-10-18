@@ -39,8 +39,6 @@ var unactivatedWrites = []string{
 	"DELETE /user/ssh-keys/{}",
 	"POST /user/tokens/desktop-grant",
 	"POST /invitations/{}",
-	"POST /orgs/{}/sso/saml/acs",
-	"POST /orgs/{}/sso/saml/slo",
 }
 
 const apiPrefix = "/api/v1"

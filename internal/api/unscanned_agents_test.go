@@ -240,8 +240,8 @@ func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
 	}
 
 	// Public is refused while a version admitted unscanned stands, even
-	// after the flag is cleared — and quarantined counts as standing,
-	// since a reinstate would walk it back to published without the gate.
+	// after the flag is cleared — and quarantined counts as standing: the
+	// version is still there, and only a yank ends it.
 	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/internal", map[string]any{"pipelineSkip": false}, nil, http.StatusOK)
 	res := env.do(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/internal", map[string]any{"visibility": "public"})
 	var p struct {
@@ -260,10 +260,12 @@ func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
 	if code, slug, _ := problemOf(t, env.do(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/internal", map[string]any{"visibility": "public"})); code != http.StatusConflict || slug != "agent-unscanned" {
 		t.Fatalf("public with an unscanned version quarantined: %d %s, want 409 agent-unscanned", code, slug)
 	}
-	env.doJSON(staff, http.MethodPost, "/api/v1/platform/agents/"+orgH+"/internal/reinstate", map[string]any{"reason": "done"}, nil, http.StatusNoContent)
+	// A reinstate asks for a scan of what it releases, and a version admitted
+	// without one has none to judge: it stays held, and still stands.
+	env.doJSON(staff, http.MethodPost, "/api/v1/platform/agents/"+orgH+"/internal/reinstate", map[string]any{"reason": "done"}, nil, http.StatusAccepted)
 	env.doJSON(admin, http.MethodGet, "/api/v1/agents/"+orgH+"/internal/versions/1.0.0", nil, &v, http.StatusOK)
-	if v.Status != "published" {
-		t.Fatalf("reinstated on a private agent: %s, want published", v.Status)
+	if v.Status != "quarantined" {
+		t.Fatalf("reinstated, admitted unscanned: %s, want quarantined", v.Status)
 	}
 	// Yanked, it stands no more.
 	env.doJSON(admin, http.MethodPost, "/api/v1/agents/"+orgH+"/internal/versions/1.0.0/yank", map[string]any{"reason": "unscanned"}, nil, http.StatusNoContent)

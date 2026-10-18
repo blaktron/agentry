@@ -177,6 +177,15 @@ page carries the warning, and an advisory is raised against it. A version
 or agent that trust & safety has confirmed malicious is **blocked**, and
 downloads then return `410 Gone`.
 
+Lifting a block or a quarantine is a scan too. Platform staff's
+reinstate publishes nothing by itself: it asks for a fresh scan of each
+blocked or quarantined version of the agent and runs it through the same
+gate, under the policy then in force. A version the gate passes is published
+again, and its review item is closed with the reinstate's reason. Every other
+version stays quarantined (a blocked one becomes quarantined), with an open
+platform review item for a person to decide against the new scan. A version
+admitted without a scan has nothing to scan and stays as it is.
+
 A new ruleset also judges the review queue again. Every version still
 waiting for a person is scanned under the new rules and run through the
 same gate as a fresh submission, under the policy then in force. One that

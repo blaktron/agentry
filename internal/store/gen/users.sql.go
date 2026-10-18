@@ -480,8 +480,7 @@ ORDER BY i.created_at, i.id
 `
 
 // The subjects the account signs in with at individual providers
-// ("<provider>:<sub>"), oldest first. An organization's SSO identities are
-// left out: they belong to the organization's connection.
+// ("<provider>:<sub>"), oldest first.
 func (q *Queries) ListUserSignInSubjects(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	rows, err := q.db.Query(ctx, listUserSignInSubjects, userID)
 	if err != nil {

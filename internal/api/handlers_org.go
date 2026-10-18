@@ -12,6 +12,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/maildomains"
 	"github.com/blaktron/agentry/internal/registry"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
@@ -710,7 +711,7 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 }
 
 // ApproveOrgMember implements POST /orgs/{org}/members/{handle}/approve
-// (admin). This is where the seat check bites for the SCIM and fold-in
+// (admin). This is where the seat check bites for the provisioning and fold-in
 // doors: a person the IdP provisioned holds no seat until an admin says so.
 func (s *Server) ApproveOrgMember(w http.ResponseWriter, r *http.Request, org OrgHandle, handle Handle) {
 	if !s.requireDB(w, r) {
@@ -1144,4 +1145,11 @@ func (s *Server) RemoveTeamMember(w http.ResponseWriter, r *http.Request, org Or
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// orgFeatures answers what the organization's subscription includes. Every
+// caller decides what an error means for its own act. Enforced SSO does not
+// ask (enforceSSO says why): billing state does not loosen identity.
+func (s *Server) orgFeatures(ctx context.Context, orgID uuid.UUID) (entitlements.Features, error) {
+	return s.entitlements().Features(ctx, entitlements.ForOrg(orgID))
 }

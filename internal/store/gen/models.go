@@ -447,16 +447,6 @@ type RulesetRelease struct {
 	PublishedAt  time.Time `json:"published_at"`
 }
 
-type SamlConsumedAssertion struct {
-	ID        string    `json:"id"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
-type SamlRequest struct {
-	ID        string    `json:"id"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
 type ScanResultCache struct {
 	ArchiveDigest    string    `json:"archive_digest"`
 	Scanner          string    `json:"scanner"`
@@ -489,30 +479,18 @@ type ScanStageResult struct {
 	FinishedAt time.Time `json:"finished_at"`
 }
 
-type ScimToken struct {
-	ID          uuid.UUID  `json:"id"`
-	OrgID       uuid.UUID  `json:"org_id"`
-	TokenSha256 []byte     `json:"token_sha256"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-	RevokedAt   *time.Time `json:"revoked_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-}
-
 type Session struct {
-	ID               uuid.UUID   `json:"id"`
-	TokenSha256      []byte      `json:"token_sha256"`
-	UserID           uuid.UUID   `json:"user_id"`
-	CsrfToken        string      `json:"csrf_token"`
-	SsoTags          []byte      `json:"sso_tags"`
-	Ip               *netip.Addr `json:"ip"`
-	UserAgent        *string     `json:"user_agent"`
-	CreatedAt        time.Time   `json:"created_at"`
-	LastSeenAt       time.Time   `json:"last_seen_at"`
-	ExpiresAt        time.Time   `json:"expires_at"`
-	RevokedAt        *time.Time  `json:"revoked_at"`
-	SsoConnectionID  *uuid.UUID  `json:"sso_connection_id"`
-	SamlNameID       *string     `json:"saml_name_id"`
-	SamlSessionIndex *string     `json:"saml_session_index"`
+	ID          uuid.UUID   `json:"id"`
+	TokenSha256 []byte      `json:"token_sha256"`
+	UserID      uuid.UUID   `json:"user_id"`
+	CsrfToken   string      `json:"csrf_token"`
+	SsoTags     []byte      `json:"sso_tags"`
+	Ip          *netip.Addr `json:"ip"`
+	UserAgent   *string     `json:"user_agent"`
+	CreatedAt   time.Time   `json:"created_at"`
+	LastSeenAt  time.Time   `json:"last_seen_at"`
+	ExpiresAt   time.Time   `json:"expires_at"`
+	RevokedAt   *time.Time  `json:"revoked_at"`
 }
 
 type SigningKey struct {
@@ -524,15 +502,6 @@ type SigningKey struct {
 	RetiredAt    *time.Time `json:"retired_at"`
 }
 
-type SsoConnection struct {
-	ID        uuid.UUID `json:"id"`
-	OrgID     uuid.UUID `json:"org_id"`
-	Kind      string    `json:"kind"`
-	Config    []byte    `json:"config"`
-	Enabled   bool      `json:"enabled"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 type Star struct {
 	UserID    uuid.UUID `json:"user_id"`
 	AgentID   uuid.UUID `json:"agent_id"`
@@ -540,11 +509,10 @@ type Star struct {
 }
 
 type Team struct {
-	ID          uuid.UUID `json:"id"`
-	OrgID       uuid.UUID `json:"org_id"`
-	Slug        string    `json:"slug"`
-	ScimGroupID *string   `json:"scim_group_id"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	OrgID     uuid.UUID `json:"org_id"`
+	Slug      string    `json:"slug"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type TeamMember struct {

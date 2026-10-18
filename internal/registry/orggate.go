@@ -5,7 +5,7 @@ package registry
 // and the git door agree on a suspended organization and on a failed org
 // lookup: the API's authorize chokepoint for org-scoped routes, the agent
 // resolution for agent-scoped ones, CreateAgent, the membership
-// chokepoint, the SCIM data plane and the git transport.
+// chokepoint and the git transport.
 
 import (
 	"context"

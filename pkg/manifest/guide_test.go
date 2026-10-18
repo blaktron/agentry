@@ -288,3 +288,60 @@ func TestV2SchemaGuideShape(t *testing.T) {
 		}
 	}
 }
+
+// TestGuideConnectTakesAServerThatSignsIn: help for making the OAuth
+// client a vendor needs is keyed by the server's id, for a remote server
+// with auth: oauth and a package server with an oauth block alike, and
+// ServerConnect finds it.
+func TestGuideConnectTakesAServerThatSignsIn(t *testing.T) {
+	remote := MCPServer{URL: "https://mcp.linear.app/mcp", Auth: AuthOAuth, Scopes: []string{"read"}}
+	pkg := MCPServer{PyPI: "workspace-mcp", Version: "2.0.1", Egress: []string{"gmail.googleapis.com"}, OAuth: &MCPOAuth{
+		Issuer: "https://accounts.google.com",
+		Scopes: []string{"https://www.googleapis.com/auth/gmail.readonly"},
+		Env:    map[string]string{"GOOGLE_ACCESS_TOKEN": "{access_token}"},
+	}}
+	m := mustParse(t, guideYAML)
+	m.Capabilities.MCPServers = append(m.Capabilities.MCPServers, remote, pkg)
+	m.Guide.Connect["url:https://mcp.linear.app/mcp"] = "Linear signs you in with its own app; nothing to make."
+	m.Guide.Connect["pypi:workspace-mcp"] = "Make a **Desktop app** client in your Google Cloud project."
+	for _, err := range Validate(m) {
+		if is, ok := AsIssue(err); ok && is.Severity == SeverityError {
+			t.Fatalf("a server that signs in is refused as a connect key: %v", is)
+		}
+	}
+	if got := m.Guide.ServerConnect(remote); got != m.Guide.Connect["url:https://mcp.linear.app/mcp"] {
+		t.Fatalf("ServerConnect(remote) = %q", got)
+	}
+	if got := m.Guide.ServerConnect(pkg); got != m.Guide.Connect["pypi:workspace-mcp"] {
+		t.Fatalf("ServerConnect(package) = %q", got)
+	}
+	if got := (*Guide)(nil).ServerConnect(remote); got != "" {
+		t.Fatalf("a missing guide has help: %q", got)
+	}
+}
+
+// TestGuideConnectRefusesAServerThatAsksNoSignIn: a server keyed by id
+// must be declared and must sign in by OAuth; one that takes a secret is
+// helped under its secret's name, and one that is not declared at all is
+// refused.
+func TestGuideConnectRefusesAServerThatAsksNoSignIn(t *testing.T) {
+	m := mustParse(t, guideYAML)
+	m.Capabilities.MCPServers = append(m.Capabilities.MCPServers,
+		MCPServer{URL: "https://mcp.example.com/mcp", Auth: AuthNone},
+		MCPServer{NPM: "github-mcp-server-js", Version: "0.1.7", Secrets: []string{"GITHUB_TOKEN"}},
+	)
+	for _, key := range []string{"url:https://mcp.example.com/mcp", "npm:github-mcp-server-js", "url:https://mcp.linear.app/mcp", "https://mcp.example.com/mcp"} {
+		t.Run(key, func(t *testing.T) {
+			m.Guide.Connect = map[string]string{key: "Some help"}
+			var hit bool
+			for _, err := range Validate(m) {
+				if is, ok := AsIssue(err); ok && is.Rule == "V10" && is.Path == "guide.connect."+key {
+					hit = true
+				}
+			}
+			if !hit {
+				t.Fatalf("connect help keyed %q is accepted", key)
+			}
+		})
+	}
+}

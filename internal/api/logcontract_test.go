@@ -154,6 +154,52 @@ func TestInboundRequestIDHonouredOnlyWhenTheHopSetsIt(t *testing.T) {
 	}
 }
 
+// A page of the /ui/ surface calls the API in-process. That call is part of
+// the browser's request, not a second request: the response carries one
+// X-Request-Id, the log carries one access line, and every line written
+// under the request (the API handler's included) carries that same id.
+func TestUICallsLogAndCountOnce(t *testing.T) {
+	srv, buf := contractServer(t, 0, false)
+	// A page that calls the API (the signed-in lookup) when a session
+	// cookie is present; the session does not exist, which is enough to make
+	// the call and have it refused.
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/ui/authorize?port=40123&state=abcdefghij", nil)
+	req.AddCookie(&http.Cookie{Name: "agentry_session", Value: "no-such-session"})
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if got := res.Header.Values("X-Request-Id"); len(got) != 1 || !mintedID.MatchString(got[0]) {
+		t.Fatalf("X-Request-Id = %v, want exactly one minted id", got)
+	}
+
+	var access []map[string]any
+	ids := map[string]bool{}
+	for _, l := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var m map[string]any
+		if json.Unmarshal([]byte(l), &m) != nil {
+			continue
+		}
+		if id, ok := m["request_id"].(string); ok {
+			ids[id] = true
+		}
+		if m["msg"] == "http" {
+			access = append(access, m)
+		}
+	}
+	if len(access) != 1 {
+		t.Fatalf("access lines = %d, want 1: %s", len(access), buf.String())
+	}
+	if access[0]["path"] != "/ui/authorize" || access[0]["request_id"] != res.Header.Get("X-Request-Id") {
+		t.Fatalf("access line = %v", access[0])
+	}
+	if len(ids) != 1 {
+		t.Fatalf("lines carry %d distinct request ids, want 1: %v", len(ids), ids)
+	}
+}
+
 // The git role mounts a bare mux through the same stack: a git
 // deployment answers with a request id and logs an access line too.
 func TestWrapMiddlewareGivesABareMuxTheContract(t *testing.T) {
