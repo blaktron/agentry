@@ -55,6 +55,18 @@ type SignIn struct {
 	// names a second factor and `auth_time` is minutes old. detail rides
 	// the user.trusted_device_add audit row.
 	RememberBrowser func(detail map[string]any) (token string, ttl time.Duration, err error)
+	// AssertSSO records that this sign-in came through orgID's own single
+	// sign-on, so the session it gets satisfies that organization's
+	// enforced SSO (auth.Principal.SSOSatisfied). The assertion is as fresh
+	// as the token's auth_time, never the moment the registry heard it, so
+	// a provider session silently re-used long after its sign-in renews
+	// nothing; a token with no auth_time, or one from the future, tags
+	// nothing. The extension that calls it answers for the claim it read,
+	// from a provider it trusts for it; the organization's resources still
+	// need the person's membership, which this grants nothing of. It counts
+	// only when called before the hook returns; a nil id is ignored. The
+	// organization's audit log records it as sso.login.
+	AssertSSO func(orgID uuid.UUID)
 }
 
 // AddSignInHook registers a listener for every sign-in through an
