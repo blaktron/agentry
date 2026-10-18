@@ -7,6 +7,7 @@ everything else is ordinary Go work.
 ## Before you start
 
 - **Security issues do not go in pull requests.** See [SECURITY.md](SECURITY.md).
+- Everyone who takes part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 - Large changes: open an issue first. Protocol and manifest changes go through
   an RFC in `docs/rfcs/` (copy the template, open a PR with the RFC alone).
 
@@ -16,9 +17,9 @@ This repository is the open core: the server, the pipeline, auth, the git
 host, the headless deployment and the server's own `/ui/` pages. The hosted
 service's site and enterprise build are closed repositories; a bug in the hosted
 site's pages, brand or deployment goes to the service's support address, not
-to an issue here. The CLI, the desktop app, the MCP server, the docs machinery
-and the examples each have their own public repository (see
-[docs/dev/getting-started.md](docs/dev/getting-started.md)).
+to an issue here. The CLI, the desktop app and the MCP server each have their
+own public repository, and the QuickAgent template is a public template
+repository (see [docs/dev/getting-started.md](docs/dev/getting-started.md)).
 
 ## Contributing from outside
 
