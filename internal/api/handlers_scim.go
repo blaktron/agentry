@@ -224,7 +224,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 	if in.Name != nil {
 		displayName = in.Name.Formatted
 	}
-	userID, err := s.scimProvisionUser(r.Context(), sc.orgID, email, in.UserName, displayName)
+	userID, err := s.provisionPending(r.Context(), sc.orgID, email, in.UserName, displayName, "scim")
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "scim create user", "err", err)
 		scimError(w, http.StatusInternalServerError, "provisioning failed")
@@ -234,15 +234,18 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request, sc scimC
 	scimWrite(w, http.StatusCreated, userToSCIM(userID, email, orDefault(displayName, email), true))
 }
 
-// scimProvisionUser links an existing global user by email or JIT-creates
+// provisionPending links an existing global user by email or JIT-creates
 // one, then adds a **pending** org membership marked via_scim: the IdP
 // says who exists, an admin says who is a member. A pending
 // membership holds no seat and confers nothing, so a SCIM create still
 // answers 201 however many seats the organization has left — the wall is at
 // the approval. A new account's handle is seeded from the IdP's userName
 // (its local part when the userName is the address), the name the directory
-// knows the person by.
-func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, userName, displayName string) (uuid.UUID, error) {
+// knows the person by, and its address is taken as verified (the
+// organization's identity provider vouches for it). An existing membership,
+// pending or active, is left as it is. Every door that creates an account fires user.registered, with via
+// naming the door.
+func (s *Server) provisionPending(ctx context.Context, orgID uuid.UUID, email, userName, displayName, via string) (uuid.UUID, error) {
 	if u, err := s.q().GetUserByEmail(ctx, email); err == nil {
 		if err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
 			_, err := q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
@@ -281,10 +284,8 @@ func (s *Server) scimProvisionUser(ctx context.Context, orgID uuid.UUID, email, 
 	if err != nil {
 		return uuid.Nil, err
 	}
-	// Every door that creates an account fires user.registered (see the
-	// social JIT path); SCIM provisioning is one of them.
 	s.fireEvent(ctx, Event{Kind: "user.registered", UserID: userID, OrgID: orgID, Payload: map[string]any{
-		"handle": handle, "email": email, "emailVerified": true, "via": "scim",
+		"handle": handle, "email": email, "emailVerified": true, "via": via,
 	}})
 	return userID, nil
 }
@@ -480,12 +481,31 @@ func scimLastAdmin(w http.ResponseWriter, err error) bool {
 // the IdP is answered errLastAdmin and the org keeps
 // someone who can act until another admin is made.
 func (s *Server) scimDeactivate(ctx context.Context, orgID, userID uuid.UUID) error {
-	return s.st.WithTx(ctx, func(q *storegen.Queries) error {
+	_, err := s.deprovisionMember(ctx, orgID, userID, false, s.scimEvent(orgID, audit.ActionSCIMUserDeactivate, "user", userID))
+	return err
+}
+
+// deprovisionMember takes userID's membership of orgID away and revokes
+// their org-bound PATs for orgID, every session and every remembered
+// browser, in one transaction, audited with ev. The last admin's
+// membership is the one thing it cannot take: with keepLastAdmin false the
+// whole call is refused with errLastAdmin; with it true the membership
+// stays (the organization keeps someone who can act), everything else is
+// revoked, and kept reports it. A person who is not a member loses their
+// sessions and remembered browsers all the same.
+func (s *Server) deprovisionMember(ctx context.Context, orgID, userID uuid.UUID, keepLastAdmin bool, ev audit.Event) (kept bool, err error) {
+	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		kept = false
 		if err := guardLastAdmin(ctx, q, orgID, userID); err != nil {
-			return err
+			if !keepLastAdmin || !errors.Is(err, errLastAdmin) {
+				return err
+			}
+			kept = true
 		}
-		if _, err := q.DeleteMembership(ctx, storegen.DeleteMembershipParams{OrgID: orgID, UserID: userID}); err != nil {
-			return err
+		if !kept {
+			if _, err := q.DeleteMembership(ctx, storegen.DeleteMembershipParams{OrgID: orgID, UserID: userID}); err != nil {
+				return err
+			}
 		}
 		if _, err := q.RevokeOrgBoundPATsForUser(ctx, storegen.RevokeOrgBoundPATsForUserParams{UserID: userID, OrgID: &orgID}); err != nil {
 			return err
@@ -502,13 +522,22 @@ func (s *Server) scimDeactivate(ctx context.Context, orgID, userID uuid.UUID) er
 		if _, err := q.RevokeTrustedDevicesForUser(ctx, userID); err != nil {
 			return err
 		}
-		if err := s.auditW.Write(ctx, q, s.scimEvent(orgID, audit.ActionSCIMUserDeactivate, "user", userID)); err != nil {
+		if kept {
+			if ev.Detail == nil {
+				ev.Detail = map[string]any{}
+			}
+			ev.Detail["lastAdminKept"] = true
+		}
+		if err := s.auditW.Write(ctx, q, ev); err != nil {
 			return err
 		}
 		// Deprovisioned from the staff organization is no longer staff;
 		// the IdP is the actor.
-		return s.syncStaffIn(ctx, q, userID, registry.StaffSyncMembership, s.scimEvent(orgID, audit.ActionUserStaffSync, "user", userID))
+		actor := ev
+		actor.Action, actor.Detail = audit.ActionUserStaffSync, nil
+		return s.syncStaffIn(ctx, q, userID, registry.StaffSyncMembership, actor)
 	})
+	return kept, err
 }
 
 // scimStaffOrgRefusal answers the IdP when the staff organization's door

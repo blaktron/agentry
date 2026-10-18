@@ -746,3 +746,35 @@ func TestBindHandsTheReportSettings(t *testing.T) {
 		t.Fatalf("the other person's design moved: %s", got)
 	}
 }
+
+// membersReader keeps the membership door it was bound with.
+type membersReader struct {
+	noop
+	members Members
+}
+
+func (m *membersReader) Name() string   { return "members-reader" }
+func (m *membersReader) Bind(deps Deps) { m.members = deps.Members }
+
+// TestBindHandsTheMembersDoor: a server with a database hands an extension
+// the core's membership door, and its refusals are the ones this package
+// names. What provisioning and deprovisioning do is the API's tests'.
+func TestBindHandsTheMembersDoor(t *testing.T) {
+	st := migratedStore(t)
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
+	m := &membersReader{}
+	applyExtensions(srv, []Extension{m})
+	if m.members == nil {
+		t.Fatal("a server with a database handed out no membership door")
+	}
+	ctx := context.Background()
+	if _, err := m.members.Provision(ctx, uuid.New(), ProvisionedMember{Email: "someone@example.test"}); !errors.Is(err, ErrOrgNotProvisionable) {
+		t.Fatalf("provisioning into an unknown organization: %v, want ErrOrgNotProvisionable", err)
+	}
+	if kept, err := m.members.Deprovision(ctx, uuid.New(), uuid.New()); err != nil || kept {
+		t.Fatalf("deprovisioning nobody: kept %v, %v; want a quiet no-op", kept, err)
+	}
+}
