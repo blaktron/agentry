@@ -4237,7 +4237,9 @@
             "TestGuideIsAV2Field",
             "TestGuideChangesNothingAboutTheContract",
             "TestGuideDecodingStaysStrict",
-            "TestV2SchemaGuideShape"
+            "TestV2SchemaGuideShape",
+            "TestGuideConnectTakesAServerThatSignsIn",
+            "TestGuideConnectRefusesAServerThatAsksNoSignIn"
           ],
           "fuzz": [],
           "benchmarks": [],
