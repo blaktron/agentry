@@ -43,9 +43,10 @@ Everyday commands:
 
 | Command | What |
 |---|---|
-| `make check` | the full gate: generated-code drift, ruleset sync, test inventory, lint, tests, build |
+| `make check` | the full gate: generated-code drift, ruleset sync, test inventory, compose image pins, lint, tests, build |
 | `make generate` | regenerate the OpenAPI server and Go client, and sqlc |
 | `make test` | Go tests (DB tests need `AGENTRY_TEST_DATABASE_URL`) |
+| `make bump-pins` | move each digest in `deploy/compose/docker-compose.yaml` to what its tag serves now (needs the network) |
 | `./scripts/acceptance/smoke.sh` | the stack boots and the generated Go client reaches the API |
 | `./scripts/acceptance/auth.sh` | the authorization matrix, the personal-access-token lifecycle and the audit rows, against a real Postgres |
 | `./scripts/acceptance/git.sh` | the git conformance matrix: oversize pushes, wrong credentials and tag permissions are refused |
