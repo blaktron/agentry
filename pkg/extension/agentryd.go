@@ -604,6 +604,28 @@ func (s serverStaff) Members(ctx context.Context) ([]StaffMember, error) {
 	return s.srv.PlatformStaff(ctx)
 }
 
+// membersOf adapts the server's membership door to Members under the
+// extension's name: nil without a database, the way Deps.DB is.
+func membersOf(srv *api.Server, pool *pgxpool.Pool, name string) Members {
+	if pool == nil {
+		return nil
+	}
+	return serverMembers{srv: srv, name: name}
+}
+
+type serverMembers struct {
+	srv  *api.Server
+	name string
+}
+
+func (m serverMembers) Provision(ctx context.Context, orgID uuid.UUID, p ProvisionedMember) (uuid.UUID, error) {
+	return m.srv.ProvisionMember(ctx, m.name, orgID, p)
+}
+
+func (m serverMembers) Deprovision(ctx context.Context, orgID, userID uuid.UUID) (bool, error) {
+	return m.srv.DeprovisionMember(ctx, m.name, orgID, userID)
+}
+
 // signInHookOf hands an extension's hook the sign-in with a remembered
 // browser that is audited under the extension's name, whatever detail the
 // extension asks for.
@@ -968,7 +990,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
-				Staff: staffOf(srv, pool), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name()), Sealer: sealerOf(srv, e.Name())})
+				Staff: staffOf(srv, pool), Members: membersOf(srv, pool, e.Name()), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name()), Sealer: sealerOf(srv, e.Name())})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {

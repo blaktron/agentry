@@ -100,8 +100,8 @@ func TestApplyExtensionsWiresTheIdentitySeam(t *testing.T) {
 	if !srv.HasDirectory() {
 		t.Fatal("the extension's directory was not set")
 	}
-	if ext.deps.Staff != nil || ext.deps.RememberedBrowsers != nil {
-		t.Error("without a database the staff read and the remembered browsers must be nil, as DB is")
+	if ext.deps.Staff != nil || ext.deps.RememberedBrowsers != nil || ext.deps.Members != nil {
+		t.Error("without a database the staff read, the remembered browsers and the membership door must be nil, as DB is")
 	}
 	// The sealer is the server's with or without a database: what it seals
 	// opens, and a value changed since does not.
