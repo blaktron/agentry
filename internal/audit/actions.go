@@ -116,7 +116,10 @@ const (
 	ActionAbuseReport          Action = "abuse.report"
 	ActionAbuseTriage          Action = "abuse.triage"
 
-	// Enterprise: SSO, SCIM, webhooks, domain verification, audit export.
+	// Enterprise: SSO, provisioning, webhooks, domain verification, audit
+	// export. sso.connection_*, scim.token_* and scim.group_sync name rows
+	// this server does not write; they stay in the vocabulary so older rows
+	// stay readable.
 	ActionSSOConnectionSet    Action = "sso.connection_set"
 	ActionSSOConnectionDelete Action = "sso.connection_delete"
 	ActionSSOLogin            Action = "sso.login"

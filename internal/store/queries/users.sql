@@ -48,8 +48,7 @@ ORDER BY h.handle;
 
 -- name: ListUserSignInSubjects :many
 -- The subjects the account signs in with at individual providers
--- ("<provider>:<sub>"), oldest first. An organization's SSO identities are
--- left out: they belong to the organization's connection.
+-- ("<provider>:<sub>"), oldest first.
 SELECT i.subject FROM identities i
 WHERE i.user_id = $1 AND i.provider_kind = 'social' AND i.sso_connection_id IS NULL
 ORDER BY i.created_at, i.id;

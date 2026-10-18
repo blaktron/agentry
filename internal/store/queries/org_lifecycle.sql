@@ -50,15 +50,6 @@ DELETE FROM teams WHERE org_id = $1;
 -- Deliveries cascade with their endpoint.
 DELETE FROM webhook_endpoints WHERE org_id = $1;
 
--- name: DeleteOrgSSOIdentities :execrows
-DELETE FROM identities WHERE sso_connection_id IN (SELECT id FROM sso_connections WHERE org_id = $1);
-
--- name: DeleteOrgSSOConnections :execrows
-DELETE FROM sso_connections WHERE org_id = $1;
-
--- name: DeleteOrgSCIMTokens :execrows
-DELETE FROM scim_tokens WHERE org_id = $1;
-
 -- name: DeleteOrgDomainClaims :execrows
 DELETE FROM domain_claims WHERE org_id = $1;
 

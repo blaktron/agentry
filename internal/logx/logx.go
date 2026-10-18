@@ -47,7 +47,7 @@ const truncatedMarker = "…[truncated]"
 // tokenRE matches every token the registry mints through auth.NewToken: 52
 // lowercase base32 characters, with or without a kind prefix — `agy_` PATs,
 // `agys_` sessions, `agyv_` verification tokens, `agyi_` invitations,
-// `agyd_` remembered browsers, `agyscim_` SCIM tokens, `agd_` desktop grants,
+// `agyd_` remembered browsers, `agd_` desktop grants,
 // `whsec_` webhook secrets, `csrf_` CSRF tokens, and the bare form used for
 // OIDC state and nonce and domain verification. The 12-character display
 // prefix a PAT is identified by is shorter than this and stays. A
