@@ -359,7 +359,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 			}
 		},
 	})
-	s.issueSocialSession(w, r, user, name, st.Next, id.AMR, ssoOrgs)
+	s.issueSocialSession(w, r, user, name, st.Next, id.AMR, ssoTags{orgs: ssoOrgs, at: id.AuthTime})
 }
 
 // readSocialState opens and clears the single-use state cookie.
@@ -523,13 +523,34 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	return newUserID, true, nil
 }
 
+// ssoTags are the organizations whose own single sign-on a sign-in hook
+// said a sign-in came through, and when the provider says that sign-in
+// happened (the token's auth_time).
+type ssoTags struct {
+	orgs []uuid.UUID
+	at   time.Time
+}
+
+// stamp is the freshness to record, false when there is none to trust: no
+// auth_time, one ahead of the clock by more than its skew, or one already
+// older than an assertion may be (maxAge), which would satisfy nothing.
+func (t ssoTags) stamp(now time.Time, maxAge time.Duration) (time.Time, bool) {
+	if len(t.orgs) == 0 || t.at.IsZero() || t.at.After(now.Add(rememberWindow)) || now.Sub(t.at) > maxAge {
+		return time.Time{}, false
+	}
+	if t.at.After(now) {
+		return now, true
+	}
+	return t.at, true
+}
+
 // issueSocialSession opens a session for user and answers: a 303 to next in
 // browser mode (next non-empty, already validated by safeNextPath), else the
-// LoginResult body. ssoOrgs are the organizations whose own single sign-on a
-// sign-in hook said this sign-in came through: the session is tagged
-// SSO-fresh for each in the same transaction, the login's audit row names
-// them, and each organization's audit log gets an sso.login row.
-func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string, ssoOrgs []uuid.UUID) {
+// LoginResult body. The session is tagged SSO-fresh, as of the sign-in's
+// auth_time, for each organization in sso, in the same transaction; the
+// login's audit row names them, and each organization's audit log gets an
+// sso.login row.
+func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string, sso ssoTags) {
 	ctx := r.Context()
 	sessToken, err := auth.NewToken(auth.SessionPrefix)
 	if err != nil {
@@ -555,10 +576,13 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		}); err != nil {
 			return err
 		}
-		now := time.Now().UTC().Format(time.RFC3339)
-		tagged := make([]string, 0, len(ssoOrgs))
-		for _, orgID := range ssoOrgs {
-			if err := q.TagSessionSSO(ctx, storegen.TagSessionSSOParams{ID: sessID, Column2: orgID.String(), Column3: now}); err != nil {
+		at, fresh := sso.stamp(time.Now(), s.cfg.Auth.SSOMaxAge)
+		tagged := make([]string, 0, len(sso.orgs))
+		for _, orgID := range sso.orgs {
+			if !fresh {
+				break
+			}
+			if err := q.TagSessionSSO(ctx, storegen.TagSessionSSOParams{ID: sessID, Column2: orgID.String(), Column3: at.UTC().Format(time.RFC3339)}); err != nil {
 				return err
 			}
 			tagged = append(tagged, orgID.String())

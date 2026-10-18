@@ -281,7 +281,8 @@ func (s *Server) orgHandleOf(ctx context.Context, orgID uuid.UUID) string {
 // off. A session satisfies it through a sign-in the organization's single
 // sign-on asserted (the core's own SSO, or SignIn.AssertSSO from an
 // extension's sign-in); a token, by being bound to the organization. The
-// git transport applies the same flag the same way (gitsrv's ssoAllows).
+// git transport reads the flag the same way, tier-blind, for the pushes and
+// publishes it covers (gitsrv's ssoAllows).
 func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.UUID) bool {
 	if s.st == nil {
 		return true

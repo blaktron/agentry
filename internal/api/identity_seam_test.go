@@ -393,8 +393,10 @@ func TestSignInHookHearsTheClaimsAndMayRememberTheBrowser(t *testing.T) {
 
 // TestASignInHookMayAssertAnOrganizationsSSO: a session whose sign-in a
 // hook said came through an organization's own single sign-on satisfies
-// that organization's enforced SSO, and no other organization's; a sign-in
-// no hook said it of satisfies none. The login's audit row names it.
+// that organization's enforced SSO, and no other organization's, as fresh
+// as the token's auth_time: a provider session re-used long after its
+// sign-in, or a token with no auth_time, satisfies nothing. A sign-in no
+// hook said it of satisfies none. The login's audit row names it.
 func TestASignInHookMayAssertAnOrganizationsSSO(t *testing.T) {
 	var asserted uuid.UUID
 	env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) {
@@ -431,6 +433,7 @@ func TestASignInHookMayAssertAnOrganizationsSSO(t *testing.T) {
 		t.Fatal("a session no hook asserted SSO for passed the organization's enforced SSO")
 	}
 
+	person.AuthTime = time.Now()
 	asserted = uuid.MustParse(idB)
 	elsewhere := env.signInOIDC(t, idp, "oidc", person)
 	if elsewhere.status != http.StatusOK || !refused(elsewhere.caller) {
@@ -447,6 +450,18 @@ func TestASignInHookMayAssertAnOrganizationsSSO(t *testing.T) {
 	}
 	if !refused(first.caller) {
 		t.Fatal("an earlier session gained the later sign-in's assertion")
+	}
+	for name, at := range map[string]time.Time{
+		"a provider session nine hours old": time.Now().Add(-9 * time.Hour),
+		"no auth_time":                      {},
+		"an auth_time an hour ahead":        time.Now().Add(time.Hour),
+	} {
+		stale := person
+		stale.AuthTime = at
+		in := env.signInOIDC(t, idp, "oidc", stale)
+		if in.status != http.StatusOK || !refused(in.caller) {
+			t.Errorf("%s: %d, or the session satisfied the organization's enforced SSO", name, in.status)
+		}
 	}
 	var named int
 	if err := env.st.Pool().QueryRow(context.Background(),
