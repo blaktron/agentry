@@ -36,7 +36,7 @@ make build      # compile ./... and write bin/agentryd
 make test       # all Go tests; database tests read AGENTRY_TEST_DATABASE_URL
 make lint       # gofmt, go vet, golangci-lint
 make generate   # regenerate the OpenAPI server, the Go client and sqlc output
-make check      # the CI gate: generated-code drift, ruleset sync, lint, tests, build
+make check      # the CI gate: generated-code drift, ruleset sync, compose image pins, lint, tests, build
 ```
 
 `./scripts/dev/pg.sh test-url` prints a database URL for the tests. The
