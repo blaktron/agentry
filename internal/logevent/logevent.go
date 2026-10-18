@@ -21,9 +21,6 @@ const (
 	// AuthSocialRejected is a sign-in through the OpenID provider the server
 	// rejected.
 	AuthSocialRejected Event = "auth.social_rejected"
-	// SAMLStateUnavailable is a SAML login refused because the shared state
-	// behind it could not be read or written.
-	SAMLStateUnavailable Event = "saml.state_unavailable"
 	// SSRFRefused is an outbound target the private-range guard refused.
 	SSRFRefused Event = "ssrf.refused"
 	// GateVerdict is the gate deciding a version: published, rejected or
@@ -72,7 +69,7 @@ func Audit(action string) Event { return Event(AuditPrefix + action) }
 
 // All lists every catalogued name, for the completeness test and the docs.
 var All = []Event{
-	HTTPRequest, HTTPRateLimited, AuthSocialRejected, SAMLStateUnavailable, SSRFRefused,
+	HTTPRequest, HTTPRateLimited, AuthSocialRejected, SSRFRefused,
 	GateVerdict, GateError, ScanStage,
 	FailOpenAuditStreamDrop, FailOpenHistoryNotScanned, FailOpenOSVNotChecked, FailOpenOSVError, FailOpenVersionNotChecked, FailOpenDirectoryErasure,
 	GitPushRefused, MailSuppressed, WebhookDelivered, ModelInput,

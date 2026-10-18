@@ -644,3 +644,9 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 	}
 	writeJSON(w, http.StatusOK, LoginResult{User: apiUser, CsrfToken: csrfToken})
 }
+
+// errExplicitLinkRequired signals the account-takeover guard: an existing
+// account holds the asserted address and the asserting party has not proved
+// it controls that address's domain, so linking it would be taking the
+// account over.
+var errExplicitLinkRequired = errors.New("explicit link confirmation required")
