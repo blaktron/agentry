@@ -53,7 +53,7 @@ const (
 	ActOrgTeamsRead      Action = "org.teams.read"      // member+
 	ActOrgTeamsManage    Action = "org.teams.manage"    // admin+
 	ActOrgAuditRead      Action = "org.audit.read"      // admin+
-	ActOrgSettingsManage Action = "org.settings.manage" // admin (SSO/SCIM, policy)
+	ActOrgSettingsManage Action = "org.settings.manage" // admin (enforced SSO, policy)
 	// ActOrgBrandingManage sets or removes the organization's logo.
 	ActOrgBrandingManage Action = "org.branding.manage" // admin
 	// ActOrgInvitationsManage is the invitation door: send,

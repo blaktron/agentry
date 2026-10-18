@@ -12,8 +12,8 @@
 #   * Redis (optional) — nothing the chart runs requires it, and
 #     nothing in the core reads secret.redisUrl today: setting it only
 #     reports features.redis on GET /api/v1/meta. The state a replica set
-#     must share — sessions, the queue, and the SAML replay and request
-#     sets — is in Postgres, so every api replica shares it as it is.
+#     must share — sessions and the queue — is in Postgres, so every api
+#     replica shares it as it is.
 #     What stays per process is the rate-limit buckets, so N
 #     replicas allow N times the budget behind the edge's own.
 
@@ -164,7 +164,6 @@ config:
   # webhookDeliveriesPerSecond: 5
   # gitPushesPerHour: 60
   # sshKeyOffersPerMin: 60
-  # scimPerMin: 600
   # gitConcurrentPerIP: 20
   # agentsPerOrgNamespace: 500
 

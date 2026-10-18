@@ -35,7 +35,8 @@ func (env *testEnv) createOrg(c caller, handle string) string {
 }
 
 // freshenSSO stamps a user's sessions SSO-fresh for an org (what a successful
-// SAML/OIDC login would do), so enforced-SSO tests need not run a full flow.
+// sign-in through the organization's identity provider would do), so
+// enforced-SSO tests need not run a full flow.
 func (env *testEnv) freshenSSO(userID, orgID string) {
 	env.t.Helper()
 	_, err := env.st.Pool().Exec(context.Background(),
