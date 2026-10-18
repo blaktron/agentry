@@ -3116,6 +3116,12 @@ type PendingOrg struct {
 // PendingOrgVia The door — `domain` (their verified address is at the organization's domain) or `scim`.
 type PendingOrgVia string
 
+// PlatformReinstateAccepted defines model for PlatformReinstateAccepted.
+type PlatformReinstateAccepted struct {
+	// Queued How many blocked or quarantined versions have a scan queued.
+	Queued int `json:"queued"`
+}
+
 // Problem RFC 9457 problem details.
 type Problem struct {
 	Detail *string `json:"detail,omitempty"`
@@ -5627,12 +5633,32 @@ type ClientInterface interface {
 
 	// PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff).
 	//
+	// Quarantine and block take effect before the response. Reinstate clears
+	// the agent's flag and asks for a fresh scan of each of its blocked and
+	// quarantined versions, then returns; it publishes nothing itself. A
+	// version is published again, signed as any publication is, only when the
+	// gate's verdict on its new scan is publish, and its open review item is
+	// closed with the reinstate's reason. Every other version stays held: a
+	// blocked one becomes quarantined once its verdict exists, and each has an
+	// open platform review item for a person to decide against the new scan.
+	// A version admitted without a scan has no scan to judge and stays as it is.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
 	PlatformAgentActionWithBody(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff).
+	//
+	// Quarantine and block take effect before the response. Reinstate clears
+	// the agent's flag and asks for a fresh scan of each of its blocked and
+	// quarantined versions, then returns; it publishes nothing itself. A
+	// version is published again, signed as any publication is, only when the
+	// gate's verdict on its new scan is publish, and its open review item is
+	// closed with the reinstate's reason. Every other version stays held: a
+	// blocked one becomes quarantined once its verdict exists, and each has an
+	// open platform review item for a person to decide against the new scan.
+	// A version admitted without a scan has no scan to judge and stays as it is.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -8717,6 +8743,16 @@ func (c *Client) TriageAbuseReport(ctx context.Context, id openapi_types.UUID, b
 
 // PlatformAgentActionWithBody Quarantine, block, or reinstate an agent (platform staff).
 //
+// Quarantine and block take effect before the response. Reinstate clears
+// the agent's flag and asks for a fresh scan of each of its blocked and
+// quarantined versions, then returns; it publishes nothing itself. A
+// version is published again, signed as any publication is, only when the
+// gate's verdict on its new scan is publish, and its open review item is
+// closed with the reinstate's reason. Every other version stays held: a
+// blocked one becomes quarantined once its verdict exists, and each has an
+// open platform review item for a person to decide against the new scan.
+// A version admitted without a scan has no scan to judge and stays as it is.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
@@ -8733,6 +8769,16 @@ func (c *Client) PlatformAgentActionWithBody(ctx context.Context, ns Namespace, 
 }
 
 // PlatformAgentAction Quarantine, block, or reinstate an agent (platform staff).
+//
+// Quarantine and block take effect before the response. Reinstate clears
+// the agent's flag and asks for a fresh scan of each of its blocked and
+// quarantined versions, then returns; it publishes nothing itself. A
+// version is published again, signed as any publication is, only when the
+// gate's verdict on its new scan is publish, and its open review item is
+// closed with the reinstate's reason. Every other version stays held: a
+// blocked one becomes quarantined once its verdict exists, and each has an
+// open platform review item for a person to decide against the new scan.
+// A version admitted without a scan has no scan to judge and stays as it is.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -18806,12 +18852,32 @@ type ClientWithResponsesInterface interface {
 
 	// PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff).
 	//
+	// Quarantine and block take effect before the response. Reinstate clears
+	// the agent's flag and asks for a fresh scan of each of its blocked and
+	// quarantined versions, then returns; it publishes nothing itself. A
+	// version is published again, signed as any publication is, only when the
+	// gate's verdict on its new scan is publish, and its open review item is
+	// closed with the reinstate's reason. Every other version stays held: a
+	// blocked one becomes quarantined once its verdict exists, and each has an
+	// open platform review item for a person to decide against the new scan.
+	// A version admitted without a scan has no scan to judge and stays as it is.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
 	PlatformAgentActionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, action PlatformAgentActionParamsAction, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PlatformAgentActionResponse, error)
 
 	// PlatformAgentActionWithResponse Quarantine, block, or reinstate an agent (platform staff).
+	//
+	// Quarantine and block take effect before the response. Reinstate clears
+	// the agent's flag and asks for a fresh scan of each of its blocked and
+	// quarantined versions, then returns; it publishes nothing itself. A
+	// version is published again, signed as any publication is, only when the
+	// gate's verdict on its new scan is publish, and its open review item is
+	// closed with the reinstate's reason. Every other version stays held: a
+	// blocked one becomes quarantined once its verdict exists, and each has an
+	// open platform review item for a person to decide against the new scan.
+	// A version admitted without a scan has no scan to judge and stays as it is.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -24815,8 +24881,15 @@ func (r TriageAbuseReportResponse) ContentType() string {
 type PlatformAgentActionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *PlatformReinstateAccepted
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PlatformAgentActionResponse) GetJSON202() *PlatformReinstateAccepted {
+	return r.JSON202
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
@@ -29602,6 +29675,16 @@ func (c *ClientWithResponses) TriageAbuseReportWithResponse(ctx context.Context,
 
 // PlatformAgentActionWithBodyWithResponse Quarantine, block, or reinstate an agent (platform staff).
 //
+// Quarantine and block take effect before the response. Reinstate clears
+// the agent's flag and asks for a fresh scan of each of its blocked and
+// quarantined versions, then returns; it publishes nothing itself. A
+// version is published again, signed as any publication is, only when the
+// gate's verdict on its new scan is publish, and its open review item is
+// closed with the reinstate's reason. Every other version stays held: a
+// blocked one becomes quarantined once its verdict exists, and each has an
+// open platform review item for a person to decide against the new scan.
+// A version admitted without a scan has no scan to judge and stays as it is.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /platform/agents/{ns}/{name}/{action} (the `PlatformAgentAction` operationId).
@@ -29614,6 +29697,16 @@ func (c *ClientWithResponses) PlatformAgentActionWithBodyWithResponse(ctx contex
 }
 
 // PlatformAgentActionWithResponse Quarantine, block, or reinstate an agent (platform staff).
+//
+// Quarantine and block take effect before the response. Reinstate clears
+// the agent's flag and asks for a fresh scan of each of its blocked and
+// quarantined versions, then returns; it publishes nothing itself. A
+// version is published again, signed as any publication is, only when the
+// gate's verdict on its new scan is publish, and its open review item is
+// closed with the reinstate's reason. Every other version stays held: a
+// blocked one becomes quarantined once its verdict exists, and each has an
+// open platform review item for a person to decide against the new scan.
+// A version admitted without a scan has no scan to judge and stays as it is.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -34424,6 +34517,13 @@ func ParsePlatformAgentActionResponse(rsp *http.Response) (*PlatformAgentActionR
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest PlatformReinstateAccepted
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
 	case rsp.StatusCode == 204:
 		break // No content-type
 
