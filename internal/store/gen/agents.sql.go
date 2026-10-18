@@ -170,10 +170,11 @@ WHERE agent_id = $1 AND scan_status = 'skipped'
 `
 
 // The versions of an agent that were admitted without a scan and could still
-// be, or return to being, published: published, quarantined or blocked — a
-// reinstate walks the last two back to published. While one stands the agent
-// cannot become public, since only a version that passed the gate is ever
-// public; yanking is what ends it.
+// be, or return to being, published: published, quarantined or blocked. A
+// reinstate leaves the last two held, since it publishes only on a scan's
+// verdict and such a version has none. While one stands the agent cannot
+// become public, since only a version that passed the gate is ever public;
+// yanking is what ends it.
 func (q *Queries) CountUnscannedVersionsStanding(ctx context.Context, agentID uuid.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countUnscannedVersionsStanding, agentID)
 	var column_1 int64

@@ -136,7 +136,11 @@ if one is in the cluster, scope it by the query below, not by the findings.
    returns **`410 Gone`** on every download of that agent or version. Work
    through the API
    (`POST /platform/agents/{ns}/{name}/quarantine`, then `.../block`) so every
-   action is audited with a reason, not in SQL.
+   action is audited with a reason, not in SQL. Lifting either is
+   `.../reinstate`, which publishes nothing itself: it queues a fresh scan of
+   each blocked or quarantined version, and only a version the gate passes on
+   that scan is published again. The rest stay quarantined, each with an open
+   platform review item for a reviewer to decide.
 4. **Publish one advisory per affected agent** (or one covering the cluster,
    referenced from each). Consumers who already installed are reached by
    advisory + webhook, not by any push we control.
