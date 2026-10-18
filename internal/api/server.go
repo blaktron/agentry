@@ -997,7 +997,7 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 
 	// The server's own browser surface (internal/ui): the device
 	// authorize page, sign-in, the account basics and the operator pages,
-	// served at /ui/ and acting through the same handler chain in-process.
+	// served at /ui/ and acting through the same API routes in-process.
 	// Off by config, or down to the authorize page when a site fronts this
 	// server. It is dispatched by prefix in front of the mux rather than
 	// registered on it: a "/ui/" pattern and git's "GET /{ns}/{repo}/info/refs"
@@ -1006,9 +1006,13 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	// with it.
 	root := apiHandler
 	if s.cfg.UI.Mode != "off" {
-		var final http.Handler // bound below; the UI calls the full chain
+		// The page's in-process API calls go straight to the generated
+		// routes: they run inside the browser request's middleware, under
+		// its context, so the request has one id, one access line and one
+		// set of RED samples, and the actor the API resolves reaches the
+		// request's access line.
 		uiH := ui.New(ui.Options{
-			API:          http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { final.ServeHTTP(w, r) }),
+			API:          apiHandler,
 			Mode:         s.cfg.UI.Mode,
 			SiteURL:      s.cfg.Web.URL,
 			BaseURL:      s.cfg.BaseURL,
@@ -1025,8 +1029,6 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 			}
 			apiHandler.ServeHTTP(w, r)
 		})
-		final = withMiddleware(root, s.log, s.Metrics, newProxyTrust(s.cfg.HTTP), s.cfg.HTTP.ProxyRequestID)
-		return final
 	}
 	return withMiddleware(root, s.log, s.Metrics, newProxyTrust(s.cfg.HTTP), s.cfg.HTTP.ProxyRequestID)
 }
