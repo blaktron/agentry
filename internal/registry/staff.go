@@ -17,7 +17,7 @@
 // CreateOrg), so a deployment's first staff are seeded by its operator. The
 // staff organization admits nobody whose address is outside its domain,
 // at every door: the activation chokepoint (invitations, approvals), the
-// pending doors (the fold-in, SCIM) and the invitation itself. The flag is
+// pending doors (the fold-in, provisioning) and the invitation itself. The flag is
 // recomputed by SyncStaffIn inside the transaction of every membership
 // change, at sign-in, and over every candidate once when the server starts,
 // and each change is audited as user.staff_sync naming the rule. Nothing

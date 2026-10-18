@@ -1,8 +1,8 @@
 # Self-hosting Agentry
 
-The whole registry is open source: the scanners, the review queue, SSO and
-SCIM, signing with your own key, and the server's own browser pages. There
-is no "community edition" with the security features removed; a registry you
+The whole registry is open source: the scanners, the review queue, sign-in
+through your own OpenID provider, signing with your own key, and the
+server's own browser pages. There is no "community edition" with the security features removed; a registry you
 cannot audit is one you have to take on faith. What is *not* in this
 repository is SecureAgentry's site — a closed front end that runs in
 front of this same server; a registry does not need one, and
@@ -138,9 +138,8 @@ The `git` role is the only one that needs repo storage mounted, and the
 what lets you give the scanning workers a no-egress security group.
 
 Whatever `api` replicas must see alike lives in the database, not in any one
-process: sessions, the job queue, and the SAML sets, so
-an assertion consumed by one replica is refused by every other and a login
-started on one completes on another. Nothing has to be enabled for that;
+process: sessions and the job queue, so a login started on one replica
+completes on another. Nothing has to be enabled for that;
 Redis (`AGENTRY_REDIS_URL`) remains optional and unused by these. What is
 still per process is the rate-limit buckets, which an N-replica
 deployment multiplies by N (the edge's limits are the ones that hold).
@@ -685,7 +684,8 @@ compose stack, or a real provider.
 
 Whatever the transport, the registry mails only addresses it has verified:
 a user whose `email_verified_at` is unset (the verify-email link, an IdP's
-`email_verified` claim, or SCIM sets it) receives none of the notification
+`email_verified` claim, or an extension that provisions people from an
+organization's identity provider sets it) receives none of the notification
 mails, and the suppression is logged as `notify: suppressed, address not
 verified` with the user id (a user row that cannot be read is logged as
 `user row unreadable` at warn and treated the same way). The verification mail itself is the one
@@ -719,7 +719,6 @@ through the entitlements resolver. The defaults:
 | `limits.authedPerHour`, `authedBurstPerMin`, `anonymousPerMin`, `loginPerMin` | 5000, 100, 60, 10 | the API rate buckets (also enforced at the edge) |
 | `limits.knowledgeBytesPerAccount` | 0 (no cap) | the bytes of knowledge packs one account keeps in the registry, and apart from its members' the bytes of one organization's shared packs (`AGENTRY_KNOWLEDGE_BYTES_PER_ACCOUNT`); past it no pack is added or grown, and none is deleted ([Knowledge packs](knowledge.md)) |
 | `limits.modelInputPerMin` | 120 | model-input calls ([Model input](model-input.md)) per caller per minute, and the burst: a platform staff member, or one hosted job. An address presenting job credentials may spend ten times that (`AGENTRY_LIMITS_MODEL_INPUT_PER_MIN`) |
-| `limits.scimPerMin` | 600 | SCIM requests per organization per minute, and the burst a directory may spend at once. An initial sync of a few hundred people fits; past it the IdP gets 429 with `Retry-After` and paces itself. Raise it for a directory of thousands, since a directory's size is a property of the deployment |
 
 The archive quotas are checked by the manifest rules (V8) both on the server
 at submission and by `agentry validate` offline, so a package learns it is
@@ -932,7 +931,7 @@ having no per-IP limiting at all.
 
 The compose stack ships its own proxy, the `edge` service
 (`deploy/compose/edge/nginx.conf`): nginx on 80/443 that terminates TLS and
-serves the server's own `/ui/` pages, `/api`, `/scim`, `/.well-known`,
+serves the server's own `/ui/` pages, `/api`, `/.well-known`,
 `/downloads/` and `/<ns>/<name>.git` from one origin (the same split the
 Helm ingress makes; a site in front replaces this config with its own, see
 the last section). **Use it even in dev.** Browsers send no `Sec-Fetch-Site`
@@ -1006,8 +1005,9 @@ staff exactly while three things hold:
 
 The organization admits nobody else. An address outside its domain is
 refused with `409 staff-org-domain` at every door: an invitation, the
-invitation's accept, an admin's approval of a pending member, SCIM
-provisioning, the domain fold-in and founding the organization.
+invitation's accept, an admin's approval of a pending member, an identity
+provider's provisioning through an extension, the domain fold-in and founding
+the organization.
 
 What matches: `secureagentry.net` matches `chris@secureagentry.net`. It does
 not match `ops.secureagentry.net`, `secureagentry.net.example`, or a domain
@@ -1016,8 +1016,8 @@ that is not plain ASCII (an internationalised look-alike).
 Add and remove staff by adding and removing members, as an admin of the
 staff organization. The flag is recomputed in the same transaction as every
 membership change (an accept, an approval, a role change, a removal or a
-member leaving, SCIM deprovisioning, account erasure, and erasing the
-organization). It is also recomputed at every sign-in and once over every
+member leaving, an identity provider's deprovisioning, account erasure, and
+erasing the organization). It is also recomputed at every sign-in and once over every
 flagged account and member when the server starts, so changing these keys
 takes effect at the next start. Each change is audited as
 `user.staff_sync` with `rule: staff-org` and the reason.
@@ -1035,14 +1035,14 @@ The rule rests on facts nobody sets about themselves:
 
 - **Membership** is granted by the organization's admins.
 - **The organization itself** can be founded only by platform staff.
-- **A stored address** changes only at erasure (SCIM refuses a change). Use
-  a sign-in provider that does not let people change their own address.
+- **A stored address** changes only at erasure. Use a sign-in provider that
+  does not let people change their own address.
 
 An address counts as verified when the registry's mailed link was
 followed, the sign-in provider or a social provider asserted it at sign-in, an
 invitation at an organization's verified domain was accepted, or an
-organization's SCIM provisioned it. So an address at the staff domain in
-the registry is not proof by itself that its holder controls the mailbox.
+organization's identity provider provisioned it through an extension. So an
+address at the staff domain in the registry is not proof by itself that its holder controls the mailbox.
 It is the membership an admin grants that makes staff.
 
 A registry-side service account needs an address at the domain and a
@@ -1095,32 +1095,6 @@ the like, never `pwd` alone — which the registry records as
 before enabling the flag, because with it on and a provider that never
 asserts a factor, nobody can publish publicly.
 
-With the same flag set, an organization's own SSO connection is evidence
-too. When a member signs in through the organization's SAML or OIDC
-connection and the validated assertion says a second factor was used, the
-registry stamps `users.idp_mfa_at` as it does for the sign-in provider. Only with
-the flag, because the organization's IdP belongs to that organization's
-admins, not to you, and the stamp is account-wide and kept. With the flag
-off there is no gate, and an organization's claim is not recorded. For OIDC the evidence is the ID token's `amr`, by the list above. For SAML
-it is the signed AuthnStatement's `AuthnContextClassRef`, or Entra ID's
-`http://schemas.microsoft.com/claims/authnmethodsreferences` attribute,
-naming one of:
-
-| Value | Sent by |
-|---|---|
-| `https://refeds.org/profile/mfa` | IdPs that follow the REFEDS MFA profile |
-| `http://schemas.microsoft.com/claims/multipleauthn` | AD FS, Entra ID |
-| `urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract` | SAML 2.0 context class |
-| `urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorUnregistered` | SAML 2.0 context class |
-| `urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken` | SAML 2.0 context class |
-
-A password context class (`Password`, `PasswordProtectedTransport`) is one
-factor and stamps nothing. Some IdPs send the multi-factor class only when
-the service provider asks for it. Check one member's assertion before relying
-on it. The `sso.login` audit row records, for each sign-in, whether the
-assertion named a second factor (`mfaAsserted`) and whether the registry
-recorded it (`mfaRecorded`).
-
 Whichever way it is set, `GET /api/v1/meta` reports the gate's state as
 `features.publicPublish2FA`, which is what a front end reads before it
 tells anyone that publishing needs a second factor.
@@ -1158,8 +1132,8 @@ revokes all of them, this browser's included. Both are for a session: a
 personal access token reads 0 and is refused the clear. There is no list
 and no per-browser removal; the hosted site offers the clear as one "Clear
 remembered devices" button. Account erasure deletes the account's records in
-the erasure transaction, and SCIM deactivation revokes them. Every lookup
-ignores a record past its expiry, and an hourly sweep on the worker role
+the erasure transaction, and an identity provider's deprovisioning revokes
+them. Every lookup ignores a record past its expiry, and an hourly sweep on the worker role
 (`trusted_device.sweep`) deletes those rows, with the address and user agent
 they hold. A revoked record is kept until its own expiry, inert, and swept
 then. Signing out, and "sign out everywhere else", leave remembered browsers
@@ -1269,14 +1243,24 @@ Three notes on the knobs:
 An organization is a namespace with members. Anyone with a verified
 address creates one (`POST /api/v1/orgs`, or a site's organizations page)
 and becomes its first **admin**; the other role is
-**member**. Admins manage members, teams, settings, policy, SSO, SCIM,
-domains and webhooks and publish to the organization's agents; members
-create agents in its namespace and publish to them. Nobody joins
-uninvited: an admin invites by email, or approves someone the
-organization's IdP provisioned over SCIM. A person belongs to one
-organization at a time and may leave it from the members list; the last
+**member**. Admins manage members, teams, settings, policy, whether the
+organization requires single sign-on, domains and webhooks and publish to
+the organization's agents; members create agents in its namespace and
+publish to them. Nobody joins uninvited: an admin invites by email, or
+approves someone the organization's identity provider provisioned through
+an extension. A person belongs to one organization at a time and may leave it from the members list; the last
 admin cannot leave, be removed or erase their account until another admin
 is in place.
+
+The open-source server has no single sign-on or SCIM endpoints of its own
+for an organization: everyone signs in through the one OpenID provider in
+`auth.oidc`. An organization's own identity provider, and the provisioning
+and deprovisioning it drives, reach the registry through an extension
+([Fronting it with a site](#fronting-it-with-a-site)); SecureAgentry's
+hosted service runs them on its directory
+(<https://docs.secureagentry.net/>). The core keeps what they rest on:
+pending members, the domain fold-in, and an organization that requires
+single sign-on.
 
 An organization is **keyed on its creator's email domain**: unless the
 form asks for no domain, or the address is at a public mail provider,
@@ -1300,9 +1284,9 @@ staff.
 
 When an organization holds a domain, the accounts whose verified address
 is at it **fold in**: at the person's next directory sign-in they become a
-*pending* member of the organization — the same state a SCIM-provisioned
-person is in — and a sweep folds in the accounts already known at the
-domain the moment the organization is created there or verifies it. A
+*pending* member of the organization — the same state a person provisioned
+by the organization's identity provider is in — and a sweep folds in the
+accounts already known at the domain the moment the organization is created there or verifies it. A
 pending member holds nothing and keeps working on their own plan until an
 admin approves them (where the seat is taken) or declines them; a decline
 is remembered, and only an admin's invitation supersedes it. `GET
@@ -1505,8 +1489,9 @@ sign-in through an individual provider with all of the ID token's claims,
 before the session is issued, and whether that sign-in created the account
 (`HearsSignIn`), and the events
 `account.erased` (with the identities the account signed in with and the
-address it held) and `staff.changed`. It can read platform staff, mint a
-remembered browser at a sign-in it hears, and check one, under the
+address it held) and `staff.changed`. It can read platform staff, provision
+and deprovision an organization's members on its identity provider's word
+(`Deps.Members`), mint a remembered browser at a sign-in it hears, and check one, under the
 registry's rules: minted only from that sign-in's own verified token, whose
 `amr` names a second factor and whose `auth_time` is minutes old, stored as
 a SHA-256 hash and bound to one account. It can say that a sign-in it
@@ -1514,8 +1499,14 @@ hears came through an organization's own single sign-on
 (`SignIn.AssertSSO`), and the session that sign-in gets then satisfies the
 organization's enforced SSO for `auth.ssoMaxAge` from the token's
 `auth_time` (a token without one satisfies nothing); the organization's
-audit log records it as `sso.login`. It can seal a small value it must
-keep at rest, such as a queued erasure's address, under the server's
+audit log records it as `sso.login`. Provisioning names only an address the
+organization's identity provider may vouch for, because it takes the address
+as verified; it makes the person a pending member (`via` `scim`) whom an
+admin approves, and seats count then. Deprovisioning removes the membership
+and revokes the person's organization-bound tokens, every session and every
+remembered browser in one transaction; the organization's last admin keeps
+the membership, with those credentials revoked all the same. It can seal a
+small value it must keep at rest, such as a queued erasure's address, under the server's
 sealing key (`Deps.Sealer`). It can serve calls
 from a service of its own under `/internal/x/<name>/` (`ReceivesCallbacks`).
 There the registry checks a shared secret of at least 32 characters, answers

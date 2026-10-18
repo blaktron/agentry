@@ -1365,42 +1365,6 @@ func (e SearchHitQuarantineState) Valid() bool {
 	}
 }
 
-// Defines values for SsoConnectionKind.
-const (
-	SsoConnectionKindOidc SsoConnectionKind = "oidc"
-	SsoConnectionKindSaml SsoConnectionKind = "saml"
-)
-
-// Valid indicates whether the value is a known member of the SsoConnectionKind enum.
-func (e SsoConnectionKind) Valid() bool {
-	switch e {
-	case SsoConnectionKindOidc:
-		return true
-	case SsoConnectionKindSaml:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for SsoConnectionTestKind.
-const (
-	SsoConnectionTestKindOidc SsoConnectionTestKind = "oidc"
-	SsoConnectionTestKindSaml SsoConnectionTestKind = "saml"
-)
-
-// Valid indicates whether the value is a known member of the SsoConnectionTestKind enum.
-func (e SsoConnectionTestKind) Valid() bool {
-	switch e {
-	case SsoConnectionTestKindOidc:
-		return true
-	case SsoConnectionTestKindSaml:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for UIInfoMode.
 const (
 	Authorize UIInfoMode = "authorize"
@@ -1593,24 +1557,6 @@ func (e SocialProvider) Valid() bool {
 	}
 }
 
-// Defines values for SsoKind.
-const (
-	SsoKindOidc SsoKind = "oidc"
-	SsoKindSaml SsoKind = "saml"
-)
-
-// Valid indicates whether the value is a known member of the SsoKind enum.
-func (e SsoKind) Valid() bool {
-	switch e {
-	case SsoKindOidc:
-		return true
-	case SsoKindSaml:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ListAgentsParamsState.
 const (
 	ListAgentsParamsStateActive  ListAgentsParamsState = "active"
@@ -1791,60 +1737,6 @@ func (e GetMcpServerScanParamsEcosystem) Valid() bool {
 	case GetMcpServerScanParamsEcosystemNpm:
 		return true
 	case GetMcpServerScanParamsEcosystemPypi:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for DeleteSsoConnectionParamsKind.
-const (
-	DeleteSsoConnectionParamsKindOidc DeleteSsoConnectionParamsKind = "oidc"
-	DeleteSsoConnectionParamsKindSaml DeleteSsoConnectionParamsKind = "saml"
-)
-
-// Valid indicates whether the value is a known member of the DeleteSsoConnectionParamsKind enum.
-func (e DeleteSsoConnectionParamsKind) Valid() bool {
-	switch e {
-	case DeleteSsoConnectionParamsKindOidc:
-		return true
-	case DeleteSsoConnectionParamsKindSaml:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for PutSsoConnectionParamsKind.
-const (
-	PutSsoConnectionParamsKindOidc PutSsoConnectionParamsKind = "oidc"
-	PutSsoConnectionParamsKindSaml PutSsoConnectionParamsKind = "saml"
-)
-
-// Valid indicates whether the value is a known member of the PutSsoConnectionParamsKind enum.
-func (e PutSsoConnectionParamsKind) Valid() bool {
-	switch e {
-	case PutSsoConnectionParamsKindOidc:
-		return true
-	case PutSsoConnectionParamsKindSaml:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for TestSsoConnectionParamsKind.
-const (
-	TestSsoConnectionParamsKindOidc TestSsoConnectionParamsKind = "oidc"
-	TestSsoConnectionParamsKindSaml TestSsoConnectionParamsKind = "saml"
-)
-
-// Valid indicates whether the value is a known member of the TestSsoConnectionParamsKind enum.
-func (e TestSsoConnectionParamsKind) Valid() bool {
-	switch e {
-	case TestSsoConnectionParamsKindOidc:
-		return true
-	case TestSsoConnectionParamsKindSaml:
 		return true
 	default:
 		return false
@@ -2395,7 +2287,7 @@ type CreatedInvitation struct {
 	// Mailed Whether the invitation was mailed. It is not when the address belongs to no account, to an account whose address the registry has not verified, or to someone who has turned organization-invitation mail off — the registry mails no address it has not confirmed.
 	Mailed bool `json:"mailed"`
 
-	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings and sign-in policy, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role OrgRole `json:"role"`
 
 	// Token The credential, shown once and never again: the registry keeps only its SHA-256. Give it to the person you invited if it was not mailed to them.
@@ -2670,7 +2562,7 @@ type Invitation struct {
 	// InvitedBy The handle of the admin who sent it.
 	InvitedBy *string `json:"invitedBy,omitempty"`
 
-	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings and sign-in policy, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role OrgRole `json:"role"`
 }
 
@@ -2688,7 +2580,7 @@ type InvitationOffer struct {
 	// Reason Why it cannot be accepted, when it cannot.
 	Reason *string `json:"reason,omitempty"`
 
-	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings and sign-in policy, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role OrgRole `json:"role"`
 }
 
@@ -2841,12 +2733,6 @@ type LoginResult struct {
 	User      User   `json:"user"`
 }
 
-// LogoutResult defines model for LogoutResult.
-type LogoutResult struct {
-	// IdpLogoutUrl Send the browser here to end the IdP session too (SAML SLO).
-	IdpLogoutUrl string `json:"idpLogoutUrl"`
-}
-
 // McpAdvisory defines model for McpAdvisory.
 type McpAdvisory struct {
 	Aliases *[]string `json:"aliases,omitempty"`
@@ -2897,7 +2783,7 @@ type McpServerScanStatus string
 
 // Membership defines model for Membership.
 type Membership struct {
-	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+	// Role An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings and sign-in policy, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 	Role OrgRole `json:"role"`
 
 	// State Whether the membership is in force. `pending` is someone the organization's IdP provisioned, or its domain folded in, who holds no seat and nothing of the organization until an admin approves them; `active` is a member. Declining a pending member removes them, and a decline is remembered: the domain does not fold that person in again unless an admin invites them.
@@ -3060,7 +2946,7 @@ type Org struct {
 	VerifiedDomains *[]string `json:"verifiedDomains,omitempty"`
 }
 
-// OrgRole An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings, SSO and SCIM, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
+// OrgRole An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings and sign-in policy, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 type OrgRole string
 
 // OrgRoleAssignment The role a PUT assigns. security_reviewer is refused outside a first-party organization. `owner` is accepted by the schema but refused with a 422 that names the roles that exist.
@@ -3109,11 +2995,11 @@ type PendingOrg struct {
 	DisplayName string `json:"displayName"`
 	Handle      string `json:"handle"`
 
-	// Via The door — `domain` (their verified address is at the organization's domain) or `scim`.
+	// Via The door — `domain` (their verified address is at the organization's domain) or `scim` (the organization's identity provider provisioned them).
 	Via PendingOrgVia `json:"via"`
 }
 
-// PendingOrgVia The door — `domain` (their verified address is at the organization's domain) or `scim`.
+// PendingOrgVia The door — `domain` (their verified address is at the organization's domain) or `scim` (the organization's identity provider provisioned them).
 type PendingOrgVia string
 
 // PlatformReinstateAccepted defines model for PlatformReinstateAccepted.
@@ -3416,22 +3302,6 @@ type ScanReport struct {
 	VersionStatus VersionStatus `json:"versionStatus"`
 }
 
-// ScimToken defines model for ScimToken.
-type ScimToken struct {
-	CreatedAt time.Time          `json:"createdAt"`
-	ExpiresAt *time.Time         `json:"expiresAt,omitempty"`
-	Id        openapi_types.UUID `json:"id"`
-}
-
-// ScimTokenCreated defines model for ScimTokenCreated.
-type ScimTokenCreated struct {
-	ExpiresAt *time.Time         `json:"expiresAt,omitempty"`
-	Id        openapi_types.UUID `json:"id"`
-
-	// Token The SCIM bearer token; shown once.
-	Token string `json:"token"`
-}
-
 // Scope PAT scopes. A token can do only what its scopes allow; a
 // session acts with the account's full authority. `run:write` lets a
 // token start, feed and cancel a hosted run of a QuickAgent and
@@ -3536,41 +3406,6 @@ type SshKey struct {
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
 	Title      string     `json:"title"`
 }
-
-// SsoConnection defines model for SsoConnection.
-type SsoConnection struct {
-	// Config Non-secret connection settings (client secrets are redacted).
-	Config  *map[string]interface{} `json:"config,omitempty"`
-	Enabled bool                    `json:"enabled"`
-	Kind    SsoConnectionKind       `json:"kind"`
-}
-
-// SsoConnectionKind defines model for SsoConnection.Kind.
-type SsoConnectionKind string
-
-// SsoConnectionInput defines model for SsoConnectionInput.
-type SsoConnectionInput struct {
-	// Config SAML (idpMetadataXml or idpEntityId+idpCertificatePem+idpSsoUrl) or OIDC (issuer, clientId, clientSecret) settings. An OIDC save that omits clientSecret keeps the stored one; to drop the secret, delete the connection.
-	Config  map[string]interface{} `json:"config"`
-	Enabled bool                   `json:"enabled"`
-}
-
-// SsoConnectionTest defines model for SsoConnectionTest.
-type SsoConnectionTest struct {
-	CheckedAt time.Time `json:"checkedAt"`
-
-	// Details Discovered endpoints / metadata facts (strings only).
-	Details *map[string]string    `json:"details,omitempty"`
-	Kind    SsoConnectionTestKind `json:"kind"`
-	Ok      bool                  `json:"ok"`
-
-	// Summary One line for the admin page.
-	Summary  string    `json:"summary"`
-	Warnings *[]string `json:"warnings,omitempty"`
-}
-
-// SsoConnectionTestKind defines model for SsoConnectionTest.Kind.
-type SsoConnectionTestKind string
 
 // TagPage defines model for TagPage.
 type TagPage struct {
@@ -3855,9 +3690,6 @@ type OrgHandle = string
 // SocialProvider defines model for SocialProvider.
 type SocialProvider string
 
-// SsoKind defines model for SsoKind.
-type SsoKind string
-
 // TeamSlug defines model for TeamSlug.
 type TeamSlug = string
 
@@ -4110,32 +3942,6 @@ type ApproveOrgMemberJSONBody struct {
 
 // SetOrgPolicyJSONBody defines parameters for SetOrgPolicy.
 type SetOrgPolicyJSONBody map[string]interface{}
-
-// CreateScimTokenJSONBody defines parameters for CreateScimToken.
-type CreateScimTokenJSONBody struct {
-	ExpiresInDays *int `json:"expiresInDays,omitempty"`
-}
-
-// DeleteSsoConnectionParamsKind defines parameters for DeleteSsoConnection.
-type DeleteSsoConnectionParamsKind string
-
-// PutSsoConnectionParamsKind defines parameters for PutSsoConnection.
-type PutSsoConnectionParamsKind string
-
-// TestSsoConnectionParamsKind defines parameters for TestSsoConnection.
-type TestSsoConnectionParamsKind string
-
-// OidcCallbackParams defines parameters for OidcCallback.
-type OidcCallbackParams struct {
-	Code  *string `form:"code,omitempty" json:"code,omitempty"`
-	State *string `form:"state,omitempty" json:"state,omitempty"`
-}
-
-// OidcStartParams defines parameters for OidcStart.
-type OidcStartParams struct {
-	// Next Where the browser returns after a successful sign-in. A same-origin path only (leading `/`, not `//`); anything else is ignored. It is sealed into the state the callback reads, so the identity provider's round trip cannot change it.
-	Next *string `form:"next,omitempty" json:"next,omitempty"`
-}
 
 // SuspendOrgJSONBody defines parameters for SuspendOrg.
 type SuspendOrgJSONBody struct {
@@ -4431,12 +4237,6 @@ type ApproveOrgMemberJSONRequestBody ApproveOrgMemberJSONBody
 
 // SetOrgPolicyJSONRequestBody defines body for SetOrgPolicy for application/json ContentType.
 type SetOrgPolicyJSONRequestBody SetOrgPolicyJSONBody
-
-// CreateScimTokenJSONRequestBody defines body for CreateScimToken for application/json ContentType.
-type CreateScimTokenJSONRequestBody CreateScimTokenJSONBody
-
-// PutSsoConnectionJSONRequestBody defines body for PutSsoConnection for application/json ContentType.
-type PutSsoConnectionJSONRequestBody = SsoConnectionInput
 
 // SuspendOrgJSONRequestBody defines body for SuspendOrg for application/json ContentType.
 type SuspendOrgJSONRequestBody SuspendOrgJSONBody
@@ -4846,8 +4646,6 @@ type ClientInterface interface {
 
 	// Logout Revoke the current session.
 	//
-	// Answers 204 for a session opened through an OpenID provider. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
-	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
 	Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4860,7 +4658,7 @@ type ClientInterface interface {
 
 	// SocialOidcStart Begin sign-in with the deployment's OpenID provider.
 	//
-	// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership. Org SSO lives under /orgs/{org}/sso.
+	// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership.
 	//
 	// Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 	SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5360,14 +5158,14 @@ type ClientInterface interface {
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMember(ctx context.Context, org OrgHandle, handle Handle, body SetOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ApproveOrgMemberWithBody Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+	// ApproveOrgMemberWithBody Approve a pending member (admin). The seat check fires here: a person provisioned by the organization's identity provider, or folded in from the organization's domain, holds no seat until an admin approves them.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
 	ApproveOrgMemberWithBody(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ApproveOrgMember Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+	// ApproveOrgMember Approve a pending member (admin). The seat check fires here: a person provisioned by the organization's identity provider, or folded in from the organization's domain, holds no seat until an admin approves them.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5402,107 +5200,6 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
 	ReinstateOrg(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListScimTokens List active SCIM provisioning tokens (admin).
-	//
-	// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
-	ListScimTokens(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateScimTokenWithBody Mint a SCIM bearer token (admin).
-	//
-	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
-	CreateScimTokenWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateScimToken Mint a SCIM bearer token (admin).
-	//
-	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
-	CreateScimToken(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// RevokeScimToken Revoke a SCIM token (admin).
-	//
-	// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
-	RevokeScimToken(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListSsoConnections List the org's SSO connections (admin).
-	//
-	// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
-	ListSsoConnections(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteSsoConnection Delete a connection (admin).
-	//
-	// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
-	DeleteSsoConnection(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin).
-	//
-	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
-	PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PutSsoConnection Create or update a SAML/OIDC connection (admin).
-	//
-	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
-	PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// TestSsoConnection Probe a stored connection without signing in (admin).
-	//
-	// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
-	//
-	// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
-	TestSsoConnection(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// OidcCallback OIDC redirect URI: exchange the code and establish a session.
-	//
-	// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
-	//
-	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
-	OidcCallback(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP).
-	//
-	// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
-	//
-	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
-	OidcStart(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SamlAcs SAML Assertion Consumer Service: consume a signed assertion.
-	//
-	// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
-	//
-	// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
-	SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetSamlMetadata SP SAML metadata for this org's connection.
-	//
-	// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
-	GetSamlMetadata(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SamlSloRedirect SAML Single Logout endpoint, HTTP-Redirect binding.
-	//
-	// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
-	//
-	// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
-	SamlSloRedirect(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SamlSloPost SAML Single Logout endpoint, HTTP-POST binding.
-	//
-	// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
-	SamlSloPost(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SuspendOrgWithBody Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
 	//
@@ -6806,8 +6503,6 @@ func (c *Client) ExchangeDesktopCode(ctx context.Context, body ExchangeDesktopCo
 
 // Logout Revoke the current session.
 //
-// Answers 204 for a session opened through an OpenID provider. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
-//
 // Corresponds with POST /auth/logout (the `Logout` operationId).
 func (c *Client) Logout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewLogoutRequest(c.Server)
@@ -6840,7 +6535,7 @@ func (c *Client) SocialOidcCallback(ctx context.Context, provider SocialOidcCall
 
 // SocialOidcStart Begin sign-in with the deployment's OpenID provider.
 //
-// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership. Org SSO lives under /orgs/{org}/sso.
+// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership.
 //
 // Corresponds with GET /auth/oidc/{provider}/start (the `SocialOidcStart` operationId).
 func (c *Client) SocialOidcStart(ctx context.Context, provider SocialOidcStartParamsProvider, params *SocialOidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8040,7 +7735,7 @@ func (c *Client) SetOrgMember(ctx context.Context, org OrgHandle, handle Handle,
 	return c.Client.Do(req)
 }
 
-// ApproveOrgMemberWithBody Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+// ApproveOrgMemberWithBody Approve a pending member (admin). The seat check fires here: a person provisioned by the organization's identity provider, or folded in from the organization's domain, holds no seat until an admin approves them.
 //
 // Takes any type of body and a specified content type.
 //
@@ -8057,7 +7752,7 @@ func (c *Client) ApproveOrgMemberWithBody(ctx context.Context, org OrgHandle, ha
 	return c.Client.Do(req)
 }
 
-// ApproveOrgMember Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+// ApproveOrgMember Approve a pending member (admin). The seat check fires here: a person provisioned by the organization's identity provider, or folded in from the organization's domain, holds no seat until an admin approves them.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8143,257 +7838,6 @@ func (c *Client) SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPol
 // Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
 func (c *Client) ReinstateOrg(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReinstateOrgRequest(c.Server, org)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListScimTokens List active SCIM provisioning tokens (admin).
-//
-// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
-func (c *Client) ListScimTokens(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListScimTokensRequest(c.Server, org)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateScimTokenWithBody Mint a SCIM bearer token (admin).
-//
-// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
-func (c *Client) CreateScimTokenWithBody(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateScimTokenRequestWithBody(c.Server, org, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateScimToken Mint a SCIM bearer token (admin).
-//
-// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
-func (c *Client) CreateScimToken(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateScimTokenRequest(c.Server, org, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// RevokeScimToken Revoke a SCIM token (admin).
-//
-// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
-func (c *Client) RevokeScimToken(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRevokeScimTokenRequest(c.Server, org, tokenId)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListSsoConnections List the org's SSO connections (admin).
-//
-// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
-func (c *Client) ListSsoConnections(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListSsoConnectionsRequest(c.Server, org)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// DeleteSsoConnection Delete a connection (admin).
-//
-// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
-func (c *Client) DeleteSsoConnection(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteSsoConnectionRequest(c.Server, org, kind)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// PutSsoConnectionWithBody Create or update a SAML/OIDC connection (admin).
-//
-// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
-func (c *Client) PutSsoConnectionWithBody(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutSsoConnectionRequestWithBody(c.Server, org, kind, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// PutSsoConnection Create or update a SAML/OIDC connection (admin).
-//
-// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
-func (c *Client) PutSsoConnection(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutSsoConnectionRequest(c.Server, org, kind, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// TestSsoConnection Probe a stored connection without signing in (admin).
-//
-// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
-//
-// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
-func (c *Client) TestSsoConnection(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTestSsoConnectionRequest(c.Server, org, kind)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// OidcCallback OIDC redirect URI: exchange the code and establish a session.
-//
-// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
-//
-// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
-func (c *Client) OidcCallback(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewOidcCallbackRequest(c.Server, org, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// OidcStart Begin the OIDC auth-code + PKCE flow (redirect to IdP).
-//
-// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
-//
-// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
-func (c *Client) OidcStart(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewOidcStartRequest(c.Server, org, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SamlAcs SAML Assertion Consumer Service: consume a signed assertion.
-//
-// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
-//
-// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
-func (c *Client) SamlAcs(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSamlAcsRequest(c.Server, org)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetSamlMetadata SP SAML metadata for this org's connection.
-//
-// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
-func (c *Client) GetSamlMetadata(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSamlMetadataRequest(c.Server, org)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SamlSloRedirect SAML Single Logout endpoint, HTTP-Redirect binding.
-//
-// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
-//
-// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
-func (c *Client) SamlSloRedirect(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSamlSloRedirectRequest(c.Server, org)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SamlSloPost SAML Single Logout endpoint, HTTP-POST binding.
-//
-// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
-func (c *Client) SamlSloPost(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSamlSloPostRequest(c.Server, org)
 	if err != nil {
 		return nil, err
 	}
@@ -13960,568 +13404,6 @@ func NewReinstateOrgRequest(server string, org OrgHandle) (*http.Request, error)
 	return req, nil
 }
 
-// NewListScimTokensRequest constructs an http.Request for the ListScimTokens method
-func NewListScimTokensRequest(server string, org OrgHandle) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/scim/tokens", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCreateScimTokenRequest calls the generic CreateScimToken builder with application/json body
-func NewCreateScimTokenRequest(server string, org OrgHandle, body CreateScimTokenJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateScimTokenRequestWithBody(server, org, "application/json", bodyReader)
-}
-
-// NewCreateScimTokenRequestWithBody constructs an http.Request for the CreateScimToken method, with any body, and a specified content type
-func NewCreateScimTokenRequestWithBody(server string, org OrgHandle, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/scim/tokens", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewRevokeScimTokenRequest constructs an http.Request for the RevokeScimToken method
-func NewRevokeScimTokenRequest(server string, org OrgHandle, tokenId openapi_types.UUID) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "tokenId", tokenId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/scim/tokens/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewListSsoConnectionsRequest constructs an http.Request for the ListSsoConnections method
-func NewListSsoConnectionsRequest(server string, org OrgHandle) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/connections", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewDeleteSsoConnectionRequest constructs an http.Request for the DeleteSsoConnection method
-func NewDeleteSsoConnectionRequest(server string, org OrgHandle, kind DeleteSsoConnectionParamsKind) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/connections/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewPutSsoConnectionRequest calls the generic PutSsoConnection builder with application/json body
-func NewPutSsoConnectionRequest(server string, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewPutSsoConnectionRequestWithBody(server, org, kind, "application/json", bodyReader)
-}
-
-// NewPutSsoConnectionRequestWithBody constructs an http.Request for the PutSsoConnection method, with any body, and a specified content type
-func NewPutSsoConnectionRequestWithBody(server string, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/connections/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewTestSsoConnectionRequest constructs an http.Request for the TestSsoConnection method
-func NewTestSsoConnectionRequest(server string, org OrgHandle, kind TestSsoConnectionParamsKind) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "kind", kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/connections/%s/test", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewOidcCallbackRequest constructs an http.Request for the OidcCallback method
-func NewOidcCallbackRequest(server string, org OrgHandle, params *OidcCallbackParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/oidc/callback", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Code != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", *params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.State != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewOidcStartRequest constructs an http.Request for the OidcStart method
-func NewOidcStartRequest(server string, org OrgHandle, params *OidcStartParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/oidc/start", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Next != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "next", *params.Next, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewSamlAcsRequest constructs an http.Request for the SamlAcs method
-func NewSamlAcsRequest(server string, org OrgHandle) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/saml/acs", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetSamlMetadataRequest constructs an http.Request for the GetSamlMetadata method
-func NewGetSamlMetadataRequest(server string, org OrgHandle) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/saml/metadata", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewSamlSloRedirectRequest constructs an http.Request for the SamlSloRedirect method
-func NewSamlSloRedirectRequest(server string, org OrgHandle) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/saml/slo", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewSamlSloPostRequest constructs an http.Request for the SamlSloPost method
-func NewSamlSloPostRequest(server string, org OrgHandle) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/sso/saml/slo", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewSuspendOrgRequest calls the generic SuspendOrg builder with application/json body
 func NewSuspendOrgRequest(server string, org OrgHandle, body SuspendOrgJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -17957,8 +16839,6 @@ type ClientWithResponsesInterface interface {
 
 	// LogoutWithResponse Revoke the current session.
 	//
-	// Answers 204 for a session opened through an OpenID provider. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
-	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/logout (the `Logout` operationId).
@@ -17975,7 +16855,7 @@ type ClientWithResponsesInterface interface {
 
 	// SocialOidcStartWithResponse Begin sign-in with the deployment's OpenID provider.
 	//
-	// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership. Org SSO lives under /orgs/{org}/sso.
+	// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18529,14 +17409,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /orgs/{org}/members/{handle} (the `SetOrgMember` operationId).
 	SetOrgMemberWithResponse(ctx context.Context, org OrgHandle, handle Handle, body SetOrgMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOrgMemberResponse, error)
 
-	// ApproveOrgMemberWithBodyWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+	// ApproveOrgMemberWithBodyWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by the organization's identity provider, or folded in from the organization's domain, holds no seat until an admin approves them.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/members/{handle}/approve (the `ApproveOrgMember` operationId).
 	ApproveOrgMemberWithBodyWithResponse(ctx context.Context, org OrgHandle, handle Handle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApproveOrgMemberResponse, error)
 
-	// ApproveOrgMemberWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+	// ApproveOrgMemberWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by the organization's identity provider, or folded in from the organization's domain, holds no seat until an admin approves them.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18577,129 +17457,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
 	ReinstateOrgWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ReinstateOrgResponse, error)
-
-	// ListScimTokensWithResponse List active SCIM provisioning tokens (admin).
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
-	ListScimTokensWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListScimTokensResponse, error)
-
-	// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin).
-	//
-	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
-	CreateScimTokenWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error)
-
-	// CreateScimTokenWithResponse Mint a SCIM bearer token (admin).
-	//
-	// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
-	CreateScimTokenWithResponse(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error)
-
-	// RevokeScimTokenWithResponse Revoke a SCIM token (admin).
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
-	RevokeScimTokenWithResponse(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeScimTokenResponse, error)
-
-	// ListSsoConnectionsWithResponse List the org's SSO connections (admin).
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
-	ListSsoConnectionsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListSsoConnectionsResponse, error)
-
-	// DeleteSsoConnectionWithResponse Delete a connection (admin).
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
-	DeleteSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*DeleteSsoConnectionResponse, error)
-
-	// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin).
-	//
-	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
-	PutSsoConnectionWithBodyWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
-
-	// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin).
-	//
-	// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
-	PutSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error)
-
-	// TestSsoConnectionWithResponse Probe a stored connection without signing in (admin).
-	//
-	// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
-	TestSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*TestSsoConnectionResponse, error)
-
-	// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session.
-	//
-	// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
-	OidcCallbackWithResponse(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*OidcCallbackResponse, error)
-
-	// OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP).
-	//
-	// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
-	OidcStartWithResponse(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*OidcStartResponse, error)
-
-	// SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion.
-	//
-	// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
-	SamlAcsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlAcsResponse, error)
-
-	// GetSamlMetadataWithResponse SP SAML metadata for this org's connection.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
-	GetSamlMetadataWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetSamlMetadataResponse, error)
-
-	// SamlSloRedirectWithResponse SAML Single Logout endpoint, HTTP-Redirect binding.
-	//
-	// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
-	SamlSloRedirectWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloRedirectResponse, error)
-
-	// SamlSloPostWithResponse SAML Single Logout endpoint, HTTP-POST binding.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
-	SamlSloPostWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloPostResponse, error)
 
 	// SuspendOrgWithBodyWithResponse Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
 	//
@@ -20873,15 +19630,8 @@ func (r ExchangeDesktopCodeResponse) ContentType() string {
 type LogoutResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *LogoutResult
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r LogoutResponse) GetJSON200() *LogoutResult {
-	return r.JSON200
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
@@ -23557,588 +22307,6 @@ func (r ReinstateOrgResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ReinstateOrgResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListScimTokensResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]ScimToken
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListScimTokensResponse) GetJSON200() *[]ScimToken {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r ListScimTokensResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r ListScimTokensResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListScimTokensResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListScimTokensResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListScimTokensResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type CreateScimTokenResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *ScimTokenCreated
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateScimTokenResponse) GetJSON201() *ScimTokenCreated {
-	return r.JSON201
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r CreateScimTokenResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r CreateScimTokenResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateScimTokenResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateScimTokenResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CreateScimTokenResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type RevokeScimTokenResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r RevokeScimTokenResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r RevokeScimTokenResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r RevokeScimTokenResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r RevokeScimTokenResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r RevokeScimTokenResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListSsoConnectionsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]SsoConnection
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListSsoConnectionsResponse) GetJSON200() *[]SsoConnection {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r ListSsoConnectionsResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r ListSsoConnectionsResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListSsoConnectionsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListSsoConnectionsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListSsoConnectionsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type DeleteSsoConnectionResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r DeleteSsoConnectionResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r DeleteSsoConnectionResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteSsoConnectionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteSsoConnectionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DeleteSsoConnectionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type PutSsoConnectionResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *SsoConnection
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r PutSsoConnectionResponse) GetJSON200() *SsoConnection {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r PutSsoConnectionResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r PutSsoConnectionResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r PutSsoConnectionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PutSsoConnectionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PutSsoConnectionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type TestSsoConnectionResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *SsoConnectionTest
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r TestSsoConnectionResponse) GetJSON200() *SsoConnectionTest {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r TestSsoConnectionResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r TestSsoConnectionResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r TestSsoConnectionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r TestSsoConnectionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r TestSsoConnectionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type OidcCallbackResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *LoginResult
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r OidcCallbackResponse) GetJSON200() *LoginResult {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r OidcCallbackResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r OidcCallbackResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r OidcCallbackResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r OidcCallbackResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r OidcCallbackResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type OidcStartResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r OidcStartResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r OidcStartResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r OidcStartResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r OidcStartResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r OidcStartResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type SamlAcsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *LoginResult
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r SamlAcsResponse) GetJSON200() *LoginResult {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r SamlAcsResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r SamlAcsResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r SamlAcsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r SamlAcsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SamlAcsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type GetSamlMetadataResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r GetSamlMetadataResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r GetSamlMetadataResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetSamlMetadataResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetSamlMetadataResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetSamlMetadataResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type SamlSloRedirectResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r SamlSloRedirectResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r SamlSloRedirectResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r SamlSloRedirectResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r SamlSloRedirectResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SamlSloRedirectResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type SamlSloPostResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *Problem
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r SamlSloPostResponse) GetApplicationproblemJSONDefault() *Problem {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r SamlSloPostResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r SamlSloPostResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r SamlSloPostResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SamlSloPostResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -28090,8 +26258,6 @@ func (c *ClientWithResponses) ExchangeDesktopCodeWithResponse(ctx context.Contex
 
 // LogoutWithResponse Revoke the current session.
 //
-// Answers 204 for a session opened through an OpenID provider. For a session established through an organization's SAML connection whose IdP publishes a Single Logout endpoint, answers 200 with the IdP logout URL the browser should be sent to next (SP-initiated SLO); the registry session is revoked either way.
-//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /auth/logout (the `Logout` operationId).
@@ -28120,7 +26286,7 @@ func (c *ClientWithResponses) SocialOidcCallbackWithResponse(ctx context.Context
 
 // SocialOidcStartWithResponse Begin sign-in with the deployment's OpenID provider.
 //
-// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership. Org SSO lives under /orgs/{org}/sso.
+// Individual-account sign-in through the OpenID provider the server is configured with (`auth.oidc`: discovery, issuer pinning, PKCE and a verified ID token). A provider id the server does not serve answers 404. This is individual sign-in and never grants org membership.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29094,7 +27260,7 @@ func (c *ClientWithResponses) SetOrgMemberWithResponse(ctx context.Context, org 
 	return ParseSetOrgMemberResponse(rsp)
 }
 
-// ApproveOrgMemberWithBodyWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+// ApproveOrgMemberWithBodyWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by the organization's identity provider, or folded in from the organization's domain, holds no seat until an admin approves them.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29107,7 +27273,7 @@ func (c *ClientWithResponses) ApproveOrgMemberWithBodyWithResponse(ctx context.C
 	return ParseApproveOrgMemberResponse(rsp)
 }
 
-// ApproveOrgMemberWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by SCIM, or folded in from the organization's domain, holds no seat until an admin approves them.
+// ApproveOrgMemberWithResponse Approve a pending member (admin). The seat check fires here: a person provisioned by the organization's identity provider, or folded in from the organization's domain, holds no seat until an admin approves them.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29183,219 +27349,6 @@ func (c *ClientWithResponses) ReinstateOrgWithResponse(ctx context.Context, org 
 		return nil, err
 	}
 	return ParseReinstateOrgResponse(rsp)
-}
-
-// ListScimTokensWithResponse List active SCIM provisioning tokens (admin).
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/scim/tokens (the `ListScimTokens` operationId).
-func (c *ClientWithResponses) ListScimTokensWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListScimTokensResponse, error) {
-	rsp, err := c.ListScimTokens(ctx, org, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListScimTokensResponse(rsp)
-}
-
-// CreateScimTokenWithBodyWithResponse Mint a SCIM bearer token (admin).
-//
-// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
-func (c *ClientWithResponses) CreateScimTokenWithBodyWithResponse(ctx context.Context, org OrgHandle, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error) {
-	rsp, err := c.CreateScimTokenWithBody(ctx, org, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateScimTokenResponse(rsp)
-}
-
-// CreateScimTokenWithResponse Mint a SCIM bearer token (admin).
-//
-// 403 `feature-not-included` while the organization's subscription does not include directory provisioning. Tokens already issued are left alone by a subscription change and provision again the moment it includes SCIM.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/scim/tokens (the `CreateScimToken` operationId).
-func (c *ClientWithResponses) CreateScimTokenWithResponse(ctx context.Context, org OrgHandle, body CreateScimTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateScimTokenResponse, error) {
-	rsp, err := c.CreateScimToken(ctx, org, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateScimTokenResponse(rsp)
-}
-
-// RevokeScimTokenWithResponse Revoke a SCIM token (admin).
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /orgs/{org}/scim/tokens/{tokenId} (the `RevokeScimToken` operationId).
-func (c *ClientWithResponses) RevokeScimTokenWithResponse(ctx context.Context, org OrgHandle, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeScimTokenResponse, error) {
-	rsp, err := c.RevokeScimToken(ctx, org, tokenId, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRevokeScimTokenResponse(rsp)
-}
-
-// ListSsoConnectionsWithResponse List the org's SSO connections (admin).
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/sso/connections (the `ListSsoConnections` operationId).
-func (c *ClientWithResponses) ListSsoConnectionsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListSsoConnectionsResponse, error) {
-	rsp, err := c.ListSsoConnections(ctx, org, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListSsoConnectionsResponse(rsp)
-}
-
-// DeleteSsoConnectionWithResponse Delete a connection (admin).
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /orgs/{org}/sso/connections/{kind} (the `DeleteSsoConnection` operationId).
-func (c *ClientWithResponses) DeleteSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind DeleteSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*DeleteSsoConnectionResponse, error) {
-	rsp, err := c.DeleteSsoConnection(ctx, org, kind, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteSsoConnectionResponse(rsp)
-}
-
-// PutSsoConnectionWithBodyWithResponse Create or update a SAML/OIDC connection (admin).
-//
-// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
-func (c *ClientWithResponses) PutSsoConnectionWithBodyWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error) {
-	rsp, err := c.PutSsoConnectionWithBody(ctx, org, kind, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePutSsoConnectionResponse(rsp)
-}
-
-// PutSsoConnectionWithResponse Create or update a SAML/OIDC connection (admin).
-//
-// 403 `feature-not-included` while the organization's subscription does not include single sign-on. An existing connection is left alone by a subscription change and works again the moment the subscription includes SSO.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PUT /orgs/{org}/sso/connections/{kind} (the `PutSsoConnection` operationId).
-func (c *ClientWithResponses) PutSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind PutSsoConnectionParamsKind, body PutSsoConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*PutSsoConnectionResponse, error) {
-	rsp, err := c.PutSsoConnection(ctx, org, kind, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePutSsoConnectionResponse(rsp)
-}
-
-// TestSsoConnectionWithResponse Probe a stored connection without signing in (admin).
-//
-// OIDC: runs discovery against the stored issuer and reports the endpoints it advertises. SAML: parses the stored IdP metadata and reports entity id, sign-on URLs and signing-certificate expiry. Neither contacts the IdP's sign-in flow or uses the client secret. A failed probe is a 200 with ok=false and the reason, so the admin page can show it inline.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/sso/connections/{kind}/test (the `TestSsoConnection` operationId).
-func (c *ClientWithResponses) TestSsoConnectionWithResponse(ctx context.Context, org OrgHandle, kind TestSsoConnectionParamsKind, reqEditors ...RequestEditorFn) (*TestSsoConnectionResponse, error) {
-	rsp, err := c.TestSsoConnection(ctx, org, kind, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseTestSsoConnectionResponse(rsp)
-}
-
-// OidcCallbackWithResponse OIDC redirect URI: exchange the code and establish a session.
-//
-// When the start carried a `next`, this is browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason. Otherwise the answer is the JSON below. 404 while the organization's subscription does not include SSO.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/sso/oidc/callback (the `OidcCallback` operationId).
-func (c *ClientWithResponses) OidcCallbackWithResponse(ctx context.Context, org OrgHandle, params *OidcCallbackParams, reqEditors ...RequestEditorFn) (*OidcCallbackResponse, error) {
-	rsp, err := c.OidcCallback(ctx, org, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseOidcCallbackResponse(rsp)
-}
-
-// OidcStartWithResponse Begin the OIDC auth-code + PKCE flow (redirect to IdP).
-//
-// 404 while the organization's subscription does not include SSO: the door is not there to be started. `next` puts the callback in browser mode.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/sso/oidc/start (the `OidcStart` operationId).
-func (c *ClientWithResponses) OidcStartWithResponse(ctx context.Context, org OrgHandle, params *OidcStartParams, reqEditors ...RequestEditorFn) (*OidcStartResponse, error) {
-	rsp, err := c.OidcStart(ctx, org, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseOidcStartResponse(rsp)
-}
-
-// SamlAcsWithResponse SAML Assertion Consumer Service: consume a signed assertion.
-//
-// A `RelayState` form field holding a same-origin path puts this in browser mode: the session and CSRF cookies are set and the answer is a 303 to that path, and a failure is a 303 to the sign-in page carrying the reason, because a browser cannot read a problem document. Anything else in `RelayState` is ignored. Without one the answer is the JSON below. 404 while the organization's subscription does not include SSO.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/sso/saml/acs (the `SamlAcs` operationId).
-func (c *ClientWithResponses) SamlAcsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlAcsResponse, error) {
-	rsp, err := c.SamlAcs(ctx, org, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSamlAcsResponse(rsp)
-}
-
-// GetSamlMetadataWithResponse SP SAML metadata for this org's connection.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/sso/saml/metadata (the `GetSamlMetadata` operationId).
-func (c *ClientWithResponses) GetSamlMetadataWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*GetSamlMetadataResponse, error) {
-	rsp, err := c.GetSamlMetadata(ctx, org, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetSamlMetadataResponse(rsp)
-}
-
-// SamlSloRedirectWithResponse SAML Single Logout endpoint, HTTP-Redirect binding.
-//
-// Accepts a signed IdP-initiated LogoutRequest (revokes the sessions it names and answers the IdP with a LogoutResponse) or the IdP's LogoutResponse to an SP-initiated logout (validated, then the browser is sent home).
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/sso/saml/slo (the `SamlSloRedirect` operationId).
-func (c *ClientWithResponses) SamlSloRedirectWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloRedirectResponse, error) {
-	rsp, err := c.SamlSloRedirect(ctx, org, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSamlSloRedirectResponse(rsp)
-}
-
-// SamlSloPostWithResponse SAML Single Logout endpoint, HTTP-POST binding.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /orgs/{org}/sso/saml/slo (the `SamlSloPost` operationId).
-func (c *ClientWithResponses) SamlSloPostWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*SamlSloPostResponse, error) {
-	rsp, err := c.SamlSloPost(ctx, org, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSamlSloPostResponse(rsp)
 }
 
 // SuspendOrgWithBodyWithResponse Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
@@ -31697,13 +29650,6 @@ func ParseLogoutResponse(rsp *http.Response) (*LogoutResponse, error) {
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest LogoutResult
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
 	case rsp.StatusCode == 204:
 		break // No content-type
 
@@ -33568,420 +31514,6 @@ func ParseReinstateOrgResponse(rsp *http.Response) (*ReinstateOrgResponse, error
 			return nil, err
 		}
 		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListScimTokensResponse parses an HTTP response from a ListScimTokensWithResponse call
-func ParseListScimTokensResponse(rsp *http.Response) (*ListScimTokensResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListScimTokensResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []ScimToken
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCreateScimTokenResponse parses an HTTP response from a CreateScimTokenWithResponse call
-func ParseCreateScimTokenResponse(rsp *http.Response) (*CreateScimTokenResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreateScimTokenResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest ScimTokenCreated
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseRevokeScimTokenResponse parses an HTTP response from a RevokeScimTokenWithResponse call
-func ParseRevokeScimTokenResponse(rsp *http.Response) (*RevokeScimTokenResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &RevokeScimTokenResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListSsoConnectionsResponse parses an HTTP response from a ListSsoConnectionsWithResponse call
-func ParseListSsoConnectionsResponse(rsp *http.Response) (*ListSsoConnectionsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListSsoConnectionsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []SsoConnection
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDeleteSsoConnectionResponse parses an HTTP response from a DeleteSsoConnectionWithResponse call
-func ParseDeleteSsoConnectionResponse(rsp *http.Response) (*DeleteSsoConnectionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteSsoConnectionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParsePutSsoConnectionResponse parses an HTTP response from a PutSsoConnectionWithResponse call
-func ParsePutSsoConnectionResponse(rsp *http.Response) (*PutSsoConnectionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PutSsoConnectionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SsoConnection
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseTestSsoConnectionResponse parses an HTTP response from a TestSsoConnectionWithResponse call
-func ParseTestSsoConnectionResponse(rsp *http.Response) (*TestSsoConnectionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &TestSsoConnectionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest SsoConnectionTest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseOidcCallbackResponse parses an HTTP response from a OidcCallbackWithResponse call
-func ParseOidcCallbackResponse(rsp *http.Response) (*OidcCallbackResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &OidcCallbackResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest LoginResult
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case rsp.StatusCode == 303:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseOidcStartResponse parses an HTTP response from a OidcStartWithResponse call
-func ParseOidcStartResponse(rsp *http.Response) (*OidcStartResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &OidcStartResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 302:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseSamlAcsResponse parses an HTTP response from a SamlAcsWithResponse call
-func ParseSamlAcsResponse(rsp *http.Response) (*SamlAcsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SamlAcsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest LoginResult
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case rsp.StatusCode == 303:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetSamlMetadataResponse parses an HTTP response from a GetSamlMetadataWithResponse call
-func ParseGetSamlMetadataResponse(rsp *http.Response) (*GetSamlMetadataResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetSamlMetadataResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseSamlSloRedirectResponse parses an HTTP response from a SamlSloRedirectWithResponse call
-func ParseSamlSloRedirectResponse(rsp *http.Response) (*SamlSloRedirectResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SamlSloRedirectResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 200:
-		break // No content-type
-
-	case rsp.StatusCode == 303:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseSamlSloPostResponse parses an HTTP response from a SamlSloPostWithResponse call
-func ParseSamlSloPostResponse(rsp *http.Response) (*SamlSloPostResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SamlSloPostResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 200:
-		break // No content-type
-
-	case rsp.StatusCode == 303:
-		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

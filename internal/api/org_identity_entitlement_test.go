@@ -1,7 +1,7 @@
 package api_test
 
-// SSO and SCIM gated on the tier, and the rule that billing state never
-// loosens identity.
+// The rule that billing state never loosens identity: an organization's
+// enforced SSO holds whatever its subscription says.
 
 import (
 	"context"
@@ -25,96 +25,20 @@ func identityResolverFor(sso, scim bool) entitlements.Resolver {
 	}
 }
 
-// identityState is what a downgrade must not touch: the organization's
-// enforced-SSO flag and the rows behind its sign-in and provisioning.
-type identityState struct {
-	required    bool
-	connections int
-	tokens      int
-}
-
-func (env *testEnv) ssoState(orgID string) identityState {
+func (env *testEnv) ssoRequired(orgID string) bool {
 	env.t.Helper()
-	var st identityState
-	ctx := context.Background()
-	if err := env.st.Pool().QueryRow(ctx, `SELECT sso_required FROM orgs WHERE id = $1`, orgID).Scan(&st.required); err != nil {
+	var required bool
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT sso_required FROM orgs WHERE id = $1`, orgID).Scan(&required); err != nil {
 		env.t.Fatalf("read sso_required: %v", err)
 	}
-	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM sso_connections WHERE org_id = $1`, orgID).Scan(&st.connections); err != nil {
-		env.t.Fatalf("count connections: %v", err)
-	}
-	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM scim_tokens WHERE org_id = $1 AND revoked_at IS NULL`, orgID).Scan(&st.tokens); err != nil {
-		env.t.Fatalf("count scim tokens: %v", err)
-	}
-	return st
+	return required
 }
 
-// A tier without SSO or SCIM refuses to create either, and says which
-// subscription is the reason rather than pretending the route is absent.
-func TestIdentityDoorsAreGatedOnTheTier(t *testing.T) {
-	env := newTestEnvWith(t, identityTier(false, false))
-	admin := env.register("id-admin")
-	env.verifyEmail(admin)
-	sess := env.login(admin)
-	orgH := "idorg" + env.sfx
-	env.createOrg(sess, orgH)
-
-	res := env.do(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/oidc", map[string]any{
-		"enabled": true,
-		"config":  map[string]any{"issuer": "https://idp.example", "clientId": "x", "clientSecret": "y"},
-	})
-	code, slug, _ := problemOf(t, res)
-	if code != http.StatusForbidden || slug != "feature-not-included" {
-		t.Fatalf("an SSO connection on a tier without SSO: %d %s, want 403 feature-not-included", code, slug)
-	}
-
-	res = env.do(sess, http.MethodPost, "/api/v1/orgs/"+orgH+"/scim/tokens", map[string]any{})
-	code, slug, _ = problemOf(t, res)
-	if code != http.StatusForbidden || slug != "feature-not-included" {
-		t.Fatalf("a SCIM token on a tier without SCIM: %d %s, want 403 feature-not-included", code, slug)
-	}
-
-	// The organization's SSO start is not a door that exists.
-	res = env.do(caller{name: "anon"}, http.MethodGet, "/api/v1/orgs/"+orgH+"/sso/oidc/start", nil)
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusNotFound {
-		t.Fatalf("the SSO start on a tier without SSO: %d, want 404", res.StatusCode)
-	}
-}
-
-// An entitlement the resolver cannot answer refuses the act, as every
-// other entitlement gate does: an outage is not a way to add a sign-in
-// door or mint a directory credential.
-func TestIdentityDoorsFailClosed(t *testing.T) {
-	env := newTestEnvWith(t, brokenTier())
-	admin := env.register("idf-admin")
-	env.verifyEmail(admin)
-	sess := env.login(admin)
-	orgH := "idforg" + env.sfx
-	env.createOrg(sess, orgH)
-
-	for _, tc := range []struct {
-		name, method, path string
-		body               map[string]any
-	}{
-		{"an SSO connection", http.MethodPut, "/api/v1/orgs/" + orgH + "/sso/connections/oidc",
-			map[string]any{"enabled": true, "config": map[string]any{"issuer": "https://idp.example", "clientId": "x", "clientSecret": "y"}}},
-		{"a SCIM token", http.MethodPost, "/api/v1/orgs/" + orgH + "/scim/tokens", map[string]any{}},
-	} {
-		res := env.do(sess, tc.method, tc.path, tc.body)
-		code, _, _ := problemOf(t, res)
-		if code < 400 {
-			t.Fatalf("%s while entitlements are unknown: %d, want a refusal", tc.name, code)
-		}
-	}
-}
-
-// The rule these tests exist to keep: a subscription that stops
-// including SSO takes nothing away and lets nobody in. The connection and
-// the SCIM token keep their rows, `sso_required` is untouched — billing
-// never writes it — the doors shut, and enforcement goes on: neither a
-// downgrade nor an entitlement outage lets an ordinary session past the
-// organization's own sign-in policy.
+// The rule this test exists to keep: a subscription that stops including
+// SSO lets nobody in. `sso_required` is untouched — billing never writes
+// it — and enforcement goes on: neither a downgrade nor an entitlement
+// outage lets an ordinary session past the organization's own sign-in
+// policy.
 func TestDowngradeNeverLoosensIdentity(t *testing.T) {
 	env := newTestEnvWith(t, identityTier(true, true))
 	admin := env.register("dg-admin")
@@ -123,25 +47,15 @@ func TestDowngradeNeverLoosensIdentity(t *testing.T) {
 	orgH := "dgorg" + env.sfx
 	orgID := env.createOrg(sess, orgH)
 
-	// With the tier: a connection, a SCIM token, and enforced SSO.
-	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/oidc", map[string]any{
-		"enabled": true,
-		"config":  map[string]any{"issuer": "https://idp.example", "clientId": "x", "clientSecret": "y"},
-	}, nil, http.StatusOK)
-	var tok struct {
-		Token string `json:"token"`
-	}
-	env.doJSON(sess, http.MethodPost, "/api/v1/orgs/"+orgH+"/scim/tokens", map[string]any{}, &tok, http.StatusCreated)
+	// With the tier: enforced SSO.
 	env.doJSON(sess, http.MethodPatch, "/api/v1/orgs/"+orgH, map[string]any{"ssoRequired": true}, nil, http.StatusOK)
-
-	before := env.ssoState(orgID)
-	if !before.required || before.connections != 1 || before.tokens != 1 {
-		t.Fatalf("before the downgrade: %+v", before)
+	if !env.ssoRequired(orgID) {
+		t.Fatal("before the downgrade: sso_required is not set")
 	}
 
 	// The positive control, without which the assertion after the
 	// downgrade would pass for an organization that was never enforcing:
-	// while the tier includes SSO, this password session is refused the
+	// while the tier includes SSO, this ordinary session is refused the
 	// organization's own settings, because it has not come through the
 	// organization's identity provider.
 	res := env.do(sess, http.MethodPatch, "/api/v1/orgs/"+orgH,
@@ -154,9 +68,8 @@ func TestDowngradeNeverLoosensIdentity(t *testing.T) {
 	// The subscription stops including either.
 	env.setEntitlements(identityResolverFor(false, false))
 
-	after := env.ssoState(orgID)
-	if after != before {
-		t.Fatalf("the downgrade changed identity state: before %+v, after %+v", before, after)
+	if !env.ssoRequired(orgID) {
+		t.Fatal("the downgrade cleared sso_required")
 	}
 
 	// Enforcement goes on, whatever the tier says and when it cannot be
@@ -172,36 +85,5 @@ func TestDowngradeNeverLoosensIdentity(t *testing.T) {
 		if code != http.StatusForbidden || slug != "sso-required" {
 			t.Fatalf("enforced SSO under %s: %d %s, want 403 sso-required", name, code, slug)
 		}
-	}
-	// The rest of the test reads the downgraded tier.
-	env.setEntitlements(identityResolverFor(false, false))
-
-	// And the doors are shut: the token no longer provisions, and the
-	// start is gone.
-	res = env.do(caller{name: "scim", pat: tok.Token}, http.MethodGet, "/scim/v2/Users", nil)
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusForbidden {
-		t.Fatalf("SCIM after the downgrade: %d, want 403", res.StatusCode)
-	}
-	res = env.do(caller{name: "anon"}, http.MethodGet, "/api/v1/orgs/"+orgH+"/sso/oidc/start", nil)
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusNotFound {
-		t.Fatalf("the SSO start after the downgrade: %d, want 404", res.StatusCode)
-	}
-	// And the entry point people paste into an address bar, which is the
-	// one that would otherwise still hand a browser to the IdP.
-	res = env.do(caller{name: "anon"}, http.MethodGet, "/sso/"+orgH, nil)
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusNotFound {
-		t.Fatalf("the SSO landing after the downgrade: %d, want 404", res.StatusCode)
-	}
-
-	// Back on a tier that includes them, everything works again without
-	// anything being re-entered.
-	env.setEntitlements(identityResolverFor(true, true))
-	res = env.do(caller{name: "scim", pat: tok.Token}, http.MethodGet, "/scim/v2/Users", nil)
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("SCIM after re-subscribing: %d, want 200 — the token should not have had to be re-issued", res.StatusCode)
 	}
 }

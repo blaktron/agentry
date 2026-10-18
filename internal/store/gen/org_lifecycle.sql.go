@@ -109,42 +109,6 @@ func (q *Queries) DeleteOrgPolicy(ctx context.Context, orgID *uuid.UUID) (int64,
 	return result.RowsAffected(), nil
 }
 
-const deleteOrgSCIMTokens = `-- name: DeleteOrgSCIMTokens :execrows
-DELETE FROM scim_tokens WHERE org_id = $1
-`
-
-func (q *Queries) DeleteOrgSCIMTokens(ctx context.Context, orgID uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteOrgSCIMTokens, orgID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteOrgSSOConnections = `-- name: DeleteOrgSSOConnections :execrows
-DELETE FROM sso_connections WHERE org_id = $1
-`
-
-func (q *Queries) DeleteOrgSSOConnections(ctx context.Context, orgID uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteOrgSSOConnections, orgID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteOrgSSOIdentities = `-- name: DeleteOrgSSOIdentities :execrows
-DELETE FROM identities WHERE sso_connection_id IN (SELECT id FROM sso_connections WHERE org_id = $1)
-`
-
-func (q *Queries) DeleteOrgSSOIdentities(ctx context.Context, orgID uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteOrgSSOIdentities, orgID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteOrgTeams = `-- name: DeleteOrgTeams :execrows
 DELETE FROM teams WHERE org_id = $1
 `
