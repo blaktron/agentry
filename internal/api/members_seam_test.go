@@ -88,6 +88,19 @@ func TestTheMembersSeamProvisionsAPendingMemberOnly(t *testing.T) {
 		t.Fatalf("provisioning audit rows naming the extension = %d (%v), want at least one", n, err)
 	}
 
+	// An account that holds an address without having proved it is not
+	// where the organization's membership goes.
+	claimH := env.registerEmail("mp-claim", "claimed-"+env.sfx+"@mp.example")
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE users SET email_verified_at = NULL WHERE id = (SELECT id FROM handles WHERE handle = $1)`, claimH); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.srvObj.ProvisionMember(ctx, "probe", orgID, api.ProvisionedMember{Email: "claimed-" + env.sfx + "@mp.example"}); !errors.Is(err, api.ErrAddressUnproven) {
+		t.Fatalf("provisioning onto an unproven account: %v, want ErrAddressUnproven", err)
+	}
+	if got := env.membership(orgID, uuid.MustParse(env.userID(claimH))); got != "" {
+		t.Fatalf("the unproven account's membership is %q, want none", got)
+	}
+
 	// A suspended organization provisions nobody.
 	if _, err := env.st.Pool().Exec(ctx, `UPDATE orgs SET state = 'suspended' WHERE id = $1`, orgID); err != nil {
 		t.Fatal(err)
@@ -156,6 +169,7 @@ func TestTheMembersSeamDeprovisionTakesEverythingAway(t *testing.T) {
 	// someone who can act, and loses every credential all the same.
 	adminID := uuid.MustParse(env.userID(adminH))
 	adminDevice := insertTrustedDevice(t, env, adminID.String())
+	adminBound := env.insertPAT(adminID.String(), orgID.String(), "user:profile")
 	kept, err = env.srvObj.DeprovisionMember(ctx, "probe", orgID, adminID)
 	if err != nil || !kept {
 		t.Fatalf("deprovision the last admin = kept %v, %v; want the membership kept", kept, err)
@@ -167,6 +181,11 @@ func TestTheMembersSeamDeprovisionTakesEverythingAway(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("the last admin's session after deprovisioning: %d, want 401", res.StatusCode)
+	}
+	res = env.do(caller{name: "admin-bound", pat: adminBound}, http.MethodGet, "/api/v1/user", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("the last admin's organization token after deprovisioning: %d, want 401", res.StatusCode)
 	}
 	if got := deviceState(t, env, adminDevice); got != "revoked" {
 		t.Fatalf("the last admin's remembered browser after deprovisioning is %s, want revoked", got)
