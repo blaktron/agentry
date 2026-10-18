@@ -22,13 +22,20 @@ type ProvisionedMember struct {
 	DisplayName string
 }
 
-// ErrOrgNotProvisionable is Provision's refusal of an organization that is
-// unknown, suspended or being decommissioned: its membership is frozen.
-var ErrOrgNotProvisionable = errors.New("api: the organization is not active, so nobody is provisioned into it")
+// The refusals of ProvisionMember. An organization that is unknown,
+// suspended or being decommissioned has its membership frozen. An account
+// that holds the address without having proved it may be someone else's
+// claim on it, and a membership the organization meant for the address's
+// owner must not land there.
+var (
+	ErrOrgNotProvisionable = errors.New("api: the organization is not active, so nobody is provisioned into it")
+	ErrAddressUnproven     = errors.New("api: the account at this address has not proved it, so it is not provisioned")
+)
 
 // ProvisionMember makes the person a pending member of orgID on a
 // directory extension's word (pkg/extension.Deps.Members): the account at
-// their address, or a new one with the address taken as verified. A pending
+// their address when it has proved the address, or a new one with the
+// address taken as verified on the extension's word. A pending
 // membership holds no seat and confers nothing until an admin approves it,
 // and an existing membership, pending or active, is left as it is. The
 // staff organization admits only its own domain. The extension decides
@@ -54,6 +61,11 @@ func (s *Server) ProvisionMember(ctx context.Context, ext string, orgID uuid.UUI
 	if err := s.staffOrgAddressIn(ctx, s.q(), orgID, email); err != nil {
 		return uuid.Nil, err
 	}
+	if u, err := s.q().GetUserByEmail(ctx, email); err == nil && u.EmailVerifiedAt == nil {
+		return uuid.Nil, ErrAddressUnproven
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, err
+	}
 	userID, err := s.provisionPending(ctx, orgID, email, p.UserName, p.DisplayName, ext)
 	if err != nil {
 		return uuid.Nil, err
@@ -68,8 +80,8 @@ func (s *Server) ProvisionMember(ctx context.Context, ext string, orgID uuid.UUI
 // extension's word and revokes their org-bound tokens for orgID, every
 // session and every remembered browser (pkg/extension.Deps.Members). The
 // organization's last admin keeps the membership, so the organization keeps
-// someone who can act, and loses every credential all the same; kept
-// reports it. Calling it again does nothing more. It runs in any state of
+// someone who can act, and those credentials are revoked all the same;
+// kept reports it. Calling it again does nothing more. It runs in any state of
 // the organization: taking access away is never frozen.
 func (s *Server) DeprovisionMember(ctx context.Context, ext string, orgID, userID uuid.UUID) (kept bool, err error) {
 	if s.st == nil {

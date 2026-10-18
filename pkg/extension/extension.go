@@ -961,20 +961,23 @@ type StaffMember = api.StaffMember
 // deprovisioned. The extension decides whom to name; what provisioning and
 // deprovisioning do stays the core's: a provisioned person is only ever a
 // pending member, whom an admin approves (seats count then), and a
-// deprovisioned one loses the membership and every way back in at once.
+// deprovisioned one loses the membership and every live credential at once.
 type Members interface {
 	// Provision makes the person a pending member of orgID: the account at
-	// their address, or a new one, with the address taken as verified (the
-	// organization's identity provider vouches for it; name only addresses
-	// it may vouch for). An existing membership, pending or active, is
-	// left as it is. ErrOrgNotProvisionable for an organization that is
-	// unknown, suspended or being decommissioned; ErrStaffOrgDomain for an
-	// address the staff organization does not admit.
+	// their address, or a new one with the address taken as verified on
+	// the extension's word, so name only addresses the organization's
+	// identity provider may vouch for. An existing membership, pending or
+	// active, is left as it is. ErrOrgNotProvisionable for an organization
+	// that is unknown, suspended or being decommissioned;
+	// ErrAddressUnproven when the account at the address has not proved
+	// it; ErrStaffOrgDomain for an address the staff organization does not
+	// admit.
 	Provision(ctx context.Context, orgID uuid.UUID, p ProvisionedMember) (userID uuid.UUID, err error)
 	// Deprovision takes userID's membership of orgID away and revokes
 	// their org-bound tokens for orgID, every session and every
 	// remembered browser, in one transaction, audited. The organization's
-	// last admin keeps the membership and loses the rest; kept says so.
+	// last admin keeps the membership and those credentials are revoked
+	// all the same; kept says so.
 	// Idempotent.
 	Deprovision(ctx context.Context, orgID, userID uuid.UUID) (kept bool, err error)
 }
@@ -987,6 +990,7 @@ type ProvisionedMember = api.ProvisionedMember
 // The refusals of Members.Provision.
 var (
 	ErrOrgNotProvisionable = api.ErrOrgNotProvisionable
+	ErrAddressUnproven     = api.ErrAddressUnproven
 	ErrStaffOrgDomain      = registry.ErrStaffOrgDomain
 )
 
