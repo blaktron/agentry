@@ -1437,6 +1437,42 @@ purpose. A declared command writes only beneath `/tmp`, the scratch folder
 and a granted workspace, so an archive is unpacked there. A run in Agentry
 provides these and no others. `agentry doctor` lists them.
 
+### Support scripts: what the scan reads
+
+A package may ship shell, Python and JavaScript files its instruction tells
+the run to start. The registry's scan (stage S6, see [trust](trust.md#s6))
+reads their text against the manifest before a version is published; the
+run itself holds a script to the declared `network.egress` whether or not
+the scan read the host it reaches, so what the scan misses is still refused
+at run time.
+
+In a shell script the scan reads a host in these places: a network
+command's URL, address or destination (`curl`, `wget`, `nc`, `telnet`,
+`openssl s_client`, and `ssh`, `scp`, `sftp`, `rsync` and the other
+ssh-family commands, with a jump host or a forward), and, since ruleset
+0.4.12:
+
+| Form | Example |
+|---|---|
+| a redirection to bash's network devices | `exec 3<>/dev/tcp/host.example.org/443`, `cat f > /dev/udp/10.1.2.3/53` |
+| a connecting `socat` address | `socat - TCP:host.example.org:443`, `OPENSSL:`, `UDP:`, `TCP6:[2001:db8::1]:80` |
+| git's scp-like remote, in a subcommand that takes a remote | `git clone git@host.example.org:org/repo.git` |
+| the registry of an image that `docker` or `podman` pulls or pushes | `docker pull registry.example.org:5000/app`, `docker push 10.1.2.3:5000/app` |
+| an IPv6 address without brackets, as a network command's word or an ssh destination | `nc -6 2001:db8::1 22`, `ssh admin@2001:db8::1` |
+
+A word that only looks like one is not a host: an e-mail address in a
+`git commit` message or an echoed string, a tag (`docker pull ubuntu:22.04`),
+a time, a hardware address, a loopback address, and a name that is only
+mentioned in a comment or as another command's argument.
+
+**What the scan does not read.** It reads text and never runs the script, so
+a host it cannot see in the text is not a finding. That covers a host a
+script reaches through a loop over an array (`for h in "${HOSTS[@]}"`), a
+line read from a file (`while read h; do ssh "$h"; done < hosts.txt`), the
+output of another command (`H=$(cat host.txt)`), or any value computed when
+the script runs. A host a script names in a variable it assigns with a
+literal, or in a plain `for` list, is read.
+
 ## Running with files
 
 A run's files are the ones you give it: `--file PATH` (files or folders,
