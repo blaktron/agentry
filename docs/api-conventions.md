@@ -5,12 +5,10 @@ per-endpoint semantics that are easy to get wrong. The authoritative
 contract is `schemas/openapi.yaml`; this document explains the parts a
 schema cannot express.
 
-Base path is `/api/v1`. Three surfaces sit deliberately outside it: `/scim/v2`
-(the SCIM 2.0 spec fixes that path), `/sso/{org}` (a browser destination
-people paste into address bars and IdP consoles, not a JSON operation), and
+Base path is `/api/v1`. One surface sits deliberately outside it:
 `/internal/x/<name>/` (an extension's callbacks from a service of its own on
 the private network, gated by a shared secret and never routed by an edge).
-The last is not part of the public API and answers bare status codes.
+It is not part of the public API and answers bare status codes.
 
 ## Versioning
 
@@ -46,10 +44,11 @@ private; nothing already private is touched.
 The organization problems, each with
 its own slug so a client can offer the right next step. Answered by every
 registry: `409 last-admin` refuses the demotion or removal of an
-organization's last admin, by an admin or by the organization's IdP over
-SCIM, their leaving, and the erasure of their account (`POST
-/user/delete`) — promote another member first; only a decommission
-removes the last one. `403 email-unverified` refuses `POST /orgs` and the
+organization's last admin, by an admin, their leaving, and the erasure of
+their account (`POST /user/delete`) — promote another member first; only a
+decommission removes the last one. (An identity provider's deprovisioning,
+through an extension, revokes the last admin's tokens and sessions but leaves
+the membership.) `403 email-unverified` refuses `POST /orgs` and the
 domain lookup from an account whose address is not verified. `409
 org-pending` refuses `POST /orgs` while an organization the account
 created is still awaiting payment (only where an admission extension
@@ -68,8 +67,8 @@ organization: a person belongs to one at a time, and leaves it (`DELETE
 /orgs/{org}/members/{own handle}`) before joining or founding another.
 `409 staff-org-domain` refuses the deployment's staff organization
 (`AGENTRY_STAFF_ORG`) an address outside its domain (`AGENTRY_STAFF_DOMAIN`),
-at every door: an invitation, its accept, an approval, SCIM provisioning and
-founding it; its members are platform staff.
+at every door: an invitation, its accept, an approval, an identity provider's
+provisioning and founding it; its members are platform staff.
 `409 domain-claimed` refuses `POST /orgs` from an address whose domain
 already belongs to an organization — recorded at that organization's
 creation, or verified by it over DNS — and a DNS verification of a domain
@@ -229,28 +228,6 @@ still serializes with the `network` key present, so key-existence alone
 would match every agent ever published; the filter additionally requires the
 value not to be `none`, null or empty, and for object-valued capabilities
 that at least one member is non-empty.
-
-## SCIM 2.0
-
-The subset is Users and Groups→teams. Four behaviours to code
-against:
-
-- **`PUT /scim/v2/Users/{id}` is a full-resource replace,** not a merge.
-  Omit the active flag and it reads as false, so a partial PUT deactivates
-  the user. Deactivation is a PUT of the whole user with `"active": false`;
-  that revokes the org's PATs and sessions for that user in-request, inside
-  60 seconds by design.
-- **`userName` is immutable.** It is the account's email, and email changes
-  are an identity operation, not a directory attribute update. A PUT that
-  changes it gets `400` with a message telling you to deactivate and
-  re-provision.
-- **Membership-sync failures return 5xx.** If a group create or PATCH writes
-  the group but cannot write its members, the response is `500` so your IdP
-  retries. Silently discarding the error would leave the IdP believing a
-  group had synced when the team was empty. The one tolerated case is "this
-  user is not an org member", which is a legitimate no-op rather than a lost
-  write, and is skipped rather than failed.
-- **Only `userName eq "…"` is supported as a filter.**
 
 ## Account erasure (GDPR)
 
@@ -468,7 +445,9 @@ provider (`docs/self-hosting.md` "Sign in with your OpenID provider") at
 `GET /auth/oidc/{provider}/start`, and a first sign-in creates the account.
 Sessions, PATs and every authorization decision are the registry's own.
 `POST /auth/verify-email` confirms an address from the link
-`POST /user/email-verification` mails.
+`POST /user/email-verification` mails. SSH keys registered at
+`/user/ssh-keys` are a git credential only (they never authenticate to the
+API).
 
 **Desktop sign-in**: a signed-in browser records a grant with
 `POST /user/tokens/desktop-grant` (the app's `state` nonce), and the app
@@ -550,17 +529,6 @@ the PUT reads it first. The actions are audited as `agent.install` and
 them; the QuickAgent's own activity feed does not, at any role — whose
 account holds a QuickAgent is that person's business, where a star is
 public approval.
-
-## Enterprise SSO
-
-Beyond the browser destinations (`/sso/{org}`, the SAML `acs` and `metadata`
-endpoints, the OIDC `start`/`callback` pair): `POST
-/orgs/{org}/sso/connections/{kind}/test` exercises a stored connection —
-metadata, certificate, issuer — without enforcing it, and
-`/orgs/{org}/sso/saml/slo` accepts the identity provider's single-logout
-request over both the redirect and POST bindings, ending the registry
-session for that user. SSH keys registered at `/user/ssh-keys` are a git
-credential only (they never authenticate to the API).
 
 ## Downloads and version states
 

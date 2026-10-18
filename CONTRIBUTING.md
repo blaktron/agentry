@@ -43,16 +43,17 @@ Everyday commands:
 
 | Command | What |
 |---|---|
-| `make check` | the full gate: generated-code drift, ruleset sync, test inventory, lint, tests, build |
+| `make check` | the full gate: generated-code drift, ruleset sync, test inventory, compose image pins, lint, tests, build |
 | `make generate` | regenerate the OpenAPI server and Go client, and sqlc |
 | `make test` | Go tests (DB tests need `AGENTRY_TEST_DATABASE_URL`) |
+| `make bump-pins` | move each digest in `deploy/compose/docker-compose.yaml` to what its tag serves now (needs the network) |
+| `make workflows-check` | no workflow job that a fork's pull request can start runs on a self-hosted runner without the fork guard (needs python3 with PyYAML) |
 | `./scripts/acceptance/smoke.sh` | the stack boots and the generated Go client reaches the API |
 | `./scripts/acceptance/auth.sh` | the authorization matrix, the personal-access-token lifecycle and the audit rows, against a real Postgres |
 | `./scripts/acceptance/git.sh` | the git conformance matrix: oversize pushes, wrong credentials and tag permissions are refused |
 | `./scripts/acceptance/publish-install.sh` | publish and install round trips, byte-reproducible archives, yank semantics, and no path to `published` that skips the gate |
 | `./scripts/acceptance/cli.sh` | the `agentry` CLI against a booted `agentryd`: login, init, validate, publish, install, verify, yank |
 | `./scripts/acceptance/gate.sh` | the attack-corpus gate, the state-machine property, offline attestation verification and tighten-only policy |
-| `./scripts/acceptance/enterprise-sso.sh` | SAML and OIDC sign-in, enforced SSO, SCIM, domain verification, webhooks and audit export |
 | `./scripts/acceptance/helm.sh` | the Helm chart lints and renders, and its production shape holds |
 | `./scripts/acceptance/invariant-test-names.sh` | every test named as evidence for a security invariant still exists under that name |
 | `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages (the sign-in hand-off, device authorize and its exchange, sign-out), driven with curl and a cookie jar |
@@ -73,8 +74,8 @@ against every role. If a handler needs authorization the chokepoint cannot
 express (platform staff, org reviewer, "not the author"), mark it
 `SelfAuthorized: true` and write a dedicated test for it.
 
-A route that is not part of the OpenAPI surface — a root mount, like SCIM,
-the image proxy, git smart HTTP, the SSO landing or a probe — declares in
+A route that is not part of the OpenAPI surface — a root mount, like the
+image proxy, git smart HTTP or a probe — declares in
 `mountAuthz` in the same file instead: its gate (`MountGate`) and the rate
 class it draws from, with a `Why` whenever the gate is `GatePublic` or
 the class is one of the two sentinels. Register it through `api.Mount`,

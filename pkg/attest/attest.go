@@ -84,6 +84,12 @@ type DSSESignature struct {
 
 // VerifyEnvelope checks a DSSE envelope against a PEM public key. Used by the
 // CLI (offline), the server's own tests, and third-party verifiers.
+//
+// The caller chooses the key. A signature's keyid is a label the signer
+// attached, not evidence of anything: it is never read here, and a verifier
+// must never resolve a key from it (fetching or selecting whatever key an
+// envelope names would let the envelope's author pick the key that checks
+// it). The key comes from a source the verifier already trusts.
 func VerifyEnvelope(env DSSEEnvelope, publicKeyPEM string) (InTotoStatement, error) {
 	block, _ := pem.Decode([]byte(publicKeyPEM))
 	if block == nil {

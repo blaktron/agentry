@@ -19,7 +19,9 @@ const scannerUndeclaredEnv = "S6/undeclared-env"
 // the shell, Python and JavaScript/TypeScript files in the package and
 // compares what they do with what the manifest declares: network calls
 // against `network.egress` (a host counts only inside a network call, so a
-// documentation URL in a comment or string is not a finding), writes
+// documentation URL in a comment or string is not a finding; a shell
+// script's /dev/tcp redirection, socat address, git remote and container
+// registry name their host themselves, see netFormHosts), writes
 // against `filesystem.write`, environment reads against `secrets`, and a
 // script's very presence against `exec` — a package that ships a script
 // under `exec: none` is a high finding. Remote and
@@ -261,8 +263,18 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 					envNames = append(envNames, s6First(m[1:]))
 				}
 			}
-			if net && !decl.anyHost {
-				for _, h := range hostsOnLineWith(line, class, vars) {
+			if !decl.anyHost {
+				var hosts []string
+				if net {
+					hosts = hostsOnLineWith(line, class, vars)
+				}
+				if class == scriptShell {
+					// These forms name their own host and are no network
+					// command's word, so they are read whether or not the
+					// line is a network call.
+					hosts = append(hosts, netFormHostsWith(line, vars)...)
+				}
+				for _, h := range hosts {
 					if !decl.hosts[h] {
 						if _, seen := undeclaredNet[h]; !seen {
 							undeclaredNet[h] = hit
@@ -381,7 +393,11 @@ var s6Quoted = regexp.MustCompile("[\"'`]([^\"'`]+)[\"'`]")
 // rsync's :path after it; the user may be a shell variable ($USER,
 // ${SSH_USER}). An e-mail address has the same shape, which is why only
 // an ssh-family command's own destination words are read with it.
-var s6UserAtHost = regexp.MustCompile(`(?i)^(?:[a-z0-9._-]|\$\{[^}]*\}|\$[a-z0-9_]+)+@(` + s6HostRe + `)\.?(?::.*)?$`)
+var s6UserAtHost = regexp.MustCompile(`(?i)^` + s6UserRe + `@(` + s6HostRe + `)\.?(?::.*)?$`)
+
+// s6UserRe is the user of a destination or a git remote: letters, digits and
+// . _ -, or a shell variable.
+const s6UserRe = `(?:[a-z0-9._-]|\$\{[^}]*\}|\$[a-z0-9_]+)+`
 
 // s6HostRe is a host as an ssh-family command names it: a dotted name, an
 // IPv4 address or a bracketed IPv6 one. s6DestHost is an ssh
@@ -683,13 +699,22 @@ func userAtHost(word string) []string {
 }
 
 // destHost is an ssh destination: user@host, or a host alone when it is a
-// dotted name or an address (a single label may be an ssh_config alias).
+// dotted name or an address, bracketed or not for IPv6 (a single label may
+// be an ssh_config alias).
 func destHost(word string) []string {
 	if h := userAtHost(word); h != nil {
 		return h
 	}
 	if m := s6DestHost.FindStringSubmatch(word); m != nil && !s6LooksLikeFile(m[1]) {
 		return []string{m[1]}
+	}
+	// An IPv6 address needs no brackets as ssh's destination, alone or after
+	// the user; only scp's and rsync's host:path cannot tell it from the path.
+	if i := strings.LastIndexByte(word, '@'); i > 0 && s6User.MatchString(word[:i]) {
+		word = word[i+1:]
+	}
+	if ip := s6IPv6Word(word); ip != "" {
+		return []string{ip}
 	}
 	return nil
 }
@@ -824,10 +849,13 @@ func s6Substitute(line string, vars map[string][]string) []string {
 	return out
 }
 
-// shellWord is one word of a shell line, and whether any of it was quoted.
+// shellWord is one word of a shell line, whether any of it was quoted, and
+// whether it is the word a redirection (<, >, >>, <>, &>) opens: the file
+// the shell opens rather than an argument of the command.
 type shellWord struct {
 	text   string
 	quoted bool
+	redir  bool
 }
 
 // shellSegments splits a shell line into its commands' words: a new
@@ -847,11 +875,12 @@ func shellSegmentsAt(line string, depth int) [][]shellWord {
 	var segs [][]shellWord
 	var seg []shellWord
 	var cur strings.Builder
-	inWord, quoted := false, false
+	inWord, quoted, redirect := false, false, false
 	var quote byte
 	flush := func() {
 		if inWord {
-			seg = append(seg, shellWord{text: cur.String(), quoted: quoted})
+			seg = append(seg, shellWord{text: cur.String(), quoted: quoted, redir: redirect})
+			redirect = false
 		}
 		cur.Reset()
 		inWord, quoted = false, false
@@ -908,6 +937,12 @@ func shellSegmentsAt(line string, depth int) [][]shellWord {
 			return segs
 		case c == ' ' || c == '\t' || c == '\r' || c == '<' || c == '>':
 			flush()
+			if c == '<' || c == '>' {
+				// The next word is a file, except after << and <<<, whose
+				// next word is a delimiter or a string.
+				doubled := (i > 0 && line[i-1] == '<') || (i+1 < len(line) && line[i+1] == '<')
+				redirect = c == '>' || !doubled
+			}
 		case strings.IndexByte(";|&()`", c) >= 0:
 			endSeg()
 		default:
@@ -1016,6 +1051,8 @@ func s6AddrWords(line string) []string {
 			}
 			if m := s6AddrWord.FindStringSubmatch(a.text); m != nil {
 				out = append(out, m[1])
+			} else if ip := s6IPv6Word(a.text); ip != "" {
+				out = append(out, ip)
 			}
 		}
 	}

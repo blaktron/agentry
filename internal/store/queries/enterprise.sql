@@ -1,31 +1,7 @@
--- Enterprise features: SSO connections, identities, SCIM tokens and SCIM
--- data-plane, webhooks, domain claims, audit exports, enforced-SSO helpers.
-
--- ============================ SSO connections ============================
-
--- name: UpsertSSOConnection :one
-INSERT INTO sso_connections (id, org_id, kind, config, enabled)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (org_id, kind)
-  DO UPDATE SET config = EXCLUDED.config, enabled = EXCLUDED.enabled
-RETURNING *;
-
--- name: GetSSOConnection :one
-SELECT * FROM sso_connections WHERE org_id = $1 AND kind = $2;
-
--- name: GetEnabledSSOConnection :one
-SELECT * FROM sso_connections WHERE org_id = $1 AND kind = $2 AND enabled = true;
-
--- name: ListSSOConnections :many
-SELECT * FROM sso_connections WHERE org_id = $1 ORDER BY kind;
-
--- name: DeleteSSOConnection :execrows
-DELETE FROM sso_connections WHERE org_id = $1 AND kind = $2;
+-- Enterprise features: identities, webhooks, domain claims, audit exports,
+-- enforced-SSO helpers.
 
 -- ============================ Identities (JIT) ============================
-
--- name: GetIdentityBySubject :one
-SELECT * FROM identities WHERE sso_connection_id = $1 AND subject = $2;
 
 -- name: CreateIdentity :one
 INSERT INTO identities (id, user_id, provider_kind, sso_connection_id, subject)
@@ -48,69 +24,6 @@ UPDATE orgs SET sso_required = $2, updated_at = now() WHERE id = $1;
 UPDATE sessions
 SET sso_tags = sso_tags || jsonb_build_object($2::text, $3::text)
 WHERE id = $1;
-
--- ============================ SCIM tokens ============================
-
--- name: CreateSCIMToken :one
-INSERT INTO scim_tokens (id, org_id, token_sha256, expires_at)
-VALUES ($1, $2, $3, $4)
-RETURNING *;
-
--- name: GetSCIMTokenByHash :one
-SELECT * FROM scim_tokens
-WHERE token_sha256 = $1 AND revoked_at IS NULL
-  AND (expires_at IS NULL OR expires_at > now());
-
--- name: ListSCIMTokens :many
-SELECT * FROM scim_tokens WHERE org_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC;
-
--- name: RevokeSCIMToken :execrows
-UPDATE scim_tokens SET revoked_at = now() WHERE id = $1 AND org_id = $2 AND revoked_at IS NULL;
-
--- ============================ SCIM users (data plane) ============================
-
--- name: ListScimUsers :many
-SELECT u.id, u.email, u.display_name, u.state, h.handle, m.role, m.via_scim
-FROM memberships m
-JOIN users u ON u.id = m.user_id
-JOIN handles h ON h.id = u.id
-WHERE m.org_id = $1
-ORDER BY u.email;
-
--- name: GetScimUser :one
-SELECT u.id, u.email, u.display_name, u.state, h.handle, m.role, m.via_scim
-FROM memberships m
-JOIN users u ON u.id = m.user_id
-JOIN handles h ON h.id = u.id
-WHERE m.org_id = $1 AND u.id = $2;
-
--- name: FindOrgMemberByEmail :one
-SELECT u.id, u.email, u.display_name, u.state, h.handle, m.role, m.via_scim
-FROM memberships m
-JOIN users u ON u.id = m.user_id
-JOIN handles h ON h.id = u.id
-WHERE m.org_id = $1 AND u.email = $2;
-
--- ============================ SCIM groups (teams) ============================
-
--- name: CreateTeamWithScim :one
-INSERT INTO teams (id, org_id, slug, scim_group_id) VALUES ($1, $2, $3, $4)
-RETURNING *;
-
--- name: GetTeamByID :one
-SELECT * FROM teams WHERE id = $1 AND org_id = $2;
-
--- name: GetTeamByScimGroupID :one
-SELECT * FROM teams WHERE org_id = $1 AND scim_group_id = $2;
-
--- name: SetTeamScimGroupID :exec
-UPDATE teams SET scim_group_id = $2 WHERE id = $1;
-
--- name: ListTeamMemberIDs :many
-SELECT user_id FROM team_members WHERE team_id = $1;
-
--- name: ClearTeamMembers :exec
-DELETE FROM team_members WHERE team_id = $1;
 
 -- GetAgentOwnerOrg returns the owning org id when an agent's namespace is an
 -- org (webhook fan-out is org-scoped; personal-namespace agents return no
@@ -230,8 +143,3 @@ WHERE a.org_id = $1
        OR (a.occurred_at = sqlc.narg('after_time') AND a.id > sqlc.narg('after_id')))
 ORDER BY a.occurred_at ASC, a.id ASC
 LIMIT $2;
-
--- name: GetSSOConnectionWithOrg :one
--- SAML Single Logout: a session remembers its connection id; the logout path
--- needs the org handle to rebuild the SP.
-SELECT c.*, h.handle AS org_handle FROM sso_connections c JOIN handles h ON h.id = c.org_id WHERE c.id = $1;

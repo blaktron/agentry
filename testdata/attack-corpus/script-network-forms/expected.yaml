@@ -1,0 +1,8 @@
+technique: "Support script reaches hosts the manifest does not declare through a /dev/tcp redirection, a socat address, a git scp-like remote and a container image's registry (S6)"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"filesystem":{"read":"workspace"},"exec":{"commands":["bash","socat","git","docker"]}}}
+expect:
+  - S6/undeclared-network
+forbid: []
+expectClean: false

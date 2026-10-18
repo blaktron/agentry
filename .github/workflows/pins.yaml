@@ -26,3 +26,16 @@ jobs:
           persist-credentials: false
       - name: Are the action and tool pins current?
         run: ./scripts/pins-check.sh
+
+  # The headless compose stack's images, each pinned by tag and digest: the
+  # pinned digest must still be served and the tag must still be that
+  # digest. A tag that moved is a rebuild or a release; `make bump-pins`
+  # moves the pin.
+  compose-images:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Are the compose image pins current?
+        run: ./scripts/compose-pins.sh check --online

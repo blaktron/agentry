@@ -26,6 +26,13 @@
 # the connector dials the edge over the compose network, so the edge can
 # be bound the same way (docs/self-hosting.md, "Cloudflare Tunnel").
 
+# Images. Every image is named by tag AND digest (`name:tag@sha256:...`, the
+# digest of the multi-architecture index), so `docker compose pull` fetches
+# the image that was tested, never whatever a tag points at that day.
+# scripts/compose-pins.sh checks the form, reports a tag whose digest has
+# moved, and rewrites the digests (`make bump-pins`); to move to a new
+# version, change the tag and run it.
+#
 # Logs. Every service keeps Docker's json-file driver, rotated (three files
 # of 10 MB per container), so logs never grow without bound; `docker logs`
 # is the reader. An override file that sets `logging` on a service ships
@@ -39,7 +46,7 @@ x-logging: &rotated
 services:
   postgres:
     logging: *rotated
-    image: postgres:16
+    image: postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
     restart: unless-stopped
     environment:
       POSTGRES_USER: agentry
@@ -57,7 +64,13 @@ services:
 
   minio:
     logging: *rotated
-    image: minio/minio:latest
+    # The upstream project's own images are not served anonymously from
+    # Docker Hub or Quay; this is a build of the same source (AGPL-3.0, run
+    # here as a separate service). It ships the `mc` client the health check
+    # and the bucket bootstrap below use, and runs as uid 65532, so a volume
+    # that an image running as root wrote needs a one-time chown
+    # (docs/self-hosting.md, "What the stack exposes").
+    image: &minio-image cgr.dev/chainguard/minio:latest@sha256:709099319add48dfb44aa596a7070d3ddd8dd04d7ae881765719aec29df9e510
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -84,7 +97,7 @@ services:
 
   mailpit:
     logging: *rotated
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.31.6@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
     restart: unless-stopped
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:1025:1025"   # SMTP
@@ -96,7 +109,7 @@ services:
   minio-init:
     logging: *rotated
     profiles: ["server"]
-    image: minio/mc:latest
+    image: *minio-image
     depends_on:
       minio:
         condition: service_healthy
@@ -114,6 +127,20 @@ services:
     build:
       context: ../..
       dockerfile: deploy/compose/Dockerfile
+    # Hardened like the chart's pods and the tunnel connector: the image's
+    # own non-root user, a read-only root file system, no capabilities (it
+    # listens above 1024) and no way to gain any. What it writes lives on
+    # the volumes below and the two tmpfs mounts: the scratch directory for
+    # uploads, archives and scan workspaces, and a directory of its own,
+    # mounted executable, where a push's receive hook is written and run
+    # (the scratch directory is mounted noexec).
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=1g,mode=1777,noexec,nosuid,nodev
+      - /run/agentry-hooks:size=8m,mode=0700,uid=65532,gid=65532,exec,nosuid,nodev
     environment:
       # Dev mode is opt-in: off,
       # the server needs a sealing key (AGENTRY_AUTH_SEALING_KEY, 32 random
@@ -213,6 +240,9 @@ services:
       # docs/self-hosting.md "Audit archive and retention".
       AGENTRY_LOG_LEVEL: ${AGENTRY_LOG_LEVEL:-info}
       AGENTRY_AUDIT_STREAM_KIND: ${AGENTRY_AUDIT_STREAM_KIND:-none}
+      # Where `file` writes its daily files: the volume mounted at
+      # /data/storage, since the root file system is read-only.
+      AGENTRY_AUDIT_STREAM_DIR: ${AGENTRY_AUDIT_STREAM_DIR:-/data/storage/audit-stream}
       # Sign in through any OpenID provider (docs/self-hosting.md "Sign in
       # with your OpenID provider"): the server keeps no passwords, so this
       # is how people sign in to it.
@@ -241,6 +271,9 @@ services:
       # uid 65532 (see Dockerfile); the default .devdata/git would resolve
       # to an unwritable / in-container.
       AGENTRY_GIT_DATA_DIR: /data/git
+      # Where a push's receive hook is written and run: the executable tmpfs
+      # above. The default, the scratch directory, is noexec here.
+      AGENTRY_GIT_HOOKS_DIR: /run/agentry-hooks
       # SSH git transport: listens in-container on
       # 2222; the host key is generated under /data/git on first start.
       # AGENTRY_GIT_SSH_PUBLIC_URL is what agent pages print as the clone
@@ -269,6 +302,7 @@ services:
       - "${AGENTRY_SSH_BIND:-0.0.0.0}:${AGENTRY_SSH_PORT:-2222}:2222"
     volumes:
       - gitdata:/data/git
+      - storagedata:/data/storage
       # The signing key's directory when one is configured; an unset
       # AGENTRY_SIGNING_KEY_DIR mounts the empty placeholder volume instead,
       # so the same file works with and without a key.
@@ -293,7 +327,7 @@ services:
   edge:
     logging: *rotated
     profiles: ["server"]
-    image: nginx:1.27-alpine
+    image: nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
     restart: unless-stopped
     # Two networks: the stack's, to reach the services it fronts, and
     # `ingress`, shared with cloudflared alone. The edge trusts a visitor
@@ -363,6 +397,8 @@ volumes:
   pgdata:
   miniodata:
   gitdata:
+  # Mounted at /data/storage: the audit stream's files.
+  storagedata:
   edgecache:
   # Mounted at /etc/agentry when no signing key directory is configured.
   signing-placeholder:

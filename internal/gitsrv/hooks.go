@@ -54,8 +54,10 @@ func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 		}
 		oldOID, newOID, ref := parts[0], parts[1], parts[2]
 
-		// Protected version-tag namespace.
-		if strings.HasPrefix(ref, "refs/tags/v") {
+		// Protected version-tag namespace. The leading letter is matched
+		// without regard to case, so refs/tags/V1.0.0 is held like
+		// refs/tags/v1.0.0.
+		if isVersionTagRef(ref) {
 			if oldOID != zeroOID {
 				return deny("version tags are immutable: %s cannot be updated or deleted", ref)
 			}
@@ -100,19 +102,48 @@ func RunPreReceiveHook(stdin io.Reader, stderr io.Writer) int {
 	return 0
 }
 
+// isVersionTagRef reports whether ref names a tag in the version namespace:
+// refs/tags/ followed by a v or a V.
+func isVersionTagRef(ref string) bool {
+	rest, ok := strings.CutPrefix(ref, "refs/tags/")
+	return ok && (strings.HasPrefix(rest, "v") || strings.HasPrefix(rest, "V"))
+}
+
 // checkTree scans the tip tree for nested .git entries and oversized blobs.
 // History interior is intentionally not scanned: receive.maxInputSize caps
 // pack size and the tip is what archives/scans consume.
+//
+// It fails closed: a tip that git cannot resolve or list is refused. The one
+// object with no tree to scan is a tag that peels to a single file, which is
+// held to the file-size limit alone.
 func checkTree(oid string, maxBlob int) string {
-	out, err := exec.Command("git", "ls-tree", "-r", "-l", oid).Output() //nolint:gosec // fixed binary, oid validated by git
+	// Peel any chain of tags to the commit, tree or blob underneath.
+	peeled, err := gitOutput("rev-parse", "--verify", "--end-of-options", oid+"^{}")
 	if err != nil {
-		// Tag objects need peeling; try the commit the tag points at.
-		out, err = exec.Command("git", "ls-tree", "-r", "-l", oid+"^{commit}").Output() //nolint:gosec
-		if err != nil {
-			return "" // unscannable (e.g. tag of a blob) — content scans re-check at publish
-		}
+		return "could not read the pushed object " + oid
 	}
-	for _, line := range strings.Split(string(out), "\n") {
+	kind, err := gitOutput("cat-file", "-t", peeled)
+	if err != nil {
+		return "could not read the pushed object " + oid
+	}
+	if kind == "blob" {
+		sz, err := gitOutput("cat-file", "-s", peeled)
+		if err != nil {
+			return "could not read the pushed object " + oid
+		}
+		if size, err := strconv.Atoi(sz); err == nil && size > maxBlob {
+			return fmt.Sprintf("%s exceeds the %d MB single-file limit", oid, maxBlob>>20)
+		}
+		return ""
+	}
+	// -z prints each path verbatim, NUL-terminated; without it git wraps a
+	// path with an unusual byte in quotes and escapes it, and a ".git"
+	// segment at either end of such a path would no longer compare equal.
+	out, err := exec.Command("git", "ls-tree", "-r", "-l", "-z", "--end-of-options", peeled+"^{tree}").Output() //nolint:gosec // fixed binary, oid resolved by git above
+	if err != nil {
+		return "could not read the tree of the pushed object " + oid
+	}
+	for _, line := range strings.Split(string(out), "\x00") {
 		// <mode> <type> <oid> <size>\t<path>
 		tab := strings.IndexByte(line, '\t')
 		if tab < 0 {
@@ -132,6 +163,12 @@ func checkTree(oid string, maxBlob int) string {
 		}
 	}
 	return ""
+}
+
+// gitOutput runs git with fixed arguments and returns its trimmed stdout.
+func gitOutput(args ...string) (string, error) {
+	out, err := exec.Command("git", args...).Output() //nolint:gosec // fixed binary, arguments built by the hook
+	return strings.TrimSpace(string(out)), err
 }
 
 func gitOK(args ...string) error {

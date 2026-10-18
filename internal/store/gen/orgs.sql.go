@@ -278,7 +278,7 @@ func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (Org, erro
 }
 
 const createTeam = `-- name: CreateTeam :one
-INSERT INTO teams (id, org_id, slug) VALUES ($1, $2, $3) RETURNING id, org_id, slug, scim_group_id, created_at
+INSERT INTO teams (id, org_id, slug) VALUES ($1, $2, $3) RETURNING id, org_id, slug, created_at
 `
 
 type CreateTeamParams struct {
@@ -294,7 +294,6 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 		&i.ID,
 		&i.OrgID,
 		&i.Slug,
-		&i.ScimGroupID,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -599,8 +598,8 @@ type GetOrgByHandleRow struct {
 }
 
 // verified_domains is every domain the organization proved control of over
-// DNS (domain_claims.verified_at), oldest first: the SSO auto-link rule and
-// the invitation door read it.
+// DNS (domain_claims.verified_at), oldest first: the invitation door reads
+// it.
 func (q *Queries) GetOrgByHandle(ctx context.Context, handle string) (GetOrgByHandleRow, error) {
 	row := q.db.QueryRow(ctx, getOrgByHandle, handle)
 	var i GetOrgByHandleRow
@@ -724,7 +723,7 @@ func (q *Queries) GetPendingOrgCreatedBy(ctx context.Context, createdBy *uuid.UU
 }
 
 const getTeam = `-- name: GetTeam :one
-SELECT id, org_id, slug, scim_group_id, created_at FROM teams WHERE org_id = $1 AND slug = $2
+SELECT id, org_id, slug, created_at FROM teams WHERE org_id = $1 AND slug = $2
 `
 
 type GetTeamParams struct {
@@ -739,7 +738,6 @@ func (q *Queries) GetTeam(ctx context.Context, arg GetTeamParams) (Team, error) 
 		&i.ID,
 		&i.OrgID,
 		&i.Slug,
-		&i.ScimGroupID,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -1069,7 +1067,7 @@ func (q *Queries) ListTeamMembers(ctx context.Context, teamID uuid.UUID) ([]List
 }
 
 const listTeams = `-- name: ListTeams :many
-SELECT id, org_id, slug, scim_group_id, created_at FROM teams WHERE org_id = $1 ORDER BY slug
+SELECT id, org_id, slug, created_at FROM teams WHERE org_id = $1 ORDER BY slug
 `
 
 func (q *Queries) ListTeams(ctx context.Context, orgID uuid.UUID) ([]Team, error) {
@@ -1085,7 +1083,6 @@ func (q *Queries) ListTeams(ctx context.Context, orgID uuid.UUID) ([]Team, error
 			&i.ID,
 			&i.OrgID,
 			&i.Slug,
-			&i.ScimGroupID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -1466,7 +1463,7 @@ type UpsertPendingMembershipParams struct {
 	ViaDomain bool      `json:"via_domain"`
 }
 
-// The SCIM and fold-in doors: a membership that holds no seat and confers
+// The provisioning and fold-in doors: a membership that holds no seat and confers
 // nothing until an admin approves it. An existing membership is left alone —
 // approving twice, or provisioning someone who is already active, must not
 // push them back to pending. Reports 1 when this call wrote the row, which is
