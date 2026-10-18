@@ -601,6 +601,10 @@ type Deps struct {
 	// Staff reads platform staff. nil when the server runs without a
 	// database.
 	Staff Staff
+	// Members is the core's membership door for an extension that
+	// provisions people on a directory's word. nil when the server runs
+	// without a database.
+	Members Members
 	// RememberedBrowsers mints and checks remembered browsers under the
 	// core's rules, audited under the extension's name. nil when the
 	// server runs without a database.
@@ -951,6 +955,44 @@ type Staff interface {
 // StaffMember is one member of platform staff: account, handle, verified
 // address (lower-cased).
 type StaffMember = api.StaffMember
+
+// Members is the core's membership door for an extension that learns from
+// a directory whom an organization's identity provider provisioned and
+// deprovisioned. The extension decides whom to name; what provisioning and
+// deprovisioning do stays the core's: a provisioned person is only ever a
+// pending member, whom an admin approves (seats count then), and a
+// deprovisioned one loses the membership and every live credential at once.
+type Members interface {
+	// Provision makes the person a pending member of orgID: the account at
+	// their address, or a new one with the address taken as verified on
+	// the extension's word, so name only addresses the organization's
+	// identity provider may vouch for. An existing membership, pending or
+	// active, is left as it is. ErrOrgNotProvisionable for an organization
+	// that is unknown, suspended or being decommissioned;
+	// ErrAddressUnproven when the account at the address has not proved
+	// it; ErrStaffOrgDomain for an address the staff organization does not
+	// admit.
+	Provision(ctx context.Context, orgID uuid.UUID, p ProvisionedMember) (userID uuid.UUID, err error)
+	// Deprovision takes userID's membership of orgID away and revokes
+	// their org-bound tokens for orgID, every session and every
+	// remembered browser, in one transaction, audited. The organization's
+	// last admin keeps the membership and those credentials are revoked
+	// all the same; kept says so.
+	// Idempotent.
+	Deprovision(ctx context.Context, orgID, userID uuid.UUID) (kept bool, err error)
+}
+
+// ProvisionedMember is a person an organization's identity provider
+// provisioned: their address, the name the provider calls them by (a seed
+// for a new account's handle) and a display name.
+type ProvisionedMember = api.ProvisionedMember
+
+// The refusals of Members.Provision.
+var (
+	ErrOrgNotProvisionable = api.ErrOrgNotProvisionable
+	ErrAddressUnproven     = api.ErrAddressUnproven
+	ErrStaffOrgDomain      = registry.ErrStaffOrgDomain
+)
 
 // RememberedBrowsers is the core's remembered-browser credential as an
 // extension may use it: a browser that answered the second factor at its

@@ -746,3 +746,70 @@ func TestBindHandsTheReportSettings(t *testing.T) {
 		t.Fatalf("the other person's design moved: %s", got)
 	}
 }
+
+// membersReader keeps the membership door it was bound with.
+type membersReader struct {
+	noop
+	members Members
+}
+
+func (m *membersReader) Name() string   { return "members-reader" }
+func (m *membersReader) Bind(deps Deps) { m.members = deps.Members }
+
+// TestBindHandsTheMembersDoor: a server with a database hands an extension
+// the core's membership door, and its refusals are the ones this package
+// names. What provisioning and deprovisioning do is the API's tests'.
+func TestBindHandsTheMembersDoor(t *testing.T) {
+	st := migratedStore(t)
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
+	m := &membersReader{}
+	applyExtensions(srv, []Extension{m})
+	if m.members == nil {
+		t.Fatal("a server with a database handed out no membership door")
+	}
+	ctx := context.Background()
+	// An organization with one admin, written the way the core's own
+	// creation leaves it.
+	orgID, adminID := uuid.New(), uuid.New()
+	for _, stmt := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO handles (id, handle, kind) VALUES ($1, $2, 'org')`, []any{orgID, "mo-" + orgID.String()[:8]}},
+		{`INSERT INTO orgs (id, display_name) VALUES ($1, 'Members door')`, []any{orgID}},
+		{`INSERT INTO handles (id, handle, kind) VALUES ($1, $2, 'user')`, []any{adminID, "ma-" + adminID.String()[:8]}},
+		{`INSERT INTO users (id, email, email_verified_at) VALUES ($1, $2, now())`, []any{adminID, adminID.String() + "@example.test"}},
+		{`INSERT INTO memberships (org_id, user_id, role, state) VALUES ($1, $2, 'admin', 'active')`, []any{orgID, adminID}},
+	} {
+		if _, err := st.Pool().Exec(ctx, stmt.sql, stmt.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	email := orgID.String()[:8] + "-person@example.test"
+	userID, err := m.members.Provision(ctx, orgID, ProvisionedMember{Email: email, UserName: email})
+	if err != nil {
+		t.Fatalf("provision through the door: %v", err)
+	}
+	state := func() string {
+		var s string
+		if err := st.Pool().QueryRow(ctx, `SELECT state FROM memberships WHERE org_id = $1 AND user_id = $2`, orgID, userID).Scan(&s); err != nil {
+			return ""
+		}
+		return s
+	}
+	if got := state(); got != "pending" {
+		t.Fatalf("a member provisioned through the door is %q, want pending", got)
+	}
+	if kept, err := m.members.Deprovision(ctx, orgID, userID); err != nil || kept || state() != "" {
+		t.Fatalf("deprovision through the door: kept %v, %v, membership %q; want it gone", kept, err, state())
+	}
+	if _, err := m.members.Provision(ctx, uuid.New(), ProvisionedMember{Email: "someone@example.test"}); !errors.Is(err, ErrOrgNotProvisionable) {
+		t.Fatalf("provisioning into an unknown organization: %v, want ErrOrgNotProvisionable", err)
+	}
+	if kept, err := m.members.Deprovision(ctx, uuid.New(), uuid.New()); err != nil || kept {
+		t.Fatalf("deprovisioning nobody: kept %v, %v; want a quiet no-op", kept, err)
+	}
+}

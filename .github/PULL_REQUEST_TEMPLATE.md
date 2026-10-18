@@ -1,4 +1,5 @@
-<!-- One concern per pull request. Conventional-commit subject. -->
+<!-- Pull requests go into `dev`; `main` takes only promotions from `dev`.
+One concern per pull request. Conventional-commit subject. -->
 
 ## What and why
 
