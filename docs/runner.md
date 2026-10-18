@@ -2329,8 +2329,9 @@ The save keeps `fetch`'s rules and adds its own:
   encoded is decoded first, so the value is looked for in the bytes that
   would be saved ([encoded bodies](#encoded-response-bodies)).
 - **Inside the folder, never executable.** The path is resolved beneath
-  `/scratch` through the folder's `os.Root`: a path that climbs out, or a
-  link a declared command planted that points out, is refused. The body is
+  `/scratch`, every element of it held beneath the folder by the kernel
+  (`openat2` with `RESOLVE_BENEATH`, under gVisor too): a path that climbs
+  out, or a link a declared command planted that points out, is refused. The body is
   written to a new file of its own beside the path, made mode 0666, then
   renamed over the path, so a file already there is replaced, never written
   through. A `HEAD` request has no body and is refused with `saveTo`.
