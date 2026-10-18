@@ -208,6 +208,96 @@ agentry run ns/name --mode interactive --session-protocol \
   Windows refuses it. The flag changes nothing that is compiled: the plan
   is the one a terminal session runs.
 
+A client that speaks the Agent Client Protocol, an editor for one, drives a
+QuickAgent through `agentry acp` below instead, with its consent asked of the
+client.
+
+### `agentry acp [ns/name[@range] | --local DIR]`
+
+Serves one QuickAgent to an editor or another agent over the [Agent Client
+Protocol](https://agentclientprotocol.com) (ACP), on the command's standard
+input and output. The client launches the command; the person points an ACP
+client at `agentry acp ns/name`, and the QuickAgent appears as an agent in it.
+It needs CLI v0.6.140 or later.
+
+```
+agentry acp ns/name@^1.2 --deliver-to ~/Documents/Agentry
+```
+
+It is the run `agentry run` makes, with the same verification, sandbox,
+gateway, budgets and receipts; what changes is who sits at the terminal. The
+client does, and the command asks nothing of anyone else.
+
+**One session, one run.** A connection serves one session, and the first
+`session/prompt` starts the run. Before it, nothing is resolved, verified,
+installed or started. A second `session/new` is refused: a second QuickAgent is
+a second `agentry acp`.
+
+**Consent.** The first prompt puts the run's plan to the client as a
+`session/request_permission`: the release, how it was verified, the mode, the
+capabilities the run enforces, what changed since the person last accepted the
+release and where the output goes. The request has two options, and only a
+selection of **Run it** starts the run. A client that cannot show the request
+and answers with an error, a dismissed dialog, **Do not run it**, an option the
+request did not offer, or no answer within five minutes is a refusal: the
+prompt ends with the stop reason `refusal` and nothing has been started. Unlike
+`agentry run`, which asks only when a release declares network egress, a
+command, a remote server or a target host, or widens what it declared, `agentry
+acp` always asks, because the person has not typed the command. `--yes` is the
+person's own consent on the command line: the client is not asked, and the plan
+is shown as a message.
+
+**How a run mode maps to a session.**
+
+| Mode | Session | What comes back |
+| --- | --- | --- |
+| interactive | One session. The first prompt is the first turn of the chat and each later prompt another. | The reply as it streams, each tool call as a tool call with its progress, and each turn answered `end_turn`, or `max_turn_requests` when a tool-call or turn budget ended the session. The deliverables the teardown lists come back when the client sends `session/close`. |
+| autonomous | The first prompt is the task. The run happens once and the session ends. | The tool calls as they happen, then the result as a message and each deliverable as a message of its own, then the answer to the prompt, `end_turn`, with the run's id, status, exit class, output folder and deliveries in its `_meta`. A run that fails is an error answer with the run's own message. |
+
+A release that declares both modes runs interactive; `--mode autonomous` says
+otherwise. An interactive release's `interactive.opening` line is not shown,
+because the client's first prompt takes its place.
+
+**Deliverables.** Each file the run was for is handed back only after the
+runner shows it to be the one the envelope lists: under `reports/`, reached
+through no link, of the listed size and SHA-256. A text file (`md`, `txt`,
+`csv`, `json`, valid UTF-8) of at most 256 KiB, and 1 MiB in all, is embedded
+as a `resource` content block. Every other file is a `resource_link` to the file
+in the run's output folder, with its digest in `_meta.agentry.sha256`. A file
+that fails the check is named in a message and handed back as nothing.
+`--deliver-to` and `--destination` apply as on any run, and what they did is in
+the answer's `_meta.agentry.deliveries`.
+
+**Cancel and close.** `session/cancel` and `session/close` end the run. A
+session cannot stop one turn and leave the harness idle, so the prompt in
+flight is answered `cancelled` and a later prompt finds the session over. A
+client that closes its end of the pipe, or a stop signal, ends the run the same
+way, and the command waits for the teardown. After the session ends the command
+leaves when the client closes the pipe, or after 30 seconds.
+
+**What the client does not get.** The QuickAgent's tools are the ones its release
+declares, served by the gateway. The command never calls the client's file
+system or terminal, and refuses a `session/new` that names MCP servers or extra
+directories. Prompts are text; a resource link in one is read as a note of what
+the client meant, and image, audio and embedded resource blocks are refused.
+Any method the command does not serve, from `session/load` to `fs/read_text_file`,
+is answered with an error and does nothing.
+
+**The connection is bounded.** A message over 1 MiB is refused and the next is
+read. One prompt is in flight at a time. A client that stops reading costs the
+run nothing: progress past 16 MiB behind is dropped, and the answers the client
+is owed are kept.
+
+**Flags.** `agentry acp` takes the run flags that make sense with no terminal:
+`--local`, `--pin`, `--policy`, `--adapter`, `--mode`, `--out`, `--timeout`,
+`--max-turns`, `--max-cost`, `--yes`, `--allow-unsigned`, `--allow-unscanned`,
+`--allow-vulnerable-mcp`, `--keep-run-dir`, `--file`, `--knowledge`, `--voice`,
+`--no-voice`, `--report-theme`, `--report-design`, `--deliver-to`,
+`--destination`, `--no-destination`, `--intake` and `--intake-token`. What would
+ask a person at a terminal (an intake question, a profile, a connection's
+sign-in) is answered by a flag, or set up first with `agentry run`. The command's
+messages go to standard error; standard output is the protocol's alone.
+
 ### Intake questions
 
 A release may declare up to twenty **intake** questions (`intake` in the
