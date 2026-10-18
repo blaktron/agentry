@@ -179,13 +179,13 @@ func (h *handler) serveCSS(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(stylesheet)
 }
 
-// buildCSP: the pages carry no scripts; styles are the embedded sheet (plus
+// buildCSP: the pages carry no scripts and no inline styles; styles are the embedded sheet (plus
 // the brand's, if any); images are self, data: and the brand logo's origin;
 // forms post here and, for the device authorize flow, redirect to the
 // loopback listener (form-action governs the redirect after a
 // POST in Chrome), and sign-out may redirect to the directory or the site.
 func (h *handler) buildCSP() string {
-	style := "'self' 'unsafe-inline'"
+	style := "'self'"
 	if o := originOf(h.opt.Brand.CSSURL); o != "" {
 		style += " " + o
 	}
