@@ -4798,7 +4798,8 @@
       "disposition": "retain",
       "kind": "workflow",
       "jobs": [
-        "actions-and-tools"
+        "actions-and-tools",
+        "compose-images"
       ]
     },
     {

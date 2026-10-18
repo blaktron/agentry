@@ -853,6 +853,33 @@ instead of MinIO's thirty seconds (`AGENTRY_MINIO_DRIVE_TIMEOUT` in `.env`
 changes it), because a disk shared with builds can stall a write past
 thirty seconds under load, and a slow write is better than a refused one.
 
+MinIO's image runs as uid 65532, like the server's. A `miniodata` volume
+written by an image that ran as root keeps root's ownership, and MinIO then
+refuses to start with "Unable to write to the backend". Hand the volume over
+once, with the stack stopped:
+`docker run --rm -u 0 -v <project>_miniodata:/data --entrypoint chown <the minio image of docker-compose.yaml> -R 65532:65532 /data`.
+
+### The compose stack's containers and images
+
+The `server` service runs with the image's non-root user (65532), a
+read-only root file system, every capability dropped and
+`no-new-privileges`, as the chart's pods and the tunnel connector do. What it
+writes goes to the volumes and two tmpfs mounts: `gitdata` at `/data/git`
+(the repositories and the SSH host key), `storagedata` at `/data/storage`
+(the audit stream's files when `AGENTRY_AUDIT_STREAM_KIND=file`), `/tmp` (uploads, archives and scan
+workspaces; 1 GB, `noexec`) and `/run/agentry-hooks` (the receive hook of a
+push, which must be executable; `AGENTRY_GIT_HOOKS_DIR` points there). A
+compose override that gives the server another writable path mounts a volume
+or tmpfs for it. The edge, the object store, the mail catcher and the
+database keep their images' defaults.
+
+Every image in `docker-compose.yaml` is named by tag and digest
+(`name:tag@sha256:…`, the digest of the multi-architecture index), so a pull
+fetches the image that was tested. `make bump-pins` moves each digest to what
+its tag serves now; to move to another version, change the tag and run it.
+`scripts/compose-pins.sh check --online` reports a pinned digest the registry
+no longer serves, or a tag that has moved since the pin was written.
+
 ### Rate limits at the edge
 
 agentryd applies per-IP limits to the API; the edge adds `limit_req`
