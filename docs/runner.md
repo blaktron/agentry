@@ -245,8 +245,11 @@ again.
 
 It exits 1 when a file could not be delivered, and when the folder is not a
 run's output folder or the run did not succeed (a run that failed lists no
-deliverables and delivers nothing). A run that lists no deliverables is
-copied nowhere but still sends its result to a destination. The run folder is
+deliverables and delivers nothing), and when it lists no deliverables and has
+no result. A run that lists no deliverables but has a result is not copied and
+is sent to each `--destination`; with `--to` as well it exits 1 before any send,
+since there is nothing to copy. It needs Docker and builds the runner image if
+this machine has none. The run folder is
 left as it is: the only files written in it are `receipts/deliveries.ndjson`,
 which gains a line for each file, and `receipts/delivery-proxy-<destination>.log`
 for a destination; `result.json` is not rewritten. A copy needs agentry-cli
@@ -2732,14 +2735,21 @@ saved credentials unless you give new ones.
 | `--generate-secret` | make a signing secret and print it once, on stderr, for you to give the receiver |
 | `--authorization-env VAR` | the name of an environment variable holding the value of an `Authorization` header the receiver wants |
 
-With none of the three secret flags, a terminal is asked for the secret
-(typed, not shown). The signing secret and the `Authorization` value are kept in
-the system keychain, never in a file, and an `Authorization` value saved for one
-host is dropped when the address is changed to another. The other fields are in
+A destination that has no signing secret yet needs one: with none of the three
+secret flags a terminal is asked for it (typed, not shown), and without a
+terminal `add` exits 2. Saving a destination again keeps the secret it has. A
+name begins with a letter or a digit, at most 64 destinations are kept and a run
+sends to at most 8. The signing secret and the `Authorization` value are kept in
+the system keychain, not in a file (a schedule that runs while you are signed
+out keeps a sealed copy with its other keys), so `add` fails where the keychain
+is turned off (`AGENTRY_NO_KEYRING`). An `Authorization` value saved for one
+host and port is dropped, with a note on stderr, when the address is changed to
+another and `--authorization-env` is not given. The other fields are in
 `destinations.yaml` in the CLI's configuration folder. `agentry destinations
-list` shows each destination's name, kind and host (never its path or query,
-which may hold the receiver's own token), whether it is on your network and the
-QuickAgents it is a default for; `--json` prints the same. No secret is ever
+list` shows each destination's name, kind and scheme, host and port (never its
+path or query, which may hold the receiver's own token), whether it is on your
+network, whether it has no signing secret, and the QuickAgents it is a default
+for; `--json` prints the same with `secret` and `authorization` flags. No secret is ever
 shown. A token in the address's path or query is not a credential to Agentry:
 it is kept in `destinations.yaml` and sent to the receiver, so give a receiver's
 secret in `--authorization-env` where it takes one.
@@ -2785,8 +2795,10 @@ once and private the next. The step holds:
 - nothing of the run: no output folder, no workspace, no other credential.
 
 The step follows no redirect (a `3xx` is a failed delivery), reads at most 64
-KiB of what the receiver answers and keeps none of it, and gives up after three
-minutes. All of a run's destinations together have twelve. The proxy's
+KiB of what the receiver answers and keeps none of it. The receiver must begin
+its answer within one minute, which matters to a workflow that answers only
+when it finishes, and the whole request is abandoned after three. All of a
+run's destinations together have twelve minutes. The proxy's
 decisions, which name hosts and ports and never a credential or a body, are in
 `receipts/delivery-proxy-<destination>.log`.
 
@@ -2822,14 +2834,15 @@ and a body of one JSON object, at most 10 MiB:
 
 `ref` and `digest` name the exact release that ran. `result` is the run's final
 result as its envelope holds it: the parsed JSON when the release has an
-`output.schema.json`, else its text as a JSON string. It is left out, and
-`"resultOmitted"` says `too-large` or `unreadable` in its place, when it would
-take more than half the cap, is not valid UTF-8, or is nested more than 64
-levels. Each deliverable carries its `content` base64-encoded, or `omitted` with
-a word saying why there is none (`too-large` past the cap, or `changed`,
-`missing`, `link`, `unreadable`, `outside-reports` for a file the CLI could not
-stage), listed with its digest all the same. A run that left no file and has a
-result sends the result alone, with an empty `deliverables` list.
+`output.schema.json`, else its text as a JSON string; `null` when the run has
+none. It is `null` and `"resultOmitted"` says `too-large` or `unreadable` when
+the result would take more than half the cap, is not valid JSON or valid UTF-8,
+or is nested more than 64 levels. Each deliverable carries its `content`
+base64-encoded, or `omitted` with a word saying why there is none (`too-large`
+past the cap, or `changed`, `missing`, `link`, `unreadable`, `outside-reports`
+or `write` for a file the CLI could not stage), listed with its digest all the
+same. A run that left no file and has a result sends the result alone, with an
+empty `deliverables` list; one with neither sends and records nothing.
 
 ### Verifying the signature
 
@@ -2841,8 +2854,9 @@ from its own clock, which stops a captured request from being sent again later:
 import hashlib, hmac, time
 
 def verify(secret: bytes, headers, raw_body: bytes) -> bool:
+    # headers looks names up without regard to case, as most web frameworks do
     ts = headers["X-Agentry-Timestamp"]
-    if abs(time.time() - int(ts)) > 300:
+    if not ts.isdigit() or abs(time.time() - int(ts)) > 300:
         return False
     mac = hmac.new(secret, ts.encode() + b"." + raw_body, hashlib.sha256)
     return hmac.compare_digest("sha256=" + mac.hexdigest(), headers["X-Agentry-Signature"])
@@ -2855,16 +2869,18 @@ failed one.
 ### On my network
 
 A destination reaches public addresses on port 443 over https. One saved with
-`--on-my-network` may also be at an address on your own network (private,
-shared and loopback space: 10/8, 172.16/12, 192.168/16, 100.64/10, fc00::/7), in
-http as well as https, on any port: a n8n on your LAN, a server on your desk.
+`--on-my-network` may also be at an address on your own network (private
+and shared space: 10/8, 172.16/12, 192.168/16, 100.64/10, fc00::/7), in
+http as well as https, on any port: an n8n on your LAN, a server on your desk.
 The receipt records it (`onMyNetwork`). The proxy still checks every address a
 name resolves to, and **link-local space is never reached**: 169.254.0.0/16 and
 fe80::/10, where cloud metadata answers. Whatever the box, an address is
 refused that carries a user name or password, a fragment, an IPv6 literal, a
 host written as a number another way (`2130706433`, `0x7f.1`, `127.1`) or a
 loopback address or `localhost`, which in the delivery step is the step's own
-container: name this computer by its address on your network instead. On
+container: name this computer by its address on your network instead (a name
+that resolves to a loopback address is not refused, and reaches that same
+container). On
 rootless podman a container cannot reach the host that way, so a receiver on the
 same machine needs docker, or a receiver elsewhere.
 
@@ -2882,7 +2898,7 @@ Each file's delivery to each destination is a line of
 the deliverable's path, or `result` for a run that sent its result alone (its
 `sha256` is that of the result as sent). `status` is `delivered`, `refused` (the
 file's content was not sent: `too-large`, `changed`, `missing`, `link`,
-`unreadable` or `outside-reports`) or `failed`, and `error` is one word, never a
+`unreadable`, `outside-reports` or `write`) or `failed`, and `error` is one word, never a
 receiver's or a system's own text:
 
 | `error` | Meaning |
@@ -2890,12 +2906,16 @@ receiver's or a system's own text:
 | `destination` | the saved address no longer passes the address rule |
 | `credential` | the signing secret is missing, or a value cannot be sent |
 | `address` | the host, or an address it resolves to, is not one the step may reach |
-| `unreachable` | nothing answered, or the connection ended |
+| `unreachable` | nothing answered, the connection ended, or the proxy answered with something other than a tunnel or a refusal |
 | `tls` | the receiver's certificate was not accepted |
-| `timeout` | the receiver did not finish in time |
+| `timeout` | the receiver did not answer in time, or the twelve minutes of a run's destinations were spent before this one |
 | `redirect` | the receiver answered with a redirect, which is never followed |
 | `status` | the receiver answered with an error status |
 | `step` | the delivery step itself failed and left no usable report |
+
+A file the body had no room for is `refused` with `too-large`; when not even the
+listing of the files fits, the delivery is `failed` with `too-large` and nothing
+is sent.
 
 A delivery never changes how the run ended: the run is `ok` with exit 0 whatever
 a receiver says, and the CLI says on stderr what was not sent and which command
@@ -4176,7 +4196,7 @@ key variable's **name** only.
 | `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
-| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made: `destination`, `kind`, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
+| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made and each send to a [destination](#destinations-sending-a-runs-result-somewhere): `destination`, `kind`, `host` and `onMyNetwork` for a send, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
 | `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts), `corrections` (how many slips were corrected), `repaired` (whether the one repair turn ran) and `check` (AI Review's check as one word: `pass`, `flagged`, `not_scanned`, or `unanswered`; absent for a draft that could not be rendered). The envelope's usage is both turns' together. A draft that stops before the Drafter runs still writes one envelope with its class and stage |
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
