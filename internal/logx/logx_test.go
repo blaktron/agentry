@@ -58,7 +58,7 @@ func TestRequestIDStampedFromContext(t *testing.T) {
 func TestTokensAreMaskedEverywhere(t *testing.T) {
 	kinds := map[string]string{
 		"pat": auth.PATPrefix, "session": auth.SessionPrefix, "verification": auth.VerificationPrefix,
-		"scim": "agyscim_", "desktop grant": "agd_", "webhook secret": "whsec_", "csrf": "csrf_", "bare (oidc state, domain verification)": "",
+		"desktop grant": "agd_", "webhook secret": "whsec_", "csrf": "csrf_", "bare (oidc state, domain verification)": "",
 		// Pinned rather than left to the regex's shape: tokenRE's `agy[a-z]*_`
 		// happens to cover both of these, and "happens to" is not a guarantee
 		// anyone would notice breaking.

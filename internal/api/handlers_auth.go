@@ -150,9 +150,6 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 		problemForbidden(w, r, "Signing out requires a session, not a token.")
 		return
 	}
-	// SP-initiated SAML Single Logout: resolved before
-	// the revoke, which is what makes the session unreadable.
-	idpLogout := s.samlLogoutURLForSession(r, p.SessionID)
 	err := s.st.WithTx(r.Context(), func(q *storegen.Queries) error {
 		if _, err := q.RevokeSession(r.Context(), p.SessionID); err != nil {
 			return err
@@ -167,9 +164,5 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
-	if idpLogout != "" {
-		writeJSON(w, http.StatusOK, LogoutResult{IdpLogoutUrl: idpLogout})
-		return
-	}
 	w.WriteHeader(http.StatusNoContent)
 }

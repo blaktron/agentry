@@ -8,6 +8,7 @@ package api_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -354,7 +355,7 @@ func (r *recordedEvents) count(kind string) int {
 
 // TestSuspendedOrgIsRefusedEverywhere: platform staff suspend an
 // organization and it answers as absent — its page, its members, its
-// agents by name and in every listing, its SCIM plane, anything created
+// agents by name and in every listing, its provisioning, anything created
 // under it — to members and strangers alike, until it is reinstated. A
 // decommission then puts it in a read-only hold: reads and the audit log
 // go on for its members, a private agent stays invisible to a non-reader
@@ -372,7 +373,7 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	env.verifyEmail(adminH)
 	admin := env.login(adminH)
 	orgH := "suorg" + env.sfx
-	env.createOrg(admin, orgH)
+	orgID := uuid.MustParse(env.createOrg(admin, orgH))
 	memberH := env.register("su-member")
 	env.joinOrg(admin, orgH, memberH)
 	member := env.login(memberH)
@@ -406,11 +407,14 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	if !listed() {
 		t.Fatal("the published agent is not in search before suspension")
 	}
-	var scim struct {
-		Token string `json:"token"`
+	// provision is the identity provider's door through the members seam;
+	// n names a fresh person each time.
+	provision := func(n string) error {
+		t.Helper()
+		_, err := env.srvObj.ProvisionMember(context.Background(), "probe", orgID,
+			api.ProvisionedMember{Email: "su-" + n + "-" + env.sfx + "@acme.example"})
+		return err
 	}
-	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/scim/tokens", map[string]any{}, &scim, http.StatusCreated)
-	scimCaller := caller{name: "scim", pat: scim.Token}
 
 	status := func(c caller, method, path string, body any) int {
 		t.Helper()
@@ -429,8 +433,8 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	if got := status(stranger, http.MethodGet, "/api/v1/agents/"+orgH+"/su-private", nil); got != http.StatusNotFound {
 		t.Fatalf("private agent for a stranger: %d, want 404", got)
 	}
-	if got := status(scimCaller, http.MethodGet, "/scim/v2/Users", nil); got != http.StatusOK {
-		t.Fatalf("scim before suspension: %d", got)
+	if err := provision("before"); err != nil {
+		t.Fatalf("provisioning before suspension: %v", err)
 	}
 
 	// Only staff suspend; the reason is required.
@@ -476,8 +480,8 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 			}
 		}
 	}
-	if got := status(scimCaller, http.MethodGet, "/scim/v2/Users", nil); got != http.StatusForbidden {
-		t.Fatalf("scim while suspended: %d, want 403", got)
+	if err := provision("suspended"); !errors.Is(err, api.ErrOrgNotProvisionable) {
+		t.Fatalf("provisioning while suspended: %v, want ErrOrgNotProvisionable", err)
 	}
 	// Suspending twice is a conflict, not a second suspension.
 	if got := status(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/suspend", map[string]any{"reason": "again"}); got != http.StatusConflict {
@@ -495,8 +499,8 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	if !listed() {
 		t.Fatal("the reinstated organization's agent is not back in search")
 	}
-	if got := status(scimCaller, http.MethodGet, "/scim/v2/Users", nil); got != http.StatusOK {
-		t.Fatalf("scim after reinstate: %d", got)
+	if err := provision("reinstated"); err != nil {
+		t.Fatalf("provisioning after reinstate: %v", err)
 	}
 	if got := status(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/reinstate", nil); got != http.StatusConflict {
 		t.Fatalf("reinstating an active org: %d, want 409", got)
@@ -558,8 +562,8 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 			t.Fatalf("%s %s during the hold: %d %s %q, want 409 org-decommissioning", probe.method, probe.path, code, slug, detail)
 		}
 	}
-	if got := status(scimCaller, http.MethodGet, "/scim/v2/Users", nil); got != http.StatusForbidden {
-		t.Fatalf("scim during the hold: %d, want 403", got)
+	if err := provision("hold"); !errors.Is(err, api.ErrOrgNotProvisionable) {
+		t.Fatalf("provisioning during the hold: %v, want ErrOrgNotProvisionable", err)
 	}
 	// Nobody joins an organization on its way out: the invitation door is
 	// closed above, and the chokepoint refuses an approval too.

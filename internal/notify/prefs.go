@@ -18,7 +18,7 @@ import (
 //
 // Before any setting is read, the address itself has to be one the registry
 // confirmed: users.email_verified_at is set by the verify-email
-// link, by an IdP's email_verified claim on SSO/social JIT, and by SCIM, and
+// link, by an IdP's email_verified claim on sign-in, and by provisioning, and
 // an address without it gets no mail of any kind. The verification mail is
 // the one exception — it is the mail that does the confirming — and it does
 // not pass through here. Bounces from test accounts with invented addresses

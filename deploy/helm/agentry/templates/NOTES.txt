@@ -12,7 +12,7 @@ Roles deployed:
      (from existing secret "{{ .Values.secret.existingSecret }}")
 {{- end }}
    - Object storage: kind={{ .Values.config.storage.kind }}, bucket="{{ .Values.config.storage.s3Bucket }}"
-   - Redis (optional): {{ if or .Values.secret.redisUrl .Values.secret.existingSecret }}configured{{ else }}not set{{ end }} — nothing in the core reads it; the shared state (sessions, queue, SAML sets) is in Postgres, and only the rate-limit buckets stay per process
+   - Redis (optional): {{ if or .Values.secret.redisUrl .Values.secret.existingSecret }}configured{{ else }}not set{{ end }} — nothing in the core reads it; the shared state (sessions, queue) is in Postgres, and only the rate-limit buckets stay per process
 
 {{- if eq .Values.config.storage.kind "s3" }}
 {{- if not .Values.config.storage.s3Bucket }}
