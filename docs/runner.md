@@ -905,7 +905,7 @@ the receipt, and decides from it where the run's docker filter runs.
 | Colima | macOS | `colima start`; Agentry Desktop can install and run it for you | sidecar | supported |
 | Lima, the `docker-rootful` template | macOS | its context selected | sidecar | expected to work, not yet tested |
 | Rancher Desktop, dockerd (moby) backend | macOS | the dockerd backend chosen in its settings; its socket is `~/.rd/docker.sock` | sidecar | supported (tested with 1.24.0) |
-| Rancher Desktop, dockerd (moby) backend | Windows | the dockerd backend chosen in its settings | sidecar | expected to work, not yet tested |
+| Rancher Desktop, dockerd (moby) backend | Windows | the dockerd backend chosen in its settings | sidecar | supported (tested with 1.24.0) |
 | Podman Desktop (a podman machine) | macOS | the `docker` CLI installed and pointed at the machine's API socket (`podman machine inspect` names it) | sidecar | supported (tested with podman 6.1.4); no policy runtime |
 | Podman Desktop (a podman machine) | Windows | the `docker` CLI pointed at the machine's socket | sidecar | not yet tested; no policy runtime |
 | OrbStack | macOS | running | sidecar | expected to work, not yet tested |
