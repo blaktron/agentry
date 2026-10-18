@@ -16,6 +16,8 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
+
+	"github.com/blaktron/agentry/internal/queue"
 )
 
 // ---------------------------------------------------------------- blocked
@@ -92,6 +94,11 @@ func TestBlockedAgentDownloadReturns410(t *testing.T) {
 	if res.StatusCode != http.StatusAccepted || accepted.Queued != 1 {
 		t.Fatalf("reinstate: got %d with %+v, want 202 with one scan queued", res.StatusCode, accepted)
 	}
+	// The worker runs the queued scan; the gate's verdict on it is publish.
+	w := queue.NewRiverClient(env.st, nil)
+	w.SetTestOnly(true)
+	env.srvObj.Pipeline().RegisterHandlers(w)
+	w.Drain(context.Background(), "sandbox")
 	env.waitStatus(author, "banned", "1.0.0", "published")
 	res = env.do(anonymous, http.MethodGet, dl, nil)
 	_ = res.Body.Close()
