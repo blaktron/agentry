@@ -28,7 +28,8 @@ import (
 
 // ---------------------------------------------------------------- block
 
-// TestBlockWalksVersionsAndReinstateReverses pins `blocked`: T&S confirming
+// TestBlockWalksVersionsAndReinstateReverses pins `blocked`, and that a reinstate
+// returns a version whose new scan passes: T&S confirming
 // a malicious package must actually disable it. Setting agents.quarantine_state
 // alone would leave every published version downloadable and resolvable, and
 // the download handler's 410 branch dead code.
@@ -69,7 +70,7 @@ func TestBlockWalksVersionsAndReinstateReverses(t *testing.T) {
 	}
 
 	// Reinstate reverses it (only platform staff set/unset).
-	if _, err := e.pipe.Reinstate(ctx, agent.ID, "T&S: appeal upheld", staffEvent()); err != nil {
+	if _, err := e.pipe.Reinstate(ctx, agent.ID, "T&S: appeal upheld"); err != nil {
 		t.Fatalf("reinstate: %v", err)
 	}
 	back, err := e.st.Queries().GetVersionByID(ctx, v.ID)

@@ -2818,6 +2818,18 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/registry/published_callers_test.go",
+          "tests": [
+            "TestEveryCallerOfAnEdgeIntoPublishedPassedAGate"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/registry/staff_internal_test.go",
           "tests": [
             "TestAtStaffDomainComparesAsASCII"
@@ -3177,6 +3189,16 @@
           ]
         },
         {
+          "path": "internal/scan/publish_verdict_internal_test.go",
+          "tests": [
+            "TestPublishUnderLockRefusesAVerdictThatIsNotPublish"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/reattest_test.go",
           "tests": [
             "TestSignPayloadIsSignOverTheEncodedStatement",
@@ -3206,6 +3228,23 @@
             "TestANewRulesetEnqueuesTheSweepAndTheRedo",
             "TestARulesetJobRunsOnlyUnderItsOwnRuleset",
             "TestANewRulesetsJobsOutlastARollingDeploy"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/reinstate_test.go",
+          "tests": [
+            "TestReinstatePublishesOnlyWhatTheGateNowPasses",
+            "TestReinstateLeavesAQuarantineTheGateStillHolds",
+            "TestReinstateGivesAHeldVersionAReviewItem",
+            "TestReinstateQueuesTheScansAndMovesNothing",
+            "TestAReinstateBlockedAgainBeforeItsScanPublishesNothing",
+            "TestReinstateLeavesAnUnscannedVersionHeld"
           ],
           "fuzz": [],
           "benchmarks": [],
