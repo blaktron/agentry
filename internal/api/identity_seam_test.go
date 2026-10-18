@@ -391,6 +391,83 @@ func TestSignInHookHearsTheClaimsAndMayRememberTheBrowser(t *testing.T) {
 	}
 }
 
+// TestASignInHookMayAssertAnOrganizationsSSO: a session whose sign-in a
+// hook said came through an organization's own single sign-on satisfies
+// that organization's enforced SSO, and no other organization's; a sign-in
+// no hook said it of satisfies none. The login's audit row names it.
+func TestASignInHookMayAssertAnOrganizationsSSO(t *testing.T) {
+	var asserted uuid.UUID
+	env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) {
+		s.AddSignInHook(func(_ context.Context, in api.SignIn) {
+			if asserted != uuid.Nil {
+				in.AssertSSO(asserted)
+				in.AssertSSO(asserted)
+			}
+		})
+	})
+	h := "asserted" + env.sfx
+	person := testidp.Person{Subject: "sub-" + h, Email: h + "@example.test", EmailVerified: true, Username: h}
+	first := env.signInOIDC(t, idp, "oidc", person)
+	if first.status != http.StatusOK {
+		t.Fatalf("first sign-in: %d %s", first.status, first.body)
+	}
+	// A person belongs to one organization at a time, so the other
+	// organization is someone else's.
+	other := env.mintAccount(t, idp, "asserted-other")
+	orgA, orgB := "ssoa"+env.sfx, "ssob"+env.sfx
+	idA := env.createOrg(first.caller, orgA)
+	idB := env.createOrg(other, orgB)
+	env.doJSON(first.caller, http.MethodPatch, "/api/v1/orgs/"+orgA, map[string]any{"ssoRequired": true}, nil, http.StatusOK)
+	refused := func(c caller) bool {
+		t.Helper()
+		res := env.do(c, http.MethodPatch, "/api/v1/orgs/"+orgA, map[string]any{"displayName": "Renamed " + orgA})
+		code, slug, _ := problemOf(t, res)
+		if code != http.StatusOK && (code != http.StatusForbidden || slug != "sso-required") {
+			t.Fatalf("PATCH %s: %d %s, want 200 or 403 sso-required", orgA, code, slug)
+		}
+		return code == http.StatusForbidden
+	}
+	if !refused(first.caller) {
+		t.Fatal("a session no hook asserted SSO for passed the organization's enforced SSO")
+	}
+
+	asserted = uuid.MustParse(idB)
+	elsewhere := env.signInOIDC(t, idp, "oidc", person)
+	if elsewhere.status != http.StatusOK || !refused(elsewhere.caller) {
+		t.Fatalf("a sign-in asserted for another organization: %d, or it satisfied this one's enforced SSO", elsewhere.status)
+	}
+
+	asserted = uuid.MustParse(idA)
+	second := env.signInOIDC(t, idp, "oidc", person)
+	if second.status != http.StatusOK || second.userID != first.userID {
+		t.Fatalf("second sign-in: %d, account %s", second.status, second.userID)
+	}
+	if refused(second.caller) {
+		t.Fatal("the session whose sign-in asserted the organization's SSO was refused by it")
+	}
+	if !refused(first.caller) {
+		t.Fatal("an earlier session gained the later sign-in's assertion")
+	}
+	var named int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events WHERE action = 'user.login' AND target_id = $1::uuid AND detail->'ssoOrgs' = jsonb_build_array($2::text)`,
+		first.userID, idA).Scan(&named); err != nil {
+		t.Fatal(err)
+	}
+	if named != 1 {
+		t.Fatalf("%d login rows name the asserted organization once, want 1", named)
+	}
+	var orgRows int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events WHERE action = 'sso.login' AND org_id = $1::uuid AND target_id = $2::uuid`,
+		idA, first.userID).Scan(&orgRows); err != nil {
+		t.Fatal(err)
+	}
+	if orgRows != 1 {
+		t.Fatalf("%d sso.login rows in the organization's audit log, want 1", orgRows)
+	}
+}
+
 // TestStaffChangedIsHeardAndTheSetIsRead: a change to platform staff is
 // heard as staff.changed once its transaction has had time to commit, and
 // the set an extension reads is the registry's.
