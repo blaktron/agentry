@@ -274,6 +274,15 @@ func (s *Server) orgHandleOf(ctx context.Context, orgID uuid.UUID) string {
 // enforceSSO returns true when the caller may act on orgID's resources under
 // the org's enforced-SSO policy. Non-enforcing orgs always pass. The
 // gate is skipped without a database (dev-only) since it cannot be evaluated.
+//
+// The organization's subscription is not read: the flag is the
+// organization's own policy, which only its administrators clear, and a
+// billing change or an entitlement outage must never be what switches it
+// off. A session satisfies it through a sign-in the organization's single
+// sign-on asserted (the core's own SSO, or SignIn.AssertSSO from an
+// extension's sign-in); a token, by being bound to the organization. The
+// git transport reads the flag the same way, tier-blind, for the pushes and
+// publishes it covers (gitsrv's ssoAllows).
 func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.UUID) bool {
 	if s.st == nil {
 		return true
@@ -283,21 +292,6 @@ func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.U
 		return true // org lookup failure surfaces as a 404 in the handler
 	}
 	if !org.SsoRequired {
-		return true
-	}
-	// A tier that does not include SSO cannot enforce it: the organization
-	// would have no door to satisfy the demand through, so every member
-	// would be locked out of the organization's own resources by a
-	// subscription change. The flag stays in the row untouched —
-	// billing never writes it — and enforcement resumes the moment the
-	// subscription includes SSO again.
-	//
-	// An unknown answer keeps enforcing. This is the one entitlement gate
-	// that fails that way round: everywhere else "unknown" refuses an act,
-	// but here refusing means *not* applying the organization's own
-	// sign-in policy, and an entitlement outage must never be what lets
-	// someone past it.
-	if f, err := s.orgFeatures(ctx, orgID); err == nil && !f.SSO {
 		return true
 	}
 	return p.SSOSatisfied(orgID, s.cfg.Auth.SSOMaxAge)

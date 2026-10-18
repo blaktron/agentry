@@ -927,9 +927,11 @@ const (
 // sign-in through an individual provider that the callback gives a session,
 // with every claim of the ID token, once the account is resolved and
 // before the session is issued: a cookie it sets rides the session's
-// response, and SignIn.RememberBrowser mints a remembered browser from
-// this sign-in's own evidence. It cannot refuse the sign-in, and it runs
-// in the callback, so it is quick.
+// response, SignIn.RememberBrowser mints a remembered browser from this
+// sign-in's own evidence, and SignIn.AssertSSO says the sign-in came
+// through an organization's own single sign-on, so that the session
+// satisfies the organization's enforced SSO. It cannot refuse the sign-in,
+// and it runs in the callback, so it is quick.
 type HearsSignIn interface {
 	SignedIn(ctx context.Context, in SignIn)
 }
