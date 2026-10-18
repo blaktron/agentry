@@ -75,6 +75,14 @@ func TestTokensAreMaskedEverywhere(t *testing.T) {
 			"value", tok,
 			"err", errors.New("bad token "+tok),
 			"detail", map[string]any{"nested": map[string]any{"deep": "x " + tok + " y"}, "list": []any{tok}},
+			// A byte slice is encoded by the JSON handler as base64, which no
+			// token pattern matches; it is read as the text it holds.
+			"body", []byte("Authorization failed for "+tok),
+			"raw", json.RawMessage(`{"seen":"`+tok+`"}`),
+			"batch", [][]byte{[]byte(tok)},
+			// A secret-named key is recognised in camelCase and kebab-case.
+			"signingKey", tok,
+			"detail2", map[string]any{"clientSecret": tok, "X-Api-Key": tok},
 		)
 		out := buf.String()
 		if strings.Contains(out, tok) {
@@ -83,8 +91,8 @@ func TestTokensAreMaskedEverywhere(t *testing.T) {
 		if !strings.Contains(out, tok[:12]+"…"+logx.Redacted) {
 			t.Fatalf("%s token not masked with its display prefix: %s", name, out)
 		}
-		if strings.Count(out, logx.Redacted) < 5 {
-			t.Fatalf("%s: expected the token masked in msg, value, err, deep map and list; got %s", name, out)
+		if strings.Count(out, logx.Redacted) < 11 {
+			t.Fatalf("%s: expected the token masked in msg, value, err, deep map, list, bytes, raw JSON, byte batch and three secret-named keys; got %s", name, out)
 		}
 	}
 	// The display prefix on its own (what the UI shows) is not a token and
@@ -105,14 +113,20 @@ func TestSecretNamedKeysAreRedacted(t *testing.T) {
 		"cookie", "c", "api_key", "k", "smtp_password", "sp",
 		"object_key", "archive/1.tgz", "hostkey_fingerprint", "SHA256:abc", "public_key", "ssh-ed25519 AAAA",
 		"detail", map[string]any{"token": "inner", "keep": "me"},
+		// The same names in camelCase, kebab-case and dotted form.
+		"signingKey", "sk", "privateKey", "pk", "apiKey", "ak", "accessKey", "ack", "secretKey", "sek",
+		"clientSecret", "cs", "refreshToken", "rt", "X-Api-Key", "xk", "db.password", "dp",
+		"publicKey", "ssh-ed25519 BBBB", "objectKey", "archive/2.tgz", "hostKeyFingerprint", "SHA256:def",
 	)
 	m := line(t, &buf)
-	for _, k := range []string{"token", "Password", "client_secret", "Authorization", "cookie", "api_key", "smtp_password"} {
+	for _, k := range []string{"token", "Password", "client_secret", "Authorization", "cookie", "api_key", "smtp_password",
+		"signingKey", "privateKey", "apiKey", "accessKey", "secretKey", "clientSecret", "refreshToken", "X-Api-Key", "db.password"} {
 		if m[k] != logx.Redacted {
 			t.Errorf("%s = %v, want %q", k, m[k], logx.Redacted)
 		}
 	}
-	for k, want := range map[string]string{"object_key": "archive/1.tgz", "hostkey_fingerprint": "SHA256:abc", "public_key": "ssh-ed25519 AAAA"} {
+	for k, want := range map[string]string{"object_key": "archive/1.tgz", "hostkey_fingerprint": "SHA256:abc", "public_key": "ssh-ed25519 AAAA",
+		"publicKey": "ssh-ed25519 BBBB", "objectKey": "archive/2.tgz", "hostKeyFingerprint": "SHA256:def"} {
 		if m[k] != want {
 			t.Errorf("%s = %v, want it kept", k, m[k])
 		}

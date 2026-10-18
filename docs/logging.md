@@ -117,7 +117,10 @@ drop accounting.
 - **A token or a secret.** Before a line is written, a value under a key
   ending in `token`, `secret`, `password`, `passwd`, `authorization`,
   `cookie`, `api_key`, `private_key`, `signing_key`, `secret_key`,
-  `access_key`, `client_secret` or `credential(s)` becomes `[redacted]`,
+  `access_key`, `client_secret` or `credential(s)` becomes `[redacted]`
+  (names are compared without case or separators, so `signingKey`,
+  `Signing-Key` and `signing_key` are one name), a byte slice is logged as
+  the text it holds and masked like any string,
   and any token the registry minted — 52 base32 characters, with the kind's
   prefix (`agy_` PATs, `agys_` sessions, `agyv_` verification tokens,
   `agyi_` invitations, `agyd_` remembered browsers,

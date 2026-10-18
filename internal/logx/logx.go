@@ -15,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -59,14 +60,17 @@ var tokenRE = regexp.MustCompile(`(?i)\b(?:agy[a-z]*_|agd_|whsec_|csrf_)?[a-z2-7
 // an incident can still be traced to the credential.
 const tokenDisplayLen = 12
 
-// secretKeySuffixes are the attribute-key endings (compared case-insensitively)
-// under which a value is never written. Bare "key" is deliberately absent:
+// secretKeySuffixes are the attribute-key endings under which a value is
+// never written. A key is compared case-insensitively and with its
+// separators (underscore, hyphen, dot, space) removed, so `signing_key`,
+// `signingKey`, `Signing-Key` and `signing.key` are one name; the suffixes
+// below are written in that folded form. Bare "key" is deliberately absent:
 // object keys, public keys and host-key fingerprints are legitimate log
 // content; the specific secret kinds are listed instead.
 var secretKeySuffixes = []string{
 	"token", "secret", "password", "passwd", "authorization", "cookie",
-	"api_key", "apikey", "private_key", "signing_key", "secret_key", "access_key",
-	"client_secret", "credential", "credentials",
+	"apikey", "privatekey", "signingkey", "secretkey", "accesskey",
+	"clientsecret", "credential", "credentials",
 }
 
 type ctxKey struct{}
@@ -178,13 +182,29 @@ func Sanitize(_ []string, a slog.Attr) slog.Attr {
 }
 
 func isSecretKey(key string) bool {
-	k := strings.ToLower(key)
+	k := foldKey(key)
 	for _, s := range secretKeySuffixes {
 		if strings.HasSuffix(k, s) {
 			return true
 		}
 	}
 	return false
+}
+
+// foldKey lower-cases a key and drops its separators, so the naming style
+// of the call site (snake_case, camelCase, kebab-case, dotted) does not
+// decide whether a secret is recognised.
+func foldKey(key string) string {
+	var b strings.Builder
+	b.Grow(len(key))
+	for _, r := range strings.ToLower(key) {
+		switch r {
+		case '_', '-', '.', ' ':
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func sanitizeValue(v slog.Value) slog.Value {
@@ -206,7 +226,8 @@ func sanitizeValue(v slog.Value) slog.Value {
 }
 
 // sanitizeAny walks the shapes slog serialises as JSON objects: maps,
-// slices, errors, Stringers. Anything else is left to the encoder.
+// slices, byte slices, errors, Stringers. Anything else is left to the
+// encoder.
 func sanitizeAny(x any) any {
 	switch t := x.(type) {
 	case nil:
@@ -249,7 +270,19 @@ func sanitizeAny(x any) any {
 		return out
 	case fmt.Stringer:
 		return sanitizeString(t.String())
+	case [][]byte:
+		out := make([]any, len(t))
+		for i, v := range t {
+			out[i] = sanitizeString(string(v))
+		}
+		return out
 	default:
+		// A byte slice (a named one such as json.RawMessage included) would
+		// be encoded as base64, which no token pattern matches; it is
+		// logged as the text it holds, masked and cut like any string.
+		if v := reflect.ValueOf(x); v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Uint8 {
+			return sanitizeString(string(v.Bytes()))
+		}
 		return x
 	}
 }
