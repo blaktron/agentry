@@ -1509,7 +1509,12 @@ address it held) and `staff.changed`. It can read platform staff, mint a
 remembered browser at a sign-in it hears, and check one, under the
 registry's rules: minted only from that sign-in's own verified token, whose
 `amr` names a second factor and whose `auth_time` is minutes old, stored as
-a SHA-256 hash and bound to one account. It can seal a small value it must
+a SHA-256 hash and bound to one account. It can say that a sign-in it
+hears came through an organization's own single sign-on
+(`SignIn.AssertSSO`), and the session that sign-in gets then satisfies the
+organization's enforced SSO for `auth.ssoMaxAge` from the token's
+`auth_time` (a token without one satisfies nothing); the organization's
+audit log records it as `sso.login`. It can seal a small value it must
 keep at rest, such as a queued erasure's address, under the server's
 sealing key (`Deps.Sealer`). It can serve calls
 from a service of its own under `/internal/x/<name>/` (`ReceivesCallbacks`).
