@@ -1309,6 +1309,7 @@
             "TestAccessLineCarriesTheContract",
             "TestProbesAreNotAccessLogged",
             "TestInboundRequestIDHonouredOnlyWhenTheHopSetsIt",
+            "TestUICallsLogAndCountOnce",
             "TestWrapMiddlewareGivesABareMuxTheContract",
             "TestRequestIDReachesTheAuditRow",
             "TestFailedSignInIsNamedAndMirrored",
@@ -2358,6 +2359,19 @@
             "child process",
             "source/file contract",
             "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/hook_policy_test.go",
+          "tests": [
+            "TestHookProtectsVersionTagsInEveryCase",
+            "TestHookTreeCheckFailsClosed"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process"
           ]
         },
         {
@@ -3846,7 +3860,9 @@
             "TestLandingSaysWhoIsSignedIn",
             "TestLogoutRevokesAndClears",
             "TestVerifyEmailConfirmsThroughTheAPI",
-            "TestCSPAdmitsTheSignOutOrigin"
+            "TestCSPAdmitsTheSignOutOrigin",
+            "TestCSPIsExactlyThisString",
+            "TestAPICallRunsUnderTheBrowserRequestsContext"
           ],
           "fuzz": [],
           "benchmarks": [],
