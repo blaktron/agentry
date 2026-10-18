@@ -11,12 +11,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"testing"
 
-	samlsp "github.com/blaktron/agentry/internal/auth/saml"
+	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
@@ -102,7 +101,7 @@ func TestEveryMembershipDoorCountsSeats(t *testing.T) {
 	// refused for the seat it reserved.
 	env.doJSON(env.login(oneH), http.MethodPost, "/api/v1/invitations/"+token, nil, nil, http.StatusOK)
 
-	// An approval past the cap is refused too: a SCIM-provisioned person is
+	// An approval past the cap is refused too: a provisioned person is
 	// pending, which costs nothing, and the wall is at the approval.
 	pendingH := env.register("st-pending")
 	env.verifyEmail(pendingH)
@@ -510,30 +509,23 @@ func TestOneOrgPerPersonHoldsUnderConcurrentDoors(t *testing.T) {
 	}
 }
 
-// TestSCIMProvisionsPending: the IdP says who exists, an admin says who is
-// a member. A SCIM create answers 201 whatever the seats, because a pending
-// person holds none; approving is where the seat is taken, and declining
-// removes them.
-func TestSCIMProvisionsPending(t *testing.T) {
+// TestProvisioningMakesPendingMembers: the IdP says who exists, an admin
+// says who is a member. Provisioning through the members seam succeeds
+// whatever the seats, because a pending person holds none; approving is
+// where the seat is taken, and declining removes them.
+func TestProvisioningMakesPendingMembers(t *testing.T) {
 	env := newTestEnv(t)
+	ctx := context.Background()
 	adminH := env.register("sp-admin")
 	env.verifyEmail(adminH)
 	admin := env.login(adminH)
 	orgH := "sporg" + env.sfx
-	env.createOrg(admin, orgH)
-	var tok struct {
-		Token string `json:"token"`
-	}
-	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/scim/tokens", map[string]any{}, &tok, http.StatusCreated)
-	scim := caller{name: "scim", pat: tok.Token}
+	orgID := uuid.MustParse(env.createOrg(admin, orgH))
 
 	email := "dana-" + env.sfx + "@acme.example"
-	var created struct {
-		ID string `json:"id"`
+	if _, err := env.srvObj.ProvisionMember(ctx, "probe", orgID, api.ProvisionedMember{Email: email, UserName: email}); err != nil {
+		t.Fatalf("provision: %v", err)
 	}
-	env.doJSON(scim, http.MethodPost, "/scim/v2/Users", map[string]any{
-		"userName": email, "emails": []map[string]any{{"value": email, "primary": true}}, "active": true,
-	}, &created, http.StatusCreated)
 
 	var members []struct {
 		State string `json:"state"`
@@ -546,13 +538,13 @@ func TestSCIMProvisionsPending(t *testing.T) {
 	for _, m := range members {
 		if m.User.Handle != adminH {
 			if m.State != "pending" {
-				t.Fatalf("a SCIM-provisioned member is %q, want pending", m.State)
+				t.Fatalf("a provisioned member is %q, want pending", m.State)
 			}
 			provisioned = m.User.Handle
 		}
 	}
 	if provisioned == "" {
-		t.Fatal("SCIM provisioned nobody")
+		t.Fatal("provisioning made nobody a member")
 	}
 
 	// A pending member holds no seat.
@@ -575,11 +567,11 @@ func TestSCIMProvisionsPending(t *testing.T) {
 
 	// Declining removes a pending person and takes no seat.
 	email2 := "eli-" + env.sfx + "@acme.example"
-	env.doJSON(scim, http.MethodPost, "/scim/v2/Users", map[string]any{
-		"userName": email2, "emails": []map[string]any{{"value": email2, "primary": true}}, "active": true,
-	}, nil, http.StatusCreated)
+	if _, err := env.srvObj.ProvisionMember(ctx, "probe", orgID, api.ProvisionedMember{Email: email2, UserName: email2}); err != nil {
+		t.Fatalf("provision: %v", err)
+	}
 	var handle2 string
-	if err := env.st.Pool().QueryRow(context.Background(),
+	if err := env.st.Pool().QueryRow(ctx,
 		`SELECT h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.email = $1`, email2).Scan(&handle2); err != nil {
 		t.Fatal(err)
 	}
@@ -770,64 +762,4 @@ func TestPendingMemberHoldsNothing(t *testing.T) {
 	// Approving them is what confers it.
 	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+pendingH+"/approve", nil, nil, http.StatusOK)
 	env.doJSON(env.login(pendingH), http.MethodGet, "/api/v1/orgs/"+orgH+"/members", nil, nil, http.StatusOK)
-}
-
-// TestOrgSSODoesNotLinkAnAccountOutsideTheVerifiedDomain: an organization's
-// admin configures its SSO connection, so an assertion alone must not be
-// able to speak for an account. Linking an identity to an existing member
-// needs the organization's verified domain as well as the membership;
-// a member who joined with a personal address is never linked
-// automatically.
-func TestOrgSSODoesNotLinkAnAccountOutsideTheVerifiedDomain(t *testing.T) {
-	env := newTestEnv(t)
-	adminH := env.register("lk-admin")
-	env.verifyEmail(adminH)
-	admin := env.login(adminH)
-	orgH := "lkorg" + env.sfx
-	env.createOrg(admin, orgH)
-	env.verifyOrgDomain(orgH, orgH+".example")
-
-	idp := newSAMLTestIdP(t)
-	metadataXML, err := samlsp.BuildIDPMetadataXML(idp.entityID, "https://lk-idp.test/sso", idp.certPEM)
-	if err != nil {
-		t.Fatal(err)
-	}
-	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/sso/connections/saml", map[string]any{
-		"enabled": true,
-		"config":  map[string]any{"idpMetadataXml": metadataXML, "emailAttribute": "email"},
-	}, nil, http.StatusOK)
-	metadataURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/metadata"
-	acsURL := env.srv.URL + "/api/v1/orgs/" + orgH + "/sso/saml/acs"
-
-	// A member who joined with a personal address. The IdP asserts it —
-	// which an org admin who controls the connection could always do — and
-	// the registry refuses to hand over the account.
-	personal := "lk-person-" + env.sfx + "@personal.example"
-	memberH := env.registerEmail("lk-member", personal)
-	env.seedMembership(orgH, memberH, "member", "active")
-	res := env.postForm(t, acsURL, url.Values{"SAMLResponse": {idp.signedResponse(t, metadataURL, acsURL, personal, false)}})
-	body, _ := io.ReadAll(res.Body)
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusConflict || !strings.Contains(string(body), "sso-link-required") {
-		t.Fatalf("assertion for a member's personal address: %d %s, want 409 sso-link-required", res.StatusCode, body)
-	}
-	var identities int
-	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT count(*) FROM identities i JOIN handles h ON h.id = i.user_id WHERE h.handle = $1`, memberH).Scan(&identities); err != nil {
-		t.Fatal(err)
-	}
-	if identities != 0 {
-		t.Fatalf("the refused assertion linked %d identity/identities", identities)
-	}
-
-	// The same member at the organization's own verified domain: linked,
-	// because the organization proved it controls that domain.
-	atDomain := "lk-at-" + env.sfx + "@" + orgH + ".example"
-	domainMemberH := env.registerEmail("lk-domain", atDomain)
-	env.seedMembership(orgH, domainMemberH, "member", "active")
-	ok := env.postForm(t, acsURL, url.Values{"SAMLResponse": {idp.signedResponse(t, metadataURL, acsURL, atDomain, false)}})
-	_ = ok.Body.Close()
-	if ok.StatusCode != http.StatusOK {
-		t.Fatalf("assertion for a member at the verified domain: %d, want 200", ok.StatusCode)
-	}
 }

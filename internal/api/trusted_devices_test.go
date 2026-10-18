@@ -19,7 +19,7 @@ package api_test
 //	the lifetime is absolute, not sliding    → TestTrustedDeviceExpiryIsAbsoluteNotSliding
 //	only the hash is stored                  → TestTrustedDeviceStoresOnlyTheHash
 //	the token says what it is                → TestTrustedDeviceTokenIdentifiesItself
-//	deactivation takes the browser away      → TestSCIMDeactivationRevokesTrustedDevices
+//	deprovisioning takes the browser away    → TestTheMembersSeamDeprovisionTakesEverythingAway
 //	erasure removes the row, not just trust  → TestErasureDeletesTrustedDevices
 //	the sweep deletes only what has expired  → TestTrustedDeviceSweepDeletesOnlyWhatHasExpired
 //	logout leaves the browser remembered     → TestTrustedDeviceSurvivesLogout
@@ -413,9 +413,8 @@ func TestTrustedDeviceTokenIdentifiesItself(t *testing.T) {
 
 // insertTrustedDevice records one directly, the way insertSession and insertPAT
 // do for the credentials they stand in for. It exists for the paths that take
-// trust away rather than grant it: a SCIM-provisioned account never signed in
-// and so cannot have earned a record, and what deactivation does to one is
-// the thing under test.
+// trust away rather than grant it: what deprovisioning or erasure does to
+// one is the thing under test.
 func insertTrustedDevice(t *testing.T, env *testEnv, userID string) string {
 	t.Helper()
 	tok, err := auth.NewToken(auth.TrustedDevicePrefix)
@@ -452,47 +451,6 @@ func deviceState(t *testing.T, env *testEnv, token string) string {
 		return "revoked"
 	}
 	return "live"
-}
-
-// TestSCIMDeactivationRevokesTrustedDevices proves deactivation takes the
-// remembered browser away as well as the sessions.
-//
-// Deactivation drops the membership, revokes the org-bound PATs and kills the
-// sessions, but it deliberately leaves the account's state alone, because the
-// person may exist outside the organization. So a surviving record would let a
-// deprovisioned user sign straight back in and be asked for *less* than before
-// them — the second factor skipped — which is the opposite of what
-// scimDeactivate promises. TestTrustedDeviceRefusesADeadCredential already
-// proves a revoked record is refused at use; this proves deactivation is what
-// revokes it, and the two together are the property.
-func TestSCIMDeactivationRevokesTrustedDevices(t *testing.T) {
-	env := newTrustedDeviceEnv(t)
-	scim, _ := env.scimOrg(t, "td-scim")
-
-	email := "td-deact-" + env.sfx + "@acme.example"
-	var created struct {
-		ID string `json:"id"`
-	}
-	env.doJSON(scim, http.MethodPost, "/scim/v2/Users", map[string]any{
-		"schemas":  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
-		"userName": email,
-		"emails":   []map[string]any{{"value": email, "primary": true}},
-		"active":   true,
-	}, &created, http.StatusCreated)
-
-	tok := insertTrustedDevice(t, env, created.ID)
-	if got := deviceState(t, env, tok); got != "live" {
-		t.Fatalf("before deactivation the record is %s, want live", got)
-	}
-
-	env.doJSON(scim, http.MethodPatch, "/scim/v2/Users/"+created.ID, map[string]any{
-		"schemas":    []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
-		"Operations": []map[string]any{{"op": "replace", "path": "active", "value": false}},
-	}, nil, http.StatusOK)
-
-	if got := deviceState(t, env, tok); got != "revoked" {
-		t.Fatalf("after SCIM deactivation the record is %s, want revoked: a deprovisioned user would keep a browser that skips their second factor", got)
-	}
 }
 
 // TestErasureDeletesTrustedDevices proves erasure removes the record

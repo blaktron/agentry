@@ -133,14 +133,9 @@ func onTier(apply func(*entitlements.Features)) func(*api.Server) {
 	}
 }
 
-func brokenTier() func(*api.Server) {
-	return func(s *api.Server) {
-		s.SetEntitlements(brokenTierResolver())
-	}
-}
-
 // tierResolverFor and brokenTierResolver are the resolvers behind onTier
-// and brokenTier, for a test that swaps the tier under a live server.
+// and a tier that cannot be read, for a test that swaps the tier under a
+// live server.
 func tierResolverFor(apply func(*entitlements.Features)) entitlements.Resolver {
 	return tierResolver{Resolver: entitlements.NewConfigResolver(config.Default().Limits), apply: apply}
 }
@@ -512,7 +507,7 @@ func (env *testEnv) joinOrg(admin caller, org, handle string) {
 // seedMembership writes a membership straight into the database, for a
 // fixture whose subject is not the door: a security_reviewer (which the API
 // assigns only inside a first-party organization) or a pending member (whom
-// only SCIM or the fold-in creates).
+// only provisioning or the fold-in creates).
 func (env *testEnv) seedMembership(org, handle, role, state string) {
 	env.t.Helper()
 	if _, err := env.st.Pool().Exec(context.Background(),

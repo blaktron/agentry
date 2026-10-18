@@ -1,5 +1,5 @@
-// Package oidc implements the OpenID Connect Relying Party side of enterprise
-// SSO: authorization-code flow with PKCE, issuer pinning (the discovery
+// Package oidc implements the OpenID Connect Relying Party side of sign-in
+// through an OpenID provider: authorization-code flow with PKCE, issuer pinning (the discovery
 // document's issuer must match the configured issuer), and email_verified
 // respected. Built on github.com/coreos/go-oidc/v3 and golang.org/x/oauth2.
 package oidc
@@ -14,8 +14,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// Config is the per-org OIDC connection configuration (stored in
-// sso_connections.config; the client secret is sealed at rest by the caller).
+// Config is an OpenID provider's relying-party configuration.
 type Config struct {
 	Issuer       string   `json:"issuer"`
 	ClientID     string   `json:"clientId"`
@@ -24,7 +23,7 @@ type Config struct {
 	Scopes       []string `json:"scopes,omitempty"`
 }
 
-// RP is a configured Relying Party for one org connection.
+// RP is a configured Relying Party for one provider.
 type RP struct {
 	provider *coreoidc.Provider
 	oauth    *oauth2.Config

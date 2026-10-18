@@ -39,8 +39,8 @@ SELECT id FROM users WHERE id = $1 FOR UPDATE;
 
 -- name: GetOrgByHandle :one
 -- verified_domains is every domain the organization proved control of over
--- DNS (domain_claims.verified_at), oldest first: the SSO auto-link rule and
--- the invitation door read it.
+-- DNS (domain_claims.verified_at), oldest first: the invitation door reads
+-- it.
 SELECT o.*, h.handle,
   coalesce((SELECT array_agg(dc.domain::text ORDER BY dc.verified_at)
             FROM domain_claims dc WHERE dc.org_id = o.id AND dc.verified_at IS NOT NULL), '{}')::text[] AS verified_domains
@@ -141,7 +141,7 @@ INSERT INTO memberships (org_id, user_id, role, state)
 VALUES ($1, $2, $3, 'active');
 
 -- name: UpsertPendingMembership :execrows
--- The SCIM and fold-in doors: a membership that holds no seat and confers
+-- The provisioning and fold-in doors: a membership that holds no seat and confers
 -- nothing until an admin approves it. An existing membership is left alone —
 -- approving twice, or provisioning someone who is already active, must not
 -- push them back to pending. Reports 1 when this call wrote the row, which is
