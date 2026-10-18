@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.4.11"
+version: "0.4.12"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -191,6 +191,19 @@ notes: >
   character with no such sequence are one high S3/variation-selector
   finding per line, as the other invisible carriers are, and the finding
   decodes the bytes they would carry. The threshold stays medium.
+  0.4.12 changes no signature and no rating. It names the release whose
+  S6 also reads the hosts a shell script names without a network
+  command's own words: the target of a redirection to /dev/tcp/HOST/PORT
+  or /dev/udp/HOST/PORT, a connecting socat address (TCP:, TCP4:, TCP6:,
+  UDP:, OPENSSL: and their -CONNECT, -SENDTO and -DATAGRAM spellings), a
+  git remote written user@host:path in clone, fetch, pull, push,
+  ls-remote, remote, submodule or subtree, the registry of a docker or
+  podman pull or push (a first path component with a dot or a port, as in
+  registry.example.org:5000/app), and an IPv6 address written without
+  brackets as a word of nc, telnet or another network command or as an ssh
+  destination. A host a script reaches through a loop over an array, a
+  line read from a file or the output of another command is beyond a
+  static reader and is not read. The threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
