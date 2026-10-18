@@ -115,6 +115,17 @@ independent. The named inventory and acceptance filters name the same test.
 Configuration defaults, entitlement mapping and consumer outage enforcement
 also keep their separate boundaries.
 
+Loading has its own refusals before `Validate` runs, and the pure defaults
+are refused by `Validate` (no sealing key outside dev mode), so a loading test
+names the refusal it expects rather than accepting any error.
+`TestLoadDefaults` requires the wrapped `fs.ErrNotExist` reading refusal for an
+explicitly named missing file, and still checks the pure-default sealing-key
+refusal and the opt-in dev load. `TestLoadRejectsUnknownKeys` loads a file that
+would otherwise succeed (dev mode opted in) and requires the parsing refusal
+naming the unknown key, then loads the same file without it.
+`TestLoadRejectsUnknownNestedKeys` and `TestLoadFileAndEnvPrecedence` keep the
+nested-key and precedence evidence.
+
 `TestValidateCapsCredentialTTLs` holds fifteen named cases. PAT and SSO
 at/over-cap inputs use literal contract values so a changed production ceiling
 cannot move the tested boundary with it:
