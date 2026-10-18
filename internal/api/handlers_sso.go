@@ -27,17 +27,11 @@ import (
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
-// orgFeatures answers what the organization's subscription includes.
-//
-// Which way an error falls depends on what the caller is deciding, and the
-// two directions are opposite, so every caller says which it wants rather
-// than sharing one default:
-//
-//   - a gate on *creating* a connection or a token fails closed, refusing
-//     while the answer is unknown, like every other entitlement check;
-//   - the enforced-SSO gate fails *enforcing*, because an unknown answer
-//     must never be the reason a person walks past an organization's own
-//     sign-in policy. Billing state does not loosen identity.
+// orgFeatures answers what the organization's subscription includes. Every
+// caller decides what an error means for its own act; the gates on the
+// sign-in doors and on creating a connection or a token refuse while the
+// answer is unknown. Enforced SSO does not ask (enforceSSO says why):
+// billing state does not loosen identity.
 func (s *Server) orgFeatures(ctx context.Context, orgID uuid.UUID) (entitlements.Features, error) {
 	return s.entitlements().Features(ctx, entitlements.ForOrg(orgID))
 }
@@ -50,9 +44,7 @@ func (s *Server) orgFeatures(ctx context.Context, orgID uuid.UUID) (entitlements
 // connection's row, so re-subscribing restores the door without
 // re-entering anything.
 //
-// An unknown answer shuts the door, like every other gate on an act. The
-// one place that reads the entitlement the other way round is enforceSSO,
-// which says why there.
+// An unknown answer shuts the door, like every other gate on an act.
 func (s *Server) ssoIncluded(ctx context.Context, orgID uuid.UUID) bool {
 	f, err := s.orgFeatures(ctx, orgID)
 	return err == nil && f.SSO

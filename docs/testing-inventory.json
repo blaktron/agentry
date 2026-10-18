@@ -441,6 +441,7 @@
             "TestADirectoryFromAnExtensionServesTheRegistry",
             "TestWithNoDirectoryTheRegistryStandsAlone",
             "TestSignInHookHearsTheClaimsAndMayRememberTheBrowser",
+            "TestASignInHookMayAssertAnOrganizationsSSO",
             "TestStaffChangedIsHeardAndTheSetIsRead",
             "TestAccountErasedCarriesTheIdentitiesWithoutAnyDirectory",
             "TestADirectoryWithoutItsOwnErasureIsAskedOnce"

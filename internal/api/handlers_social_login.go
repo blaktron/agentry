@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -344,6 +345,7 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 
+	var ssoOrgs []uuid.UUID
 	s.fireSignIn(r.Context(), SignIn{
 		UserID: userID, NewAccount: created, Provider: name, Subject: id.NamespacedSubject,
 		Claims: id.Claims, AMR: id.AMR, AuthTime: id.AuthTime,
@@ -351,8 +353,13 @@ func (s *Server) SocialOidcCallback(w http.ResponseWriter, r *http.Request, prov
 		RememberBrowser: func(detail map[string]any) (string, time.Duration, error) {
 			return s.mintRememberedBrowser(r, userID, id.AMR, id.AuthTime, detail)
 		},
+		AssertSSO: func(orgID uuid.UUID) {
+			if orgID != uuid.Nil && !slices.Contains(ssoOrgs, orgID) {
+				ssoOrgs = append(ssoOrgs, orgID)
+			}
+		},
 	})
-	s.issueSocialSession(w, r, user, name, st.Next, id.AMR)
+	s.issueSocialSession(w, r, user, name, st.Next, id.AMR, ssoOrgs)
 }
 
 // readSocialState opens and clears the single-use state cookie.
@@ -516,10 +523,13 @@ func (s *Server) resolveSocialUser(r *http.Request, id *social.Identity) (uuid.U
 	return newUserID, true, nil
 }
 
-// issueSocialSession opens an ordinary session (no org SSO tag) and answers:
-// a 303 to next in browser mode (next non-empty, already validated by
-// safeNextPath), else the LoginResult body.
-func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string) {
+// issueSocialSession opens a session for user and answers: a 303 to next in
+// browser mode (next non-empty, already validated by safeNextPath), else the
+// LoginResult body. ssoOrgs are the organizations whose own single sign-on a
+// sign-in hook said this sign-in came through: the session is tagged
+// SSO-fresh for each in the same transaction, the login's audit row names
+// them, and each organization's audit log gets an sso.login row.
+func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user storegen.GetUserByIDRow, provider, next string, amr []string, ssoOrgs []uuid.UUID) {
 	ctx := r.Context()
 	sessToken, err := auth.NewToken(auth.SessionPrefix)
 	if err != nil {
@@ -536,18 +546,38 @@ func (s *Server) issueSocialSession(w http.ResponseWriter, r *http.Request, user
 		ipPtr = &ip
 	}
 	ua := r.UserAgent()
+	sessID := newUUID()
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		if _, err := q.CreateSession(ctx, storegen.CreateSessionParams{
-			ID: newUUID(), TokenSha256: auth.HashToken(sessToken), UserID: user.ID,
+			ID: sessID, TokenSha256: auth.HashToken(sessToken), UserID: user.ID,
 			CsrfToken: csrfToken, Ip: ipPtr, UserAgent: &ua,
 			ExpiresAt: time.Now().Add(s.cfg.Auth.SessionTTL),
 		}); err != nil {
 			return err
 		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		tagged := make([]string, 0, len(ssoOrgs))
+		for _, orgID := range ssoOrgs {
+			if err := q.TagSessionSSO(ctx, storegen.TagSessionSSOParams{ID: sessID, Column2: orgID.String(), Column3: now}); err != nil {
+				return err
+			}
+			tagged = append(tagged, orgID.String())
+			e := auditEvent(r, audit.ActionSSOLogin)
+			e.Actor, e.ActorKind = user.ID, audit.ActorUser
+			e.OrgID = orgID
+			e.TargetKind, e.TargetID = "user", user.ID
+			e.Detail = map[string]any{"provider": provider, "via": "sign-in hook"}
+			if err := s.auditW.Write(ctx, q, e); err != nil {
+				return err
+			}
+		}
 		e := auditEvent(r, audit.ActionUserLogin)
 		e.Actor, e.ActorKind = user.ID, audit.ActorUser
 		e.TargetKind, e.TargetID = "user", user.ID
 		e.Detail = map[string]any{"method": "social", "provider": provider}
+		if len(tagged) > 0 {
+			e.Detail["ssoOrgs"] = tagged
+		}
 		// What the provider said about the sign-in's factors:
 		// the operator reads this row before turning on
 		// auth.requireIdpMFA, and an empty value is itself the finding.
