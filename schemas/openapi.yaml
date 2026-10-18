@@ -4164,6 +4164,16 @@ paths:
       operationId: platformAgentAction
       tags: [platform]
       summary: Quarantine, block, or reinstate an agent (platform staff).
+      description: |
+        Quarantine and block take effect before the response. Reinstate clears
+        the agent's flag and asks for a fresh scan of each of its blocked and
+        quarantined versions, then returns; it publishes nothing itself. A
+        version is published again, signed as any publication is, only when the
+        gate's verdict on its new scan is publish, and its open review item is
+        closed with the reinstate's reason. Every other version stays held: a
+        blocked one becomes quarantined once its verdict exists, and each has an
+        open platform review item for a person to decide against the new scan.
+        A version admitted without a scan has no scan to judge and stays as it is.
       parameters:
         - $ref: "#/components/parameters/Namespace"
         - $ref: "#/components/parameters/AgentName"
@@ -4185,8 +4195,16 @@ paths:
                   type: string
                   maxLength: 1000
       responses:
+        "202":
+          description: >-
+            Reinstate accepted: the agent's flag is cleared and each blocked or
+            quarantined version has a scan queued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformReinstateAccepted"
         "204":
-          description: Action applied.
+          description: Quarantine or block applied.
         default:
           $ref: "#/components/responses/Problem"
 
@@ -5975,6 +5993,14 @@ components:
           type: string
           description: User-Agent recorded at session creation.
 
+    PlatformReinstateAccepted:
+      type: object
+      required: [queued]
+      properties:
+        queued:
+          type: integer
+          minimum: 0
+          description: How many blocked or quarantined versions have a scan queued.
     RulesetRelease:
       type: object
       required: [id, semver, bundleDigest, publishedAt]
