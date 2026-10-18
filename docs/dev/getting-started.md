@@ -31,7 +31,6 @@ curl localhost:8080/api/v1/meta
 | `./scripts/acceptance/publish-install.sh` | publish and install round trips for every agent kind and source, byte-reproducible archives, yank semantics, and the state-machine property that no path to `published` skips the gate |
 | `./scripts/acceptance/cli.sh` | the `agentry` CLI against a booted `agentryd`: login, init, validate, publish, install, verify, yank |
 | `./scripts/acceptance/gate.sh` | the attack-corpus gate (full recall, no benign regressions), offline attestation verification, tighten-only policy and an extractor that survives fuzzing |
-| `./scripts/acceptance/enterprise-sso.sh` | SAML and OIDC sign-in, enforced SSO with organization-bound tokens, SCIM provisioning, domain verification, webhooks with the SSRF guard, and audit export |
 | `./scripts/acceptance/helm.sh` | the Helm chart lints and renders, and its production shape holds (skipped without `helm`) |
 | `./scripts/acceptance/invariant-test-names.sh` | every test named as evidence for a core security invariant still exists under that name |
 | `./scripts/acceptance/ui.sh` | the server's own `/ui/` pages: the sign-in hand-off, a signed-in landing, a device authorize and its exchange, sign-out — with curl, no browser |

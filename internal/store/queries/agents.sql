@@ -104,10 +104,11 @@ FOR UPDATE OF a;
 
 -- name: CountUnscannedVersionsStanding :one
 -- The versions of an agent that were admitted without a scan and could still
--- be, or return to being, published: published, quarantined or blocked — a
--- reinstate walks the last two back to published. While one stands the agent
--- cannot become public, since only a version that passed the gate is ever
--- public; yanking is what ends it.
+-- be, or return to being, published: published, quarantined or blocked. A
+-- reinstate leaves the last two held, since it publishes only on a scan's
+-- verdict and such a version has none. While one stands the agent cannot
+-- become public, since only a version that passed the gate is ever public;
+-- yanking is what ends it.
 SELECT count(*)::bigint FROM agent_versions
 WHERE agent_id = $1 AND scan_status = 'skipped'
   AND status IN ('published', 'quarantined', 'blocked');

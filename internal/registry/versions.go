@@ -273,7 +273,7 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 	if to == StatusPublished && row.ScanStatus == ScanStatusSkipped {
 		// A version admitted unscanned is published only on a private
 		// agent of an organization's — on the gate-skipping edge, and on
-		// a reinstate from quarantine alike — read here under the
+		// the edge from quarantine alike — read here under the
 		// agent's row lock, so a visibility change racing this transition
 		// cannot put an unscanned version on a public agent.
 		if err := unscannedMayPublish(ctx, q, row.AgentID, from); err != nil {
