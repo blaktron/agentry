@@ -109,8 +109,8 @@ type Database struct {
 
 // Redis is an optional dependency, and nothing in the core reads the
 // URL today: it is reported as features.redis on GET /api/v1/meta and that is
-// all. The state a replica set must share lives in Postgres — sessions, the
-// queue, and the SAML replay and request sets — so there is no
+// all. The state a replica set must share lives in Postgres — sessions and
+// the queue — so there is no
 // in-memory fallback this would replace. The rate-limit buckets stay per
 // process either way (docs/self-hosting.md).
 type Redis struct {
@@ -247,10 +247,6 @@ type Limits struct {
 	AuthedBurstPerMin int `yaml:"authedBurstPerMin"` // authed burst
 	AnonymousPerMin   int `yaml:"anonymousPerMin"`   // anonymous per-IP
 	LoginPerMin       int `yaml:"loginPerMin"`       // login/register per-IP
-	// SCIMPerMin is the SCIM data plane's budget per organization, per
-	// minute and as its burst (600): a directory syncs from one place, so the
-	// organization, not the address, is what it spends.
-	SCIMPerMin int `yaml:"scimPerMin"`
 	// ModelInputPerMin is the model-input routes' budget per caller, per
 	// minute and as its burst (120): a platform staff member,
 	// or one hosted job. An address presenting job credentials may spend
@@ -599,7 +595,6 @@ func Default() Config {
 			AuthedBurstPerMin:          100,
 			AnonymousPerMin:            60,
 			LoginPerMin:                10,
-			SCIMPerMin:                 600,
 			ModelInputPerMin:           120,
 			RepoQuotaBytes:             100 << 20,
 			RepoWarnBytes:              25 << 20,
@@ -901,7 +896,6 @@ func applyEnv(c *Config) error {
 		{"AGENTRY_LIMITS_AUTHED_BURST_PER_MIN", &c.Limits.AuthedBurstPerMin},
 		{"AGENTRY_LIMITS_ANONYMOUS_PER_MIN", &c.Limits.AnonymousPerMin},
 		{"AGENTRY_LIMITS_LOGIN_PER_MIN", &c.Limits.LoginPerMin},
-		{"AGENTRY_LIMITS_SCIM_PER_MIN", &c.Limits.SCIMPerMin},
 		{"AGENTRY_LIMITS_MODEL_INPUT_PER_MIN", &c.Limits.ModelInputPerMin},
 		{"AGENTRY_LIMITS_GIT_PUSHES_PER_HOUR", &c.Limits.GitPushesPerHour},
 		{"AGENTRY_LIMITS_SSH_KEY_OFFERS_PER_MIN", &c.Limits.SSHKeyOffersPerMin},
@@ -1222,7 +1216,6 @@ func (c Config) validateLimits() error {
 		{"limits.authedBurstPerMin", int64(c.Limits.AuthedBurstPerMin)},
 		{"limits.anonymousPerMin", int64(c.Limits.AnonymousPerMin)},
 		{"limits.loginPerMin", int64(c.Limits.LoginPerMin)},
-		{"limits.scimPerMin", int64(c.Limits.SCIMPerMin)},
 		{"limits.modelInputPerMin", int64(c.Limits.ModelInputPerMin)},
 		{"limits.repoQuotaBytes", int64(c.Limits.RepoQuotaBytes)},
 		{"limits.repoWarnBytes", int64(c.Limits.RepoWarnBytes)},

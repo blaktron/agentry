@@ -106,8 +106,10 @@ type Features struct {
 	// Seats caps the people an organization may license — active members
 	// plus open invitations (org subjects; meaningless for a user).
 	Seats Cap
-	// SSO and SCIM say whether the organization may create an SSO
-	// connection or mint a SCIM token.
+	// SSO and SCIM say whether the organization's subscription includes
+	// single sign-on through its own identity provider and provisioning
+	// from it. The server has neither; an extension that provides them
+	// gates on these.
 	SSO  bool
 	SCIM bool
 	// Branding says whether the organization may set a logo.
