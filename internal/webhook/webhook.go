@@ -345,7 +345,7 @@ func deliveryFailure(err error, endpoint string) string {
 	var ue *url.Error
 	if errors.As(err, &ue) {
 		pieces = append(pieces, ue.URL)
-		msg = ue.Op + " " + endpointHost(ue.URL) + ": " + ue.Err.Error()
+		msg = ue.Op + " " + EndpointHost(ue.URL) + ": " + ue.Err.Error()
 		if ue.Op == "parse" {
 			// A parse error quotes the bytes it stopped at, and those can be
 			// the secret itself.
@@ -378,9 +378,11 @@ func deliveryFailure(err error, endpoint string) string {
 	return msg
 }
 
-// endpointHost is the scheme and host of raw, "the endpoint" when it does not
-// parse as a URL with one.
-func endpointHost(raw string) string {
+// EndpointHost is the scheme and host of raw, "the endpoint" when it does not
+// parse as a URL with one. It is the only part of an endpoint's address that
+// belongs in a log line, an audit event or a stored error: the path, the query
+// and the user information routinely carry the endpoint's secret.
+func EndpointHost(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
 		return "the endpoint"

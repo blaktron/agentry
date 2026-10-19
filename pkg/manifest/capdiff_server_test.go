@@ -122,6 +122,25 @@ func TestANewPackageServersLineNamesItsOwnGrants(t *testing.T) {
 			new:     srv("1.2.4", []string{"api.osv.dev", "*"}, []string{"OSV_TOKEN"}, nil),
 			widened: []string{"adds MCP server: npm:@acme/osv-mcp@1.2.4 (UNRESTRICTED network egress (any host); secrets OSV_TOKEN; every tool it serves)"},
 		},
+		{
+			name: "a new server with an OAuth sign-in names its issuer and scopes",
+			new: Capabilities{MCPServers: []MCPServer{{PyPI: "workspace-mcp", Version: "2.0.1", Egress: []string{"gmail.googleapis.com"},
+				OAuth: &MCPOAuth{Issuer: "https://accounts.google.com", Scopes: []string{"gmail", "drive"}}}}},
+			widened: []string{"adds MCP server: pypi:workspace-mcp@2.0.1 (network egress to gmail.googleapis.com; every tool it serves; OAuth sign-in: issuer https://accounts.google.com; scopes gmail, drive)"},
+		},
+		{
+			name: "a new server with an OAuth sign-in and no scopes",
+			new: Capabilities{MCPServers: []MCPServer{{PyPI: "workspace-mcp", Version: "2.0.1",
+				OAuth: &MCPOAuth{Issuer: "https://accounts.google.com"}}}},
+			widened: []string{"adds MCP server: pypi:workspace-mcp@2.0.1 (every tool it serves; OAuth sign-in: issuer https://accounts.google.com)"},
+		},
+		{
+			name: "a new server with env and an OAuth sign-in lists the env first",
+			new: Capabilities{MCPServers: []MCPServer{{NPM: "gh-server", Version: "0.1.7", Tools: []string{"list"},
+				Env:   map[string]string{"B_MODE": "ro", "A_MODE": "x"},
+				OAuth: &MCPOAuth{Issuer: "https://github.com"}}}},
+			widened: []string{"adds MCP server: npm:gh-server@0.1.7 (env A_MODE=x, B_MODE=ro; tools list; OAuth sign-in: issuer https://github.com)"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
