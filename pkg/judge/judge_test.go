@@ -501,9 +501,12 @@ func TestAskRetriesOnceOn429AndRedactsTheKey(t *testing.T) {
 	dead := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	deadURL := dead.URL
 	dead.Close()
+	// A base URL that cannot be built is refused by New, without the key.
+	if _, err := New(Config{BaseURL: deadURL + "/tok-secret-value\x7f", APIKey: "tok-secret-value", RetryWait: -1}); err == nil || strings.Contains(err.Error(), "tok-secret-value") {
+		t.Fatalf("an unbuildable base must be refused without the key: %v", err)
+	}
 	for name, base := range map[string]string{
 		"refused connection": deadURL + "/tok-secret-value",
-		"unbuildable":        deadURL + "/tok-secret-value\x7f",
 	} {
 		bad, err := New(Config{BaseURL: base, APIKey: "tok-secret-value", RetryWait: -1})
 		if err != nil {
