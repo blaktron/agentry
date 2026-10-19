@@ -4204,6 +4204,21 @@
           "dependencyHints": []
         },
         {
+          "path": "pkg/manifest/execcommand_test.go",
+          "tests": [
+            "TestValidExecCommand",
+            "TestV5ExecCommandGrammar",
+            "TestV5ExecCommandLengthNamesTheCap",
+            "TestV2SchemaExecCommandPattern"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "pkg/manifest/frontmatter_test.go",
           "tests": [
             "TestParseFrontmatter",

@@ -111,6 +111,23 @@ var (
 	envNameRE   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
+// MaxExecCommandLength caps the length of a declared exec command name (V5).
+const MaxExecCommandLength = 64
+
+// execCommandRE is the shape of a declared exec command: a program name,
+// ASCII letters, digits and the punctuation a binary's name carries (dot,
+// underscore, plus, hyphen), starting with a letter or a digit and at most
+// MaxExecCommandLength characters. A command is a name the run's shim PATH
+// resolves, so it holds no path separator, no whitespace, no control
+// character and no format character such as a bidirectional override or a
+// zero-width joiner, which would let a name read as another one wherever
+// it is shown. The manifest schemas carry the same pattern.
+var execCommandRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
+
+// ValidExecCommand reports whether cmd is a program name a manifest may
+// declare under capabilities.exec.commands.
+func ValidExecCommand(cmd string) bool { return execCommandRE.MatchString(cmd) }
+
 // ValidName reports whether s is a valid agent name per the database's
 // pattern (lowercase alphanumeric plus interior hyphens, at most 65
 // chars).
@@ -715,12 +732,14 @@ func validateCapabilities(s *issues, c Capabilities) {
 			s.errf("V5", p, "command must not be empty")
 			continue
 		}
-		for _, r := range cmd {
-			if unicode.IsSpace(r) || unicode.IsControl(r) {
-				s.errf("V5", p, "command %q must be a single token without whitespace", cmd)
-				break
-			}
+		if ValidExecCommand(cmd) {
+			continue
 		}
+		if n := utf8.RuneCountInString(cmd); n > MaxExecCommandLength {
+			s.errf("V5", p, "command must be at most %d characters (got %d)", MaxExecCommandLength, n)
+			continue
+		}
+		s.errf("V5", p, "command %+q is not a program name: it is ASCII letters, digits, '.', '_', '+' and '-', starting with a letter or a digit, with no whitespace, path separator, control or format character", cmd)
 	}
 
 	for i, name := range c.Secrets {
