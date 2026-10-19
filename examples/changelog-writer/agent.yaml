@@ -4,7 +4,7 @@ namespace: agentry
 modes: [autonomous]
 version: 1.0.0
 summary: "Write release notes from the commits since the last tag"
-license: Apache-2.0
+license: MIT
 authors:
   - name: Agentry maintainers
 tags: [release, changelog, documentation]
