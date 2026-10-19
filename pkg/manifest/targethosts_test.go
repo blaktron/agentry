@@ -129,7 +129,7 @@ func TestV14PointsAnSSHClientInExecAtTargetHosts(t *testing.T) {
 		if withHost {
 			m = targetHostsManifest(t)
 		}
-		m.Capabilities.Exec = ExecCapability{Commands: []string{"git", "ssh", "/usr/bin/RSYNC", "scp", "sftp", "sshpass"}}
+		m.Capabilities.Exec = ExecCapability{Commands: []string{"git", "ssh", "RSYNC", "scp", "sftp", "sshpass"}}
 		b, w := targetHostIssues(Validate(m))
 		if len(b) != 0 {
 			t.Fatalf("an SSH client in exec is refused: %v", b)
@@ -145,7 +145,7 @@ func TestV14PointsAnSSHClientInExecAtTargetHosts(t *testing.T) {
 		if !slices.Equal(paths, want) {
 			t.Fatalf("with a target host %v: hints at %v; want %v", withHost, paths, want)
 		}
-		if got := RemoteShellCommands(m.Capabilities); !slices.Equal(got, []string{"ssh", "/usr/bin/RSYNC", "scp", "sftp"}) {
+		if got := RemoteShellCommands(m.Capabilities); !slices.Equal(got, []string{"ssh", "RSYNC", "scp", "sftp"}) {
 			t.Fatalf("RemoteShellCommands = %v", got)
 		}
 	}

@@ -609,6 +609,14 @@ through the gateway's tools, which is what makes the contract enforceable.
 | `none` / omitted | no subprocesses | no `run_command` tool; harness built-in shells are never enabled |
 | `{commands: [jq, git, …]}` | only these binaries | `run_command` restricted to the listed commands via an argv allowlist plus a shim `PATH` containing only them |
 
+A command is a program name, not a path or a command line: ASCII letters,
+digits, `.`, `_`, `+` and `-`, starting with a letter or a digit, at most 64
+characters (`git`, `python3.12`, `g++`). Whitespace, a path separator, a
+control character and a format character such as a right-to-left override or
+a zero-width joiner are refused when a version is published, so a name reads
+the same wherever it is shown. A release that is already published keeps
+running.
+
 **`secrets`**: a list of environment variable **names**, never values.
 The runner resolves each from the operator's secret source before any
 container starts (missing ⇒ refuse, exit 11, naming the variable), and
