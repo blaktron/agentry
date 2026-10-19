@@ -146,6 +146,10 @@ func TestInvisibleCharactersRevealed(t *testing.T) {
 		{"unicode tag block", "hello\U000E0041", "U+E0041"},
 		{"private use", "xy", "U+E000"},
 		{"soft hyphen", "sof\u00adhyphen", "U+00AD"},
+		// Each of these is decided by one branch alone: a supplementary
+		// private-use plane, and a format character no named range lists.
+		{"supplementary private use", "x\U000F0001y", "U+F0001"},
+		{"other format character", "a\u2062b", "U+2062"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -171,6 +175,14 @@ func TestRevealInvisibleLeavesTagsIntact(t *testing.T) {
 	if out != in {
 		t.Fatalf("clean HTML was modified:\nin:  %s\nout: %s", in, out)
 	}
+	// An invisible character inside a tag is left as it is: rewriting an
+	// attribute value would corrupt it. The same character in text is
+	// revealed.
+	attr := "<a title=\"x\u200by\">link\u200b</a>"
+	want := "<a title=\"x\u200by\">link<span class=\"agy-invisible\">U+200B</span></a>"
+	if got := RevealInvisible(attr); got != want {
+		t.Fatalf("RevealInvisible(%q) = %q, want %q", attr, got, want)
+	}
 }
 
 func TestPlainTextStripsEverything(t *testing.T) {
@@ -195,6 +207,9 @@ func TestOversizedInputTruncated(t *testing.T) {
 	}
 	if len(out) > MaxInputBytes+1000 {
 		t.Fatalf("output not bounded: %d bytes", len(out))
+	}
+	if text := r.PlainText([]byte(big)); len(text) > MaxInputBytes {
+		t.Fatalf("plain text not bounded: %d bytes", len(text))
 	}
 }
 
@@ -256,6 +271,11 @@ func TestLinksCarryUGCRel(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("rel lacks %q: %s", want, out)
 		}
+	}
+	// The absolute link opens in a new tab, so it must not hand the new
+	// page a reference to this one.
+	if !strings.Contains(out, `rel="nofollow noreferrer noopener ugc" target="_blank"`) {
+		t.Errorf("the absolute link is not rel=\"nofollow noreferrer noopener ugc\" target=\"_blank\": %s", out)
 	}
 	if strings.Count(out, "ugc") != strings.Count(out, "<a ") {
 		t.Errorf("not every link carries ugc: %s", out)
