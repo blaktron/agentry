@@ -6,8 +6,10 @@ package manifest
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -113,10 +115,19 @@ func TestV2ClosedSchemaOnNewFields(t *testing.T) {
 		"interactive key": strings.Replace(v2YAML, "idleTimeoutSeconds: 900", "idleTimeoutSeconds: 900\n  theme: dark", 1),
 		"entrypoints key": strings.Replace(v2YAML, "instruction: AGENT.md", "instruction: AGENT.md\n  binary: a.out", 1),
 	}
+	says := map[string]string{
+		"intake key":      "field placeholder not found",
+		"interactive key": "field theme not found",
+		"entrypoints key": "field binary not found",
+	}
 	for name, y := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Parse([]byte(y)); err == nil {
+			_, err := Parse([]byte(y))
+			if err == nil {
 				t.Fatalf("expected unknown-key error")
+			}
+			if !strings.Contains(err.Error(), says[name]) {
+				t.Fatalf("refused for another reason, want %q: %v", says[name], err)
 			}
 		})
 	}
@@ -242,12 +253,26 @@ func TestIntakeRules(t *testing.T) {
 		})
 	}
 	t.Run("too many", func(t *testing.T) {
-		m := validV2Manifest(t)
-		m.Intake = nil
-		for i := 0; i <= MaxIntakeQuestions; i++ {
-			m.Intake = append(m.Intake, q("q"+strings.Repeat("a", i%5)+string(rune('a'+i%26))+string(rune('a'+i/26)), IntakeText))
+		withQuestions := func(n int) *Manifest {
+			m := validV2Manifest(t)
+			m.Intake = nil
+			for i := 0; i < n; i++ {
+				m.Intake = append(m.Intake, q("q"+strings.Repeat("a", i%5)+string(rune('a'+i%26))+string(rune('a'+i/26)), IntakeText))
+			}
+			return m
 		}
-		wantIssue(t, Validate(m), "V10", SeverityError, "intake")
+		// Exactly the maximum is a valid form.
+		wantClean(t, Validate(withQuestions(MaxIntakeQuestions)))
+		// One more is refused on the intake list itself, not on a question.
+		errs := Validate(withQuestions(MaxIntakeQuestions + 1))
+		wantIssue(t, errs, "V10", SeverityError, "intake")
+		for _, err := range errs {
+			if i, ok := AsIssue(err); ok && i.Rule == "V10" && i.Severity == SeverityError && i.Path == "intake" &&
+				strings.Contains(i.Message, fmt.Sprintf("the maximum is %d", MaxIntakeQuestions)) {
+				return
+			}
+		}
+		t.Fatalf("no V10 error on the intake list naming the maximum in:%s", issueStrings(errs))
 	})
 	t.Run("every type passes", func(t *testing.T) {
 		m := validV2Manifest(t)
@@ -269,6 +294,7 @@ func TestInteractiveHints(t *testing.T) {
 	})
 	for name, opening := range map[string]string{
 		"an escape":          "Hello\x1b]0;title\a",
+		"a lone escape":      "Hello\x1b[31mred",
 		"a carriage return":  "Hello\rgone",
 		"a C1 control":       "Hello\u0085",
 		"a bidi override":    "Hello \u202eworld",
@@ -359,19 +385,21 @@ func TestInstructionCandidates(t *testing.T) {
 	cases := []struct {
 		name string
 		m    *Manifest
-		want string
+		want []string
 	}{
-		{"v2 named", v2, "AGENT.md"},
-		{"v2 default", v2Default, DefaultInstructionFile},
-		{"v1 skill", v1("skill", "SKILL.md"), "SKILL.md"},
-		{"v1 skill without entrypoint", v1("skill", ""), ""},
-		{"v1 prompt-agent", v1("prompt-agent", ""), "AGENT.md,PROMPT.md"},
-		{"v1 prompt-agent with skill file", v1("prompt-agent", "SKILL.md"), "SKILL.md"},
-		{"v1 mcp-server", v1("mcp-server", ""), ""},
+		{"v2 named", v2, []string{"AGENT.md"}},
+		{"v2 default", v2Default, []string{DefaultInstructionFile}},
+		{"v1 skill", v1("skill", "SKILL.md"), []string{"SKILL.md"}},
+		{"v1 skill without entrypoint", v1("skill", ""), nil},
+		{"v1 prompt-agent", v1("prompt-agent", ""), []string{"AGENT.md", "PROMPT.md"}},
+		{"v1 prompt-agent with skill file", v1("prompt-agent", "SKILL.md"), []string{"SKILL.md"}},
+		{"v1 mcp-server", v1("mcp-server", ""), nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := strings.Join(tc.m.InstructionCandidates(), ","); got != tc.want {
+			// Compared as lists: an empty list and a list holding one
+			// empty name must not read the same.
+			if got := tc.m.InstructionCandidates(); !slices.Equal(got, tc.want) {
 				t.Fatalf("InstructionCandidates = %q, want %q", got, tc.want)
 			}
 		})
