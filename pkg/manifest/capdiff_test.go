@@ -15,6 +15,9 @@ func TestDiffCapabilitiesWidening(t *testing.T) {
 		old, new Capabilities
 		widened  bool
 		contains string
+		// lacks, when set, must not appear in the diff: the line is the
+		// plain one, not a variant that carries more.
+		lacks string
 	}{
 		{
 			name:     "new egress host",
@@ -107,6 +110,113 @@ func TestDiffCapabilitiesWidening(t *testing.T) {
 			widened:  false,
 			contains: "drops MCP server: npm:x@1",
 		},
+		{
+			name:     "a new env key on a server that already has env",
+			old:      Capabilities{MCPServers: []MCPServer{{NPM: "x", Version: "1", Env: map[string]string{"MODE": "ro"}}}},
+			new:      Capabilities{MCPServers: []MCPServer{{NPM: "x", Version: "1", Env: map[string]string{"MODE": "ro", "EXTRA": "1"}}}},
+			widened:  true,
+			contains: "changes env of MCP server npm:x@1: EXTRA=1",
+			lacks:    "MODE",
+		},
+		{
+			name:     "a first env key on a server that had none",
+			old:      Capabilities{MCPServers: []MCPServer{{NPM: "x", Version: "1"}}},
+			new:      Capabilities{MCPServers: []MCPServer{{NPM: "x", Version: "1", Env: map[string]string{"EXTRA": "1"}}}},
+			widened:  true,
+			contains: "changes env of MCP server npm:x@1: EXTRA=1",
+		},
+		{
+			name:     "a dropped env key is a narrowing",
+			old:      Capabilities{MCPServers: []MCPServer{{NPM: "x", Version: "1", Env: map[string]string{"MODE": "ro", "EXTRA": "1"}}}},
+			new:      Capabilities{MCPServers: []MCPServer{{NPM: "x", Version: "1", Env: map[string]string{"MODE": "ro"}}}},
+			widened:  false,
+			contains: "drops env EXTRA of MCP server npm:x@1",
+		},
+		{
+			name:     "a second exec command does not claim the first one's wording",
+			old:      Capabilities{Exec: ExecCapability{Commands: []string{"git"}}},
+			new:      Capabilities{Exec: ExecCapability{Commands: []string{"git", "curl"}}},
+			widened:  true,
+			contains: "adds subprocess execution: curl",
+			lacks:    "previously none",
+		},
+		{
+			name:     "exec dropping one of two commands",
+			old:      Capabilities{Exec: ExecCapability{Commands: []string{"git", "make"}}},
+			new:      Capabilities{Exec: ExecCapability{Commands: []string{"git"}}},
+			widened:  false,
+			contains: "drops subprocess execution: make",
+		},
+		{
+			name:     "exec dropping its last command",
+			old:      Capabilities{Exec: ExecCapability{Commands: []string{"git"}}},
+			new:      Capabilities{},
+			widened:  false,
+			contains: "drops subprocess execution: git",
+		},
+		{
+			name:     "an agent-level secret dropped is a narrowing",
+			old:      Capabilities{Secrets: []string{"API_KEY", "OLD_KEY"}},
+			new:      Capabilities{Secrets: []string{"API_KEY"}},
+			widened:  false,
+			contains: "no longer asks for secret: OLD_KEY",
+		},
+		{
+			name:     "a data access category dropped is a narrowing",
+			old:      Capabilities{DataAccess: []DataAccess{"source-code", "email"}},
+			new:      Capabilities{DataAccess: []DataAccess{"source-code"}},
+			widened:  false,
+			contains: "drops data access: email",
+		},
+		{
+			name:     "a dropped read path is a narrowing",
+			old:      Capabilities{Filesystem: Filesystem{Read: FSAccess{Mode: FSModePaths, Paths: []string{"a", "b"}}}},
+			new:      Capabilities{Filesystem: Filesystem{Read: FSAccess{Mode: FSModePaths, Paths: []string{"a"}}}},
+			widened:  false,
+			contains: "drops filesystem read path: b",
+		},
+		{
+			name:     "a dropped write path is a narrowing",
+			old:      Capabilities{Filesystem: Filesystem{Write: FSAccess{Mode: FSModePaths, Paths: []string{"out", "/etc"}}}},
+			new:      Capabilities{Filesystem: Filesystem{Write: FSAccess{Mode: FSModePaths, Paths: []string{"out"}}}},
+			widened:  false,
+			contains: "drops filesystem write path: /etc",
+		},
+		{
+			name:     "a new read path",
+			old:      Capabilities{Filesystem: Filesystem{Read: FSAccess{Mode: FSModePaths, Paths: []string{"a"}}}},
+			new:      Capabilities{Filesystem: Filesystem{Read: FSAccess{Mode: FSModePaths, Paths: []string{"a", "b"}}}},
+			widened:  true,
+			contains: "adds filesystem read path: b",
+		},
+		{
+			name:     "paths to workspace widens",
+			old:      Capabilities{Filesystem: Filesystem{Write: FSAccess{Mode: FSModePaths, Paths: []string{"out"}}}},
+			new:      Capabilities{Filesystem: Filesystem{Write: FSAccess{Mode: FSModeWorkspace}}},
+			widened:  true,
+			contains: "widens filesystem write from paths to workspace",
+		},
+		{
+			name:     "workspace to paths narrows and names the paths",
+			old:      Capabilities{Filesystem: Filesystem{Write: FSAccess{Mode: FSModeWorkspace}}},
+			new:      Capabilities{Filesystem: Filesystem{Write: FSAccess{Mode: FSModePaths, Paths: []string{"out", "tmp"}}}},
+			widened:  false,
+			contains: "narrows filesystem write from workspace to paths out, tmp",
+		},
+		{
+			name:     "undeclared to paths widens and names the paths",
+			old:      Capabilities{},
+			new:      Capabilities{Filesystem: Filesystem{Read: FSAccess{Mode: FSModePaths, Paths: []string{"src"}}}},
+			widened:  true,
+			contains: "widens filesystem read from undeclared to paths src",
+		},
+		{
+			name:     "paths to undeclared narrows",
+			old:      Capabilities{Filesystem: Filesystem{Read: FSAccess{Mode: FSModePaths, Paths: []string{"src"}}}},
+			new:      Capabilities{},
+			widened:  false,
+			contains: "narrows filesystem read from paths to undeclared",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -118,6 +228,9 @@ func TestDiffCapabilitiesWidening(t *testing.T) {
 			all := strings.Join(append(append([]string{}, d.Widened...), d.Narrowed...), " | ")
 			if !strings.Contains(all, tt.contains) {
 				t.Errorf("diff %q does not contain %q", all, tt.contains)
+			}
+			if tt.lacks != "" && strings.Contains(all, tt.lacks) {
+				t.Errorf("diff %q carries %q", all, tt.lacks)
 			}
 		})
 	}
@@ -136,6 +249,15 @@ func TestDiffCapabilitiesIdentical(t *testing.T) {
 	}
 	if d := DiffCapabilities(c, c); !d.Empty() {
 		t.Fatalf("identical contracts diffed: %+v", d)
+	}
+	// A path list only counts in the paths form: the same mode with
+	// different paths listed beside it is the same access.
+	for _, mode := range []FSMode{FSModeWorkspace, FSModeNone} {
+		with := Capabilities{Filesystem: Filesystem{Read: FSAccess{Mode: mode, Paths: []string{"a"}}}}
+		other := Capabilities{Filesystem: Filesystem{Read: FSAccess{Mode: mode, Paths: []string{"b"}}}}
+		if d := DiffCapabilities(with, other); !d.Empty() {
+			t.Fatalf("paths beside mode %q diffed: %+v", mode, d)
+		}
 	}
 }
 
