@@ -141,6 +141,8 @@ drop accounting.
   configured) says a mail would have gone and to which mailbox with the
   address masked (`a…@example.test`), and never carries a verification
   token; an address cannot be verified through it. Use a sender.
+  The SMTP sender's "sent" and "send failed" lines carry the recipient masked
+  the same way, including a mailbox the mail server quotes in a refusal.
 - **A value above 4 KB.** Docker splits a line above 16 KB into pieces that
   are no longer JSON and cannot be reassembled, so every string value is cut
   at 4,096 bytes (on a character boundary) with a `…[truncated]` marker; a
