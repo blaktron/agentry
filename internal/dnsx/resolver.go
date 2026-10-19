@@ -36,7 +36,10 @@ func TXTName(domain string) string {
 // at TXTName(domain). Tokens are matched exactly (after trimming) and may be
 // carried verbatim or as "agentry-domain-verification=<token>".
 func VerifyTXT(ctx context.Context, r Resolver, domain, token string) (bool, error) {
-	if token == "" {
+	// Trimmed before it is judged: a blank token would otherwise match a
+	// blank record or a bare "agentry-domain-verification=" one.
+	want := strings.TrimSpace(token)
+	if want == "" {
 		return false, nil
 	}
 	records, err := r.LookupTXT(ctx, TXTName(domain))
@@ -49,7 +52,6 @@ func VerifyTXT(ctx context.Context, r Resolver, domain, token string) (bool, err
 		}
 		return false, err
 	}
-	want := strings.TrimSpace(token)
 	prefixed := "agentry-domain-verification=" + want
 	for _, rec := range records {
 		got := strings.TrimSpace(rec)
