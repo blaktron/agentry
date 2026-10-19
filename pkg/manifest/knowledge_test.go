@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -131,6 +132,8 @@ func TestKnowledgeBlockRefusals(t *testing.T) {
 		{"empty block", func(k *Knowledge) { k.Ships, k.Accepts = nil, nil }, "knowledge"},
 		{"bad pack name", func(k *Knowledge) { k.Ships = []ShippedKnowledge{{Name: "AWS"}} }, "knowledge.ships[0].name"},
 		{"pack name that climbs", func(k *Knowledge) { k.Ships = []ShippedKnowledge{{Name: ".."}} }, "knowledge.ships[0].name"},
+		{"empty pack name", func(k *Knowledge) { k.Ships = []ShippedKnowledge{{Name: ""}} }, "knowledge.ships[0].name"},
+		{"pack name of 65 characters", func(k *Knowledge) { k.Ships = []ShippedKnowledge{{Name: strings.Repeat("a", 65)}} }, "knowledge.ships[0].name"},
 		{"pack shipped twice", func(k *Knowledge) { k.Ships = []ShippedKnowledge{{Name: "a"}, {Name: "a"}} }, "knowledge.ships[1].name"},
 		{"too many packs", func(k *Knowledge) {
 			k.Ships = nil
@@ -143,18 +146,48 @@ func TestKnowledgeBlockRefusals(t *testing.T) {
 		{"prompt on two lines", func(k *Knowledge) { k.Accepts.Prompt = "one\ntwo" }, "knowledge.accepts.prompt"},
 		{"prompt with a bidi override", func(k *Knowledge) { k.Accepts.Prompt = "attach \u202Eit" }, "knowledge.accepts.prompt"},
 	}
+	// says is a fragment of the refusal's own message where the path alone
+	// would let a neighbouring rule answer.
+	says := map[string]string{
+		"too many packs":             fmt.Sprintf("%d packs; a release ships at most %d", MaxShippedPacks+1, MaxShippedPacks),
+		"prompt too long":            fmt.Sprintf("prompt is %d characters; the maximum is %d", MaxKnowledgePromptChars+1, MaxKnowledgePromptChars),
+		"empty pack name":            "is not a knowledge pack name",
+		"pack name of 65 characters": "is not a knowledge pack name",
+	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			m := mustParse(t, knowledgeYAML)
 			c.edit(m.Knowledge)
 			var hit bool
 			for _, is := range blockingIssues(Validate(m)) {
-				if is.Rule == "V11" && is.Path == c.path {
+				if is.Rule == "V11" && is.Path == c.path && strings.Contains(is.Message, says[c.name]) {
 					hit = true
 				}
 			}
 			if !hit {
-				t.Fatalf("no V11 error at %s: %v", c.path, Validate(m))
+				t.Fatalf("no V11 error at %s saying %q: %v", c.path, says[c.name], Validate(m))
+			}
+		})
+	}
+	// The limits are inclusive: a block exactly at a cap is valid, and a
+	// pack name may carry '.', '-' and '_' inside it and be 64 characters.
+	atLimit := map[string]func(k *Knowledge){
+		"the maximum number of packs": func(k *Knowledge) {
+			k.Ships = nil
+			for i := range MaxShippedPacks {
+				k.Ships = append(k.Ships, ShippedKnowledge{Name: fmt.Sprintf("p%d", i)})
+			}
+		},
+		"a prompt of the maximum characters": func(k *Knowledge) { k.Accepts.Prompt = strings.Repeat("é", MaxKnowledgePromptChars) },
+		"a pack name of 64 characters":       func(k *Knowledge) { k.Ships = []ShippedKnowledge{{Name: strings.Repeat("a", 64)}} },
+		"a pack name with . - _ inside":      func(k *Knowledge) { k.Ships = []ShippedKnowledge{{Name: "a.b-c_d"}} },
+	}
+	for name, edit := range atLimit {
+		t.Run(name, func(t *testing.T) {
+			m := mustParse(t, knowledgeYAML)
+			edit(m.Knowledge)
+			if issues := blockingIssues(Validate(m)); len(issues) != 0 {
+				t.Fatalf("a block at its limit is refused: %v", issues)
 			}
 		})
 	}
@@ -169,13 +202,13 @@ func TestKnowledgeIsAV2Field(t *testing.T) {
 }
 
 func TestKnowledgeDecodingStaysStrict(t *testing.T) {
-	if _, err := Parse([]byte(strings.Replace(knowledgeYAML, "    required: false\n", "    required: false\n    extra: nope\n", 1))); err == nil {
-		t.Fatal("an unknown field inside knowledge.accepts was accepted")
+	if _, err := Parse([]byte(strings.Replace(knowledgeYAML, "    required: false\n", "    required: false\n    extra: nope\n", 1))); err == nil || !strings.Contains(err.Error(), "field extra not found") {
+		t.Fatalf("an unknown field inside knowledge.accepts was not refused by name: %v", err)
 	}
 	// The contract's knowledge names come only from the knowledge block.
 	withCaps := strings.Replace(knowledgeYAML, "publish:", "capabilities:\n  knowledge: [aws-docs]\npublish:", 1)
-	if _, err := Parse([]byte(withCaps)); err == nil {
-		t.Fatal("capabilities.knowledge was accepted in agent.yaml")
+	if _, err := Parse([]byte(withCaps)); err == nil || !strings.Contains(err.Error(), "field knowledge not found") {
+		t.Fatalf("capabilities.knowledge was not refused by name in agent.yaml: %v", err)
 	}
 }
 
@@ -209,6 +242,16 @@ func TestShippedPackInTheArchive(t *testing.T) {
 			delete(tree, "wiki/log.md")
 			return knowledgeContext(t, "aws-docs", tree, nil)
 		}, "V11", "wiki/log.md is missing"},
+		{"no wiki index", func(t *testing.T) Context {
+			tree := packTree()
+			delete(tree, "wiki/index.md")
+			return knowledgeContext(t, "aws-docs", tree, nil)
+		}, "V11", "wiki/index.md is missing"},
+		{"no manifest.json beside the pack's files", func(t *testing.T) Context {
+			ctx := knowledgeContext(t, "aws-docs", packTree(), nil)
+			ctx.Files = deleteFile(ctx.Files, "knowledge/aws-docs/manifest.json")
+			return ctx
+		}, "V11", "knowledge/aws-docs/manifest.json is missing"},
 		{"manifest names another pack", func(t *testing.T) Context {
 			ctx := knowledgeContext(t, "aws-docs", packTree(), nil)
 			read := ctx.ReadFile
@@ -270,6 +313,47 @@ func TestShippedPackInTheArchive(t *testing.T) {
 			}
 		})
 	}
+	// A pack exactly at a cap is valid; one past it is refused. The pack's
+	// bytes are the sizes of its files, manifest.json included.
+	sized := func(t *testing.T, total int64) Context {
+		ctx := knowledgeContext(t, "aws-docs", packTree(), nil)
+		var others int64
+		for _, f := range ctx.Files {
+			if strings.HasPrefix(f.Path, "knowledge/aws-docs/") && f.Path != "knowledge/aws-docs/sources/ec2.txt" {
+				others += f.Size
+			}
+		}
+		for i := range ctx.Files {
+			if ctx.Files[i].Path == "knowledge/aws-docs/sources/ec2.txt" {
+				ctx.Files[i].Size = total - others
+			}
+		}
+		return ctx
+	}
+	t.Run("a pack of exactly the maximum bytes", func(t *testing.T) {
+		if issues := blockingIssues(ValidateInContext(m, sized(t, MaxKnowledgePackBytes))); len(issues) != 0 {
+			t.Fatalf("a pack at its byte cap is refused: %v", issues)
+		}
+		issues := blockingIssues(ValidateInContext(m, sized(t, MaxKnowledgePackBytes+1)))
+		if !hasIssue(issues, "V8", "a pack is at most") {
+			t.Fatalf("a pack one byte past its cap is accepted: %v", issues)
+		}
+	})
+	t.Run("a pack of exactly the maximum files", func(t *testing.T) {
+		withFiles := func(n int) Context {
+			tree := packTree()
+			for i := 0; len(tree) < n; i++ {
+				tree[fmt.Sprintf("sources/f%04d.txt", i)] = []byte("x")
+			}
+			return knowledgeContext(t, "aws-docs", tree, nil)
+		}
+		if issues := blockingIssues(ValidateInContext(m, withFiles(MaxKnowledgePackFiles))); len(issues) != 0 {
+			t.Fatalf("a pack at its file cap is refused: %v", issues)
+		}
+		if issues := blockingIssues(ValidateInContext(m, withFiles(MaxKnowledgePackFiles+1))); !hasIssue(issues, "V8", "a pack holds at most") {
+			t.Fatalf("a pack one file past its cap is accepted: %v", issues)
+		}
+	})
 }
 
 // TestShippedPackOutsideTheReleaseQuotas: a pack's files are held to the
@@ -390,7 +474,8 @@ func TestV2SchemaKnowledgeShape(t *testing.T) {
 						Required             []string `json:"required"`
 						Properties           struct {
 							Prompt struct {
-								MaxLength int `json:"maxLength"`
+								MaxLength int    `json:"maxLength"`
+								Pattern   string `json:"pattern"`
 							} `json:"prompt"`
 						} `json:"properties"`
 					} `json:"accepts"`
@@ -408,6 +493,22 @@ func TestV2SchemaKnowledgeShape(t *testing.T) {
 	if k.Properties.Ships.MaxItems != MaxShippedPacks || k.Properties.Accepts.Properties.Prompt.MaxLength != MaxKnowledgePromptChars ||
 		k.Properties.Ships.Items.Properties.Name.Pattern == "" || !slices.Equal(k.Properties.Accepts.Required, []string{"prompt"}) {
 		t.Fatalf("schema knowledge = %+v", k)
+	}
+	// The name pattern is the literal, and it agrees with the Go rule on
+	// the names that sit at its edges.
+	namePattern := k.Properties.Ships.Items.Properties.Name.Pattern
+	if want := `^[a-z0-9][a-z0-9._-]{0,63}$`; namePattern != want {
+		t.Fatalf("schema pack name pattern is %q, want %q", namePattern, want)
+	}
+	nameRE := regexp.MustCompile(namePattern)
+	for _, name := range []string{"a", "aws-docs", "a.b-c_d", strings.Repeat("a", 64), strings.Repeat("a", 65), "", "-a", ".a", "_a", "A", "a b", "a/b", ".."} {
+		if got := nameRE.MatchString(name); got != ValidKnowledgePackName(name) {
+			t.Errorf("pack name %q: the schema says %v, pkg/manifest says %v", name, got, ValidKnowledgePackName(name))
+		}
+	}
+	// The prompt is one plain line, as the guide's one-line parts are.
+	if want := `^[^\u0000-\u001f\u007f]*$`; k.Properties.Accepts.Properties.Prompt.Pattern != want {
+		t.Fatalf("schema knowledge prompt pattern is %q, want %q", k.Properties.Accepts.Properties.Prompt.Pattern, want)
 	}
 }
 

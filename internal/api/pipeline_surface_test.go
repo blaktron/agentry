@@ -16,6 +16,8 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
+
+	"github.com/blaktron/agentry/internal/queue"
 )
 
 // ---------------------------------------------------------------- blocked
@@ -80,13 +82,24 @@ func TestBlockedAgentDownloadReturns410(t *testing.T) {
 		t.Fatal("resolve still returns a blocked agent")
 	}
 
-	// Reinstate restores service (only platform staff set/unset).
+	// Reinstate asks for a fresh scan (only platform staff set/unset) and
+	// restores service once the gate's verdict on it is publish.
 	res = env.do(staffSess, http.MethodPost,
 		"/api/v1/platform/agents/"+author+"/banned/reinstate", map[string]any{"reason": "appeal upheld"})
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("reinstate: got %d want 204", res.StatusCode)
+	var accepted struct {
+		Queued int `json:"queued"`
 	}
+	_ = json.NewDecoder(res.Body).Decode(&accepted)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusAccepted || accepted.Queued != 1 {
+		t.Fatalf("reinstate: got %d with %+v, want 202 with one scan queued", res.StatusCode, accepted)
+	}
+	// The worker runs the queued scan; the gate's verdict on it is publish.
+	w := queue.NewRiverClient(env.st, nil)
+	w.SetTestOnly(true)
+	env.srvObj.Pipeline().RegisterHandlers(w)
+	w.Drain(context.Background(), "sandbox")
+	env.waitStatus(author, "banned", "1.0.0", "published")
 	res = env.do(anonymous, http.MethodGet, dl, nil)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusOK {

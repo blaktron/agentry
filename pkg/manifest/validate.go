@@ -111,6 +111,23 @@ var (
 	envNameRE   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
+// MaxExecCommandLength caps the length of a declared exec command name (V5).
+const MaxExecCommandLength = 64
+
+// execCommandRE is the shape of a declared exec command: a program name,
+// ASCII letters, digits and the punctuation a binary's name carries (dot,
+// underscore, plus, hyphen), starting with a letter or a digit and at most
+// MaxExecCommandLength characters. A command is a name the run's shim PATH
+// resolves, so it holds no path separator, no whitespace, no control
+// character and no format character such as a bidirectional override or a
+// zero-width joiner, which would let a name read as another one wherever
+// it is shown. The manifest schemas carry the same pattern.
+var execCommandRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
+
+// ValidExecCommand reports whether cmd is a program name a manifest may
+// declare under capabilities.exec.commands.
+func ValidExecCommand(cmd string) bool { return execCommandRE.MatchString(cmd) }
+
 // ValidName reports whether s is a valid agent name per the database's
 // pattern (lowercase alphanumeric plus interior hyphens, at most 65
 // chars).
@@ -562,7 +579,9 @@ func validateInteractive(s *issues, m *Manifest) {
 // setup. The overview and each key's connect help are markdown and may
 // span lines; every other part is one plain line. A connect key must be
 // a secret the release declares, in capabilities.secrets or a declared
-// MCP server's secrets, so help never names a key the run cannot take.
+// MCP server's secrets, or the id of a declared server that signs in by
+// OAuth (MCPServer.SourceID), so help never names a key the run cannot
+// take or a server that asks for no sign-in.
 // No part may carry a format character (a bidi override, a zero-width
 // space) or a C1 control: the guide is read by a person deciding what
 // to hand a run, and the connect help is read by one deciding where to
@@ -589,7 +608,12 @@ func validateGuide(s *issues, m *Manifest) {
 	guideLine(s, "guide.files", "files", g.Files, MaxGuideFilesChars, false)
 	guideLine(s, "guide.task", "task", g.Task, MaxGuideTaskChars, false)
 
-	declared := declaredSecretNames(m.Capabilities)
+	keys := declaredSecretNames(m.Capabilities)
+	for _, srv := range m.Capabilities.MCPServers {
+		if srv.NeedsConnection() {
+			keys[srv.SourceID()] = true
+		}
+	}
 	names := make([]string, 0, len(g.Connect))
 	for n := range g.Connect {
 		names = append(names, n)
@@ -597,8 +621,8 @@ func validateGuide(s *issues, m *Manifest) {
 	sort.Strings(names)
 	for _, n := range names {
 		p := "guide.connect." + n
-		if !declared[n] {
-			s.errf("V10", p, "%q is not a secret this release declares (capabilities.secrets or an MCP server's secrets)", n)
+		if !keys[n] {
+			s.errf("V10", p, "%q is neither a secret this release declares (capabilities.secrets or an MCP server's secrets) nor a declared server that signs in by OAuth (url:…, npm:… or pypi:…)", n)
 		}
 		what := "connect help for " + n
 		if guideText(s, p, what, g.Connect[n], MaxGuideConnectChars, true) {
@@ -708,12 +732,14 @@ func validateCapabilities(s *issues, c Capabilities) {
 			s.errf("V5", p, "command must not be empty")
 			continue
 		}
-		for _, r := range cmd {
-			if unicode.IsSpace(r) || unicode.IsControl(r) {
-				s.errf("V5", p, "command %q must be a single token without whitespace", cmd)
-				break
-			}
+		if ValidExecCommand(cmd) {
+			continue
 		}
+		if n := utf8.RuneCountInString(cmd); n > MaxExecCommandLength {
+			s.errf("V5", p, "command must be at most %d characters (got %d)", MaxExecCommandLength, n)
+			continue
+		}
+		s.errf("V5", p, "command %+q is not a program name: it is ASCII letters, digits, '.', '_', '+' and '-', starting with a letter or a digit, with no whitespace, path separator, control or format character", cmd)
 	}
 
 	for i, name := range c.Secrets {

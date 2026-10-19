@@ -35,7 +35,7 @@ which entry points run; a listed support file is not another executed test.
 | Actual headless UI flows | `scripts/acceptance/ui.sh`; page rendering is tested independently |
 | Published envelopes verified by independent code | `scripts/dev/attest-interop.sh` |
 | Edge request budgets | `scripts/acceptance/edge.sh` against the real `deploy/compose/edge/nginx.conf` |
-| End-to-end acceptance | `scripts/acceptance/auth.sh`, `git.sh`, `publish-install.sh`, `cli.sh`, `gate.sh`, `enterprise-sso.sh`; filtered Go evidence must name actual passing tests through `gotest` |
+| End-to-end acceptance | `scripts/acceptance/auth.sh`, `git.sh`, `publish-install.sh`, `cli.sh`, `gate.sh`; filtered Go evidence must name actual passing tests through `gotest` |
 | Helm and deployment configuration | `scripts/acceptance/helm.sh` and CI's render/config checks |
 | Prose and generated/spec/rules drift | `scripts/prose/check.sh --self-test` and Makefile/CI drift gates |
 
@@ -114,6 +114,17 @@ The environment, storage, judge, proxy, audit and staff-rule cases remain
 independent. The named inventory and acceptance filters name the same test.
 Configuration defaults, entitlement mapping and consumer outage enforcement
 also keep their separate boundaries.
+
+Loading has its own refusals before `Validate` runs, and the pure defaults
+are refused by `Validate` (no sealing key outside dev mode), so a loading test
+names the refusal it expects rather than accepting any error.
+`TestLoadDefaults` requires the wrapped `fs.ErrNotExist` reading refusal for an
+explicitly named missing file, and still checks the pure-default sealing-key
+refusal and the opt-in dev load. `TestLoadRejectsUnknownKeys` loads a file that
+would otherwise succeed (dev mode opted in) and requires the parsing refusal
+naming the unknown key, then loads the same file without it.
+`TestLoadRejectsUnknownNestedKeys` and `TestLoadFileAndEnvPrecedence` keep the
+nested-key and precedence evidence.
 
 `TestValidateCapsCredentialTTLs` holds fifteen named cases. PAT and SSO
 at/over-cap inputs use literal contract values so a changed production ceiling

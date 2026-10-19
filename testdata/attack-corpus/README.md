@@ -116,6 +116,14 @@ S6 reports `S6/ungranted-tool` and the version goes to a person. Its twin
 declared, and must draw no finding, including for the `browser_evaluate` the
 instruction names only to turn it away.
 
+S6 over a support script (ruleset 0.4.12): `script-network-forms` is a shell
+script that reaches four undeclared hosts without a curl, wget or ssh on the
+line: a redirection to `/dev/tcp`, a `socat` address, a `git clone` of an
+scp-like remote and a `docker pull` from a registry with a port; S6 reports
+`S6/undeclared-network` and the version goes to a person. Its twin
+`script-network-forms-benign` is the same script with the four hosts declared
+in `network.egress`.
+
 S2 over the manifest (a declared MCP server's plain `env`):
 `manifest-env-secret` (a prefixed token under a credential-named key:
 the line rule and the name finding),

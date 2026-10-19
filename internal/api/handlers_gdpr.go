@@ -340,7 +340,7 @@ func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Que
 	if _, err := tq.RevokeUserSessions(ctx, userID); err != nil {
 		return out, err
 	}
-	// Deleted rather than revoked, unlike SCIM deactivation: the erased
+	// Deleted rather than revoked, unlike deprovisioning: the erased
 	// account cannot sign in again — PseudonymizeUser above set
 	// state='deleted' and nulled the password hash — so a surviving record
 	// is inert as a credential. What it still holds is an address and a

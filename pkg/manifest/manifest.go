@@ -348,10 +348,21 @@ type Guide struct {
 	Files string `yaml:"files,omitempty" json:"files,omitempty"`
 	// Task is the placeholder for the task field.
 	Task string `yaml:"task,omitempty" json:"task,omitempty"`
-	// Connect is help per declared secret name: where to create the key,
-	// which scopes it needs, in markdown that may span lines. Every key must
-	// be a declared secret (V10).
+	// Connect is help per declared secret name (where to create the key,
+	// which scopes it needs) or per server that signs in by OAuth, keyed
+	// by its SourceID (how to make the OAuth client that vendor needs),
+	// in markdown that may span lines. Every key must be a declared secret
+	// or such a server (V10).
 	Connect map[string]string `yaml:"connect,omitempty" json:"connect,omitempty"`
+}
+
+// ServerConnect is the publisher's help for signing in to srv, keyed by
+// its SourceID; "" when the guide carries none.
+func (g *Guide) ServerConnect(srv MCPServer) string {
+	if g == nil {
+		return ""
+	}
+	return g.Connect[srv.SourceID()]
 }
 
 // InteractiveHints are the manifest's hints for interactive sessions.

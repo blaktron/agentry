@@ -3,6 +3,7 @@ package packseal
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"io"
 	"strings"
@@ -63,6 +64,26 @@ func TestReadHeaderNeedsNoKey(t *testing.T) {
 	if _, err := ReadHeader(strings.NewReader("not a sealed pack")); !errors.Is(err, ErrFormat) {
 		t.Fatalf("err = %v", err)
 	}
+	// The header as sealed, rewritten: a reader refuses a version it does
+	// not know, and a header past MaxHeader even when it is valid JSON.
+	hl := int(binary.BigEndian.Uint32(sealed[len(Magic):]))
+	raw := sealed[len(Magic)+4 : len(Magic)+4+hl]
+	withHeader := func(h []byte) []byte {
+		b := []byte(Magic)
+		b = binary.BigEndian.AppendUint32(b, uint32(len(h)))
+		return append(b, h...)
+	}
+	if _, err := ReadHeader(bytes.NewReader(withHeader(raw))); err != nil {
+		t.Fatalf("the header rewritten as it was: %v", err)
+	}
+	for name, h := range map[string][]byte{
+		"version 2":      bytes.Replace(bytes.Clone(raw), []byte(`"v":1`), []byte(`"v":2`), 1),
+		"past MaxHeader": append(bytes.Clone(raw), bytes.Repeat([]byte(" "), MaxHeader+1-len(raw))...),
+	} {
+		if _, err := ReadHeader(bytes.NewReader(withHeader(h))); !errors.Is(err, ErrFormat) {
+			t.Fatalf("%s: err = %v, want ErrFormat", name, err)
+		}
+	}
 }
 
 func TestOpenRefuses(t *testing.T) {
@@ -98,6 +119,9 @@ func TestOpenRefuses(t *testing.T) {
 		{name: "cut at a frame boundary", sealed: func() []byte {
 			return sealed[:firstFrame+frameLen]
 		}, key: k, is: ErrOpen},
+		{name: "bytes after the last frame", sealed: func() []byte {
+			return append(bytes.Clone(sealed), 0)
+		}, key: k, is: ErrOpen},
 		{name: "not a sealed pack", sealed: func() []byte { return []byte("PK\x03\x04 a zip") }, key: k, is: ErrFormat},
 		{name: "a short key", sealed: func() []byte { return sealed }, key: k[:16], is: ErrKey},
 	}
@@ -125,5 +149,19 @@ func TestTwoSealsOfOneTreeDiffer(t *testing.T) {
 	b := seal(t, k, Header{Pack: "kp_a"}, []byte("same"))
 	if bytes.Equal(a, b) {
 		t.Fatal("two seals of one tree under one key are identical: the nonce is not fresh")
+	}
+	// Within one seal every frame has its own nonce: under GCM, two frames
+	// of the same plaintext under one nonce would share their keystream,
+	// and their ciphertexts would match byte for byte up to the tag.
+	sealed := seal(t, k, Header{Pack: "kp_a"}, bytes.Repeat([]byte{'k'}, 2*ChunkSize+1))
+	off := len(Magic) + 4 + int(binary.BigEndian.Uint32(sealed[len(Magic):]))
+	frame := func() []byte {
+		n := int(binary.BigEndian.Uint32(sealed[off:]))
+		f := sealed[off+4 : off+4+n]
+		off += 4 + n
+		return f[:64]
+	}
+	if first, second := frame(), frame(); bytes.Equal(first, second) {
+		t.Fatal("two frames of one seal share a nonce")
 	}
 }

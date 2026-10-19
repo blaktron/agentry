@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -411,5 +412,66 @@ func TestCSPAdmitsTheSignOutOrigin(t *testing.T) {
 	}
 	if strings.Contains(csp, "cancel") || strings.Contains(csp, "end-session") {
 		t.Fatalf("csp carries more than the origin: %q", csp)
+	}
+}
+
+// The policy is pinned as a whole string, not by fragments: a page carries
+// no script and no inline style, so any widening (an 'unsafe-inline' or
+// 'unsafe-eval' source, a script-src, a wildcard) is a change someone must
+// make here on purpose. The policy for a brand with its own origins is the
+// same string with those origins appended.
+func TestCSPIsExactlyThisString(t *testing.T) {
+	const bare = "default-src 'none'; style-src 'self'; img-src 'self' data:; form-action 'self' http://127.0.0.1:*; base-uri 'none'; frame-ancestors 'none'"
+	pages := map[string][]*http.Cookie{
+		"/ui/login":        nil,
+		"/ui/verify-email": nil,
+		"/ui/authorize?port=40123&state=abcdefghij": {sessCookie, csrfCookieV},
+	}
+	for path, cookies := range pages {
+		w := get(newUI(t, Options{}), path, cookies...)
+		if w.Code != http.StatusOK && w.Code != http.StatusBadRequest {
+			t.Fatalf("%s: %d, want a rendered page", path, w.Code)
+		}
+		if got := w.Header().Get("Content-Security-Policy"); got != bare {
+			t.Errorf("%s: csp\n got %q\nwant %q", path, got, bare)
+		}
+	}
+
+	branded := newUI(t, Options{
+		Brand:        Brand{CSSURL: "https://cdn.brand.example/theme.css", LogoURL: "https://img.brand.example/logo.png"},
+		IdPLogoutURL: "https://auth.brand.example/end-session/",
+		SiteURL:      "https://brand.example",
+	})
+	const want = "default-src 'none'; style-src 'self' https://cdn.brand.example; img-src 'self' data: https://img.brand.example; " +
+		"form-action 'self' http://127.0.0.1:* https://auth.brand.example https://brand.example; base-uri 'none'; frame-ancestors 'none'"
+	if got := get(branded, "/ui/login").Header().Get("Content-Security-Policy"); got != want {
+		t.Errorf("branded csp\n got %q\nwant %q", got, want)
+	}
+	for _, banned := range []string{"unsafe-inline", "unsafe-eval", "script-src"} {
+		if strings.Contains(want, banned) || strings.Contains(bare, banned) {
+			t.Errorf("the pinned policy contains %q", banned)
+		}
+	}
+}
+
+// A page's API call runs under the browser request's context: whatever the
+// server attached to that request (its id, the resolved client address)
+// reaches the handler the call lands on, so the call is part of the request
+// and not a second one.
+func TestAPICallRunsUnderTheBrowserRequestsContext(t *testing.T) {
+	type ctxKey struct{}
+	var seen []string
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		v, _ := r.Context().Value(ctxKey{}).(string)
+		seen = append(seen, v)
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+	h := newUI(t, Options{API: api})
+	r := httptest.NewRequest(http.MethodGet, "/ui/authorize?port=40123&state=abcdefghij", nil)
+	r.AddCookie(sessCookie)
+	r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, "request-1"))
+	h.ServeHTTP(httptest.NewRecorder(), r)
+	if len(seen) != 1 || seen[0] != "request-1" {
+		t.Fatalf("the API saw contexts %v, want the browser request's", seen)
 	}
 }

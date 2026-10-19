@@ -9,7 +9,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/blaktron/agentry/internal/audit"
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/registry"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // ProvisionedMember is a person an organization's identity provider
@@ -87,7 +89,7 @@ func (s *Server) DeprovisionMember(ctx context.Context, ext string, orgID, userI
 	if s.st == nil {
 		return false, errors.New("api: no database to deprovision members in")
 	}
-	return s.deprovisionMember(ctx, orgID, userID, true, s.extensionMemberEvent(ext, orgID, audit.ActionSCIMUserDeactivate, userID))
+	return s.deprovisionMember(ctx, orgID, userID, s.extensionMemberEvent(ext, orgID, audit.ActionSCIMUserDeactivate, userID))
 }
 
 // extensionMemberEvent is the audit row of an extension's provisioning
@@ -99,4 +101,124 @@ func (s *Server) extensionMemberEvent(ext string, orgID uuid.UUID, action audit.
 		TargetKind: "user", TargetID: userID,
 		Detail: map[string]any{"via": "extension", "extension": ext},
 	}
+}
+
+// provisionPending links an existing global user by email or JIT-creates
+// one, then adds a **pending** org membership marked as provisioned
+// (via_scim): the IdP says who exists, an admin says who is a member. A
+// pending membership holds no seat and confers nothing, so a provisioning
+// door still succeeds however
+// many seats the organization has left; the wall is at the approval. A new
+// account's handle is seeded from the IdP's userName (its local part when
+// the userName is the address), the name the directory knows the person
+// by, and its address is taken as verified, because the organization's
+// identity provider vouches for it. An existing membership, pending or
+// active, is left as it is. Every door that creates an account fires
+// user.registered, with via naming the door.
+func (s *Server) provisionPending(ctx context.Context, orgID uuid.UUID, email, userName, displayName, via string) (uuid.UUID, error) {
+	if u, err := s.q().GetUserByEmail(ctx, email); err == nil {
+		if err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
+			_, err := q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
+				OrgID: orgID, UserID: u.ID, Role: string(auth.RoleMember), ViaScim: true,
+			})
+			return err
+		}); err != nil {
+			return uuid.Nil, err
+		}
+		return u.ID, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, err
+	}
+	userID := newUUID()
+	handle, err := s.allocateHandle(ctx, userName, email, email)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	dn := orDefault(displayName, handle)
+	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		if err := q.CreateHandle(ctx, storegen.CreateHandleParams{ID: userID, Handle: handle, Kind: "user"}); err != nil {
+			return err
+		}
+		if _, err := q.CreateUser(ctx, storegen.CreateUserParams{ID: userID, Email: email, DisplayName: dn}); err != nil {
+			return err
+		}
+		// Provisioned on the directory extension's word: the organization's
+		// identity provider vouches for the address.
+		if err := q.MarkEmailVerified(ctx, userID); err != nil {
+			return err
+		}
+		_, err := q.UpsertPendingMembership(ctx, storegen.UpsertPendingMembershipParams{
+			OrgID: orgID, UserID: userID, Role: string(auth.RoleMember), ViaScim: true,
+		})
+		return err
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	s.fireEvent(ctx, Event{Kind: "user.registered", UserID: userID, OrgID: orgID, Payload: map[string]any{
+		"handle": handle, "email": email, "emailVerified": true, "via": via,
+	}})
+	return userID, nil
+}
+
+// deprovisionMember takes userID's membership of orgID away and revokes
+// their org-bound PATs for orgID, every session and every remembered
+// browser, in one transaction, audited with ev. The last admin's
+// membership is the one thing it cannot take: the membership stays (the
+// organization keeps someone who can act), the credentials are revoked,
+// and kept reports it. A person who is not a member loses their sessions
+// and remembered browsers all the same.
+func (s *Server) deprovisionMember(ctx context.Context, orgID, userID uuid.UUID, ev audit.Event) (kept bool, err error) {
+	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		kept = false
+		if err := guardLastAdmin(ctx, q, orgID, userID); err != nil {
+			if !errors.Is(err, errLastAdmin) {
+				return err
+			}
+			kept = true
+		}
+		if !kept {
+			if _, err := q.DeleteMembership(ctx, storegen.DeleteMembershipParams{OrgID: orgID, UserID: userID}); err != nil {
+				return err
+			}
+		}
+		if _, err := q.RevokeOrgBoundPATsForUser(ctx, storegen.RevokeOrgBoundPATsForUserParams{UserID: userID, OrgID: &orgID}); err != nil {
+			return err
+		}
+		if _, err := q.RevokeUserSessions(ctx, userID); err != nil {
+			return err
+		}
+		// A remembered browser is a way back in that outlives the sessions
+		// killed just above, and deactivation leaves the account's password and
+		// state untouched on purpose — the person may exist outside the
+		// organization. Without this the deprovisioned user could sign in again
+		// and be asked for *less* than before, the second factor skipped, which
+		// is the opposite of what this function promises.
+		if _, err := q.RevokeTrustedDevicesForUser(ctx, userID); err != nil {
+			return err
+		}
+		row := ev
+		if kept {
+			row.Detail = map[string]any{"lastAdminKept": true}
+			for k, v := range ev.Detail {
+				row.Detail[k] = v
+			}
+		}
+		if err := s.auditW.Write(ctx, q, row); err != nil {
+			return err
+		}
+		// Deprovisioned from the staff organization is no longer staff;
+		// whoever deprovisioned is the actor.
+		actor := ev
+		actor.Action = audit.ActionUserStaffSync
+		return s.syncStaffIn(ctx, q, userID, registry.StaffSyncMembership, actor)
+	})
+	return kept, err
+}
+
+func orDefault(s, def string) string {
+	if strings.TrimSpace(s) == "" {
+		return def
+	}
+	return s
 }

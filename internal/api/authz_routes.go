@@ -168,25 +168,8 @@ var routeAuthz = map[string]RouteDecl{
 	"checkDraft":        {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"searchModelInput":  {Action: auth.ActPublicRead, SelfAuthorized: true},
 	"triageAbuseReport": {Action: auth.ActPublicRead, SelfAuthorized: true},
-	// Enterprise: SSO/SCIM config = admin (ActOrgSettingsManage,
-	// session-only for PATs); webhooks/domains = admin+ (ActOrgUpdate);
-	// audit export = admin+ (ActOrgAuditRead). The SSO login-flow endpoints
-	// establish credentials (like login/register) so they are NoAuthz. The
-	// SCIM data plane (/scim/v2) is mounted outside the generated handler and
-	// authenticates by SCIM token — no RouteDecl (see handlers_scim.go).
-	"listSsoConnections":    {Action: auth.ActOrgSettingsManage, OrgScoped: true},
-	"putSsoConnection":      {Action: auth.ActOrgSettingsManage, OrgScoped: true},
-	"deleteSsoConnection":   {Action: auth.ActOrgSettingsManage, OrgScoped: true},
-	"testSsoConnection":     {Action: auth.ActOrgSettingsManage, OrgScoped: true},
-	"getSamlMetadata":       {NoAuthz: true, Anonymous: true},
-	"samlAcs":               {NoAuthz: true, Anonymous: true},
-	"samlSloRedirect":       {NoAuthz: true, Anonymous: true},
-	"samlSloPost":           {NoAuthz: true, Anonymous: true},
-	"oidcStart":             {NoAuthz: true, Anonymous: true},
-	"oidcCallback":          {NoAuthz: true, Anonymous: true},
-	"listScimTokens":        {Action: auth.ActOrgSettingsManage, OrgScoped: true},
-	"createScimToken":       {Action: auth.ActOrgSettingsManage, OrgScoped: true},
-	"revokeScimToken":       {Action: auth.ActOrgSettingsManage, OrgScoped: true},
+	// Enterprise: webhooks/domains = admin+ (ActOrgUpdate); audit export =
+	// admin+ (ActOrgAuditRead).
 	"listWebhooks":          {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"createWebhook":         {Action: auth.ActOrgUpdate, OrgScoped: true},
 	"getWebhook":            {Action: auth.ActOrgUpdate, OrgScoped: true},
@@ -322,9 +305,6 @@ const (
 	GatePublic MountGate = "public"
 	// GateSignature's only gate is an HMAC over the request.
 	GateSignature MountGate = "signature"
-	// GateSCIMToken is gated by a SCIM bearer token, hashed at rest, bound
-	// to an active organization that holds the entitlement.
-	GateSCIMToken MountGate = "scim-token"
 	// GateGit is gated by git's own authorization: a PAT over Basic auth,
 	// then the effective agent role, existence privacy and the org-state
 	// gate.
@@ -398,12 +378,6 @@ func AllMountAuthzDecls() map[string]MountDecl {
 	return out
 }
 
-// scimDataPlane is what every SCIM route declares: the SCIM bearer token,
-// and the `scim` bucket scimAuth spends per organization (limits.scimPerMin).
-// Its burst is sized for a directory's initial sync,
-// which is legitimate traffic; past it an IdP is refused with Retry-After.
-var scimDataPlane = MountDecl{Gate: GateSCIMToken, Class: "scim"}
-
 // mountAuthz maps a root mount's pattern → declaration. These are the
 // registrations that are not part of the generated surface. A pattern here
 // that nothing registers fails the completeness gate, and a registration
@@ -447,26 +421,4 @@ var mountAuthz = map[string]MountDecl{
 	// construction, since verification needs them.
 	"GET /.well-known/agentry/registry.json":     {Gate: GatePublic, Class: RateNone, Why: "discovery: read before a caller holds a credential"},
 	"GET /.well-known/agentry/signing-keys.json": {Gate: GatePublic, Class: RateNone, Why: "the keys are public by construction; a verifier needs them"},
-
-	// SCIM 2.0's data plane: its own base path, media type and
-	// credential, so it is deliberately not part of the OpenAPI surface.
-	"POST /scim/v2/Users":         scimDataPlane,
-	"GET /scim/v2/Users":          scimDataPlane,
-	"GET /scim/v2/Users/{id}":     scimDataPlane,
-	"PATCH /scim/v2/Users/{id}":   scimDataPlane,
-	"PUT /scim/v2/Users/{id}":     scimDataPlane,
-	"DELETE /scim/v2/Users/{id}":  scimDataPlane,
-	"POST /scim/v2/Groups":        scimDataPlane,
-	"GET /scim/v2/Groups":         scimDataPlane,
-	"GET /scim/v2/Groups/{id}":    scimDataPlane,
-	"PATCH /scim/v2/Groups/{id}":  scimDataPlane,
-	"DELETE /scim/v2/Groups/{id}": scimDataPlane,
-
-	// The org SSO landing is a browser destination, reachable by
-	// definition without a session: it is the door to making one. It draws
-	// from the `login` bucket, which the handler applies.
-	"GET /sso/{org}": {
-		Gate: GatePublic, Class: "login",
-		Why: "the door to a session cannot require one; the handler checks that login is allowed at all, that the organization exists and holds the entitlement, and the `login` bucket bounds how often",
-	},
 }
