@@ -3960,7 +3960,8 @@
             "TestAZoneDoesNotHideARange",
             "TestTheTestTableNamesEveryRangeTheGuardRefuses",
             "TestEachSpecialPurposeRangeIsRefusedByItsOwnRow",
-            "TestTheGlobalUnicastSpaceIsIPv6sOnly"
+            "TestTheGlobalUnicastSpaceIsIPv6sOnly",
+            "TestAddressesNextToAnEmbeddingPrefixAreNotReadAsEmbedding"
           ],
           "fuzz": [],
           "benchmarks": [],

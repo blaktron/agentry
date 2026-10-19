@@ -69,11 +69,6 @@ func TestGuard_IsAllowedIP(t *testing.T) {
 		{"::a9fe:a9fe", false},         // IPv4-compatible form of the metadata address
 		{"2001:a00:1::1", true},        // starts like 6to4 (0x20) but is not 2002::/16: not read as 10.0.0.1
 		{"2a02:a00:1::1", true},        // second byte 0x02 but not 2002::/16: not read as 10.0.0.1
-		{"64:fe9b::a00:1", true},       // not the NAT64 prefix (third byte differs)
-		{"64:ff9c::a00:1", true},       // not the NAT64 prefix (fourth byte differs)
-		{"64:ff9b::1:0:a00:1", true},   // NAT64 prefix with a nonzero byte 8-9: outside 64:ff9b::/96
-		{"64:ff9b:101::1", true},       // not 64:ff9b:1::/48: the sixth byte alone does not make it local-use
-		{"::1:a00:1", true},            // only ::/96 is the IPv4-compatible form
 	}
 	for _, c := range cases {
 		ip := netip.MustParseAddr(c.ip)
