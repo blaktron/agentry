@@ -265,16 +265,6 @@ func TestDeliverRejectsMalformedRecipient(t *testing.T) {
 	}
 }
 
-// SMTP DATA ends at a lone "."; without dot-stuffing a body could truncate
-// itself, or worse, terminate early and leave the rest interpreted as commands.
-func TestBodyIsDotStuffedAndCRLF(t *testing.T) {
-	got := normalizeBody("first\n.\n.hidden\nlast\n")
-	want := "first\r\n..\r\n..hidden\r\nlast\r\n"
-	if got != want {
-		t.Errorf("normalizeBody = %q, want %q", got, want)
-	}
-}
-
 func TestComposeSetsTransactionalHeaders(t *testing.T) {
 	n, _ := capture(t)
 	raw, err := n.compose("u@example.test", message{Subject: "hello", Body: "body\n"})

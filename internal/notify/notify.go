@@ -422,7 +422,7 @@ func (r renderer) verification(handle, token string) message {
 	if r.verifyEmail != nil {
 		url = r.verifyEmail(token)
 	}
-	body := "Follow this link to confirm this address and activate the " + r.registry + " account " + handle + ".\n\n"
+	account := " this address and activate the " + r.registry + " account " + handle + ".\n\n"
 	// The mail does not promise "the address will not be used", which
 	// nothing in the server keeps: no job deletes an unconfirmed account,
 	// the row keeps the address, and a later membership grant mails it.
@@ -430,17 +430,18 @@ func (r renderer) verification(handle, token string) message {
 	// create a QuickAgent on any deployment, and where a directory holds
 	// credentials it is read-only until it activates. "Browse but not
 	// publish" is the sentence true of both.
-	once := "The link works once."
+	var body, once, thing string
 	if url != "" {
-		body += url + "\n\n"
+		body = "Follow this link to confirm" + account + url + "\n\n"
+		once, thing = "The link works once.", "link"
 	} else {
-		body += "Verification code: " + token + "\n\n"
-		once = "The code works once."
+		body = "Use this code to confirm" + account + "Verification code: " + token + "\n\n"
+		once, thing = "The code works once.", "code"
 	}
 	body += once + " Until this address is confirmed, the account can\n" +
 		"browse but not publish.\n\n" +
-		"If you did not create an account named " + handle + ", do not follow the\n" +
-		"link: someone may have signed up with your address. Ignore this message.\n"
+		"If you did not create an account named " + handle + ", do not use the\n" +
+		thing + ": someone may have signed up with your address. Ignore this message.\n"
 	return message{Subject: r.registry + ": activate your account", Body: body + r.footer()}
 }
 
