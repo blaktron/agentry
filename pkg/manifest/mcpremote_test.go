@@ -124,7 +124,7 @@ func TestRemoteServerRefusals(t *testing.T) {
 `, "auth is required"},
 		"unknown auth": {`    - url: https://mcp.example.com/mcp
       auth: basic
-`, "oauth, secret or none"},
+`, `capabilities.mcpServers[0].auth: auth "basic" is not one of oauth, secret or none`},
 		"version on remote": {`    - url: https://mcp.example.com/mcp
       auth: none
       version: 1.0.0
@@ -183,9 +183,18 @@ func TestRemoteServerRefusals(t *testing.T) {
 		"gateway expansion in the path": {`    - url: https://mcp.example.com/x/${GITHUB_TOKEN}
       auth: none
 `, "gateway would expand"},
-		"template in the path": {`    - url: "https://mcp.example.com/{{ .Secret }}"
+		"template in the path": {`    - url: "https://mcp.example.com/{{.Secret}}"
       auth: none
-`, "gateway would expand"},
+`, `capabilities.mcpServers[0].url: "https://mcp.example.com/{{.Secret}}" may hold only printable ASCII`},
+		"template with spaces in the path": {`    - url: "https://mcp.example.com/{{ .Secret }}"
+      auth: none
+`, `capabilities.mcpServers[0].url: "https://mcp.example.com/{{ .Secret }}" may hold only printable ASCII`},
+		"open brace in the path": {`    - url: "https://mcp.example.com/a{b"
+      auth: none
+`, `capabilities.mcpServers[0].url: "https://mcp.example.com/a{b" may hold only printable ASCII`},
+		"close brace in the path": {`    - url: "https://mcp.example.com/a}b"
+      auth: none
+`, `capabilities.mcpServers[0].url: "https://mcp.example.com/a}b" may hold only printable ASCII`},
 		"space in the path": {`    - url: https://mcp.example.com/ mcp
       auth: none
 `, "printable ASCII"},
@@ -330,21 +339,21 @@ func TestMCPOAuthRefusals(t *testing.T) {
 // TestRemoteAndOAuthAreV2Only: a v1 manifest refuses every new field by
 // name, as it refuses env.
 func TestRemoteAndOAuthAreV2Only(t *testing.T) {
-	for name, yaml := range map[string]string{
-		"url": `    - url: https://mcp.example.com/mcp
+	for name, tc := range map[string]struct{ yaml, want string }{
+		"url": {`    - url: https://mcp.example.com/mcp
       auth: none
-`,
-		"oauth": `    - npm: server-x
+`, "manifest V1: capabilities.mcpServers[0].url: url is a v2 field"},
+		"oauth": {`    - npm: server-x
       version: 1.0.0
       oauth:
         issuer: https://auth.example.com
         env: {TOKEN: "{access_token}"}
-`,
+`, "manifest V1: capabilities.mcpServers[0].oauth: oauth is a v2 field"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			text := blockingText(issuesFor(t, mcpManifest(yaml)))
-			if !strings.Contains(text, "is a v2 field") {
-				t.Fatalf("v1 manifest accepted %s:\n%s", name, text)
+			text := blockingText(issuesFor(t, mcpManifest(tc.yaml)))
+			if !strings.Contains(text, tc.want) {
+				t.Fatalf("v1 manifest accepted %s; want %q:\n%s", name, tc.want, text)
 			}
 		})
 	}
@@ -376,10 +385,23 @@ func TestExpandOAuthPlaceholders(t *testing.T) {
 	if err != nil || got != `{"normal":{"access_token":"ya29.TOKEN","expiry_date":1700000000000}}` {
 		t.Fatalf("got %q, %v", got, err)
 	}
-	for _, bad := range []string{`{refresh_token}`, `{dir}`, `{Access_Token}`, `{expiry}`} {
-		if _, err := ExpandOAuthTemplate(bad, vals); err == nil {
-			t.Fatalf("template %s expanded", bad)
+	// Each is refused for its own reason: a name outside the template's
+	// set (the match is exact, so a case variant is outside it too) is
+	// unknown even when vals could have supplied it; an allowed name
+	// with no value is missing.
+	for bad, want := range map[string]string{
+		`{refresh_token}`: "unknown placeholder {refresh_token}",
+		`{dir}`:           "unknown placeholder {dir}",
+		`{Access_Token}`:  "unknown placeholder {Access_Token}",
+		`{expiry}`:        "no value for placeholder {expiry}",
+	} {
+		if _, err := ExpandOAuthTemplate(bad, vals); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("template %s: err = %v, want %q", bad, err, want)
 		}
+	}
+	// The case variant stays unknown even when a value is supplied for it.
+	if _, err := ExpandOAuthTemplate(`{Access_Token}`, map[string]string{"Access_Token": "x"}); err == nil || !strings.Contains(err.Error(), "unknown placeholder {Access_Token}") {
+		t.Fatalf("a supplied case variant expanded: %v", err)
 	}
 	// JSON's own braces are not placeholders.
 	if got, err := ExpandOAuthTemplate(`{"a":{"b":{}}}`, vals); err != nil || got != `{"a":{"b":{}}}` {
@@ -433,6 +455,10 @@ func TestDiffRemoteAndOAuthServers(t *testing.T) {
 			"adds MCP server: url:https://mcp.linear.app/mcp (auth oauth; scopes read)"},
 		{"none to oauth", caps(remote(AuthNone)), caps(remote(AuthOAuth, "read")), true,
 			"changes auth of MCP server url:https://mcp.linear.app/mcp: oauth (was none)"},
+		// The scopes are the same on both sides, so only the auth line
+		// can widen this one.
+		{"none to oauth with the same scopes", caps(remote(AuthNone)), caps(remote(AuthOAuth)), true,
+			"changes auth of MCP server url:https://mcp.linear.app/mcp: oauth (was none)"},
 		{"a new scope", caps(remote(AuthOAuth, "read")), caps(remote(AuthOAuth, "read", "write")), true,
 			"adds scope write to MCP server url:https://mcp.linear.app/mcp"},
 		{"a dropped scope narrows", caps(remote(AuthOAuth, "read", "write")), caps(remote(AuthOAuth, "read")), false,
@@ -460,9 +486,17 @@ func TestDiffRemoteAndOAuthServers(t *testing.T) {
 			if d.HasWidened() != tc.widened {
 				t.Fatalf("widened = %v, want %v: %+v", d.HasWidened(), tc.widened, d)
 			}
-			all := strings.Join(append(append([]string{}, d.Widened...), d.Narrowed...), "\n")
-			if !strings.Contains(all, tc.contains) {
-				t.Fatalf("diff lacks %q:\n%s", tc.contains, all)
+			// The line is in the list that decides whether the person is
+			// asked again, not merely somewhere in the diff.
+			list, other := d.Narrowed, d.Widened
+			if tc.widened {
+				list, other = d.Widened, d.Narrowed
+			}
+			if !slices.ContainsFunc(list, func(l string) bool { return strings.Contains(l, tc.contains) }) {
+				t.Fatalf("diff lacks %q in the list it belongs to:\nwidened: %q\nnarrowed: %q", tc.contains, d.Widened, d.Narrowed)
+			}
+			if slices.ContainsFunc(other, func(l string) bool { return strings.Contains(l, tc.contains) }) {
+				t.Fatalf("diff carries %q in the other list:\nwidened: %q\nnarrowed: %q", tc.contains, d.Widened, d.Narrowed)
 			}
 		})
 	}
@@ -564,6 +598,9 @@ func TestUnsupportedListIsInTheDocs(t *testing.T) {
 	raw, err := os.ReadFile("../../docs/quickagents.md")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(unsupportedOAuthPackages) == 0 {
+		t.Fatal("the unsupported list is empty, so the docs table is held to nothing")
 	}
 	for id, alt := range unsupportedOAuthPackages {
 		if row := "| `" + id + "` | `" + alt + "` |"; !strings.Contains(string(raw), row) {
