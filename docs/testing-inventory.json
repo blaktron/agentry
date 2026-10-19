@@ -2327,6 +2327,9 @@
           "tests": [
             "TestRequestIDStampedFromContext",
             "TestTokensAreMaskedEverywhere",
+            "TestTokenJoinedToOtherCharactersIsMasked",
+            "TestEmptyKeyValueIsSanitised",
+            "TestTypedNilValuesDoNotPanic",
             "TestSecretNamedKeysAreRedacted",
             "TestLongValuesAreTruncated",
             "TestParseLevel"
@@ -4802,6 +4805,25 @@
           "dependencyHints": [
             "HTTP transport"
           ]
+        }
+      ]
+    },
+    {
+      "owner": "scripts/notices",
+      "behavior": "Licence classification and the source note of the generated third-party notices",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "scripts/notices/main_test.go",
+          "tests": [
+            "TestClassify",
+            "TestLicenceNames",
+            "TestSourceNoteNamesUpstreamForCopyleftModules"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         }
       ]
     }
