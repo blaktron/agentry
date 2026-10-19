@@ -1968,7 +1968,8 @@
             "TestTrustedProxyCIDRsFromEnv",
             "TestKnowledgeSealingKeyFromEnv",
             "TestSignInOIDCIsOneProvider",
-            "TestSignInOIDCFromEnv"
+            "TestSignInOIDCFromEnv",
+            "TestJudgeBaseURLIsHTTPSWhereAKeyIsSent"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2340,6 +2341,9 @@
           "tests": [
             "TestRequestIDStampedFromContext",
             "TestTokensAreMaskedEverywhere",
+            "TestTokenJoinedToOtherCharactersIsMasked",
+            "TestEmptyKeyValueIsSanitised",
+            "TestTypedNilValuesDoNotPanic",
             "TestSecretNamedKeysAreRedacted",
             "TestLongValuesAreTruncated",
             "TestParseLevel"
@@ -2421,7 +2425,6 @@
             "TestVerificationLinkUsesBaseURL",
             "TestComposeRejectsHeaderInjection",
             "TestDeliverRejectsMalformedRecipient",
-            "TestBodyIsDotStuffedAndCRLF",
             "TestComposeSetsTransactionalHeaders",
             "TestNonASCIISubjectIsEncoded",
             "TestSendFailureIsReported",
@@ -2454,6 +2457,21 @@
             "TestEmailPermittedRequiresVerifiedAddress",
             "TestScheduleSwitchIsItsOwn",
             "TestBugReportSwitchIsItsOwn"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/notify/smtp_test.go",
+          "tests": [
+            "TestSMTPDeliversALoneDotLineIntact",
+            "TestBodyIsCRLFAndLeavesDotsToTheDataWriter",
+            "TestSentLineMasksTheRecipient",
+            "TestSendFailedLineMasksTheRecipientEverywhere",
+            "TestVerificationWithoutALinkNeverMentionsOne",
+            "TestMalformedRecipientErrorDoesNotEchoIt"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2574,7 +2592,8 @@
         {
           "path": "internal/registry/blobstore_test.go",
           "tests": [
-            "TestLocalFSRoundTripAndDelete"
+            "TestLocalFSRoundTripAndDelete",
+            "TestArchiveKeyIsTheContentAddressedName"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2606,6 +2625,23 @@
           ]
         },
         {
+          "path": "internal/registry/pure_controls_test.go",
+          "tests": [
+            "TestAdmissionFailsClosedAndCarriesTheAdmittersAnswer",
+            "TestSkipsPipelineOnlyForAFlaggedPrivateOrgAgentOnATierThatAllowsIt",
+            "TestQuotaSubjectIsTheNamespaceThatOwnsTheAgent",
+            "TestOrgGateErrorSaysWhatTheOrganizationIs",
+            "TestSeatsAreSpentByMembersAndInvitationsAndDoorsAreNamed",
+            "TestRefusalSentencesAndConstraintViolations",
+            "TestNormalizeModesDefaultsDeduplicatesAndRefusesUnknownModes",
+            "TestForkRefusalsAreRecognisedAndPutInWords"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/registry/staff_internal_test.go",
           "tests": [
             "TestAtStaffDomainComparesAsASCII"
@@ -2619,6 +2655,7 @@
           "path": "internal/registry/statemachine_test.go",
           "tests": [
             "TestStateMachineEdges",
+            "TestTransitionEventNamesTheWebhookOfEachEdge",
             "TestNoPathToPublishedSkipsTheGateForAPublicAgent",
             "TestStageArchiveDoesNotLeakOnWriteFailure",
             "TestStageArchiveSucceeds"
@@ -3299,7 +3336,8 @@
             "TestS5ReadsEveryTextFile",
             "TestTypeSafeRubricHashPerShape",
             "TestTypeSafeJudgeWithoutAKeyFailsClosed",
-            "TestTheDraftCheckAsksTheRubricAsS5Does"
+            "TestTheDraftCheckAsksTheRubricAsS5Does",
+            "TestJudgeFactoryRefusesAPlainBaseURLForAKey"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3753,7 +3791,12 @@
           "path": "internal/webhook/webhook_test.go",
           "tests": [
             "TestClient_NoRedirectFollowing",
-            "TestSign_And_Verify"
+            "TestSign_And_Verify",
+            "TestEventCatalog",
+            "TestNewDispatcher_Defaults",
+            "TestDispatcher_NeedsAStoreAndAQueue",
+            "TestDeliver_UnreadableArgsAreNotRetried",
+            "TestBackoffAndStrPtrOrNil"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3894,6 +3937,7 @@
             "TestClient_HTTPSOnly",
             "TestClient_RefusesNonPublicTargets",
             "TestClient_DefaultTimeout",
+            "TestClient_TransportBounds",
             "TestProxy_TunnelsToTheTarget",
             "TestProxy_RefusesANonPublicTargetBeforeAsking",
             "TestProxy_CarriesHTTPSOnly",
@@ -4109,6 +4153,23 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        },
+        {
+          "path": "pkg/judge/endpoint_test.go",
+          "tests": [
+            "TestNewSendsTheKeyOnlyOverHTTPS",
+            "TestCheckBaseURLNamesTheRule",
+            "TestAKeyReachesALoopbackServer",
+            "TestAskRefusesAnAnswerThatIsNotANoul",
+            "TestDeclaredCapabilitiesIsNotCutInsideACharacter",
+            "TestAnEmptyVoiceOrDraftIsNotSentToTheJudge"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
         },
         {
           "path": "pkg/judge/judge_test.go",
@@ -4586,7 +4647,8 @@
             "TestNormalizeLogoRefuses",
             "TestNormalizeLogoScalesDown",
             "TestDesignWithLogoRoundTrips",
-            "TestDesignLogoRefusals"
+            "TestDesignLogoRefusals",
+            "TestLogoNullIsNoLogo"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4601,6 +4663,7 @@
             "TestBuiltinsDiffer",
             "TestValidationTable",
             "TestTextIsData",
+            "TestContrastRefusalNeverPrintsAPass",
             "TestContrast",
             "TestNearestPassing",
             "TestTint",

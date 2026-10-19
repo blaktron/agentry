@@ -10,9 +10,12 @@ import (
 	"net"
 	"net/mail"
 	"net/smtp"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/blaktron/agentry/internal/logx"
 )
 
 // SMTPOptions configures the SMTP transport.
@@ -141,7 +144,7 @@ func (n *SMTPNotifier) Rendered(ctx context.Context, notice RenderedNotice) erro
 func (n *SMTPNotifier) deliver(ctx context.Context, to string, m message, kind string) error {
 	addr, err := mail.ParseAddress(to)
 	if err != nil {
-		return fmt.Errorf("notify: recipient %q: %w", to, err)
+		return fmt.Errorf("notify: recipient %q: %w", logx.MaskEmail(to), err)
 	}
 	raw, err := n.compose(addr.Address, m)
 	if err != nil {
@@ -150,10 +153,14 @@ func (n *SMTPNotifier) deliver(ctx context.Context, to string, m message, kind s
 	ctx, cancel := context.WithTimeout(ctx, n.opt.Timeout)
 	defer cancel()
 	if err := n.send(ctx, n.from.Address, []string{addr.Address}, raw); err != nil {
-		n.log.Error("notify: smtp send failed", "kind", kind, "to", addr.Address, "err", err)
+		// A server's refusal often quotes the mailbox it refused, and the
+		// callers log what is returned, so the address is masked in the error
+		// text itself; the original error stays reachable through Unwrap.
+		err = &maskedError{text: maskAddress(err.Error(), addr.Address), err: err}
+		n.log.Error("notify: smtp send failed", "kind", kind, "to", logx.MaskEmail(addr.Address), "err", err)
 		return fmt.Errorf("notify: send %s: %w", kind, err)
 	}
-	n.log.Info("notify: sent", "kind", kind, "to", addr.Address)
+	n.log.Info("notify: sent", "kind", kind, "to", logx.MaskEmail(addr.Address))
 	return nil
 }
 
@@ -191,18 +198,29 @@ func encodeHeader(s string) string {
 	return mime.QEncoding.Encode("utf-8", s)
 }
 
-// normalizeBody converts to CRLF line endings and dot-stuffs, as SMTP DATA
-// requires. Without the stuffing a body line that is a single "." ends the
-// message early and truncates everything after it.
+// maskedError carries a transport error's text with the recipient masked.
+type maskedError struct {
+	text string
+	err  error
+}
+
+func (e *maskedError) Error() string { return e.text }
+func (e *maskedError) Unwrap() error { return e.err }
+
+// maskAddress replaces every occurrence of addr in s, whatever its case,
+// with the masked form the log contract uses for a mailbox.
+func maskAddress(s, addr string) string {
+	re := regexp.MustCompile("(?i)" + regexp.QuoteMeta(addr))
+	masked := logx.MaskEmail(addr)
+	return re.ReplaceAllLiteralString(s, masked)
+}
+
+// normalizeBody converts to CRLF line endings. It does not dot-stuff: the
+// writer net/smtp returns from Data stuffs a leading "." itself, so stuffing
+// here too would deliver a body line "." as "..".
 func normalizeBody(body string) string {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
-	lines := strings.Split(body, "\n")
-	for i, l := range lines {
-		if strings.HasPrefix(l, ".") {
-			lines[i] = "." + l
-		}
-	}
-	return strings.Join(lines, "\r\n")
+	return strings.ReplaceAll(body, "\n", "\r\n")
 }
 
 // dialAndSend performs the SMTP conversation.

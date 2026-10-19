@@ -24,6 +24,14 @@ func TestAtStaffDomainComparesAsASCII(t *testing.T) {
 		{"ops@evilkiln.example", false},
 		{"kiln.example", false},
 		{"", false},
+		// The domain is what follows the last "@": an "@" inside the local
+		// part, and a non-ASCII local part, change nothing; a staff domain
+		// before a last "@" at another domain is not the staff domain.
+		{"a@b@kiln.example", true},
+		{"a@\u00e9@kiln.example", true},
+		{"\u00e9ps@kiln.example", true},
+		{"ops@kiln.example@evil.example", false},
+		{"ops@", false},
 	} {
 		if got := s.atStaffDomain(c.email, true); got != c.want {
 			t.Errorf("%q: %v, want %v", c.email, got, c.want)
@@ -32,7 +40,11 @@ func TestAtStaffDomainComparesAsASCII(t *testing.T) {
 	if s.atStaffDomain("ops@kiln.example", false) {
 		t.Error("an unverified address must never match")
 	}
-	if (&Service{}).atStaffDomain("ops@kiln.example", true) {
-		t.Error("no staff domain configured must never match")
+	// With no staff domain configured nothing matches, an address with an
+	// empty domain included: "" must not equal the unset domain.
+	for _, email := range []string{"ops@kiln.example", "ops@", "ops@.", "", "kiln.example"} {
+		if (&Service{}).atStaffDomain(email, true) {
+			t.Errorf("no staff domain configured must never match, %q did", email)
+		}
 	}
 }
