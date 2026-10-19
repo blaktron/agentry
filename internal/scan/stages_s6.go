@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/blaktron/agentry/internal/manifestcaps"
 )
 
 // scannerUndeclaredEnv is S6's finding for an environment read the manifest
@@ -95,7 +97,7 @@ type s6Declared struct {
 
 func s6DeclaredFromManifest(manifestJSON []byte) s6Declared {
 	d := s6Declared{hosts: map[string]bool{}, secrets: map[string]bool{}}
-	c, ok := readManifestCaps(manifestJSON)
+	c, ok := manifestcaps.Read(manifestJSON)
 	if !ok {
 		return d
 	}
@@ -109,8 +111,8 @@ func s6DeclaredFromManifest(manifestJSON []byte) s6Declared {
 			d.hosts[strings.ToLower(h)] = true
 		}
 	}
-	d.fsWrite = notNone(c.Filesystem.Write)
-	d.exec = notNone(c.Exec)
+	d.fsWrite = manifestcaps.NotNone(c.Filesystem.Write)
+	d.exec = manifestcaps.NotNone(c.Exec)
 	for _, s := range c.Secrets {
 		d.secrets[s] = true
 	}
