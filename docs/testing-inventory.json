@@ -2436,12 +2436,20 @@
             "TestSendFailureIsReported",
             "TestLogNotifierNeverFails",
             "TestVerificationFallsBackToACodeWithoutABaseURL",
-            "TestAdvisoryNamesItsRangeAndTheFooterNamesTheSettingsPage"
+            "TestAdvisoryNamesItsRangeAndTheFooterNamesTheSettingsPage",
+            "TestMCPDependencyAlertMailNamesTheServerAndTheFix",
+            "TestOrgInviteMailIsAnOfferWithAnExpiry",
+            "TestOrgAccessRequestMailPointsAtTheConsole",
+            "TestOrgPendingMembersDigestNamesEachDoor",
+            "TestRenderedMailCarriesTheTextInTheFrame",
+            "TestDialAndSendSpeaksSMTP"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
-          "dependencyHints": []
+          "dependencyHints": [
+            "explicit skip"
+          ]
         },
         {
           "path": "internal/notify/prefs_db_test.go",
@@ -2462,7 +2470,8 @@
             "TestEmailAllowedDefaultsAndKinds",
             "TestEmailPermittedRequiresVerifiedAddress",
             "TestScheduleSwitchIsItsOwn",
-            "TestBugReportSwitchIsItsOwn"
+            "TestBugReportSwitchIsItsOwn",
+            "TestAllowsEmailDecisionAndLogsWithoutADatabase"
           ],
           "fuzz": [],
           "benchmarks": [],
