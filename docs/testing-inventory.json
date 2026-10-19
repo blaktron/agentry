@@ -2411,7 +2411,6 @@
             "TestVerificationLinkUsesBaseURL",
             "TestComposeRejectsHeaderInjection",
             "TestDeliverRejectsMalformedRecipient",
-            "TestBodyIsDotStuffedAndCRLF",
             "TestComposeSetsTransactionalHeaders",
             "TestNonASCIISubjectIsEncoded",
             "TestSendFailureIsReported",
@@ -2444,6 +2443,21 @@
             "TestEmailPermittedRequiresVerifiedAddress",
             "TestScheduleSwitchIsItsOwn",
             "TestBugReportSwitchIsItsOwn"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/notify/smtp_test.go",
+          "tests": [
+            "TestSMTPDeliversALoneDotLineIntact",
+            "TestBodyIsCRLFAndLeavesDotsToTheDataWriter",
+            "TestSentLineMasksTheRecipient",
+            "TestSendFailedLineMasksTheRecipientEverywhere",
+            "TestVerificationWithoutALinkNeverMentionsOne",
+            "TestMalformedRecipientErrorDoesNotEchoIt"
           ],
           "fuzz": [],
           "benchmarks": [],
