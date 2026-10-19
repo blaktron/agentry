@@ -1158,5 +1158,375 @@
         "queue": "platform"
       }
     }
+  ],
+  "derivations": [
+    {
+      "name": "nothing declared",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none"
+        }
+      },
+      "want": {
+        "declaredCapabilities": [],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "egress to named hosts is network",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": [
+              "api.example.com"
+            ]
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none"
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "network"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "\"*\" egress is network, and unrestricted",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": [
+              "*"
+            ]
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none"
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "network"
+        ],
+        "unrestrictedNetwork": true
+      }
+    },
+    {
+      "name": "a remote MCP server's host is network",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "mcpServers": [
+            {
+              "url": "https://mcp.example.com/mcp",
+              "tools": [
+                "search"
+              ]
+            }
+          ]
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "network"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "a package MCP server's own egress is network",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "mcpServers": [
+            {
+              "npm": "example-mcp",
+              "version": "1.0.0",
+              "egress": [
+                "api.example.com"
+              ]
+            }
+          ]
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "network"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "a package MCP server with no egress declares nothing",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "mcpServers": [
+            {
+              "npm": "example-mcp",
+              "version": "1.0.0"
+            }
+          ]
+        }
+      },
+      "want": {
+        "declaredCapabilities": [],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "files, commands and secrets",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "workspace",
+            "write": {
+              "paths": [
+                "out/"
+              ]
+            }
+          },
+          "exec": {
+            "commands": [
+              "git"
+            ]
+          },
+          "secrets": [
+            "EXAMPLE_TOKEN"
+          ]
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "env",
+          "exec",
+          "fs-read",
+          "fs-write"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "a target host is its own token, not network",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "targetHosts": [
+            "build-01.example.com"
+          ]
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "targetHosts"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "a site-scoped browser is its own token, not unrestricted",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "browser": {
+            "sites": [
+              "site"
+            ],
+            "hosts": [
+              "fonts.example.com"
+            ],
+            "scope": "site"
+          }
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "browser"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "a browser on any public site is unrestricted",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "browser": {
+            "scope": "public"
+          }
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "browser"
+        ],
+        "unrestrictedNetwork": true
+      }
+    },
+    {
+      "name": "a browser line that does not read counts as any public site",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "browser": 7
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "browser"
+        ],
+        "unrestrictedNetwork": true
+      }
+    },
+    {
+      "name": "a null browser line is none",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "browser": null
+        }
+      },
+      "want": {
+        "declaredCapabilities": [],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "a manifest with no capabilities block declares nothing",
+      "manifest": {
+        "name": "example"
+      },
+      "want": {
+        "declaredCapabilities": [],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "\"*\" beside \"none\" is still unrestricted",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": [
+              "none",
+              "*"
+            ]
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none"
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "network"
+        ],
+        "unrestrictedNetwork": true
+      }
+    },
+    {
+      "name": "a package MCP server's own \"*\" egress is network, not unrestricted",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "mcpServers": [
+            {
+              "npm": "example-mcp",
+              "version": "1.0.0",
+              "egress": [
+                "*"
+              ]
+            }
+          ]
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "network"
+        ],
+        "unrestrictedNetwork": false
+      }
+    }
   ]
 }
