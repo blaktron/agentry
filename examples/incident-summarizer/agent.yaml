@@ -4,7 +4,7 @@ namespace: agentry
 modes: [autonomous]
 version: 1.0.0
 summary: "Turns a PagerDuty incident into a postmortem draft"
-license: Apache-2.0
+license: MIT
 authors:
   - name: Agentry maintainers
 tags: [incident-response, summarization, postmortem]
