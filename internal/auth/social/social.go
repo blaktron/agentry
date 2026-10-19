@@ -1,10 +1,7 @@
 // Package social implements sign-in for individual accounts through the
-// deployment's OpenID provider (linked via identities; no password). It is
-// deliberately separate from the per-organization SSO in internal/auth/oidc,
-// whose relying party it uses: the two flows differ in who they admit
-// (anyone with an account at the provider vs. members of one org's IdP), what
-// they grant (an individual session vs. org membership with an SSO freshness
-// tag), and how they are configured (server-wide vs. per org).
+// deployment's OpenID provider (linked via identities; no password), on the
+// relying party in internal/auth/oidc. It admits anyone with an account at
+// the provider, grants an individual session and is configured server-wide.
 package social
 
 import (
@@ -67,8 +64,8 @@ type Identity struct {
 	Claims map[string]any
 }
 
-// MFAAsserted reports whether AMR names a second factor, by the rule the
-// organization OIDC callback shares (oidcrp.AMRNamesSecondFactor).
+// MFAAsserted reports whether AMR names a second factor, by the relying
+// party's rule (oidcrp.AMRNamesSecondFactor).
 func (id *Identity) MFAAsserted() bool {
 	return oidcrp.AMRNamesSecondFactor(id.AMR)
 }

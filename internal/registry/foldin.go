@@ -4,7 +4,7 @@ package registry
 // whose verified address is at that domain and who is a member of nothing
 // becomes a pending member of it — at the person's next directory sign-in,
 // or when the sweep runs over the accounts already known at the domain.
-// It is the SCIM door's twin: it writes `pending` and nothing else, so the
+// It is the provisioning door's twin: it writes `pending` and nothing else, so the
 // seat is still taken where every seat is, in ActivateMember, by an admin.
 // It never fires for an unverified address, for a public mail domain, for
 // a person who holds a membership anywhere (pending included), for an

@@ -75,7 +75,7 @@ type CreateTrustedDeviceRow struct {
 // factor at a directory, so a later sign-in from it skips the code.
 //
 // The credential's queries: establish and touch it, take it away when access
-// is taken away (SCIM, erasure), the account's own count and clear, and the
+// is taken away (deprovisioning, erasure), the account's own count and clear, and the
 // expiry sweep. There is no list and no per-browser removal.
 func (q *Queries) CreateTrustedDevice(ctx context.Context, arg CreateTrustedDeviceParams) (CreateTrustedDeviceRow, error) {
 	row := q.db.QueryRow(ctx, createTrustedDevice,
@@ -179,7 +179,7 @@ UPDATE trusted_devices SET revoked_at = now() WHERE user_id = $1 AND revoked_at 
 `
 
 // RevokeTrustedDevicesForUser revokes every live record of one account. It
-// sits beside RevokeUserSessions in SCIM deactivation, because a remembered
+// sits beside RevokeUserSessions in deprovisioning, because a remembered
 // browser is a way back in that outliving the sessions would otherwise leave
 // open.
 //
@@ -189,7 +189,7 @@ UPDATE trusted_devices SET revoked_at = now() WHERE user_id = $1 AND revoked_at 
 // person may exist outside the organization. So without this, a
 // deprovisioned user could sign straight back in from a remembered browser
 // and be asked for *less* than before — the second factor skipped — which is
-// the opposite of the guarantee scimDeactivate exists to make.
+// the opposite of the guarantee deprovisioning exists to make.
 //
 // Erasure is the other place access is taken away, and it uses
 // DeleteTrustedDevicesForUser below instead: erasure sets state='deleted', so

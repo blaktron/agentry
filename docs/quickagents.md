@@ -397,10 +397,13 @@ guide:
     - Your negotiation playbook, if you have one
   files: "The contract, and optionally your playbook."   # ≤ 500 characters
   task: "e.g. 3-year SaaS subscription, 200 seats, EU data"   # the task field's placeholder, ≤ 200 characters
-  connect:                 # help per declared secret, markdown, ≤ 2,000 characters each
+  connect:                 # help per declared secret or OAuth server, markdown, ≤ 2,000 characters each
     GITHUB_TOKEN: |
       A fine-grained token with **read** access to pull requests:
       GitHub → Settings → Developer settings → Fine-grained tokens.
+    "url:https://mcp.example.com/mcp": |
+      Example needs an OAuth client of your own: Example → Settings →
+      Developers → New app, of the desktop kind.
 ```
 
 | Rule | |
@@ -408,14 +411,17 @@ guide:
 | `overview`, `connect` values | markdown a person reads, never the agent; clients render it with no HTML and no images; a `connect` value is at most 2,000 characters (counted as characters, not bytes) and may not be empty or blank |
 | `prepare`, `files`, `task` | one plain line each: no control characters and no format characters (bidi overrides, zero-width characters); a `prepare` item may not be empty or blank |
 | `overview` and `connect` characters | newlines and tabs, and no other control character (no ESC, CR, BEL, NUL, DEL or C1 control); no format character |
-| `connect` keys | each must be a secret the release declares, under `capabilities.secrets` or a declared MCP server's `secrets` |
+| `connect` keys | each must be a secret the release declares, under `capabilities.secrets` or a declared MCP server's `secrets`, or the id of a declared MCP server that signs in by OAuth (`auth: oauth`, or an `oauth` block): `url:` and its address, `npm:` or `pypi:` and its package |
+| help for an OAuth server | what a person reads when they must make an OAuth client of their own for that vendor, after the steps Agentry writes for the vendors it knows (Google's); a vendor that lets Agentry register itself asks for no client, so its help is not needed |
 | schema | v2 only; a v1 manifest carrying `guide` is refused (V1) |
 
 The guide is validated under V10 with the intake and the interactive
 hints. A CLI or desktop older than the core release that added it
 refuses a manifest carrying one as an unknown field, in the release's
 archive and in the registry's answer about it, so use it once your
-tools are current.
+tools are current. The same holds, later again, for `connect` help keyed
+by a server: a client whose core predates it refuses the release under
+V10.
 
 ### `knowledge`: packs the release ships
 
@@ -602,6 +608,14 @@ through the gateway's tools, which is what makes the contract enforceable.
 |---|---|---|
 | `none` / omitted | no subprocesses | no `run_command` tool; harness built-in shells are never enabled |
 | `{commands: [jq, git, …]}` | only these binaries | `run_command` restricted to the listed commands via an argv allowlist plus a shim `PATH` containing only them |
+
+A command is a program name, not a path or a command line: ASCII letters,
+digits, `.`, `_`, `+` and `-`, starting with a letter or a digit, at most 64
+characters (`git`, `python3.12`, `g++`). Whitespace, a path separator, a
+control character and a format character such as a right-to-left override or
+a zero-width joiner are refused when a version is published, so a name reads
+the same wherever it is shown. A release that is already published keeps
+running.
 
 **`secrets`**: a list of environment variable **names**, never values.
 The runner resolves each from the operator's secret source before any

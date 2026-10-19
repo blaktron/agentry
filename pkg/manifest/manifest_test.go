@@ -92,22 +92,27 @@ func TestParseClosedSchema(t *testing.T) {
 	cases := []struct {
 		name string
 		yaml string
+		says string // the refusal's own text: the unknown key and where it sits
 	}{
-		{"top-level", normativeYAML + "extraKey: true\n"},
-		{"nested publish", strings.Replace(normativeYAML, "channel: stable", "channel: stable\n  compress: true", 1)},
-		{"nested entrypoints", strings.Replace(normativeYAML, "skill: SKILL.md", "skill: SKILL.md\n  binary: a.out", 1)},
-		{"capabilities", strings.Replace(normativeYAML, "exec: none", "exec: none\n  gpu: true", 1)},
+		{"top-level", normativeYAML + "extraKey: true\n", "field extraKey not found"},
+		{"nested publish", strings.Replace(normativeYAML, "channel: stable", "channel: stable\n  compress: true", 1), "field compress not found"},
+		{"nested entrypoints", strings.Replace(normativeYAML, "skill: SKILL.md", "skill: SKILL.md\n  binary: a.out", 1), "field binary not found"},
+		{"capabilities", strings.Replace(normativeYAML, "exec: none", "exec: none\n  gpu: true", 1), "field gpu not found"},
 		{"filesystem paths sibling", strings.Replace(normativeYAML, "read: workspace",
-			"read:\n      paths: [data/]\n      mode: fast", 1)},
+			"read:\n      paths: [data/]\n      mode: fast", 1), `unknown key "mode"`},
 		{"exec commands sibling", strings.Replace(normativeYAML, "exec: none",
-			"exec:\n    commands: [git]\n    shell: true", 1)},
+			"exec:\n    commands: [git]\n    shell: true", 1), `unknown key "shell"`},
 		{"mcp entrypoint", strings.Replace(normativeYAML, "skill: SKILL.md",
-			"mcp:\n    command: node\n    args: [x.js]\n    transport: stdio\n    port: 80", 1)},
+			"mcp:\n    command: node\n    args: [x.js]\n    transport: stdio\n    port: 80", 1), "field port not found"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := Parse([]byte(tc.yaml)); err == nil {
+			_, err := Parse([]byte(tc.yaml))
+			if err == nil {
 				t.Fatalf("expected unknown-key error")
+			}
+			if !strings.Contains(err.Error(), tc.says) {
+				t.Fatalf("refused for another reason, want %q: %v", tc.says, err)
 			}
 		})
 	}
@@ -118,16 +123,17 @@ func TestParseSchemaVersion(t *testing.T) {
 		name    string
 		version string
 		ok      bool
+		says    string // for a refusal: the text only that refusal carries
 	}{
-		{"major 1", `"1"`, true},
-		{"unquoted 1", `1`, true},
-		{"minor allowed", `"1.0"`, true},
-		{"major 2", `"2"`, true},
-		{"major 2 dotted", `"2.0"`, true},
-		{"major 3", `"3"`, false},
-		{"garbage", `"one"`, false},
-		{"empty", `""`, false},
-		{"trailing dot", `"1."`, false},
+		{"major 1", `"1"`, true, ""},
+		{"unquoted 1", `1`, true, ""},
+		{"minor allowed", `"1.0"`, true, ""},
+		{"major 2", `"2"`, true, ""},
+		{"major 2 dotted", `"2.0"`, true, ""},
+		{"major 3", `"3"`, false, `unsupported schemaVersion "3"`},
+		{"garbage", `"one"`, false, `unsupported schemaVersion "one"`},
+		{"empty", `""`, false, "schemaVersion is required"},
+		{"trailing dot", `"1."`, false, `invalid schemaVersion "1."`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -138,6 +144,9 @@ func TestParseSchemaVersion(t *testing.T) {
 			}
 			if !tc.ok && err == nil {
 				t.Fatalf("expected schemaVersion rejection")
+			}
+			if !tc.ok && !strings.Contains(err.Error(), tc.says) {
+				t.Fatalf("refused for another reason, want %q: %v", tc.says, err)
 			}
 		})
 	}
@@ -158,14 +167,14 @@ func TestParseUnionShapes(t *testing.T) {
 	})
 	t.Run("egress bogus scalar", func(t *testing.T) {
 		y := strings.Replace(normativeYAML, "egress: [api.pagerduty.com]", "egress: everywhere", 1)
-		if _, err := Parse([]byte(y)); err == nil {
-			t.Fatalf("expected error")
+		if _, err := Parse([]byte(y)); err == nil || !strings.Contains(err.Error(), `scalar must be "none" or "*"`) {
+			t.Fatalf("expected the egress scalar refusal, got %v", err)
 		}
 	})
 	t.Run("egress mapping", func(t *testing.T) {
 		y := strings.Replace(normativeYAML, "egress: [api.pagerduty.com]", "egress: {hosts: [a.example]}", 1)
-		if _, err := Parse([]byte(y)); err == nil {
-			t.Fatalf("expected error")
+		if _, err := Parse([]byte(y)); err == nil || !strings.Contains(err.Error(), `network.egress must be "none" or a list of hosts`) {
+			t.Fatalf("expected the egress shape refusal, got %v", err)
 		}
 	})
 	t.Run("filesystem paths form", func(t *testing.T) {
@@ -177,8 +186,8 @@ func TestParseUnionShapes(t *testing.T) {
 	})
 	t.Run("filesystem bogus scalar", func(t *testing.T) {
 		y := strings.Replace(normativeYAML, "read: workspace", "read: everything", 1)
-		if _, err := Parse([]byte(y)); err == nil {
-			t.Fatalf("expected error")
+		if _, err := Parse([]byte(y)); err == nil || !strings.Contains(err.Error(), `filesystem access must be "none", "workspace", or {paths: [...]}, got "everything"`) {
+			t.Fatalf("expected the filesystem scalar refusal, got %v", err)
 		}
 	})
 	t.Run("exec commands form", func(t *testing.T) {
@@ -190,23 +199,23 @@ func TestParseUnionShapes(t *testing.T) {
 	})
 	t.Run("exec bogus scalar", func(t *testing.T) {
 		y := strings.Replace(normativeYAML, "exec: none", "exec: anything", 1)
-		if _, err := Parse([]byte(y)); err == nil {
-			t.Fatalf("expected error")
+		if _, err := Parse([]byte(y)); err == nil || !strings.Contains(err.Error(), `exec must be "none" or {commands: [...]}, got "anything"`) {
+			t.Fatalf("expected the exec scalar refusal, got %v", err)
 		}
 	})
 }
 
 func TestParseRejectsExtraDocumentsAndEmpty(t *testing.T) {
-	if _, err := Parse([]byte(normativeYAML + "---\nsecond: doc\n")); err == nil {
-		t.Errorf("expected multi-document rejection")
+	if _, err := Parse([]byte(normativeYAML + "---\nsecond: doc\n")); err == nil || !strings.Contains(err.Error(), "exactly one YAML document") {
+		t.Errorf("expected multi-document rejection, got %v", err)
 	}
-	if _, err := Parse(nil); err == nil {
-		t.Errorf("expected empty-input rejection")
+	if _, err := Parse(nil); err == nil || !strings.Contains(err.Error(), "empty document") {
+		t.Errorf("expected empty-input rejection, got %v", err)
 	}
-	if _, err := Parse([]byte("# only a comment\n")); err == nil {
-		t.Errorf("expected empty-document rejection")
+	if _, err := Parse([]byte("# only a comment\n")); err == nil || !strings.Contains(err.Error(), "empty document") {
+		t.Errorf("expected empty-document rejection, got %v", err)
 	}
-	if _, err := Parse([]byte("{{{")); err == nil {
-		t.Errorf("expected syntax-error rejection")
+	if _, err := Parse([]byte("{{{")); err == nil || !strings.Contains(err.Error(), "did not find expected node content") {
+		t.Errorf("expected syntax-error rejection, got %v", err)
 	}
 }

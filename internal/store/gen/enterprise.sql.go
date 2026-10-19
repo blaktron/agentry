@@ -12,15 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const clearTeamMembers = `-- name: ClearTeamMembers :exec
-DELETE FROM team_members WHERE team_id = $1
-`
-
-func (q *Queries) ClearTeamMembers(ctx context.Context, teamID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, clearTeamMembers, teamID)
-	return err
-}
-
 const completeAuditExport = `-- name: CompleteAuditExport :exec
 UPDATE audit_exports
 SET status = 'completed', object_key = $2, event_count = $3, finished_at = now()
@@ -125,6 +116,8 @@ func (q *Queries) CreateDomainClaim(ctx context.Context, arg CreateDomainClaimPa
 }
 
 const createIdentity = `-- name: CreateIdentity :one
+
+
 INSERT INTO identities (id, user_id, provider_kind, sso_connection_id, subject)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, user_id, provider_kind, sso_connection_id, subject, created_at, directory_account_id
@@ -138,6 +131,9 @@ type CreateIdentityParams struct {
 	Subject         string     `json:"subject"`
 }
 
+// Enterprise features: identities, webhooks, domain claims, audit exports,
+// enforced-SSO helpers.
+// ============================ Identities (JIT) ============================
 func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) (Identity, error) {
 	row := q.db.QueryRow(ctx, createIdentity,
 		arg.ID,
@@ -155,72 +151,6 @@ func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) 
 		&i.Subject,
 		&i.CreatedAt,
 		&i.DirectoryAccountID,
-	)
-	return i, err
-}
-
-const createSCIMToken = `-- name: CreateSCIMToken :one
-
-INSERT INTO scim_tokens (id, org_id, token_sha256, expires_at)
-VALUES ($1, $2, $3, $4)
-RETURNING id, org_id, token_sha256, expires_at, revoked_at, created_at
-`
-
-type CreateSCIMTokenParams struct {
-	ID          uuid.UUID  `json:"id"`
-	OrgID       uuid.UUID  `json:"org_id"`
-	TokenSha256 []byte     `json:"token_sha256"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-}
-
-// ============================ SCIM tokens ============================
-func (q *Queries) CreateSCIMToken(ctx context.Context, arg CreateSCIMTokenParams) (ScimToken, error) {
-	row := q.db.QueryRow(ctx, createSCIMToken,
-		arg.ID,
-		arg.OrgID,
-		arg.TokenSha256,
-		arg.ExpiresAt,
-	)
-	var i ScimToken
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.TokenSha256,
-		&i.ExpiresAt,
-		&i.RevokedAt,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const createTeamWithScim = `-- name: CreateTeamWithScim :one
-
-INSERT INTO teams (id, org_id, slug, scim_group_id) VALUES ($1, $2, $3, $4)
-RETURNING id, org_id, slug, scim_group_id, created_at
-`
-
-type CreateTeamWithScimParams struct {
-	ID          uuid.UUID `json:"id"`
-	OrgID       uuid.UUID `json:"org_id"`
-	Slug        string    `json:"slug"`
-	ScimGroupID *string   `json:"scim_group_id"`
-}
-
-// ============================ SCIM groups (teams) ============================
-func (q *Queries) CreateTeamWithScim(ctx context.Context, arg CreateTeamWithScimParams) (Team, error) {
-	row := q.db.QueryRow(ctx, createTeamWithScim,
-		arg.ID,
-		arg.OrgID,
-		arg.Slug,
-		arg.ScimGroupID,
-	)
-	var i Team
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Slug,
-		&i.ScimGroupID,
-		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -301,23 +231,6 @@ func (q *Queries) CreateWebhookEndpoint(ctx context.Context, arg CreateWebhookEn
 	return i, err
 }
 
-const deleteSSOConnection = `-- name: DeleteSSOConnection :execrows
-DELETE FROM sso_connections WHERE org_id = $1 AND kind = $2
-`
-
-type DeleteSSOConnectionParams struct {
-	OrgID uuid.UUID `json:"org_id"`
-	Kind  string    `json:"kind"`
-}
-
-func (q *Queries) DeleteSSOConnection(ctx context.Context, arg DeleteSSOConnectionParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteSSOConnection, arg.OrgID, arg.Kind)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteWebhookEndpoint = `-- name: DeleteWebhookEndpoint :execrows
 DELETE FROM webhook_endpoints WHERE id = $1 AND org_id = $2
 `
@@ -347,44 +260,6 @@ type FailAuditExportParams struct {
 func (q *Queries) FailAuditExport(ctx context.Context, arg FailAuditExportParams) error {
 	_, err := q.db.Exec(ctx, failAuditExport, arg.ID, arg.Error)
 	return err
-}
-
-const findOrgMemberByEmail = `-- name: FindOrgMemberByEmail :one
-SELECT u.id, u.email, u.display_name, u.state, h.handle, m.role, m.via_scim
-FROM memberships m
-JOIN users u ON u.id = m.user_id
-JOIN handles h ON h.id = u.id
-WHERE m.org_id = $1 AND u.email = $2
-`
-
-type FindOrgMemberByEmailParams struct {
-	OrgID uuid.UUID `json:"org_id"`
-	Email string    `json:"email"`
-}
-
-type FindOrgMemberByEmailRow struct {
-	ID          uuid.UUID `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	State       string    `json:"state"`
-	Handle      string    `json:"handle"`
-	Role        string    `json:"role"`
-	ViaScim     bool      `json:"via_scim"`
-}
-
-func (q *Queries) FindOrgMemberByEmail(ctx context.Context, arg FindOrgMemberByEmailParams) (FindOrgMemberByEmailRow, error) {
-	row := q.db.QueryRow(ctx, findOrgMemberByEmail, arg.OrgID, arg.Email)
-	var i FindOrgMemberByEmailRow
-	err := row.Scan(
-		&i.ID,
-		&i.Email,
-		&i.DisplayName,
-		&i.State,
-		&i.Handle,
-		&i.Role,
-		&i.ViaScim,
-	)
-	return i, err
 }
 
 const getAgentOwnerOrg = `-- name: GetAgentOwnerOrg :one
@@ -475,167 +350,6 @@ func (q *Queries) GetDomainClaim(ctx context.Context, arg GetDomainClaimParams) 
 	return i, err
 }
 
-const getEnabledSSOConnection = `-- name: GetEnabledSSOConnection :one
-SELECT id, org_id, kind, config, enabled, created_at FROM sso_connections WHERE org_id = $1 AND kind = $2 AND enabled = true
-`
-
-type GetEnabledSSOConnectionParams struct {
-	OrgID uuid.UUID `json:"org_id"`
-	Kind  string    `json:"kind"`
-}
-
-func (q *Queries) GetEnabledSSOConnection(ctx context.Context, arg GetEnabledSSOConnectionParams) (SsoConnection, error) {
-	row := q.db.QueryRow(ctx, getEnabledSSOConnection, arg.OrgID, arg.Kind)
-	var i SsoConnection
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Kind,
-		&i.Config,
-		&i.Enabled,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getIdentityBySubject = `-- name: GetIdentityBySubject :one
-
-SELECT id, user_id, provider_kind, sso_connection_id, subject, created_at, directory_account_id FROM identities WHERE sso_connection_id = $1 AND subject = $2
-`
-
-type GetIdentityBySubjectParams struct {
-	SsoConnectionID *uuid.UUID `json:"sso_connection_id"`
-	Subject         string     `json:"subject"`
-}
-
-// ============================ Identities (JIT) ============================
-func (q *Queries) GetIdentityBySubject(ctx context.Context, arg GetIdentityBySubjectParams) (Identity, error) {
-	row := q.db.QueryRow(ctx, getIdentityBySubject, arg.SsoConnectionID, arg.Subject)
-	var i Identity
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.ProviderKind,
-		&i.SsoConnectionID,
-		&i.Subject,
-		&i.CreatedAt,
-		&i.DirectoryAccountID,
-	)
-	return i, err
-}
-
-const getSCIMTokenByHash = `-- name: GetSCIMTokenByHash :one
-SELECT id, org_id, token_sha256, expires_at, revoked_at, created_at FROM scim_tokens
-WHERE token_sha256 = $1 AND revoked_at IS NULL
-  AND (expires_at IS NULL OR expires_at > now())
-`
-
-func (q *Queries) GetSCIMTokenByHash(ctx context.Context, tokenSha256 []byte) (ScimToken, error) {
-	row := q.db.QueryRow(ctx, getSCIMTokenByHash, tokenSha256)
-	var i ScimToken
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.TokenSha256,
-		&i.ExpiresAt,
-		&i.RevokedAt,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getSSOConnection = `-- name: GetSSOConnection :one
-SELECT id, org_id, kind, config, enabled, created_at FROM sso_connections WHERE org_id = $1 AND kind = $2
-`
-
-type GetSSOConnectionParams struct {
-	OrgID uuid.UUID `json:"org_id"`
-	Kind  string    `json:"kind"`
-}
-
-func (q *Queries) GetSSOConnection(ctx context.Context, arg GetSSOConnectionParams) (SsoConnection, error) {
-	row := q.db.QueryRow(ctx, getSSOConnection, arg.OrgID, arg.Kind)
-	var i SsoConnection
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Kind,
-		&i.Config,
-		&i.Enabled,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getSSOConnectionWithOrg = `-- name: GetSSOConnectionWithOrg :one
-SELECT c.id, c.org_id, c.kind, c.config, c.enabled, c.created_at, h.handle AS org_handle FROM sso_connections c JOIN handles h ON h.id = c.org_id WHERE c.id = $1
-`
-
-type GetSSOConnectionWithOrgRow struct {
-	ID        uuid.UUID `json:"id"`
-	OrgID     uuid.UUID `json:"org_id"`
-	Kind      string    `json:"kind"`
-	Config    []byte    `json:"config"`
-	Enabled   bool      `json:"enabled"`
-	CreatedAt time.Time `json:"created_at"`
-	OrgHandle string    `json:"org_handle"`
-}
-
-// SAML Single Logout: a session remembers its connection id; the logout path
-// needs the org handle to rebuild the SP.
-func (q *Queries) GetSSOConnectionWithOrg(ctx context.Context, id uuid.UUID) (GetSSOConnectionWithOrgRow, error) {
-	row := q.db.QueryRow(ctx, getSSOConnectionWithOrg, id)
-	var i GetSSOConnectionWithOrgRow
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Kind,
-		&i.Config,
-		&i.Enabled,
-		&i.CreatedAt,
-		&i.OrgHandle,
-	)
-	return i, err
-}
-
-const getScimUser = `-- name: GetScimUser :one
-SELECT u.id, u.email, u.display_name, u.state, h.handle, m.role, m.via_scim
-FROM memberships m
-JOIN users u ON u.id = m.user_id
-JOIN handles h ON h.id = u.id
-WHERE m.org_id = $1 AND u.id = $2
-`
-
-type GetScimUserParams struct {
-	OrgID uuid.UUID `json:"org_id"`
-	ID    uuid.UUID `json:"id"`
-}
-
-type GetScimUserRow struct {
-	ID          uuid.UUID `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	State       string    `json:"state"`
-	Handle      string    `json:"handle"`
-	Role        string    `json:"role"`
-	ViaScim     bool      `json:"via_scim"`
-}
-
-func (q *Queries) GetScimUser(ctx context.Context, arg GetScimUserParams) (GetScimUserRow, error) {
-	row := q.db.QueryRow(ctx, getScimUser, arg.OrgID, arg.ID)
-	var i GetScimUserRow
-	err := row.Scan(
-		&i.ID,
-		&i.Email,
-		&i.DisplayName,
-		&i.State,
-		&i.Handle,
-		&i.Role,
-		&i.ViaScim,
-	)
-	return i, err
-}
-
 const getSocialIdentity = `-- name: GetSocialIdentity :one
 SELECT id, user_id, provider_kind, sso_connection_id, subject, created_at, directory_account_id FROM identities
 WHERE sso_connection_id IS NULL AND provider_kind = 'social' AND subject = $1
@@ -654,50 +368,6 @@ func (q *Queries) GetSocialIdentity(ctx context.Context, subject string) (Identi
 		&i.Subject,
 		&i.CreatedAt,
 		&i.DirectoryAccountID,
-	)
-	return i, err
-}
-
-const getTeamByID = `-- name: GetTeamByID :one
-SELECT id, org_id, slug, scim_group_id, created_at FROM teams WHERE id = $1 AND org_id = $2
-`
-
-type GetTeamByIDParams struct {
-	ID    uuid.UUID `json:"id"`
-	OrgID uuid.UUID `json:"org_id"`
-}
-
-func (q *Queries) GetTeamByID(ctx context.Context, arg GetTeamByIDParams) (Team, error) {
-	row := q.db.QueryRow(ctx, getTeamByID, arg.ID, arg.OrgID)
-	var i Team
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Slug,
-		&i.ScimGroupID,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getTeamByScimGroupID = `-- name: GetTeamByScimGroupID :one
-SELECT id, org_id, slug, scim_group_id, created_at FROM teams WHERE org_id = $1 AND scim_group_id = $2
-`
-
-type GetTeamByScimGroupIDParams struct {
-	OrgID       uuid.UUID `json:"org_id"`
-	ScimGroupID *string   `json:"scim_group_id"`
-}
-
-func (q *Queries) GetTeamByScimGroupID(ctx context.Context, arg GetTeamByScimGroupIDParams) (Team, error) {
-	row := q.db.QueryRow(ctx, getTeamByScimGroupID, arg.OrgID, arg.ScimGroupID)
-	var i Team
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Slug,
-		&i.ScimGroupID,
-		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -834,141 +504,6 @@ func (q *Queries) ListDomainClaims(ctx context.Context, orgID uuid.UUID) ([]Doma
 	return items, nil
 }
 
-const listSCIMTokens = `-- name: ListSCIMTokens :many
-SELECT id, org_id, token_sha256, expires_at, revoked_at, created_at FROM scim_tokens WHERE org_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC
-`
-
-func (q *Queries) ListSCIMTokens(ctx context.Context, orgID uuid.UUID) ([]ScimToken, error) {
-	rows, err := q.db.Query(ctx, listSCIMTokens, orgID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ScimToken
-	for rows.Next() {
-		var i ScimToken
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrgID,
-			&i.TokenSha256,
-			&i.ExpiresAt,
-			&i.RevokedAt,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSSOConnections = `-- name: ListSSOConnections :many
-SELECT id, org_id, kind, config, enabled, created_at FROM sso_connections WHERE org_id = $1 ORDER BY kind
-`
-
-func (q *Queries) ListSSOConnections(ctx context.Context, orgID uuid.UUID) ([]SsoConnection, error) {
-	rows, err := q.db.Query(ctx, listSSOConnections, orgID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SsoConnection
-	for rows.Next() {
-		var i SsoConnection
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrgID,
-			&i.Kind,
-			&i.Config,
-			&i.Enabled,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listScimUsers = `-- name: ListScimUsers :many
-
-SELECT u.id, u.email, u.display_name, u.state, h.handle, m.role, m.via_scim
-FROM memberships m
-JOIN users u ON u.id = m.user_id
-JOIN handles h ON h.id = u.id
-WHERE m.org_id = $1
-ORDER BY u.email
-`
-
-type ListScimUsersRow struct {
-	ID          uuid.UUID `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	State       string    `json:"state"`
-	Handle      string    `json:"handle"`
-	Role        string    `json:"role"`
-	ViaScim     bool      `json:"via_scim"`
-}
-
-// ============================ SCIM users (data plane) ============================
-func (q *Queries) ListScimUsers(ctx context.Context, orgID uuid.UUID) ([]ListScimUsersRow, error) {
-	rows, err := q.db.Query(ctx, listScimUsers, orgID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListScimUsersRow
-	for rows.Next() {
-		var i ListScimUsersRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Email,
-			&i.DisplayName,
-			&i.State,
-			&i.Handle,
-			&i.Role,
-			&i.ViaScim,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listTeamMemberIDs = `-- name: ListTeamMemberIDs :many
-SELECT user_id FROM team_members WHERE team_id = $1
-`
-
-func (q *Queries) ListTeamMemberIDs(ctx context.Context, teamID uuid.UUID) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listTeamMemberIDs, teamID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []uuid.UUID
-	for rows.Next() {
-		var user_id uuid.UUID
-		if err := rows.Scan(&user_id); err != nil {
-			return nil, err
-		}
-		items = append(items, user_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listWebhookDeliveries = `-- name: ListWebhookDeliveries :many
 SELECT id, endpoint_id, event_type, payload, attempt, status_code, error, delivered_at, next_retry_at, created_at FROM webhook_deliveries
 WHERE endpoint_id = $1
@@ -1098,23 +633,6 @@ func (q *Queries) RecordWebhookDeliveryResult(ctx context.Context, arg RecordWeb
 	return err
 }
 
-const revokeSCIMToken = `-- name: RevokeSCIMToken :execrows
-UPDATE scim_tokens SET revoked_at = now() WHERE id = $1 AND org_id = $2 AND revoked_at IS NULL
-`
-
-type RevokeSCIMTokenParams struct {
-	ID    uuid.UUID `json:"id"`
-	OrgID uuid.UUID `json:"org_id"`
-}
-
-func (q *Queries) RevokeSCIMToken(ctx context.Context, arg RevokeSCIMTokenParams) (int64, error) {
-	result, err := q.db.Exec(ctx, revokeSCIMToken, arg.ID, arg.OrgID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const setAuditExportRunning = `-- name: SetAuditExportRunning :exec
 UPDATE audit_exports SET status = 'running' WHERE id = $1
 `
@@ -1137,20 +655,6 @@ type SetOrgSSORequiredParams struct {
 // ============================ Enforced SSO ============================
 func (q *Queries) SetOrgSSORequired(ctx context.Context, arg SetOrgSSORequiredParams) error {
 	_, err := q.db.Exec(ctx, setOrgSSORequired, arg.ID, arg.SsoRequired)
-	return err
-}
-
-const setTeamScimGroupID = `-- name: SetTeamScimGroupID :exec
-UPDATE teams SET scim_group_id = $2 WHERE id = $1
-`
-
-type SetTeamScimGroupIDParams struct {
-	ID          uuid.UUID `json:"id"`
-	ScimGroupID *string   `json:"scim_group_id"`
-}
-
-func (q *Queries) SetTeamScimGroupID(ctx context.Context, arg SetTeamScimGroupIDParams) error {
-	_, err := q.db.Exec(ctx, setTeamScimGroupID, arg.ID, arg.ScimGroupID)
 	return err
 }
 
@@ -1262,47 +766,6 @@ func (q *Queries) UpdateWebhookEndpoint(ctx context.Context, arg UpdateWebhookEn
 		&i.Active,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const upsertSSOConnection = `-- name: UpsertSSOConnection :one
-
-
-INSERT INTO sso_connections (id, org_id, kind, config, enabled)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (org_id, kind)
-  DO UPDATE SET config = EXCLUDED.config, enabled = EXCLUDED.enabled
-RETURNING id, org_id, kind, config, enabled, created_at
-`
-
-type UpsertSSOConnectionParams struct {
-	ID      uuid.UUID `json:"id"`
-	OrgID   uuid.UUID `json:"org_id"`
-	Kind    string    `json:"kind"`
-	Config  []byte    `json:"config"`
-	Enabled bool      `json:"enabled"`
-}
-
-// Enterprise features: SSO connections, identities, SCIM tokens and SCIM
-// data-plane, webhooks, domain claims, audit exports, enforced-SSO helpers.
-// ============================ SSO connections ============================
-func (q *Queries) UpsertSSOConnection(ctx context.Context, arg UpsertSSOConnectionParams) (SsoConnection, error) {
-	row := q.db.QueryRow(ctx, upsertSSOConnection,
-		arg.ID,
-		arg.OrgID,
-		arg.Kind,
-		arg.Config,
-		arg.Enabled,
-	)
-	var i SsoConnection
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Kind,
-		&i.Config,
-		&i.Enabled,
-		&i.CreatedAt,
 	)
 	return i, err
 }

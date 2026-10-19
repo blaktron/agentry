@@ -8,7 +8,7 @@ GO      ?= go
 BIN_DIR := bin
 LDFLAGS := -X github.com/blaktron/agentry/internal/version.Version=$(shell git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo 0.0.0-dev)
 
-.PHONY: all build test lint vuln generate generate-check check prose-check dev db-up db-down clean e2e sync-rules sync-rules-check fuzz deps-audit attest-interop test-inventory-check
+.PHONY: all build test lint vuln generate generate-check check prose-check dev db-up db-down clean e2e sync-rules sync-rules-check fuzz deps-audit attest-interop test-inventory-check compose-pins-check bump-pins workflows-check
 
 all: build
 
@@ -85,11 +85,30 @@ deps-audit:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 ## check: the full local/CI gate
-check: generate-check sync-rules-check test-inventory-check lint test build
+check: generate-check sync-rules-check test-inventory-check compose-pins-check lint test build
+
+## compose-pins-check: every image of the headless compose stack is pinned by
+## tag and digest (offline; the registry is read daily by the pins workflow)
+compose-pins-check:
+	./scripts/compose-pins.sh --self-test
+	./scripts/compose-pins.sh check
+
+## bump-pins: move each compose image's digest to what its tag serves now
+## (to move to a new version, change the tag in the compose file first)
+bump-pins:
+	./scripts/compose-pins.sh bump
 
 # Named evidence stays recorded when a case moves or a new family is added.
 test-inventory-check:
 	python3 scripts/testing/inventory.py --check
+
+## workflows-check: no job a fork's pull request can start runs on a
+## self-hosted runner without the fork guard, and the check's own tests pass.
+## Needs python3 with PyYAML; deliberately not part of `check`, which
+## needs no Python. CI runs it as its own step in the `check` job.
+workflows-check:
+	python3 scripts/ci/workflow_guard.py
+	python3 -m unittest discover -s scripts/ci
 
 ## prose-check: the posture sentences and the never list over the
 ## markdown, then the advisory unslop battery (UNSLOP_SKIP=1 skips it,

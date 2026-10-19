@@ -48,7 +48,7 @@ var unactivatedOperations = map[string]bool{
 	"deleteCurrentUser": true, "clearCurrentUserData": true,
 	"revokeOtherUserSessions": true, "revokeUserSession": true, "clearTrustedDevices": true,
 	"revokeToken": true, "removeSshKey": true, "createDesktopGrant": true,
-	"acceptInvitation": true, "samlAcs": true, "samlSloPost": true,
+	"acceptInvitation": true,
 }
 
 // TestUnactivatedWritesFollowTheSpec holds the gate's list to the spec, one

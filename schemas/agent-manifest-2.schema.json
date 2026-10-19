@@ -126,7 +126,7 @@
         },
         "connect": {
           "type": "object",
-          "description": "Help per declared secret name: where to create the key and which scopes it needs, in markdown a person reads (never the agent). At most 2,000 characters each; newlines and tabs are the only control characters it may carry. Every key must be a secret the release declares, in capabilities.secrets or a declared MCP server's secrets (V10; JSON schema cannot express that cross-reference).",
+          "description": "Help per declared secret name (where to create the key and which scopes it needs) or per declared MCP server that signs in by OAuth, keyed by its id (url:<address>, npm:<package> or pypi:<project>; how to make the OAuth client that vendor needs), in markdown a person reads (never the agent). At most 2,000 characters each; newlines and tabs are the only control characters it may carry. Every key must be a secret the release declares, in capabilities.secrets or a declared MCP server's secrets, or a declared server with auth: oauth or an oauth block (V10; JSON schema cannot express that cross-reference).",
           "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f]*$" }
         }
       }
@@ -364,7 +364,7 @@
       ]
     },
     "exec": {
-      "description": "\"none\" or {commands: [...]} of single-token command names.",
+      "description": "\"none\" or {commands: [...]}, each a program name: ASCII letters, digits, '.', '_', '+' and '-', starting with a letter or a digit, at most 64 characters. A path, whitespace, a control character or a format character is refused.",
       "oneOf": [
         { "const": "none" },
         {
@@ -375,7 +375,7 @@
             "commands": {
               "type": "array",
               "minItems": 1,
-              "items": { "type": "string", "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$" }
+              "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$" }
             }
           }
         }

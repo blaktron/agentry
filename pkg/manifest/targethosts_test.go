@@ -116,7 +116,15 @@ func TestTargetHostsIsAV2Field(t *testing.T) {
 	m := validV2Manifest(t)
 	m.SchemaVersion = "1"
 	m.Capabilities.TargetHosts = []string{"server"}
-	wantIssue(t, Validate(m), "V1", SeverityError, "capabilities.targetHosts")
+	errs := Validate(m)
+	wantIssue(t, errs, "V1", SeverityError, "capabilities.targetHosts")
+	for _, err := range errs {
+		if is, _ := AsIssue(err); is.Rule == "V1" && is.Severity == SeverityError && is.Path == "capabilities.targetHosts" &&
+			strings.Contains(is.Message, "targetHosts is a v2 field") {
+			return
+		}
+	}
+	t.Fatalf("no V1 issue at capabilities.targetHosts saying it is a v2 field:%s", issueStrings(errs))
 }
 
 // TestV14PointsAnSSHClientInExecAtTargetHosts: a release whose exec names
@@ -129,7 +137,7 @@ func TestV14PointsAnSSHClientInExecAtTargetHosts(t *testing.T) {
 		if withHost {
 			m = targetHostsManifest(t)
 		}
-		m.Capabilities.Exec = ExecCapability{Commands: []string{"git", "ssh", "/usr/bin/RSYNC", "scp", "sftp", "sshpass"}}
+		m.Capabilities.Exec = ExecCapability{Commands: []string{"git", "ssh", "RSYNC", "scp", "sftp", "sshpass"}}
 		b, w := targetHostIssues(Validate(m))
 		if len(b) != 0 {
 			t.Fatalf("an SSH client in exec is refused: %v", b)
@@ -145,7 +153,7 @@ func TestV14PointsAnSSHClientInExecAtTargetHosts(t *testing.T) {
 		if !slices.Equal(paths, want) {
 			t.Fatalf("with a target host %v: hints at %v; want %v", withHost, paths, want)
 		}
-		if got := RemoteShellCommands(m.Capabilities); !slices.Equal(got, []string{"ssh", "/usr/bin/RSYNC", "scp", "sftp"}) {
+		if got := RemoteShellCommands(m.Capabilities); !slices.Equal(got, []string{"ssh", "RSYNC", "scp", "sftp"}) {
 			t.Fatalf("RemoteShellCommands = %v", got)
 		}
 	}

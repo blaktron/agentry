@@ -177,6 +177,9 @@ func (p *Pipeline) RegisterHandlers(q queue.Client) {
 		_, err := p.MCPSweep(ctx)
 		return err
 	})
+	q.Register(JobReinstateScan, func(ctx context.Context, job queue.Job) error {
+		return p.reinstateJob(ctx, job.Args)
+	})
 	q.Register(JobPublishApproved, func(ctx context.Context, job queue.Job) error {
 		var args PublishApprovedArgs
 		if err := json.Unmarshal(job.Args, &args); err != nil {
@@ -495,6 +498,11 @@ type rejudged struct {
 // run is persisted like any other (quarantines must be explainable): the
 // reviewer who has to act on it needs the findings.
 func (p *Pipeline) rejudge(ctx context.Context, v storegen.AgentVersion) (rejudged, error) {
+	return p.rejudgeAs(ctx, v, "rescan")
+}
+
+// rejudgeAs is rejudge with the trigger the run is recorded under.
+func (p *Pipeline) rejudgeAs(ctx context.Context, v storegen.AgentVersion, trigger string) (rejudged, error) {
 	agent, err := p.st.Queries().GetAgentByID(ctx, v.AgentID)
 	if err != nil {
 		return rejudged{}, fmt.Errorf("scan: rescan load agent: %w", err)
@@ -503,7 +511,7 @@ func (p *Pipeline) rejudge(ctx context.Context, v storegen.AgentVersion) (rejudg
 	if err != nil {
 		return rejudged{}, err
 	}
-	runID, resume, err := p.resumeOrCreateRun(ctx, v, "rescan", pol)
+	runID, resume, err := p.resumeOrCreateRun(ctx, v, trigger, pol)
 	if err != nil {
 		return rejudged{}, err
 	}
@@ -606,42 +614,16 @@ func (p *Pipeline) notifyAuthorQuarantined(ctx context.Context, v storegen.Agent
 // agents.quarantine_state alone would leave published versions downloadable and make
 // the download handler's 410 branch unreachable.
 func (p *Pipeline) Block(ctx context.Context, agentID uuid.UUID, reason string, ev audit.Event) (int, error) {
-	return p.transitionLiveVersions(ctx, agentID,
-		[]string{
-			string(registry.StatusPublished),
-			string(registry.StatusQuarantined),
-		},
-		registry.StatusBlocked, reason, ev)
-}
-
-// Reinstate reverses a block or quarantine. Blocked versions pass back
-// through quarantined — the edge the state machine draws — and on to
-// published. No re-signing happens: the attestation was issued once, on the
-// original publish.
-func (p *Pipeline) Reinstate(ctx context.Context, agentID uuid.UUID, reason string, ev audit.Event) (int, error) {
-	n, err := p.transitionLiveVersions(ctx, agentID,
-		[]string{string(registry.StatusBlocked)}, registry.StatusQuarantined, reason, ev)
-	if err != nil {
-		return n, err
-	}
-	m, err := p.transitionLiveVersions(ctx, agentID,
-		[]string{string(registry.StatusQuarantined)}, registry.StatusPublished, reason, ev)
-	return n + m, err
-}
-
-// transitionLiveVersions moves every version of an agent in one of `from`
-// into `to`, skipping edges the state machine forbids.
-func (p *Pipeline) transitionLiveVersions(ctx context.Context, agentID uuid.UUID, from []string, to registry.Status, reason string, ev audit.Event) (int, error) {
 	rows, err := p.st.Queries().ListVersionsByStatus(ctx, storegen.ListVersionsByStatusParams{
-		AgentID: agentID, Statuses: from,
+		AgentID: agentID, Statuses: []string{string(registry.StatusPublished), string(registry.StatusQuarantined)},
 	})
 	if err != nil {
-		return 0, fmt.Errorf("scan: list versions for %s: %w", to, err)
+		return 0, fmt.Errorf("scan: list versions to block: %w", err)
 	}
 	moved := 0
 	var errs []error
 	for _, v := range rows {
-		if err := p.reg.Transition(ctx, v.ID, to, reason, ev); err != nil {
+		if err := p.reg.Transition(ctx, v.ID, registry.StatusBlocked, reason, ev); err != nil {
 			if errors.Is(err, registry.ErrBadTransition) {
 				continue
 			}

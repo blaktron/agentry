@@ -66,7 +66,8 @@ type Pipeline struct {
 	// registry, kept here for the daily sweep.
 	osv      OSVClient
 	mcpCache MCPScanCache
-	// jobs carries a keyless role's approvals to the worker.
+	// jobs carries a keyless role's approvals, and the scans a platform
+	// reinstate asks for, to the worker.
 	jobs queue.Client
 }
 
@@ -777,6 +778,10 @@ func (p *Pipeline) applyDecision(ctx context.Context, agent storegen.GetAgentByI
 	return nil
 }
 
+// errNotAPublishVerdict is publishUnderLock refusing a result whose verdict
+// is not publish.
+var errNotAPublishVerdict = errors.New("scan: not a publish verdict")
+
 // publishUnderLock publishes a version the gate passed, from the run that
 // judged it. The attestation and the transition to `published` are one
 // transaction under the version's row lock. When the transition came first
@@ -796,6 +801,11 @@ func (p *Pipeline) publishUnderLock(ctx context.Context, agent storegen.GetAgent
 	from registry.Status, runID uuid.UUID, result RunResult, policyVer int, reason string,
 	inTx func(q *storegen.Queries) error,
 ) error {
+	// The only route to published that carries a scan's verdict is a verdict
+	// of publish: a held, rejected or unread result never gets here.
+	if result.Decision.Outcome != OutcomePublish {
+		return fmt.Errorf("%w: the gate's verdict for %s is %q", errNotAPublishVerdict, v.Version, result.Decision.Outcome)
+	}
 	var res registry.TransitionResult
 	err := p.st.WithTx(ctx, func(q *storegen.Queries) error {
 		row, err := q.GetVersionForUpdate(ctx, v.ID)

@@ -139,7 +139,10 @@ func (s *Server) baselinePolicy(r *http.Request) scan.Policy {
 }
 
 // PlatformAgentAction implements POST /platform/agents/{ns}/{name}/{action}
-// (T&S actions: quarantine, block, reinstate). Platform staff only.
+// (T&S actions: quarantine, block, reinstate). Platform staff only. Reinstate
+// clears the agent's flag and asks for a fresh scan of each blocked or
+// quarantined version; a version is published again only when the gate's
+// verdict on that scan is publish.
 func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns Namespace, name AgentName, actionParam PlatformAgentActionParamsAction) {
 	if !s.requireDB(w, r) {
 		return
@@ -233,7 +236,7 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	case "block":
 		moved, err = s.pipeline.Block(r.Context(), a.ID, reason, sysEvent)
 	case "reinstate":
-		moved, err = s.pipeline.Reinstate(r.Context(), a.ID, reason, sysEvent)
+		moved, err = s.pipeline.Reinstate(r.Context(), a.ID, reason)
 	}
 	if err != nil {
 		// The agent flag committed; the version walk did not finish. Report
@@ -244,6 +247,12 @@ func (s *Server) PlatformAgentAction(w http.ResponseWriter, r *http.Request, ns 
 	}
 	s.log.InfoContext(r.Context(), "platform trust & safety action", "action", action,
 		"agent", ns+"/"+name, "versions", moved, "forks", forks)
+	if action == "reinstate" {
+		// The versions are not published here: each is scanned again and
+		// the gate decides. The answer says how many scans were asked for.
+		writeJSON(w, http.StatusAccepted, PlatformReinstateAccepted{Queued: moved})
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
