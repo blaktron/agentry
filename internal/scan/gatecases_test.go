@@ -240,3 +240,21 @@ func evaluateBranches(t *testing.T) []string {
 	sort.Strings(out)
 	return out
 }
+
+// TestTheGatesManifestInputsAreThePublishedDerivations: the two inputs the
+// orchestrator hands the gate from a manifest (its declared capability
+// tokens and WildcardEgress) are what the published derivation cases say,
+// so a client that restates the gate reads a manifest as this scanner does.
+func TestTheGatesManifestInputsAreThePublishedDerivations(t *testing.T) {
+	for _, d := range loadGateCases(t).Derivations {
+		t.Run(d.Name, func(t *testing.T) {
+			got := sortedSet(declaredCaps(d.Manifest))
+			if strings.Join(got, ",") != strings.Join(d.Want.DeclaredCapabilities, ",") {
+				t.Errorf("declaredCaps = %v, the table says %v", got, d.Want.DeclaredCapabilities)
+			}
+			if got := unrestrictedNetwork(d.Manifest); got != d.Want.UnrestrictedNetwork {
+				t.Errorf("unrestrictedNetwork = %v, the table says %v", got, d.Want.UnrestrictedNetwork)
+			}
+		})
+	}
+}

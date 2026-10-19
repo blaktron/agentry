@@ -146,7 +146,13 @@ and organization-bound narrowing have their own assertions.
 `TestGateCases` owns the severity/outcome/queue matrix through the literal
 cases in `pkg/gatecases/cases.json`. Its baseline, grid and branch guards
 remain separate. Clients consume the same published inputs and expectations;
-the table is not derived from `Evaluate`.
+the table is not derived from `Evaluate`. Its `derivations` cases hold the two
+gate inputs a manifest gives (the declared capability tokens and the
+unrestricted-network flag) to `DeclaredCapabilities` and
+`UnrestrictedNetwork` in the same package, which the scanner calls:
+`TestTheDerivationsAnswerTheTable` and `TestTheDerivationsCoverEveryToken` in
+`pkg/gatecases`, and `TestTheGatesManifestInputsAreThePublishedDerivations`
+in `internal/scan`.
 
 These `TestGateCases` subcases cover the outcome of one finding at each
 severity, and of none:
