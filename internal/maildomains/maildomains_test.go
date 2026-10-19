@@ -84,9 +84,29 @@ func TestOfReadsTheDomain(t *testing.T) {
 		"Alice@Acme.IO": "acme.io", "a@b@c.example": "c.example", "nobody": "", "x@acme.io.": "acme.io",
 		"x@ acme.io ": "acme.io", "x@\tACME.io.": "acme.io", "@acme.io": "acme.io", "": "", "x@": "", "x@.": "",
 		"x@sub.acme.io": "sub.acme.io", "first@a.io@second@b.io": "b.io",
+		"x@acme.io..": "acme.io", "x@acme.io...": "acme.io", "x@acme.io. .": "acme.io", "x@...": "",
 	} {
 		if got := Of(in); got != want {
 			t.Errorf("Of(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A trailing dot is not part of a domain, however many there are: a shared
+// provider stays shared with one, two or three, read directly or through Of.
+func TestSharedHoldsForAnyNumberOfTrailingDots(t *testing.T) {
+	for _, dots := range []string{".", "..", "..."} {
+		if !Shared("gmail.com" + dots) {
+			t.Errorf("Shared(%q) = false", "gmail.com"+dots)
+		}
+		if !Shared(Of("someone@Gmail.com" + dots)) {
+			t.Errorf("Shared(Of(%q)) = false", "someone@Gmail.com"+dots)
+		}
+		if Shared("acme-corp.io" + dots) {
+			t.Errorf("Shared(%q) = true for a domain nobody shares", "acme-corp.io"+dots)
+		}
+	}
+	if !Shared("...") {
+		t.Error("Shared of nothing but dots is false; an empty domain must read as shared")
 	}
 }

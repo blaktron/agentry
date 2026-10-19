@@ -390,6 +390,22 @@ func TestOIDC_NonceMismatchRejected(t *testing.T) {
 	}
 }
 
+// With no nonce to compare, Exchange refuses before it exchanges anything: an
+// empty expected nonce is a caller's mistake, never a reason to skip the check.
+func TestOIDC_EmptyExpectedNonceRefused(t *testing.T) {
+	idp := newFakeIDP(t)
+	rp, err := New(idp.ctx(), Config{Issuer: idp.srv.URL, ClientID: idp.clientID}, idp.srv.URL+"/callback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tokenNonce := range []string{"nonce-xyz", ""} {
+		idp.nonce = tokenNonce
+		if _, err := rp.Exchange(idp.ctx(), idp.code, "verifier-abcdefabcdefabcdefabcdefabcdef1234", ""); err == nil || !strings.Contains(err.Error(), "no nonce") {
+			t.Errorf("token nonce %q, expected nonce empty: Exchange: %v, want a refusal", tokenNonce, err)
+		}
+	}
+}
+
 func TestOIDC_EmailVerifiedSurfaced(t *testing.T) {
 	idp := newFakeIDP(t)
 	idp.emailVerified = false
