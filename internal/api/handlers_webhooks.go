@@ -131,7 +131,7 @@ func (s *Server) CreateWebhook(w http.ResponseWriter, r *http.Request, org OrgHa
 		e := auditEvent(r, audit.ActionWebhookCreate)
 		e.OrgID = orgRow.ID
 		e.TargetKind, e.TargetID = "webhook", id
-		e.Detail = map[string]any{"url": req.Url, "events": req.Events}
+		e.Detail = map[string]any{"host": webhook.EndpointHost(req.Url), "events": req.Events}
 		return s.auditW.Write(r.Context(), q, e)
 	})
 	if err != nil {

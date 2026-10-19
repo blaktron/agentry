@@ -57,6 +57,34 @@ func TestCreateAgentModes(t *testing.T) {
 		}
 	})
 
+	// The store's constraint takes the persistent mode as the registry does,
+	// alone or beside the others, and still refuses an unknown one beside it.
+	t.Run("persistent mode stored", func(t *testing.T) {
+		a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
+			Namespace: ns, Name: "modes-persistent", Visibility: "public",
+			Modes: []string{"persistent"},
+		}, ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(a.Modes, []string{"persistent"}) {
+			t.Fatalf("modes = %v, want [persistent]", a.Modes)
+		}
+		b, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
+			Namespace: ns, Name: "modes-all-three", Visibility: "private",
+			Modes: []string{"autonomous", "interactive", "persistent"},
+		}, ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(b.Modes, []string{"autonomous", "interactive", "persistent"}) {
+			t.Fatalf("modes = %v, want all three", b.Modes)
+		}
+		if _, err := e.st.Pool().Exec(ctx, `UPDATE agents SET modes = '{persistent,batch}' WHERE id = $1`, a.ID); err == nil {
+			t.Fatal("the store took an unknown mode beside persistent")
+		}
+	})
+
 	t.Run("unknown mode refused", func(t *testing.T) {
 		_, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
 			Namespace: ns, Name: "modes-bad", Visibility: "private",
@@ -76,9 +104,10 @@ func TestCreateAgentModes(t *testing.T) {
 		for _, r := range rows {
 			counts[r.Mode] = r.N
 		}
-		// Two public agents above support autonomous; one supports interactive.
-		if counts["autonomous"] < 2 || counts["interactive"] < 1 {
-			t.Fatalf("facet counts %v: want autonomous ≥ 2 and interactive ≥ 1", counts)
+		// Two public agents above support autonomous; one supports
+		// interactive; one supports persistent.
+		if counts["autonomous"] < 2 || counts["interactive"] < 1 || counts["persistent"] < 1 {
+			t.Fatalf("facet counts %v: want autonomous ≥ 2, interactive ≥ 1 and persistent ≥ 1", counts)
 		}
 	})
 }
