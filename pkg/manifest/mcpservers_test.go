@@ -76,6 +76,20 @@ func TestMCPServersValid(t *testing.T) {
 	if got := m.Capabilities.MCPServers[0].SourceID(); got != "npm:github-mcp-server-js" {
 		t.Fatalf("SourceID = %q", got)
 	}
+
+	// The egress host grammar admits its edges: both ends of each
+	// character range, a hyphen inside a label, a label of 63 characters
+	// and a host of 253.
+	edges := mcpManifest(`    - npm: server-x
+      version: 1.0.0
+      egress:
+        - az09-AZ.example.com
+        - z9.Z9.example.com
+        - ` + strings.Repeat("a", 63) + "." + strings.Repeat("a", 63) + "." + strings.Repeat("a", 63) + "." + strings.Repeat("a", 61) + `
+`)
+	if blocking := blockingText(issuesFor(t, edges)); blocking != "" {
+		t.Fatalf("egress host edges refused:\n%s", blocking)
+	}
 }
 
 func TestMCPServersRefusals(t *testing.T) {
@@ -130,6 +144,56 @@ func TestMCPServersRefusals(t *testing.T) {
 			`    - npm: server-x
       version: 1.0.0
       egress: ["not a host"]
+`, "not a valid DNS host name"},
+		"empty tool name": {
+			`    - npm: server-x
+      version: 1.0.0
+      tools: [list, ""]
+`, `capabilities.mcpServers[0].tools[1]: tool name must not be empty`},
+		"tool name with a control character": {
+			`    - npm: server-x
+      version: 1.0.0
+      tools: ["a\x01b"]
+`, `capabilities.mcpServers[0].tools[0]: tool "a\x01b" must be a single token without whitespace`},
+		"tool name with a tab": {
+			`    - npm: server-x
+      version: 1.0.0
+      tools: ["a\tb"]
+`, `capabilities.mcpServers[0].tools[0]: tool "a\tb" must be a single token without whitespace`},
+		"auth on a package server": {
+			`    - npm: server-x
+      version: 1.0.0
+      auth: oauth
+`, "capabilities.mcpServers[0].auth: auth is a remote server's field; a package server signs in through an oauth block"},
+		"scopes on a package server": {
+			`    - npm: server-x
+      version: 1.0.0
+      scopes: [read]
+`, "capabilities.mcpServers[0].scopes: scopes on a package server go in its oauth block"},
+		"egress host of 254 characters": {
+			`    - npm: server-x
+      version: 1.0.0
+      egress: [` + strings.Repeat("a", 63) + "." + strings.Repeat("a", 63) + "." + strings.Repeat("a", 63) + "." + strings.Repeat("a", 62) + `]
+`, "not a valid DNS host name"},
+		"egress host label of 64 characters": {
+			`    - npm: server-x
+      version: 1.0.0
+      egress: [` + strings.Repeat("a", 64) + `.example.com]
+`, "not a valid DNS host name"},
+		"egress host with an empty label": {
+			`    - npm: server-x
+      version: 1.0.0
+      egress: ["a..example.com"]
+`, "not a valid DNS host name"},
+		"egress host with a leading hyphen": {
+			`    - npm: server-x
+      version: 1.0.0
+      egress: ["-a.example.com"]
+`, "not a valid DNS host name"},
+		"egress host with a trailing hyphen": {
+			`    - npm: server-x
+      version: 1.0.0
+      egress: ["a-.example.com"]
 `, "not a valid DNS host name"},
 	}
 	for name, tc := range cases {
@@ -246,6 +310,24 @@ func TestMCPServerEnvValid(t *testing.T) {
 	if len(env) != 2 || env["GITHUB_PERMISSION"] != "read-only" || env["LOGS_DIR"] != "/tmp/logs" {
 		t.Fatalf("env = %v", env)
 	}
+
+	// The limits admit their exact size: MaxMCPServerEnvEntries entries,
+	// and a value of MaxMCPServerEnvValue characters, whether each takes
+	// one byte or two.
+	var full strings.Builder
+	full.WriteString("    - npm: server-x\n      version: 1.0.0\n      env:\n")
+	for i := 0; i < MaxMCPServerEnvEntries; i++ {
+		fmt.Fprintf(&full, "        KEY_%d: v\n", i)
+	}
+	for name, yaml := range map[string]string{
+		"entries at the cap":                   full.String(),
+		"a value of the cap":                   "    - npm: server-x\n      version: 1.0.0\n      env: {LONG: \"" + strings.Repeat("x", MaxMCPServerEnvValue) + "\"}\n",
+		"a value of the cap in two-byte runes": "    - npm: server-x\n      version: 1.0.0\n      env: {LONG: \"" + strings.Repeat("\xc3\xa9", MaxMCPServerEnvValue) + "\"}\n",
+	} {
+		if blocking := blockingText(issuesFor(t, mcpManifestV2(yaml))); blocking != "" {
+			t.Fatalf("%s refused:\n%s", name, blocking)
+		}
+	}
 }
 
 // TestMCPServerEnvRefusals: one failing fixture per rule.
@@ -270,6 +352,19 @@ func TestMCPServerEnvRefusals(t *testing.T) {
       version: 1.0.0
       env: {LONG: "` + strings.Repeat("x", MaxMCPServerEnvValue+1) + `"}
 `, "at most 512 characters"},
+		"value one over the cap in two-byte runes": {
+			"    - npm: server-x\n      version: 1.0.0\n      env: {LONG: \"" + strings.Repeat("\xc3\xa9", MaxMCPServerEnvValue+1) + "\"}\n",
+			"capabilities.mcpServers[0].env.LONG: value must be at most 512 characters (got 513)"},
+		"control character below space": {
+			"    - npm: server-x\n      version: 1.0.0\n      env: {CTRL: \"a\\x01b\"}\n",
+			"capabilities.mcpServers[0].env.CTRL: value must be a single line with no control characters"},
+		"too many keys by one": {"    - npm: server-x\n      version: 1.0.0\n      env: {" + func() string {
+			var kv []string
+			for i := 0; i <= MaxMCPServerEnvEntries; i++ {
+				kv = append(kv, fmt.Sprintf("K%d: v", i))
+			}
+			return strings.Join(kv, ", ")
+		}() + "}\n", "capabilities.mcpServers[0].env: at most 16 env entries may be declared per server (got 17)"},
 		"multi-line value": {
 			`    - npm: server-x
       version: 1.0.0
