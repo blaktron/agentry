@@ -672,3 +672,47 @@ func TestSignInOIDCFromEnv(t *testing.T) {
 		t.Fatalf("from the environment: %+v %v", p, ok)
 	}
 }
+
+// A judge's key goes to its base URL, so the base is https; plain http is
+// accepted only for a loopback address, and a classifier with no key has
+// nothing to protect.
+func TestJudgeBaseURLIsHTTPSWhereAKeyIsSent(t *testing.T) {
+	type j = Judge
+	refused := []j{
+		{Provider: "typesafe", APIKey: "k", BaseURL: "http://api.typesafe.ai"},
+		{Provider: "typesafe", APIKey: "k", BaseURL: "api.typesafe.ai"},
+		{Provider: "openai", APIKey: "k", BaseURL: "http://llm.example.internal"},
+		{Provider: "anthropic", APIKey: "k", BaseURL: "http://10.0.0.7:8080"},
+		{Provider: "classifier", APIKey: "k", BaseURL: "http://prompt-guard:8080/classify"},
+		{Provider: "typesafe", APIKey: "k", BaseURL: "https://user:pw@api.typesafe.ai"},
+	}
+	for _, jc := range refused {
+		cfg := devDefault()
+		cfg.Judge = jc
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "judge.baseUrl") {
+			t.Fatalf("%+v: Validate() = %v, want a refusal naming judge.baseUrl", jc, err)
+		}
+		if strings.Contains(err.Error(), "pw") {
+			t.Fatalf("%+v: the refusal repeats a credential: %v", jc, err)
+		}
+	}
+	accepted := []j{
+		{Provider: "typesafe", APIKey: "k"},
+		{Provider: "typesafe", APIKey: "k", BaseURL: "https://api.typesafe.ai"},
+		{Provider: "typesafe", APIKey: "k", BaseURL: "http://127.0.0.1:8099"},
+		{Provider: "openai", APIKey: "k", BaseURL: "https://llm.example.internal"},
+		{Provider: "openai", APIKey: "k", BaseURL: "http://localhost:8000"},
+		{Provider: "classifier", BaseURL: "http://prompt-guard:8080/classify"},
+		{Provider: "classifier", APIKey: "k", BaseURL: "https://guard.example.internal/classify"},
+		{Provider: "none"},
+		{Provider: "static"},
+	}
+	for _, jc := range accepted {
+		cfg := devDefault()
+		cfg.Judge = jc
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("%+v: %v", jc, err)
+		}
+	}
+}

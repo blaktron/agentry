@@ -1955,7 +1955,8 @@
             "TestTrustedProxyCIDRsFromEnv",
             "TestKnowledgeSealingKeyFromEnv",
             "TestSignInOIDCIsOneProvider",
-            "TestSignInOIDCFromEnv"
+            "TestSignInOIDCFromEnv",
+            "TestJudgeBaseURLIsHTTPSWhereAKeyIsSent"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3308,7 +3309,8 @@
             "TestS5ReadsEveryTextFile",
             "TestTypeSafeRubricHashPerShape",
             "TestTypeSafeJudgeWithoutAKeyFailsClosed",
-            "TestTheDraftCheckAsksTheRubricAsS5Does"
+            "TestTheDraftCheckAsksTheRubricAsS5Does",
+            "TestJudgeFactoryRefusesAPlainBaseURLForAKey"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4095,6 +4097,23 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        },
+        {
+          "path": "pkg/judge/endpoint_test.go",
+          "tests": [
+            "TestNewSendsTheKeyOnlyOverHTTPS",
+            "TestCheckBaseURLNamesTheRule",
+            "TestAKeyReachesALoopbackServer",
+            "TestAskRefusesAnAnswerThatIsNotANoul",
+            "TestDeclaredCapabilitiesIsNotCutInsideACharacter",
+            "TestAnEmptyVoiceOrDraftIsNotSentToTheJudge"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
         },
         {
           "path": "pkg/judge/judge_test.go",

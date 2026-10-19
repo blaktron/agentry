@@ -17,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/blaktron/agentry/pkg/judge"
 	"github.com/blaktron/agentry/pkg/websearch"
 )
 
@@ -431,7 +432,9 @@ type SMTP struct {
 // protocol (hosted APIs or self-hosted gateways alike): set BaseURL to the
 // API root and APIKey to the credential. The AGENTRY_JUDGE_TYPE,
 // AGENTRY_JUDGE_BASE_URL and AGENTRY_JUDGE_API_KEY environment variables
-// configure the same three values.
+// configure the same three values. The key is sent to BaseURL, so Validate
+// refuses a BaseURL that is not https; plain http is accepted only for a
+// loopback address, for a test server on the same machine.
 type Judge struct {
 	Provider string `yaml:"provider"` // openai | anthropic | bedrock | typesafe | classifier | static | none
 	Model    string `yaml:"model"`
@@ -1039,6 +1042,17 @@ func (c Config) Validate() error {
 	case "classifier":
 		if c.Judge.BaseURL == "" {
 			return fmt.Errorf("config: judge.baseUrl (the classify endpoint) is required when judge.provider is %q", c.Judge.Provider)
+		}
+	}
+	// The key is sent to the base URL, so the base is https (plain http to a
+	// loopback address only, for a test server); a classifier with no key
+	// has nothing to protect.
+	switch c.Judge.Provider {
+	case "openai", "anthropic", "typesafe", "classifier":
+		if c.Judge.APIKey != "" {
+			if err := judge.CheckBaseURL(c.Judge.BaseURL); err != nil {
+				return fmt.Errorf("config: judge.baseUrl: %w", err)
+			}
 		}
 	}
 	// The names are pkg/websearch's own list, so a provider added there is
