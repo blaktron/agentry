@@ -58,7 +58,7 @@ func TestCreateAgentModes(t *testing.T) {
 	})
 
 	// The store's constraint takes the persistent mode as the registry does,
-	// alone or beside the others, and the facet and the filter find it.
+	// alone or beside the others, and still refuses an unknown one beside it.
 	t.Run("persistent mode stored", func(t *testing.T) {
 		a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
 			Namespace: ns, Name: "modes-persistent", Visibility: "public",

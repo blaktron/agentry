@@ -20,6 +20,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/entitlements"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 type fakeAdmitter struct {
@@ -409,5 +410,20 @@ func TestForkRefusalsAreRecognisedAndPutInWords(t *testing.T) {
 	}
 	if got := (&forkRefusal{detail: "the copy cannot succeed"}).Error(); got != "the copy cannot succeed" {
 		t.Errorf("forkRefusal reads %q", got)
+	}
+}
+
+// The registry's copy of the mode vocabulary is the manifest's set: a
+// release the manifest validates is never refused here for its modes.
+func TestValidModesAreTheManifestsModes(t *testing.T) {
+	for _, mode := range []manifest.Mode{manifest.ModeAutonomous, manifest.ModeInteractive, manifest.ModePersistent} {
+		if !validModes[string(mode)] {
+			t.Errorf("the registry refuses the manifest's mode %q", mode)
+		}
+	}
+	for mode := range validModes {
+		if !manifest.Mode(mode).Valid() {
+			t.Errorf("the registry takes %q, which the manifest refuses", mode)
+		}
 	}
 }

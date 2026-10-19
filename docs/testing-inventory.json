@@ -2690,7 +2690,8 @@
             "TestSeatsAreSpentByMembersAndInvitationsAndDoorsAreNamed",
             "TestRefusalSentencesAndConstraintViolations",
             "TestNormalizeModesDefaultsDeduplicatesAndRefusesUnknownModes",
-            "TestForkRefusalsAreRecognisedAndPutInWords"
+            "TestForkRefusalsAreRecognisedAndPutInWords",
+            "TestValidModesAreTheManifestsModes"
           ],
           "fuzz": [],
           "benchmarks": [],
