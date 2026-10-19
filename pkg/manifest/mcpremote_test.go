@@ -6,6 +6,7 @@ package manifest
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -78,6 +79,83 @@ func TestRemoteAndOAuthServersValid(t *testing.T) {
 	if len(srv[5].OAuth.Files) != 2 || srv[5].OAuth.Env["GOOGLE_OAUTH_CREDENTIALS"] != "{dir}/keys.json" {
 		t.Fatalf("calendar oauth = %+v", srv[5].OAuth)
 	}
+
+	t.Run("limits and shapes at their exact edge", func(t *testing.T) {
+		// Every size limit and address shape at its edge: the largest value
+		// accepted, beside the refusals in the tables below.
+		const base = "https://mcp.example.com/"
+		long := func(prefix string) string { return prefix + strings.Repeat("a", MaxRemoteURLLength-len(prefix)) }
+		label := func(n int) string { return strings.Repeat("a", n) }
+		wideChars := strings.Repeat("\xc3\xa9", MaxMCPServerEnvValue) // MaxMCPServerEnvValue runes, twice as many bytes
+		token := "{access_token}"
+		cases := map[string]string{
+			"an address of exactly the cap":     remoteNone(long(base)),
+			"an explicit port 443":              remoteNone("https://mcp.example.com:443/mcp"),
+			"a label of 63 characters":          remoteNone("https://" + label(63) + ".example.com/mcp"),
+			"a host of 253 characters":          remoteNone("https://" + label(63) + "." + label(63) + "." + label(63) + "." + label(61) + "/mcp"),
+			"an internal word as a plain label": remoteNone("https://mcp.local.example.com/mcp") + remoteNone("https://mcp.corp.example.com/mcp") + remoteNone("https://mcp.lan.example.com/mcp"),
+			"hyphens, digits and edge letters":  remoteNone("https://mcp-1.az09.example.com/mcp"),
+			"an uppercase path":                 remoteNone("https://mcp.example.com/Path/UP"),
+			"the scope count cap":               "    - url: https://mcp.example.com/mcp\n      auth: oauth\n      scopes: " + scopeList(MaxMCPScopes) + "\n",
+			"a scope of the cap length":         "    - url: https://mcp.example.com/mcp\n      auth: oauth\n      scopes: [" + label(MaxMCPScopeLength) + "]\n",
+			"a scope of the cap length in runes": "    - url: https://mcp.example.com/mcp\n      auth: oauth\n      scopes: [\"" +
+				strings.Repeat("\xc3\xa9", MaxMCPScopeLength) + "\"]\n",
+			"an issuer of exactly the cap": oauthServer("        issuer: " + long("https://auth.example.com/") + "\n        env: {TOKEN: \"" + token + "\"}\n"),
+			"oauth scopes at the cap":      oauthServer("        issuer: https://auth.example.com\n        scopes: " + scopeList(MaxMCPScopes) + "\n        env: {TOKEN: \"" + token + "\"}\n"),
+			"oauth env entries at the cap": oauthServer("        issuer: https://auth.example.com\n" + oauthEnvEntries(MaxOAuthEnvEntries)),
+			"an oauth env value of the cap": oauthServer("        issuer: https://auth.example.com\n        env: {TOKEN: \"" + token +
+				"\", LONG: \"" + strings.Repeat("x", MaxMCPServerEnvValue) + "\"}\n"),
+			"an oauth env value of the cap in runes": oauthServer("        issuer: https://auth.example.com\n        env: {TOKEN: \"" + token +
+				"\", LONG: \"" + wideChars + "\"}\n"),
+			"files at the cap": oauthServer("        issuer: https://auth.example.com\n        files:\n" +
+				"          - {path: a, template: \"" + token + "\"}\n          - {path: b, template: x}\n          - {path: c, template: x}\n          - {path: d, template: x}\n"),
+			"a template of exactly 2,048 bytes": oauthServer("        issuer: https://auth.example.com\n        files:\n          - path: a.json\n            template: \"" +
+				token + strings.Repeat("x", MaxOAuthTemplateBytes-len(token)) + "\"\n"),
+			"a template with newline and tab": oauthServer("        issuer: https://auth.example.com\n        files:\n          - path: a.json\n            template: \"" +
+				token + "\\n\\t\"\n"),
+		}
+		for name, servers := range cases {
+			t.Run(name, func(t *testing.T) {
+				if blocking := blockingText(issuesFor(t, mcpManifestV2(servers))); blocking != "" {
+					t.Fatalf("refused:\n%s", blocking)
+				}
+			})
+		}
+	})
+}
+
+// remoteNone is a remote server entry at address u with no auth.
+func remoteNone(u string) string {
+	return "    - url: " + u + "\n      auth: none\n"
+}
+
+// oauthServer is a package server entry whose oauth block is body.
+func oauthServer(body string) string {
+	return "    - npm: server-x\n      version: 1.0.0\n      oauth:\n" + body
+}
+
+// oauthEnvEntries is an oauth env block of n entries; the first carries the
+// access token, so the connection reaches the server.
+func oauthEnvEntries(n int) string {
+	var b strings.Builder
+	b.WriteString("        env:\n")
+	for i := 0; i < n; i++ {
+		v := "v"
+		if i == 0 {
+			v = `"{access_token}"`
+		}
+		fmt.Fprintf(&b, "          KEY_%d: %s\n", i, v)
+	}
+	return b.String()
+}
+
+// scopeList is a YAML flow list of n distinct scopes.
+func scopeList(n int) string {
+	names := make([]string, n)
+	for i := range names {
+		names[i] = fmt.Sprintf("s%d", i)
+	}
+	return "[" + strings.Join(names, ", ") + "]"
 }
 
 func TestRemoteServerRefusals(t *testing.T) {
@@ -198,6 +276,39 @@ func TestRemoteServerRefusals(t *testing.T) {
 		"space in the path": {`    - url: https://mcp.example.com/ mcp
       auth: none
 `, "printable ASCII"},
+		"internal suffix .localhost":          {remoteNone("https://mcp.example.localhost/mcp"), "public host name"},
+		"internal suffix .local":              {remoteNone("https://mcp.example.local/mcp"), "public host name"},
+		"internal suffix .lan":                {remoteNone("https://mcp.example.lan/mcp"), "public host name"},
+		"internal suffix .home.arpa":          {remoteNone("https://mcp.example.home.arpa/mcp"), "public host name"},
+		"internal suffix .corp":               {remoteNone("https://mcp.example.corp/mcp"), "public host name"},
+		"internal suffix .intranet":           {remoteNone("https://mcp.example.intranet/mcp"), "public host name"},
+		"internal suffix .internal":           {remoteNone("https://mcp.example.internal/mcp"), "public host name"},
+		"a bare question mark":                {remoteNone("https://mcp.example.com/mcp?"), "no query"},
+		"a bare question mark after the host": {remoteNone("https://mcp.example.com?"), "no query"},
+		"a bare hash":                         {remoteNone("https://mcp.example.com/mcp#"), "no fragment"},
+		"an address one byte over the cap": {remoteNone("https://mcp.example.com/" + strings.Repeat("a", MaxRemoteURLLength-len("https://mcp.example.com/")+1)),
+			"a remote server's address must be at most 512 characters (got 513)"},
+		"an ipv6 zone":                      {remoteNone("https://[fe80::1%25eth0]/mcp"), "not an IP address"},
+		"a tab in the path":                 {"    - url: \"https://mcp.example.com/a\\tb\"\n      auth: none\n", "printable ASCII"},
+		"a control character in the path":   {"    - url: \"https://mcp.example.com/a\\x01b\"\n      auth: none\n", "printable ASCII"},
+		"a delete character in the path":    {"    - url: \"https://mcp.example.com/a\\x7fb\"\n      auth: none\n", "printable ASCII"},
+		"a non-ASCII character in the path": {"    - url: \"https://mcp.example.com/a\\xe9b\"\n      auth: none\n", "printable ASCII"},
+		"a label of 64 characters":          {remoteNone("https://" + strings.Repeat("a", 64) + ".example.com/mcp"), "public host name"},
+		"a host of 254 characters":          {remoteNone("https://" + strings.Repeat("a", 63) + "." + strings.Repeat("a", 63) + "." + strings.Repeat("a", 63) + "." + strings.Repeat("a", 62) + "/mcp"), "public host name"},
+		"a label with a leading hyphen":     {remoteNone("https://-mcp.example.com/mcp"), "public host name"},
+		"a label with a trailing hyphen":    {remoteNone("https://mcp-.example.com/mcp"), "public host name"},
+		"a label with an underscore":        {remoteNone("https://mcp_x.example.com/mcp"), "public host name"},
+		"an empty label":                    {remoteNone("https://mcp..example.com/mcp"), "public host name"},
+		"a trailing dot":                    {remoteNone("https://mcp.example.com./mcp"), "public host name"},
+		"too many scopes": {"    - url: https://mcp.example.com/mcp\n      auth: oauth\n      scopes: " + scopeList(MaxMCPScopes+1) + "\n",
+			"capabilities.mcpServers[0].scopes: at most 32 scopes may be declared (got 33)"},
+		"a scope over the length cap": {"    - url: https://mcp.example.com/mcp\n      auth: oauth\n      scopes: [" + strings.Repeat("a", MaxMCPScopeLength+1) + "]\n",
+			"capabilities.mcpServers[0].scopes[0]: scope must be at most 256 characters"},
+		"a scope over the length cap in runes": {"    - url: https://mcp.example.com/mcp\n      auth: oauth\n      scopes: [\"" + strings.Repeat("\xc3\xa9", MaxMCPScopeLength+1) + "\"]\n",
+			"capabilities.mcpServers[0].scopes[0]: scope must be at most 256 characters"},
+		"an empty scope": {"    - url: https://mcp.example.com/mcp\n      auth: oauth\n      scopes: [\"\"]\n", "capabilities.mcpServers[0].scopes[0]: scope must not be empty"},
+		"a scope with a control character": {"    - url: https://mcp.example.com/mcp\n      auth: oauth\n      scopes: [\"a\\x01b\"]\n",
+			"capabilities.mcpServers[0].scopes[0]: scope \"a\\x01b\" must be a single token without whitespace"},
 		"duplicate url": {`    - url: https://mcp.example.com/mcp
       auth: none
     - url: https://mcp.example.com/mcp
@@ -319,6 +430,35 @@ func TestMCPOAuthRefusals(t *testing.T) {
         scopes: [""]
         env: {TOKEN: "{access_token}"}
 `), "scope must not be empty"},
+		"too many oauth env entries": {oauthServer("        issuer: https://auth.example.com\n" + oauthEnvEntries(MaxOAuthEnvEntries+1)),
+			"capabilities.mcpServers[0].oauth.env: at most 8 env entries may be declared (got 9)"},
+		"oauth env value one over the cap": {oauthServer("        issuer: https://auth.example.com\n        env: {TOKEN: \"{access_token}\", LONG: \"" + strings.Repeat("x", MaxMCPServerEnvValue+1) + "\"}\n"),
+			"capabilities.mcpServers[0].oauth.env.LONG: value must be at most 512 characters (got 513)"},
+		"oauth env value one over the cap in runes": {oauthServer("        issuer: https://auth.example.com\n        env: {TOKEN: \"{access_token}\", LONG: \"" + strings.Repeat("\xc3\xa9", MaxMCPServerEnvValue+1) + "\"}\n"),
+			"capabilities.mcpServers[0].oauth.env.LONG: value must be at most 512 characters (got 513)"},
+		"oauth env value with a control character": {oauthServer("        issuer: https://auth.example.com\n        env: {TOKEN: \"{access_token}\", CTRL: \"a\\x01b\"}\n"),
+			"capabilities.mcpServers[0].oauth.env.CTRL: value must be a single line with no control characters"},
+		"too many oauth scopes": {oauthServer("        issuer: https://auth.example.com\n        scopes: " + scopeList(MaxMCPScopes+1) + "\n        env: {TOKEN: \"{access_token}\"}\n"),
+			"capabilities.mcpServers[0].oauth.scopes: at most 32 scopes may be declared (got 33)"},
+		"an oauth scope over the length cap": {oauthServer("        issuer: https://auth.example.com\n        scopes: [" + strings.Repeat("a", MaxMCPScopeLength+1) + "]\n        env: {TOKEN: \"{access_token}\"}\n"),
+			"capabilities.mcpServers[0].oauth.scopes[0]: scope must be at most 256 characters"},
+		"an oauth scope over the length cap in runes": {oauthServer("        issuer: https://auth.example.com\n        scopes: [\"" + strings.Repeat("\xc3\xa9", MaxMCPScopeLength+1) + "\"]\n        env: {TOKEN: \"{access_token}\"}\n"),
+			"capabilities.mcpServers[0].oauth.scopes[0]: scope must be at most 256 characters"},
+		"an oauth scope with a control character": {oauthServer("        issuer: https://auth.example.com\n        scopes: [\"a\\x01b\"]\n        env: {TOKEN: \"{access_token}\"}\n"),
+			"capabilities.mcpServers[0].oauth.scopes[0]: scope \"a\\x01b\" must be a single token without whitespace"},
+		"an oauth scope with a space": {oauthServer("        issuer: https://auth.example.com\n        scopes: [\"a b\"]\n        env: {TOKEN: \"{access_token}\"}\n"),
+			"capabilities.mcpServers[0].oauth.scopes[0]: scope \"a b\" must be a single token without whitespace"},
+		"a duplicate oauth scope": {oauthServer("        issuer: https://auth.example.com\n        scopes: [read, read]\n        env: {TOKEN: \"{access_token}\"}\n"),
+			"capabilities.mcpServers[0].oauth.scopes[1]: duplicate scope \"read\""},
+		"an issuer one byte over the cap": {oauthServer("        issuer: https://auth.example.com/" + strings.Repeat("a", MaxRemoteURLLength-len("https://auth.example.com/")+1) + "\n        env: {TOKEN: \"{access_token}\"}\n"),
+			"capabilities.mcpServers[0].oauth.issuer: issuer must be at most 512 characters"},
+		"an issuer with an explicit port": {oauthServer("        issuer: https://auth.example.com:8443\n        env: {TOKEN: \"{access_token}\"}\n"),
+			"issuer: \"https://auth.example.com:8443\" must use port 443"},
+		"an issuer on an internal name": {oauthServer("        issuer: https://auth.example.lan\n        env: {TOKEN: \"{access_token}\"}\n"),
+			"issuer: \"https://auth.example.lan\" must be a public host name"},
+		"a template one byte over the cap": {oauthServer("        issuer: https://auth.example.com\n        files:\n          - path: a.json\n            template: \"{access_token}" +
+			strings.Repeat("x", MaxOAuthTemplateBytes-len("{access_token}")+1) + "\"\n"),
+			"capabilities.mcpServers[0].oauth.files[0].template: a template must be at most 2048 bytes (got 2049)"},
 		"unsupported package": {`    - pypi: mcp-gsuite
       version: 0.4.1
       oauth:
@@ -479,6 +619,37 @@ func TestDiffRemoteAndOAuthServers(t *testing.T) {
 			"changes how MCP server pypi:workspace-mcp@2.0.1 receives its token"},
 		{"drops a sign-in", caps(pkg(google("gmail"))), caps(pkg(nil)), false,
 			"drops the OAuth sign-in of MCP server pypi:workspace-mcp@2.0.1"},
+		// Every change of auth is asked again, whichever way it goes.
+		{"oauth to secret", caps(remote(AuthOAuth)), caps(remote(AuthSecret)), true,
+			"changes auth of MCP server url:https://mcp.linear.app/mcp: secret (was oauth)"},
+		{"secret to none", caps(remote(AuthSecret)), caps(remote(AuthNone)), true,
+			"changes auth of MCP server url:https://mcp.linear.app/mcp: none (was secret)"},
+		{"oauth to none", caps(remote(AuthOAuth)), caps(remote(AuthNone)), true,
+			"changes auth of MCP server url:https://mcp.linear.app/mcp: none (was oauth)"},
+		{"none to secret", caps(remote(AuthNone)), caps(remote(AuthSecret)), true,
+			"changes auth of MCP server url:https://mcp.linear.app/mcp: secret (was none)"},
+		{"secret to oauth", caps(remote(AuthSecret)), caps(remote(AuthOAuth)), true,
+			"changes auth of MCP server url:https://mcp.linear.app/mcp: oauth (was secret)"},
+		// The files are the same on both sides, so only the env can widen
+		// these.
+		{"a changed oauth env value", caps(pkg(google("gmail"))),
+			caps(pkg(&MCPOAuth{Issuer: "https://accounts.google.com", Scopes: []string{"gmail"}, Files: google().Files,
+				Env: map[string]string{"WORKSPACE_MCP_CREDENTIALS_DIR": "{dir}/sub"}})), true,
+			"changes how MCP server pypi:workspace-mcp@2.0.1 receives its token (its oauth files or env)"},
+		{"a new oauth env key", caps(pkg(google("gmail"))),
+			caps(pkg(&MCPOAuth{Issuer: "https://accounts.google.com", Scopes: []string{"gmail"}, Files: google().Files,
+				Env: map[string]string{"WORKSPACE_MCP_CREDENTIALS_DIR": "{dir}", "EXTRA_TOKEN": "{access_token}"}})), true,
+			"changes how MCP server pypi:workspace-mcp@2.0.1 receives its token (its oauth files or env)"},
+		{"a dropped oauth env key", caps(pkg(&MCPOAuth{Issuer: "https://accounts.google.com", Scopes: []string{"gmail"}, Files: google().Files,
+			Env: map[string]string{"WORKSPACE_MCP_CREDENTIALS_DIR": "{dir}", "EXTRA_TOKEN": "{access_token}"}})),
+			caps(pkg(google("gmail"))), true,
+			"changes how MCP server pypi:workspace-mcp@2.0.1 receives its token (its oauth files or env)"},
+		{"a dropped oauth file", caps(pkg(&MCPOAuth{Issuer: "https://accounts.google.com", Scopes: []string{"gmail"},
+			Files: append(google().Files, MCPOAuthFile{Path: "keys.json", Template: "{}"}), Env: google().Env})),
+			caps(pkg(google("gmail"))), true,
+			"changes how MCP server pypi:workspace-mcp@2.0.1 receives its token (its oauth files or env)"},
+		{"a dropped oauth scope narrows", caps(pkg(google("gmail", "drive"))), caps(pkg(google("gmail"))), false,
+			"drops scope drive of MCP server pypi:workspace-mcp@2.0.1"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

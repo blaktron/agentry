@@ -1874,10 +1874,13 @@
             "TestOIDC_ExchangeCreatesClaims",
             "TestOIDC_IssuerPinning",
             "TestOIDC_NonceMismatchRejected",
+            "TestOIDC_EmptyExpectedNonceRefused",
             "TestOIDC_EmailVerifiedSurfaced",
             "TestOIDC_PreferredUsernameSurfaced",
             "TestOIDC_RawCarriesEveryClaim",
-            "TestOIDC_AuthTimeSurfaced"
+            "TestOIDC_AuthTimeSurfaced",
+            "TestOIDC_IDTokenVerificationRefusals",
+            "TestOIDC_DescribeReportsDiscovery"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1898,12 +1901,16 @@
           "tests": [
             "TestProvidersIsTheOneOpenIDProvider",
             "TestAProviderNeedsAnIssuer",
-            "TestRetiredProvidersAreUnknown"
+            "TestRetiredProvidersAreUnknown",
+            "TestProviderSignsInThroughTheConfiguredIssuer",
+            "TestIdentityMFAAsserted"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
-          "dependencyHints": []
+          "dependencyHints": [
+            "HTTP transport"
+          ]
         }
       ]
     },
@@ -1926,7 +1933,23 @@
             "TestNamespaceDerivedAgentRole",
             "TestAgentRoleLadder",
             "TestHoldPermits",
-            "TestAgentManageScope"
+            "TestAgentManageScope",
+            "TestScopeListIsClosed",
+            "TestSSOSatisfied",
+            "TestUnactivatedAndSyntheticAddress",
+            "TestClientIPRidesTheContext"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/auth/resolve_test.go",
+          "tests": [
+            "TestResolvePAT",
+            "TestResolveSSHKey",
+            "TestParseSSHPublicKey"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2004,7 +2027,9 @@
         {
           "path": "internal/dnsx/resolver_test.go",
           "tests": [
-            "TestVerifyTXT"
+            "TestVerifyTXT",
+            "TestSystemResolverLooksUpUnderTheContext",
+            "TestVerifyTXTRefusesWhatItCannotJudge"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2381,7 +2406,8 @@
           "path": "internal/maildomains/maildomains_test.go",
           "tests": [
             "TestSharedNamesNobodyOwns",
-            "TestOfReadsTheDomain"
+            "TestOfReadsTheDomain",
+            "TestSharedHoldsForAnyNumberOfTrailingDots"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2578,7 +2604,9 @@
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
-          "dependencyHints": []
+          "dependencyHints": [
+            "source/file contract"
+          ]
         }
       ]
     },
@@ -4728,7 +4756,8 @@
           "tests": [
             "TestBundleTarRoundTrip",
             "TestBundleTarDeterministic",
-            "TestUntarBundleRejectsStructure"
+            "TestUntarBundleRejectsStructure",
+            "TestUntarBundleRefusesNamesWindowsGivesAMeaning"
           ],
           "fuzz": [],
           "benchmarks": [],

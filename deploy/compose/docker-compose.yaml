@@ -64,13 +64,19 @@ services:
 
   minio:
     logging: *rotated
-    # The upstream project's own images are not served anonymously from
-    # Docker Hub or Quay; this is a build of the same source (AGPL-3.0, run
-    # here as a separate service). It ships the `mc` client the health check
-    # and the bucket bootstrap below use, and runs as uid 65532, so a volume
-    # that an image running as root wrote needs a one-time chown
+    # MinIO's own images are not served anonymously from Docker Hub or Quay,
+    # so this is Chainguard's build of the same source, copied unchanged to
+    # the project's own registry (agentry-dockerimages' agentry-minio row): the
+    # registry it comes from publishes only `latest` and does not promise an
+    # older digest stays pullable. The digest is Chainguard's, MinIO
+    # RELEASE.2026-09-22T19-25-18Z. MinIO is AGPL-3.0, run here unmodified as a
+    # separate service; its source is named in agentry-dockerimages' NOTICE
+    # (https://github.com/blaktron/agentry-dockerimages/blob/main/NOTICE) and
+    # at https://github.com/minio/minio. The image ships the `mc` client the
+    # health check and the bucket bootstrap below use, and runs as uid 65532,
+    # so a volume that an image running as root wrote needs a one-time chown
     # (docs/self-hosting.md, "What the stack exposes").
-    image: &minio-image cgr.dev/chainguard/minio:latest@sha256:709099319add48dfb44aa596a7070d3ddd8dd04d7ae881765719aec29df9e510
+    image: &minio-image ghcr.io/blaktron/agentry-minio:latest@sha256:709099319add48dfb44aa596a7070d3ddd8dd04d7ae881765719aec29df9e510
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:

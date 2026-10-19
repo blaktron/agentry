@@ -64,6 +64,13 @@ func TestEveryReleasedVersionNamesItsThreshold(t *testing.T) {
 	if _, ok := baselineThresholds[b.Version()]; !ok {
 		t.Fatalf("the embedded bundle %s has no baseline threshold", b.Version())
 	}
+	// And no threshold names a version that has not reached a registry: the
+	// two maps are kept together.
+	for v := range baselineThresholds {
+		if _, ok := releasedDigests[v]; !ok {
+			t.Errorf("baseline threshold for %s, which has no pinned digest in releasedDigests", v)
+		}
+	}
 	if got := BaselineMaxAutoPublishSeverity(); got != baselineThresholds[b.Version()] {
 		t.Fatalf("BaselineMaxAutoPublishSeverity() = %q, want %q for bundle %s", got, baselineThresholds[b.Version()], b.Version())
 	}
@@ -72,7 +79,9 @@ func TestEveryReleasedVersionNamesItsThreshold(t *testing.T) {
 // The thresholds of released versions are fixed: 0.3.0 is the first
 // version that publishes on medium.
 func TestReleasedThresholdsAreHistory(t *testing.T) {
-	for v, want := range map[string]string{"0.2.3": "low", "0.3.0": "medium", "0.3.1": "medium", "0.3.2": "medium", "0.3.3": "medium", "0.3.4": "medium", "0.4.0": "medium", "0.4.1": "medium", "0.4.2": "medium", "0.4.3": "medium", "0.4.4": "medium", "0.4.5": "medium", "0.4.6": "medium", "0.4.7": "medium", "0.4.8": "medium", "0.4.9": "medium", "0.4.10": "medium", "0.4.11": "medium", "0.4.12": "medium", "0.0.0-unknown": "low"} {
+	// A version that has no entry answers the strictest threshold, whatever
+	// it looks like: never "medium" by default.
+	for v, want := range map[string]string{"0.2.0": "low", "0.2.1": "low", "0.2.2": "low", "0.2.3": "low", "0.3.0": "medium", "0.3.1": "medium", "0.3.2": "medium", "0.3.3": "medium", "0.3.4": "medium", "0.4.0": "medium", "0.4.1": "medium", "0.4.2": "medium", "0.4.3": "medium", "0.4.4": "medium", "0.4.5": "medium", "0.4.6": "medium", "0.4.7": "medium", "0.4.8": "medium", "0.4.9": "medium", "0.4.10": "medium", "0.4.11": "medium", "0.4.12": "medium", "0.0.0-unknown": "low", "": "low", "9.9.9": "low", "0.4.1.2": "low", "v0.4.12": "low"} {
 		if got := BaselineMaxAutoPublishSeverityFor(v); got != want {
 			t.Errorf("BaselineMaxAutoPublishSeverityFor(%q) = %q, want %q", v, got, want)
 		}
