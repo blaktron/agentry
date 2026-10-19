@@ -4638,7 +4638,9 @@
             "TestCanonicalJSONV2",
             "TestV2SchemaFileShape",
             "TestV2SchemaEnvShape",
-            "TestCanonicalJSONV2Env"
+            "TestCanonicalJSONV2Env",
+            "TestPersistentModeParsesAndIsKnown",
+            "TestV2SchemaModesAreTheGoSet"
           ],
           "fuzz": [],
           "benchmarks": [],

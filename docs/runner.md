@@ -162,6 +162,18 @@ same session in its run panel, and a hosted session
 ([Hosted runs](hosted-runs.md#a-hosted-session)) runs it on a sandbox host
 through the session protocol below.
 
+A **persistent** release (`modes: [persistent]`) is a conversation the
+runner keeps between sessions rather than one that ends: the agent's
+conversation and its own files outlive each start and stop. The runner
+runs this mode only for its own built-in agents. A persistent release
+from the registry or a local folder is refused before anything starts,
+with exit 11 and "a persistent release runs only as a built-in in this
+version"; a CLI earlier than the one that knows the mode refuses the
+manifest instead, as declaring an unknown mode. A release that declares
+`persistent` beside another mode runs in that other mode, as `--mode`
+chooses. The policy key `allowPersistentReleases` is reserved for
+running such releases from other sources and changes nothing yet.
+
 #### Driving a session from a program
 
 Without a terminal, an interactive run is refused: the chat is its input.
@@ -1081,6 +1093,7 @@ its digest, so a run record says which file a run obeyed.
 | `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
+| `allowPersistentReleases` | reserved: a persistent release from the registry or a local folder is refused whatever it says (exit 11, [Run modes](#run-modes)). `agentry setup` never writes it |
 | `secretSource.mode` (`env` \| `envFile`) + `secretSource.envFile` | fallback secret resolution behind profiles |
 | `budgets.timeoutSeconds` / `budgets.maxTurns` / `budgets.maxCostUsd` | default hard stops (cost `0` = unlimited) |
 | `sessions.idleTimeoutSeconds` / `sessions.maxWallSeconds` / `sessions.maxUserTurns` | interactive-session caps (shipped 900 s idle, 7200 s wall, 200 user turns); a manifest can only tighten the idle timeout |
