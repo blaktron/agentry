@@ -3727,7 +3727,12 @@
           "path": "internal/webhook/webhook_test.go",
           "tests": [
             "TestClient_NoRedirectFollowing",
-            "TestSign_And_Verify"
+            "TestSign_And_Verify",
+            "TestEventCatalog",
+            "TestNewDispatcher_Defaults",
+            "TestDispatcher_NeedsAStoreAndAQueue",
+            "TestDeliver_UnreadableArgsAreNotRetried",
+            "TestBackoffAndStrPtrOrNil"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3868,6 +3873,7 @@
             "TestClient_HTTPSOnly",
             "TestClient_RefusesNonPublicTargets",
             "TestClient_DefaultTimeout",
+            "TestClient_TransportBounds",
             "TestProxy_TunnelsToTheTarget",
             "TestProxy_RefusesANonPublicTargetBeforeAsking",
             "TestProxy_CarriesHTTPSOnly",
