@@ -621,3 +621,26 @@ func TestTheDraftCheckAsksTheRubricAsS5Does(t *testing.T) {
 		t.Fatalf("pkg/judge declares a shipped pack where pkg/manifest mounts it: %s", rubric[0].State.DeclaredCapabilities)
 	}
 }
+
+// The factory builds no provider whose key would go over a plain channel,
+// so a deployment with such a base URL refuses to start rather than
+// judging.
+func TestJudgeFactoryRefusesAPlainBaseURLForAKey(t *testing.T) {
+	for _, p := range []string{"typesafe", "openai", "anthropic", "classifier"} {
+		cfg := JudgeConfig{Provider: p, APIKey: "k", BaseURL: "http://judge.example.com"}
+		if _, err := BuildJudgeProvider(context.Background(), cfg); err == nil || !strings.Contains(err.Error(), "https") {
+			t.Fatalf("%s over plain http: %v", p, err)
+		}
+		if v := NewJudgeProvider(cfg); !v.RequiresHumanReview() {
+			t.Fatalf("%s: a degraded provider must fail closed", p)
+		}
+		cfg.BaseURL = "http://127.0.0.1:9"
+		if _, err := BuildJudgeProvider(context.Background(), cfg); err != nil {
+			t.Fatalf("%s over loopback: %v", p, err)
+		}
+	}
+	// A classifier with no key sends nothing secret.
+	if _, err := BuildJudgeProvider(context.Background(), JudgeConfig{Provider: "classifier", BaseURL: "http://prompt-guard:8080/classify"}); err != nil {
+		t.Fatalf("a keyless classifier on a service name: %v", err)
+	}
+}

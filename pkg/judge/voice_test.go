@@ -100,7 +100,7 @@ func TestAVoiceThatIsNotOneOrAFailedJudgeIsNotScanned(t *testing.T) {
 		t.Fatalf("a voice at the bound: %+v", res)
 	}
 	// The bound is 32768 bytes: that many are asked, one more is not, and
-	// white space alone is still something.
+	// white space alone is nothing to ask about.
 	if VoiceMaxBytes != 32768 {
 		t.Fatalf("the bound is %d, want 32 KiB", VoiceMaxBytes)
 	}
@@ -109,7 +109,7 @@ func TestAVoiceThatIsNotOneOrAFailedJudgeIsNotScanned(t *testing.T) {
 			t.Fatalf("%d bytes: %+v", n, res)
 		}
 	}
-	if res := s.Scan(context.Background(), " \n"); res.Verdict != VerdictPass {
+	if res := s.Scan(context.Background(), " \n"); res.Verdict != VerdictNotScanned || res.Failure != FailureInvalid {
 		t.Fatalf("white space only: %+v", res)
 	}
 	broken := &fakeAsker{answer: func(map[string]string, Question, int) (float64, error) { return 0, context.DeadlineExceeded }}
