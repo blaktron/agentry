@@ -70,6 +70,7 @@ func TestMCPServersValid(t *testing.T) {
 	if !warned {
 		t.Fatal("wildcard server egress did not warn")
 	}
+	wantIssue(t, errs, "V5", SeverityWarning, "capabilities.mcpServers[1].egress[0]")
 
 	m, _ := Parse([]byte(doc))
 	if got := m.Capabilities.MCPServers[0].SourceID(); got != "npm:github-mcp-server-js" {
@@ -160,9 +161,15 @@ capabilities:
 publish:
   include: [agent.yaml, server.js]
 `
-	text := blockingText(issuesFor(t, doc))
+	errs := issuesFor(t, doc)
+	text := blockingText(errs)
 	if !strings.Contains(text, "withdrawn") {
 		t.Fatalf("withdrawn mcp-server kind not refused:\n%s", text)
+	}
+	// The kind itself is refused, at its own path: the entrypoints.mcp
+	// refusal also says "withdrawn", and must not stand in for it.
+	if !strings.Contains(text, "manifest V1: kind: kind mcp-server is withdrawn") {
+		t.Fatalf("the kind line itself was not refused:\n%s", text)
 	}
 }
 
@@ -174,8 +181,20 @@ func TestMCPServersCapAtMax(t *testing.T) {
 		b.WriteString("\n      version: 1.0.0\n")
 	}
 	text := blockingText(issuesFor(t, mcpManifest(b.String())))
-	if !strings.Contains(text, "at most") {
-		t.Fatalf("server count cap not enforced:\n%s", text)
+	want := fmt.Sprintf("manifest V5: capabilities.mcpServers: at most %d MCP servers may be declared (got %d)", MaxMCPServers, MaxMCPServers+1)
+	if !strings.Contains(text, want) {
+		t.Fatalf("server count cap not enforced; want %q:\n%s", want, text)
+	}
+
+	// Exactly MaxMCPServers is allowed.
+	var ok strings.Builder
+	for i := 0; i < MaxMCPServers; i++ {
+		ok.WriteString("    - npm: server-")
+		ok.WriteRune(rune('a' + i))
+		ok.WriteString("\n      version: 1.0.0\n")
+	}
+	if blocking := blockingText(issuesFor(t, mcpManifest(ok.String()))); blocking != "" {
+		t.Fatalf("%d servers, the limit, were refused:\n%s", MaxMCPServers, blocking)
 	}
 }
 
