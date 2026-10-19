@@ -391,6 +391,19 @@
           ]
         },
         {
+          "path": "internal/api/webhook_failure_test.go",
+          "tests": [
+            "TestAFailedDeliveryKeepsTheEndpointsTokenOut"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/webhook_seam_test.go",
           "tests": [
             "TestWebhookSeamDeliversToTheEndpointNamed",
@@ -1812,8 +1825,11 @@
             "TestFileStreamRotatesDaily",
             "TestFileStreamDropsWhenBufferFull",
             "TestNewStreamKinds",
+            "TestFileStreamBackgroundFlushAndClose",
             "TestWriterStreamDefaultsToNop",
-            "TestLogStreamMirrorsRecordAsLine"
+            "TestLogStreamMirrorsRecordAsLine",
+            "TestWriterWritesTheRowAndFeedsTheArchive",
+            "TestActionRegistryIsAppendOnly"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1955,7 +1971,8 @@
             "TestTrustedProxyCIDRsFromEnv",
             "TestKnowledgeSealingKeyFromEnv",
             "TestSignInOIDCIsOneProvider",
-            "TestSignInOIDCFromEnv"
+            "TestSignInOIDCFromEnv",
+            "TestJudgeBaseURLIsHTTPSWhereAKeyIsSent"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2327,7 +2344,11 @@
           "tests": [
             "TestRequestIDStampedFromContext",
             "TestTokensAreMaskedEverywhere",
+            "TestTokenJoinedToOtherCharactersIsMasked",
+            "TestEmptyKeyValueIsSanitised",
+            "TestTypedNilValuesDoNotPanic",
             "TestSecretNamedKeysAreRedacted",
+            "TestMaskEmail",
             "TestLongValuesAreTruncated",
             "TestParseLevel"
           ],
@@ -2378,7 +2399,9 @@
             "TestExtensionInstrumentLeavesThroughOTLP",
             "TestNilMetricsHandsANoOpExtensionMeter",
             "TestExtensionCannotShadowAHistogramSeries",
-            "TestASeriesAttributeNeverOverridesAResourceLabel"
+            "TestASeriesAttributeNeverOverridesAResourceLabel",
+            "TestMCPSweepCountsRunsAndOpenedAlerts",
+            "TestModelInputCountsCallsAndJudgeTokens"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2408,7 +2431,6 @@
             "TestVerificationLinkUsesBaseURL",
             "TestComposeRejectsHeaderInjection",
             "TestDeliverRejectsMalformedRecipient",
-            "TestBodyIsDotStuffedAndCRLF",
             "TestComposeSetsTransactionalHeaders",
             "TestNonASCIISubjectIsEncoded",
             "TestSendFailureIsReported",
@@ -2450,6 +2472,21 @@
             "TestScheduleSwitchIsItsOwn",
             "TestBugReportSwitchIsItsOwn",
             "TestAllowsEmailDecisionAndLogsWithoutADatabase"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/notify/smtp_test.go",
+          "tests": [
+            "TestSMTPDeliversALoneDotLineIntact",
+            "TestBodyIsCRLFAndLeavesDotsToTheDataWriter",
+            "TestSentLineMasksTheRecipient",
+            "TestSendFailedLineMasksTheRecipientEverywhere",
+            "TestVerificationWithoutALinkNeverMentionsOne",
+            "TestMalformedRecipientErrorDoesNotEchoIt"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2570,7 +2607,8 @@
         {
           "path": "internal/registry/blobstore_test.go",
           "tests": [
-            "TestLocalFSRoundTripAndDelete"
+            "TestLocalFSRoundTripAndDelete",
+            "TestArchiveKeyIsTheContentAddressedName"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2602,6 +2640,23 @@
           ]
         },
         {
+          "path": "internal/registry/pure_controls_test.go",
+          "tests": [
+            "TestAdmissionFailsClosedAndCarriesTheAdmittersAnswer",
+            "TestSkipsPipelineOnlyForAFlaggedPrivateOrgAgentOnATierThatAllowsIt",
+            "TestQuotaSubjectIsTheNamespaceThatOwnsTheAgent",
+            "TestOrgGateErrorSaysWhatTheOrganizationIs",
+            "TestSeatsAreSpentByMembersAndInvitationsAndDoorsAreNamed",
+            "TestRefusalSentencesAndConstraintViolations",
+            "TestNormalizeModesDefaultsDeduplicatesAndRefusesUnknownModes",
+            "TestForkRefusalsAreRecognisedAndPutInWords"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/registry/staff_internal_test.go",
           "tests": [
             "TestAtStaffDomainComparesAsASCII"
@@ -2615,6 +2670,7 @@
           "path": "internal/registry/statemachine_test.go",
           "tests": [
             "TestStateMachineEdges",
+            "TestTransitionEventNamesTheWebhookOfEachEdge",
             "TestNoPathToPublishedSkipsTheGateForAPublicAgent",
             "TestStageArchiveDoesNotLeakOnWriteFailure",
             "TestStageArchiveSucceeds"
@@ -3295,7 +3351,8 @@
             "TestS5ReadsEveryTextFile",
             "TestTypeSafeRubricHashPerShape",
             "TestTypeSafeJudgeWithoutAKeyFailsClosed",
-            "TestTheDraftCheckAsksTheRubricAsS5Does"
+            "TestTheDraftCheckAsksTheRubricAsS5Does",
+            "TestJudgeFactoryRefusesAPlainBaseURLForAKey"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3733,10 +3790,28 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "internal/webhook/failure_test.go",
+          "tests": [
+            "TestADeliveryFailureNamesTheHostNeverThePathOrQuery",
+            "TestADeliveryFailureStillSaysWhatWentWrong"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/webhook/webhook_test.go",
           "tests": [
             "TestClient_NoRedirectFollowing",
-            "TestSign_And_Verify"
+            "TestSign_And_Verify",
+            "TestEventCatalog",
+            "TestNewDispatcher_Defaults",
+            "TestDispatcher_NeedsAStoreAndAQueue",
+            "TestDeliver_UnreadableArgsAreNotRetried",
+            "TestBackoffAndStrPtrOrNil"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3877,6 +3952,7 @@
             "TestClient_HTTPSOnly",
             "TestClient_RefusesNonPublicTargets",
             "TestClient_DefaultTimeout",
+            "TestClient_TransportBounds",
             "TestProxy_TunnelsToTheTarget",
             "TestProxy_RefusesANonPublicTargetBeforeAsking",
             "TestProxy_CarriesHTTPSOnly",
@@ -3889,6 +3965,23 @@
           "dependencyHints": [
             "HTTP transport"
           ]
+        },
+        {
+          "path": "pkg/egressguard/special_purpose_test.go",
+          "tests": [
+            "TestEverySpecialPurposeRangeIsRefused",
+            "TestUnallocatedIPv6SpaceIsRefused",
+            "TestEmbeddedIPv4FormsDecideOnTheEmbeddedAddress",
+            "TestAZoneDoesNotHideARange",
+            "TestTheTestTableNamesEveryRangeTheGuardRefuses",
+            "TestEachSpecialPurposeRangeIsRefusedByItsOwnRow",
+            "TestTheGlobalUnicastSpaceIsIPv6sOnly",
+            "TestAddressesNextToAnEmbeddingPrefixAreNotReadAsEmbedding"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         }
       ]
     },
@@ -4076,6 +4169,23 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        },
+        {
+          "path": "pkg/judge/endpoint_test.go",
+          "tests": [
+            "TestNewSendsTheKeyOnlyOverHTTPS",
+            "TestCheckBaseURLNamesTheRule",
+            "TestAKeyReachesALoopbackServer",
+            "TestAskRefusesAnAnswerThatIsNotANoul",
+            "TestDeclaredCapabilitiesIsNotCutInsideACharacter",
+            "TestAnEmptyVoiceOrDraftIsNotSentToTheJudge"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
         },
         {
           "path": "pkg/judge/judge_test.go",
@@ -4553,7 +4663,8 @@
             "TestNormalizeLogoRefuses",
             "TestNormalizeLogoScalesDown",
             "TestDesignWithLogoRoundTrips",
-            "TestDesignLogoRefusals"
+            "TestDesignLogoRefusals",
+            "TestLogoNullIsNoLogo"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4568,6 +4679,7 @@
             "TestBuiltinsDiffer",
             "TestValidationTable",
             "TestTextIsData",
+            "TestContrastRefusalNeverPrintsAPass",
             "TestContrast",
             "TestNearestPassing",
             "TestTint",
@@ -4805,6 +4917,25 @@
           "dependencyHints": [
             "HTTP transport"
           ]
+        }
+      ]
+    },
+    {
+      "owner": "scripts/notices",
+      "behavior": "Licence classification and the source note of the generated third-party notices",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "scripts/notices/main_test.go",
+          "tests": [
+            "TestClassify",
+            "TestLicenceNames",
+            "TestSourceNoteNamesUpstreamForCopyleftModules"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         }
       ]
     }
