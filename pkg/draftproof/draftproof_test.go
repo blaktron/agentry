@@ -1,9 +1,11 @@
 package draftproof
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -189,6 +191,11 @@ func TestTheProofSeesEveryChangeOfMeaning(t *testing.T) {
 		{"  exec: none\n", ""},
 		{"prompt: Which repository?", "prompt: \"  Which repository?  \""},
 		{"    required: true\n", "    required: true\n    type: text\n"},
+		{"schemaVersion: \"2\"", "schemaVersion: \"1\""},
+		{"name: weekly-summary\n", "kind: prompt-agent\nname: weekly-summary\n"},
+		{"  instruction: AGENT.md\n", "  instruction: AGENT.md\n  skill: SKILL.md\n"},
+		{"  instruction: AGENT.md\n", "  instruction: AGENT.md\n  mcp: {command: node, transport: stdio}\n"},
+		{"publish:\n", "dependencies:\n  agents:\n    - ref: alice/helper\n      version: ^1\npublish:\n"},
 	} {
 		same := strings.Replace(base, tc.old, tc.new, 1)
 		if same == base {
@@ -197,6 +204,62 @@ func TestTheProofSeesEveryChangeOfMeaning(t *testing.T) {
 		if p := proofOf(t, same, text); p.Manifest != want.Manifest {
 			t.Errorf("%q → %q changed the proof, but the Builder sets or drops it", tc.old, tc.new)
 		}
+	}
+
+	// Two writings of the same thing prove alike: a text with CRLF, a lone
+	// CR or LF line breaks, and what is empty once its spaces are gone (an
+	// item, a list, an object, a member) against what is not there.
+	const guide = "guide:\n  overview: Reads the issues.\n  prepare: [a token]\n"
+	for _, tc := range []struct{ name, a, b string }{
+		{"CRLF and LF in a text",
+			strings.Replace(base, "summary: Summarizes the week's closed issues", `summary: "One.\r\nTwo."`, 1),
+			strings.Replace(base, "summary: Summarizes the week's closed issues", `summary: "One.\nTwo."`, 1)},
+		{"a lone CR and LF in a text",
+			strings.Replace(base, "summary: Summarizes the week's closed issues", `summary: "One.\rTwo."`, 1),
+			strings.Replace(base, "summary: Summarizes the week's closed issues", `summary: "One.\nTwo."`, 1)},
+		{"spaces at the ends of a text",
+			strings.Replace(base, "summary: Summarizes the week's closed issues", `summary: "  One.\nTwo. \n"`, 1),
+			strings.Replace(base, "summary: Summarizes the week's closed issues", `summary: "One.\nTwo."`, 1)},
+		{"a list holding only a blank item",
+			strings.Replace(base, guide, "guide:\n  overview: Reads the issues.\n  prepare: [\"  \"]\n", 1),
+			strings.Replace(base, guide, "guide:\n  overview: Reads the issues.\n", 1)},
+		{"an object holding only blanks",
+			strings.Replace(base, guide, "guide:\n  overview: \"  \"\n  prepare: [\"  \"]\n", 1),
+			strings.Replace(base, guide, "", 1)},
+		{"a blank member of an object",
+			strings.Replace(base, guide, "guide:\n  overview: \"  \"\n  prepare: [a token]\n", 1),
+			strings.Replace(base, guide, "guide:\n  prepare: [a token]\n", 1)},
+	} {
+		if tc.a == base || tc.b == base {
+			t.Fatalf("%s: the edit did not apply", tc.name)
+		}
+		if proofOf(t, tc.a, text) != proofOf(t, tc.b, text) {
+			t.Errorf("%s: the two writings do not prove alike", tc.name)
+		}
+	}
+	if proofOf(t, strings.Replace(base, "summary: Summarizes the week's closed issues", `summary: "One.\nTwo."`, 1), text) ==
+		proofOf(t, strings.Replace(base, "summary: Summarizes the week's closed issues", `summary: "One. Two."`, 1), text) {
+		t.Error("a line break inside a text is part of what it says")
+	}
+
+	// Each digest is "sha256:" and 64 hex digits, and the proof that crosses
+	// from the sandbox host to the registry carries exactly the two keys.
+	digest := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	for name, d := range map[string]string{"manifest": want.Manifest, "instruction": want.Instruction} {
+		if !digest.MatchString(d) {
+			t.Errorf("the %s digest is %q", name, d)
+		}
+	}
+	wire, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys map[string]string
+	if err := json.Unmarshal(wire, &keys); err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 2 || keys["manifest"] != want.Manifest || keys["instruction"] != want.Instruction {
+		t.Errorf("the proof marshals as %s, want the keys manifest and instruction", wire)
 	}
 }
 
@@ -212,6 +275,25 @@ func TestTheInstructionTextIsReadWithItsLineBreaksAsLF(t *testing.T) {
 	for _, text := range []string{"One.\nTwo. \n", " One.\nTwo.\n", "One.\n\nTwo.\n", "One.\tTwo.\n"} {
 		if got := proofOf(t, base, text).Instruction; got == want {
 			t.Errorf("%q proves as %q, but it is a different text", text, "One.\nTwo.\n")
+		}
+	}
+
+	// The text that is proved: LF line breaks, exactly one final newline,
+	// and nothing at all for a text with no characters but line breaks.
+	for _, tc := range []struct{ in, want string }{
+		{"", ""},
+		{"\n\n", ""},
+		{"\r\n\r\n", ""},
+		{"\r", ""},
+		{"One.", "One.\n"},
+		{"One.\r\nTwo.\r", "One.\nTwo.\n"},
+		{"One.\n\n\n", "One.\n"},
+		{"One.\n \n", "One.\n \n"},
+		{" One. \n", " One. \n"},
+		{"\nOne.\n", "\nOne.\n"},
+	} {
+		if got := string(NormalizeText([]byte(tc.in))); got != tc.want {
+			t.Errorf("NormalizeText(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
@@ -245,6 +327,115 @@ func TestAPackageTheProofCannotReadIsNoProof(t *testing.T) {
 			}
 		})
 	}
+	// The instruction path must name a file inside the package, and the
+	// refusal says so: a file that exists where the path points outside, an
+	// absolute path (read under the package root it would be found), the
+	// package root itself and its parent are each "no instruction file".
+	for _, tc := range []struct{ name, path string }{
+		{"a file one level up", "../AGENT.md"},
+		{"a file reached by climbing out of a directory", "docs/../../AGENT.md"},
+		{"an absolute path", "/AGENT.md"},
+		{"the package root", "."},
+		{"the package root with a slash", "./"},
+		{"the parent directory", ".."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			outer := t.TempDir()
+			pkg := filepath.Join(outer, "pkg")
+			for p, c := range map[string]string{
+				"AGENT.md":       "outside\n",
+				"pkg/AGENT.md":   "inside\n",
+				"pkg/agent.yaml": strings.Replace(base, "instruction: AGENT.md", "instruction: "+tc.path, 1),
+			} {
+				if err := os.MkdirAll(filepath.Dir(filepath.Join(outer, p)), 0o750); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(outer, p), []byte(c), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, rel, err := OfDir(pkg)
+			if !errors.Is(err, ErrNoProof) || !strings.Contains(err.Error(), "no instruction file") || rel != "" {
+				t.Fatalf("got %q, %v; want ErrNoProof, no instruction file", rel, err)
+			}
+		})
+	}
+	t.Run("a directory for the instruction file", func(t *testing.T) {
+		dir := write(t, map[string]string{"agent.yaml": strings.Replace(base, "instruction: AGENT.md", "instruction: docs", 1), "docs/x.md": "x\n"})
+		if _, _, err := OfDir(dir); !errors.Is(err, ErrNoProof) || !strings.Contains(err.Error(), "not a file the proof reads") {
+			t.Fatalf("got %v, want ErrNoProof, not a file the proof reads", err)
+		}
+	})
+	t.Run("a linked manifest", func(t *testing.T) {
+		dir := write(t, map[string]string{"real.yaml": base, "AGENT.md": "x\n"})
+		if err := os.Symlink(filepath.Join(dir, "real.yaml"), filepath.Join(dir, ManifestFile)); err != nil {
+			t.Skip(err)
+		}
+		if _, _, err := OfDir(dir); !errors.Is(err, ErrNoProof) {
+			t.Fatalf("got %v, want ErrNoProof", err)
+		}
+	})
+	t.Run("an unreadable instruction file", func(t *testing.T) {
+		dir := write(t, map[string]string{"agent.yaml": base, "AGENT.md": "x\n"})
+		if err := os.Chmod(filepath.Join(dir, "AGENT.md"), 0); err != nil {
+			t.Skip(err)
+		}
+		if f, err := os.Open(filepath.Join(dir, "AGENT.md")); err == nil {
+			_ = f.Close()
+			t.Skip("the file is readable whatever its mode (running as root)")
+		}
+		if _, _, err := OfDir(dir); !errors.Is(err, ErrNoProof) {
+			t.Fatalf("got %v, want ErrNoProof", err)
+		}
+	})
+	// A file of at most 4 MiB is read, one byte more is not a file a draft
+	// wrote: the limit holds for the instruction file and for the manifest.
+	t.Run("the size a file may have", func(t *testing.T) {
+		const limit = 4 << 20
+		pad := func(n int) string { return strings.Repeat("a", n) }
+		for _, tc := range []struct {
+			name  string
+			files map[string]string
+			ok    bool
+		}{
+			{"an instruction file of 4 MiB", map[string]string{"agent.yaml": base, "AGENT.md": pad(limit)}, true},
+			{"an instruction file of 4 MiB and a byte", map[string]string{"agent.yaml": base, "AGENT.md": pad(limit + 1)}, false},
+			{"a manifest of 4 MiB", map[string]string{"agent.yaml": base + "#" + pad(limit-len(base)-1), "AGENT.md": "x\n"}, true},
+			{"a manifest of 4 MiB and a byte", map[string]string{"agent.yaml": base + "#" + pad(limit-len(base)), "AGENT.md": "x\n"}, false},
+		} {
+			_, _, err := OfDir(write(t, tc.files))
+			switch {
+			case tc.ok && err != nil:
+				t.Errorf("%s: %v", tc.name, err)
+			case !tc.ok && (!errors.Is(err, ErrNoProof) || !strings.Contains(err.Error(), "not a file the proof reads")):
+				t.Errorf("%s: got %v, want ErrNoProof, not a file the proof reads", tc.name, err)
+			}
+		}
+	})
+	// The path OfDir names is the instruction file's, cleaned and relative,
+	// and the proof of a directory is the proof of the two files it holds.
+	t.Run("the proof of a directory is the proof of its files", func(t *testing.T) {
+		const text = "Summarize.\r\nThe week.\r\n"
+		dir := write(t, map[string]string{
+			"agent.yaml":    strings.Replace(base, "instruction: AGENT.md", "instruction: ./docs//AGENT.md", 1),
+			"docs/AGENT.md": text,
+		})
+		got, rel, err := OfDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rel != "docs/AGENT.md" {
+			t.Errorf("the instruction file is %q, want docs/AGENT.md", rel)
+		}
+		if want := proofOf(t, base, text); got != want {
+			t.Errorf("OfDir = %+v, Of = %+v", got, want)
+		}
+	})
+	t.Run("a manifest that does not parse", func(t *testing.T) {
+		if _, err := Of([]byte("name: ["), []byte("x\n")); !errors.Is(err, ErrNoProof) {
+			t.Fatalf("got %v, want ErrNoProof", err)
+		}
+	})
 	t.Run("a linked instruction file", func(t *testing.T) {
 		dir := write(t, map[string]string{"agent.yaml": base, "real.md": "x\n"})
 		if err := os.Symlink(filepath.Join(dir, "real.md"), filepath.Join(dir, "AGENT.md")); err != nil {

@@ -2561,7 +2561,8 @@
         {
           "path": "internal/registry/blobstore_test.go",
           "tests": [
-            "TestLocalFSRoundTripAndDelete"
+            "TestLocalFSRoundTripAndDelete",
+            "TestArchiveKeyIsTheContentAddressedName"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2593,6 +2594,23 @@
           ]
         },
         {
+          "path": "internal/registry/pure_controls_test.go",
+          "tests": [
+            "TestAdmissionFailsClosedAndCarriesTheAdmittersAnswer",
+            "TestSkipsPipelineOnlyForAFlaggedPrivateOrgAgentOnATierThatAllowsIt",
+            "TestQuotaSubjectIsTheNamespaceThatOwnsTheAgent",
+            "TestOrgGateErrorSaysWhatTheOrganizationIs",
+            "TestSeatsAreSpentByMembersAndInvitationsAndDoorsAreNamed",
+            "TestRefusalSentencesAndConstraintViolations",
+            "TestNormalizeModesDefaultsDeduplicatesAndRefusesUnknownModes",
+            "TestForkRefusalsAreRecognisedAndPutInWords"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/registry/staff_internal_test.go",
           "tests": [
             "TestAtStaffDomainComparesAsASCII"
@@ -2606,6 +2624,7 @@
           "path": "internal/registry/statemachine_test.go",
           "tests": [
             "TestStateMachineEdges",
+            "TestTransitionEventNamesTheWebhookOfEachEdge",
             "TestNoPathToPublishedSkipsTheGateForAPublicAgent",
             "TestStageArchiveDoesNotLeakOnWriteFailure",
             "TestStageArchiveSucceeds"
