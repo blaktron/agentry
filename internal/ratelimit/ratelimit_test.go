@@ -48,8 +48,13 @@ func TestPerHourBudgetExhaustsAndRecovers(t *testing.T) {
 	lim, burst := PerHour(60), 60
 
 	for i := range 60 {
-		if !b.Allow("push", "repo-1", lim, burst).OK {
+		res := b.Allow("push", "repo-1", lim, burst)
+		if !res.OK {
 			t.Fatalf("push %d within the hourly budget was refused", i+1)
+		}
+		// The answer's headers: the budget, and what is left of it.
+		if res.Limit != 60 || res.Remaining != 59-i {
+			t.Fatalf("push %d: Limit %d, Remaining %d, want 60 and %d", i+1, res.Limit, res.Remaining, 59-i)
 		}
 	}
 	res := b.Allow("push", "repo-1", lim, burst)
@@ -58,6 +63,10 @@ func TestPerHourBudgetExhaustsAndRecovers(t *testing.T) {
 	}
 	if res.Reset <= 0 {
 		t.Fatal("a refusal must say when the next token arrives")
+	}
+	// At 60/h the next token is a minute away, not the one-second floor.
+	if res.Reset < 59*time.Second || res.Reset > time.Minute {
+		t.Fatalf("Reset = %s, want about a minute", res.Reset)
 	}
 	// One token per minute at 60/h.
 	advance(time.Minute)
@@ -74,6 +83,14 @@ func TestIdleTTLIsNotShorterThanAnEnforcedWindow(t *testing.T) {
 		t.Fatalf("DefaultIdleTTL is %s; the git push quota is enforced over an hour, "+
 			"so a shorter TTL hands back a full budget after a pause", DefaultIdleTTL)
 	}
+	// A store with no idle TTL takes the default, and closing it twice is
+	// harmless.
+	d := New(0)
+	if d.idleTTL != DefaultIdleTTL {
+		t.Errorf("New(0).idleTTL = %s, want DefaultIdleTTL", d.idleTTL)
+	}
+	_ = d.Close()
+	_ = d.Close()
 }
 
 func TestEvictionDropsOnlyIdleBuckets(t *testing.T) {
@@ -94,6 +111,16 @@ func TestEvictionDropsOnlyIdleBuckets(t *testing.T) {
 	// The surviving bucket must be the recently used one.
 	if _, ok := b.buckets["push|fresh"]; !ok {
 		t.Error("eviction dropped the recently used bucket")
+	}
+
+	// Idle is since the last use, not since creation: a bucket made long ago
+	// and used a moment ago keeps its spent budget.
+	b.Allow("push", "busy", lim, 1)
+	advance(90 * time.Minute)
+	b.Allow("push", "busy", lim, 1)
+	b.evictIdle()
+	if _, ok := b.buckets["push|busy"]; !ok {
+		t.Fatal("eviction dropped a bucket used a moment ago, handing back its budget")
 	}
 }
 
@@ -119,6 +146,9 @@ func TestZeroRateReportsABackoff(t *testing.T) {
 	}
 	if res.Reset < time.Second {
 		t.Errorf("Reset = %s, want a real backoff", res.Reset)
+	}
+	if res.Reset != time.Hour {
+		t.Errorf("Reset = %s, want an hour for a bucket that never refills", res.Reset)
 	}
 }
 
