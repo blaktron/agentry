@@ -4756,7 +4756,8 @@
           "tests": [
             "TestBundleTarRoundTrip",
             "TestBundleTarDeterministic",
-            "TestUntarBundleRejectsStructure"
+            "TestUntarBundleRejectsStructure",
+            "TestUntarBundleRefusesNamesWindowsGivesAMeaning"
           ],
           "fuzz": [],
           "benchmarks": [],
