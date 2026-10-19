@@ -3064,7 +3064,7 @@ type RedTeamReport struct {
 	RulesetSemver string                 `json:"rulesetSemver"`
 }
 
-// ReportDesign A report design, the theme document version 2. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB.
+// ReportDesign A report design, the theme document version 2. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control, line-break, bidirectional formatting or other invisible format characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB; `"logo": null` is read as no logo.
 type ReportDesign struct {
 	// Accent The one colour, lower-case hex.
 	Accent string `json:"accent"`
@@ -3141,7 +3141,7 @@ type ReportDesignTitleBlock string
 
 // ReportSettings The caller's report settings, a profile setting. No `design` means the person never chose one.
 type ReportSettings struct {
-	// Design A report design, the theme document version 2. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control or bidirectional formatting characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB.
+	// Design A report design, the theme document version 2. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control, line-break, bidirectional formatting or other invisible format characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB; `"logo": null` is read as no logo.
 	Design *ReportDesign `json:"design,omitempty"`
 }
 

@@ -327,6 +327,15 @@ func NewJudgeProvider(cfg JudgeConfig) JudgeProvider {
 // the deployment configures must not silently become "review everything").
 func BuildJudgeProvider(ctx context.Context, cfg JudgeConfig) (JudgeProvider, error) {
 	switch cfg.Provider {
+	case "openai", "anthropic", "typesafe", "classifier":
+		// The key goes to the base URL: https, or plain http to loopback.
+		if strings.TrimSpace(cfg.APIKey) != "" {
+			if err := judge.CheckBaseURL(cfg.BaseURL); err != nil {
+				return nil, fmt.Errorf("scan: %s judge: %w", cfg.Provider, err)
+			}
+		}
+	}
+	switch cfg.Provider {
 	case "", "none":
 		return NoneProvider{}, nil
 	case "static":

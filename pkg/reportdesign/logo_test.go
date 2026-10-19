@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -463,8 +464,12 @@ func TestDesignWithLogoRoundTrips(t *testing.T) {
 	if _, err := Parse(asSent(fieldLen)); !errors.As(err, &fe) || fe.Field != "logo.png" || !errors.Is(err, ErrLogoTooLarge) {
 		t.Errorf("a document at the size limit with a logo field of %d: %v, want the logo refused as too large", fieldLen, err)
 	}
-	if _, err := Parse(asSent(fieldLen + 1)); !errors.As(err, &fe) || fe.Field != "" || !strings.Contains(fe.Message, "without its logo") {
-		t.Errorf("a document one byte over the size limit: %v, want the document refused as a whole", err)
+	// The early refusal counts the whole document, the logo field included,
+	// and says so; it does not call that count "without its logo".
+	over := asSent(fieldLen + 1)
+	want := fmt.Sprintf("the document is %d bytes, over the %d bytes a document may be with its logo", len(over), limit)
+	if _, err := Parse(over); !errors.As(err, &fe) || fe.Field != "" || fe.Message != want {
+		t.Errorf("a document one byte over the size limit: %v, want the document refused as a whole saying %q", err, want)
 	}
 }
 
@@ -580,5 +585,23 @@ func TestDesignLogoRefusals(t *testing.T) {
 		if _, err := Parse(doc); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+// "logo": null is the same as no logo key: the design is read without a
+// logo and its canonical form has no logo key, whichever way it was written.
+func TestLogoNullIsNoLogo(t *testing.T) {
+	var m map[string]any
+	if err := json.Unmarshal(Default().Canonical(), &m); err != nil {
+		t.Fatal(err)
+	}
+	m["logo"] = nil
+	doc, _ := json.Marshal(m)
+	d, err := Parse(doc)
+	if err != nil {
+		t.Fatalf(`"logo": null: %v`, err)
+	}
+	if d.Logo != (Logo{}) || !bytes.Equal(d.Canonical(), Default().Canonical()) {
+		t.Errorf(`"logo": null did not read as no logo: %s`, d.Canonical())
 	}
 }

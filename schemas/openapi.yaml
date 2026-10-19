@@ -5885,10 +5885,11 @@ components:
         test holds them equal). Beyond what the schema says, the accent must
         reach 4.5:1 contrast on white when it touches text (titleBlock
         `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and
-        `name` and `footer.text` are one line with no control or
-        bidirectional formatting characters. The tint is derived: 12% of the
+        `name` and `footer.text` are one line with no control, line-break,
+        bidirectional formatting or other invisible format characters. The tint is derived: 12% of the
         accent over white. The five built-in themes are each a value of it.
-        `logo` is optional and not counted in the 16 KB.
+        `logo` is optional and not counted in the 16 KB; `"logo": null` is
+        read as no logo.
       additionalProperties: false
       required: [agentryTheme, name, basedOn, version, paper, fonts, accent, titleBlock, headings, tables, quotes, footer]
       properties:
