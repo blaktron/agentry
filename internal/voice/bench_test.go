@@ -189,6 +189,7 @@ func TestTheRuleStagesPassGoodVoicesAndFlagHiddenOnes(t *testing.T) {
 	}
 	orch := scan.NewOrchestrator(bundle, scan.StaticProvider{}, nil)
 	r := &Reviewer{rules: orch, judge: quietJudge{}}
+	seen := map[string]bool{}
 	for _, c := range cases(t) {
 		rep := r.Review(context.Background(), c.text)
 		var flags []string
@@ -204,9 +205,17 @@ func TestTheRuleStagesPassGoodVoicesAndFlagHiddenOnes(t *testing.T) {
 			}
 		case "hidden":
 			t.Logf("%-28s rule stages: %s %v", c.name, rep.Verdict, flags)
+			seen[c.name] = true
 			if ruleCaught[c.name] && rep.Verdict != VerdictFlagged {
 				t.Errorf("%s: the rule stages no longer flag it", c.name)
 			}
+		}
+	}
+	// A name that is no hidden variant any more would leave its check
+	// silently empty.
+	for name := range ruleCaught {
+		if !seen[name] {
+			t.Errorf("%s: no hidden variant of that name is in the corpus", name)
 		}
 	}
 }
