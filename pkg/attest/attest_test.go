@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"strings"
 	"testing"
 )
 
@@ -48,9 +49,36 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 	if _, err := VerifyEnvelope(env, string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: oder}))); err == nil {
 		t.Fatal("envelope verified with the wrong key")
 	}
+	// The payload type is signed with the payload: the same signature over
+	// a relabelled envelope does not verify.
+	relabelled := env
+	relabelled.PayloadType = "application/json"
+	if _, err := VerifyEnvelope(relabelled, pub); err == nil {
+		t.Fatal("an envelope with another payload type verified")
+	}
+	// Any one valid signature verifies, after one that does not decode or
+	// does not match; none valid does not.
+	good := env.Signatures[0]
+	junk := DSSESignature{KeyID: "x", Sig: "not base64!"}
+	wrong := DSSESignature{KeyID: "y", Sig: base64.StdEncoding.EncodeToString([]byte("not a signature"))}
+	env.Signatures = []DSSESignature{junk, wrong, good}
+	if _, err := VerifyEnvelope(env, pub); err != nil {
+		t.Fatalf("a valid signature after two invalid ones: %v", err)
+	}
+	env.Signatures = []DSSESignature{junk, wrong}
+	if _, err := VerifyEnvelope(env, pub); err == nil || !strings.Contains(err.Error(), "no valid signature") {
+		t.Fatalf("no valid signature: err = %v", err)
+	}
+	env.Signatures = []DSSESignature{good}
 	// A tampered payload does not verify.
 	env.Payload = base64.StdEncoding.EncodeToString(append(payload, ' '))
 	if _, err := VerifyEnvelope(env, pub); err == nil {
 		t.Fatal("tampered envelope verified")
+	}
+	// PAE is the DSSE specification's encoding, byte for byte: a
+	// round trip alone would pass with any encoding both sides share,
+	// and a third party verifies against the specification's.
+	if got, want := string(PAE("http://example.com/HelloWorld", []byte("hello world"))), "DSSEv1 29 http://example.com/HelloWorld 11 hello world"; got != want {
+		t.Fatalf("PAE = %q, want %q", got, want)
 	}
 }
