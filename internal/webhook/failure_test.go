@@ -78,6 +78,14 @@ func failureTexts(t *testing.T) map[string]string {
 		t.Fatal("a control character was accepted in a URL")
 	}
 	out["an address that does not parse"] = deliveryFailure(err, bad)
+	out["an address with a bad escape"] = func() string {
+		ep := "https://10.0.0.1/hooks/" + pathToken + "%zz?key=" + queryToken
+		_, err := http.NewRequest(http.MethodPost, ep, nil)
+		if err == nil {
+			t.Fatal("a bad escape was accepted")
+		}
+		return deliveryFailure(err, ep)
+	}()
 	out["an address with a bad port"] = func() string {
 		ep := "https://10.0.0.1:80x/hooks/" + pathToken + "?key=" + queryToken
 		_, err := http.NewRequest(http.MethodPost, ep, nil)
@@ -100,7 +108,7 @@ func TestADeliveryFailureNamesTheHostNeverThePathOrQuery(t *testing.T) {
 				t.Errorf("%s: %q carries %q", name, got, secret)
 			}
 		}
-		for _, piece := range []string{"/hooks", "/services", "/send", "?key", "?auth", "?token", "svc:", "%2F"} {
+		for _, piece := range []string{"/hooks", "/services", "/send", "?key", "?auth", "?token", "svc:", "%2F", "%zz"} {
 			if strings.Contains(got, piece) {
 				t.Errorf("%s: %q carries %q", name, got, piece)
 			}
