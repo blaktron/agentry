@@ -4,7 +4,7 @@ namespace: agentry
 modes: [autonomous]
 version: 1.0.0
 summary: "Review a document for prompt-injection risk before an agent reads it"
-license: Apache-2.0
+license: MIT
 authors:
   - name: Agentry maintainers
 tags: [security, prompt-injection, review]
