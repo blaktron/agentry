@@ -4547,7 +4547,8 @@
             "TestNormalizeLogoRefuses",
             "TestNormalizeLogoScalesDown",
             "TestDesignWithLogoRoundTrips",
-            "TestDesignLogoRefusals"
+            "TestDesignLogoRefusals",
+            "TestLogoNullIsNoLogo"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4562,6 +4563,7 @@
             "TestBuiltinsDiffer",
             "TestValidationTable",
             "TestTextIsData",
+            "TestContrastRefusalNeverPrintsAPass",
             "TestContrast",
             "TestNearestPassing",
             "TestTint",
