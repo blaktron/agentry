@@ -1085,7 +1085,7 @@ its digest, so a run record says which file a run obeyed.
 
 | Key | Meaning |
 |---|---|
-| `images.gateway` / `images.harnessDockerAgent` | pinned images (digests recommended) |
+| `images.gateway` | the MCP gateway's image (digest recommended) |
 | `images.goBuilder` | the Go image the runner image is compiled in on first use (the default is pinned by digest). Its Go must be at least the CLI's own, to the patch: the build context names that version, and an older builder stops the build with "images.goBuilder … is older than the Go the runner needs" |
 | `images.runner` | override the locally built runner image tag (pin this when the CLI and desktop app share a machine) |
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
@@ -1103,7 +1103,7 @@ its digest, so a run record says which file a run obeyed.
 | `mcpServers.allowVulnerable` | let runs proceed when the registry's gate rates an advisory of a declared server version high or critical, or, from a registry that serves no rating, when the advisory's own severity is (default false: refused, exit 11) |
 | `exec.packages` | the exec catalog: command name → apk package (optionally `=version`) the exec image installs for a QuickAgent that declares that command; a declared command with no entry is refused at plan time (exit 11) |
 | `exec.apkMirror` | the Alpine mirror the exec image build installs from (default: the runner image's own repositories) — egress of the image build only, over ordinary docker networking; a run's network posture is unchanged |
-| `images.harnessImages.<adapter>` | the harness image of an adapter other than docker-agent, pinned by digest or, for an image your computer builds, by the `artifact` hash it is built from ([model sign-ins](#model-sign-ins)); unset, the CLI's default is used |
+| `images.harnessImages.<adapter>` | the harness image of each adapter that runs in a container, `docker-agent` included: `{ ref: <name>@sha256:… }` for a published image, or, for an image your computer builds, the `ref` and the `artifact` hash it is built from ([model sign-ins](#model-sign-ins)); an adapter left out takes the CLI's default. `docker-agent` is a published image, so its entry carries no `artifact`. Older policy files name docker-agent's image as `images.harnessDockerAgent`, which is still read; naming it both ways with different images is refused |
 | `harness.<adapter>.signInTokenRoute` | `auth-command` (the default) or `restart`: how a ChatGPT plan's token reaches Codex ([below](#a-chatgpt-plan)) |
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
@@ -1138,6 +1138,12 @@ an interactive session's agent and the one-shot that gives it the session
 store, and the MCP server installer that builds a declared server's dependency
 closure. Unset, the shipped default, every container takes the daemon's own
 default and the receipt says nothing about a runtime.
+
+The agent container is the harness itself: with the default adapter it runs
+the docker-agent image under `runsc` like the rest of the QuickAgent's code,
+and the receipt's `capabilities_enforced.runtime` names it ("the agent
+container (the QuickAgent's code)") with the runtime the engine reported back
+for it before it started.
 
 The runtime also holds the gateway's health probe and,
 through the run's docker filter, the tools server and the declared MCP servers
@@ -3455,7 +3461,7 @@ plan, so `agentry run` picks it without `--adapter`.
 
 | Adapter | What runs | Modes | Isolation |
 |---|---|---|---|
-| `docker-agent` (default) | the pinned `docker/docker-agent` image | autonomous, interactive (Agent Client Protocol over the container's stdio) | a container on the run's internal network: it has no route out but the proxy |
+| `docker-agent` (default) | Docker Agent, built from its pinned upstream commit and published signed as `ghcr.io/blaktron/agentry-docker-agent-src`, pinned by digest | autonomous, interactive (Agent Client Protocol over the container's stdio) | a container on the run's internal network: it has no route out but the proxy |
 | `claude` | **your own installation** of Claude Code, as a process of your user | autonomous, interactive (Claude Code's own bidirectional stream-json) | the harness is outside the run's network boundary — see below |
 | `codex` | **your own installation** of the OpenAI Codex CLI, as a process of your user | autonomous, interactive (codex's own app-server protocol) | as for `claude` — see below |
 | `codex-image` | OpenAI's Codex CLI in agentry-dockerimages' signed `agentry-codex` image, pinned by digest | autonomous, interactive (codex's app-server; an autonomous run is one session turn) | a container on the run's internal network, as for `docker-agent`; the default for a ChatGPT plan |
