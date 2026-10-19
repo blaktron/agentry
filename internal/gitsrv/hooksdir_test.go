@@ -48,6 +48,9 @@ func TestPushHooks(t *testing.T) {
 		t.Fatalf("hooks directory holds %v, want only pre-receive", entries)
 	}
 	shim := filepath.Join(dir, "pre-receive")
+	if sfi, err := os.Stat(shim); err != nil || sfi.Mode().Perm() != 0o700 {
+		t.Fatalf("hook mode %v (%v), want 0700: only the server may change what runs", sfi, err)
+	}
 	body, err := os.ReadFile(shim) //nolint:gosec // test-created path
 	if err != nil {
 		t.Fatal(err)
@@ -107,6 +110,32 @@ func TestReceivePackRefusedWhenNoHookCanRun(t *testing.T) {
 	if err := newHooksStore(t, file).PrepareHooks(); err == nil {
 		t.Fatal("accepted a base that is a file")
 	}
+
+	// A hooks directory that can be made but whose hook cannot run is
+	// refused, with the way out, and is not left behind.
+	base := t.TempDir()
+	broken := newHooksStore(t, base)
+	broken.hookBin = filepath.Join(t.TempDir(), "no-such-agentryd")
+	_, _, startErr := broken.Command(context.Background(), "receive-pack", "--stateless-rpc", "/data/git/ab/ab.git")
+	for name, err := range map[string]error{"PrepareHooks": broken.PrepareHooks(), "Command": startErr} {
+		if err == nil {
+			t.Fatalf("%s accepted a hook that cannot run", name)
+		}
+		for _, want := range []string{"git hooks cannot run from " + base, "set AGENTRY_GIT_HOOKS_DIR", "no-such-agentryd"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s refusal %q does not say %q", name, err, want)
+			}
+		}
+	}
+	if left, _ := os.ReadDir(base); len(left) != 0 {
+		t.Fatalf("a refused hooks directory was left behind: %v", left)
+	}
+	// The ref advertisement runs no hook and is still served.
+	if _, done, err := broken.Command(context.Background(), "receive-pack", "--stateless-rpc", "--advertise-refs", "/data/git/ab/ab.git"); err != nil {
+		t.Fatalf("ref advertisement refused with a broken hook: %v", err)
+	} else {
+		done()
+	}
 }
 
 // TestPrepareHooksLeavesNothingBehind: the startup check makes, runs and
@@ -118,6 +147,22 @@ func TestPrepareHooksLeavesNothingBehind(t *testing.T) {
 	}
 	if left, _ := os.ReadDir(base); len(left) != 0 {
 		t.Fatalf("PrepareHooks left %v behind", left)
+	}
+
+	// With no hooks base configured the system temporary directory is used.
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	s := newHooksStore(t, "")
+	dir, done, err := s.pushHooks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(dir) != tmp {
+		t.Fatalf("hooks directory %s, want one made under %s", dir, tmp)
+	}
+	done()
+	if left, _ := os.ReadDir(tmp); len(left) != 0 {
+		t.Fatalf("done left %v behind", left)
 	}
 }
 
