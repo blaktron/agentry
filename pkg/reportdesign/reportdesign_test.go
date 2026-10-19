@@ -6,9 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -198,6 +201,22 @@ func TestValidationTable(t *testing.T) {
 		{"footer only no-break spaces", "footer.text", strings.Repeat(string(rune(0xa0)), 3), "footer.text"},
 		{"name with a line break", "name", "a\nb", "name"},
 		{"name with a bidi override", "name", "a" + string(rune(0x202e)) + "b", "name"},
+		// Every other format character (Unicode Cf) is refused too: it draws
+		// nothing, so a footer or a name could carry hidden or look-alike text.
+		{"footer zero-width space", "footer.text", "a" + string(rune(0x200b)) + "b", "footer.text"},
+		{"footer zero-width non-joiner", "footer.text", "a" + string(rune(0x200c)) + "b", "footer.text"},
+		{"footer zero-width joiner", "footer.text", "a" + string(rune(0x200d)) + "b", "footer.text"},
+		{"footer byte order mark", "footer.text", string(rune(0xfeff)) + "Acme", "footer.text"},
+		{"footer word joiner", "footer.text", "a" + string(rune(0x2060)) + "b", "footer.text"},
+		{"footer soft hyphen", "footer.text", "a" + string(rune(0xad)) + "b", "footer.text"},
+		{"footer tag character", "footer.text", "a" + string(rune(0xe0041)) + "b", "footer.text"},
+		{"footer language tag", "footer.text", "a" + string(rune(0xe0001)) + "b", "footer.text"},
+		{"footer interlinear annotation", "footer.text", "a" + string(rune(0xfff9)) + "b", "footer.text"},
+		{"name zero-width space", "name", "a" + string(rune(0x200b)) + "b", "name"},
+		{"name byte order mark", "name", string(rune(0xfeff)) + "Acme", "name"},
+		{"name word joiner", "name", "a" + string(rune(0x2060)) + "b", "name"},
+		{"name soft hyphen", "name", "a" + string(rune(0xad)) + "b", "name"},
+		{"name tag character", "name", "a" + string(rune(0xe0041)) + "b", "name"},
 		{"theme document 3", "agentryTheme", 3, "agentryTheme"},
 		{"name as a number", "name", 5, "name"},
 		{"fonts as a string", "fonts", "Inter", "fonts"},
@@ -228,7 +247,7 @@ func TestValidationTable(t *testing.T) {
 	// error.
 	const (
 		colourMsg = "must be a colour #rrggbb in lower-case hex"
-		oneLine   = "must be one line of plain text (no control, line-break or bidirectional formatting characters)"
+		oneLine   = "must be one line of plain text (no control, line-break, bidirectional formatting or other invisible format characters)"
 		blank     = "must not be empty or only spaces"
 		required  = "is required"
 	)
@@ -289,6 +308,10 @@ func TestValidationTable(t *testing.T) {
 	for _, c := range cases {
 		if strings.HasPrefix(c.name, "missing ") {
 			wantMsg[c.name] = required
+		}
+		// A format character in either free text is the one-line refusal.
+		if (strings.HasPrefix(c.name, "footer ") || strings.HasPrefix(c.name, "name ")) && wantMsg[c.name] == "" {
+			wantMsg[c.name] = oneLine
 		}
 	}
 	for _, c := range cases {
@@ -413,6 +436,39 @@ func TestTextIsData(t *testing.T) {
 	}
 }
 
+// A refusal for an accent just under a line never prints a ratio that reaches
+// it, for any colour: the shade a design is told it has is not a pass.
+func TestContrastRefusalNeverPrintsAPass(t *testing.T) {
+	for _, tb := range []string{"bar", "band"} {
+		d := Default()
+		d.TitleBlock = tb
+		need := d.MinContrast()
+		for v := 0; v < 256; v++ {
+			for _, accent := range []string{
+				fmt.Sprintf("#%02x%02x%02x", v, v, v),
+				fmt.Sprintf("#%02x%02x%02x", v, 0x80, 0xff-v),
+				fmt.Sprintf("#%02x%02x%02x", 0xe0-v/2, v, 0x40),
+			} {
+				d.Accent = accent
+				err := d.Validate()
+				var fe *FieldError
+				if !errors.As(err, &fe) || fe.Field != "accent" {
+					continue
+				}
+				m := reachesRatio.FindStringSubmatch(fe.Message)
+				if m == nil {
+					t.Fatalf("%s: %q prints no ratio", accent, fe.Message)
+				}
+				if shown, _ := strconv.ParseFloat(m[1], 64); shown >= need {
+					t.Fatalf("%s: %q prints %s, which reaches %v", accent, fe.Message, m[1], need)
+				}
+			}
+		}
+	}
+}
+
+var reachesRatio = regexp.MustCompile(` reaches ([0-9.]+):1 on white`)
+
 // The contrast table.
 func TestContrast(t *testing.T) {
 	for _, c := range []struct {
@@ -484,7 +540,7 @@ func TestContrast(t *testing.T) {
 		need, use, reaches           string
 	}{
 		{"#949494", "bar", "rule", true, GraphicsContrast, "", "", ""},
-		{"#959595", "bar", "rule", false, GraphicsContrast, "needs 3.0:1", "colours only graphics", "#959595 reaches "},
+		{"#959595", "bar", "rule", false, GraphicsContrast, "needs 3.0:1", "colours only graphics", "#959595 reaches 2.99:1 on white"},
 		{"#767676", "band", "rule", true, TextContrast, "", "", ""},
 		{"#777777", "band", "rule", false, TextContrast, "needs 4.5:1", "colours text", "#777777 reaches 4.48:1 on white"},
 		{"#767676", "bar", "smallcaps", true, TextContrast, "", "", ""},
@@ -514,6 +570,13 @@ func TestContrast(t *testing.T) {
 			if !strings.Contains(fe.Message, want) {
 				t.Errorf("%s with %s and %s: %q does not say %q", c.accent, c.titleBlock, c.headings, fe.Message, want)
 			}
+		}
+		// The ratio the refusal prints is never one that reaches the line.
+		rm := reachesRatio.FindStringSubmatch(fe.Message)
+		if rm == nil {
+			t.Errorf("%s with %s and %s: %q prints no ratio", c.accent, c.titleBlock, c.headings, fe.Message)
+		} else if shown, _ := strconv.ParseFloat(rm[1], 64); shown >= c.min {
+			t.Errorf("%s with %s and %s: %q prints %s, which reaches %v", c.accent, c.titleBlock, c.headings, fe.Message, rm[1], c.min)
 		}
 		if r, err := Contrast(shadeOf(fe.Message), White); err != nil || r < c.min {
 			t.Errorf("%s with %s and %s: the suggested shade %q reaches %.2f:1 (%v), want %v", c.accent, c.titleBlock, c.headings, shadeOf(fe.Message), r, err, c.min)
