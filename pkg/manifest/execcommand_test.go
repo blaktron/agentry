@@ -26,6 +26,8 @@ var execCommandCases = []struct {
 	// names of published releases
 	{"leading digit", "7z", true},
 	{"mixed case", "analyzeHeadless", true},
+	{"leading capital", "Rscript", true},
+	{"single character", "w", true},
 	// shapes a binary's name takes
 	{"dot and digit", "python3.12", true},
 	{"plus", "g++", true},
@@ -85,6 +87,23 @@ func TestV5ExecCommandGrammar(t *testing.T) {
 				return
 			}
 			wantIssue(t, errs, "V5", SeverityError, "capabilities.exec.commands[1]")
+			// Each refusal says its own reason.
+			says := "is not a program name"
+			switch tc.name {
+			case "empty":
+				says = "command must not be empty"
+			case "65 characters":
+				says = "command must be at most 64 characters (got 65)"
+			}
+			found := false
+			for _, err := range errs {
+				if i, ok := AsIssue(err); ok && i.Rule == "V5" && i.Path == "capabilities.exec.commands[1]" && strings.Contains(i.Message, says) {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("no V5 issue at capabilities.exec.commands[1] saying %q:%s", says, issueStrings(errs))
+			}
 			if len(Blocking(errs)) == 0 {
 				t.Fatal("a command outside the grammar must block publish")
 			}
@@ -112,6 +131,29 @@ func TestV5ExecCommandLengthNamesTheCap(t *testing.T) {
 	}
 	if !strings.Contains(msg, "64") || strings.Contains(msg, strings.Repeat("a", 65)) {
 		t.Fatalf("message = %q; want the cap named and the command not echoed", msg)
+	}
+	if !strings.Contains(msg, "command must be at most 64 characters (got 65)") {
+		t.Fatalf("message = %q; want the length refusal", msg)
+	}
+
+	// The cap is on characters and a name at the cap is not over it: a
+	// 64-character name, and a 33-character one whose bytes pass 64, are
+	// refused for their characters, not for their length.
+	for name, cmd := range map[string]string{
+		"64 characters with a path separator": strings.Repeat("a", 63) + "/",
+		"33 two-byte letters":                 strings.Repeat("\u0131", 33),
+	} {
+		m := validSkillManifest()
+		m.Capabilities.Exec = ExecCapability{Commands: []string{cmd}}
+		msg := ""
+		for _, err := range Validate(m) {
+			if i, ok := AsIssue(err); ok && i.Rule == "V5" && i.Path == "capabilities.exec.commands[0]" {
+				msg = i.Message
+			}
+		}
+		if !strings.Contains(msg, "is not a program name") || strings.Contains(msg, "at most") {
+			t.Errorf("%s: message = %q; want the program-name refusal, not the length one", name, msg)
+		}
 	}
 }
 

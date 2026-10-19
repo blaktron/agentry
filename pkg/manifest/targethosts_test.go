@@ -116,7 +116,15 @@ func TestTargetHostsIsAV2Field(t *testing.T) {
 	m := validV2Manifest(t)
 	m.SchemaVersion = "1"
 	m.Capabilities.TargetHosts = []string{"server"}
-	wantIssue(t, Validate(m), "V1", SeverityError, "capabilities.targetHosts")
+	errs := Validate(m)
+	wantIssue(t, errs, "V1", SeverityError, "capabilities.targetHosts")
+	for _, err := range errs {
+		if is, _ := AsIssue(err); is.Rule == "V1" && is.Severity == SeverityError && is.Path == "capabilities.targetHosts" &&
+			strings.Contains(is.Message, "targetHosts is a v2 field") {
+			return
+		}
+	}
+	t.Fatalf("no V1 issue at capabilities.targetHosts saying it is a v2 field:%s", issueStrings(errs))
 }
 
 // TestV14PointsAnSSHClientInExecAtTargetHosts: a release whose exec names
