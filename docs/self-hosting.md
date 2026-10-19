@@ -880,6 +880,10 @@ its tag serves now; to move to another version, change the tag and run it.
 `scripts/compose-pins.sh check --online` reports a pinned digest the registry
 no longer serves, or a tag that has moved since the pin was written.
 
+The object store in the stack is MinIO, from Chainguard's build of the MinIO
+source, which is licensed AGPL-3.0. It runs as a separate service that the
+server reaches over the S3 API, and it is not part of Agentry.
+
 ### Rate limits at the edge
 
 agentryd applies per-IP limits to the API; the edge adds `limit_req`

@@ -127,8 +127,13 @@ drop accounting.
   `agd_` desktop grants, `whsec_` webhook secrets,
   `csrf_` CSRF tokens) or bare (OIDC state and nonce, domain verification)
   — is masked wherever it appears (in a message, a value, an error, a
-  nested object), keeping its 12-character display prefix so an incident
-  still traces to the credential. Masked, not dropped: the line about the incident
+  nested object) and whatever characters touch it (`sess_<token>`,
+  `<token>_1` and a file name built from one are masked like a bare token;
+  a letter stuck to the token is masked with it), keeping its
+  12-character display prefix so an incident still traces to the credential.
+  A value is masked the same way under an empty key, and a nil pointer
+  that implements `error` or `fmt.Stringer` is written as `null`.
+  Masked, not dropped: the line about the incident
   is worth more than the value it would have leaked. The collector applies
   the same token pattern again as a second net.
 - **A person's name or email address.** Lines carry opaque principal ids.
