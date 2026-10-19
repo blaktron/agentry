@@ -4045,13 +4045,20 @@
           "path": "pkg/extension/agentryd_apiqueue_test.go",
           "tests": [
             "TestExtensionJobsSplitsTheAPIQueue",
-            "TestAPIRoleDrainsTheAPIQueue"
+            "TestAPIRoleDrainsTheAPIQueue",
+            "TestRolesThatNeedADatabaseRefuseToStartWithoutOne",
+            "TestRunWithRefusesAnUnknownRoleAndOneThatCannotRun",
+            "TestRootCmdHasTheRolesAndOnlyTheWorkerTakesQueues",
+            "TestAPIRoleWithoutADatabaseServesTheExtensions",
+            "TestServeHTTPReportsAListenFailureAndStopsWithItsContext"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
             "database fixture",
+            "HTTP transport",
+            "source/file contract",
             "real-time wait",
             "explicit skip"
           ]
@@ -4090,7 +4097,12 @@
             "TestRegisterAuditActionKeepsTheExtensionPrefix",
             "TestBindHandsTheBaseURL",
             "TestApplyExtensionsBindsAndRegistersActions",
+            "TestApplyExtensionsRefusesARepeatedOrMalformedName",
+            "TestDepsAdaptersFollowThePoolAndKeepTheExtensionsName",
+            "TestMigrateExtensionsSkipsThoseWithoutMigrationsAndReportsAFailure",
             "TestPeriodicTickerEnqueuesNowAndOnThePeriod",
+            "TestReconcileTickerEnqueuesTheWatchdogOnTheCoreQueue",
+            "TestRegisterJobsRegistersEveryHandlerAndEnqueuesOnlyPeriodicJobs",
             "TestNoopSatisfiesTheInterface",
             "TestParseQueues",
             "TestScopeAllows",
@@ -4099,6 +4111,7 @@
             "TestBindHandsTheKnowledgeStore",
             "TestApplyExtensionsRegistersTheAccountEraser",
             "TestBindHandsTheVoiceStore",
+            "TestVoiceStoreProposesOnlyTheSourcesAVoiceWriterHas",
             "TestBindHandsTheServersMeter",
             "TestBindHandsTheReportSettings",
             "TestBindHandsTheMembersDoor"
@@ -4125,7 +4138,9 @@
           "tests": [
             "TestApplyExtensionsWiresTheIdentitySeam",
             "TestOneDirectoryPerDeployment",
-            "TestTheIdentityEventsAreTheCoresNames"
+            "TestSignInHookAuditsTheRememberedBrowserUnderTheExtensionsName",
+            "TestTheIdentityEventsAreTheCoresNames",
+            "TestTheSeamsNamesAreTheCoresNames"
           ],
           "fuzz": [],
           "benchmarks": [],
