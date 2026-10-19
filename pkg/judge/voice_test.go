@@ -2,6 +2,7 @@ package judge
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -61,6 +62,12 @@ func TestAVoiceQuestionAtTheLineFlagsTheVoice(t *testing.T) {
 			t.Fatalf("banded %v: %+v", c.answers, res)
 		}
 	}
+	// Every flagged question is listed, in the set's order.
+	all := &fakeAsker{answer: func(map[string]string, Question, int) (float64, error) { return 0.95, nil }}
+	res = NewVoiceScanner(all).Scan(context.Background(), "x")
+	if res.Verdict != VerdictFlagged || strings.Join(res.Flagged, ",") != "beyond_style,override,inserted_content,task_change" {
+		t.Fatalf("flagged: %v", res.Flagged)
+	}
 }
 
 func TestAVoiceThatIsNotOneOrAFailedJudgeIsNotScanned(t *testing.T) {
@@ -78,6 +85,13 @@ func TestAVoiceThatIsNotOneOrAFailedJudgeIsNotScanned(t *testing.T) {
 		if res.Verdict != VerdictNotScanned || res.Failure != want || res.Scores != nil {
 			t.Fatalf("%s: %+v", want, res)
 		}
+		wantErr := map[string]string{
+			FailureTooLarge: "judge: a voice of 32769 bytes is past the bound 32768",
+			FailureInvalid:  "judge: a voice must be UTF-8 text with something in it",
+		}[want]
+		if res.Err == nil || res.Err.Error() != wantErr || res.Model != DefaultModel || res.QuestionSet != s.QuestionSet() || res.Usage.Requests != 0 {
+			t.Fatalf("%s: the refusal is %v (want %q), model %q", want, res.Err, wantErr, res.Model)
+		}
 	}
 	if len(f.asked) != 0 {
 		t.Fatal("a text that is not a voice was asked")
@@ -85,8 +99,28 @@ func TestAVoiceThatIsNotOneOrAFailedJudgeIsNotScanned(t *testing.T) {
 	if res := s.Scan(context.Background(), strings.Repeat("v", VoiceMaxBytes)); res.Verdict != VerdictPass {
 		t.Fatalf("a voice at the bound: %+v", res)
 	}
+	// The bound is 32768 bytes: that many are asked, one more is not, and
+	// white space alone is still something.
+	if VoiceMaxBytes != 32768 {
+		t.Fatalf("the bound is %d, want 32 KiB", VoiceMaxBytes)
+	}
+	for n, want := range map[int]Verdict{32768: VerdictPass, 32769: VerdictNotScanned} {
+		if res := s.Scan(context.Background(), strings.Repeat("v", n)); res.Verdict != want {
+			t.Fatalf("%d bytes: %+v", n, res)
+		}
+	}
+	if res := s.Scan(context.Background(), " \n"); res.Verdict != VerdictPass {
+		t.Fatalf("white space only: %+v", res)
+	}
 	broken := &fakeAsker{answer: func(map[string]string, Question, int) (float64, error) { return 0, context.DeadlineExceeded }}
 	if res := NewVoiceScanner(broken).Scan(context.Background(), "x"); res.Verdict != VerdictNotScanned || res.Failure != FailureTimeout {
 		t.Fatalf("a timeout: %+v", res)
+	}
+	// Any other failure is a judge error, and the request made is counted.
+	boom := errors.New("judge: typesafe endpoint returned 500: oops")
+	failing := &fakeAsker{answer: func(map[string]string, Question, int) (float64, error) { return 0, boom }}
+	if res := NewVoiceScanner(failing).Scan(context.Background(), "x"); res.Verdict != VerdictNotScanned || res.Failure != FailureJudgeError ||
+		!errors.Is(res.Err, boom) || res.Flagged != nil || res.Scores != nil || res.Usage.Requests != 1 {
+		t.Fatalf("a judge error: %+v", res)
 	}
 }
