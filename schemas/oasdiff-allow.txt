@@ -1,0 +1,18 @@
+# One-time exception to the additive-only rule: the server's own
+# organization single sign-on and SCIM token routes leave the API, and
+# signing out no longer answers 200 with an identity provider's logout
+# address. CI's oasdiff job ignores exactly these while this file exists.
+POST /auth/logout removed the success response with the status `200`
+GET /orgs/{org}/scim/tokens api path removed without deprecation
+POST /orgs/{org}/scim/tokens api path removed without deprecation
+DELETE /orgs/{org}/scim/tokens/{tokenId} api path removed without deprecation
+GET /orgs/{org}/sso/connections api path removed without deprecation
+DELETE /orgs/{org}/sso/connections/{kind} api path removed without deprecation
+PUT /orgs/{org}/sso/connections/{kind} api path removed without deprecation
+POST /orgs/{org}/sso/connections/{kind}/test api path removed without deprecation
+GET /orgs/{org}/sso/oidc/callback api path removed without deprecation
+GET /orgs/{org}/sso/oidc/start api path removed without deprecation
+POST /orgs/{org}/sso/saml/acs api path removed without deprecation
+GET /orgs/{org}/sso/saml/metadata api path removed without deprecation
+GET /orgs/{org}/sso/saml/slo api path removed without deprecation
+POST /orgs/{org}/sso/saml/slo api path removed without deprecation
