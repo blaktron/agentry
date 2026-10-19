@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -23,6 +24,21 @@ func TestCleanQuery(t *testing.T) {
 	}
 	if _, err := CleanQuery(strings.Repeat("é", MaxQuery)); err != nil {
 		t.Fatal("the bound is in characters, not bytes")
+	}
+	// Every control character is refused (NUL, DEL, a C1 control), while a
+	// space inside the text and the full bound are not.
+	for _, bad := range []string{"nul\x00byte", "del\x7fchar", "c1\xc2\x85ctl", "esc\x1b[0m", "carriage\rreturn"} {
+		if _, err := CleanQuery(bad); err != ErrBadQuery {
+			t.Fatalf("%q must be refused", bad)
+		}
+	}
+	for _, ok := range []string{strings.Repeat("a", MaxQuery), "two  spaces and a no-break\xc2\xa0space"} {
+		if q, err := CleanQuery(ok); err != nil || q != ok {
+			t.Fatalf("%q must be accepted whole: %q %v", ok, q, err)
+		}
+	}
+	if _, err := CleanQuery("ok\xffnot ok"); err != ErrBadQuery {
+		t.Fatal("invalid UTF-8 inside the text must be refused")
 	}
 }
 
@@ -59,16 +75,100 @@ func TestCleanBoundsEveryResult(t *testing.T) {
 	if got := Clean(in, 1); len(got) != 1 {
 		t.Fatalf("count bounds the results: %d", len(got))
 	}
+
+	t.Run("the count is held to 1..MaxCount, 0 or less meaning the default", func(t *testing.T) {
+		var many []Result
+		for i := range 12 {
+			many = append(many, Result{Title: "r", URL: "https://example.com/" + strings.Repeat("p", i+1)})
+		}
+		for asked, want := range map[int]int{-1: DefaultCount, 0: DefaultCount, 1: 1, 10: 10, 11: MaxCount, 50: MaxCount} {
+			got := Clean(many, asked)
+			if len(got) != want || got[0].URL != many[0].URL || got[want-1].URL != many[want-1].URL {
+				t.Fatalf("Clean(.., %d) kept %d, want %d", asked, len(got), want)
+			}
+		}
+	})
+
+	t.Run("an address is kept or dropped at its exact bound", func(t *testing.T) {
+		base := "https://example.com/"
+		for name, tc := range map[string]struct{ in, want string }{
+			"exactly maxURL bytes":      {base + strings.Repeat("x", maxURL-len(base)), base + strings.Repeat("x", maxURL-len(base))},
+			"one byte past maxURL":      {base + strings.Repeat("x", maxURL-len(base)+1), ""},
+			"white space around":        {" \t" + base + "pad\n ", base + "pad"},
+			"invalid UTF-8":             {base + "bad\xffbyte", ""},
+			"user name alone":           {"https://token@example.com/e", ""},
+			"https with no host":        {"https:///nohost", ""},
+			"https with an opaque path": {"https:nohost", ""},
+			"a file address":            {"file:///etc/passwd", ""},
+			"nothing":                   {"", ""},
+		} {
+			got := Clean([]Result{{Title: "t", URL: tc.in}}, 5)
+			switch {
+			case tc.want == "" && len(got) != 0:
+				t.Fatalf("%s: kept %+v", name, got)
+			case tc.want != "" && (len(got) != 1 || got[0].URL != tc.want):
+				t.Fatalf("%s: got %+v", name, got)
+			}
+		}
+	})
+
+	t.Run("text is folded, stripped and cut at its bound", func(t *testing.T) {
+		clean := func(title, snippet string) Result {
+			got := Clean([]Result{{Title: title, URL: "https://example.com/t", Snippet: snippet}}, 1)
+			if len(got) != 1 {
+				t.Fatalf("dropped %q", title)
+			}
+			return got[0]
+		}
+		for name, tc := range map[string]struct{ in, want string }{
+			"a new line between words":        {"a\nb", "a b"},
+			"a tab between words":             {"a\tb", "a b"},
+			"unicode spaces fold":             {"a\xc2\xa0\xe2\x80\x83b", "a b"},
+			"a leading unicode space":         {"\xc2\xa0 lead", "lead"},
+			"a delete character":              {"x\x7fy", "xy"},
+			"a C1 control":                    {"x\xc2\x85y", "x y"},
+			"invalid UTF-8":                   {"bad\xffbyte", "badbyte"},
+			"exactly the title bound":         {strings.Repeat("a", maxTitle), strings.Repeat("a", maxTitle)},
+			"one past the title bound":        {strings.Repeat("a", maxTitle+1), strings.Repeat("a", maxTitle)},
+			"a space ending the title bound":  {strings.Repeat("a", maxTitle-2) + " b", strings.Repeat("a", maxTitle-2) + " b"},
+			"a word starting at the boundary": {strings.Repeat("a", maxTitle-1) + " bcd efg", ""},
+		} {
+			got := clean(tc.in, tc.in).Title
+			if tc.want == "" {
+				// Cut inside the fold: the title never passes its bound
+				// and keeps the text before it.
+				if utf8.RuneCountInString(got) > maxTitle || !strings.HasPrefix(got, strings.Repeat("a", maxTitle-1)) || strings.Contains(got, "b") {
+					t.Fatalf("%s: %d characters %q", name, utf8.RuneCountInString(got), got)
+				}
+				continue
+			}
+			if got != tc.want {
+				t.Fatalf("%s: title %q, want %q", name, got, tc.want)
+			}
+			// The snippet's bound is wider than the title's, so only the
+			// shorter inputs are cut the same in both.
+			if snippet := clean(tc.in, tc.in).Snippet; utf8.RuneCountInString(tc.in) < maxTitle-2 && snippet != tc.want {
+				t.Fatalf("%s: snippet %q, want %q", name, snippet, tc.want)
+			}
+		}
+		if got := clean("t", strings.Repeat("s", maxSnippet)).Snippet; got != strings.Repeat("s", maxSnippet) {
+			t.Fatalf("a snippet of exactly the bound loses %d characters", maxSnippet-len(got))
+		}
+	})
 }
 
 func TestYouComAsksOnceWithTheKeyAndReadsOnlyTheWebResults(t *testing.T) {
 	var got struct {
 		Key, Method, Path string
 		Body              map[string]any
+		Req               *http.Request
+		Raw               []byte
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got.Key, got.Method, got.Path = r.Header.Get("X-API-Key"), r.Method, r.URL.Path
+		got.Req = r.Clone(context.Background())
 		raw, _ := io.ReadAll(r.Body)
+		got.Raw = raw
 		_ = json.Unmarshal(raw, &got.Body)
 		_, _ = w.Write([]byte(`{"results":{
 			"web":[
@@ -101,6 +201,39 @@ func TestYouComAsksOnceWithTheKeyAndReadsOnlyTheWebResults(t *testing.T) {
 	if len(res) != 2 || res[0].Title != "MCP servers" || res[0].Snippet != "Reference servers." || res[1].Snippet != "from snippets" {
 		t.Fatalf("results: %+v", res)
 	}
+	if want := map[string]any{"query": "github mcp server", "count": 3.0}; !reflect.DeepEqual(got.Body, want) {
+		t.Fatalf("the body is the query and the count alone: %v", got.Body)
+	}
+	if got.Req.Header.Get("Content-Type") != "application/json" || got.Req.Header.Get("Accept") != "application/json" {
+		t.Fatalf("headers: %v", got.Req.Header)
+	}
+	assertKeyOnlyIn(t, "ydc-secret-key", "X-API-Key", got.Req, got.Raw)
+	if res[0].URL != "https://github.com/modelcontextprotocol/servers" || res[1].URL != "https://example.com/b" || res[1].Title != "B" {
+		t.Fatalf("results: %+v", res)
+	}
+
+	t.Run("the count is held to 1..MaxCount, 0 or less meaning the default", func(t *testing.T) {
+		for asked, want := range map[int]float64{-1: DefaultCount, 0: DefaultCount, 1: 1, 10: 10, 11: MaxCount, 50: MaxCount} {
+			if _, err := y.Search(context.Background(), "q", asked); err != nil || got.Body["count"] != want {
+				t.Fatalf("asked %d: sent %v, want %v (%v)", asked, got.Body["count"], want, err)
+			}
+		}
+	})
+
+	t.Run("a blank description gives way to the first snippet, a missing one to nothing", func(t *testing.T) {
+		answer := serve(t, func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"results":{"web":[
+				{"url":"https://example.com/a","title":"A","description":"  \n ","snippets":["blank description","second"]},
+				{"url":"https://example.com/b","title":"B","description":"","snippets":[]},
+				{"url":"https://example.com/c","title":"C"}]}}`))
+		})
+		y3, _ := NewYouCom(YouComConfig{BaseURL: answer, APIKey: "k"})
+		rs, err := y3.Search(context.Background(), "q", 5)
+		if err != nil || len(rs) != 3 || rs[0].Snippet != "blank description" || rs[1].Snippet != "" || rs[2].Snippet != "" ||
+			rs[0].URL != "https://example.com/a" || rs[2].Title != "C" {
+			t.Fatalf("results %+v, err %v", rs, err)
+		}
+	})
 }
 
 func TestYouComFailsWithoutTheKeyInTheError(t *testing.T) {
@@ -149,10 +282,62 @@ func TestNewNamesTheProviders(t *testing.T) {
 		}
 	}
 	for _, unknown := range []string{"fake", "google", "Brave", "kagi", "Tavily"} {
-		if _, err := New(unknown, "", "k"); err == nil {
-			t.Fatalf("%q must be refused: no configuration names the fake or an unbuilt provider", unknown)
+		_, err := New(unknown, "", "k")
+		if err == nil || err == ErrNoKey || !strings.Contains(err.Error(), "unknown provider") ||
+			!strings.Contains(err.Error(), strings.Join(Providers(), "|")) {
+			t.Fatalf("%q must be refused as unknown, naming the providers there are: %v", unknown, err)
 		}
 	}
+
+	// The base address and the key reach the client the name builds, and a
+	// name is trimmed.
+	for _, name := range []string{"youcom", "brave", "tavily", "exa", "perplexity", " brave ", "\texa\n"} {
+		var hits int
+		addr := serve(t, func(w http.ResponseWriter, _ *http.Request) {
+			hits++
+			_, _ = w.Write([]byte("{}"))
+		})
+		p, err := New(name, addr, "k")
+		if err != nil {
+			t.Fatalf("%q: %v", name, err)
+		}
+		if _, err := p.Search(context.Background(), "q", 5); err != nil || hits != 1 {
+			t.Fatalf("%q: the search must reach the base address once: %d hits, %v", name, hits, err)
+		}
+	}
+
+	// Fake answers from its list for a test, and no configuration names it.
+	t.Run("the fake provider", func(t *testing.T) {
+		f := &Fake{Results: []Result{{Title: "a", URL: "https://example.com/a"}, {Title: "b", URL: "https://example.com/b"}}}
+		var _ Provider = f
+		if f.Name() != "fake" || Known(f.Name()) {
+			t.Fatalf("name %q, known %v", f.Name(), Known(f.Name()))
+		}
+		all, err := f.Search(context.Background(), "q1", 5)
+		if err != nil || len(all) != 2 {
+			t.Fatalf("count past the list: %v %v", all, err)
+		}
+		all[0].Title = "changed"
+		one, err := f.Search(context.Background(), "q2", 1)
+		if err != nil || len(one) != 1 || one[0].Title != "a" {
+			t.Fatalf("a count of one, and results that are copies: %v %v", one, err)
+		}
+		qs := f.Queries()
+		if !reflect.DeepEqual(qs, []string{"q1", "q2"}) {
+			t.Fatalf("queries: %v", qs)
+		}
+		qs[0] = "changed"
+		if !reflect.DeepEqual(f.Queries(), []string{"q1", "q2"}) {
+			t.Fatalf("queries: %v", f.Queries())
+		}
+		f.Err = errors.New("down")
+		if rs, err := f.Search(context.Background(), "q3", 5); rs != nil || err != f.Err {
+			t.Fatalf("an error answers with no results: %v %v", rs, err)
+		}
+		if !reflect.DeepEqual(f.Queries(), []string{"q1", "q2", "q3"}) {
+			t.Fatalf("a failed search is still asked: %v", f.Queries())
+		}
+	})
 }
 
 func TestYouComNeverFollowsARedirectAndRedactsAcrossTheCut(t *testing.T) {
@@ -180,6 +365,14 @@ func TestYouComNeverFollowsARedirectAndRedactsAcrossTheCut(t *testing.T) {
 	if _, err := y2.Search(context.Background(), "q", 5); err == nil || strings.Contains(err.Error(), "ydc-secret") {
 		t.Fatalf("a part of the key survived: %v", err)
 	}
+
+	checkClientControls(t, controls{
+		name: YouComName, key: key, header: "X-API-Key",
+		build:    func(c ClientConfig) (Provider, error) { return NewYouCom(c) },
+		path:     "/v1/search",
+		endpoint: "https://ydc-index.io/v1/search",
+		answer:   `{"results":{"web":[]}}`, head: `{"results":{"web":[]},"pad":"`, tail: `"}`,
+	})
 }
 
 func TestOriginAndTheProviderList(t *testing.T) {
@@ -188,6 +381,15 @@ func TestOriginAndTheProviderList(t *testing.T) {
 	}
 	if Origin("not a url") != "" {
 		t.Fatal("no host, no origin")
+	}
+	if Origin("https://host.example/%zz") != "" {
+		t.Fatal("an address that does not parse has no origin")
+	}
+	if got := Origin("https://user:pw@example.com:8443/x?y=1#z"); got != "https://example.com:8443/" {
+		t.Fatalf("an origin carries no user information, path or query: %q", got)
+	}
+	if want := []string{"none", "youcom", "brave", "tavily", "exa", "perplexity"}; !reflect.DeepEqual(Providers(), want) {
+		t.Fatalf("providers: %v", Providers())
 	}
 	for _, ok := range []string{"", "none", "youcom", " youcom ", "brave", "tavily", "exa", "perplexity"} {
 		if !Known(ok) {
