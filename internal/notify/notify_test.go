@@ -545,7 +545,7 @@ func TestVerificationLinkUsesBaseURL(t *testing.T) {
 		"https://registry.example/auth/verify-email?token=secret-token\n\n" +
 		"The link works once. Until this address is confirmed, the account can\n" +
 		"browse but not publish.\n\n" +
-		"If you did not create an account named chris, do not follow the\n" +
+		"If you did not create an account named chris, do not use the\n" +
 		"link: someone may have signed up with your address. Ignore this message.\n" +
 		wantFooter("registry.example", "")
 	if got := bodyOf((*sent)[0]); got != wantBody {
@@ -637,7 +637,8 @@ func TestDeliverRejectsMalformedRecipient(t *testing.T) {
 		t.Error("a message was sent to a malformed address")
 	}
 	err := n.EmailVerification(t.Context(), "not an address", "chris", "tok")
-	if err == nil || !strings.Contains(err.Error(), `notify: recipient "not an address"`) {
+	// The refusal names the recipient masked, never in clear.
+	if err == nil || !strings.Contains(err.Error(), `notify: recipient "…"`) || strings.Contains(err.Error(), "not an address") {
 		t.Errorf("malformed-recipient error = %v", err)
 	}
 
@@ -692,31 +693,6 @@ func TestDeliverRejectsMalformedRecipient(t *testing.T) {
 	}
 }
 
-// SMTP DATA ends at a lone "."; without dot-stuffing a body could truncate
-// itself, or worse, terminate early and leave the rest interpreted as commands.
-func TestBodyIsDotStuffedAndCRLF(t *testing.T) {
-	got := normalizeBody("first\n.\n.hidden\nlast\n")
-	want := "first\r\n..\r\n..hidden\r\nlast\r\n"
-	if got != want {
-		t.Errorf("normalizeBody = %q, want %q", got, want)
-	}
-
-	// CRLF input is not doubled, only a leading dot is stuffed (a dot inside
-	// a line is left alone), a stuffed line is stuffed once more, and an
-	// empty body stays empty.
-	for _, c := range []struct{ name, in, want string }{
-		{"CRLF input", "a\r\n.b\r\nc\r\n", "a\r\n..b\r\nc\r\n"},
-		{"dot inside a line", "a.b\nend.\n", "a.b\r\nend.\r\n"},
-		{"already stuffed", "..x\n", "...x\r\n"},
-		{"empty", "", ""},
-		{"no trailing newline", "x\n.", "x\r\n.."},
-	} {
-		if got := normalizeBody(c.in); got != c.want {
-			t.Errorf("%s: normalizeBody(%q) = %q, want %q", c.name, c.in, got, c.want)
-		}
-	}
-}
-
 func TestComposeSetsTransactionalHeaders(t *testing.T) {
 	n, _ := capture(t)
 	raw, err := n.compose("u@example.test", message{Subject: "hello", Body: "body\n"})
@@ -764,13 +740,14 @@ func TestComposeSetsTransactionalHeaders(t *testing.T) {
 	if got, want := headerOf(string(zoned), "Date"), "Sat, 29 Aug 2026 12:00:00 +0500"; got != want {
 		t.Errorf("Date = %q, want %q", got, want)
 	}
-	// The body goes through dot-stuffing inside compose, not only on its own.
+	// compose ends lines in CRLF and stuffs no dot: the SMTP DATA writer
+	// stuffs each line once, so a body line "." reaches the reader as ".".
 	stuffed, err := n.compose("u@example.test", message{Subject: "s", Body: "x\n.\ny\n"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(string(stuffed), "\r\n\r\nx\r\n..\r\ny\r\n") {
-		t.Errorf("compose did not dot-stuff the body:\n%q", stuffed)
+	if !strings.HasSuffix(string(stuffed), "\r\n\r\nx\r\n.\r\ny\r\n") {
+		t.Errorf("compose changed the body beyond its line ends:\n%q", stuffed)
 	}
 }
 
@@ -982,8 +959,8 @@ func TestVerificationFallsBackToACodeWithoutABaseURL(t *testing.T) {
 	want := "Verification code: tok123\n\n" +
 		"The code works once. Until this address is confirmed, the account can\n" +
 		"browse but not publish.\n\n" +
-		"If you did not create an account named chris, do not follow the\n" +
-		"link: someone may have signed up with your address. Ignore this message.\n" +
+		"If you did not create an account named chris, do not use the\n" +
+		"code: someone may have signed up with your address. Ignore this message.\n" +
 		wantFooter("Agentry", "")
 	if opening, rest, _ := strings.Cut(m.Body, "\n\n"); rest != want || !strings.Contains(opening, "activate the Agentry account chris.") {
 		t.Errorf("code-branch body:\n%q\nwant the opening sentence, then:\n%q", m.Body, want)

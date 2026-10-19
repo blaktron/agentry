@@ -2573,8 +2573,9 @@ anything:
   names the nearest shade that passes. The tint is derived (12% of the
   accent over white), never stored;
 - `name` (60 characters) and `footer.text` (120) one line of plain text, no
-  control or bidirectional formatting characters. The footer is set as
-  text by the template, never evaluated;
+  control, line-break, bidirectional formatting or other invisible format
+  characters (zero-width characters, the soft hyphen, the tag block). The
+  footer is set as text by the template, never evaluated;
 - `agentryTheme` 2. The version-1 documents and the old names (`formal`,
   `brief`, `letter`) are not read.
 

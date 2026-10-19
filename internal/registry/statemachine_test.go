@@ -3,6 +3,7 @@ package registry
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,9 +26,11 @@ func TestStateMachineEdges(t *testing.T) {
 		{StatusNeedsReview, StatusRejected},
 		{StatusPublished, StatusQuarantined},
 		{StatusPublished, StatusYanked},
+		{StatusPublished, StatusBlocked}, // T&S confirming a malicious published package: one atomic step
 		{StatusQuarantined, StatusPublished},
 		{StatusQuarantined, StatusYanked},
 		{StatusQuarantined, StatusBlocked},
+		{StatusBlocked, StatusQuarantined}, // the platform's reinstate path
 	}
 	for _, tc := range allowed {
 		if !transitionAllowed(tc.from, tc.to) {
@@ -44,6 +47,75 @@ func TestStateMachineEdges(t *testing.T) {
 	for _, tc := range denied {
 		if transitionAllowed(tc.from, tc.to) {
 			t.Errorf("%s → %s must be denied", tc.from, tc.to)
+		}
+	}
+
+	// The table is closed: of every pair of states, the reserved approved
+	// state and one that is no state at all included, exactly the allowed
+	// edges above are edges. A state with no edge out (rejected, yanked,
+	// approved, an unknown one) stays terminal, and a state is not its own
+	// successor.
+	listed := map[[2]Status]bool{}
+	for _, tc := range allowed {
+		listed[[2]Status{tc.from, tc.to}] = true
+	}
+	states := []Status{
+		StatusSubmitted, StatusScanning, StatusNeedsReview, StatusApproved, StatusPublished,
+		StatusRejected, StatusYanked, StatusQuarantined, StatusBlocked, Status("unknown"),
+	}
+	edges := 0
+	for _, from := range states {
+		for _, to := range states {
+			got := transitionAllowed(from, to)
+			if got != listed[[2]Status{from, to}] {
+				t.Errorf("%s → %s: allowed = %v, want %v", from, to, got, !got)
+			}
+			if got {
+				edges++
+			}
+		}
+	}
+	if edges != len(allowed) {
+		t.Errorf("%d edges in the table, want %d", edges, len(allowed))
+	}
+	// The gate-skipping edge is that one pair and no other.
+	for _, from := range states {
+		for _, to := range states {
+			want := from == StatusSubmitted && to == StatusPublished
+			if got := skipsTheGate(from, to); got != want {
+				t.Errorf("skipsTheGate(%s, %s) = %v, want %v", from, to, got, want)
+			}
+		}
+	}
+}
+
+// transitionEvent names the webhook each edge raises: a version that
+// publishes, is rejected, goes to review or is yanked, and an agent that is
+// quarantined or comes back from quarantine. The edges that raise nothing
+// (scanning starts, a block) answer "".
+func TestTransitionEventNamesTheWebhookOfEachEdge(t *testing.T) {
+	for _, tc := range []struct {
+		from, to Status
+		want     string
+	}{
+		{StatusSubmitted, StatusScanning, ""},
+		{StatusSubmitted, StatusPublished, "version.published"},
+		{StatusScanning, StatusPublished, "version.published"},
+		{StatusNeedsReview, StatusPublished, "version.published"},
+		{StatusQuarantined, StatusPublished, "agent.reinstated"},
+		{StatusScanning, StatusRejected, "version.rejected"},
+		{StatusNeedsReview, StatusRejected, "version.rejected"},
+		{StatusScanning, StatusNeedsReview, "version.needs_review"},
+		{StatusPublished, StatusYanked, "version.yanked"},
+		{StatusQuarantined, StatusYanked, "version.yanked"},
+		{StatusPublished, StatusQuarantined, "agent.quarantined"},
+		{StatusBlocked, StatusQuarantined, "agent.quarantined"},
+		{StatusPublished, StatusBlocked, ""},
+		{StatusQuarantined, StatusBlocked, ""},
+		{StatusPublished, StatusApproved, ""},
+	} {
+		if got := transitionEvent(tc.from, tc.to); got != tc.want {
+			t.Errorf("%s → %s: event %q, want %q", tc.from, tc.to, got, tc.want)
 		}
 	}
 }
@@ -130,8 +202,42 @@ func TestStageArchiveDoesNotLeakOnWriteFailure(t *testing.T) {
 	}
 	include := manifest.ResolveInclude([]string{"agent.yaml", "README.md", "SKILL.md"}, files)
 
-	before := runtime.NumGoroutine()
 	wantErr := errors.New("disk full")
+
+	// Which failure is reported. A sink that fails on the last byte of an
+	// archive that was built whole: the copy failed, the build did not, so
+	// the staging error is the one returned, wrapped. A build that fails
+	// itself (a file that is gone) is the build error, wrapped, with the sink
+	// untouched by it. And when both fail, the sink failure that aborted the
+	// build comes back as the build's error, which says more.
+	t.Run("the failing side is named", func(t *testing.T) {
+		small := t.TempDir()
+		if err := os.WriteFile(filepath.Join(small, "agent.yaml"), []byte("schemaVersion: \"1\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		smallFiles, err := WalkWorkspace(small)
+		if err != nil {
+			t.Fatal(err)
+		}
+		smallInclude := manifest.ResolveInclude([]string{"agent.yaml"}, smallFiles)
+		var whole bytes.Buffer
+		if _, err := BuildArchive(small, smallInclude, &whole); err != nil {
+			t.Fatal(err)
+		}
+		_, err = stageArchive(small, smallInclude, &failingWriter{remaining: whole.Len() - 1, err: wantErr})
+		if !errors.Is(err, wantErr) || !strings.HasPrefix(err.Error(), "registry: stage archive: ") {
+			t.Errorf("a sink that fails on the last byte: %v, want the wrapped staging error", err)
+		}
+
+		gone := append(append([]manifest.FileInfo(nil), smallInclude...), manifest.FileInfo{Path: "gone.md", Size: 3})
+		var sink bytes.Buffer
+		_, err = stageArchive(small, gone, &sink)
+		if !errors.Is(err, fs.ErrNotExist) || !strings.HasPrefix(err.Error(), "registry: build archive: ") {
+			t.Errorf("a build that fails: %v, want the wrapped build error", err)
+		}
+	})
+
+	before := runtime.NumGoroutine()
 
 	done := make(chan error, 1)
 	go func() {
@@ -145,6 +251,9 @@ func TestStageArchiveDoesNotLeakOnWriteFailure(t *testing.T) {
 		}
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want it to wrap %v", err, wantErr)
+		}
+		if !strings.HasPrefix(err.Error(), "registry: build archive: ") {
+			t.Fatalf("error = %v, want the build's own error, which the sink failure aborted", err)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("stageArchive hung: the builder goroutine is still blocked on pw.Write")

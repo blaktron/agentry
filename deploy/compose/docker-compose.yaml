@@ -175,7 +175,9 @@ services:
       # typesafe (TypeSafe AI's Jev, hosted only) needs AGENTRY_JUDGE_API_KEY;
       # AGENTRY_JUDGE_MODEL is a pinned version id (default jev-1.13.0, an
       # alias such as jev-latest is refused) and AGENTRY_JUDGE_BASE_URL
-      # defaults to https://api.typesafe.ai.
+      # defaults to https://api.typesafe.ai. A base URL carrying a key must be
+      # https (plain http only to a loopback address), or the server refuses
+      # to start.
       AGENTRY_JUDGE_REGION: ${AGENTRY_JUDGE_REGION:-}
       # Web search the registry brokers for the model-input search route:
       # none (the default; the route answers 503), youcom, brave, tavily, exa
