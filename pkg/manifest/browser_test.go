@@ -3,6 +3,7 @@ package manifest
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -129,7 +130,7 @@ func TestV15RefusesWhatTheLineCannotMean(t *testing.T) {
 		{"a duplicate secret", site, Browser{Sites: []string{"site"}, Secrets: []string{"SITE_PASSWORD", "SITE_PASSWORD"}}, []string{"SITE_PASSWORD"},
 			"V15", "capabilities.browser.secrets[1]", "duplicate browser secret"},
 		{"a secret that is not a name", site, Browser{Sites: []string{"site"}, Secrets: []string{"SITE PASSWORD"}}, nil,
-			"V5", "capabilities.browser.secrets[0]", ""},
+			"V5", "capabilities.browser.secrets[0]", `"SITE PASSWORD" is not a valid environment variable name`},
 		{"secrets with public scope", site, Browser{Sites: []string{"site"}, Scope: BrowserScopePublic, Secrets: []string{"SITE_PASSWORD"}}, []string{"SITE_PASSWORD"},
 			"V15", "capabilities.browser.secrets", "cannot have scope: public"},
 	} {
@@ -182,6 +183,19 @@ func TestV15TakesWhatTheLineMeans(t *testing.T) {
 			}
 		})
 	}
+
+	// The name is held only by a declared server and marked optional, so
+	// optionalSecrets alone is what declares it to the browser.
+	t.Run("an optional secret held by a server only", func(t *testing.T) {
+		m := validV2Manifest(t)
+		m.Intake = []IntakeQuestion{urlQ("site")}
+		m.Capabilities.Browser = &Browser{Sites: []string{"site"}, Secrets: []string{"SITE_USER"}}
+		m.Capabilities.MCPServers = []MCPServer{{NPM: "server-x", Version: "1.0.0", Secrets: []string{"SITE_USER"}}}
+		m.Capabilities.OptionalSecrets = []string{"SITE_USER"}
+		if is := browserIssues(Validate(m)); len(is) != 0 {
+			t.Fatalf("refused: %v", is)
+		}
+	})
 }
 
 func TestBrowserIsAV2Field(t *testing.T) {
@@ -223,6 +237,40 @@ func TestBrowserIsInTheContract(t *testing.T) {
 	if err := json.Unmarshal(raw, &back); err != nil || back.Capabilities.Browser == nil ||
 		!slices.Equal(back.Capabilities.Browser.Hosts, []string{"fonts.googleapis.com", "*.stripe.com"}) {
 		t.Fatalf("the canonical form does not read back: %v %+v", err, back.Capabilities.Browser)
+	}
+
+	// A public scope is written in the YAML key `scope`, parses, and is in
+	// the canonical form: dropping it would turn the line into a site-scoped
+	// one for every reader of the contract.
+	pub := mustParse(t, strings.Replace(v2YAML, "  secrets: [PAGERDUTY_TOKEN]\n",
+		"  secrets: [PAGERDUTY_TOKEN]\n  browser:\n    scope: public\n", 1))
+	if b := pub.Capabilities.Browser; b == nil || b.Scope != BrowserScopePublic || !b.IsPublic() {
+		t.Fatalf("scope: public parsed to %+v", pub.Capabilities.Browser)
+	}
+	if is := browserIssues(Validate(pub)); len(is) != 0 {
+		t.Fatalf("a public-web browser is refused: %v", is)
+	}
+	if got := pub.Contract().Browser; got == nil || !got.IsPublic() {
+		t.Fatalf("Contract().Browser = %+v; want public", got)
+	}
+	raw, err = CanonicalJSON(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pubDoc struct {
+		Capabilities struct {
+			Browser map[string]json.RawMessage `json:"browser"`
+		} `json:"capabilities"`
+	}
+	if err := json.Unmarshal(raw, &pubDoc); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(pubDoc.Capabilities.Browser["scope"]); got != `"public"` {
+		t.Fatalf("canonical capabilities.browser.scope = %s in %s; want \"public\"", got, raw)
+	}
+	var pubBack Manifest
+	if err := json.Unmarshal(raw, &pubBack); err != nil || pubBack.Capabilities.Browser == nil || !pubBack.Capabilities.Browser.IsPublic() {
+		t.Fatalf("the canonical public line does not read back: %v %+v", err, pubBack.Capabilities.Browser)
 	}
 }
 
@@ -289,6 +337,7 @@ func TestV2SchemaBrowserShape(t *testing.T) {
 				Properties struct {
 					Browser struct {
 						AdditionalProperties *bool `json:"additionalProperties"`
+						MinProperties        int   `json:"minProperties"`
 						Properties           struct {
 							Sites   list `json:"sites"`
 							Hosts   list `json:"hosts"`
@@ -310,11 +359,39 @@ func TestV2SchemaBrowserShape(t *testing.T) {
 		t.Fatal("capabilities.browser is not closed")
 	}
 	p := b.Properties
+	if b.MinProperties != 1 {
+		t.Fatalf("minProperties = %d; an empty browser line goes nowhere and is refused", b.MinProperties)
+	}
+	for name, l := range map[string]list{"sites": p.Sites, "hosts": p.Hosts, "secrets": p.Secrets} {
+		if l.Type != "array" || !l.UniqueItems {
+			t.Fatalf("%s = %+v; want a unique array", name, l)
+		}
+	}
 	if p.Sites.MaxItems != MaxBrowserSites || p.Sites.Items.Pattern != intakeIDRE.String() || !p.Sites.UniqueItems {
 		t.Fatalf("sites = %+v", p.Sites)
 	}
 	if p.Hosts.MaxItems != MaxBrowserHosts || !p.Hosts.UniqueItems || p.Hosts.Items.Pattern == "" {
 		t.Fatalf("hosts = %+v", p.Hosts)
+	}
+	// The host pattern says what the Go rule says on names that differ in
+	// shape: it admits the names validBrowserHost admits and none of the
+	// forms it refuses for being no DNS name or suffix of one.
+	hostRE, err := regexp.Compile(p.Hosts.Items.Pattern)
+	if err != nil {
+		t.Fatalf("hosts pattern %q: %v", p.Hosts.Items.Pattern, err)
+	}
+	for _, h := range []string{"fonts.googleapis.com", "*.stripe.com", "status.example.com", "a.b", "xn--bcher-kva.example",
+		strings.Repeat("a", 63) + ".com", "Mixed.Example.COM"} {
+		if !validBrowserHost(h) || !hostRE.MatchString(h) {
+			t.Errorf("host %q: Go rule %v, schema pattern %v; want both to admit it", h, validBrowserHost(h), hostRE.MatchString(h))
+		}
+	}
+	for _, h := range []string{"*", "*.", "", "localhost", "example.com:8443", "https://example.com", "cdn.*.example.com",
+		"*.*.example.com", "a..example.com", "-a.example.com", "a-.example.com", "exa mple.com", "example.com.",
+		strings.Repeat("a", 64) + ".com"} {
+		if validBrowserHost(h) || hostRE.MatchString(h) {
+			t.Errorf("host %q: Go rule %v, schema pattern %v; want both to refuse it", h, validBrowserHost(h), hostRE.MatchString(h))
+		}
 	}
 	if !slices.Equal(p.Scope.Enum, []string{string(BrowserScopeSite), string(BrowserScopePublic)}) {
 		t.Fatalf("scope = %v", p.Scope.Enum)
