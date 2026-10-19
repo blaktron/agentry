@@ -3,6 +3,8 @@ package scan
 import (
 	"strings"
 	"testing"
+
+	"github.com/blaktron/agentry/internal/manifestcaps"
 )
 
 // An optional secret is still a declared secret to every stage: S6,
@@ -18,8 +20,8 @@ func TestOptionalSecretsAreStillDeclared(t *testing.T) {
 	if got := declaredCaps(b); !got["env"] {
 		t.Fatalf("an optional secret is not the env capability: %v", got)
 	}
-	c, ok := readManifestCaps(b)
+	c, ok := manifestcaps.Read(b)
 	if !ok || len(c.Secrets) != 1 || c.Secrets[0] != "API_TOKEN" {
-		t.Fatalf("readManifestCaps = %+v, %v", c, ok)
+		t.Fatalf("manifestcaps.Read = %+v, %v", c, ok)
 	}
 }
