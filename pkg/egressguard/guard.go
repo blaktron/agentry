@@ -68,8 +68,8 @@ type Guard struct {
 	Proxy         *url.URL
 }
 
-// IsAllowedIP reports whether ip is a public unicast address safe to reach.
-// It refuses every range the IANA IPv4 and IPv6 special-purpose registries
+// IsAllowedIP reports whether ip is a public unicast address worth reaching.
+// It refuses the ranges the IANA IPv4 and IPv6 special-purpose registries
 // list as not globally reachable (see specialPurpose), the multicast ranges,
 // loopback unless the test seam allows it, and any IPv6 address outside the
 // global unicast space 2000::/3. IPv4-mapped IPv6 is unmapped first so
@@ -83,17 +83,18 @@ func (g Guard) IsAllowedIP(ip netip.Addr) bool {
 	// A zoned address is never inside a netip.Prefix, so the zone must go
 	// before any range is consulted.
 	ip = ip.WithZone("").Unmap()
+	if v4, ok := isatapIPv4(ip); ok && !g.IsAllowedIP(v4) {
+		// An ISATAP address is an ordinary address under its own prefix that
+		// also names a tunnel endpoint: it is refused when either is. The
+		// identifier is checked first because it can sit under a 6to4 prefix.
+		return false
+	}
 	if v4, ok := embeddedIPv4(ip); ok {
 		// 2002:7f00:1::1 is 127.0.0.1 to a 6to4 relay and 64:ff9b::a00:1 is
 		// 10.0.0.1 to a NAT64 gateway: on a host that routes those prefixes
 		// the packet lands where the embedded address says, so the embedded
 		// address is what the policy has to judge.
 		return g.IsAllowedIP(v4)
-	}
-	if v4, ok := isatapIPv4(ip); ok && !g.IsAllowedIP(v4) {
-		// An ISATAP address is an ordinary address under its own prefix that
-		// also names a tunnel endpoint: it is refused when either is.
-		return false
 	}
 	if ip.IsLoopback() {
 		return g.AllowLoopback
@@ -104,7 +105,8 @@ func (g Guard) IsAllowedIP(ip netip.Addr) bool {
 	if ip.Is6() && !globalUnicastSpace.Contains(ip) {
 		return false
 	}
-	// Backstop: the standard library's own notion of a global unicast address.
+	// Backstop, so that an address the table and the 2000::/3 check both miss
+	// still has to be one the standard library calls global unicast.
 	return ip.IsGlobalUnicast()
 }
 
@@ -117,7 +119,8 @@ type specialRange struct {
 }
 
 // globalUnicastSpace is the part of the IPv6 address space the IANA has
-// allocated for global unicast use (RFC 4291); nothing else is a public host.
+// allocated for global unicast use (RFC 4291); an address outside it is not
+// assigned to any public host.
 var globalUnicastSpace = netip.MustParsePrefix("2000::/3")
 
 // specialPurpose lists the IANA special-purpose ranges the guard refuses.

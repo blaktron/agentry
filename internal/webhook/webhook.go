@@ -290,6 +290,7 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 	if err != nil {
 		reason := deliveryFailure(err, row.Url)
 		record(nil, reason, nil, d.backoff(now, job.Attempt))
+		// Not wrapped with %w: the wrapped error names the whole endpoint URL.
 		return fmt.Errorf("webhook: deliver %s: %s", args.DeliveryID, reason)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -312,6 +313,7 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 		reason := deliveryFailure(err, row.Url)
 		delivered("error", "err", reason)
 		record(nil, reason, nil, d.backoff(now, job.Attempt))
+		// Not wrapped with %w: the wrapped error names the whole endpoint URL.
 		return fmt.Errorf("webhook: deliver %s: %s", args.DeliveryID, reason)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -344,6 +346,11 @@ func deliveryFailure(err error, endpoint string) string {
 	if errors.As(err, &ue) {
 		pieces = append(pieces, ue.URL)
 		msg = ue.Op + " " + endpointHost(ue.URL) + ": " + ue.Err.Error()
+		if ue.Op == "parse" {
+			// A parse error quotes the bytes it stopped at, and those can be
+			// the secret itself.
+			return "the endpoint's address is not a valid URL"
+		}
 	}
 	for _, raw := range append([]string(nil), pieces...) {
 		u, perr := url.Parse(raw)

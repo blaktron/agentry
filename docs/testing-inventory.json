@@ -391,6 +391,19 @@
           ]
         },
         {
+          "path": "internal/api/webhook_failure_test.go",
+          "tests": [
+            "TestAFailedDeliveryKeepsTheEndpointsTokenOut"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/webhook_seam_test.go",
           "tests": [
             "TestWebhookSeamDeliversToTheEndpointNamed",
@@ -3724,6 +3737,19 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "internal/webhook/failure_test.go",
+          "tests": [
+            "TestADeliveryFailureNamesTheHostNeverThePathOrQuery",
+            "TestADeliveryFailureStillSaysWhatWentWrong"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/webhook/webhook_test.go",
           "tests": [
             "TestClient_NoRedirectFollowing",
@@ -3880,6 +3906,22 @@
           "dependencyHints": [
             "HTTP transport"
           ]
+        },
+        {
+          "path": "pkg/egressguard/special_purpose_test.go",
+          "tests": [
+            "TestEverySpecialPurposeRangeIsRefused",
+            "TestUnallocatedIPv6SpaceIsRefused",
+            "TestEmbeddedIPv4FormsDecideOnTheEmbeddedAddress",
+            "TestAZoneDoesNotHideARange",
+            "TestTheTestTableNamesEveryRangeTheGuardRefuses",
+            "TestEachSpecialPurposeRangeIsRefusedByItsOwnRow",
+            "TestTheGlobalUnicastSpaceIsIPv6sOnly"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         }
       ]
     },
