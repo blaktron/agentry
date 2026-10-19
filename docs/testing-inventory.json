@@ -3708,7 +3708,8 @@
           "tests": [
             "TestAReviewPassesOnlyWhatEveryStageReadAndNothingFlagged",
             "TestAReviewReportKeepsNoExcerpt",
-            "TestCheckHoldsTheFormat"
+            "TestCheckHoldsTheFormat",
+            "TestTheServiceStoresAndReviewsAVoice"
           ],
           "fuzz": [],
           "benchmarks": [],
