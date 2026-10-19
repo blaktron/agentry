@@ -49,6 +49,10 @@ func TestBraveAsksOnceWithTheKeyAndReadsOnlyTheGenericResults(t *testing.T) {
 	if strings.Contains(got.URL.RawQuery, "brave-secret-key") {
 		t.Fatal("the key rode in the URL")
 	}
+	if got.Header.Get("Accept") != "application/json" {
+		t.Fatalf("Accept = %q", got.Header.Get("Accept"))
+	}
+	assertKeyOnlyIn(t, "brave-secret-key", "X-Subscription-Token", got, nil)
 	if len(res) != 2 || res[0].URL != "https://www.loc.gov/preservation/digital/formats/fdd/fdd000323.shtml" ||
 		res[0].Title != "CSV, Comma Separated Values (RFC 4180)" || res[0].Snippet != "RFC 4180 defines the CSV format. … Fields may be quoted." ||
 		res[1].Snippet != "" {
@@ -98,15 +102,23 @@ func TestBraveRefusalsCarryNoKeyAndNoRedirectIsFollowed(t *testing.T) {
 	if _, err := NewBrave(BraveConfig{APIKey: "  "}); err != ErrNoKey {
 		t.Fatalf("no key: %v", err)
 	}
+
+	checkClientControls(t, controls{
+		name: BraveName, key: key, header: "X-Subscription-Token",
+		build:    func(c ClientConfig) (Provider, error) { return NewBrave(c) },
+		path:     "/res/v1/llm/context",
+		endpoint: "https://api.search.brave.com/res/v1/llm/context",
+		answer:   `{"grounding":{"generic":[]}}`, head: `{"grounding":{"generic":[]},"pad":"`, tail: `"}`,
+	})
 }
 
 // A query the route admits (400 characters) can pass Brave's 75 words, and
 // 400 characters of a wide script pass 600 bytes; either would be a 422.
 // The client searches on the query's opening words within both.
 func TestBraveHoldsTheQueryToItsLimits(t *testing.T) {
-	var got string
+	var got, urls string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.URL.Query().Get("q")
+		got, urls = r.URL.Query().Get("q"), r.URL.Query().Get("maximum_number_of_urls")
 		_, _ = w.Write([]byte(`{"grounding":{"generic":[]}}`))
 	}))
 	defer srv.Close()
@@ -137,5 +149,27 @@ func TestBraveHoldsTheQueryToItsLimits(t *testing.T) {
 
 	if _, err := b.Search(context.Background(), "RFC 4180 CSV", 5); err != nil || got != "RFC 4180 CSV" {
 		t.Fatalf("a short query must go as it is: %q %v", got, err)
+	}
+
+	// The byte limit is 600 inclusive, cut at a character, with no space
+	// left at the cut; white space between words folds to one space.
+	for name, tc := range map[string]struct{ in, want string }{
+		"exactly 600 bytes":          {strings.Repeat("検", 200), strings.Repeat("検", 200)},
+		"one character past":         {strings.Repeat("検", 201), strings.Repeat("検", 200)},
+		"a cut inside a character":   {"a" + strings.Repeat("検", 300), "a" + strings.Repeat("検", 199)},
+		"a space at the cut":         {strings.Repeat("a", 599) + " bbbb", strings.Repeat("a", 599)},
+		"white space between words":  {"a  b\n\tc", "a b c"},
+		"exactly 75 words are whole": {strings.TrimSpace(strings.Repeat("ab ", 75)), strings.TrimSpace(strings.Repeat("ab ", 75))},
+	} {
+		if _, err := b.Search(context.Background(), tc.in, 5); err != nil || got != tc.want {
+			t.Fatalf("%s: sent %d bytes %q, %v", name, len(got), got, err)
+		}
+	}
+
+	// The count asked for is held to 1..MaxCount, 0 or less meaning the default.
+	for asked, want := range map[int]string{-1: "5", 0: "5", 1: "1", 10: "10", 11: "10", 50: "10"} {
+		if _, err := b.Search(context.Background(), "q", asked); err != nil || urls != want {
+			t.Fatalf("asked %d: sent %q, want %q (%v)", asked, urls, want, err)
+		}
 	}
 }
