@@ -1825,8 +1825,11 @@
             "TestFileStreamRotatesDaily",
             "TestFileStreamDropsWhenBufferFull",
             "TestNewStreamKinds",
+            "TestFileStreamBackgroundFlushAndClose",
             "TestWriterStreamDefaultsToNop",
-            "TestLogStreamMirrorsRecordAsLine"
+            "TestLogStreamMirrorsRecordAsLine",
+            "TestWriterWritesTheRowAndFeedsTheArchive",
+            "TestActionRegistryIsAppendOnly"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2345,6 +2348,7 @@
             "TestEmptyKeyValueIsSanitised",
             "TestTypedNilValuesDoNotPanic",
             "TestSecretNamedKeysAreRedacted",
+            "TestMaskEmail",
             "TestLongValuesAreTruncated",
             "TestParseLevel"
           ],
@@ -2395,7 +2399,9 @@
             "TestExtensionInstrumentLeavesThroughOTLP",
             "TestNilMetricsHandsANoOpExtensionMeter",
             "TestExtensionCannotShadowAHistogramSeries",
-            "TestASeriesAttributeNeverOverridesAResourceLabel"
+            "TestASeriesAttributeNeverOverridesAResourceLabel",
+            "TestMCPSweepCountsRunsAndOpenedAlerts",
+            "TestModelInputCountsCallsAndJudgeTokens"
           ],
           "fuzz": [],
           "benchmarks": [],
