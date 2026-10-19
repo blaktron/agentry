@@ -3,6 +3,7 @@ package manifest
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -117,6 +118,13 @@ func TestSourceQuestionGrantsNothing(t *testing.T) {
 	if !slices.Equal(with.Contract().Secrets, without.Contract().Secrets) || !slices.Equal(with.Contract().Network.Egress.Hosts, without.Contract().Network.Egress.Hosts) {
 		t.Fatal("source questions changed the contract")
 	}
+	// The whole contract a person consents to, not a field or two of it.
+	if !reflect.DeepEqual(without.Contract(), with.Contract()) {
+		t.Fatalf("source questions changed the contract:\n without: %+v\n with:    %+v", without.Contract(), with.Contract())
+	}
+	if d := DiffCapabilities(without.Contract(), with.Contract()); !d.Empty() {
+		t.Fatalf("adding source questions widened or narrowed the contract: %+v", d)
+	}
 
 	// No egress to the source's host, no secret for its token, nothing at all.
 	m := validV2Manifest(t)
@@ -135,6 +143,28 @@ func TestSourceQuestionGrantsNothing(t *testing.T) {
 	validateSecretIntakeAgreement(&s, m)
 	if len(s.list) != 0 {
 		t.Fatalf("a source question was held to the secret rule: %v", s.list)
+	}
+	// The same holds where the secret rule would disagree with the
+	// question: a source question that is not required beside a required
+	// secret of its id, and one that is required beside an optional one.
+	m.Capabilities.Secrets = []string{"REPO", "DOC"}
+	m.Capabilities.OptionalSecrets = []string{"DOC"}
+	m.Intake = []IntakeQuestion{
+		{ID: "repo", Prompt: "Repository", Type: IntakeRepository},
+		{ID: "doc", Prompt: "Document", Type: IntakeURL, Required: true},
+	}
+	s = issues{}
+	validateSecretIntakeAgreement(&s, m)
+	if len(s.list) != 0 {
+		t.Fatalf("a source question was read as a secret question: %v", s.list)
+	}
+	// Control: the same two questions as secret questions do disagree, so
+	// the fixture above is one the rule would refuse.
+	m.Intake[0].Type, m.Intake[1].Type = IntakeSecret, IntakeSecret
+	s = issues{}
+	validateSecretIntakeAgreement(&s, m)
+	if len(s.list) != 2 {
+		t.Fatalf("the control did not disagree twice: %v", s.list)
 	}
 }
 
@@ -255,6 +285,15 @@ func TestV2SchemaRefusesControlCharactersInIntakeAndOpening(t *testing.T) {
 	line, markdown := schema.Properties.Guide.Properties.Task.Pattern, schema.Properties.Guide.Properties.Overview.Pattern
 	if line == "" || markdown == "" {
 		t.Fatal("the guide's patterns are not where this test reads them")
+	}
+	// The two are pinned to their literals, so the checks below compare
+	// the intake and the opening against the real rule, not against
+	// whatever the guide's patterns have become.
+	if want := `^[^\u0000-\u001f\u007f]*$`; line != want {
+		t.Fatalf("the guide's one-line pattern is %q, want %q", line, want)
+	}
+	if want := `^[^\u0000-\u0008\u000b-\u001f\u007f]*$`; markdown != want {
+		t.Fatalf("the guide's markdown pattern is %q, want %q", markdown, want)
 	}
 	q := schema.Defs.IntakeQuestion.Properties
 	for name, got := range map[string]string{"intake prompt": q.Prompt.Pattern, "intake choice": q.Choices.Items.Pattern} {

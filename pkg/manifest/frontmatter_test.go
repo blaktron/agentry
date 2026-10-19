@@ -14,8 +14,13 @@ func TestParseFrontmatter(t *testing.T) {
 	if _, ok, _ := ParseFrontmatter([]byte("# no frontmatter\n---\nname: x\n")); ok {
 		t.Fatal("frontmatter must open the file")
 	}
-	if _, ok, err := ParseFrontmatter([]byte("---\nname: x\n\nno terminator\n")); !ok || err == nil {
-		t.Fatal("unterminated block must be reported")
+	if _, ok, err := ParseFrontmatter([]byte("---\nname: x\n\nno terminator\n")); !ok || !errors.Is(err, errFrontmatterUnterminated) {
+		t.Fatalf("unterminated block must be reported as unterminated: %v %v", ok, err)
+	}
+	// A block that is valid YAML to the end of the file is still refused for
+	// the missing terminator alone, not parsed as if it ended there.
+	if _, ok, err := ParseFrontmatter([]byte("---\nname: x\ndescription: y\n")); !ok || !errors.Is(err, errFrontmatterUnterminated) {
+		t.Fatalf("a valid but unterminated block must be reported as unterminated: %v %v", ok, err)
 	}
 	if _, ok, err := ParseFrontmatter([]byte("---\n: : :\n---\n")); !ok || err == nil {
 		t.Fatal("invalid yaml must be reported")
@@ -76,6 +81,13 @@ func TestV9FrontmatterContradictsManifest(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("matching frontmatter must be clean: %+v", got)
 	}
+	// Case alone is not a contradiction either.
+	got = v9Issues(ValidateInContext(m, v9Context(map[string]string{
+		"agent.yaml": "x", "SKILL.md": "---\nname: hello\ndescription: SAYS Hello Politely\n---\n",
+	})))
+	if len(got) != 0 {
+		t.Fatalf("a description that differs only in case must be clean: %+v", got)
+	}
 	// No frontmatter, or no reader: nothing to say.
 	if got := v9Issues(ValidateInContext(m, v9Context(map[string]string{"agent.yaml": "x", "SKILL.md": "# hello\n"}))); len(got) != 0 {
 		t.Fatalf("no frontmatter: %+v", got)
@@ -87,7 +99,13 @@ func TestV9FrontmatterContradictsManifest(t *testing.T) {
 	}
 	// Malformed block: warning, not a rejection.
 	got = v9Issues(ValidateInContext(m, v9Context(map[string]string{"agent.yaml": "x", "SKILL.md": "---\nname: x\nnever closed\n"})))
-	if len(got) != 1 || !IsWarning(got[0]) {
+	if len(got) != 1 || !IsWarning(got[0]) || !strings.Contains(got[0].Message, "not terminated") {
 		t.Fatalf("malformed block: %+v", got)
+	}
+	// Valid YAML that is never closed is a warning for the missing
+	// terminator, not a name contradiction read out of an unfinished block.
+	got = v9Issues(ValidateInContext(m, v9Context(map[string]string{"agent.yaml": "x", "SKILL.md": "---\nname: x\n"})))
+	if len(got) != 1 || !IsWarning(got[0]) || !strings.Contains(got[0].Message, "not terminated") {
+		t.Fatalf("valid but unterminated block: %+v", got)
 	}
 }

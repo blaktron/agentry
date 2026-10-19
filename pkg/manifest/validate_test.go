@@ -377,6 +377,15 @@ func TestValidateInContext(t *testing.T) {
 				FileInfo{Path: "prompts/b.md", Size: 600 << 10, IsText: true})
 		}, "V8", SeverityError, "publish.include"},
 	}
+	// says names, for the cases whose rule, severity and path are shared
+	// with a neighbouring refusal, a message fragment only that refusal
+	// carries, so a different guard cannot answer for it.
+	says := map[string]string{
+		"V3 duplicate on other channel": `already exists on channel "beta"`,
+		"V4 zero resolved files":        "resolve to zero files",
+		"V7 missing LICENSE file":       "LICENSE file",
+		"V7 missing README":             "README.md at the repo root",
+	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := validSkillManifest()
@@ -387,7 +396,19 @@ func TestValidateInContext(t *testing.T) {
 			if tc.mutateC != nil {
 				tc.mutateC(&ctx)
 			}
-			wantIssue(t, ValidateInContext(m, ctx), tc.rule, tc.sev, tc.pathSub)
+			errs := ValidateInContext(m, ctx)
+			wantIssue(t, errs, tc.rule, tc.sev, tc.pathSub)
+			want, ok := says[tc.name]
+			if !ok {
+				return
+			}
+			for _, err := range errs {
+				if i, isIssue := AsIssue(err); isIssue && i.Rule == tc.rule && i.Severity == tc.sev &&
+					strings.Contains(i.Path, tc.pathSub) && strings.Contains(i.Message, want) {
+					return
+				}
+			}
+			t.Fatalf("no %s %v issue whose message contains %q in:%s", tc.rule, tc.sev, want, issueStrings(errs))
 		})
 	}
 }
@@ -468,8 +489,20 @@ func TestChannelMonotonicity(t *testing.T) {
 		wantIssue(t, ValidateInContext(m, ctx), "V3", SeverityError, "version")
 	})
 	t.Run("same string on other channel is immutable", func(t *testing.T) {
+		// The beta head sits below 1.4.1, so the own-channel ordering rule
+		// has nothing to say and only the cross-channel immutability rule
+		// can refuse the version.
 		m, ctx := newBeta("1.4.1")
-		wantIssue(t, ValidateInContext(m, ctx), "V3", SeverityError, "version")
+		ctx.ExistingVersions[ChannelBeta] = []string{"1.3.0-beta.1"}
+		errs := ValidateInContext(m, ctx)
+		wantIssue(t, errs, "V3", SeverityError, "version")
+		for _, err := range errs {
+			i, _ := AsIssue(err)
+			if i != nil && i.Rule == "V3" && i.Severity == SeverityError && strings.Contains(i.Message, `already exists on channel "stable"`) {
+				return
+			}
+		}
+		t.Fatalf("no immutability refusal naming the stable channel in:%s", issueStrings(errs))
 	})
 	t.Run("build metadata does not evade immutability", func(t *testing.T) {
 		m, ctx := newBeta("1.5.0-beta.1+build.7")

@@ -35,6 +35,22 @@ func TestRulesMatchReportedIDs(t *testing.T) {
 			t.Errorf("an Issue reports %s, but Rules() does not list it", id)
 		}
 	}
+	// Rules() promises its list in order, and clients print the titles: each
+	// id sits at its place, and each title says what its rule checks.
+	wantTitle := []struct{ id, says string }{
+		{"V1", "closed schema"}, {"V2", "namespace and name"}, {"V3", "semver"}, {"V4", "publish.include"},
+		{"V5", "capability"}, {"V7", "licence"}, {"V8", "quotas"}, {"V9", "frontmatter"}, {"V10", "guide"},
+		{"V11", "knowledge"}, {"V12", "inputs"}, {"V13", "input sources"}, {"V14", "target hosts"}, {"V15", "browser"},
+	}
+	got := Rules()
+	if len(got) != len(wantTitle) {
+		t.Fatalf("Rules() lists %d rules, want %d: %+v", len(got), len(wantTitle), got)
+	}
+	for i, w := range wantTitle {
+		if got[i].ID != w.id || !strings.Contains(got[i].Title, w.says) {
+			t.Errorf("Rules()[%d] = %+v, want %s with a title saying %q", i, got[i], w.id, w.says)
+		}
+	}
 }
 
 func TestRulesIsACopy(t *testing.T) {
