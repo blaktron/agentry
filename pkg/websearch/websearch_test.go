@@ -42,6 +42,37 @@ func TestCleanQuery(t *testing.T) {
 	}
 }
 
+// A query is text: a format character (a bidirectional override, a zero-width
+// character, the soft hyphen, a tag character) draws nothing or reorders what
+// is drawn, so it is dropped before the query is checked and sent, where a
+// control character refuses the query.
+func TestCleanQueryDropsFormatCharacters(t *testing.T) {
+	for name, tc := range map[string]struct{ in, want string }{
+		"a bidirectional override":      {"github" + string(rune(0x202e)) + " mcp", "github mcp"},
+		"a zero-width space":            {"git" + string(rune(0x200b)) + "hub", "github"},
+		"a zero-width non-joiner":       {"git" + string(rune(0x200c)) + "hub", "github"},
+		"a word joiner":                 {"git" + string(rune(0x2060)) + "hub", "github"},
+		"a soft hyphen":                 {"git" + string(rune(0xad)) + "hub", "github"},
+		"a byte order mark":             {string(rune(0xfeff)) + "github", "github"},
+		"a tag character":               {"github" + string(rune(0xe0041)) + string(rune(0xe0062)), "github"},
+		"before the trimmed spaces":     {string(rune(0x200b)) + "  github  " + string(rune(0x200b)), "github"},
+		"what remains is what is bound": {strings.Repeat("a", MaxQuery) + string(rune(0x200b)), strings.Repeat("a", MaxQuery)},
+	} {
+		if got, err := CleanQuery(tc.in); err != nil || got != tc.want {
+			t.Errorf("%s: %q, %v, want %q", name, got, err, tc.want)
+		}
+	}
+	for name, bad := range map[string]string{
+		"only format characters": string(rune(0x200b)) + string(rune(0x202e)) + string(rune(0xe0041)),
+		"format and spaces":      " " + string(rune(0xfeff)) + " ",
+		"a control beside one":   "a" + string(rune(0x200b)) + "\nb",
+	} {
+		if _, err := CleanQuery(bad); err != ErrBadQuery {
+			t.Errorf("%s must be refused", name)
+		}
+	}
+}
+
 func TestClampCount(t *testing.T) {
 	for in, want := range map[int]int{-3: DefaultCount, 0: DefaultCount, 1: 1, 7: 7, 10: 10, 11: MaxCount, 1000: MaxCount} {
 		if got := ClampCount(in); got != want {
@@ -128,20 +159,27 @@ func TestCleanBoundsEveryResult(t *testing.T) {
 			"a delete character":              {"x\x7fy", "xy"},
 			"a C1 control":                    {"x\xc2\x85y", "x y"},
 			"invalid UTF-8":                   {"bad\xffbyte", "badbyte"},
+			"a zero-width space":              {"a" + string(rune(0x200b)) + "b", "ab"},
+			"a zero-width non-joiner":         {"a" + string(rune(0x200c)) + "b", "ab"},
+			"a zero-width joiner":             {"a" + string(rune(0x200d)) + "b", "ab"},
+			"a bidirectional override":        {"a" + string(rune(0x202e)) + "b", "ab"},
+			"a bidirectional isolate":         {"a" + string(rune(0x2066)) + "b", "ab"},
+			"a left-to-right mark":            {"a" + string(rune(0x200e)) + "b", "ab"},
+			"a word joiner":                   {"a" + string(rune(0x2060)) + "b", "ab"},
+			"a soft hyphen":                   {"a" + string(rune(0xad)) + "b", "ab"},
+			"a byte order mark":               {"a" + string(rune(0xfeff)) + "b", "ab"},
+			"a tag character":                 {"a" + string(rune(0xe0041)) + "b", "ab"},
+			"a language tag":                  {"a" + string(rune(0xe0001)) + "b", "ab"},
+			"an Arabic letter mark":           {"a" + string(rune(0x61c)) + "b", "ab"},
+			"format characters around a fold": {"a " + string(rune(0x200b)) + " " + string(rune(0x202e)) + "b", "a b"},
+			"only format characters":          {string(rune(0x200b)) + string(rune(0xe0041)), ""},
+			"a leading format character":      {string(rune(0xfeff)) + "lead", "lead"},
 			"exactly the title bound":         {strings.Repeat("a", maxTitle), strings.Repeat("a", maxTitle)},
 			"one past the title bound":        {strings.Repeat("a", maxTitle+1), strings.Repeat("a", maxTitle)},
 			"a space ending the title bound":  {strings.Repeat("a", maxTitle-2) + " b", strings.Repeat("a", maxTitle-2) + " b"},
-			"a word starting at the boundary": {strings.Repeat("a", maxTitle-1) + " bcd efg", ""},
+			"a word starting at the boundary": {strings.Repeat("a", maxTitle-1) + " bcd efg", strings.Repeat("a", maxTitle-1)},
 		} {
 			got := clean(tc.in, tc.in).Title
-			if tc.want == "" {
-				// Cut inside the fold: the title never passes its bound
-				// and keeps the text before it.
-				if utf8.RuneCountInString(got) > maxTitle || !strings.HasPrefix(got, strings.Repeat("a", maxTitle-1)) || strings.Contains(got, "b") {
-					t.Fatalf("%s: %d characters %q", name, utf8.RuneCountInString(got), got)
-				}
-				continue
-			}
 			if got != tc.want {
 				t.Fatalf("%s: title %q, want %q", name, got, tc.want)
 			}
@@ -149,6 +187,16 @@ func TestCleanBoundsEveryResult(t *testing.T) {
 			// shorter inputs are cut the same in both.
 			if snippet := clean(tc.in, tc.in).Snippet; utf8.RuneCountInString(tc.in) < maxTitle-2 && snippet != tc.want {
 				t.Fatalf("%s: snippet %q, want %q", name, snippet, tc.want)
+			}
+		}
+		// However the bound falls against a space, the text neither starts
+		// nor ends with one.
+		for n := range maxTitle + 3 {
+			text := strings.Repeat("a", n) + " bcd efg"
+			for _, got := range []string{clean(text, "").Title, clean("t", text+strings.Repeat(" x", maxSnippet)).Snippet} {
+				if got != strings.TrimSpace(got) || got != "" && !strings.HasPrefix(got, strings.Repeat("a", min(n, maxTitle-1))) {
+					t.Fatalf("%d characters then a fold: %q", n, got)
+				}
 			}
 		}
 		if got := clean("t", strings.Repeat("s", maxSnippet)).Snippet; got != strings.Repeat("s", maxSnippet) {
@@ -401,4 +449,42 @@ func TestOriginAndTheProviderList(t *testing.T) {
 			t.Fatalf("%q must not be known", bad)
 		}
 	}
+}
+
+// The fake answers a count it cannot honour with what it can: nothing for a
+// count below one, at most what it holds for one above.
+func TestFakeSearchHoldsAnyCount(t *testing.T) {
+	f := &Fake{Results: []Result{{Title: "a", URL: "https://example.com/a"}, {Title: "b", URL: "https://example.com/b"}}}
+	for count, want := range map[int]int{-5: 0, -1: 0, 0: 0, 1: 1, 2: 2, 3: 2, 1 << 30: 2} {
+		got, err := f.Search(context.Background(), "q", count)
+		if err != nil || len(got) != want {
+			t.Errorf("count %d: %d results, %v, want %d", count, len(got), err, want)
+		}
+	}
+}
+
+// A provider returns what its upstream sends, which may be more than it was
+// asked for; the bound on the results a caller shows is Clean's.
+func TestCleanHoldsTheCountAProviderOverran(t *testing.T) {
+	var sent []Result
+	for i := range 25 {
+		sent = append(sent, Result{Title: "r", URL: "https://example.com/" + strings.Repeat("p", i+1)})
+	}
+	var p Provider = overrun{sent}
+	got, err := p.Search(context.Background(), "q", 3)
+	if err != nil || len(got) != len(sent) {
+		t.Fatalf("the stub should overrun: %d, %v", len(got), err)
+	}
+	for asked, want := range map[int]int{3: 3, 10: MaxCount, 0: DefaultCount} {
+		if kept := Clean(got, asked); len(kept) != want {
+			t.Errorf("Clean(.., %d) kept %d, want %d", asked, len(kept), want)
+		}
+	}
+}
+
+type overrun struct{ results []Result }
+
+func (overrun) Name() string { return "overrun" }
+func (o overrun) Search(context.Context, string, int) ([]Result, error) {
+	return o.results, nil
 }

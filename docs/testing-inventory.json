@@ -4894,13 +4894,16 @@
           "path": "pkg/websearch/websearch_test.go",
           "tests": [
             "TestCleanQuery",
+            "TestCleanQueryDropsFormatCharacters",
             "TestClampCount",
             "TestCleanBoundsEveryResult",
             "TestYouComAsksOnceWithTheKeyAndReadsOnlyTheWebResults",
             "TestYouComFailsWithoutTheKeyInTheError",
             "TestNewNamesTheProviders",
             "TestYouComNeverFollowsARedirectAndRedactsAcrossTheCut",
-            "TestOriginAndTheProviderList"
+            "TestOriginAndTheProviderList",
+            "TestFakeSearchHoldsAnyCount",
+            "TestCleanHoldsTheCountAProviderOverran"
           ],
           "fuzz": [],
           "benchmarks": [],
