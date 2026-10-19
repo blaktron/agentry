@@ -1,6 +1,7 @@
 package rules_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blaktron/agentry/pkg/rules"
@@ -37,6 +38,27 @@ func TestBundleNotPatternsAreParagraphScoped(t *testing.T) {
 		{"descriptive line after, same paragraph", directive + "Report each finding.\n", false},
 		{"blank line between", "Cite the messages.\n\n" + directive, true},
 		{"heading then blank line", "# Findings\n\n" + directive, true},
+		// A hit on a heading line is judged by that line alone.
+		{"directive on a heading line, cataloguing line before", "Cite the messages.\n## " + directive, true},
+		{"directive on a heading line, cataloguing line after", "## " + directive + "Cite the messages.\n", true},
+		{"directive on a heading line, cataloguing word in it", "## Cite the messages. " + directive, false},
+		// A line of whitespace ends a paragraph as an empty one does.
+		{"spaces-only line between", "Cite the messages.\n   \n" + directive, true},
+		{"tab-only line between", "Cite the messages.\n\t\n" + directive, true},
+		{"spaces-only line after", directive + "  \nReport each finding.\n", true},
+		// The paragraph reaches over several lines, up and down, and to the
+		// end of a file with no final newline.
+		{"cataloguing line two lines above", "Cite the messages.\nA neutral line.\n" + directive, false},
+		{"cataloguing line two lines below", directive + "A neutral line.\nReport each finding.\n", false},
+		{"cataloguing line below, no final newline", directive + "Report each finding.", false},
+		{"cataloguing line above a directive with no final newline", "Cite the messages.\n" + strings.TrimSuffix(directive, "\n"), false},
+		{"directive alone, no final newline", strings.TrimSuffix(directive, "\n"), true},
+		{"heading above a cataloguing paragraph", "# Findings\nCite the messages.\n" + directive, false},
+		{"cataloguing line, heading, directive", "Cite the messages.\n# Findings\n" + directive, true},
+		{"directive, heading, cataloguing line", directive + "# Findings\nCite the messages.\n", true},
+		// CRLF files.
+		{"CRLF: cataloguing line before", "Cite the messages.\r\n" + strings.TrimSuffix(directive, "\n") + "\r\n", false},
+		{"CRLF: heading before", "# Findings\r\n" + strings.TrimSuffix(directive, "\n") + "\r\n", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
