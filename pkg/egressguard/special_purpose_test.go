@@ -206,3 +206,25 @@ func TestTheGlobalUnicastSpaceIsIPv6sOnly(t *testing.T) {
 		t.Fatal("an IPv4 address was judged against 2000::/3")
 	}
 }
+
+// Addresses that sit next to an embedding prefix but are not inside it are
+// not read as carrying an IPv4 address. They lie outside 2000::/3, so the
+// guard refuses them as unallocated space; the decoder is held to its prefixes
+// here.
+func TestAddressesNextToAnEmbeddingPrefixAreNotReadAsEmbedding(t *testing.T) {
+	for _, s := range []string{
+		"64:fe9b::a00:1",       // not the NAT64 prefix (third byte differs)
+		"64:ff9c::a00:1",       // not the NAT64 prefix (fourth byte differs)
+		"64:ff9b::1:0:a00:1",   // NAT64 prefix with a nonzero byte 8-9: outside 64:ff9b::/96
+		"64:ff9b:101::1",       // not 64:ff9b:1::/48
+		"::1:a00:1",            // only ::/96 is the IPv4-compatible form
+		"2001:a00:1::1",        // starts like 6to4 but is not 2002::/16
+		"2a02:a00:1::1",        // second byte 0x02 but not 2002::/16
+		"::ffff:1:a00:1",       // not the IPv4-translated prefix
+		"0:0:0:1:0:ffff:a00:1", // a nonzero group before the IPv4-translated marker
+	} {
+		if v4, ok := embeddedIPv4(netip.MustParseAddr(s)); ok {
+			t.Errorf("%s read as embedding %s", s, v4)
+		}
+	}
+}
