@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -68,6 +69,15 @@ func rawTar(t *testing.T, entries ...tar.Header) []byte {
 	return b.Bytes()
 }
 
+// emptyFiles is n empty sources, in byte order of their names.
+func emptyFiles(n int) []tar.Header {
+	h := make([]tar.Header, n)
+	for i := range h {
+		h[i] = tar.Header{Typeflag: tar.TypeReg, Name: fmt.Sprintf("sources/%05d.txt", i), Mode: 0o644, ModTime: time.Unix(0, 0), Format: tar.FormatPAX}
+	}
+	return h
+}
+
 // digestOf is the plain hash of a tree's bytes: the refusals below are
 // for a tree whose digest is right and whose form is not.
 func digestOf(b []byte) string {
@@ -98,7 +108,21 @@ func TestReadTreeRefuses(t *testing.T) {
 		{name: "not canonical: a mode", tree: rawTar(t, tar.Header{Typeflag: tar.TypeReg, Name: "wiki/a.md", Mode: 0o755, Size: 1, ModTime: time.Unix(0, 0), Format: tar.FormatPAX})},
 		{name: "not a tar", tree: []byte("PK\x03\x04 a zip, not a tree")},
 		{name: "past the cap", tree: rawTar(t, reg("sources/a.txt", MaxBytes), reg("sources/b.txt", 1)), is: ErrTooLarge},
+		{name: "past the file cap", tree: rawTar(t, emptyFiles(MaxFiles+1)...), is: ErrTooLarge},
+		// The end blocks close the tree: bytes after them are hashed, so the
+		// digest is right, and refused, so they cannot ride along.
+		{name: "bytes after the end", tree: append(bytes.Clone(good), make([]byte, 512)...)},
 	}
+	t.Run("at the file cap", func(t *testing.T) {
+		files := make([]scan.PackFile, MaxFiles)
+		for i := range files {
+			files[i] = scan.PackFile{Path: fmt.Sprintf("sources/%05d.txt", i)}
+		}
+		tree := treeBytes(t, files)
+		if _, err := ReadTree(bytes.NewReader(tree), digestOf(tree)); err != nil {
+			t.Fatalf("a tree of MaxFiles files: %v", err)
+		}
+	})
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			digest, want := tc.digest, tc.is

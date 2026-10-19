@@ -98,6 +98,25 @@ func TestDeploymentWrapperOpensForTheOwnerAlone(t *testing.T) {
 	if _, err := wrapper(t, 8).Unwrap(ctx, alice, wk); !errors.Is(err, ErrNotOwner) {
 		t.Fatalf("under another sealing key: err = %v", err)
 	}
+	// The owner's kind is bound into the wrap itself, not only its salt:
+	// an organization that shares the person's id and, here, the very same
+	// salt still cannot open the person's key.
+	salts := &memSalts{}
+	shared, err := NewDeploymentWrapper(bytes.Repeat([]byte{7}, 32), salts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pk, err := shared.Wrap(ctx, alice, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	salts.m[Org(alice.ID)] = salts.m[alice]
+	if _, err := shared.Unwrap(ctx, Org(alice.ID), pk); !errors.Is(err, ErrNotOwner) {
+		t.Fatalf("an organization with the person's id and salt: err = %v, want ErrNotOwner", err)
+	}
+	if got, err := shared.Unwrap(ctx, alice, pk); err != nil || !bytes.Equal(got, data) {
+		t.Fatalf("the person's own unwrap beside it: %v", err)
+	}
 }
 
 func TestDeploymentWrapperDestroyKillsEveryCopy(t *testing.T) {
