@@ -377,6 +377,19 @@
           ]
         },
         {
+          "path": "internal/api/webhook_audit_url_test.go",
+          "tests": [
+            "TestCreatingAnEndpointKeepsItsTokenOutOfTheAuditEvent"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/webhook_catalog_test.go",
           "tests": [
             "TestWebhookCatalogEventsAreEmitted"
@@ -1861,10 +1874,13 @@
             "TestOIDC_ExchangeCreatesClaims",
             "TestOIDC_IssuerPinning",
             "TestOIDC_NonceMismatchRejected",
+            "TestOIDC_EmptyExpectedNonceRefused",
             "TestOIDC_EmailVerifiedSurfaced",
             "TestOIDC_PreferredUsernameSurfaced",
             "TestOIDC_RawCarriesEveryClaim",
-            "TestOIDC_AuthTimeSurfaced"
+            "TestOIDC_AuthTimeSurfaced",
+            "TestOIDC_IDTokenVerificationRefusals",
+            "TestOIDC_DescribeReportsDiscovery"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1885,12 +1901,16 @@
           "tests": [
             "TestProvidersIsTheOneOpenIDProvider",
             "TestAProviderNeedsAnIssuer",
-            "TestRetiredProvidersAreUnknown"
+            "TestRetiredProvidersAreUnknown",
+            "TestProviderSignsInThroughTheConfiguredIssuer",
+            "TestIdentityMFAAsserted"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
-          "dependencyHints": []
+          "dependencyHints": [
+            "HTTP transport"
+          ]
         }
       ]
     },
@@ -1913,7 +1933,23 @@
             "TestNamespaceDerivedAgentRole",
             "TestAgentRoleLadder",
             "TestHoldPermits",
-            "TestAgentManageScope"
+            "TestAgentManageScope",
+            "TestScopeListIsClosed",
+            "TestSSOSatisfied",
+            "TestUnactivatedAndSyntheticAddress",
+            "TestClientIPRidesTheContext"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/auth/resolve_test.go",
+          "tests": [
+            "TestResolvePAT",
+            "TestResolveSSHKey",
+            "TestParseSSHPublicKey"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1991,7 +2027,9 @@
         {
           "path": "internal/dnsx/resolver_test.go",
           "tests": [
-            "TestVerifyTXT"
+            "TestVerifyTXT",
+            "TestSystemResolverLooksUpUnderTheContext",
+            "TestVerifyTXTRefusesWhatItCannotJudge"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2464,7 +2502,8 @@
           "path": "internal/maildomains/maildomains_test.go",
           "tests": [
             "TestSharedNamesNobodyOwns",
-            "TestOfReadsTheDomain"
+            "TestOfReadsTheDomain",
+            "TestSharedHoldsForAnyNumberOfTrailingDots"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2661,7 +2700,9 @@
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
-          "dependencyHints": []
+          "dependencyHints": [
+            "source/file contract"
+          ]
         }
       ]
     },
@@ -2745,7 +2786,8 @@
             "TestSeatsAreSpentByMembersAndInvitationsAndDoorsAreNamed",
             "TestRefusalSentencesAndConstraintViolations",
             "TestNormalizeModesDefaultsDeduplicatesAndRefusesUnknownModes",
-            "TestForkRefusalsAreRecognisedAndPutInWords"
+            "TestForkRefusalsAreRecognisedAndPutInWords",
+            "TestValidModesAreTheManifestsModes"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4100,13 +4142,20 @@
           "path": "pkg/extension/agentryd_apiqueue_test.go",
           "tests": [
             "TestExtensionJobsSplitsTheAPIQueue",
-            "TestAPIRoleDrainsTheAPIQueue"
+            "TestAPIRoleDrainsTheAPIQueue",
+            "TestRolesThatNeedADatabaseRefuseToStartWithoutOne",
+            "TestRunWithRefusesAnUnknownRoleAndOneThatCannotRun",
+            "TestRootCmdHasTheRolesAndOnlyTheWorkerTakesQueues",
+            "TestAPIRoleWithoutADatabaseServesTheExtensions",
+            "TestServeHTTPReportsAListenFailureAndStopsWithItsContext"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
             "database fixture",
+            "HTTP transport",
+            "source/file contract",
             "real-time wait",
             "explicit skip"
           ]
@@ -4145,7 +4194,12 @@
             "TestRegisterAuditActionKeepsTheExtensionPrefix",
             "TestBindHandsTheBaseURL",
             "TestApplyExtensionsBindsAndRegistersActions",
+            "TestApplyExtensionsRefusesARepeatedOrMalformedName",
+            "TestDepsAdaptersFollowThePoolAndKeepTheExtensionsName",
+            "TestMigrateExtensionsSkipsThoseWithoutMigrationsAndReportsAFailure",
             "TestPeriodicTickerEnqueuesNowAndOnThePeriod",
+            "TestReconcileTickerEnqueuesTheWatchdogOnTheCoreQueue",
+            "TestRegisterJobsRegistersEveryHandlerAndEnqueuesOnlyPeriodicJobs",
             "TestNoopSatisfiesTheInterface",
             "TestParseQueues",
             "TestScopeAllows",
@@ -4154,6 +4208,7 @@
             "TestBindHandsTheKnowledgeStore",
             "TestApplyExtensionsRegistersTheAccountEraser",
             "TestBindHandsTheVoiceStore",
+            "TestVoiceStoreProposesOnlyTheSourcesAVoiceWriterHas",
             "TestBindHandsTheServersMeter",
             "TestBindHandsTheReportSettings",
             "TestBindHandsTheMembersDoor"
@@ -4180,7 +4235,9 @@
           "tests": [
             "TestApplyExtensionsWiresTheIdentitySeam",
             "TestOneDirectoryPerDeployment",
-            "TestTheIdentityEventsAreTheCoresNames"
+            "TestSignInHookAuditsTheRememberedBrowserUnderTheExtensionsName",
+            "TestTheIdentityEventsAreTheCoresNames",
+            "TestTheSeamsNamesAreTheCoresNames"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4693,7 +4750,9 @@
             "TestCanonicalJSONV2",
             "TestV2SchemaFileShape",
             "TestV2SchemaEnvShape",
-            "TestCanonicalJSONV2Env"
+            "TestCanonicalJSONV2Env",
+            "TestPersistentModeParsesAndIsKnown",
+            "TestV2SchemaModesAreTheGoSet"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4811,7 +4870,8 @@
           "tests": [
             "TestBundleTarRoundTrip",
             "TestBundleTarDeterministic",
-            "TestUntarBundleRejectsStructure"
+            "TestUntarBundleRejectsStructure",
+            "TestUntarBundleRefusesNamesWindowsGivesAMeaning"
           ],
           "fuzz": [],
           "benchmarks": [],

@@ -6,6 +6,7 @@ package oidc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -118,6 +119,11 @@ func (rp *RP) AuthURL(state, nonce, verifier string) string {
 // expiry), checks the nonce, and returns the claims. email_verified is
 // surfaced verbatim for the JIT decision.
 func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string) (*Claims, error) {
+	// The nonce binds the ID token to this sign-in. Without one to compare
+	// there is nothing to check, so that is refused rather than skipped.
+	if expectedNonce == "" {
+		return nil, errors.New("oidc: no nonce to check the id_token against")
+	}
 	tok, err := rp.oauth.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
 		return nil, fmt.Errorf("oidc: code exchange: %w", err)
@@ -130,7 +136,7 @@ func (rp *RP) Exchange(ctx context.Context, code, verifier, expectedNonce string
 	if err != nil {
 		return nil, fmt.Errorf("oidc: id_token verification: %w", err)
 	}
-	if expectedNonce != "" && idToken.Nonce != expectedNonce {
+	if idToken.Nonce != expectedNonce {
 		return nil, fmt.Errorf("oidc: id_token nonce mismatch")
 	}
 	var raw struct {

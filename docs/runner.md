@@ -78,7 +78,7 @@ One QuickAgent, one job, one container tree, then gone.
 
 | Flag | Meaning |
 |---|---|
-| `--mode autonomous\|interactive` | the run mode (default: the release's only mode; asked on a terminal when it declares both, autonomous otherwise) |
+| `--mode autonomous\|interactive` | the run mode (default: the release's only mode; asked on a terminal when it declares autonomous and interactive, autonomous otherwise) |
 | `--input FILE` | task text (else piped stdin, else an empty task) |
 | `--intake id=value` | answer an intake question non-interactively (repeatable; unanswered questions are asked on a terminal, and a `secret` answer is never recorded) |
 | `--file PATH` | provide a file or directory to the run, read-only under `/inputs` (repeatable; basename-rooted; duplicate basenames refused); it is checked for malware and turned into text before the agent starts ([running with files](#running-with-files)) |
@@ -156,11 +156,22 @@ manifest declared. The
 session is bounded by the policy's `sessions` block (idle timeout, wall
 time, user turns) on top of the cost and tool-call budgets, and its
 receipts add `transcript.md` and the intake answers. A release with one
-mode runs in it; one with both is asked on a terminal and runs autonomous
+mode runs in it; one with autonomous and interactive is asked on a terminal and runs autonomous
 otherwise (`--yes` or `--dry-run` never ask). The desktop app runs the
 same session in its run panel, and a hosted session
 ([Hosted runs](hosted-runs.md#a-hosted-session)) runs it on a sandbox host
 through the session protocol below.
+
+A **persistent** release (`modes: [persistent]`) is a conversation the
+runner keeps between sessions rather than one that ends: the agent's
+conversation and its own files outlive each start and stop. The runner
+runs this mode only for its own built-in agents, so a persistent release
+from the registry or a local folder is refused before anything starts: a
+CLI that knows the mode says "a persistent release runs only as a
+built-in in this version", and an earlier one refuses the manifest as
+declaring an unknown mode. A CLI that knows the mode runs a release that
+declares `persistent` beside another mode in that other mode, as
+`--mode` chooses.
 
 #### Driving a session from a program
 
@@ -254,7 +265,7 @@ is shown as a message.
 | interactive | One session. The first prompt is the first turn of the chat and each later prompt another. | The reply as it streams, each tool call as a tool call with its progress, and each turn answered `end_turn`, or `max_turn_requests` when a tool-call or turn budget ended the session. The deliverables the teardown lists come back when the client sends `session/close`. |
 | autonomous | The first prompt is the task. The run happens once and the session ends. | The tool calls as they happen, then the result as a message and each deliverable as a message of its own, then the answer to the prompt, `end_turn`, with the run's id, status, exit class, output folder and deliveries in its `_meta`. A run that fails is an error answer with the run's own message. |
 
-A release that declares both modes runs interactive; `--mode autonomous` says
+A release that declares autonomous and interactive runs interactive; `--mode autonomous` says
 otherwise. An interactive release's `interactive.opening` line is not shown,
 because the client's first prompt takes its place.
 
@@ -1074,13 +1085,14 @@ its digest, so a run record says which file a run obeyed.
 
 | Key | Meaning |
 |---|---|
-| `images.gateway` / `images.harnessDockerAgent` | pinned images (digests recommended) |
+| `images.gateway` | the MCP gateway's image (digest recommended) |
 | `images.goBuilder` | the Go image the runner image is compiled in on first use (the default is pinned by digest). Its Go must be at least the CLI's own, to the patch: the build context names that version, and an older builder stops the build with "images.goBuilder … is older than the Go the runner needs" |
 | `images.runner` | override the locally built runner image tag (pin this when the CLI and desktop app share a machine) |
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
 | `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
+| `allowPersistentReleases` | reserved for running persistent releases from other sources; a policy that sets it is refused in this version ([Run modes](#run-modes)), and `agentry setup` never writes it |
 | `secretSource.mode` (`env` \| `envFile`) + `secretSource.envFile` | fallback secret resolution behind profiles |
 | `budgets.timeoutSeconds` / `budgets.maxTurns` / `budgets.maxCostUsd` | default hard stops (cost `0` = unlimited) |
 | `sessions.idleTimeoutSeconds` / `sessions.maxWallSeconds` / `sessions.maxUserTurns` | interactive-session caps (shipped 900 s idle, 7200 s wall, 200 user turns); a manifest can only tighten the idle timeout |
@@ -1091,7 +1103,7 @@ its digest, so a run record says which file a run obeyed.
 | `mcpServers.allowVulnerable` | let runs proceed when the registry's gate rates an advisory of a declared server version high or critical, or, from a registry that serves no rating, when the advisory's own severity is (default false: refused, exit 11) |
 | `exec.packages` | the exec catalog: command name → apk package (optionally `=version`) the exec image installs for a QuickAgent that declares that command; a declared command with no entry is refused at plan time (exit 11) |
 | `exec.apkMirror` | the Alpine mirror the exec image build installs from (default: the runner image's own repositories) — egress of the image build only, over ordinary docker networking; a run's network posture is unchanged |
-| `images.harnessImages.<adapter>` | the harness image of an adapter other than docker-agent, pinned by digest or, for an image your computer builds, by the `artifact` hash it is built from ([model sign-ins](#model-sign-ins)); unset, the CLI's default is used |
+| `images.harnessImages.<adapter>` | the harness image of each adapter that runs in a container, `docker-agent` included: `{ ref: <name>@sha256:… }` for a published image, or, for an image your computer builds, the `ref` and the `artifact` hash it is built from ([model sign-ins](#model-sign-ins)); an adapter left out takes the CLI's default. `docker-agent` is a published image, so its entry carries no `artifact`. Older policy files name docker-agent's image as `images.harnessDockerAgent`, which is still read; naming it both ways with different images is refused |
 | `harness.<adapter>.signInTokenRoute` | `auth-command` (the default) or `restart`: how a ChatGPT plan's token reaches Codex ([below](#a-chatgpt-plan)) |
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
@@ -1099,7 +1111,7 @@ its digest, so a run record says which file a run obeyed.
 | `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode ([Unsafe Mode](agentry/unsafe-mode.md)) |
 | `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
 | `images.hostlink` | the hostlink image the host link is built on, the OpenSSH client a run reaches a [target host](#target-hosts-a-server-named-at-run-time) with, pinned by digest (the default is the one the CLI release names) |
-| `images.browser` | the browser server's image a release that declares a [browser](#the-browser-a-site-to-test-named-at-run-time) runs on, `agentry-browser` (`@playwright/mcp` and Chrome for Testing), pinned by digest (the default is the one the CLI release names) |
+| `images.browser` | the browser server's image a release that declares a [browser](#the-browser-a-site-to-test-named-at-run-time) runs on, `agentry-browser` (`@playwright/mcp` and Debian's open-source Chromium), pinned by digest (the default is the one the CLI release names) |
 | `browser.allowPublicWeb` | lets a browser whose scope is `public` reach any public site on ports 80 and 443 (default false → such a release is refused, exit 11); apart from `allowWildcardEgress` |
 | `hosts.allow` / `hosts.deny` | IPv4 networks in CIDR form that narrow the addresses a target host may be at: with `allow` set an address must be in one, and one in `deny` is refused either way ([below](#the-hosts-lists-hosts)) |
 | `images.clamavSignatures` | the ClamAV signature bundle, `<registry>/<repository>:<tag>` (default `ghcr.io/blaktron/agentry-clamav-db:latest`); a mirror must carry the publishing workflow's signature |
@@ -1126,6 +1138,12 @@ an interactive session's agent and the one-shot that gives it the session
 store, and the MCP server installer that builds a declared server's dependency
 closure. Unset, the shipped default, every container takes the daemon's own
 default and the receipt says nothing about a runtime.
+
+The agent container is the harness itself: with the default adapter it runs
+the docker-agent image under `runsc` like the rest of the QuickAgent's code,
+and the receipt's `capabilities_enforced.runtime` names it ("the agent
+container (the QuickAgent's code)") with the runtime the engine reported back
+for it before it started.
 
 The runtime also holds the gateway's health probe and,
 through the run's docker filter, the tools server and the declared MCP servers
@@ -2136,7 +2154,8 @@ tools or the review grant, is never given a browser.
 
 **The browser server** is one more server in the run's gateway catalog,
 named `browser`, on the `agentry-browser` image from agentry-dockerimages
-(`@playwright/mcp` 0.0.83 and Chrome for Testing, pinned by digest,
+(`@playwright/mcp` 0.0.83 driving Debian's open-source Chromium, with no
+Widevine or other proprietary component, pinned by digest,
 `images.browser` in the policy; pulled by its digest when the machine
 lacks it).
 
@@ -2196,7 +2215,7 @@ it. Loopback, link-local (where a cloud's metadata service answers),
 multicast and unspecified addresses are never dialled, a site of yours
 included, and a subdomain of your site must be at public addresses. Every
 tunnel keeps the proxy's SNI check: the TLS name must be the host asked
-for, with no encrypted ClientHello (the image's Chrome policy turns ECH
+for, with no encrypted ClientHello (the image's Chromium policy turns ECH
 off so that it passes). A page's plain `http` is forwarded under the same
 checks, with no redirect followed: the browser asks again and is judged
 again. The proxy reads no page and decrypts nothing, so it narrows where a
@@ -3442,7 +3461,7 @@ plan, so `agentry run` picks it without `--adapter`.
 
 | Adapter | What runs | Modes | Isolation |
 |---|---|---|---|
-| `docker-agent` (default) | the pinned `docker/docker-agent` image | autonomous, interactive (Agent Client Protocol over the container's stdio) | a container on the run's internal network: it has no route out but the proxy |
+| `docker-agent` (default) | Docker Agent, built from its pinned upstream commit and published signed as `ghcr.io/blaktron/agentry-docker-agent-src`, pinned by digest | autonomous, interactive (Agent Client Protocol over the container's stdio) | a container on the run's internal network: it has no route out but the proxy |
 | `claude` | **your own installation** of Claude Code, as a process of your user | autonomous, interactive (Claude Code's own bidirectional stream-json) | the harness is outside the run's network boundary — see below |
 | `codex` | **your own installation** of the OpenAI Codex CLI, as a process of your user | autonomous, interactive (codex's own app-server protocol) | as for `claude` — see below |
 | `codex-image` | OpenAI's Codex CLI in agentry-dockerimages' signed `agentry-codex` image, pinned by digest | autonomous, interactive (codex's app-server; an autonomous run is one session turn) | a container on the run's internal network, as for `docker-agent`; the default for a ChatGPT plan |
