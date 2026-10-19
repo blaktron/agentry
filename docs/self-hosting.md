@@ -351,6 +351,10 @@ judge:
   # apiKey: ...                       # AGENTRY_JUDGE_API_KEY (required)
   # model: jev-1.13.0                 # AGENTRY_JUDGE_MODEL (pinned; default shown)
   # baseUrl: https://api.typesafe.ai  # AGENTRY_JUDGE_BASE_URL (default shown)
+  # The key is sent to the base URL, so the base URL must be https. Plain
+  # http is accepted only for a loopback address (localhost, 127.0.0.0/8,
+  # ::1), for a test server on the same machine; any other http address, and
+  # a URL with credentials in it, stops the server at startup.
   # For openai/anthropic, point at any endpoint speaking that protocol:
   # baseUrl: https://api.openai.com   # AGENTRY_JUDGE_BASE_URL
   # apiKey: sk-...                    # AGENTRY_JUDGE_API_KEY
@@ -363,6 +367,8 @@ judge:
   # It scores ONLY the injection axis, so it always routes to human review —
   # a cheap pre-screen that adds evidence, not a substitute for the rubric.
   # baseUrl: http://prompt-guard:8080/classify   # AGENTRY_JUDGE_BASE_URL
+  # (a classifier with no apiKey may be plain http; one with an apiKey follows
+  # the https rule above)
   # apiKey: ...                       # optional bearer token
   # With typesafe, the registry also serves the model-input scan
   # (POST /model-input/scan, docs/model-input.md) to platform staff and to
@@ -879,6 +885,10 @@ fetches the image that was tested. `make bump-pins` moves each digest to what
 its tag serves now; to move to another version, change the tag and run it.
 `scripts/compose-pins.sh check --online` reports a pinned digest the registry
 no longer serves, or a tag that has moved since the pin was written.
+
+The object store in the stack is MinIO, from Chainguard's build of the MinIO
+source, which is licensed AGPL-3.0. It runs as a separate service that the
+server reaches over the S3 API, and it is not part of Agentry.
 
 ### Rate limits at the edge
 

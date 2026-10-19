@@ -127,8 +127,13 @@ drop accounting.
   `agd_` desktop grants, `whsec_` webhook secrets,
   `csrf_` CSRF tokens) or bare (OIDC state and nonce, domain verification)
   — is masked wherever it appears (in a message, a value, an error, a
-  nested object), keeping its 12-character display prefix so an incident
-  still traces to the credential. Masked, not dropped: the line about the incident
+  nested object) and whatever characters touch it (`sess_<token>`,
+  `<token>_1` and a file name built from one are masked like a bare token;
+  a letter stuck to the token is masked with it), keeping its
+  12-character display prefix so an incident still traces to the credential.
+  A value is masked the same way under an empty key, and a nil pointer
+  that implements `error` or `fmt.Stringer` is written as `null`.
+  Masked, not dropped: the line about the incident
   is worth more than the value it would have leaked. The collector applies
   the same token pattern again as a second net.
 - **A person's name or email address.** Lines carry opaque principal ids.
@@ -136,6 +141,8 @@ drop accounting.
   configured) says a mail would have gone and to which mailbox with the
   address masked (`a…@example.test`), and never carries a verification
   token; an address cannot be verified through it. Use a sender.
+  The SMTP sender's "sent" and "send failed" lines carry the recipient masked
+  the same way, including a mailbox the mail server quotes in a refusal.
 - **A value above 4 KB.** Docker splits a line above 16 KB into pieces that
   are no longer JSON and cannot be reassembled, so every string value is cut
   at 4,096 bytes (on a character boundary) with a `…[truncated]` marker; a

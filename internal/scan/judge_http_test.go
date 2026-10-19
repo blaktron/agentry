@@ -200,7 +200,7 @@ func TestNewJudgeProviderSelection(t *testing.T) {
 		{"unknown", "none", true},
 	}
 	for _, c := range cases {
-		cfg := JudgeConfig{Provider: c.provider, BaseURL: "http://judge.invalid", APIKey: "k"}
+		cfg := JudgeConfig{Provider: c.provider, BaseURL: "https://judge.invalid", APIKey: "k"}
 		p := NewJudgeProvider(cfg)
 		if p.Name() != c.want {
 			t.Fatalf("provider %q: got name %q want %q", c.provider, p.Name(), c.want)
