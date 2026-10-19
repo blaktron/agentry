@@ -444,12 +444,12 @@ func TestContrastRefusalNeverPrintsAPass(t *testing.T) {
 		d.TitleBlock = tb
 		need := d.MinContrast()
 		for v := 0; v < 256; v++ {
-			for _, hex := range []string{
+			for _, accent := range []string{
 				fmt.Sprintf("#%02x%02x%02x", v, v, v),
 				fmt.Sprintf("#%02x%02x%02x", v, 0x80, 0xff-v),
 				fmt.Sprintf("#%02x%02x%02x", 0xe0-v/2, v, 0x40),
 			} {
-				d.Accent = hex
+				d.Accent = accent
 				err := d.Validate()
 				var fe *FieldError
 				if !errors.As(err, &fe) || fe.Field != "accent" {
@@ -457,10 +457,10 @@ func TestContrastRefusalNeverPrintsAPass(t *testing.T) {
 				}
 				m := reachesRatio.FindStringSubmatch(fe.Message)
 				if m == nil {
-					t.Fatalf("%s: %q prints no ratio", hex, fe.Message)
+					t.Fatalf("%s: %q prints no ratio", accent, fe.Message)
 				}
 				if shown, _ := strconv.ParseFloat(m[1], 64); shown >= need {
-					t.Fatalf("%s: %q prints %s, which reaches %v", hex, fe.Message, m[1], need)
+					t.Fatalf("%s: %q prints %s, which reaches %v", accent, fe.Message, m[1], need)
 				}
 			}
 		}
