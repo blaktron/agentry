@@ -10,9 +10,15 @@
 // own test; a core pin bump that changes the gate then fails that test until
 // the restatement follows.
 //
-// The table carries no code of the pipeline. Its baseline is the platform
-// baseline compiled into the registry; an operator may store another one,
-// which GET /api/v1/platform/policy answers.
+// Two of the gate's inputs come from the manifest: the capability tokens it
+// declares and whether it asks for the network without naming where. The
+// package publishes those two derivations as code (DeclaredCapabilities and
+// UnrestrictedNetwork), which the registry's scanner itself calls, and the
+// table carries derivation cases for a client that reads them another way.
+//
+// The table carries no other code of the pipeline. Its baseline is the
+// platform baseline compiled into the registry; an operator may store
+// another one, which GET /api/v1/platform/policy answers.
 package gatecases
 
 import (
@@ -46,6 +52,29 @@ type Table struct {
 	Baseline Policy `json:"baseline"`
 	// Cases are the gate's cases, each with the outcome it reaches.
 	Cases []Case `json:"cases"`
+	// Derivations are manifests and the two gate inputs the registry
+	// derives from each.
+	Derivations []Derivation `json:"derivations"`
+}
+
+// Derivation is a manifest and what the registry derives from it for the
+// gate.
+type Derivation struct {
+	// Name says what the case shows; names are unique among derivations.
+	Name string `json:"name"`
+	// Manifest is the manifest's canonical JSON. Only its capabilities block
+	// is read.
+	Manifest json.RawMessage `json:"manifest"`
+	// Want is what DeclaredCapabilities and UnrestrictedNetwork answer.
+	Want GateInputs `json:"want"`
+}
+
+// GateInputs is the pair of gate inputs a manifest gives.
+type GateInputs struct {
+	// DeclaredCapabilities are the tokens, sorted; empty for none.
+	DeclaredCapabilities []string `json:"declaredCapabilities"`
+	// UnrestrictedNetwork is the case's WildcardEgress.
+	UnrestrictedNetwork bool `json:"unrestrictedNetwork"`
 }
 
 // Policy is the part of the publication policy the gate reads, in the
@@ -149,6 +178,16 @@ func parse(doc []byte) (Table, error) {
 		seen[c.Name] = true
 		if err := checkCase(c); err != nil {
 			return Table{}, fmt.Errorf("gatecases: case %q: %w", c.Name, err)
+		}
+	}
+	seen = map[string]bool{}
+	for i, d := range t.Derivations {
+		if d.Name == "" || seen[d.Name] {
+			return Table{}, fmt.Errorf("gatecases: derivation %d: missing or repeated name %q", i, d.Name)
+		}
+		seen[d.Name] = true
+		if len(d.Manifest) == 0 || string(d.Manifest) == "null" {
+			return Table{}, fmt.Errorf("gatecases: derivation %q: names no manifest", d.Name)
 		}
 	}
 	return t, nil
