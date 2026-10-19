@@ -2740,7 +2740,8 @@
             "TestGateCases",
             "TestGateCasesBaselineIsTheRegistrysBaseline",
             "TestGateCasesCoverEveryBranch",
-            "TestGateCasesCoverTheGrid"
+            "TestGateCasesCoverTheGrid",
+            "TestTheGatesManifestInputsAreThePublishedDerivations"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3707,7 +3708,8 @@
           "tests": [
             "TestAReviewPassesOnlyWhatEveryStageReadAndNothingFlagged",
             "TestAReviewReportKeepsNoExcerpt",
-            "TestCheckHoldsTheFormat"
+            "TestCheckHoldsTheFormat",
+            "TestTheServiceStoresAndReviewsAVoice"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3814,6 +3816,7 @@
           "path": "pkg/draftcheck/draftcheck_test.go",
           "tests": [
             "TestReadTakesTheManifestTheInstructionAndEveryFileInOrder",
+            "TestCheckRatesADraftAgainstTheRubric",
             "TestReadRefusesWhatIsNotADraftOrPastItsBounds",
             "TestReadListsTheToolsTheManifestDoesNotGrant"
           ],
@@ -3999,7 +4002,10 @@
           "path": "pkg/gatecases/gatecases_test.go",
           "tests": [
             "TestTheEmbeddedTableLoads",
-            "TestATableThatCannotBeReadIsRefused"
+            "TestATableThatCannotBeReadIsRefused",
+            "TestTheDerivationsAnswerTheTable",
+            "TestTheDerivationsCoverEveryToken",
+            "TestAnUnreadableManifestDeclaresNothing"
           ],
           "fuzz": [],
           "benchmarks": [],
