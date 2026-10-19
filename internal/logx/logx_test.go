@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -121,6 +123,10 @@ func TestTokensAreMaskedEverywhere(t *testing.T) {
 			// A secret-named key is recognised in camelCase and kebab-case.
 			"signingKey", tok,
 			"detail2", map[string]any{"clientSecret": tok, "X-Api-Key": tok},
+			// A key that is empty because a caller's variable was, and a token
+			// that a cache key or a file name builds into a longer word.
+			"", tok,
+			"cache", "sess_"+tok+"_1",
 		)
 		out := buf.String()
 		if strings.Contains(out, tok) {
@@ -129,8 +135,8 @@ func TestTokensAreMaskedEverywhere(t *testing.T) {
 		if !strings.Contains(out, tok[:12]+"…"+logx.Redacted) {
 			t.Fatalf("%s token not masked with its display prefix: %s", name, out)
 		}
-		if strings.Count(out, logx.Redacted) < 11 {
-			t.Fatalf("%s: expected the token masked in msg, value, err, deep map, list, bytes, raw JSON, byte batch and three secret-named keys; got %s", name, out)
+		if strings.Count(out, logx.Redacted) < 13 {
+			t.Fatalf("%s: expected the token masked in msg, value, err, deep map, list, bytes, raw JSON, byte batch, three secret-named keys, an empty key and a joined word; got %s", name, out)
 		}
 	}
 	// The display prefix on its own (what the UI shows) is not a token and
@@ -174,6 +180,113 @@ func TestTokensAreMaskedEverywhere(t *testing.T) {
 		t.Fatalf("redaction marker is not the documented text: %s", lit.String())
 	}
 	t.Run("every shape of value", sanitizeShapes)
+}
+
+// A token is masked whatever characters touch it: a prefix and a suffix made
+// of letters, digits or underscores, as a cache key or a file name builds
+// them, hide nothing; and a run that is not a token — a hex digest, a long
+// lowercase word, a token one character short — stays readable.
+func TestTokenJoinedToOtherCharactersIsMasked(t *testing.T) {
+	for _, prefix := range []string{auth.PATPrefix, auth.SessionPrefix, ""} {
+		tok, err := auth.NewToken(prefix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, form := range []string{
+			"sess_%s", "x%s", "%sx", "9%s", "%s9", "%s_1", "_%s", "%s_", "Z%s", "%sZ",
+			"k=%s", "pre/%s.json", "Bearer %s", "[%s]", "%s,%s", "sess_%s_1",
+		} {
+			joined := strings.ReplaceAll(form, "%s", tok)
+			var buf bytes.Buffer
+			logx.New(logx.Options{W: &buf}).Info("joined "+joined, "v", joined, "err", errors.New(joined))
+			out := buf.String()
+			if strings.Contains(out, tok[12:]) {
+				t.Errorf("%q: the token's tail reached the line: %s", form, out)
+			}
+			if !strings.Contains(out, logx.Redacted) {
+				t.Errorf("%q: nothing masked: %s", form, out)
+			}
+		}
+	}
+
+	for name, s := range map[string]string{
+		"hex digest":        strings.Repeat("0123456789abcdef", 4),
+		"long lowercase":    strings.Repeat("abcdefghij", 5) + "k-" + strings.Repeat("lmnop", 10),
+		"one char short":    strings.Repeat("a", 51),
+		"base32 and a stop": strings.Repeat("a", 30) + "." + strings.Repeat("b", 30),
+	} {
+		if got := logx.MaskTokens(s); got != s {
+			t.Errorf("%s was masked: %q", name, got)
+		}
+	}
+}
+
+// A value under an empty key is sanitised like any other; a group with an
+// empty name, which slog inlines, is sanitised too.
+func TestEmptyKeyValueIsSanitised(t *testing.T) {
+	tok, err := auth.NewToken(auth.PATPrefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	log := logx.New(logx.Options{W: &buf})
+	log.Info("x", "", tok)
+	if out := buf.String(); strings.Contains(out, tok) || !strings.Contains(out, tok[:12]+"…"+logx.Redacted) {
+		t.Fatalf("a token under an empty key was not masked: %s", out)
+	}
+
+	buf.Reset()
+	log.Info("x", slog.Group("", "inner", tok, "token", "t"), "", errors.New("bad "+tok), "", map[string]any{"": tok})
+	out := buf.String()
+	if strings.Contains(out, tok) {
+		t.Fatalf("a token under an empty group or an empty key leaked: %s", out)
+	}
+	if strings.Contains(out, `"token":"t"`) {
+		t.Fatalf("a secret-named key inside an empty group was kept: %s", out)
+	}
+
+	// An attribute with no key and no value is dropped by the handler, not
+	// turned into a line field.
+	buf.Reset()
+	log.Info("x", slog.Attr{})
+	if m := line(t, &buf); m[""] != nil {
+		t.Fatalf("an empty attribute was written: %v", m)
+	}
+}
+
+// A typed-nil pointer that implements error or fmt.Stringer is logged as
+// null; it does not panic inside the logging call, at the top level or
+// nested in a map or a slice.
+func TestTypedNilValuesDoNotPanic(t *testing.T) {
+	var u *url.URL
+	var e *net.OpError
+	var b *bytes.Buffer
+	var buf bytes.Buffer
+	log := logx.New(logx.Options{W: &buf})
+	log.Info("x", "u", u, "e", e, "b", b,
+		"nested", map[string]any{"u": u, "e": e}, "list", []any{u, e}, "ok", "kept")
+	m := line(t, &buf)
+	for _, k := range []string{"u", "e", "b"} {
+		if v, present := m[k]; !present || v != nil {
+			t.Errorf("%s = %v (present %v), want null", k, v, present)
+		}
+	}
+	if n := m["nested"].(map[string]any); n["u"] != nil || n["e"] != nil {
+		t.Errorf("nested = %v, want nulls", n)
+	}
+	if l := m["list"].([]any); l[0] != nil || l[1] != nil {
+		t.Errorf("list = %v, want nulls", l)
+	}
+	if m["ok"] != "kept" {
+		t.Errorf("a neighbouring value was lost: %v", m)
+	}
+
+	// A non-nil pointer of the same types is still logged as its text.
+	buf.Reset()
+	log.Info("x", "u", &url.URL{Scheme: "https", Host: "example.test"})
+	if m := line(t, &buf); m["u"] != "https://example.test" {
+		t.Errorf("u = %v, want the URL's text", m["u"])
+	}
 }
 
 // A value under a secret-named key never reaches the line, whatever it is;
@@ -330,7 +443,8 @@ func TestMaskEmail(t *testing.T) {
 func TestLongValuesAreTruncated(t *testing.T) {
 	var buf bytes.Buffer
 	log := logx.New(logx.Options{W: &buf})
-	big := strings.Repeat("a", 20000)
+	// Spaced, so it is long text and not one 20,000-character base32 run.
+	big := strings.Repeat("a ", 10000)
 	log.Info("x", "err", errors.New(big), "v", big)
 	if buf.Len() > 16*1024 {
 		t.Fatalf("line is %d bytes; Docker splits above 16384", buf.Len())
@@ -344,7 +458,7 @@ func TestLongValuesAreTruncated(t *testing.T) {
 	// The panic line's shape: the stack keeps more than any other value and
 	// the line still fits.
 	buf.Reset()
-	log.Error("panic in handler", "path", "/api/v1/x", "panic", big, "stack", strings.Repeat("s", 20000))
+	log.Error("panic in handler", "path", "/api/v1/x", "panic", big, "stack", strings.Repeat("s ", 10000))
 	if buf.Len() > 16*1024 {
 		t.Fatalf("panic line is %d bytes; Docker splits above 16384", buf.Len())
 	}
@@ -383,7 +497,8 @@ func TestLongValuesAreTruncated(t *testing.T) {
 		{"stack", logx.MaxStackLen + 1, true, logx.MaxStackLen},
 	} {
 		buf.Reset()
-		log.Info("x", c.key, strings.Repeat("z", c.n))
+		// "9" is outside a token's alphabet, so only the length bound acts.
+		log.Info("x", c.key, strings.Repeat("9", c.n))
 		v := line(t, &buf)[c.key].(string)
 		wantLen := c.keep
 		if c.cut {

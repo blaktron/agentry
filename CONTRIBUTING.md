@@ -43,8 +43,9 @@ Everyday commands:
 
 | Command | What |
 |---|---|
-| `make check` | the full gate: generated-code drift, ruleset sync, test inventory, compose image pins, lint, tests, build |
+| `make check` | the full gate: generated-code drift, ruleset sync, test inventory, compose image pins, third-party notices, lint, tests, build |
 | `make generate` | regenerate the OpenAPI server and Go client, and sqlc |
+| `make notices` | regenerate `THIRD_PARTY_NOTICES` from the Go modules compiled into `agentryd`; run it after a dependency changes (`make notices-check` fails on a stale file) |
 | `make test` | Go tests (DB tests need `AGENTRY_TEST_DATABASE_URL`) |
 | `make bump-pins` | move each digest in `deploy/compose/docker-compose.yaml` to what its tag serves now (needs the network) |
 | `make workflows-check` | no workflow job that a fork's pull request can start runs on a self-hosted runner without the fork guard (needs python3 with PyYAML) |

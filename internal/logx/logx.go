@@ -51,10 +51,18 @@ const truncatedMarker = "…[truncated]"
 // `agyd_` remembered browsers, `agd_` desktop grants,
 // `whsec_` webhook secrets, `csrf_` CSRF tokens, and the bare form used for
 // OIDC state and nonce and domain verification. The 12-character display
-// prefix a PAT is identified by is shorter than this and stays. A
-// 52-character run of [a-z2-7] is nothing else in practice: a hex digest has
-// a 0, 1, 8 or 9 in every such window.
-var tokenRE = regexp.MustCompile(`(?i)\b(?:agy[a-z]*_|agd_|whsec_|csrf_)?[a-z2-7]{52}\b`)
+// prefix a PAT is identified by is shorter than this and stays.
+//
+// The match is the run of base32 characters itself, not a word: a token a
+// caller joined to other text (`sess_<token>`, `x<token>`, `<token>_1`, a
+// cache key or a file name built from one) is as secret as one standing
+// alone. A run longer than 52 is masked whole, so a letter stuck to either
+// end of a token leaves none of it behind. The alphabet is what keeps this
+// from masking ordinary text: a run of 52 characters from [a-z2-7] is
+// nothing else in practice (a hex digest has a 0, 1, 8 or 9 in every such
+// window, base64 and words have characters outside it), and a stop in the
+// text — a hyphen, a dot, a slash, a digit outside 2-7 — ends the run.
+var tokenRE = regexp.MustCompile(`(?i)(?:agy[a-z]*_|agd_|whsec_|csrf_)?[a-z2-7]{52,}`)
 
 // tokenDisplayLen mirrors auth.PATDisplayPrefixLen: what survives a mask so
 // an incident can still be traced to the credential.
@@ -168,9 +176,6 @@ func (h Handler) WithGroup(name string) slog.Handler { return Handler{h.Handler.
 // maps, slices and errors. Masked, never dropped: a line about an incident
 // is worth more than the value it would have leaked.
 func Sanitize(_ []string, a slog.Attr) slog.Attr {
-	if a.Key == "" && a.Value.Kind() != slog.KindGroup {
-		return a
-	}
 	if isSecretKey(a.Key) {
 		return slog.String(a.Key, Redacted)
 	}
@@ -229,6 +234,13 @@ func sanitizeValue(v slog.Value) slog.Value {
 // slices, byte slices, errors, Stringers. Anything else is left to the
 // encoder.
 func sanitizeAny(x any) any {
+	// A nil pointer inside an interface still has a method set: calling
+	// Error or String on it would dereference nil and panic inside the
+	// logging call. It is logged as null, which is what the encoder writes
+	// for a nil pointer anyway.
+	if v := reflect.ValueOf(x); v.Kind() == reflect.Pointer && v.IsNil() {
+		return nil
+	}
 	switch t := x.(type) {
 	case nil:
 		return nil
