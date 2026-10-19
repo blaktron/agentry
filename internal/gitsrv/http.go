@@ -273,16 +273,7 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 		}
 	}
 
-	// Lazy bare-repo init (only the git role mounts repo storage).
-	// Not for a fork still being copied: its repository is
-	// the worker's to make, and is refused below until it has.
 	copying := agent.ForkState != nil && *agent.ForkState == registry.ForkCopying
-	if _, statErr := os.Stat(h.repos.Path(agent.RepoID)); statErr != nil && !copying {
-		if err := h.repos.InitBare(ctx, agent.RepoID, agent.DefaultBranch); err != nil {
-			h.log.ErrorContext(ctx, "lazy repo init", "err", err)
-			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusInternalServerError, "internal error"}
-		}
-	}
 
 	role, err := h.reg.EffectiveRole(ctx, principal, agent)
 	if err != nil {
@@ -350,6 +341,17 @@ func (h *Handler) authorizeGit(ctx context.Context, ns, name string, principal *
 	}
 	if !allowed {
 		return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusForbidden, "forbidden: this organization requires an org-bound token"}
+	}
+
+	// Lazy bare-repo init (only the git role mounts repo storage), once
+	// the request is allowed: a refused request changes nothing on disk.
+	// A reader served the reviewed copy needs none, and a fork still being
+	// copied was refused above, its repository being the worker's to make.
+	if view.path == "" {
+		if err := h.repos.EnsureBare(ctx, agent.RepoID, agent.DefaultBranch); err != nil {
+			h.log.ErrorContext(ctx, "lazy repo init", "err", err)
+			return registry.Agent{}, auth.AgentRoleNone, refView{}, &gitDenial{http.StatusInternalServerError, "internal error"}
+		}
 	}
 	return agent, role, view, nil
 }
