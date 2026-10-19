@@ -30,6 +30,9 @@ entrypoints:
 	if m.Version != "1.2.0" || m.Summary != "Summarizes: politely" || m.SchemaVersion != "2" {
 		t.Fatalf("the rest changed: %+v", m)
 	}
+	if len(m.Modes) != 1 || m.Modes[0] != ModeAutonomous || m.Entrypoints.Instruction != "SKILL.md" {
+		t.Fatalf("modes or the instruction entrypoint changed: %+v %+v", m.Modes, m.Entrypoints)
+	}
 	if !strings.Contains(string(out), "# A comment the fork keeps.") {
 		t.Fatalf("the comment is gone:\n%s", out)
 	}
@@ -58,6 +61,19 @@ func TestRenameQuotesAValueYAMLWouldReadOtherwise(t *testing.T) {
 	}
 	if m.Name != "1234" {
 		t.Fatalf("name is %q", m.Name)
+	}
+	// Parse fills a string from a bare number too, so the quoting is only
+	// visible in the text itself.
+	if !strings.Contains(string(out), "\nname: \"1234\"\n") {
+		t.Fatalf("an existing digit-only name is not quoted:\n%s", out)
+	}
+	// An inserted key is quoted the same way.
+	out, err = Rename([]byte("schemaVersion: \"2\"\nversion: 1.0.0\n"), "5678", "1234")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "\nnamespace: \"5678\"\n") || !strings.Contains(string(out), "\nname: \"1234\"\n") {
+		t.Fatalf("an inserted digit-only namespace or name is not quoted:\n%s", out)
 	}
 }
 

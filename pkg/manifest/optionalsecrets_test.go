@@ -309,4 +309,11 @@ func TestV2SchemaOptionalSecretsShape(t *testing.T) {
 	if got.Type != "array" || !got.UniqueItems || got.Items.Pattern != props["secrets"].Items.Pattern {
 		t.Fatalf("optionalSecrets = %+v; secrets' pattern %q", got, props["secrets"].Items.Pattern)
 	}
+	// Both are the environment variable name rule V5 holds a secret to, so
+	// the two patterns cannot both drift, or both go empty, unnoticed.
+	for name, pattern := range map[string]string{"secrets": props["secrets"].Items.Pattern, "optionalSecrets": got.Items.Pattern} {
+		if pattern != envNameRE.String() {
+			t.Errorf("schema %s item pattern is %q, want V5's %q", name, pattern, envNameRE.String())
+		}
+	}
 }

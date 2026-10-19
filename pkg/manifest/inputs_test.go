@@ -3,6 +3,7 @@ package manifest
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -157,6 +158,13 @@ func TestInputsChangesNothingAboutTheContract(t *testing.T) {
 	if !slices.Equal(with.Contract().Secrets, without.Contract().Secrets) {
 		t.Fatal("inputs changed the contract")
 	}
+	// The whole contract a person consents to, not a field or two of it.
+	if !reflect.DeepEqual(without.Contract(), with.Contract()) {
+		t.Fatalf("inputs changed the contract:\n without: %+v\n with:    %+v", without.Contract(), with.Contract())
+	}
+	if d := DiffCapabilities(without.Contract(), with.Contract()); !d.Empty() {
+		t.Fatalf("an inputs-only change widened or narrowed the contract: %+v", d)
+	}
 	raw, err := CanonicalJSON(without)
 	if err != nil {
 		t.Fatal(err)
@@ -175,8 +183,8 @@ func TestInputsChangesNothingAboutTheContract(t *testing.T) {
 
 // TestInputsDecodingStaysStrict: the block is closed.
 func TestInputsDecodingStaysStrict(t *testing.T) {
-	if _, err := Parse([]byte(inputsYAML + "  archives: unpack\n")); err == nil {
-		t.Fatal("an unknown field inside inputs was accepted")
+	if _, err := Parse([]byte(inputsYAML + "  archives: unpack\n")); err == nil || !strings.Contains(err.Error(), "field archives not found") {
+		t.Fatalf("an unknown field inside inputs was not refused by name: %v", err)
 	}
 }
 
