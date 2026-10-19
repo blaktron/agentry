@@ -1099,7 +1099,7 @@ its digest, so a run record says which file a run obeyed.
 | `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode ([Unsafe Mode](agentry/unsafe-mode.md)) |
 | `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
 | `images.hostlink` | the hostlink image the host link is built on, the OpenSSH client a run reaches a [target host](#target-hosts-a-server-named-at-run-time) with, pinned by digest (the default is the one the CLI release names) |
-| `images.browser` | the browser server's image a release that declares a [browser](#the-browser-a-site-to-test-named-at-run-time) runs on, `agentry-browser` (`@playwright/mcp` and Chrome for Testing), pinned by digest (the default is the one the CLI release names) |
+| `images.browser` | the browser server's image a release that declares a [browser](#the-browser-a-site-to-test-named-at-run-time) runs on, `agentry-browser` (`@playwright/mcp` and Debian's open-source Chromium), pinned by digest (the default is the one the CLI release names) |
 | `browser.allowPublicWeb` | lets a browser whose scope is `public` reach any public site on ports 80 and 443 (default false → such a release is refused, exit 11); apart from `allowWildcardEgress` |
 | `hosts.allow` / `hosts.deny` | IPv4 networks in CIDR form that narrow the addresses a target host may be at: with `allow` set an address must be in one, and one in `deny` is refused either way ([below](#the-hosts-lists-hosts)) |
 | `images.clamavSignatures` | the ClamAV signature bundle, `<registry>/<repository>:<tag>` (default `ghcr.io/blaktron/agentry-clamav-db:latest`); a mirror must carry the publishing workflow's signature |
@@ -2136,7 +2136,8 @@ tools or the review grant, is never given a browser.
 
 **The browser server** is one more server in the run's gateway catalog,
 named `browser`, on the `agentry-browser` image from agentry-dockerimages
-(`@playwright/mcp` 0.0.83 and Chrome for Testing, pinned by digest,
+(`@playwright/mcp` 0.0.83 driving Debian's open-source Chromium, with no
+Widevine or other proprietary component, pinned by digest,
 `images.browser` in the policy; pulled by its digest when the machine
 lacks it).
 
@@ -2196,7 +2197,7 @@ it. Loopback, link-local (where a cloud's metadata service answers),
 multicast and unspecified addresses are never dialled, a site of yours
 included, and a subdomain of your site must be at public addresses. Every
 tunnel keeps the proxy's SNI check: the TLS name must be the host asked
-for, with no encrypted ClientHello (the image's Chrome policy turns ECH
+for, with no encrypted ClientHello (the image's Chromium policy turns ECH
 off so that it passes). A page's plain `http` is forwarded under the same
 checks, with no redirect followed: the browser asks again and is judged
 again. The proxy reads no page and decrypts nothing, so it narrows where a
@@ -2573,8 +2574,9 @@ anything:
   names the nearest shade that passes. The tint is derived (12% of the
   accent over white), never stored;
 - `name` (60 characters) and `footer.text` (120) one line of plain text, no
-  control or bidirectional formatting characters. The footer is set as
-  text by the template, never evaluated;
+  control, line-break, bidirectional formatting or other invisible format
+  characters (zero-width characters, the soft hyphen, the tag block). The
+  footer is set as text by the template, never evaluated;
 - `agentryTheme` 2. The version-1 documents and the old names (`formal`,
   `brief`, `letter`) are not read.
 

@@ -114,4 +114,58 @@ func TestAttr(t *testing.T) {
 	if logevent.Audit("user.login") != "audit.user.login" {
 		t.Fatal("Audit prefix")
 	}
+	if logevent.Key != "event" || logevent.AuditPrefix != "audit." {
+		t.Fatalf("Key %q AuditPrefix %q, want the contract's event and audit.", logevent.Key, logevent.AuditPrefix)
+	}
+	if logevent.Audit("user.login").Attr().Value.String() != "audit.user.login" {
+		t.Fatal("Audit(...).Attr() does not carry the prefixed name")
+	}
+
+	// Dashboards and alerts key on these exact names: each constant keeps its
+	// value (a swap between two catalogued names would pass the completeness
+	// check), is listed in All exactly once, and prints as itself.
+	want := []struct {
+		e logevent.Event
+		v string
+	}{
+		{logevent.HTTPRequest, "http.request"},
+		{logevent.HTTPRateLimited, "http.rate_limited"},
+		{logevent.AuthSocialRejected, "auth.social_rejected"},
+		{logevent.SSRFRefused, "ssrf.refused"},
+		{logevent.GateVerdict, "gate.verdict"},
+		{logevent.GateError, "gate.error"},
+		{logevent.ScanStage, "scan.stage"},
+		{logevent.FailOpenAuditStreamDrop, "failopen.audit_stream_drop"},
+		{logevent.FailOpenHistoryNotScanned, "failopen.history_not_scanned"},
+		{logevent.FailOpenOSVNotChecked, "failopen.osv_not_checked"},
+		{logevent.FailOpenOSVError, "failopen.osv_error"},
+		{logevent.FailOpenVersionNotChecked, "failopen.version_not_checked"},
+		{logevent.FailOpenDirectoryErasure, "failopen.directory_erasure"},
+		{logevent.GitPushRefused, "git.push_refused"},
+		{logevent.MailSuppressed, "mail.suppressed"},
+		{logevent.WebhookDelivered, "webhook.delivered"},
+		{logevent.ModelInput, "model_input.call"},
+	}
+	if len(logevent.All) != len(want) {
+		t.Errorf("All lists %d names, the catalogue has %d", len(logevent.All), len(want))
+	}
+	listed := map[logevent.Event]int{}
+	for _, e := range logevent.All {
+		listed[e]++
+	}
+	for _, c := range want {
+		e, v := c.e, c.v
+		if string(e) != v {
+			t.Errorf("%s = %q, want %q", v, string(e), v)
+		}
+		if e.String() != v {
+			t.Errorf("%q.String() = %q", string(e), e.String())
+		}
+		if listed[e] != 1 {
+			t.Errorf("%q is listed %d times in All, want once", v, listed[e])
+		}
+		if a := e.Attr(); a.Key != "event" || a.Value.String() != v {
+			t.Errorf("%q.Attr() = %v", v, a)
+		}
+	}
 }

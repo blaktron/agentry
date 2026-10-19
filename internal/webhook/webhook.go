@@ -9,6 +9,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -286,8 +288,10 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 	now := d.deps.Now()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, row.Url, bytes.NewReader(row.Payload))
 	if err != nil {
-		record(nil, err.Error(), nil, d.backoff(now, job.Attempt))
-		return err
+		reason := deliveryFailure(err, row.Url)
+		record(nil, reason, nil, d.backoff(now, job.Attempt))
+		// Not wrapped with %w: the wrapped error names the whole endpoint URL.
+		return fmt.Errorf("webhook: deliver %s: %s", args.DeliveryID, reason)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "agentry-webhooks/1")
@@ -306,9 +310,11 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 			d.deps.Log.WarnContext(ctx, "webhook: target refused by the private-range guard", logevent.SSRFRefused.Attr(),
 				"org", row.OrgID, "delivery", args.DeliveryID, "endpoint", row.EndpointID, "host", blocked.Host)
 		}
-		delivered("error", "err", err)
-		record(nil, err.Error(), nil, d.backoff(now, job.Attempt))
-		return fmt.Errorf("webhook: deliver %s: %w", args.DeliveryID, err)
+		reason := deliveryFailure(err, row.Url)
+		delivered("error", "err", reason)
+		record(nil, reason, nil, d.backoff(now, job.Attempt))
+		// Not wrapped with %w: the wrapped error names the whole endpoint URL.
+		return fmt.Errorf("webhook: deliver %s: %s", args.DeliveryID, reason)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
@@ -324,6 +330,64 @@ func (d *Dispatcher) deliver(ctx context.Context, job queue.Job) error {
 	// Non-2xx (incl. a 3xx we refuse to follow): retry.
 	record(&code, fmt.Sprintf("non-2xx status %d", resp.StatusCode), nil, d.backoff(now, job.Attempt))
 	return fmt.Errorf("webhook: deliver %s: status %d", args.DeliveryID, resp.StatusCode)
+}
+
+// deliveryFailure is the text of a failed attempt that is logged, stored on
+// the delivery row and returned to the queue. A transport error names the
+// request URL, and an endpoint's URL can carry a secret in its path or query
+// (a token in the address is how many receivers authenticate a webhook), so
+// the text names the endpoint's scheme and host and never its path, query,
+// fragment or user information; any piece of the endpoint that still shows in
+// the underlying message is replaced.
+func deliveryFailure(err error, endpoint string) string {
+	msg := err.Error()
+	pieces := []string{endpoint}
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		pieces = append(pieces, ue.URL)
+		msg = ue.Op + " " + EndpointHost(ue.URL) + ": " + ue.Err.Error()
+		if ue.Op == "parse" {
+			// A parse error quotes the bytes it stopped at, and those can be
+			// the secret itself.
+			return "the endpoint's address is not a valid URL"
+		}
+	}
+	for _, raw := range append([]string(nil), pieces...) {
+		u, perr := url.Parse(raw)
+		if perr != nil {
+			continue
+		}
+		if len(u.Path) > 1 {
+			pieces = append(pieces, u.Path, u.EscapedPath())
+		}
+		pieces = append(pieces, u.RawQuery, u.Fragment)
+		if u.User != nil {
+			pieces = append(pieces, u.User.String(), u.User.Username())
+			if pw, ok := u.User.Password(); ok {
+				pieces = append(pieces, pw)
+			}
+		}
+	}
+	// Longest first, so a whole URL goes before the path inside it.
+	sort.SliceStable(pieces, func(i, j int) bool { return len(pieces[i]) > len(pieces[j]) })
+	for _, p := range pieces {
+		if len(p) > 1 {
+			msg = strings.ReplaceAll(msg, p, "[redacted]")
+		}
+	}
+	return msg
+}
+
+// EndpointHost is the scheme and host of raw, "the endpoint" when it does not
+// parse as a URL with one. It is the only part of an endpoint's address that
+// belongs in a log line, an audit event or a stored error: the path, the query
+// and the user information routinely carry the endpoint's secret.
+func EndpointHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "the endpoint"
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 // backoff mirrors the queue's 2^attempt seconds schedule for the display-only

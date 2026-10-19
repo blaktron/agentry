@@ -56,6 +56,7 @@ PURPOSES = {
     "pkg/ruleset": "Pinned embedded bundle, released thresholds and immutable history",
     "pkg/toolgrant": "Runner tools an instruction calls for against the grants a manifest declares",
     "pkg/websearch": "External search requests, result bounds, redirects and key secrecy",
+    "scripts/notices": "Licence classification and the source note of the generated third-party notices",
 }
 
 # The large HTTP/pipeline packages have different subjects inside one binary.
