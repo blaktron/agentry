@@ -103,10 +103,12 @@ injection can pass this scan as it can pass the publication scan.
 ## The search
 
 The request is `{"query": …, "count": …}`: a query of 1 to 400 characters
-with no control characters, and 1 to 10 results (5 when unset). The
-registry asks its provider, drops any result without an absolute `http` or
-`https` address (or with user information in it), folds and cuts each
-title to 300 characters and each snippet to 1,000, and scans every result
+with no control characters (a format character, such as a zero-width space
+or a bidirectional override, is dropped from it), and 1 to 10 results (5
+when unset). The registry asks its provider, drops any result without an
+absolute `http` or `https` address (or with user information in it), folds
+white space, drops control and format characters, and cuts each title to
+300 characters and each snippet to 1,000, and scans every result
 as a `search_result`: its title, address and snippet together, since an
 address can carry an instruction too.
 
