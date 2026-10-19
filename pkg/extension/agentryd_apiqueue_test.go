@@ -2,14 +2,22 @@ package extension
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"log/slog"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
@@ -110,5 +118,198 @@ func TestAPIRoleDrainsTheAPIQueue(t *testing.T) {
 	}
 	if n != 0 {
 		t.Errorf("the api role enqueued %s; that is the worker's", coreKind)
+	}
+}
+
+// roleConfig is a development configuration whose data directories are the
+// test's own, for the role tests that need no database.
+func roleConfig(t *testing.T) config.Config {
+	t.Helper()
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	cfg.Git.DataDir = t.TempDir()
+	cfg.Git.HooksDir = t.TempDir()
+	cfg.Git.SSHAddr = ""
+	return cfg
+}
+
+// roleConfigFile writes roleConfig's choices, with a database no one
+// answers, to a file for the entry points that read one.
+func roleConfigFile(t *testing.T) string {
+	t.Helper()
+	t.Setenv("AGENTRY_DATABASE_URL", "postgres://agentry:agentry@127.0.0.1:1/agentry?sslmode=disable")
+	t.Setenv("AGENTRY_DATABASE_MIGRATE_ON_START", "false")
+	path := filepath.Join(t.TempDir(), "agentry.yaml")
+	body := "devMode: true\ngit:\n  dataDir: " + t.TempDir() + "\n  hooksDir: " + t.TempDir() + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// The roles that act on the database or on the repositories do not start
+// without one, and say so; a name that is no role is no role.
+func TestRolesThatNeedADatabaseRefuseToStartWithoutOne(t *testing.T) {
+	ctx := context.Background()
+	cfg := roleConfig(t)
+	log := slog.New(slog.DiscardHandler)
+	for _, role := range []string{"git", "all"} {
+		if _, _, err := buildHandler(ctx, cfg, nil, log, role, nil, nil); err == nil || !strings.Contains(err.Error(), "the git role requires a database") {
+			t.Errorf("buildHandler(%s) without a database: %v, want the git role to require one", role, err)
+		}
+	}
+	for _, role := range []string{"worker", "bogus", ""} {
+		if _, _, err := buildHandler(ctx, cfg, nil, log, role, nil, nil); err == nil || !strings.Contains(err.Error(), "unknown http role "+`"`+role+`"`) {
+			t.Errorf("buildHandler(%q): %v, want an unknown http role", role, err)
+		}
+	}
+	if err := runWorker(ctx, cfg, nil, log, nil, nil, nil); err == nil || !strings.Contains(err.Error(), "the worker role requires a database") {
+		t.Errorf("runWorker without a database: %v", err)
+	}
+	if _, err := newWorkerQueue(ctx, cfg, api.New(cfg, nil, log), nil, log, nil, nil); err == nil || !strings.Contains(err.Error(), "requires archive storage") {
+		t.Errorf("a worker without archive storage: %v", err)
+	}
+}
+
+// The entry point starts the role it is asked for, or refuses it in the
+// same words as the role itself; it never starts a name it does not know.
+func TestRunWithRefusesAnUnknownRoleAndOneThatCannotRun(t *testing.T) {
+	path := roleConfigFile(t)
+	ended, stop := context.WithCancel(context.Background())
+	stop()
+	old := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(old) })
+	for _, c := range []struct{ role, want string }{
+		{"bogus", `unknown role "bogus"`},
+		{"worker", "the worker role requires a database"},
+		{"git", "the git role requires a database"},
+		{"all", "the git role requires a database"},
+	} {
+		if err := RunWith(ended, path, c.role, Options{}); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("RunWith(%s): %v, want %q", c.role, err, c.want)
+		}
+	}
+}
+
+// agentryd's commands: the four roles, the migration and the hook shim; only
+// the worker takes --queues, and a bad list is refused before the role starts.
+func TestRootCmdHasTheRolesAndOnlyTheWorkerTakesQueues(t *testing.T) {
+	commands := map[string]bool{}
+	for _, c := range rootCmd(nil).Commands() {
+		commands[c.Name()] = true
+		hasQueues := c.Flags().Lookup("queues") != nil
+		switch c.Name() {
+		case "worker":
+			if !hasQueues {
+				t.Error("the worker takes no --queues")
+			}
+		case "hook":
+			if !c.Hidden {
+				t.Error("the git hook shim is listed in help")
+			}
+			if len(c.Commands()) != 1 || c.Commands()[0].Name() != "pre-receive" {
+				t.Errorf("the hook shim's commands = %v, want pre-receive", c.Commands())
+			}
+		default:
+			if hasQueues {
+				t.Errorf("%s takes --queues", c.Name())
+			}
+		}
+	}
+	for _, want := range []string{"api", "git", "worker", "all", "migrate", "hook"} {
+		if !commands[want] {
+			t.Errorf("no %s command", want)
+		}
+	}
+
+	path := roleConfigFile(t)
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"worker", "--queues", "judge"}, `"judge" is not a queue`},
+		{[]string{"worker", "--queues", ","}, "--queues names no queue"},
+		{[]string{"api", "--queues", "core"}, "unknown flag: --queues"},
+		{[]string{"git", "--queues", "core"}, "unknown flag: --queues"},
+		{[]string{"all", "--queues", "core"}, "unknown flag: --queues"},
+	} {
+		root := rootCmd(nil)
+		root.SetOut(io.Discard)
+		root.SetErr(io.Discard)
+		root.SetArgs(append([]string{"--config", path}, c.args...))
+		if err := root.Execute(); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("agentryd %s: %v, want %q", strings.Join(c.args, " "), err, c.want)
+		}
+	}
+}
+
+// The api role without a database (limited dev mode) serves the extensions'
+// routes under their names and lists them on /meta, and an extension whose
+// job is on the api queue opens no queue there is no database to hold.
+func TestAPIRoleWithoutADatabaseServesTheExtensions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cfg := roleConfig(t)
+	log := slog.New(slog.DiscardHandler)
+	ext := jobber{jobs: []Job{{Kind: "probe.api", Queue: QueueAPI, Every: time.Hour, Handler: func(context.Context, queue.Job) error { return nil }}}}
+
+	h, closeAll, err := buildHandler(ctx, cfg, nil, log, "api", nil, []Extension{ext})
+	if err != nil {
+		t.Fatalf("buildHandler(api) without a database: %v", err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/x/noop/status", nil))
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("GET /api/v1/x/noop/status: %d %s, want the extension's 204", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
+	var meta struct {
+		Extensions []string `json:"extensions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &meta); err != nil || rec.Code != http.StatusOK || !slices.Equal(meta.Extensions, []string{"noop"}) {
+		t.Errorf("GET /api/v1/meta: %d %s (%v), want extensions [noop]", rec.Code, rec.Body.String(), err)
+	}
+
+	// With no database there is no api queue to drain; with no api-queue job
+	// there is none either. Either way the wait returns at once.
+	for name, exts := range map[string][]Extension{"an api-queue job": {ext}, "no api-queue job": {noop{}}, "no extension": nil} {
+		wait, err := apiQueue(ctx, cfg, nil, log, nil, exts)
+		if err != nil || wait == nil {
+			t.Fatalf("apiQueue with %s and no database: %v %v", name, wait != nil, err)
+		}
+		wait()
+	}
+}
+
+// serveHTTP reports a listener that cannot start, and ends cleanly when its
+// context does.
+func TestServeHTTPReportsAListenFailureAndStopsWithItsContext(t *testing.T) {
+	cfg := roleConfig(t)
+	log := slog.New(slog.DiscardHandler)
+	taken, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = taken.Close() })
+	cfg.HTTP.Addr = taken.Addr().String()
+	bounded, giveUp := context.WithTimeout(context.Background(), 30*time.Second)
+	defer giveUp()
+	if err := serveHTTP(bounded, cfg, nil, log, "api", nil, nil); err == nil || !strings.Contains(err.Error(), "address already in use") {
+		t.Errorf("serving on an address in use: %v, want it refused", err)
+	}
+
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.HTTP.Addr = free.Addr().String()
+	_ = free.Close()
+	ended, stop := context.WithCancel(context.Background())
+	stop()
+	if err := serveHTTP(ended, cfg, nil, log, "api", nil, nil); err != nil {
+		t.Errorf("serving until the context ends: %v, want a clean stop", err)
 	}
 }

@@ -127,7 +127,7 @@ are rejected, so a typo cannot silently disable a control. Releases
 published under schema v1 (the `kind`-classified manifest) stay readable
 forever — the registry maps `skill` and `prompt-agent` to
 `modes: [autonomous]` — but a v2 manifest is what you write today, and
-only a v2 manifest can declare `interactive`.
+only a v2 manifest can declare `interactive` or `persistent`.
 
 ### Identity and metadata
 
@@ -136,7 +136,7 @@ only a v2 manifest can declare `interactive`.
 | `schemaVersion` | yes | the manifest schema major: `"2"` (v1 is read, not written) |
 | `name` | yes | lowercase `[a-z0-9-]`, ≤65 chars, starts/ends alphanumeric; unique within the namespace |
 | `namespace` | yes | the publishing handle (a user or org), lowercase `[a-z0-9-]`, ≤39 chars |
-| `modes` | yes | the run modes the release supports: `[autonomous]`, `[interactive]`, or both (section below) |
+| `modes` | yes | the run modes the release supports: any of `autonomous`, `interactive` and `persistent`, at least one, each once (section below) |
 | `version` | yes | strict semver without a leading `v`; equals the git tag when publishing from a tag; must exceed every existing version on its channel |
 | `summary` | yes | one plain-text line, ≤140 characters |
 | `license` | public publish | SPDX identifier or expression (`MIT OR Apache-2.0`); a `LICENSE` file must be present (its text is not compared) |
@@ -152,7 +152,8 @@ release declares the set of run modes it supports:
 | Mode | What a run is | Status |
 |---|---|---|
 | `autonomous` | starts from its files — after the up-front questions, if any, and MCP profile authentication — does the job, writes its output and receipts, and ends | this is `agentry run` today |
-| `interactive` | starts from the same plan and controls, but the run is a conversation: in the CLI a chat in the terminal (`agentry run --mode interactive`), in the desktop the run panel's chat. The agent can ask for information as the work reveals the need; you can answer and drop files into the read-only inputs folder (`/add PATH`), then `/finish` for the final result. You **cannot** give it more access than the manifest declares — the capability contract, the gateway and the egress allowlist are exactly those of an autonomous run of the same release, and a permission request from inside the sandbox is granted only for a tool the plan already serves, refused otherwise | `agentry run --mode interactive`; a release with one mode runs in it, one with both is asked on a terminal and runs autonomous otherwise |
+| `interactive` | starts from the same plan and controls, but the run is a conversation: in the CLI a chat in the terminal (`agentry run --mode interactive`), in the desktop the run panel's chat. The agent can ask for information as the work reveals the need; you can answer and drop files into the read-only inputs folder (`/add PATH`), then `/finish` for the final result. You **cannot** give it more access than the manifest declares — the capability contract, the gateway and the egress allowlist are exactly those of an autonomous run of the same release, and a permission request from inside the sandbox is granted only for a tool the plan already serves, refused otherwise | `agentry run --mode interactive`; a release with one mode runs in it, one with autonomous and interactive is asked on a terminal and runs autonomous otherwise |
+| `persistent` | a conversation the runner keeps between sessions: the agent's conversation and its own files outlive each start and stop. It takes the same `interactive` hints and `intake` questions as an interactive release, under the same capability contract | run only for the runner's own built-in agents: a persistent release from the registry or a local folder is refused before it starts ([Run modes](runner.md#run-modes)) |
 
 The instruction is one file:
 
@@ -166,7 +167,7 @@ release — not a package of its own.
 
 ### `intake`: questions asked before a run
 
-Both modes may ask a few things up front. The runner asks them through
+Every mode may ask a few things up front. The runner asks them through
 the same prompter that collects MCP profile secrets (a terminal prompt in
 the CLI, a form in the desktop) and stages the answers read-only for the
 agent at `/inputs/intake.json`.
@@ -374,7 +375,8 @@ task text. It may span lines and use tabs, and carries no other control
 character and no format character, as the guide's overview does (V10).
 Everything else about a session — budgets, idle timeout, wall
 time — is the operator's runner policy, which a manifest can only
-tighten. A release that does not list `interactive` may still declare
+tighten. A persistent session opens with the same `opening`. A release
+that lists neither `interactive` nor `persistent` may still declare
 hints: validation warns, and they never apply.
 
 ### `guide`: what a person reads before a run

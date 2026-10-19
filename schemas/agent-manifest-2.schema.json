@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentry.example/schemas/agent-manifest-2.schema.json",
   "title": "Agentry agent.yaml manifest (schema major 2)",
-  "description": "Machine form of the QuickAgent manifest: a release declares the run modes it supports (autonomous, interactive) and one instruction entrypoint. Closed schema: unknown keys are invalid everywhere (rule V1). This schema covers the static shape; the context rules V2 (repo identity), V3 (tag equality and channel monotonicity), V4 (include resolution, instruction file present), V7 (public-publish LICENSE/README and SPDX allowlist), V8 (archive quotas) and V9 (frontmatter vs manifest) are enforced by the registry and by pkg/manifest, as are glob validity and the policy-gated \"*\" egress.",
+  "description": "Machine form of the QuickAgent manifest: a release declares the run modes it supports (autonomous, interactive, persistent) and one instruction entrypoint. Closed schema: unknown keys are invalid everywhere (rule V1). This schema covers the static shape; the context rules V2 (repo identity), V3 (tag equality and channel monotonicity), V4 (include resolution, instruction file present), V7 (public-publish LICENSE/README and SPDX allowlist), V8 (archive quotas) and V9 (frontmatter vs manifest) are enforced by the registry and by pkg/manifest, as are glob validity and the policy-gated \"*\" egress.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "name", "namespace", "modes", "version", "summary", "publish"],
@@ -24,11 +24,11 @@
     },
     "modes": {
       "type": "array",
-      "description": "Run modes the release supports; one or both (V1).",
+      "description": "Run modes the release supports, at least one (V1). persistent is run only for the runner's own built-in agents.",
       "minItems": 1,
-      "maxItems": 2,
+      "maxItems": 3,
       "uniqueItems": true,
-      "items": { "type": "string", "enum": ["autonomous", "interactive"] }
+      "items": { "type": "string", "enum": ["autonomous", "interactive", "persistent"] }
     },
     "version": {
       "type": "string",

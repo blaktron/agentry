@@ -4,7 +4,7 @@
 // agent_versions.manifest.
 //
 // Two schema majors are read. Major 2 classifies a QuickAgent by the
-// run modes it supports — autonomous, interactive — and names one
+// run modes it supports — autonomous, interactive, persistent — and names one
 // instruction entrypoint. Major 1 classified by kind (skill,
 // prompt-agent, mcp-server) and is kept readable for the archives
 // already published under it: SupportedModes and InstructionCandidates
@@ -53,12 +53,17 @@ const (
 	// ModeInteractive starts from the same plan and controls, but the run is
 	// a conversation with the user in the CLI TUI or the desktop.
 	ModeInteractive Mode = "interactive"
+	// ModePersistent is a conversation the runner keeps between sessions:
+	// the agent's conversation and files outlive each start and stop. The
+	// runner runs it only for its own built-in agents; a release from any
+	// other source that declares it is refused at run time.
+	ModePersistent Mode = "persistent"
 )
 
 // Valid reports whether m is a known mode.
 func (m Mode) Valid() bool {
 	switch m {
-	case ModeAutonomous, ModeInteractive:
+	case ModeAutonomous, ModeInteractive, ModePersistent:
 		return true
 	}
 	return false
