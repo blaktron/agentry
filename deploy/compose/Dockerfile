@@ -52,6 +52,15 @@ COPY --from=build /out/agentryd /usr/bin/agentryd
 COPY --from=build /src/testdata/attack-corpus /srv/agentry/attack-corpus
 COPY --from=gitleaks /usr/bin/gitleaks /usr/bin/gitleaks
 
+# The licences the binaries above are redistributed under. The Go modules'
+# texts and NOTICE files are generated into THIRD_PARTY_NOTICES (scripts/notices;
+# `make notices-check` fails when it is stale). The upstream gitleaks image
+# carries no licence file, so its MIT text is fetched at the tag of the image
+# above and verified against its checksum.
+COPY THIRD_PARTY_NOTICES /usr/share/licenses/agentryd/THIRD_PARTY_NOTICES
+ADD --chmod=0644 --checksum=sha256:e3884b252b3bfc045e55be43a34d1e80da070bc6f804ac95bf4660e97d62ebc6 \
+    https://raw.githubusercontent.com/gitleaks/gitleaks/v8.30.1/LICENSE /usr/share/licenses/gitleaks/LICENSE
+
 # uid 65532 matches the helm chart's podSecurityContext.runAsUser and the
 # distroless "nonroot" convention the rest of the deployment assumes.
 USER 65532:65532

@@ -2327,6 +2327,9 @@
           "tests": [
             "TestRequestIDStampedFromContext",
             "TestTokensAreMaskedEverywhere",
+            "TestTokenJoinedToOtherCharactersIsMasked",
+            "TestEmptyKeyValueIsSanitised",
+            "TestTypedNilValuesDoNotPanic",
             "TestSecretNamedKeysAreRedacted",
             "TestLongValuesAreTruncated",
             "TestParseLevel"
@@ -3746,7 +3749,12 @@
           "path": "internal/webhook/webhook_test.go",
           "tests": [
             "TestClient_NoRedirectFollowing",
-            "TestSign_And_Verify"
+            "TestSign_And_Verify",
+            "TestEventCatalog",
+            "TestNewDispatcher_Defaults",
+            "TestDispatcher_NeedsAStoreAndAQueue",
+            "TestDeliver_UnreadableArgsAreNotRetried",
+            "TestBackoffAndStrPtrOrNil"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3887,6 +3895,7 @@
             "TestClient_HTTPSOnly",
             "TestClient_RefusesNonPublicTargets",
             "TestClient_DefaultTimeout",
+            "TestClient_TransportBounds",
             "TestProxy_TunnelsToTheTarget",
             "TestProxy_RefusesANonPublicTargetBeforeAsking",
             "TestProxy_CarriesHTTPSOnly",
@@ -4815,6 +4824,25 @@
           "dependencyHints": [
             "HTTP transport"
           ]
+        }
+      ]
+    },
+    {
+      "owner": "scripts/notices",
+      "behavior": "Licence classification and the source note of the generated third-party notices",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "scripts/notices/main_test.go",
+          "tests": [
+            "TestClassify",
+            "TestLicenceNames",
+            "TestSourceNoteNamesUpstreamForCopyleftModules"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         }
       ]
     }

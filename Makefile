@@ -8,7 +8,7 @@ GO      ?= go
 BIN_DIR := bin
 LDFLAGS := -X github.com/blaktron/agentry/internal/version.Version=$(shell git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo 0.0.0-dev)
 
-.PHONY: all build test lint vuln generate generate-check check prose-check dev db-up db-down clean e2e sync-rules sync-rules-check fuzz deps-audit attest-interop test-inventory-check compose-pins-check bump-pins workflows-check
+.PHONY: all build test lint vuln generate generate-check check prose-check dev db-up db-down clean e2e sync-rules sync-rules-check fuzz deps-audit attest-interop test-inventory-check compose-pins-check bump-pins workflows-check notices notices-check
 
 all: build
 
@@ -85,13 +85,21 @@ deps-audit:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 ## check: the full local/CI gate
-check: generate-check sync-rules-check test-inventory-check compose-pins-check lint test build
+check: generate-check sync-rules-check test-inventory-check compose-pins-check notices-check lint test build
 
 ## compose-pins-check: every image of the headless compose stack is pinned by
 ## tag and digest (offline; the registry is read daily by the pins workflow)
 compose-pins-check:
 	./scripts/compose-pins.sh --self-test
 	./scripts/compose-pins.sh check
+
+## notices: regenerate THIRD_PARTY_NOTICES from the modules compiled into agentryd
+notices:
+	./scripts/notices/generate.sh
+
+## notices-check: fail if THIRD_PARTY_NOTICES is stale (reads the module cache only)
+notices-check:
+	./scripts/notices/generate.sh --check
 
 ## bump-pins: move each compose image's digest to what its tag serves now
 ## (to move to a new version, change the tag in the compose file first)
