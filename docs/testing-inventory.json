@@ -3815,6 +3815,7 @@
           "path": "pkg/draftcheck/draftcheck_test.go",
           "tests": [
             "TestReadTakesTheManifestTheInstructionAndEveryFileInOrder",
+            "TestCheckRatesADraftAgainstTheRubric",
             "TestReadRefusesWhatIsNotADraftOrPastItsBounds",
             "TestReadListsTheToolsTheManifestDoesNotGrant"
           ],
