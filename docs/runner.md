@@ -78,7 +78,7 @@ One QuickAgent, one job, one container tree, then gone.
 
 | Flag | Meaning |
 |---|---|
-| `--mode autonomous\|interactive` | the run mode (default: the release's only mode; asked on a terminal when it declares both, autonomous otherwise) |
+| `--mode autonomous\|interactive` | the run mode (default: the release's only mode; asked on a terminal when it declares autonomous and interactive, autonomous otherwise) |
 | `--input FILE` | task text (else piped stdin, else an empty task) |
 | `--intake id=value` | answer an intake question non-interactively (repeatable; unanswered questions are asked on a terminal, and a `secret` answer is never recorded) |
 | `--file PATH` | provide a file or directory to the run, read-only under `/inputs` (repeatable; basename-rooted; duplicate basenames refused); it is checked for malware and turned into text before the agent starts ([running with files](#running-with-files)) |
@@ -156,11 +156,22 @@ manifest declared. The
 session is bounded by the policy's `sessions` block (idle timeout, wall
 time, user turns) on top of the cost and tool-call budgets, and its
 receipts add `transcript.md` and the intake answers. A release with one
-mode runs in it; one with both is asked on a terminal and runs autonomous
+mode runs in it; one with autonomous and interactive is asked on a terminal and runs autonomous
 otherwise (`--yes` or `--dry-run` never ask). The desktop app runs the
 same session in its run panel, and a hosted session
 ([Hosted runs](hosted-runs.md#a-hosted-session)) runs it on a sandbox host
 through the session protocol below.
+
+A **persistent** release (`modes: [persistent]`) is a conversation the
+runner keeps between sessions rather than one that ends: the agent's
+conversation and its own files outlive each start and stop. The runner
+runs this mode only for its own built-in agents, so a persistent release
+from the registry or a local folder is refused before anything starts: a
+CLI that knows the mode says "a persistent release runs only as a
+built-in in this version", and an earlier one refuses the manifest as
+declaring an unknown mode. A CLI that knows the mode runs a release that
+declares `persistent` beside another mode in that other mode, as
+`--mode` chooses.
 
 #### Driving a session from a program
 
@@ -254,7 +265,7 @@ is shown as a message.
 | interactive | One session. The first prompt is the first turn of the chat and each later prompt another. | The reply as it streams, each tool call as a tool call with its progress, and each turn answered `end_turn`, or `max_turn_requests` when a tool-call or turn budget ended the session. The deliverables the teardown lists come back when the client sends `session/close`. |
 | autonomous | The first prompt is the task. The run happens once and the session ends. | The tool calls as they happen, then the result as a message and each deliverable as a message of its own, then the answer to the prompt, `end_turn`, with the run's id, status, exit class, output folder and deliveries in its `_meta`. A run that fails is an error answer with the run's own message. |
 
-A release that declares both modes runs interactive; `--mode autonomous` says
+A release that declares autonomous and interactive runs interactive; `--mode autonomous` says
 otherwise. An interactive release's `interactive.opening` line is not shown,
 because the client's first prompt takes its place.
 
@@ -1081,6 +1092,7 @@ its digest, so a run record says which file a run obeyed.
 | `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
+| `allowPersistentReleases` | reserved for running persistent releases from other sources; a policy that sets it is refused in this version ([Run modes](#run-modes)), and `agentry setup` never writes it |
 | `secretSource.mode` (`env` \| `envFile`) + `secretSource.envFile` | fallback secret resolution behind profiles |
 | `budgets.timeoutSeconds` / `budgets.maxTurns` / `budgets.maxCostUsd` | default hard stops (cost `0` = unlimited) |
 | `sessions.idleTimeoutSeconds` / `sessions.maxWallSeconds` / `sessions.maxUserTurns` | interactive-session caps (shipped 900 s idle, 7200 s wall, 200 user turns); a manifest can only tighten the idle timeout |
