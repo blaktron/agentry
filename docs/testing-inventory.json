@@ -2027,6 +2027,27 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "internal/gitsrv/archive_test.go",
+          "tests": [
+            "TestArchiveCommitHoldsEveryBlobOfTheTree",
+            "TestArchiveCommitRefusesWhatIsNotACommit",
+            "TestArchiveFailsClosedOnInfoAttributes",
+            "TestArchiveTagResolvesToTheCommit",
+            "TestTagRefQualifiesOnlyPlainTagNames",
+            "TestVerifyArchiveCompleteNamesWhatWasDropped",
+            "TestArchiveCheckedAgainstTheTree",
+            "TestStartupRefusesAGitThatHonoursExportIgnore",
+            "TestExtractPlainTarIsDefensive"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/bookkeeping_test.go",
           "tests": [
             "TestPushBookkeepingRidesTheQueue",
@@ -2056,6 +2077,7 @@
             "TestReleaseArchiveIgnoresExportIgnore",
             "TestGitEnforcedSSO",
             "TestPreReceiveHookFailsClosed",
+            "TestPreReceiveHookProtectsTheDefaultBranch",
             "TestPreReceiveHookWarnTier",
             "TestOrgStateGatesGit",
             "TestArchiveTagRefusesAnOptionShapedName"
@@ -2178,9 +2200,48 @@
           ]
         },
         {
+          "path": "internal/gitsrv/limits_test.go",
+          "tests": [
+            "TestShippedLimitDefaults",
+            "TestNewHandlerBoundsGitWork",
+            "TestPushBudgetDefaultIsSixtyAnHour",
+            "TestPushBudgetRefusalWords",
+            "TestClientHostIsTheAddressPart",
+            "TestRPCAnswersWhatItCannotServe",
+            "TestGitEnvCarriesThePushPolicy",
+            "TestMountServesOnlyTheThreeSmartHTTPRoutes",
+            "TestGitClientIsTheResolvedAddress",
+            "TestFirstByteTimerRecordsTheFirstByteOnce",
+            "TestAcceptedRefsAreWhatTheRepositoryNowHolds",
+            "TestExecGitAnswersWhatItCannotServe",
+            "TestSafeRefName",
+            "TestGitFailuresAreNotAbsences",
+            "TestHermeticEnvIsolatesGit"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/pktline_test.go",
+          "tests": [
+            "TestParseReceiveCommands",
+            "TestCommandCaptureKeepsOnlyTheCommands"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/gitsrv/proxyproto_test.go",
           "tests": [
             "TestReadProxyHeader",
+            "TestReadProxyHeaderSaysWhenThereIsNone",
             "TestReadProxyHeaderConsumesOnlyTheHeader"
           ],
           "fuzz": [],
@@ -2258,6 +2319,22 @@
           ]
         },
         {
+          "path": "internal/gitsrv/ssh_session_test.go",
+          "tests": [
+            "TestParseGitCommand",
+            "TestSSHServesNothingButGitSessions",
+            "TestSSHStopsAfterTheAuthTries",
+            "TestHostKeyIsCreatedOnceAndKept",
+            "TestTruncateKeepsAtMostN"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/ssh_test.go",
           "tests": [
             "TestSSHTransportCloneAndPush",
@@ -2270,6 +2347,25 @@
             "child process",
             "source/file contract",
             "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/store_test.go",
+          "tests": [
+            "TestRepoStoreLayoutAndConfiguration",
+            "TestDiskUsageSumsFiles",
+            "TestRefsAtReadsOnlyTheNamedPlainRefs",
+            "TestTagsListsCommitTagsOnly",
+            "TestReviewedViewHoldsOnlyTheNamedTags",
+            "TestReviewedViewRefusesWhatIsNotATagOfACommit",
+            "TestReviewedViewsAreKeptWhileInUseAndPrunedWhenStale"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract"
           ]
         },
         {
