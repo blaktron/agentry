@@ -1874,6 +1874,7 @@
             "TestOIDC_ExchangeCreatesClaims",
             "TestOIDC_IssuerPinning",
             "TestOIDC_NonceMismatchRejected",
+            "TestOIDC_EmptyExpectedNonceRefused",
             "TestOIDC_EmailVerifiedSurfaced",
             "TestOIDC_PreferredUsernameSurfaced",
             "TestOIDC_RawCarriesEveryClaim",
@@ -2027,7 +2028,8 @@
           "path": "internal/dnsx/resolver_test.go",
           "tests": [
             "TestVerifyTXT",
-            "TestSystemResolverLooksUpUnderTheContext"
+            "TestSystemResolverLooksUpUnderTheContext",
+            "TestVerifyTXTRefusesWhatItCannotJudge"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2404,7 +2406,8 @@
           "path": "internal/maildomains/maildomains_test.go",
           "tests": [
             "TestSharedNamesNobodyOwns",
-            "TestOfReadsTheDomain"
+            "TestOfReadsTheDomain",
+            "TestSharedHoldsForAnyNumberOfTrailingDots"
           ],
           "fuzz": [],
           "benchmarks": [],
