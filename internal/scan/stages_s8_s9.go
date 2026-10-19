@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/blaktron/agentry/internal/manifestcaps"
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
@@ -336,15 +337,15 @@ func s9ManifestDiff(in *Input) []Finding {
 	}
 	// A remote MCP server's host is a destination too: one
 	// the previous release did not reach is the same low finding.
-	prevCapsBlock, _ := readManifestCaps(in.PrevManifestJSON)
-	curCapsBlock, _ := readManifestCaps(in.ManifestJSON)
+	prevCapsBlock, _ := manifestcaps.Read(in.PrevManifestJSON)
+	curCapsBlock, _ := manifestcaps.Read(in.ManifestJSON)
 	prevRemote := map[string]bool{}
-	for _, h := range prevCapsBlock.remoteServerHosts() {
+	for _, h := range prevCapsBlock.RemoteServerHosts() {
 		prevRemote[h] = true
 	}
-	prevServerEgress := prevCapsBlock.serverEgress()
+	prevServerEgress := prevCapsBlock.ServerEgress()
 	newRemote := map[string]bool{}
-	for _, h := range curCapsBlock.remoteServerHosts() {
+	for _, h := range curCapsBlock.RemoteServerHosts() {
 		if _, reached := prevServerEgress[strings.ToLower(h)]; !prevRemote[h] && !prevEgress[h] && !reached {
 			newRemote[h] = true
 		}
@@ -360,7 +361,7 @@ func s9ManifestDiff(in *Input) []Finding {
 	// And a host a package server's own egress names: one the previous
 	// release did not reach by any of the three is the same finding, low,
 	// and medium for "*", which names any host.
-	curServerEgress := curCapsBlock.serverEgress()
+	curServerEgress := curCapsBlock.ServerEgress()
 	for _, host := range slices.Sorted(maps.Keys(curServerEgress)) {
 		if _, reached := prevServerEgress[host]; reached || prevEgress[host] || prevRemote[host] {
 			continue
@@ -380,11 +381,11 @@ func s9ManifestDiff(in *Input) []Finding {
 	// release did not name is the same low finding, and medium for a "*."
 	// entry, which names every host below it, as "*" egress names any.
 	prevBrowser := map[string]bool{}
-	for _, h := range prevCapsBlock.browserHosts() {
+	for _, h := range prevCapsBlock.BrowserHosts() {
 		prevBrowser[h] = true
 	}
 	newBrowser := map[string]bool{}
-	for _, h := range curCapsBlock.browserHosts() {
+	for _, h := range curCapsBlock.BrowserHosts() {
 		if !prevBrowser[h] && !prevEgress[h] {
 			newBrowser[h] = true
 		}
@@ -430,8 +431,8 @@ func s9ContentDiff(bundle *rules.Bundle, in *Input, prevFiles []FileEntry, bump 
 	prevTargets := extractEgressTargets(prevFiles)
 	curTargets := extractEgressTargets(in.Files)
 	egress := egressSet(in.ManifestJSON)
-	caps, _ := readManifestCaps(in.ManifestJSON)
-	browserHosts := caps.browserHosts()
+	caps, _ := manifestcaps.Read(in.ManifestJSON)
+	browserHosts := caps.BrowserHosts()
 	declared := func(target string) bool {
 		return egress[target] || rules.BrowserHostsAdmit(browserHosts, target)
 	}
@@ -603,7 +604,7 @@ func isDiffEscalatable(f Finding) bool {
 
 func egressSet(manifestJSON []byte) map[string]bool {
 	out := map[string]bool{}
-	c, _ := readManifestCaps(manifestJSON) // unreadable, or egress none: no hosts
+	c, _ := manifestcaps.Read(manifestJSON) // unreadable, or egress none: no hosts
 	for _, h := range c.Network.Egress.Hosts {
 		out[strings.ToLower(h)] = true
 	}
