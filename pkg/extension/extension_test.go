@@ -12,12 +12,15 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
@@ -28,6 +31,7 @@ import (
 	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/queue"
+	"github.com/blaktron/agentry/internal/scan"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 	"github.com/blaktron/agentry/internal/voice"
 	"github.com/blaktron/agentry/pkg/judge"
@@ -119,6 +123,65 @@ func TestRegisterAuditActionKeepsTheExtensionPrefix(t *testing.T) {
 		}()
 		registerAuditAction("agent", "agent.update")
 	}()
+
+	// Each refusal is its own: the name, the prefix, the verb, the catalog.
+	panicked := func(name string, a AuditAction) string {
+		var got string
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					got, _ = r.(string)
+					if got == "" {
+						got = "panic with a value that is no string"
+					}
+				}
+			}()
+			registerAuditAction(name, a)
+		}()
+		return got
+	}
+	for _, c := range []struct {
+		name   string
+		action AuditAction
+		want   string
+	}{
+		{"billing", "tier_set", "must be prefixed billing."},
+		{"billing", "billingx.tier_set", "must be prefixed billing."},
+		{"billing", "billing.", "must be prefixed billing."},
+		{"billing", "billing.tier_set", "is already in the catalog"},
+		{"agent", "agent.update", "is already in the catalog"},
+		// A name is a lower-case letter, then up to 31 lower-case letters,
+		// digits and dashes, and nothing before or after it.
+		{"", ".verb", "invalid extension name"},
+		{"Billing", "Billing.verb", "invalid extension name"},
+		{"1billing", "1billing.verb", "invalid extension name"},
+		{"-billing", "-billing.verb", "invalid extension name"},
+		{"bill_ing", "bill_ing.verb", "invalid extension name"},
+		{"bill ing", "bill ing.verb", "invalid extension name"},
+		{"billing\n", "billing\n.verb", "invalid extension name"},
+		{"x" + strings.Repeat("a", 32), AuditAction("x" + strings.Repeat("a", 32) + ".verb"), "invalid extension name"},
+		{strings.Repeat("a", 64), AuditAction(strings.Repeat("a", 64) + ".verb"), "invalid extension name"},
+	} {
+		if got := panicked(c.name, c.action); !strings.Contains(got, c.want) {
+			t.Errorf("registerAuditAction(%q, %q) panicked with %q, want it to say %q", c.name, c.action, got, c.want)
+		}
+	}
+	// What the rules allow is registered, the longest name included.
+	for _, ok := range []struct {
+		name   string
+		action AuditAction
+	}{
+		{"a", "a.x"},
+		{"a1-b2", "a1-b2.verb.sub"},
+		{"x" + strings.Repeat("a", 31), AuditAction("x" + strings.Repeat("a", 31) + ".verb")},
+	} {
+		if got := panicked(ok.name, ok.action); got != "" {
+			t.Errorf("registerAuditAction(%q, %q) panicked: %s", ok.name, ok.action, got)
+		}
+		if !audit.Registered(ok.action) {
+			t.Errorf("%q is not in the catalog", ok.action)
+		}
+	}
 }
 
 // binder keeps the deps it is bound with and registers nothing else.
@@ -184,7 +247,8 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	ext := &bound{}
 	cfg := config.Default()
 	cfg.DevMode = true
-	srv := api.New(cfg, nil, slog.New(slog.DiscardHandler))
+	var logged bytes.Buffer
+	srv := api.New(cfg, nil, slog.New(slog.NewJSONHandler(&logged, nil)))
 	applyExtensions(srv, []Extension{ext})
 	if ext.deps.Log == nil || ext.deps.Audit == nil || ext.deps.Entitlements == nil {
 		t.Fatalf("Bind did not deliver the deps: %+v", ext.deps)
@@ -207,8 +271,27 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	if ext.deps.Knowledge != nil {
 		t.Fatal("a server without a database handed out the knowledge store")
 	}
+	if ext.deps.Orgs != nil || ext.deps.Agents != nil || ext.deps.Principals != nil || ext.deps.ScheduleCredentials != nil {
+		t.Fatal("a server without a database handed out an organization, agent, principal or schedule-credential read: each reads a row")
+	}
+	if ext.deps.Voice != nil || ext.deps.ReportSettings != nil {
+		t.Fatal("a server without a database handed out the voice store or the report settings")
+	}
 	if ext.deps.Meter == nil {
 		t.Fatal("a server without a database handed out a nil meter: it must be a no-op one")
+	}
+	// The extension's logger carries its name on every line.
+	ext.deps.Log.Info("bound probe")
+	if line := logged.String(); !strings.Contains(line, `"extension":"bound"`) || !strings.Contains(line, "bound probe") {
+		t.Fatalf("the extension's log line does not carry its name: %q", line)
+	}
+	// Its routes are mounted under its name and its unthrottled routes are
+	// declared under it, and under no other.
+	if got := srv.ExtensionNames(); len(got) != 1 || got[0] != "bound" {
+		t.Fatalf("mounted extensions = %v, want [bound]", got)
+	}
+	if got := srv.ExtensionUnthrottled(); len(got) != 1 || !got["POST /api/v1/x/bound/webhooks/pay"] {
+		t.Fatalf("unthrottled routes = %v, want only POST /api/v1/x/bound/webhooks/pay", got)
 	}
 	if _, err := ext.deps.Meter.Int64Counter("BoundThings"); err != nil {
 		t.Fatalf("the no-op meter refused an instrument: %v", err)
@@ -219,7 +302,148 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	if err := ext.deps.Audit.Write(context.Background(), AuditEvent{Action: "bound.tier_set", ActorKind: ActorSystem}); err == nil {
 		t.Fatal("an audit write with no database must fail, not vanish")
 	}
+
+	// Each extension seals under a key of its own: what one seals another
+	// does not open, and its own opens.
+	other := &namedBinder{name: "sealed-other"}
+	applyExtensions(srv, []Extension{other})
+	if got := srv.ExtensionNames(); len(got) != 2 || got[0] != "bound" || got[1] != "sealed-other" {
+		t.Fatalf("mounted extensions = %v, want [bound sealed-other]", got)
+	}
+	if got := srv.ExtensionUnthrottled(); len(got) != 1 {
+		t.Fatalf("an extension that names no unthrottled route declared some: %v", got)
+	}
+	sealed, err := ext.deps.Sealer.Seal([]byte("sealed by bound"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open, err := ext.deps.Sealer.Open(sealed); err != nil || string(open) != "sealed by bound" {
+		t.Fatalf("an extension's own sealer did not open its value: %q %v", open, err)
+	}
+	if open, err := other.deps.Sealer.Open(sealed); err == nil {
+		t.Fatalf("another extension's sealer opened bound's value: %q", open)
+	}
 }
+
+// namedBinder is a binder under a name of its own.
+type namedBinder struct {
+	binder
+	name string
+}
+
+func (n *namedBinder) Name() string { return n.name }
+
+// An extension is mounted once, under a name of the shape the core
+// accepts: a repeated name, an upper-case one and none are refused while
+// the extensions are applied, not later when a route is asked for.
+func TestApplyExtensionsRefusesARepeatedOrMalformedName(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		exts []Extension
+		want string
+	}{
+		{"a repeated name", []Extension{&namedBinder{name: "twin"}, &namedBinder{name: "twin"}}, "extension registered twice: twin"},
+		{"an upper-case name", []Extension{&namedBinder{name: "Twin"}}, "extension name must match"},
+		{"no name", []Extension{&namedBinder{}}, "extension name must match"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatal("the extensions were applied")
+				}
+				if msg, _ := r.(string); !strings.Contains(msg, c.want) {
+					t.Fatalf("refused with %v, want it to say %q", r, c.want)
+				}
+			}()
+			applyExtensions(identityServer(t), c.exts)
+		})
+	}
+	// Two names that differ are two mounts, in the order given.
+	srv := identityServer(t)
+	applyExtensions(srv, []Extension{&namedBinder{name: "twin"}, &namedBinder{name: "twin-two"}})
+	if got := srv.ExtensionNames(); !slices.Equal(got, []string{"twin", "twin-two"}) {
+		t.Fatalf("mounted extensions = %v", got)
+	}
+}
+
+// The adapters the core hands an extension follow the pool: none without a
+// database, one with it, as Deps.DB is; the ones that act under the
+// extension's name keep it, and the knowledge and voice stores are not
+// handed out while they are off. The pool dials nothing until it is used.
+func TestDepsAdaptersFollowThePoolAndKeepTheExtensionsName(t *testing.T) {
+	srv := identityServer(t)
+	pool, err := pgxpool.New(context.Background(), "postgres://agentry:agentry@127.0.0.1:1/agentry?sslmode=disable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	for _, c := range []struct {
+		name string
+		of   func(*pgxpool.Pool) any
+		// off is true for the stores that are nil while the server's store
+		// is off, whatever the pool.
+		off bool
+	}{
+		{"orgs", func(p *pgxpool.Pool) any { return orgsOf(srv, p) }, false},
+		{"agents", func(p *pgxpool.Pool) any { return agentsOf(srv, p) }, false},
+		{"principals", func(p *pgxpool.Pool) any { return principalsOf(srv, p) }, false},
+		{"schedule credentials", func(p *pgxpool.Pool) any { return scheduleCredentialsOf(srv, p) }, false},
+		{"notifier", func(p *pgxpool.Pool) any { return notifierOf(srv, p) }, false},
+		{"webhooks", func(p *pgxpool.Pool) any { return webhooksOf(srv, p) }, false},
+		{"report settings", func(p *pgxpool.Pool) any { return reportSettingsOf(srv, p) }, false},
+		{"staff", func(p *pgxpool.Pool) any { return staffOf(srv, p) }, false},
+		{"members", func(p *pgxpool.Pool) any { return membersOf(srv, p, "directory") }, false},
+		{"remembered browsers", func(p *pgxpool.Pool) any { return rememberedBrowsersOf(srv, p, "directory") }, false},
+		{"knowledge", func(p *pgxpool.Pool) any { return knowledgeOf(srv, p) }, true},
+		{"voice", func(p *pgxpool.Pool) any { return voiceOf(srv, p) }, true},
+	} {
+		if got := c.of(nil); got != nil {
+			t.Errorf("%s without a database: %T, want nil", c.name, got)
+		}
+		got := c.of(pool)
+		if c.off && got != nil {
+			t.Errorf("%s while the store is off: %T, want nil", c.name, got)
+		}
+		if !c.off && got == nil {
+			t.Errorf("%s with a database: nil", c.name)
+		}
+	}
+	if m, ok := membersOf(srv, pool, "directory").(serverMembers); !ok || m.name != "directory" {
+		t.Errorf("the membership door acts under %+v, want the extension's name directory", m)
+	}
+	if b, ok := rememberedBrowsersOf(srv, pool, "directory").(serverRememberedBrowsers); !ok || b.name != "directory" {
+		t.Errorf("the remembered browsers act under %+v, want the extension's name directory", b)
+	}
+	// A schedule credential is for one schedule of one user, in that order.
+	if _, _, err := scheduleCredentialsOf(srv, pool).ForSchedule(context.Background(), uuid.New(), uuid.Nil); err == nil || !strings.Contains(err.Error(), "needs the schedule's id") {
+		t.Errorf("a credential for no schedule: %v", err)
+	}
+}
+
+// migrateExtensions touches the database only for an extension that has
+// migrations, under that extension's name, and stops at the first that
+// fails; an extension without any is skipped without a connection.
+func TestMigrateExtensionsSkipsThoseWithoutMigrationsAndReportsAFailure(t *testing.T) {
+	ctx := context.Background()
+	const unreachable = "postgres://agentry:agentry@127.0.0.1:1/agentry?sslmode=disable"
+	if err := migrateExtensions(ctx, unreachable, []Extension{noop{}, noop{}}); err != nil {
+		t.Fatalf("extensions with no migrations: %v", err)
+	}
+	err := migrateExtensions(ctx, unreachable, []Extension{noop{}, migrating{name: "ledger"}})
+	if err == nil || !strings.Contains(err.Error(), "migrate ledger:") {
+		t.Fatalf("an extension with migrations on an unreachable database: %v, want a failure naming ledger", err)
+	}
+}
+
+// migrating is an extension with an (empty) migration set under its name.
+type migrating struct {
+	noop
+	name string
+}
+
+func (m migrating) Name() string    { return m.name }
+func (migrating) Migrations() fs.FS { return fstest.MapFS{} }
 
 // TestPeriodicTickerEnqueuesNowAndOnThePeriod pins the shape of Job.Every:
 // one enqueue at start-up, then one per period, until the context ends.
@@ -243,31 +467,131 @@ func TestPeriodicTickerEnqueuesNowAndOnThePeriod(t *testing.T) {
 	if k, qn := q.last(); k != "probe.cycle" || qn != "core" {
 		t.Fatalf("enqueued %s on %s; want probe.cycle on core", k, qn)
 	}
+
+	// The first enqueue does not wait for the first period: with a period of
+	// an hour and a context that is already done, the ticker enqueues once
+	// and returns. An unnamed queue is the core queue; a named one is kept.
+	ended, stop := context.WithCancel(context.Background())
+	stop()
+	for _, c := range []struct{ queue, want string }{{"", "core"}, {"sandbox", "sandbox"}, {QueueAPI, QueueAPI}} {
+		once := &countingQueue{}
+		periodicTicker(ended, once, "probe.once", c.queue, time.Hour, slog.New(slog.DiscardHandler))
+		if got := once.enqueues(); len(got) != 1 || got[0] != "probe.once on "+c.want {
+			t.Errorf("a ticker on queue %q enqueued %v, want [probe.once on %s]", c.queue, got, c.want)
+		}
+	}
 }
 
+// The watchdog ticker enqueues the scan reconcile job on the core queue
+// at start-up, and nothing else.
+func TestReconcileTickerEnqueuesTheWatchdogOnTheCoreQueue(t *testing.T) {
+	ended, stop := context.WithCancel(context.Background())
+	stop()
+	q := &countingQueue{}
+	reconcileTicker(ended, q, slog.New(slog.DiscardHandler))
+	if got, want := q.enqueues(), []string{scan.JobScanReconcile + " on core"}; !slices.Equal(got, want) {
+		t.Fatalf("enqueued %v, want %v", got, want)
+	}
+}
+
+// registerJobs registers every job's handler under its kind, and enqueues
+// a job with a period at start-up on the queue the job names; a job with
+// no period is registered and never enqueued by it.
+func TestRegisterJobsRegistersEveryHandlerAndEnqueuesOnlyPeriodicJobs(t *testing.T) {
+	errOnce, errPeriodic := errors.New("the one-off handler"), errors.New("the periodic handler")
+	q := &countingQueue{signal: make(chan struct{}, 4)}
+	ended, stop := context.WithCancel(context.Background())
+	stop() // each periodic ticker enqueues once at start-up, then returns
+	registerJobs(ended, q, []Job{
+		{Kind: "probe.once", Queue: "core", Handler: func(context.Context, queue.Job) error { return errOnce }},
+		{Kind: "probe.periodic", Queue: QueueAPI, Every: time.Hour, Handler: func(context.Context, queue.Job) error { return errPeriodic }},
+	}, slog.New(slog.DiscardHandler))
+	if got, want := q.registeredKinds(), []string{"probe.once", "probe.periodic"}; !slices.Equal(got, want) {
+		t.Fatalf("registered %v, want %v", got, want)
+	}
+	if err := q.handler("probe.once")(context.Background(), queue.Job{}); !errors.Is(err, errOnce) {
+		t.Errorf("probe.once runs %v, want its own handler", err)
+	}
+	if err := q.handler("probe.periodic")(context.Background(), queue.Job{}); !errors.Is(err, errPeriodic) {
+		t.Errorf("probe.periodic runs %v, want its own handler", err)
+	}
+	waited, giveUp := context.WithTimeout(context.Background(), 10*time.Second)
+	defer giveUp()
+	select {
+	case <-q.signal:
+	case <-waited.Done():
+		t.Fatal("the periodic job was never enqueued")
+	}
+	if got, want := q.enqueues(), []string{"probe.periodic on " + QueueAPI}; !slices.Equal(got, want) {
+		t.Fatalf("enqueued %v, want %v", got, want)
+	}
+}
+
+// countingQueue is a queue that records what is registered on it and
+// enqueued to it, and satisfies queue.Worker without working anything.
 type countingQueue struct {
-	mu    sync.Mutex
-	n     int
-	kind  string
-	queue string
+	mu         sync.Mutex
+	n          int
+	kind       string
+	queue      string
+	log        []string
+	registered []string
+	handlers   map[string]queue.Handler
+	// signal, when set, is sent to after each enqueue is recorded.
+	signal chan struct{}
 }
 
 func (c *countingQueue) Enqueue(_ context.Context, kind, queueName string, _ any, _ ...queue.EnqueueOption) (uuid.UUID, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.n++
 	c.kind, c.queue = kind, queueName
+	c.log = append(c.log, kind+" on "+queueName)
+	signal := c.signal
+	c.mu.Unlock()
+	if signal != nil {
+		select {
+		case signal <- struct{}{}:
+		default:
+		}
+	}
 	return uuid.New(), nil
 }
-func (c *countingQueue) Register(string, queue.Handler)                      {}
+func (c *countingQueue) Register(kind string, h queue.Handler) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.handlers == nil {
+		c.handlers = map[string]queue.Handler{}
+	}
+	c.registered = append(c.registered, kind)
+	c.handlers[kind] = h
+}
 func (c *countingQueue) Work(context.Context, ...string) error               { return nil }
 func (c *countingQueue) CountWaiting(context.Context, string) (int64, error) { return 0, nil }
+func (c *countingQueue) SetMetrics(*metrics.Metrics, time.Duration)          {}
+func (c *countingQueue) Drain(context.Context, ...string)                    {}
 func (c *countingQueue) count() int                                          { c.mu.Lock(); defer c.mu.Unlock(); return c.n }
+func (c *countingQueue) enqueues() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.log)
+}
+func (c *countingQueue) registeredKinds() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.registered)
+}
+func (c *countingQueue) handler(kind string) queue.Handler {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.handlers[kind]
+}
 func (c *countingQueue) last() (string, string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.kind, c.queue
 }
+
+var _ queue.Worker = (*countingQueue)(nil)
 
 func TestNoopSatisfiesTheInterface(t *testing.T) {
 	var e Extension = noop{}
@@ -290,9 +614,14 @@ func TestParseQueues(t *testing.T) {
 		{"core", []string{"core"}, ""},
 		{"sandbox", []string{"sandbox"}, ""},
 		{"sandbox, core, sandbox", []string{"sandbox", "core"}, ""},
-		{"judge", nil, `"judge" is not a queue`},
-		{"core,scan", nil, `"scan" is not a queue`},
+		{"judge", nil, `"judge" is not a queue (the queues are core, sandbox)`},
+		{"core,scan", nil, `"scan" is not a queue (the queues are core, sandbox)`},
 		{" , ", nil, "names no queue"},
+		// A blank flag is no flag: both queues, as an empty one.
+		{"  ", nil, ""},
+		{"core,,sandbox", []string{"core", "sandbox"}, ""},
+		{" core ", []string{"core"}, ""},
+		{",", nil, "names no queue"},
 	}
 	for _, c := range cases {
 		got, err := parseQueues(c.in)
@@ -424,7 +753,19 @@ func TestApplyExtensionsSetsTheModelInputCallers(t *testing.T) {
 	if _, ok := srv.ModelInputCallers().(jobCallers); !ok {
 		t.Fatalf("after applyExtensions the callers are %T, want the extension's", srv.ModelInputCallers())
 	}
+	// An extension that answers no callers does not take away the ones
+	// another gave.
+	applyExtensions(srv, []Extension{noCallers{}})
+	if _, ok := srv.ModelInputCallers().(jobCallers); !ok {
+		t.Fatalf("an extension with nil callers left %T, want the first extension's to stay", srv.ModelInputCallers())
+	}
 }
+
+// noCallers implements AdmitsModelInput and admits nobody.
+type noCallers struct{ noop }
+
+func (noCallers) Name() string                         { return "no-callers" }
+func (noCallers) ModelInputCallers() ModelInputCallers { return nil }
 
 // poolingResolver is the shape a resolver that pools knowledge takes:
 // the PoolsKnowledge seam, with the aliases alone.
@@ -599,6 +940,32 @@ func TestBindHandsTheVoiceStore(t *testing.T) {
 	}
 	if _, err := v.store.State(ctx, uuid.New()); !errors.Is(err, ErrVoiceNotFound) {
 		t.Fatalf("another person's voice: %v", err)
+	}
+}
+
+// The voice store an extension is handed proposes a Voice Writer run's
+// output only as a build or an AI edit: any other source is refused in the
+// seam's own words before the store is asked, and those two reach the store
+// (here one that is off, which answers for itself).
+func TestVoiceStoreProposesOnlyTheSourcesAVoiceWriterHas(t *testing.T) {
+	v := serverVoice{svc: &voice.Service{}}
+	for _, c := range []struct {
+		source  VoiceSource
+		refused bool
+	}{
+		{VoiceSourceBuild, false},
+		{VoiceSourceAIEdit, false},
+		{voice.SourceEdit, true},
+		{VoiceSource("upload"), true},
+		{VoiceSource(""), true},
+	} {
+		_, err := v.Propose(context.Background(), uuid.New(), []byte("# Voice\n"), c.source)
+		switch {
+		case c.refused && (err == nil || errors.Is(err, ErrVoiceUnconfigured) || !strings.Contains(err.Error(), "proposes a voice as build or ai-edit")):
+			t.Errorf("source %q: %v, want the seam to refuse it", c.source, err)
+		case !c.refused && !errors.Is(err, ErrVoiceUnconfigured):
+			t.Errorf("source %q: %v, want it handed to the store", c.source, err)
+		}
 	}
 }
 
