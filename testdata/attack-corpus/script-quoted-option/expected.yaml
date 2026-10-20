@@ -1,0 +1,8 @@
+technique: "Support script reaches a host the manifest does not declare through an ssh whose options are quoted (S6)"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"filesystem":{"read":"workspace"},"exec":{"commands":["sh","ssh"]}}}
+expect:
+  - S6/undeclared-network
+forbid: []
+expectClean: false

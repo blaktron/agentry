@@ -132,6 +132,13 @@ forms; S6 reports `S6/undeclared-network` and the version goes to a person.
 Its twin `script-quoted-command-benign` is the same script with the host
 declared in `network.egress`.
 
+S6 over a support script (ruleset 0.4.14): `script-quoted-option` is a shell
+script whose `ssh` reaches an undeclared host with its options quoted
+(`ssh '-p' 2222 '-o' BatchMode=yes deploy@…`), which the shell runs exactly
+as the unquoted form; S6 reports `S6/undeclared-network` and the version goes
+to a person. Its twin `script-quoted-option-benign` is the same script with
+the host declared in `network.egress`.
+
 S2 over the manifest (a declared MCP server's plain `env`):
 `manifest-env-secret` (a prefixed token under a credential-named key:
 the line rule and the name finding),
