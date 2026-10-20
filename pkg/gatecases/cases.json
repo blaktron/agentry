@@ -909,6 +909,26 @@
       }
     },
     {
+      "name": "S2/history-truncated is held for review under threshold medium",
+      "branch": "could-not-scan",
+      "findings": [
+        {
+          "scanner": "S2/history-truncated",
+          "severity": "medium",
+          "confidence": "high"
+        }
+      ],
+      "policy": {
+        "requireHumanReview": "never",
+        "maxAutoPublishSeverity": "medium",
+        "wildcardEgress": "review"
+      },
+      "want": {
+        "outcome": "needs_review",
+        "queue": "platform"
+      }
+    },
+    {
       "name": "S2/history-error is held for review under threshold medium",
       "branch": "could-not-scan",
       "findings": [

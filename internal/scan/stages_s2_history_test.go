@@ -64,7 +64,7 @@ func TestScanHistoryPatchCap(t *testing.T) {
 			t.Errorf("%s through the stage: %+v ran=%v", tc.name, f, ran)
 		}
 		if tc.truncated {
-			if f[0].Scanner != "S2/history-truncated" || f[0].Severity != SevLow || f[0].Detail["capBytes"] != 64<<20 {
+			if f[0].Scanner != "S2/history-truncated" || f[0].Severity != SevMedium || f[0].Detail["capBytes"] != 64<<20 {
 				t.Errorf("%s: truncation finding = %+v", tc.name, f[0])
 			}
 			// A stream that cannot be closed cleanly after the stage stopped
@@ -245,14 +245,14 @@ func scanHistoryPatchAttribution(t *testing.T) {
 		t.Errorf("two rules on one line: %+v", got)
 	}
 
-	// Findings are capped at 100; the 101st distinct one is not kept and the
-	// scan says it stopped.
+	// The report lists 100 findings; past that the scan reads on, is not
+	// truncated, and adds one finding that counts the rest.
 	findings, truncated, err := scanHistoryPatch(strings.NewReader(historyAssignments(100)))
 	if err != nil || truncated || len(findings) != 100 {
 		t.Errorf("100 findings: %d, truncated=%v, err=%v", len(findings), truncated, err)
 	}
 	findings, truncated, err = scanHistoryPatch(strings.NewReader(historyAssignments(101)))
-	if err != nil || !truncated || len(findings) != 100 {
+	if err != nil || truncated || len(findings) != 101 || findings[100].Scanner != scannerHistoryFindingLimit || findings[100].Detail["notShown"] != 1 {
 		t.Errorf("101 findings: %d, truncated=%v, err=%v", len(findings), truncated, err)
 	}
 
