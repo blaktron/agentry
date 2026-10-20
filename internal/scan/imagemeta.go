@@ -302,7 +302,7 @@ func exifTypeSize(typ uint16) int {
 // by an 8-byte character-code designator. Its UNICODE text is UTF-16: a byte
 // order mark, when present, says which order; without one the text is read
 // in the file's byte order and in the other, since writers disagree and the
-// file chooses, and both readings are scanned. The XP* tags are UCS-2
+// file chooses, and both byte orders are scanned. The XP* tags are UCS-2
 // little-endian regardless of the file's byte order.
 func decodeEXIFString(tag, typ uint16, val []byte, bo binary.ByteOrder) []string {
 	switch {
@@ -312,35 +312,49 @@ func decodeEXIFString(tag, typ uint16, val []byte, bo binary.ByteOrder) []string
 		if code == "UNICODE" {
 			switch {
 			case bytes.HasPrefix(body, []byte{0xFE, 0xFF}):
-				return []string{decodeUTF16(body[2:], binary.BigEndian)}
+				return utf16Readings(body[2:], binary.BigEndian)
 			case bytes.HasPrefix(body, []byte{0xFF, 0xFE}):
-				return []string{decodeUTF16(body[2:], binary.LittleEndian)}
+				return utf16Readings(body[2:], binary.LittleEndian)
 			}
 			other := binary.ByteOrder(binary.LittleEndian)
 			if bo == binary.LittleEndian {
 				other = binary.BigEndian
 			}
-			return []string{decodeUTF16(body, bo), decodeUTF16(body, other)}
+			return append(utf16Readings(body, bo), utf16Readings(body, other)...)
 		}
 		return []string{string(bytes.TrimRight(body, "\x00"))}
 	case tag >= 0x9C9B && tag <= 0x9C9F && typ == 1: // XP* tags are UCS-2LE
-		return []string{decodeUTF16(val, binary.LittleEndian)}
+		return utf16Readings(val, binary.LittleEndian)
 	}
 	return []string{string(bytes.TrimRight(val, "\x00"))}
 }
 
-// decodeUTF16 decodes UTF-16 bytes in byte order bo, stopping at the first
-// NUL.
-func decodeUTF16(b []byte, bo binary.ByteOrder) string {
+// utf16Readings decodes UTF-16 bytes in byte order bo and returns the ways
+// S3 reads the text (nulReadings). A NUL code unit does not end the text: a
+// reader that shows every code unit shows what follows it, so only trailing
+// NULs, which writers pad with, are dropped.
+func utf16Readings(b []byte, bo binary.ByteOrder) []string {
 	u := make([]uint16, 0, len(b)/2)
 	for i := 0; i+1 < len(b); i += 2 {
-		c := bo.Uint16(b[i : i+2])
-		if c == 0 {
-			break
-		}
-		u = append(u, c)
+		u = append(u, bo.Uint16(b[i:i+2]))
 	}
-	return string(utf16.Decode(u))
+	for len(u) > 0 && u[len(u)-1] == 0 {
+		u = u[:len(u)-1]
+	}
+	return nulReadings(string(utf16.Decode(u)))
+}
+
+// nulReadings returns the ways S3 reads a text that may hold NULs: the text
+// itself when no NUL sits between other characters; otherwise twice, with
+// each run of NULs as a line break, so what follows a NUL is scanned as text
+// of its own, and with the NULs dropped, so a word a NUL splits is read
+// whole.
+func nulReadings(text string) []string {
+	parts := strings.FieldsFunc(text, func(r rune) bool { return r == 0 })
+	if len(parts) < 2 {
+		return []string{strings.Join(parts, "")}
+	}
+	return []string{strings.Join(parts, "\n"), strings.Join(parts, "")}
 }
 
 // appendMeta records a non-trivial, valid-UTF-8 string. Metadata routinely
