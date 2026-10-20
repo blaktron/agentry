@@ -3352,6 +3352,7 @@
           "path": "internal/scan/exectool_test.go",
           "tests": [
             "TestResolveExecTool",
+            "TestExecToolRunIsBoundedAndScrubbed",
             "TestRunGitleaksMergesReport",
             "TestRunGitleaksFailureIsAFinding",
             "TestSanitizeRuleID",
@@ -3376,8 +3377,10 @@
             "TestReportDigestFailsLoudly",
             "TestUnreadableFileBecomesFinding",
             "TestResumeNeverSkipsInventory",
+            "TestAFailedStageSendsTheRunToReview",
             "TestCacheableStagesMatchSpec",
-            "TestRubricHashChangesWithRubric"
+            "TestRubricHashChangesWithRubric",
+            "TestRunFoldsInTheConfiguredGitleaks"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3461,6 +3464,7 @@
             "TestHTTPJudgeAnthropicProtocol",
             "TestHTTPJudgeBaseURLWithoutV1",
             "TestHTTPJudgeFailsClosed",
+            "TestParseJudgeJSON",
             "TestHTTPJudgeManipulatedOutputRoutesToReview",
             "TestNewJudgeProviderSelection",
             "TestHTTPJudgeRecordsUsage"
@@ -3504,7 +3508,9 @@
           "tests": [
             "TestStaticJudgeCategories",
             "TestStaticJudgeDetectsManipulation",
-            "TestRealisticBenignAgentScansClean"
+            "TestRealisticBenignAgentScansClean",
+            "TestJudgeProviderRubricHashes",
+            "TestVerdictFindingsCarryTheVerdict"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3566,7 +3572,9 @@
           "path": "internal/scan/osv_http_test.go",
           "tests": [
             "TestHTTPOSVQuery",
-            "TestHTTPOSVErrors"
+            "TestHTTPOSVErrors",
+            "TestHTTPOSVQueryBatchesAndBounds",
+            "TestOSVToFinding"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3581,6 +3589,7 @@
             "TestScanPackReadsEverySourceAndPage",
             "TestScanPackChunksUnderTheJudgeLimit",
             "TestScanPackWithNoJudgeSaysSo",
+            "TestScanProseRunsTheRuleStagesAndNoJudge",
             "TestScanPackRecordsAJudgeFailure",
             "TestScanPackRecordsAStageFailure"
           ],
@@ -3597,6 +3606,7 @@
             "TestExtractREADMEIgnoresNestedReadmes",
             "TestExtractREADMEReportsAbsence",
             "TestExtractREADMEHandlesAMissingStore",
+            "TestExtractREADMEInheritsTheExtractorsQuotas",
             "TestReadmeIndexTextIsBounded",
             "TestReadmeIndexTextTruncatesOnRuneBoundaries",
             "TestReadmeIndexTextStripsNulBytes",
