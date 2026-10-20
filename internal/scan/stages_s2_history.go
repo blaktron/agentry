@@ -3,6 +3,9 @@ package scan
 import (
 	"bufio"
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"regexp"
@@ -59,12 +62,17 @@ func s2History(ctx context.Context, in *Input) (findings []Finding, ran bool) {
 		return append(out, historyError(perr)), true
 	}
 	if truncated {
-		out = append(out, Finding{
+		f := Finding{
 			Scanner: "S2/history-truncated", Severity: SevLow, Confidence: ConfHigh,
 			Title:    "Git history scan stopped at the size cap",
 			Detail:   map[string]any{"capBytes": historyPatchCap, "reason": "older commits beyond the cap were not examined"},
 			Taxonomy: []string{"LLM03"},
-		})
+		}
+		if len(out) >= historyMaxFindings {
+			f.Title = "Git history scan stopped at its finding limit"
+			f.Detail = map[string]any{"maxFindings": historyMaxFindings, "reason": "the newer commits' findings filled the limit; secrets in older commits were not reported"}
+		}
+		out = append(out, f)
 	}
 	return out, true
 }
@@ -84,9 +92,21 @@ func historyError(err error) Finding {
 
 // scanHistoryPatch walks a `git log -p` stream (commits introduced by
 // "\x01<sha>", files by "+++ b/<path>") and applies the S2 rules to added
-// lines. Hits are de-duplicated on rule + redacted match so a secret that
-// rides through many commits is one finding naming the first commit.
+// lines. Hits are de-duplicated on the rule and the secret itself, so a
+// secret that rides through many commits is one finding naming the first
+// commit the stream shows, and every different secret is a finding of its
+// own: the publisher has to rotate each one. The seen set holds each secret
+// only as an HMAC under a key made for this call, so no secret text, and
+// nothing that could be matched against one, outlives the call.
 func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err error) {
+	var salt [32]byte
+	_, _ = rand.Read(salt[:]) // never fails
+	mac := hmac.New(sha256.New, salt[:])
+	secretKey := func(ruleID, cand string) string {
+		mac.Reset()
+		mac.Write([]byte(cand))
+		return ruleID + "|" + string(mac.Sum(nil))
+	}
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64<<10), historyMaxLine)
 	var commit, file string
@@ -128,36 +148,37 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 		}
 		added := line[1:]
 		for _, rule := range secretRules {
-			loc := rule.re.FindStringSubmatch(added)
-			if loc == nil {
-				continue
+			// Every match on the line: two different keys on one line are
+			// two secrets to rotate.
+			for _, loc := range rule.re.FindAllStringSubmatchIndex(added, -1) {
+				start, end := loc[0], loc[1]
+				if g := rule.group; g > 0 && 2*g+1 < len(loc) && loc[2*g] >= 0 {
+					start, end = loc[2*g], loc[2*g+1]
+				}
+				cand := added[start:end]
+				if rule.entropyMin > 0 && rules.ShannonEntropy([]byte(cand)) < rule.entropyMin {
+					continue
+				}
+				key := secretKey(rule.id, cand)
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				if len(findings) >= historyMaxFindings {
+					return findings, true, nil
+				}
+				findings = append(findings, Finding{
+					Scanner: "S2/history-" + rule.id, Severity: rule.severity, Confidence: ConfHigh,
+					Title:    "Possible secret in git history: " + rule.id,
+					FilePath: file,
+					Excerpt:  redact(added),
+					Detail: map[string]any{
+						"rule": rule.id, "commit": commit, "column": start + 1,
+						"reason": "the secret is in every clone of the repository even if a later commit removed it; rotate it",
+					},
+					Taxonomy: []string{"LLM03"},
+				})
 			}
-			cand := loc[0]
-			if rule.group > 0 && rule.group < len(loc) {
-				cand = loc[rule.group]
-			}
-			if rule.entropyMin > 0 && rules.ShannonEntropy([]byte(cand)) < rule.entropyMin {
-				continue
-			}
-			key := rule.id + "|" + redact(cand)
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			if len(findings) >= historyMaxFindings {
-				return findings, true, nil
-			}
-			findings = append(findings, Finding{
-				Scanner: "S2/history-" + rule.id, Severity: rule.severity, Confidence: ConfHigh,
-				Title:    "Possible secret in git history: " + rule.id,
-				FilePath: file,
-				Excerpt:  redact(added),
-				Detail: map[string]any{
-					"rule": rule.id, "commit": commit,
-					"reason": "the secret is in every clone of the repository even if a later commit removed it; rotate it",
-				},
-				Taxonomy: []string{"LLM03"},
-			})
 		}
 	}
 	if serr := sc.Err(); serr != nil {
