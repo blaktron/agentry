@@ -25,9 +25,16 @@ import (
 // scanned`, fail-open counted) rather than implying a clean history.
 
 const (
-	historyPatchCap    = 64 << 20 // bytes of patch read before stopping
+	historyPatchCap = 64 << 20 // bytes of patch read before stopping
+	// historyMaxFindings is how many history findings a report lists. The
+	// scan reads on past it and keeps the most severe, so findings in newer
+	// commits cannot push an older, worse one off the report.
 	historyMaxFindings = 100
-	historyMaxLine     = 16 << 10
+	// historyMaxSeen bounds the set of secrets the scan remembers once the
+	// report is full: past it, a secret that is not listed is no longer
+	// remembered, and a repeat of it may be counted again as not shown.
+	historyMaxSeen = 1 << 16
+	historyMaxLine = 16 << 10
 )
 
 var historyCommitRe = regexp.MustCompile(`^\x01([0-9a-f]{7,64})$`)
@@ -83,20 +90,25 @@ func s2History(ctx context.Context, in *Input) (findings []Finding, ran bool) {
 		return append(out, historyError(perr)), true
 	}
 	if truncated {
-		f := Finding{
-			Scanner: "S2/history-truncated", Severity: SevLow, Confidence: ConfHigh,
+		out = append(out, Finding{
+			Scanner: scannerHistoryTruncated, Severity: SevMedium, Confidence: ConfHigh,
 			Title:    "Git history scan stopped at the size cap",
-			Detail:   map[string]any{"capBytes": historyPatchCap, "reason": "older commits beyond the cap were not examined"},
+			Detail:   map[string]any{"capBytes": historyPatchCap, "reason": "older commits beyond the cap were not examined, and an unscanned history cannot be cleared automatically"},
 			Taxonomy: []string{"LLM03"},
-		}
-		if len(out) >= historyMaxFindings {
-			f.Title = "Git history scan stopped at its finding limit"
-			f.Detail = map[string]any{"maxFindings": historyMaxFindings, "reason": "the newer commits' findings filled the limit; secrets in older commits were not reported"}
-		}
-		out = append(out, f)
+		})
 	}
 	return out, true
 }
+
+// scannerHistoryTruncated is S2's finding when the history scan stopped at
+// the size cap: older commits went unread, so the gate forces review on it.
+const scannerHistoryTruncated = "S2/history-truncated"
+
+// scannerHistoryFindingLimit is S2's finding when a history held more
+// secrets than the report lists. Every commit was read and the most severe
+// findings are listed, so the gate weighs the worst of them; this one only
+// says how many more there were.
+const scannerHistoryFindingLimit = "S2/history-finding-limit"
 
 // scannerHistoryError is S2's finding when a tag's history could not be
 // scanned; the gate forces review on it.
@@ -116,7 +128,10 @@ func historyError(err error) Finding {
 // lines. Hits are de-duplicated on the rule and the secret itself, so a
 // secret that rides through many commits is one finding naming the first
 // commit the stream shows, and every different secret is a finding of its
-// own: the publisher has to rotate each one. The seen set holds each secret
+// own: the publisher has to rotate each one. The report lists at most
+// historyMaxFindings; past that the scan still reads every commit and keeps
+// the most severe, adding a finding that says how many it left off. Only
+// the size cap stops it early, which it reports as truncated. The seen set holds each secret
 // only as an HMAC under a key made for this call, so no secret text, and
 // nothing that could be matched against one, outlives the call.
 func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err error) {
@@ -129,37 +144,70 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 		return ruleID + "|" + string(mac.Sum(nil))
 	}
 	seen := map[string]bool{}
-	// add records a finding unless its secret was already reported, and
-	// reports whether the finding limit stopped the scan.
-	add := func(key string, f Finding) (full bool) {
+	// least is the index of the least severe listed finding once the list
+	// is full; notShown counts the findings left off it.
+	least, notShown, forgot := -1, 0, false
+	// add lists a finding unless its secret was already seen. Once the list
+	// holds historyMaxFindings, a finding more severe than the least severe
+	// listed one takes its place, and every finding left off is counted.
+	add := func(key string, f Finding) {
 		if seen[key] {
-			return false
+			return
 		}
-		seen[key] = true
-		if len(findings) >= historyMaxFindings {
-			return true
+		if len(findings) < historyMaxFindings {
+			seen[key] = true
+			findings = append(findings, f)
+			return
 		}
-		findings = append(findings, f)
-		return false
+		notShown++
+		if least < 0 {
+			least = leastSevere(findings)
+		}
+		if severityRank(f.Severity) > severityRank(findings[least].Severity) {
+			seen[key] = true
+			findings[least] = f
+			least = leastSevere(findings)
+			return
+		}
+		if len(seen) < historyMaxSeen {
+			seen[key] = true
+		} else {
+			forgot = true
+		}
+	}
+	// done adds the finding-limit finding when any were left off.
+	done := func() []Finding {
+		if notShown == 0 {
+			return findings
+		}
+		return append(findings, Finding{
+			Scanner: scannerHistoryFindingLimit, Severity: SevLow, Confidence: ConfHigh,
+			Title: "Git history holds more possible secrets than the report lists",
+			Detail: map[string]any{
+				"maxFindings": historyMaxFindings, "notShown": notShown, "notShownMayRepeat": forgot,
+				"reason": "every commit was read and the most severe findings are listed; rotate every secret the history holds, not only the listed ones",
+			},
+			Taxonomy: []string{"LLM03"},
+		})
 	}
 	// key is the private key whose body is still being read: its finding
 	// is added once the END line, or the end of the added block, says
 	// which key it is.
 	var key *pendingKey
-	closeKey := func() bool {
+	closeKey := func() {
 		if key == nil {
-			return false
+			return
 		}
 		k := key
 		key = nil
-		return add(secretKey(privateKeyRule, keyBodyNoise.ReplaceAllString(k.body.String(), "")), k.finding)
+		add(secretKey(privateKeyRule, keyBodyNoise.ReplaceAllString(k.body.String(), "")), k.finding)
 	}
 	// readKey takes the part of text that belongs to the open key's body
 	// and closes the key at its END line, at another key's BEGIN line, or
 	// once the body passes historyMaxKeyBody.
-	readKey := func(text string) bool {
+	readKey := func(text string) {
 		if key == nil {
-			return false
+			return
 		}
 		cut, done := len(text), false
 		if loc := privateKeyEndRe.FindStringIndex(text); loc != nil {
@@ -170,9 +218,8 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 		}
 		key.body.WriteString(text[:cut])
 		if done || key.body.Len() > historyMaxKeyBody {
-			return closeKey()
+			closeKey()
 		}
-		return false
 	}
 
 	sc := bufio.NewScanner(r)
@@ -184,19 +231,16 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 		line := sc.Text()
 		read += int64(len(line)) + 1
 		if read > historyPatchCap {
-			return findings, true, nil
+			closeKey()
+			return done(), true, nil
 		}
 		if m := historyCommitRe.FindStringSubmatch(line); m != nil {
-			if closeKey() {
-				return findings, true, nil
-			}
+			closeKey()
 			commit, file, inHunk = m[1], "", false
 			continue
 		}
 		if strings.HasPrefix(line, "diff --git ") {
-			if closeKey() {
-				return findings, true, nil
-			}
+			closeKey()
 			inHunk = false
 			continue
 		}
@@ -218,15 +262,11 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 		// a Markdown "+ " item included). Any other line ends the block of
 		// added lines a key's body is read from.
 		if len(line) < 2 || line[0] != '+' {
-			if closeKey() {
-				return findings, true, nil
-			}
+			closeKey()
 			continue
 		}
 		added := line[1:]
-		if readKey(added) {
-			return findings, true, nil
-		}
+		readKey(added)
 		for _, rule := range secretRules {
 			// Every match on the line: two different keys on one line are
 			// two secrets to rotate.
@@ -252,31 +292,35 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 				}
 				if rule.id == privateKeyRule {
 					// A key opened earlier on this line ends here.
-					if closeKey() {
-						return findings, true, nil
-					}
+					closeKey()
 					key = &pendingKey{finding: f}
-					if readKey(added[end:]) {
-						return findings, true, nil
-					}
+					readKey(added[end:])
 					continue
 				}
-				if add(secretKey(rule.id, cand), f) {
-					return findings, true, nil
-				}
+				add(secretKey(rule.id, cand), f)
 			}
 		}
 	}
 	if serr := sc.Err(); serr != nil {
 		if serr == bufio.ErrTooLong {
-			return findings, false, fmt.Errorf("history patch line longer than %s bytes", strconv.Itoa(historyMaxLine))
+			return done(), false, fmt.Errorf("history patch line longer than %s bytes", strconv.Itoa(historyMaxLine))
 		}
-		return findings, false, serr
+		return done(), false, serr
 	}
-	if closeKey() {
-		return findings, true, nil
+	closeKey()
+	return done(), false, nil
+}
+
+// leastSevere is the index of the least severe of findings, the last of
+// them on a tie.
+func leastSevere(findings []Finding) int {
+	least := 0
+	for i := range findings {
+		if severityRank(findings[i].Severity) <= severityRank(findings[least].Severity) {
+			least = i
+		}
 	}
-	return findings, false, nil
+	return least
 }
 
 // pendingKey is a private key the history scan has found the BEGIN line

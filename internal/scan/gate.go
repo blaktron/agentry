@@ -151,6 +151,7 @@ var couldNotScanScanners = map[string]bool{
 	scannerTextTruncated:                    true,
 	scannerToolError:                        true,
 	scannerHistoryError:                     true,
+	scannerHistoryTruncated:                 true,
 	KnowledgeStageID + "/" + packUnreadText: true,
 }
 
