@@ -415,12 +415,27 @@ func (s *RepoStore) pruneViews(repoID uuid.UUID, keep string) {
 }
 
 // safeRefName reports whether a client-supplied ref name is a plain,
-// fully-qualified ref: safe to hand to git as a literal pattern.
+// fully-qualified ref: safe to hand to git as a literal pattern, and a name
+// git itself accepts (git check-ref-format), so a ref it names can exist.
 func safeRefName(ref string) bool {
 	if !strings.HasPrefix(ref, "refs/") || len(ref) > 512 {
 		return false
 	}
-	return !strings.ContainsAny(ref, " \t\n*?[]\\^:~")
+	if strings.ContainsAny(ref, " \t\n*?[]\\^:~") || strings.Contains(ref, "..") || strings.Contains(ref, "@{") ||
+		strings.HasSuffix(ref, "/") || strings.HasSuffix(ref, ".") {
+		return false
+	}
+	for _, c := range ref {
+		if c < 0x20 || c == 0x7f {
+			return false
+		}
+	}
+	for _, part := range strings.Split(ref, "/") {
+		if part == "" || strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
+			return false
+		}
+	}
+	return true
 }
 
 // DiskUsage returns the repo's approximate size in bytes.
