@@ -238,7 +238,7 @@ func TestJudgeProviderRubricHashes(t *testing.T) {
 		t.Fatalf("the none provider's verdict: %+v", none)
 	}
 	for name, c := range map[string]struct{ got, want string }{
-		"static":             {staticRubricHash, "sha256:7e0615a30fa3b39a693a156b428a341f3c850ae1f48a0452500f3838b166c488"},
+		"static":             {staticRubricHash, "sha256:9eff478aa6c3c6584120167943a6e59ee13f6bb2dd1bcb9a6a8ee0d3294c2865"},
 		"none":               {none.PromptHash, "sha256:87c494b57e02df21c852e2dc36d4d30a52146c32c63603799b6cded5cdc549c3"},
 		"openai":             {NewHTTPJudge(JudgeConfig{Provider: "openai", BaseURL: "https://judge.invalid", APIKey: "k", Model: "gpt-pin"}).promptHash, "sha256:172b25e5b573f843c0040e962898f266706051bbb18bb22ae12f06b5a5b2bf2e"},
 		"anthropic":          {NewHTTPJudge(JudgeConfig{Provider: "anthropic", BaseURL: "https://judge.invalid", APIKey: "k", Model: "claude-pin"}).promptHash, "sha256:0b565a35144c3bd54f504c257c842a25bbbd34d7dc3ad6a72484d2a92e1d7a8f"},
