@@ -220,10 +220,10 @@ var (
 	reDestructive = regexp.MustCompile(`(?i)` +
 		`rm\s+-[a-z]*[rf][a-z]*\s|` + // rm -rf, rm -fr, rm -r
 		`\bdelete\s+(?:all|every|the\s+entire)\b|` +
-		`\b(?:wipe|erase)\s+(?:all|every|the\s+)?(?:disk|drive|volume|database|repo|repositor|file|data|directory|folder)|` +
+		`\b(?:wipe|erase)\s+(?:(?:all|every|the)\s+)?(?:disk|drive|volume|database|repo|repositor|file|data|directory|folder)|` +
 		`\bformat\s+(?:the\s+)?(?:disk|drive|volume|partition|filesystem|/dev/)|` +
 		`\bdrop\s+(?:table|database|schema)\b|` +
-		`\b(?:destroy|obliterate)\s+(?:all|every|the\s+)?(?:data|database|backup|volume|resource)|` +
+		`\b(?:destroy|obliterate)\s+(?:(?:all|every|the)\s+)?(?:data|database|backup|volume|resource)|` +
 		`\bgit\s+push\s+--force\b|` +
 		`\btruncate\s+table\b`)
 	reDeception    = regexp.MustCompile(`(?i)(?:do not (?:tell|inform|reveal)|without (?:telling|informing)|hide (?:this )?from) the user`)
