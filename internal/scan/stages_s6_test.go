@@ -761,7 +761,6 @@ func TestS6ReadsTheHostFormsOf1149(t *testing.T) {
 		"curl -s https://prod.example.org./x":                     "prod.example.org",
 		"socat - OPENSSL:h.example.org,verify=0":                  "h.example.org",
 		"exec 3<>/dev/tcp/2001:DB8::1/80":                         "2001:db8::1",
-		"nc \"-l\" 10.1.2.3 80":                                   "10.1.2.3", // a quoted flag is not read as one: the address is reported
 		"nc 255.255.255.255 80":                                   "255.255.255.255",
 		"wget 10.1.2.3/x":                                         "10.1.2.3",
 		"ncat 10.1.2.3 80":                                        "10.1.2.3",

@@ -138,7 +138,9 @@ func confusableSkeleton(s string) string {
 	return repl.Replace(s)
 }
 
-var urlRe = regexp.MustCompile(`https?://[^\s)>\]"']+`)
+// urlRe finds an http(s) URL in text. A browser takes the scheme in any
+// case, so HTTPS:// and Http:// are found too.
+var urlRe = regexp.MustCompile(`(?i)https?://[^\s)>\]"']+`)
 
 // shortenerHosts are URL-shortener domains that hide the true destination.
 var shortenerHosts = map[string]bool{
@@ -147,15 +149,35 @@ var shortenerHosts = map[string]bool{
 	"rebrand.ly": true, "shorturl.at": true,
 }
 
-// urlHost is the host a URL parser reads from an http(s) URL, lowercased:
-// the authority ends at the first "/", "?" or "#", the host follows its
-// last "@" (user:password@ is userinfo, not host), and a port is cut off.
-func urlHost(u string) string {
+// urlHost is the host a browser reads from an http(s) URL, lowercased:
+// the authority ends at the first "/", "\", "?" or "#" (a browser reads a
+// backslash as "/" in an http(s) URL, so https://bit.ly\@example.com opens
+// bit.ly), the host follows its last "@" (user:password@ is userinfo, not
+// host), a port is cut off, and a trailing dot, which names the same host,
+// is dropped.
+func urlHost(u string) string { return urlHostEndingAt(u, "/\\?#") }
+
+// urlHosts are the hosts an http(s) URL can reach: the one a browser reads,
+// and, when its authority holds a backslash, the one a parser that keeps the
+// backslash reads (Python's urlsplit does, and reads
+// https://example.com\@bit.ly as bit.ly). A tool that fetches the link
+// need not be a browser, so either reading counts.
+func urlHosts(u string) []string {
+	browser, kept := urlHost(u), urlHostEndingAt(u, "/?#")
+	if kept == browser {
+		return []string{browser}
+	}
+	return []string{browser, kept}
+}
+
+// urlHostEndingAt reads the host of an http(s) URL whose authority ends at
+// the first of the bytes in ends.
+func urlHostEndingAt(u, ends string) string {
 	rest := u
 	if i := strings.Index(rest, "://"); i >= 0 {
 		rest = rest[i+3:]
 	}
-	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
+	if i := strings.IndexAny(rest, ends); i >= 0 {
 		rest = rest[:i]
 	}
 	if i := strings.LastIndexByte(rest, '@'); i >= 0 {
@@ -168,13 +190,23 @@ func urlHost(u string) string {
 	} else if i := strings.IndexByte(rest, ':'); i >= 0 {
 		rest = rest[:i]
 	}
-	return strings.ToLower(rest)
+	return strings.ToLower(strings.TrimRight(rest, "."))
 }
 
 // suspiciousURL returns a non-empty reason when a URL looks hostile:
-// punycode/homograph host or a known shortener.
+// punycode/homograph host or a known shortener, in any of the hosts the URL
+// can reach (urlHosts).
 func suspiciousURL(u string) string {
-	host := urlHost(u)
+	for _, host := range urlHosts(u) {
+		if reason := suspiciousHost(host); reason != "" {
+			return reason
+		}
+	}
+	return ""
+}
+
+// suspiciousHost is suspiciousURL's reason for one host.
+func suspiciousHost(host string) string {
 	if strings.Contains(host, "xn--") {
 		return "punycode/homograph domain"
 	}

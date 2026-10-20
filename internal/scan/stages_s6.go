@@ -462,8 +462,13 @@ func sshDestinations(line string) []string {
 		case "mosh":
 			out = append(out, sshArgs(withoutLongOptions(args, moshLongWithArg), "p")...)
 		case "scp", "rsync", "sshfs":
+			opts := true // until --, a word that starts with - is an option
 			for _, a := range args {
-				if strings.HasPrefix(a.text, "-") && !a.quoted {
+				if opts && a.text == "--" {
+					opts = false
+					continue
+				}
+				if opts && strings.HasPrefix(a.text, "-") {
 					out = append(out, proxyJump(a.text)...)
 					continue
 				}
@@ -483,8 +488,7 @@ func withoutLongOptions(words []shellWord, withArg map[string]bool) []shellWord 
 	var out []shellWord
 	for i := 0; i < len(words); i++ {
 		w := words[i]
-		// --ssh='ssh -p 2222' is quoted only after its =.
-		if strings.HasPrefix(w.text, "--") && len(w.text) > 2 && (!w.quoted || strings.Contains(w.text, "=")) {
+		if strings.HasPrefix(w.text, "--") && len(w.text) > 2 {
 			if withArg[w.text] {
 				i++
 			}
@@ -516,7 +520,7 @@ func expandSegments(line string, depth int) [][]shellWord {
 			// take an option name (bash -o pipefail -c '…').
 			for i := 0; i < len(args); i++ {
 				a := args[i]
-				if a.quoted || !strings.HasPrefix(a.text, "-") || a.text == "-" || a.text == "--" {
+				if !strings.HasPrefix(a.text, "-") || a.text == "-" || a.text == "--" {
 					break
 				}
 				if strings.HasPrefix(a.text, "--") {
@@ -621,13 +625,13 @@ func sshArgs(words []shellWord, optsWithArg string) []string {
 	var out []string
 	for i := 0; i < len(words); i++ {
 		w := words[i]
-		if w.text == "--" && !w.quoted {
+		if w.text == "--" {
 			if i+1 < len(words) {
 				out = append(out, destHost(words[i+1].text)...)
 			}
 			return out
 		}
-		if strings.HasPrefix(w.text, "-") && len(w.text) > 1 && !w.quoted {
+		if strings.HasPrefix(w.text, "-") && len(w.text) > 1 {
 			// A cluster of flags; the first that takes an argument takes
 			// the rest of the word, or the next word.
 			for j := 1; j < len(w.text); j++ {
@@ -859,7 +863,11 @@ func s6Substitute(line string, vars map[string][]string) []string {
 
 // shellWord is one word of a shell line, whether any of it was quoted, and
 // whether it is the word a redirection (<, >, >>, <>, &>) opens: the file
-// the shell opens rather than an argument of the command.
+// the shell opens rather than an argument of the command. Quoting matters
+// only where the shell itself treats a quoted word differently: a keyword
+// (for), a declaration, or a command word holding spaces. A program's
+// options are read by their text alone, since the shell removes the quotes
+// before the program sees them: '-p', "--" and -"o" are -p, -- and -o.
 type shellWord struct {
 	text   string
 	quoted bool
@@ -1067,15 +1075,35 @@ func s6AddrWords(line string) []string {
 	return out
 }
 
-// s6Listens is nc listening (-l, or a flag cluster holding l), whose
-// address is the one it binds.
+// ncOptsWithArg are the nc, ncat and netcat flags that take an argument,
+// in the word itself (-s10.0.0.1) or the next one (-s 10.0.0.1).
+const ncOptsWithArg = "IiMmOPpsTVWwXxecqgG"
+
+// s6Listens is nc listening (-l, or a flag cluster holding l, or
+// --listen), whose address is the one it binds. Only flag letters count:
+// an l inside an option's argument (-e -lol, "-s localhost") is not -l.
 func s6Listens(cmd string, args []shellWord) bool {
 	if cmd != "nc" && cmd != "ncat" && cmd != "netcat" {
 		return false
 	}
-	for _, a := range args {
-		if !a.quoted && (a.text == "--listen" || (strings.HasPrefix(a.text, "-") && !strings.HasPrefix(a.text, "--") && strings.ContainsRune(a.text, 'l'))) {
+	for i := 0; i < len(args); i++ {
+		a := args[i].text
+		if a == "--listen" {
 			return true
+		}
+		if !strings.HasPrefix(a, "-") || strings.HasPrefix(a, "--") {
+			continue
+		}
+		for j := 1; j < len(a); j++ {
+			if a[j] == 'l' {
+				return true
+			}
+			if strings.IndexByte(ncOptsWithArg, a[j]) >= 0 {
+				if j == len(a)-1 {
+					i++ // the argument is the next word
+				}
+				break
+			}
 		}
 	}
 	return false

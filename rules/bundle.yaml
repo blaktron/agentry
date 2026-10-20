@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.4.13"
+version: "0.4.14"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -220,6 +220,25 @@ notes: >
   reputation reads the host after a URL's userinfo, so user@ and
   user:password@ before a shortener no longer hide it. The threshold
   stays medium.
+  0.4.14 changes no signature and no rating. It names the release whose
+  detectors read more of what a file can hide. S3 reads a UTF-16 image
+  comment (an EXIF UNICODE UserComment, the XP tags) past a NUL inside it,
+  twice: with each run of NULs as a line break and with the NULs dropped.
+  Its JPEG walk steps over bytes that are not a marker to the next one, as
+  decoders do, so it reads the segments behind such bytes, between
+  progressive scans and after the end-of-image marker; binary bytes that
+  only look like a text segment take none of its string slots. S2's history
+  scan reports each different secret a rule matches, not only the first
+  (two keys of one rule share their redacted form), reads every match on an
+  added line and names its column, and says which limit truncated a
+  history. S6 reads a quoted option by its text in every option reader
+  (ssh '-p' 22 user@host, "--", sh "-c" '...'), as the shell passes it;
+  nc's listen flag counts only flag letters, not an l in an option's
+  argument; and -- ends scp's and rsync's options. S8's URL reputation
+  finds a URL whose scheme is in any case, ends the authority at a
+  backslash as a browser does, reading the host a parser that keeps the
+  backslash reads as well, and drops a trailing dot from the host. The
+  threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that

@@ -133,37 +133,31 @@ func inflateBounded(b []byte) string {
 }
 
 // jpegText walks JPEG markers, decoding COM comments and the text fields of an
-// APP1/Exif segment.
+// APP1/Exif segment. It reads every segment a common reader reaches, not only
+// those before the first scan: libjpeg steps over extraneous bytes to the next
+// marker, a COM or APP segment may sit between progressive scans, and metadata
+// tools read what a file carries after its end-of-image marker
+// (nextJPEGMarker does the stepping). The walk ends when no marker is left or
+// at a segment length below two or past the data.
 func jpegText(data []byte) []metaString {
 	var out []metaString
 	pos := 2 // past SOI
-	for pos+4 <= len(data) && len(out) < maxMetaStrings {
-		if data[pos] != 0xFF {
-			// Not on a marker boundary: entropy-coded data or a malformed
-			// file. Either way there is nothing further to read structurally.
-			return out
-		}
-		// Any number of 0xFF fill bytes may precede a marker (ITU T.81
-		// B.1.1.2); a padded marker must not end the walk.
-		for pos+1 < len(data) && data[pos+1] == 0xFF {
-			pos++
-		}
-		if pos+4 > len(data) {
+	for len(out) < maxMetaStrings {
+		pos = nextJPEGMarker(data, pos)
+		if pos < 0 {
 			return out
 		}
 		marker := data[pos+1]
-		switch marker {
-		case 0xD8, 0x01: // SOI, TEM — no payload
+		switch {
+		case marker == 0xD8, marker == 0xD9, marker == 0x01: // SOI, EOI, TEM: no payload
 			pos += 2
 			continue
-		case 0xD9, 0xDA: // EOI, start of scan — metadata is behind us
-			return out
-		case 0x00: // a stuffed byte, never a marker: not a segment boundary
-			return out
+		case marker >= 0xD0 && marker <= 0xD7: // RSTn: no payload
+			pos += 2
+			continue
 		}
-		if marker >= 0xD0 && marker <= 0xD7 { // RSTn — no payload
-			pos += 2
-			continue
+		if pos+4 > len(data) {
+			return out
 		}
 		segLen := int(binary.BigEndian.Uint16(data[pos+2 : pos+4]))
 		if segLen < 2 || pos+2+segLen > len(data) {
@@ -179,6 +173,34 @@ func jpegText(data []byte) []metaString {
 		pos += 2 + segLen
 	}
 	return out
+}
+
+// nextJPEGMarker returns the offset of the next marker at or after pos (its
+// 0xFF, with the marker byte after it), or -1 when there is none. Any number
+// of 0xFF fill bytes may precede a marker (ITU T.81 B.1.1.2), and FF 00 is a
+// stuffed data byte, never a marker; every other byte before the marker is
+// entropy-coded data or extraneous, and is stepped over.
+func nextJPEGMarker(data []byte, pos int) int {
+	for {
+		i := bytes.IndexByte(data[pos:], 0xFF)
+		if i < 0 {
+			return -1
+		}
+		pos += i
+		for pos+1 < len(data) && data[pos+1] == 0xFF {
+			pos++
+		}
+		if pos+1 >= len(data) {
+			return -1
+		}
+		if data[pos+1] != 0x00 {
+			return pos
+		}
+		pos += 2
+		if pos >= len(data) {
+			return -1
+		}
+	}
 }
 
 // EXIF tags whose values are human text (UserComment,
@@ -302,7 +324,7 @@ func exifTypeSize(typ uint16) int {
 // by an 8-byte character-code designator. Its UNICODE text is UTF-16: a byte
 // order mark, when present, says which order; without one the text is read
 // in the file's byte order and in the other, since writers disagree and the
-// file chooses, and both readings are scanned. The XP* tags are UCS-2
+// file chooses, and both byte orders are scanned. The XP* tags are UCS-2
 // little-endian regardless of the file's byte order.
 func decodeEXIFString(tag, typ uint16, val []byte, bo binary.ByteOrder) []string {
 	switch {
@@ -312,47 +334,63 @@ func decodeEXIFString(tag, typ uint16, val []byte, bo binary.ByteOrder) []string
 		if code == "UNICODE" {
 			switch {
 			case bytes.HasPrefix(body, []byte{0xFE, 0xFF}):
-				return []string{decodeUTF16(body[2:], binary.BigEndian)}
+				return utf16Readings(body[2:], binary.BigEndian)
 			case bytes.HasPrefix(body, []byte{0xFF, 0xFE}):
-				return []string{decodeUTF16(body[2:], binary.LittleEndian)}
+				return utf16Readings(body[2:], binary.LittleEndian)
 			}
 			other := binary.ByteOrder(binary.LittleEndian)
 			if bo == binary.LittleEndian {
 				other = binary.BigEndian
 			}
-			return []string{decodeUTF16(body, bo), decodeUTF16(body, other)}
+			return append(utf16Readings(body, bo), utf16Readings(body, other)...)
 		}
 		return []string{string(bytes.TrimRight(body, "\x00"))}
 	case tag >= 0x9C9B && tag <= 0x9C9F && typ == 1: // XP* tags are UCS-2LE
-		return []string{decodeUTF16(val, binary.LittleEndian)}
+		return utf16Readings(val, binary.LittleEndian)
 	}
 	return []string{string(bytes.TrimRight(val, "\x00"))}
 }
 
-// decodeUTF16 decodes UTF-16 bytes in byte order bo, stopping at the first
-// NUL.
-func decodeUTF16(b []byte, bo binary.ByteOrder) string {
+// utf16Readings decodes UTF-16 bytes in byte order bo and returns the ways
+// S3 reads the text (nulReadings). A NUL code unit does not end the text: a
+// reader that shows every code unit shows what follows it, so only trailing
+// NULs, which writers pad with, are dropped.
+func utf16Readings(b []byte, bo binary.ByteOrder) []string {
 	u := make([]uint16, 0, len(b)/2)
 	for i := 0; i+1 < len(b); i += 2 {
-		c := bo.Uint16(b[i : i+2])
-		if c == 0 {
-			break
-		}
-		u = append(u, c)
+		u = append(u, bo.Uint16(b[i:i+2]))
 	}
-	return string(utf16.Decode(u))
+	for len(u) > 0 && u[len(u)-1] == 0 {
+		u = u[:len(u)-1]
+	}
+	return nulReadings(string(utf16.Decode(u)))
+}
+
+// nulReadings returns the ways S3 reads a text that may hold NULs: the text
+// itself when no NUL sits between other characters; otherwise twice, with
+// each run of NULs as a line break, so what follows a NUL is scanned as text
+// of its own, and with the NULs dropped, so a word a NUL splits is read
+// whole.
+func nulReadings(text string) []string {
+	parts := strings.FieldsFunc(text, func(r rune) bool { return r == 0 })
+	if len(parts) < 2 {
+		return []string{strings.Join(parts, "")}
+	}
+	return []string{strings.Join(parts, "\n"), strings.Join(parts, "")}
 }
 
 // appendMeta records a non-trivial, valid-UTF-8 string. Metadata routinely
 // carries camera model numbers and software names; the length floor keeps
 // those out of the finding stream without needing an allowlist.
 func appendMeta(out []metaString, field, text string) []metaString {
+	if !utf8.ValidString(text) {
+		text = strings.ToValidUTF8(text, "")
+	}
+	// The floor is applied to what is left, so binary bytes that only look
+	// like a text segment do not take one of the string slots.
 	text = strings.TrimSpace(text)
 	if len(text) < 8 || len(out) >= maxMetaStrings {
 		return out
-	}
-	if !utf8.ValidString(text) {
-		text = strings.ToValidUTF8(text, "")
 	}
 	return append(out, metaString{Field: field, Text: text})
 }

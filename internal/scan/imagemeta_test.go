@@ -401,14 +401,14 @@ func TestExtractImageTextJPEGEXIF(t *testing.T) {
 	t.Run("the walk", func(t *testing.T) {
 		com := seg(0xFE, []byte("a hidden comment"))
 		hidden := "JPEG:COM=a hidden comment"
-		wantMeta(t, "after the start of scan", extractImageText(jpegOf(seg(0xDA, []byte{1, 2, 3}), com)))
-		wantMeta(t, "after the end of image", extractImageText(append([]byte{0xFF, 0xD8, 0xFF, 0xD9}, com...)))
-		wantMeta(t, "after the end of image, behind a length", extractImageText(append([]byte{0xFF, 0xD8, 0xFF, 0xD9, 0x00, 0x02}, com...)))
+		wantMeta(t, "after the start of scan", extractImageText(jpegOf(seg(0xDA, []byte{1, 2, 3}), com)), hidden)
+		wantMeta(t, "after the end of image", extractImageText(append([]byte{0xFF, 0xD8, 0xFF, 0xD9}, com...)), hidden)
+		wantMeta(t, "after the end of image, behind a length", extractImageText(append([]byte{0xFF, 0xD8, 0xFF, 0xD9, 0x00, 0x02}, com...)), hidden)
 		wantMeta(t, "after a restart marker", extractImageText(jpegOf([]byte{0xFF, 0xD0}, com)), hidden)
 		wantMeta(t, "after the last restart marker", extractImageText(jpegOf([]byte{0xFF, 0xD7}, com)), hidden)
 		wantMeta(t, "after TEM", extractImageText(jpegOf([]byte{0xFF, 0x01}, com)), hidden)
 		wantMeta(t, "after a second SOI", extractImageText(jpegOf([]byte{0xFF, 0xD8}, com)), hidden)
-		wantMeta(t, "after a byte that is no marker", extractImageText(jpegOf(seg(0xE0, []byte("JFIF\x00")), []byte{0x00}, com)))
+		wantMeta(t, "after a byte that is no marker", extractImageText(jpegOf(seg(0xE0, []byte("JFIF\x00")), []byte{0x00}, com)), hidden)
 		wantMeta(t, "a segment that ends with the data", extractImageText(append([]byte{0xFF, 0xD8}, com...)), hidden)
 		wantMeta(t, "a segment one byte longer than the data", extractImageText(append([]byte{0xFF, 0xD8}, com[:len(com)-1]...)))
 		wantMeta(t, "a segment of a length that cannot be", extractImageText(jpegOf([]byte{0xFF, 0xFE, 0x00, 0x01}, []byte("a hidden comment"))))
@@ -464,9 +464,10 @@ func TestExtractImageTextJPEGEXIF(t *testing.T) {
 			"EXIF:UserComment=a unicode user comment")
 		wantMeta(t, "a user comment that is only its code", extractImageText(jpegOf(exifSeg(makeTIFF(le, nil,
 			[]tiffEntry{{tag: 0x9286, typ: 7, val: []byte("ASCII\x00\x00\x00")}}, 4, 1)))))
-		wantMeta(t, "UCS-2 stops at its first NUL", extractImageText(jpegOf(exifSeg(makeTIFF(le,
+		wantMeta(t, "UCS-2 reads past an interior NUL", extractImageText(jpegOf(exifSeg(makeTIFF(le,
 			[]tiffEntry{{tag: 0x9C9C, typ: 1, val: append(utf16le("visible text", true), utf16le("hidden after the NUL", true)...)}}, nil, 4, 1)))),
-			"EXIF:XPComment=visible text")
+			"EXIF:XPComment=visible text\nhidden after the NUL",
+			"EXIF:XPComment=visible texthidden after the NUL")
 		wantMeta(t, "an XP tag of ASCII type is plain text", extractImageText(jpegOf(exifSeg(makeTIFF(le,
 			[]tiffEntry{text(0x9C9B, "plain ascii title")}, nil, 4, 1)))), "EXIF:XPTitle=plain ascii title")
 		wantMeta(t, "trailing NULs are not part of the text", extractImageText(jpegOf(exifSeg(makeTIFF(le,
