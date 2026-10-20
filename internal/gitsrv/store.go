@@ -185,7 +185,7 @@ func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranc
 	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
 		return err
 	}
-	work, err := os.MkdirTemp(filepath.Dir(dir), "."+filepath.Base(dir)+".init-")
+	work, err := os.MkdirTemp(filepath.Dir(dir), "."+repoID.String()+initWorkInfix)
 	if err != nil {
 		return err
 	}
@@ -228,6 +228,80 @@ func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranc
 		return err
 	}
 	return nil
+}
+
+// initWorkInfix follows the repository id in the name of InitBare's work
+// directory, "." + id + initWorkInfix + a random suffix, which
+// SweepInitLeftovers recognises by the same constant.
+const initWorkInfix = ".git.init-"
+
+// initWorkStaleAfter is how old an InitBare work directory must be before
+// SweepInitLeftovers removes it: far longer than an init takes, so a
+// directory another process is still building in is never touched.
+const initWorkStaleAfter = time.Hour
+
+// SweepInitLeftovers removes the work directories InitBare leaves beside a
+// repository's final path ({dataDir}/{xx}/.{uuid}.git.init-*) when the
+// process dies before it cleans up, once they are older than
+// initWorkStaleAfter. Nothing reads such a directory, so without the sweep
+// they only accumulate on the repository volume. It touches nothing whose
+// name is not exactly that form, and returns how many it removed.
+func (s *RepoStore) SweepInitLeftovers() (int, error) {
+	shards, err := os.ReadDir(s.dataDir)
+	if err != nil {
+		return 0, fmt.Errorf("gitsrv: sweep init leftovers: %w", err)
+	}
+	removed := 0
+	var errs []error
+	for _, shard := range shards {
+		if !shard.IsDir() || !isShardName(shard.Name()) {
+			continue
+		}
+		dir := filepath.Join(s.dataDir, shard.Name())
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() || !isInitWorkName(shard.Name(), e.Name()) {
+				continue
+			}
+			path := filepath.Join(dir, e.Name())
+			fi, err := os.Lstat(path)
+			if err != nil || !fi.IsDir() || time.Since(fi.ModTime()) < initWorkStaleAfter {
+				continue
+			}
+			if err := os.RemoveAll(path); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			removed++
+		}
+	}
+	return removed, errors.Join(errs...)
+}
+
+// isShardName reports whether name is a repository shard directory: the
+// first two hex digits of a repository id, as Path lays them out.
+func isShardName(name string) bool {
+	return len(name) == 2 && strings.Trim(name, "0123456789abcdef") == ""
+}
+
+// isInitWorkName reports whether name, inside the shard directory, is an
+// InitBare work directory: "." + a repository id in that shard +
+// initWorkInfix + the suffix os.MkdirTemp added.
+func isInitWorkName(shard, name string) bool {
+	rest, ok := strings.CutPrefix(name, ".")
+	if !ok {
+		return false
+	}
+	id, suffix, ok := strings.Cut(rest, initWorkInfix)
+	if !ok || suffix == "" {
+		return false
+	}
+	u, err := uuid.Parse(id)
+	return err == nil && u.String() == id && id[:2] == shard
 }
 
 // EnsureBare makes the repository if it is not there yet. A repository that
