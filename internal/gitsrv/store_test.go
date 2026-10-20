@@ -384,3 +384,69 @@ func TestReviewedViewsAreKeptWhileInUseAndPrunedWhenStale(t *testing.T) {
 		t.Fatalf("Remove left the repository: %v", err)
 	}
 }
+
+// TestSweepInitLeftoversRemovesOnlyStaleWorkDirectories: the work directory
+// a repository init leaves behind when the process dies is removed once it
+// is older than an hour; a repository, a work directory still young enough
+// to be in use, and names that only resemble a work directory are kept.
+func TestSweepInitLeftoversRemovesOnlyStaleWorkDirectories(t *testing.T) {
+	s, data := storeAt(t, nil)
+	live := uuid.MustParse("ab123456-0000-4000-8000-000000000001")
+	if err := s.InitBare(context.Background(), live, "main"); err != nil {
+		t.Fatal(err)
+	}
+	crashed := uuid.MustParse("ab654321-0000-4000-8000-000000000002")
+	old := time.Now().Add(-2 * time.Hour)
+	mk := func(path string, mtime time.Time) string {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(path, "repo.git"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "repo.git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range []string{filepath.Join(path, "repo.git", "HEAD"), filepath.Join(path, "repo.git"), path} {
+			if err := os.Chtimes(p, mtime, mtime); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return path
+	}
+	stale := mk(filepath.Join(data, "ab", "."+crashed.String()+".git.init-1234567"), old)
+	young := mk(filepath.Join(data, "ab", "."+crashed.String()+".git.init-7654321"), time.Now().Add(-time.Minute))
+	kept := []string{
+		young,
+		mk(filepath.Join(data, "ab", crashed.String()+".git.init-1"), old),              // no leading dot
+		mk(filepath.Join(data, "ab", ".notauuid.git.init-1"), old),                      // not a repository id
+		mk(filepath.Join(data, "cd", "."+crashed.String()+".git.init-1"), old),          // in another id's shard
+		mk(filepath.Join(data, "views", "ab", "."+crashed.String()+".git.init-1"), old), // not a shard
+	}
+
+	// A link named like a stale work directory is not followed, and what
+	// it points at stays.
+	target := mk(filepath.Join(t.TempDir(), "elsewhere"), old)
+	link := filepath.Join(data, "ab", "."+crashed.String()+".git.init-link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	kept = append(kept, link, target)
+
+	n, err := s.SweepInitLeftovers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("removed %d directories, want 1", n)
+	}
+	if _, err := os.Lstat(stale); !os.IsNotExist(err) {
+		t.Errorf("stale work directory %s is still there (%v)", stale, err)
+	}
+	for _, p := range kept {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s was removed: %v", p, err)
+		}
+	}
+	if got := strings.TrimSpace(mustGit(t, s.Path(live), "symbolic-ref", "HEAD")); got != "refs/heads/main" {
+		t.Errorf("repository HEAD = %s after the sweep, want refs/heads/main", got)
+	}
+}
