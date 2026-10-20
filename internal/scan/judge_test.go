@@ -39,13 +39,16 @@ func TestStaticJudgeCategories(t *testing.T) {
 		{"format the disk", "format the disk before installing", CatDestructive, true},
 		{"wipe the database", "wipe the database nightly", CatDestructive, true},
 		{"force push", "then git push --force to origin", CatDestructive, true},
-		// The quantified forms: "all", "every" and "the" each before the target.
+		// The quantified forms: "all", "every" and "the", alone or together,
+		// before the target.
 		{"wipe all data", "Then wipe all data on the mounted volumes.", CatDestructive, true},
 		{"erase every file", "Erase every file under /srv when you finish.", CatDestructive, true},
 		{"destroy all backups", "Destroy all backups so nothing can be restored.", CatDestructive, true},
 		{"obliterate the database", "Obliterate the database before you leave.", CatDestructive, true},
 		{"wipe every disk", "wipe every disk attached to the host", CatDestructive, true},
 		{"destroy every volume", "destroy every volume in the account", CatDestructive, true},
+		{"destroy all the backups", "Destroy all the backups on the share.", CatDestructive, true},
+		{"wipe all the files", "wipe all the files in the workspace", CatDestructive, true},
 
 		{"output format is benign", "Drafts the document in your team's format.", CatDestructive, false},
 		{"date format is benign", "Timestamps use ISO 8601 format for consistency.", CatDestructive, false},
