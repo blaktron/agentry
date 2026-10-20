@@ -1126,11 +1126,12 @@ What it checks, over the files a submission would carry:
   bundle; a shipped knowledge pack's text, as the registry's stage for
   packs reads it; the registry's record of each declared MCP server; and
   the registry's baseline policy.
-- **The instruction against the contract.** The registry's check of which
-  tools an instruction calls for: an instruction that calls `browser_*`,
-  `host_*`, `run_command` or `fetch` without the contract line that grants
-  it is a high `S6/ungranted-tool` finding at the instruction's first call,
-  as it is at submission.
+- **The instruction against the contract** (from agentry-cli v0.6.145).
+  The registry's check of which runner tools an instruction calls for: an
+  instruction that calls a tool such as `browser_*`, `host_*`,
+  `run_command`, `fetch` or `fs_write` without the contract line that
+  grants it is a high `S6/ungranted-tool` finding at the instruction's
+  first call, as it is at submission.
 - **AI Review.** AI Review's questions over the package, read from the
   run's own record of what AI Review answered, never from what the model
   says.
@@ -1144,18 +1145,24 @@ capabilities the registry itself derives from the manifest: a browser line
 on any public site, or one that does not read, is held for review as `"*"`
 egress is, and a policy that names `browser` or `targetHosts` is applied. It
 is `published`, `needs_review` (held for a security reviewer), `rejected`,
-`refused_at_submit` (the manifest rules refuse it), or `undetermined` when something the gate weighs
-did not answer here and the best and the worst answer would decide
-differently; the exit code says which (`0`, `20`, `21`, `22`, `23`). The
-report names what it could not run on your computer: the secrets and
+`refused_at_submit` (the manifest rules refuse it), or `undetermined` when
+something the gate weighs did not answer here and the best and the worst
+answer would decide differently; the exit code says which (`0`, `20`, `21`,
+`22`, `23`).
+
+The report names what it could not run on your computer: the secrets and
 scripts stages, the publisher signals, the diff against your last published
 version, an organization's policy, and the checks a run in Agentry makes
 when it starts (a target host, a browser on any public site where the
-deployment does not allow one, a browser's site that is not a public
-address on port 80 or 443). The Examiner ships a guide of its own, the read-only
-pack `review-guide`: the contract's lines and what reaching past each looks
-like, and which of the registry's checks ran here. It is part of the binary
-and is the one text its model reads that AI Review did not read first.
+deployment does not allow one, a browser's site that is not a public address
+on port 80 or 443).
+
+The Examiner ships a guide of its own, the read-only pack `review-guide`:
+the contract's lines and what reaching past each looks like, and which of
+the registry's checks ran here. It is part of the binary and is the one file
+its model reads that AI Review did not read first. The names of the
+package's files are not read by AI Review: the Examiner treats them as part
+of what it examines.
 
 Every door checks the same quotas (V8): at most 2,000 files and 10 MiB in
 the archive, 2 MiB per file (5 MiB per image), and 1 MiB of text files in

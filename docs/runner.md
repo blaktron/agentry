@@ -2288,8 +2288,7 @@ the contract: no manifest declares them, and an install asks no consent for
 them. A hosted run has them on a
 sandbox host whose runhost carries that CLI release.
 
-From agentry-cli v0.6.143 the built-in packages (the Knowledge Creator, the
-Voice Writer, the Examiner and the Drafter) have the scratch folder too, with
+From agentry-cli v0.6.143 every built-in package has the scratch folder too, with
 [`grep` and `glob`](#searching-files-grep-and-glob), but never `export_pdf`:
 what a built-in writes is read by the application (a pack's pages, a
 `VOICE.md`, a report or a draft), not handed to a person as a document. Each
@@ -4178,8 +4177,9 @@ CSV, JSON, YAML and source files pass as they are. An archive's files are
 read as documents of their own, each named `<archive>/<member>` and cited
 `[src: doc:<archive>/<member>]`, and kept in the pack under
 `sources/<archive>/<member>`; a member whose name is not a plain one
-(letters, digits, `.`, `-` and `_` in each part), or two members whose
-names differ only in case, are listed as not read.
+(letters, digits, `.`, `-` and `_` in each part) is listed as not read,
+and two members whose names differ only in case refuse the build, naming
+both, since they would be one file on a computer whose names ignore case.
 Then the Creator compiles their
 text into pages against the model your policy names, and the build applies
 what it wrote. A local build costs no credits and is not scanned; the pack
@@ -4187,8 +4187,9 @@ records `not scanned`. `--timeout`, `--max-turns` and `--max-cost` bound
 the run, and an `add` with the same documents continues a build that
 stopped.
 
-**A repository or a web address.** A build also takes a git repository and
-files at web addresses, beside its documents or instead of them:
+**A repository or a web address.** From agentry-cli v0.6.146 a build also
+takes a git repository and files at web addresses, beside its documents or
+instead of them:
 
 - `--repo URL[@REF]`, repeatable, at most 10: an https address, with
   `@BRANCH`, `@TAG` or `@COMMIT` for a ref other than the default branch.
@@ -4216,7 +4217,8 @@ Creator fetches nothing itself. A source is fetched within what the pack has
 left: its bytes less the documents, and its 2,000 files less what the pack
 holds, the documents and a reserve of 300 for the pages; a build whose
 documents alone would pass 2,000 files is refused before the Creator runs.
-What is fetched is kept in the pack under `sources/` and cited `doc:`, as a
+Like a document, what is fetched is not read by AI Review before the
+Creator reads it. What is fetched is kept in the pack under `sources/` and cited `doc:`, as a
 document is. A repository or an address counts as a document for the web's
 default (below), so a new pack given only sources searches only with
 `--web`. The receipt has a line for each source, and `--json` names each
@@ -4229,8 +4231,8 @@ agentry knowledge create handbook --repo https://github.com/you/handbook --sourc
 ```
 
 **Searching the web.** `--web` lets the Creator search; `--no-web` forbids
-it. With neither, a new pack with no `--file` searches and anything else
-does not: `add`, and any build with documents, since its searches would
+it. With neither, a new pack with no `--file`, `--repo` or `--url`
+searches and anything else does not: `add`, and any build with documents, since its searches would
 carry what the Creator read in them to the search provider. The Creator's
 `web_search` and `web_read` are the Drafter's tools, AI Review reading
 every result first with your own Jev key, and a search provider of your own
@@ -4396,8 +4398,8 @@ the voice it writes is reviewed (the pages of web addresses are, below).
 longer), `--max-turns` and `--max-cost`
 bound its run.
 
-**Samples from web addresses.** `create`, `improve` and `edit` also take
-`--url URL`, repeatable, at most 20: the https address of a page of your
+**Samples from web addresses.** From agentry-cli v0.6.146 `create`,
+`improve` and `edit` also take `--url URL`, repeatable, at most 20: the https address of a page of your
 writing, such as a blog post or a newsletter issue, beside the files or
 instead of them.
 
@@ -4419,8 +4421,9 @@ instead of them.
   alone: it opens only the addresses given, exactly as given, renders the
   page as the Knowledge Creator's does ([pages drawn by
   scripts](#knowledge-packs)), and has AI Review read the rendered
-  text first. A page of that kind whose address has a query is withheld.
-  The Voice Writer has no `web_search`.
+  text first. A page of that kind is withheld instead when its address has
+  a query, when it came as a file inside an archive, or when the build
+  cannot render pages. The Voice Writer has no `web_search`.
 
 The Voice Writer reads a page as a sample of your own writing, not the
 site's navigation, comments or quotes of others. It ships a guide of its

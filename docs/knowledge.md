@@ -4,16 +4,15 @@ A knowledge pack is an LLM wiki: compiled markdown pages with an index,
 together with the documents and the brief they were compiled from, at most
 10 MB, that a run searches through the knowledge tools over a read-only
 `/knowledge` mount. A pack may come from documents, from a brief alone
-(what it should cover and for whom, kept as `sources/brief.md`), or both;
-with CLI v0.6.146 or later, also from a git repository or a file at a web
+(what it should cover and for whom, kept as `sources/brief.md`), or both.
+With CLI v0.6.142 or later an archive's files are kept as
+`sources/<archive>/<member>`, each cited on its own, and with v0.6.146 or
+later a pack may also come from a git repository or a file at a web
 address, fetched by the build and kept under `sources/` as documents
-(`sources/repo-<host>-<path>/…` for a repository); and with CLI v0.6.142
-or later an archive's files are kept as `sources/<archive>/<member>`, each
-cited on its own.
-Its pages cite `[src: doc:<path>]`, and, with CLI v0.6.43 or later, also
-`[src: web:<url>]` for a page the Knowledge Creator read on the web (the
-page's text is not kept) and `[src: model]` for what it took from its
-model's own knowledge. [Running QuickAgents](runner.md#knowledge-packs) covers making one,
+(`sources/repo-<host>-<path>/…` for a repository). Its pages cite
+`[src: doc:<path>]`, and, with CLI v0.6.43 or later, also `[src: web:<url>]`
+for a page the Knowledge Creator read on the web (the page's text is not
+kept) and `[src: model]` for what it took from its model's own knowledge. [Running QuickAgents](runner.md#knowledge-packs) covers making one,
 keeping it in the local store and attaching it to a run, and
 [Hosted runs](hosted-runs.md#knowledge-attached-to-a-run) attaching it to
 a run on Agentry's infrastructure. This page is the registry's side: how a

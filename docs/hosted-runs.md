@@ -863,29 +863,29 @@ deletes one at once.
 
 ## A knowledge build
 
-A run of the kind `knowledge_build` runs the CLI's built-in Knowledge Creator
-over documents, a brief, or both to make or extend a
-[knowledge pack](knowledge.md) in the registry's store, against the
-platform's model, for credits. It is created by the same
-`POST /api/v1/x/runs/` with `kind: knowledge_build`, the documents as
-`inputs`, a `brief` (what the pack should cover and for whom: text of at most
-8 KiB after trimming, with no control characters but line breaks and tabs,
-kept in the pack as `sources/brief.md`), optional `repos` and `urls`
-(sources, below), at least one of these, an
-optional `web` (Search the web, below), and exactly one of `name` (a new pack of that name;
-an empty pack of that name, one a refused build left, is reused), `pack` (the
-id of one of the caller's packs) or `continue` (a finished build of the
-caller's, whose documents, sources, brief and web choice are copied for the
-new one, so it takes no `inputs`, `repos`, `urls`, `brief` or `web` itself). It names no `ref`,
-`task` or `intake`. With `org` (an organization's handle) the build makes
-or extends that organization's shared pack: only its admins may, a caller
-who is not a member gets `404`, one who is not an admin `403`, and an
-organization in its decommission hold `409 org-decommissioning`, since its
-shared knowledge is read-only then. Membership is read again at the
+A run of the kind `knowledge_build` runs the CLI's built-in Knowledge
+Creator over documents, a brief, or both to make or extend a [knowledge
+pack](knowledge.md) in the registry's store, against the platform's model,
+for credits. It is created by the same `POST /api/v1/x/runs/` with `kind:
+knowledge_build`, the documents as `inputs`, a `brief` (what the pack should
+cover and for whom: text of at most 8 KiB after trimming, with no control
+characters but line breaks and tabs, kept in the pack as
+`sources/brief.md`), optional `repos` and `urls` (sources, below), at least
+one of `inputs`, `brief`, `repos` or `urls`, an optional `web` (Search the
+web, below), and exactly one of `name` (a new pack of that name; an empty
+pack of that name, one a refused build left, is reused), `pack` (the id of
+one of the caller's packs) or `continue` (a finished build of the caller's,
+whose documents, sources, brief and web choice are copied for the new one,
+so it takes no `inputs`, `repos`, `urls`, `brief` or `web` itself). It names
+no `ref`, `task` or `intake`. With `org` (an organization's handle) the
+build makes or extends that organization's shared pack: only its admins may,
+a caller who is not a member gets `404`, one who is not an admin `403`, and
+an organization in its decommission hold `409 org-decommissioning`, since
+its shared knowledge is read-only then. Membership is read again at the
 hand-off and at the output download, as for a run that attaches a shared
-pack (above). A token needs `knowledge:read` and `knowledge:write`
-beside `run:write`, and downloading a build's output needs `knowledge:read`
-beside `run:read`, since the output holds the pack.
+pack (above). A token needs `knowledge:read` and `knowledge:write` beside
+`run:write`, and downloading a build's output needs `knowledge:read` beside
+`run:read`, since the output holds the pack.
 
 A build holds `AGENTRY_RUNS_BUILD_CREDITS` (201) on the payer's row under
 its own ledger reasons (`knowledge_build_hold`, then `knowledge_build` and
@@ -910,22 +910,23 @@ made no pack), `changed` (the pack took another tree while it ran),
 (the output held no valid pack), refunded in full.
 
 **Search the web.** `web: true` lets the Creator search, `false` forbids it,
-and with no `web` a new pack with no documents searches and anything else
-does not; the status route's `knowledgeBuild.web` states the terms and the
-words a client shows beside the choice. A build that searches runs `agentry
-knowledge … --hosted --web` on the host with a credential minted for that
-build alone, as [a hosted draft](#a-hosted-draft)'s is: its searches go to
-the registry's search route and every result and page it reads to the
-[model-input routes](model-input.md) before its model reads it, and its
-`web_read` opens only an address one of its own searches returned. The
-registry counts each call against the build's caps,
-`AGENTRY_RUNS_BUILD_SEARCHES` (30) searches and `AGENTRY_RUNS_BUILD_PAGES`
-(60) pages, and refuses what passes them (`403`). Each search the provider
-answered settles at `AGENTRY_RUNS_DRAFT_SEARCH_CREDITS` (1) inside the
-build's hold, never past it. A build without the web is handed no
-credential. The run's `build.web` record counts the searches, the pages let
-through, AI Review's reads and what it withheld. A page the Creator wrote
-from the web cites `[src: web:<url>]` and keeps none of the page's text.
+and with no `web` a new pack with no documents, repositories or addresses
+searches and anything else does not; the status route's `knowledgeBuild.web`
+states the terms and the words a client shows beside the choice. A build
+that searches runs `agentry knowledge … --hosted --web` on the host with a
+credential minted for that build alone, as [a hosted
+draft](#a-hosted-draft)'s is: its searches go to the registry's search route
+and every result and page it reads to the [model-input
+routes](model-input.md) before its model reads it, and its `web_read` opens
+only an address one of its own searches returned. The registry counts each
+call against the build's caps, `AGENTRY_RUNS_BUILD_SEARCHES` (30) searches
+and `AGENTRY_RUNS_BUILD_PAGES` (60) pages, and refuses what passes them
+(`403`). Each search the provider answered settles at
+`AGENTRY_RUNS_DRAFT_SEARCH_CREDITS` (1) inside the build's hold, never past
+it. A build without the web is handed no credential. The run's `build.web`
+record counts the searches, the pages let through, AI Review's reads and
+what it withheld. A page the Creator wrote from the web cites `[src:
+web:<url>]` and keeps none of the page's text.
 
 **Pages drawn by scripts.** A build that searches the web is a browser job:
 it takes two of a sandbox host's slots and goes only to a host whose health
@@ -939,24 +940,24 @@ browser. A build is never given the open web that
 `AGENTRY_RUNS_BROWSER_PUBLIC_WEB` allows a release, and a build that does
 not search never renders.
 
-**A repository or a web address.** `repos` (at most 10) are git
-repositories by their https address, with `@BRANCH`, `@TAG` or `@COMMIT`
-after it for a ref other than the default branch, and `urls` (at most 20)
-are files at web addresses; each is one line of at most 2 KiB. The create
-reads them as the CLI will, and refuses one it would refuse (`422
-validation`). On the host the CLI fetches each through a proxy that reaches
-public addresses only, as `agentry knowledge … --repo … --url …` does on a
-person's computer ([a repository or a web
-address](runner.md#knowledge-packs)), within the hosted caps of 10,000
-files and 256 MiB for a repository and 10 MiB for a file, and the Creator
-reads what was fetched as documents. A key the person saved for a source's
-host under Settings → Encrypted storage is matched at create and handed to
-the host as that source's access token, used by the fetch step for that
-host alone; the build carries no other secret. The status route's
+**A repository or a web address.** With CLI v0.6.147 or later on the sandbox
+host, `repos` (at most 10) are git repositories by their https address, with
+`@BRANCH`, `@TAG` or `@COMMIT` after it for a ref other than the default
+branch, and `urls` (at most 20) are files at web addresses; each is one line
+of at most 2 KiB. The create reads them as the CLI will, and refuses one it
+would refuse (`422 validation`). On the host the CLI fetches each through a
+proxy that reaches public addresses only, as `agentry knowledge … --repo …
+--url …` does on a person's computer ([a repository or a web
+address](runner.md#knowledge-packs)), within the hosted caps of 10,000 files
+and 256 MiB for a repository and 10 MiB for a file, and the Creator reads
+what was fetched as documents. A key the person saved for a source's host
+under Settings → Encrypted storage is matched at create and handed to the
+host as that source's access token, used by the fetch step for that host
+alone; the build carries no other source credential. The status route's
 `knowledgeBuild.sources` says whether sources are taken (`enabled`) and
-`maxRepos` and `maxUrls`. A build's documents and sources are not read by
-AI Review before the Creator reads them; the pack it makes is scanned
-before it is final.
+`maxRepos` and `maxUrls`. A build's documents and sources are not read by AI
+Review before the Creator reads them; the pack it makes is scanned before it
+is final.
 
 Refused before a pack is made or anything is held: a token without the
 scopes (`403`), a balance that cannot hold the build (`402`), a pack that is
@@ -1133,12 +1134,12 @@ to write the caller's [Writing Voice](voice.md). It is created by the same
 
 Each of the three also takes `urls` (at most 20, each one https line of at
 most 2 KiB), web addresses of pages of the person's writing, beside the
-samples or instead of them (below). A brief or a note is text of at most 4 KiB. The run takes no `ref`,
-`task`, `intake`, `description`, `hints`, `name`, `pack`, `continue`,
-`org`, `knowledge` or `voice`: each is `422`. A token needs `voice:read`
-and `voice:write` beside `run:write`, and downloading the run's output
-needs `voice:read` beside `run:read`. An Improve or an AI Edit of a person
-with no voice is `409 voice-not-found`.
+samples or instead of them (below). A brief or a note is text of at most 4
+KiB. The run takes no `ref`, `task`, `intake`, `description`, `hints`,
+`name`, `pack`, `continue`, `org`, `knowledge` or `voice`: each is `422`. A
+token needs `voice:read` and `voice:write` beside `run:write`, and
+downloading the run's output needs `voice:read` beside `run:read`. An
+Improve or an AI Edit of a person with no voice is `409 voice-not-found`.
 
 **Price.** Each of the three costs **20 credits flat**
 (`AGENTRY_RUNS_VOICE_CREDITS`), AI Review of what it writes included. The
@@ -1176,8 +1177,8 @@ voice's `digest` and `bytes`, or a `note`: `nothing` (no voice came out),
 `invalid` (the output held no voice the store takes), `gone` (the voice
 it worked on was deleted) or `unavailable` (the store was off).
 
-**Web addresses.** A run given `urls` is handed a credential minted for it
-alone, which the registry admits only for AI Review's reads of pages, at
+**Web addresses.** With CLI v0.6.147 or later on the sandbox host, a run
+given `urls` is handed a credential minted for it alone, which the registry admits only for AI Review's reads of pages, at
 most `AGENTRY_RUNS_VOICE_PAGES` (100) of them, and only while the run is
 claimed or running; a run given none holds no credential, and the
 credential is cleared when the run closes. On the host the CLI fetches each
@@ -1634,7 +1635,7 @@ destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
 | `AGENTRY_RUNS_VOICE_TEXT_BYTES` | `1048576` | the cap on a Voice Writer run's samples' decoded text |
 | `AGENTRY_RUNS_VOICE_SECONDS` | `1800` | a Voice Writer run's wall time, on every tier |
 | `AGENTRY_RUNS_VOICE_MAX_TURNS` | `300` | a Voice Writer run's turn cap |
-| `AGENTRY_RUNS_VOICE_PAGES` | `100` | the page reads AI Review makes for one Voice Writer run given web addresses: a long page is read in several pieces, and a rendered page is read again |
+| `AGENTRY_RUNS_VOICE_PAGES` | `100` | AI Review's page reads for one Voice Writer run given web addresses: each page before the run, a long page in several pieces, and each page drawn by scripts that its `web_read` renders |
 | `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a host before it is cancelled and refunded; at most `12h`, half the day a secret held for one run waits for it |
 | `AGENTRY_RUNS_STALE` | `10m` | how long a run's sandbox host may be silent before the run is closed as `error` and refunded |
 | `AGENTRY_RUNS_TASK_MAX_BYTES` | `65536` | the task text's cap |
