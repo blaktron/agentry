@@ -158,6 +158,8 @@ func jpegText(data []byte) []metaString {
 			continue
 		case 0xD9, 0xDA: // EOI, start of scan — metadata is behind us
 			return out
+		case 0x00: // a stuffed byte, never a marker: not a segment boundary
+			return out
 		}
 		if marker >= 0xD0 && marker <= 0xD7 { // RSTn — no payload
 			pos += 2
