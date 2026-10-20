@@ -90,6 +90,7 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64<<10), historyMaxLine)
 	var commit, file string
+	inHunk := false // past a file's "@@" line: every line is content until the next file or commit
 	var read int64
 	seen := map[string]bool{}
 	for sc.Scan() {
@@ -99,17 +100,30 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 			return findings, true, nil
 		}
 		if m := historyCommitRe.FindStringSubmatch(line); m != nil {
-			commit, file = m[1], ""
+			commit, file, inHunk = m[1], "", false
 			continue
 		}
-		if strings.HasPrefix(line, "+++ ") {
-			file = strings.TrimPrefix(strings.TrimPrefix(line, "+++ "), "b/")
-			if file == "/dev/null" {
-				file = ""
+		if strings.HasPrefix(line, "diff --git ") {
+			inHunk = false
+			continue
+		}
+		if !inHunk {
+			// A file's header: only "+++ " names the file, and nothing here
+			// is content. An added line whose own text begins "++ " looks
+			// the same, which is why the header is read only before "@@".
+			if strings.HasPrefix(line, "+++ ") {
+				file = strings.TrimPrefix(strings.TrimPrefix(line, "+++ "), "b/")
+				if file == "/dev/null" {
+					file = ""
+				}
 			}
+			inHunk = strings.HasPrefix(line, "@@")
 			continue
 		}
-		if len(line) < 2 || line[0] != '+' || strings.HasPrefix(line, "++") {
+		// Inside a hunk every line that starts with "+" is added content,
+		// whatever its own first character ("++" from a committed patch or
+		// a Markdown "+ " item included).
+		if len(line) < 2 || line[0] != '+' {
 			continue
 		}
 		added := line[1:]
