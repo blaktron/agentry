@@ -567,7 +567,12 @@ func segmentCommand(seg []shellWord) (string, []shellWord) {
 			continue
 		}
 		// The word's text is already unquoted, as the shell runs it:
-		// "curl", 'ssh' and c"url" are curl, ssh and curl.
+		// "curl", 'ssh' and c"url" are curl, ssh and curl. A quoted word
+		// with a space in it is a whole command line held as a string
+		// ("cat docs/mv"), never the name of a command that runs.
+		if w.quoted && strings.ContainsAny(w.text, " \t\n") {
+			return "", nil
+		}
 		name := w.text[strings.LastIndexByte(w.text, '/')+1:] // /usr/bin/ssh is ssh
 		if _, ok := s6CmdWrappers[name]; ok {
 			wrapped = name
