@@ -3,6 +3,9 @@ package scan
 import (
 	"regexp"
 	"strings"
+	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // editDistance is Levenshtein distance over runes with an early exit: once
@@ -153,8 +156,8 @@ var shortenerHosts = map[string]bool{
 // the authority ends at the first "/", "\", "?" or "#" (a browser reads a
 // backslash as "/" in an http(s) URL, so https://bit.ly\@example.com opens
 // bit.ly), the host follows its last "@" (user:password@ is userinfo, not
-// host), a port is cut off, and a trailing dot, which names the same host,
-// is dropped.
+// host), a port is cut off, and the name is the one a browser looks up
+// (browserHostName).
 func urlHost(u string) string { return urlHostEndingAt(u, "/\\?#") }
 
 // urlHosts are the hosts an http(s) URL can reach: the one a browser reads,
@@ -187,10 +190,39 @@ func urlHostEndingAt(u, ends string) string {
 		if i := strings.IndexByte(rest, ']'); i >= 0 {
 			rest = rest[:i+1]
 		}
-	} else if i := strings.IndexByte(rest, ':'); i >= 0 {
+		return strings.ToLower(rest)
+	}
+	if i := strings.IndexByte(rest, ':'); i >= 0 {
 		rest = rest[:i]
 	}
-	return strings.ToLower(strings.TrimRight(rest, "."))
+	return browserHostName(rest)
+}
+
+// browserHostName is the name a browser looks up for a host as written. It
+// first applies the mapping a browser applies to a host name (UTS #46):
+// compatibility forms fold to their plain ones, so full-width letters,
+// digits and hyphens are ASCII; the full-width and ideographic full stops
+// are "."; and case is lowered, so a shortener written in full-width
+// letters, or with an ideographic full stop, opens the shortener. Punycode labels are kept as written. Then it trims what no host
+// name holds from either end, as text around a link leaves there (a comma
+// in https://bit.ly,/x), and a trailing dot, which names the same host.
+func browserHostName(host string) string {
+	host = strings.Map(func(r rune) rune {
+		switch r {
+		case '\u3002', '\uFF0E', '\uFF61': // ideographic, full-width and half-width ideographic full stops
+			return '.'
+		}
+		return r
+	}, norm.NFKC.String(host))
+	host = strings.TrimLeftFunc(host, notHostNameRune)
+	host = strings.TrimRightFunc(host, func(r rune) bool { return r == '.' || notHostNameRune(r) })
+	return strings.ToLower(host)
+}
+
+// notHostNameRune is true for a character no host name holds: anything but
+// a letter (an internationalized name's included), a digit, "." and "-".
+func notHostNameRune(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '-'
 }
 
 // suspiciousURL returns a non-empty reason when a URL looks hostile:

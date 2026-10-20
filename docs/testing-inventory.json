@@ -3356,6 +3356,7 @@
             "TestSuspiciousURLReadsTheHostAfterUserinfo",
             "TestS8URLReputationReadsUserinfoURLs",
             "TestSuspiciousURLReadsTheHostABrowserReads",
+            "TestSuspiciousURLMapsTheHostAsABrowserDoes",
             "TestS8URLReputationReadsEveryHiddenForm"
           ],
           "fuzz": [],
@@ -3730,10 +3731,23 @@
           ]
         },
         {
+          "path": "internal/scan/stages_s2_every_match_test.go",
+          "tests": [
+            "TestS2ArchiveReportsEveryMatchOnALine",
+            "TestS2HistoryTellsPrivateKeysApart"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/stages_s2_history_distinct_test.go",
           "tests": [
             "TestS2HistoryReportsEachDistinctSecret",
-            "TestS2HistoryFindingLimitSaysWhichLimit"
+            "TestS2HistoryFindingLimitSaysWhichLimit",
+            "TestS2HistoryDecoysCannotHideAnOlderSecret",
+            "TestS2HistorySizeCapHoldsTheVersion"
           ],
           "fuzz": [],
           "benchmarks": [],

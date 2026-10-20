@@ -139,6 +139,13 @@ as the unquoted form; S6 reports `S6/undeclared-network` and the version goes
 to a person. Its twin `script-quoted-option-benign` is the same script with
 the host declared in `network.egress`.
 
+S2 over a file (ruleset 0.4.15): `s2-key-behind-placeholder` holds one line
+with two `aws_secret` assignments, a placeholder first and a generated
+credential-shaped value second; S2 reports `S2/aws-secret-key` for the second
+and the version goes to a person. Its twin `s2-key-behind-placeholder-benign`
+is the same line with both values placeholders. The value was generated for
+the corpus.
+
 S2 over the manifest (a declared MCP server's plain `env`):
 `manifest-env-secret` (a prefixed token under a credential-named key:
 the line rule and the name finding),

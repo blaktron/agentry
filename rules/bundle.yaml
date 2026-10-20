@@ -1,7 +1,7 @@
 # Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
 # ruleset_releases). This manifest gives the bundle its semantic version,
 # which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.4.14"
+version: "0.4.15"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -239,6 +239,20 @@ notes: >
   backslash as a browser does, reading the host a parser that keeps the
   backslash reads as well, and drops a trailing dot from the host. The
   threshold stays medium.
+  0.4.15 changes no signature and no rating. It names the release whose
+  S2 and S8 read what they used to pass over. S2's archive scan reports
+  every match of a rule on a line, each with its column, and gates each on
+  its own entropy, so a placeholder no longer hides a secret after it on
+  the same line. Its history scan tells private keys apart by their bodies
+  rather than their shared BEGIN line, reads on past its 100-finding limit
+  keeping the most severe findings (S2/history-finding-limit, low, counts
+  the rest), and reports a history stopped at its size cap as
+  S2/history-truncated, now medium and held for review as content that
+  could not be scanned. S8's URL reputation compares a host after the
+  mapping a browser applies (compatibility forms such as full-width
+  letters fold to ASCII, the ideographic and full-width full stops read as
+  dots, case is lowered) and trims what no host name holds, such as a
+  comma after the host. The threshold stays medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
 # (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
