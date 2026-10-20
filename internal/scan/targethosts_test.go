@@ -3,6 +3,7 @@ package scan
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -92,6 +93,11 @@ func TestS1PointsAnSSHClientInExecAtTargetHosts(t *testing.T) {
 	got := run(`{"commands":["git","ssh","rsync"]}`)
 	if len(got) != 1 || got[0].Severity != SevLow || !strings.Contains(got[0].Title, "ssh, rsync") || !strings.Contains(got[0].Title, "capabilities.targetHosts") {
 		t.Fatalf("exec ssh, rsync: %+v", got)
+	}
+	// It points at the manifest, names the commands and the target hosts
+	// already declared, and is certain of what it says.
+	if got[0].FilePath != "agent.yaml" || got[0].Confidence != ConfHigh || fmt.Sprint(got[0].Detail["commands"]) != "[ssh rsync]" || fmt.Sprint(got[0].Detail["declaredTargetHosts"]) != "[server]" {
+		t.Fatalf("exec ssh, rsync: %s %s %+v", got[0].FilePath, got[0].Confidence, got[0].Detail)
 	}
 	for _, exec := range []string{`"none"`, `{"commands":["git","sshpass-free"]}`} {
 		if got := run(exec); len(got) != 0 {
