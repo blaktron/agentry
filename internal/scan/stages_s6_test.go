@@ -523,6 +523,9 @@ func TestSSHDestinations(t *testing.T) {
 		"ssh $(echo $(id))@prod.example.test uptime":                            "prod.example.test",
 		"ssh \"$(echo ')')@prod.example.test\" uptime":                          "prod.example.test",
 		"ssh admin@prod.example.test 'a b' #c":                                  "prod.example.test",
+		// env passes on a NAME=value that is not a shell name; it is skipped
+		// all the same.
+		"env A-B=1 ssh admin@prod.example.test": "prod.example.test",
 	} {
 		if got := strings.Join(sshDestinations(line), " "); got != want {
 			t.Errorf("%q: %q, want %q", line, got, want)
