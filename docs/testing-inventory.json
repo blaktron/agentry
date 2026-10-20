@@ -3454,7 +3454,9 @@
           "tests": [
             "TestEXIFUnicodeCommentFollowsTheFilesByteOrder",
             "TestImageMetadataBigEndianUnicodeInjection",
-            "TestEXIFUnicodeCommentHostileBodies"
+            "TestEXIFUnicodeCommentHostileBodies",
+            "TestUTF16TextAfterANULIsScanned",
+            "TestNULReadings"
           ],
           "fuzz": [],
           "benchmarks": [],
