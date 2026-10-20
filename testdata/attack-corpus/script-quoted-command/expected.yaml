@@ -1,0 +1,8 @@
+technique: "Support script reaches a host the manifest does not declare through a quoted curl and an ssh after a wrapper and an assignment (S6)"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"filesystem":{"read":"workspace"},"exec":{"commands":["sh","curl","ssh","sudo"]}}}
+expect:
+  - S6/undeclared-network
+forbid: []
+expectClean: false
