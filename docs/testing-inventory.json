@@ -2238,6 +2238,20 @@
           ]
         },
         {
+          "path": "internal/gitsrv/lazy_init_test.go",
+          "tests": [
+            "TestRefusedGitRequestCreatesNoRepository",
+            "TestCopyingForkGitRequestCreatesNoRepository",
+            "TestConcurrentFirstGitRequestsInitialiseOnce"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/limits_test.go",
           "tests": [
             "TestShippedLimitDefaults",
