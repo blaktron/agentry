@@ -2,14 +2,19 @@ package gitsrv
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/registry"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 // createAgentNoRepo creates an agent whose repository has never been made on
@@ -44,16 +49,16 @@ func TestRefusedGitRequestCreatesNoRepository(t *testing.T) {
 		act              auth.Action
 		status           int
 	}{
-		{"anonymous read of a private agent", "private", &auth.Principal{Anonymous: true}, auth.ActAgentRepoRead, 401},
-		{"anonymous push to a public agent", "public", &auth.Principal{Anonymous: true}, auth.ActAgentRepoWrite, 401},
-		{"stranger read of a private agent", "private", strangerP, auth.ActAgentRepoRead, 404},
-		{"stranger push to a public agent", "public", strangerP, auth.ActAgentRepoWrite, 403},
-		{"stranger read of a public agent with nothing reviewed", "public", strangerP, auth.ActAgentRepoRead, 404},
-		{"unactivated owner's push", "private", ownerP, auth.ActAgentRepoWrite, 403},
+		{"anonymous read of a private agent", "private", &auth.Principal{Anonymous: true}, auth.ActAgentRepoRead, http.StatusUnauthorized},
+		{"anonymous push to a public agent", "public", &auth.Principal{Anonymous: true}, auth.ActAgentRepoWrite, http.StatusUnauthorized},
+		{"stranger read of a private agent", "private", strangerP, auth.ActAgentRepoRead, http.StatusNotFound},
+		{"stranger push to a public agent", "public", strangerP, auth.ActAgentRepoWrite, http.StatusForbidden},
+		{"stranger read of a public agent with nothing reviewed", "public", strangerP, auth.ActAgentRepoRead, http.StatusNotFound},
+		{"unactivated owner's push", "private", ownerP, auth.ActAgentRepoWrite, http.StatusForbidden},
 	}
 	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			agent := e.createAgentNoRepo("refused"+string(rune('a'+i)), c.visibility)
+			agent := e.createAgentNoRepo(fmt.Sprintf("refused-%d", i), c.visibility)
 			_, _, _, denial := e.h.authorizeGit(ctx, "bko"+e.sfx, agent.Name, c.principal, c.act)
 			if denial == nil || denial.status != c.status {
 				t.Fatalf("denial = %+v, want status %d", denial, c.status)
@@ -68,19 +73,54 @@ func TestRefusedGitRequestCreatesNoRepository(t *testing.T) {
 	}
 }
 
+// A fork still being copied is refused even to its owner, and its
+// repository stays the copy's to make.
+func TestCopyingForkGitRequestCreatesNoRepository(t *testing.T) {
+	e := newBookkeepingEnv(t)
+	ctx := context.Background()
+	origin := e.createAgentNoRepo("origin", "public")
+	version := uuid.New()
+	if _, err := e.st.Pool().Exec(ctx,
+		`INSERT INTO agent_versions (id, agent_id, version, manifest, submitted_by, source, status)
+		 VALUES ($1, $2, '1.0.0', '{}', $3, 'git-tag', 'published')`,
+		version, origin.ID, e.owner); err != nil {
+		t.Fatal(err)
+	}
+	q := e.st.Queries()
+	repoID, agentID := uuid.New(), uuid.New()
+	if _, err := q.CreateRepo(ctx, repoID); err != nil {
+		t.Fatal(err)
+	}
+	agent, err := q.CreateForkAgent(ctx, storegen.CreateForkAgentParams{
+		ID: agentID, NamespaceID: e.owner, Name: "copying", RepoID: repoID, Modes: []string{"autonomous"},
+		ForkedFromAgentID: &origin.ID, ForkedFromVersionID: &version, ForkedBy: &e.owner,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerP := &auth.Principal{UserID: e.owner, Handle: "bko" + e.sfx, Via: "session", EmailVerified: true}
+	_, _, _, denial := e.h.authorizeGit(ctx, "bko"+e.sfx, agent.Name, ownerP, auth.ActAgentRepoWrite)
+	if denial == nil || denial.status != http.StatusConflict {
+		t.Fatalf("denial = %+v, want status %d", denial, http.StatusConflict)
+	}
+	if _, err := os.Stat(e.repos.Path(agent.RepoID)); !os.IsNotExist(err) {
+		t.Fatalf("a request for a fork being copied made its repository (stat err %v)", err)
+	}
+}
+
 // Concurrent first requests for one repository all succeed, and each one
 // that succeeds is served a complete repository, policy hook included.
 func TestConcurrentFirstGitRequestsInitialiseOnce(t *testing.T) {
 	e := newBookkeepingEnv(t)
 	ctx := context.Background()
 	ownerP := &auth.Principal{UserID: e.owner, Handle: "bko" + e.sfx, Via: "session", EmailVerified: true}
-	const agents, callers = 6, 8
-	for a := range agents {
-		agent := e.createAgentNoRepo("race"+string(rune('a'+a)), "private")
+	const agentCount, callerCount = 6, 8
+	for a := range agentCount {
+		agent := e.createAgentNoRepo(fmt.Sprintf("race-%d", a), "private")
 		var wg sync.WaitGroup
 		start := make(chan struct{})
-		errs := make(chan string, callers)
-		for range callers {
+		errs := make(chan string, callerCount)
+		for range callerCount {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
