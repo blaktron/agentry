@@ -6,7 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // fakeRegistries answers Published from a set of known refs; err makes every
@@ -86,6 +89,16 @@ func TestS7NotCheckedWhenTheRegistryDoesNotAnswer(t *testing.T) {
 	if d := Evaluate(GateInput{Findings: res.Findings}); d.Outcome != OutcomePublish {
 		t.Fatalf("gate: %+v", d)
 	}
+	if nc[0].Detail["error"] != "registry: 503" {
+		t.Fatalf("detail = %+v", nc[0].Detail)
+	}
+
+	// One server whose registry does not answer is enough for the finding.
+	one := `{"schemaVersion":"2","capabilities":{"mcpServers":[{"pypi":"mcp-server-fetch","version":"0.6.2"}]}}`
+	res = S7MCPServers{}.Run(s7ctxR(&fakeOSV{}, &MemoryMCPScanCache{}, reg), &Input{ManifestJSON: []byte(one)})
+	if nc := findScanner(res.Findings, scannerVersionNotChecked); len(nc) != 1 || len(nc[0].Detail["servers"].([]string)) != 1 {
+		t.Fatalf("one server, registry down: %+v", res.Findings)
+	}
 }
 
 // Every version published: no finding of the check's own, and OSV is asked.
@@ -107,6 +120,13 @@ func TestS7OfflineRegistriesAreNotChecked(t *testing.T) {
 	nc := findScanner(res.Findings, scannerVersionNotChecked)
 	if len(nc) != 1 || nc[0].Severity != SevInfo || osv.calls != 1 {
 		t.Fatalf("findings %+v, osv calls %d", res.Findings, osv.calls)
+	}
+
+	// One server is enough for the note, and it says how many.
+	one := `{"schemaVersion":"2","capabilities":{"mcpServers":[{"pypi":"mcp-server-fetch","version":"0.6.2"}]}}`
+	res = S7MCPServers{}.Run(s7ctxR(&fakeOSV{}, &MemoryMCPScanCache{}, OfflineRegistries{}), &Input{ManifestJSON: []byte(one)})
+	if nc := findScanner(res.Findings, scannerVersionNotChecked); len(nc) != 1 || !strings.HasPrefix(nc[0].Title, "1 declared MCP server version(s)") {
+		t.Fatalf("one server, registries off: %+v", res.Findings)
 	}
 }
 
@@ -136,13 +156,19 @@ func TestS7NotFoundRowNeverRefusesAVersionPublishedSince(t *testing.T) {
 // else as no answer.
 func TestHTTPRegistriesPaths(t *testing.T) {
 	seen := map[string]bool{}
+	accept := map[string]bool{}
+	var requests atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
 		seen[r.URL.EscapedPath()] = true
+		accept[r.Header.Get("Accept")] = true
 		switch r.URL.EscapedPath() {
 		case "/@cyanheads%2Fosv-advisory-mcp-server/0.1.13", "/pypi/mcp-server-fetch/0.6.2/json":
 			w.WriteHeader(http.StatusOK)
 		case "/@cyanheads%2Fosv-advisory-mcp-server/0.1.23":
 			w.WriteHeader(http.StatusNotFound)
+		case "/lodash/4.17.21", "/pypi/requests%2Fx/2.0.0/json", "/lodash/1%2F2", "/pypi/requests/1%2F2/json":
+			w.WriteHeader(http.StatusNoContent)
 		default:
 			w.WriteHeader(http.StatusBadGateway)
 		}
@@ -150,6 +176,20 @@ func TestHTTPRegistriesPaths(t *testing.T) {
 	defer srv.Close()
 	r := &HTTPRegistries{NPM: srv.URL, PyPI: srv.URL}
 	ctx := context.Background()
+	// A name or version that cannot be one path segment, and an ecosystem
+	// that is not covered, are refused before anything is asked.
+	for _, tc := range []struct{ eco, name, ver string }{
+		{"npm", "", "1.0.0"}, {"npm", ".", "1.0.0"}, {"npm", "..", "1.0.0"}, {"npm", "lodash", ""}, {"npm", "lodash", "."}, {"npm", "lodash", ".."},
+		{"pypi", "", "1.0.0"}, {"pypi", "requests", ".."}, {"cargo", "x", "1"}, {"", "x", "1"},
+	} {
+		before := requests.Load()
+		if ok, err := (&HTTPRegistries{NPM: srv.URL, PyPI: srv.URL}).Published(context.Background(), tc.eco, tc.name, tc.ver); ok || err == nil {
+			t.Errorf("%s %q@%q: %v, %v; want an error", tc.eco, tc.name, tc.ver, ok, err)
+		}
+		if requests.Load() != before {
+			t.Errorf("%s %q@%q: the registry was asked", tc.eco, tc.name, tc.ver)
+		}
+	}
 	for _, tc := range []struct {
 		eco, name, ver string
 		ok, err        bool
@@ -161,6 +201,18 @@ func TestHTTPRegistriesPaths(t *testing.T) {
 		{"cargo", "x", "1", false, true},
 		{"npm", "lodash", "..", false, true},
 		{"npm", "..", "1.0.0", false, true},
+		{"npm", "", "1.0.0", false, true},
+		{"npm", "lodash", "", false, true},
+		{"npm", ".", "1.0.0", false, true},
+		{"npm", "lodash", ".", false, true},
+		{"pypi", "mcp-server-fetch", "", false, true},
+		{"pypi", ".", "1.0.0", false, true},
+		// only 200 is published: another success is no answer
+		{"npm", "lodash", "4.17.21", false, true},
+		// names and versions are one path segment each, escaped
+		{"npm", "lodash", "1/2", false, true},
+		{"pypi", "requests", "1/2", false, true},
+		{"pypi", "requests/x", "2.0.0", false, true},
 	} {
 		ok, err := r.Published(ctx, tc.eco, tc.name, tc.ver)
 		if ok != tc.ok || (err != nil) != tc.err {
@@ -169,5 +221,31 @@ func TestHTTPRegistriesPaths(t *testing.T) {
 	}
 	if !seen["/@cyanheads%2Fosv-advisory-mcp-server/0.1.13"] {
 		t.Fatalf("npm path not asked as one segment: %v", seen)
+	}
+	for _, path := range []string{"/lodash/1%2F2", "/pypi/requests/1%2F2/json", "/pypi/requests%2Fx/2.0.0/json"} {
+		if !seen[path] {
+			t.Errorf("%s was not asked as one escaped segment: %v", path, seen)
+		}
+	}
+	if len(accept) != 1 || !accept["application/json"] {
+		t.Errorf("Accept headers sent: %v", accept)
+	}
+
+	// An origin written with a trailing slash asks the same paths, and the
+	// client given is the one used; without one, a request times out after 20s.
+	slash := &HTTPRegistries{NPM: srv.URL + "/", PyPI: srv.URL + "/"}
+	for _, tc := range []struct {
+		eco, name, ver string
+	}{{"npm", "@cyanheads/osv-advisory-mcp-server", "0.1.13"}, {"pypi", "mcp-server-fetch", "0.6.2"}} {
+		if ok, err := slash.Published(ctx, tc.eco, tc.name, tc.ver); !ok || err != nil {
+			t.Errorf("trailing slash, %s %s@%s: %v, %v", tc.eco, tc.name, tc.ver, ok, err)
+		}
+	}
+	if got := (&HTTPRegistries{}).httpClient().Timeout; got != 20*time.Second {
+		t.Errorf("default client timeout = %v, want 20s", got)
+	}
+	own := &http.Client{Timeout: time.Second}
+	if (&HTTPRegistries{Client: own}).httpClient() != own {
+		t.Error("the configured client was not used")
 	}
 }

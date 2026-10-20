@@ -92,6 +92,26 @@ func TestCapSizedTextFileStaysClean(t *testing.T) {
 	if f := findingByScanner(res, "S1/text-scan-truncated"); f != nil {
 		t.Fatalf("cap-sized file wrongly flagged: %+v", f)
 	}
+
+	// One byte more is the smallest file that is cut: the finding states the
+	// file's size and the window that was read, and the inventory holds
+	// exactly one mebibyte, whatever the cap is called in the code.
+	const mebibyte = 1048576
+	if textScanCap != mebibyte {
+		t.Fatalf("the text scan cap is %d bytes, not 1 MiB", textScanCap)
+	}
+	over := strings.Repeat("a", mebibyte) + "\n"
+	in, res := runS1On(t, map[string]string{"OVER.md": over})
+	f := findingByScanner(res, "S1/text-scan-truncated")
+	if f == nil {
+		t.Fatalf("a file one byte over the cap was not flagged: %+v", res.Findings)
+	}
+	if f.Detail["fileBytes"] != len(over) || f.Detail["scannedBytes"] != mebibyte {
+		t.Fatalf("detail = %+v, want fileBytes %d and scannedBytes %d", f.Detail, len(over), mebibyte)
+	}
+	if len(in.Files) != 1 || len(in.Files[0].Content) != mebibyte {
+		t.Fatalf("inventory = %+v, want one file of exactly one mebibyte", in.Files)
+	}
 }
 
 // TestS9BaselineTruncatesWithoutFindings pins the deliberate asymmetry: the
@@ -107,6 +127,22 @@ func TestS9BaselineTruncatesWithoutFindings(t *testing.T) {
 	inv := inventoryDir(dir)
 	if len(inv) != 1 || int64(len(inv[0].Content)) != int64(textScanCap) {
 		t.Fatalf("baseline inventory unexpected: %d entries", len(inv))
+	}
+
+	// A file one byte over the cap is cut to it, and one of exactly the cap
+	// is kept whole.
+	for name, size := range map[string]int{"JUSTOVER.md": 1048576 + 1, "EXACT.md": 1048576} {
+		d := t.TempDir()
+		if err := os.WriteFile(filepath.Join(d, name), []byte(strings.Repeat("c", size)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got := inventoryDir(d)
+		if len(got) != 1 {
+			t.Fatalf("%s: baseline inventory has %d entries", name, len(got))
+		}
+		if len(got[0].Content) != 1048576 {
+			t.Fatalf("%s: baseline content is %d bytes, want %d", name, len(got[0].Content), 1048576)
+		}
 	}
 }
 
