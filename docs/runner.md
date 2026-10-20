@@ -4199,8 +4199,9 @@ instead of them:
 - `--url URL`, repeatable, at most 20: one file fetched with one https GET,
   often a PDF or a text file, and read as a document under its own name. An
   archive's files are read as any archive's are, above. A page drawn by
-  scripts is not a document: a build that searches the web reads it with a
-  rendered `web_read` instead ([below](#knowledge-packs)).
+  scripts reads as almost empty this way, and the Creator never renders an
+  address given with `--url`: its rendered `web_read` opens only a page one
+  of its own searches returned ([below](#knowledge-packs)).
 - `--source-token HOST=ENV_NAME`, repeatable: the access token for a host,
   from the environment variable named. Without one, a source takes the key
   saved for its host in the system keychain (service `agentry`, account
@@ -4211,15 +4212,19 @@ instead of them:
 
 The fetch is the run's own [input-source](#input-sources-a-repository-or-a-file-at-a-web-address)
 step, in the files image behind a proxy that reaches public addresses only.
-It runs after the documents are staged and before they are decoded, so what
-it fetches goes through the same malware check and decode as a document. The
-Creator fetches nothing itself. A source is fetched within what the pack has
+It runs after the documents are staged and before they are decoded. A file
+at an address then goes through the same malware check and decode as a
+document. A repository is decoded under the rule a run's input source is
+held to: only its executable and binary risky files are checked for
+malware, its source code, scripts, text and data are not, and its images
+are not read with OCR ([input sources](#input-sources-a-repository-or-a-file-at-a-web-address)).
+The Creator fetches nothing itself. A source is fetched within what the pack has
 left: its bytes less the documents, and its 2,000 files less what the pack
 holds, the documents and a reserve of 300 for the pages; a build whose
 documents alone would pass 2,000 files is refused before the Creator runs.
 Like a document, what is fetched is not read by AI Review before the
-Creator reads it. What is fetched is kept in the pack under `sources/` and cited `doc:`, as a
-document is. A repository or an address counts as a document for the web's
+Creator reads it. What is fetched is kept in the pack under `sources/` and
+cited `doc:`, as a document is. A repository or an address counts as a document for the web's
 default (below), so a new pack given only sources searches only with
 `--web`. The receipt has a line for each source, and `--json` names each
 one under `sources[]` ([machine-readable output](#machine-readable-output)).
