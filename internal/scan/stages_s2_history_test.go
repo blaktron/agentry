@@ -171,7 +171,7 @@ func fakeHistoryPAT() string { return "gh" + "p_a1B2c3D4e5F6g7H8i9J0" + "k1L2m3N
 // assignment, so each is its own finding.
 func historyAssignments(n int) string {
 	var b strings.Builder
-	b.WriteString("\x01" + strings.Repeat("c", 40) + "\n+++ b/app.conf\n")
+	b.WriteString("\x01" + strings.Repeat("c", 40) + "\n+++ b/app.conf\n@@ -0,0 +1 @@\n")
 	for i := 0; i < n; i++ {
 		fmt.Fprintf(&b, "+password = \"%s.%03d\"\n", "aB3dE5gH7j"+"K9mN1pQ", i)
 	}
@@ -198,7 +198,7 @@ func scanHistoryPatchAttribution(t *testing.T) {
 		{"abcdef0", "abcdef0"}, {strings.Repeat("a", 64), strings.Repeat("a", 64)},
 		{"abcdef", ""}, {strings.Repeat("a", 65), ""}, {"ABCDEF0", ""}, {"abcdefg", ""},
 	} {
-		got := scan("\x01" + tc.id + "\n+++ b/f.txt\n+" + aws + "\n")
+		got := scan("\x01" + tc.id + "\n+++ b/f.txt\n@@ -0,0 +1 @@\n+" + aws + "\n")
 		if len(got) != 1 || got[0].Detail["commit"] != tc.want {
 			t.Errorf("commit line %q: %+v, want commit %q", tc.id, got, tc.want)
 		}
@@ -206,25 +206,25 @@ func scanHistoryPatchAttribution(t *testing.T) {
 
 	// The finding says what it is: rule, severity, the commit's file, a
 	// redacted excerpt.
-	got := scan("\x01" + strings.Repeat("a", 40) + "\n+++ b/one.env\n+" + aws + "\n")
+	got := scan("\x01" + strings.Repeat("a", 40) + "\n+++ b/one.env\n@@ -0,0 +1 @@\n+" + aws + "\n")
 	if len(got) != 1 || got[0].Severity != SevHigh || got[0].Confidence != ConfHigh || got[0].FilePath != "one.env" || got[0].Detail["rule"] != "aws-access-key" {
 		t.Fatalf("finding: %+v", got)
 	}
 
 	// A new commit starts with no file; a deleted file has none either.
-	got = scan("\x01" + strings.Repeat("a", 40) + "\n+++ b/one.env\n+" + aws + "\n" +
-		"\x01" + strings.Repeat("b", 40) + "\n+" + fakeHistoryPAT() + "\n")
+	got = scan("\x01" + strings.Repeat("a", 40) + "\n+++ b/one.env\n@@ -0,0 +1 @@\n+" + aws + "\n" +
+		"\x01" + strings.Repeat("b", 40) + "\n@@ -0,0 +1 @@\n+" + fakeHistoryPAT() + "\n")
 	if len(got) != 2 || got[1].FilePath != "" || got[1].Detail["commit"] != strings.Repeat("b", 40) {
 		t.Errorf("a new commit kept the previous file: %+v", got)
 	}
-	got = scan("\x01" + strings.Repeat("a", 40) + "\n--- a/gone.env\n+++ /dev/null\n+" + aws + "\n")
+	got = scan("\x01" + strings.Repeat("a", 40) + "\n--- a/gone.env\n+++ /dev/null\n@@ -0,0 +1 @@\n+" + aws + "\n")
 	if len(got) != 1 || got[0].FilePath != "" {
 		t.Errorf("an added line under /dev/null: %+v", got)
 	}
 
 	// Rules that need entropy apply it: a repeated character is a placeholder.
 	pw := func(v string) string {
-		return "\x01" + strings.Repeat("a", 40) + "\n+++ b/c.conf\n+password = \"" + v + "\"\n"
+		return "\x01" + strings.Repeat("a", 40) + "\n+++ b/c.conf\n@@ -0,0 +1 @@\n+password = \"" + v + "\"\n"
 	}
 	if got := scan(pw(strings.Repeat("a", 24))); len(got) != 0 {
 		t.Errorf("a placeholder password: %+v", got)
@@ -236,7 +236,7 @@ func scanHistoryPatchAttribution(t *testing.T) {
 	// One secret is one finding per rule: two rules that mask to the same
 	// text are two findings.
 	aws40 := aws + "0123456789abcdefghij"
-	got = scan("\x01" + strings.Repeat("a", 40) + "\n+++ b/k.conf\n+aws_key = \"" + aws40 + "\" # " + aws + "\n")
+	got = scan("\x01" + strings.Repeat("a", 40) + "\n+++ b/k.conf\n@@ -0,0 +1 @@\n+aws_key = \"" + aws40 + "\" # " + aws + "\n")
 	rules := map[string]bool{}
 	for _, f := range got {
 		rules[f.Scanner] = true
@@ -258,7 +258,7 @@ func scanHistoryPatchAttribution(t *testing.T) {
 
 	// A line the scanner cannot hold is an error that says so, and the
 	// findings made before it are returned.
-	long := "\x01" + strings.Repeat("a", 40) + "\n+++ b/f.txt\n+" + aws + "\n+" + strings.Repeat("y", 70<<10) + "\n"
+	long := "\x01" + strings.Repeat("a", 40) + "\n+++ b/f.txt\n@@ -0,0 +1 @@\n+" + aws + "\n+" + strings.Repeat("y", 70<<10) + "\n"
 	findings, truncated, err = scanHistoryPatch(strings.NewReader(long))
 	if err == nil || !strings.Contains(err.Error(), "history patch line longer than") || truncated || len(findings) != 1 {
 		t.Errorf("an over-long line: %d findings, truncated=%v, err=%v", len(findings), truncated, err)
