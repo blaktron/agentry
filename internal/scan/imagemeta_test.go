@@ -464,9 +464,10 @@ func TestExtractImageTextJPEGEXIF(t *testing.T) {
 			"EXIF:UserComment=a unicode user comment")
 		wantMeta(t, "a user comment that is only its code", extractImageText(jpegOf(exifSeg(makeTIFF(le, nil,
 			[]tiffEntry{{tag: 0x9286, typ: 7, val: []byte("ASCII\x00\x00\x00")}}, 4, 1)))))
-		wantMeta(t, "UCS-2 stops at its first NUL", extractImageText(jpegOf(exifSeg(makeTIFF(le,
+		wantMeta(t, "UCS-2 reads past an interior NUL", extractImageText(jpegOf(exifSeg(makeTIFF(le,
 			[]tiffEntry{{tag: 0x9C9C, typ: 1, val: append(utf16le("visible text", true), utf16le("hidden after the NUL", true)...)}}, nil, 4, 1)))),
-			"EXIF:XPComment=visible text")
+			"EXIF:XPComment=visible text\nhidden after the NUL",
+			"EXIF:XPComment=visible texthidden after the NUL")
 		wantMeta(t, "an XP tag of ASCII type is plain text", extractImageText(jpegOf(exifSeg(makeTIFF(le,
 			[]tiffEntry{text(0x9C9B, "plain ascii title")}, nil, 4, 1)))), "EXIF:XPTitle=plain ascii title")
 		wantMeta(t, "trailing NULs are not part of the text", extractImageText(jpegOf(exifSeg(makeTIFF(le,
