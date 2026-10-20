@@ -124,6 +124,14 @@ scp-like remote and a `docker pull` from a registry with a port; S6 reports
 `script-network-forms-benign` is the same script with the four hosts declared
 in `network.egress`.
 
+S6 over a support script (ruleset 0.4.13): `script-quoted-command` is a shell
+script that reaches an undeclared host through a quoted `"curl"` and through
+an `ssh` written quoted after a wrapper and an assignment
+(`sudo LC_ALL=C 'ssh' …`), which the shell runs exactly as the unquoted
+forms; S6 reports `S6/undeclared-network` and the version goes to a person.
+Its twin `script-quoted-command-benign` is the same script with the host
+declared in `network.egress`.
+
 S2 over the manifest (a declared MCP server's plain `env`):
 `manifest-env-secret` (a prefixed token under a credential-named key:
 the line rule and the name finding),

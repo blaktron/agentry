@@ -126,7 +126,7 @@ func TestOnlyReviewedVersionsAreCloneable(t *testing.T) {
 	stranger := env.seedPerson("gits" + env.sfx)
 	agent, c := env.seedTaggedAgent("reviewed", "public", "v1.0.0", "v1.1.0", "v1.2.0", "v1.3.0", "v1.4.0", "v1.5.0")
 	env.recordVersion(agent, "1.0.0", c["v1.0.0"], "published")
-	env.recordVersion(agent, "1.1.0", c["v1.1.0"], "needs_review")
+	awaiting := env.recordVersion(agent, "1.1.0", c["v1.1.0"], "needs_review")
 	env.recordVersion(agent, "1.2.0", c["v1.2.0"], "rejected")
 	quarantined := env.recordVersion(agent, "1.3.0", c["v1.3.0"], "quarantined")
 	env.recordVersion(agent, "1.4.0", c["v1.4.0"], "blocked")
@@ -239,6 +239,42 @@ func TestOnlyReviewedVersionsAreCloneable(t *testing.T) {
 		}
 		if slices.Contains(refs, "refs/tags/v1.3.0") {
 			t.Fatalf("a version quarantined again is still advertised: %v", refs)
+		}
+	})
+
+	// A yanked version is still a reviewed one, which the registry serves by
+	// exact pin, so its tag is served too. A version admitted without a scan
+	// passed no review whatever its status says.
+	t.Run("a yanked version is served and an unscanned one is not", func(t *testing.T) {
+		defer func() {
+			env.setVersionStatus(awaiting, "needs_review")
+			if _, err := env.st.Pool().Exec(context.Background(), `UPDATE agent_versions SET scan_status = 'pipeline' WHERE id = $1`, awaiting); err != nil {
+				t.Error(err)
+			}
+		}()
+		env.setVersionStatus(awaiting, "yanked")
+		refs, err := remoteRefs(t, env.cloneURL(agent.Name, ""), 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"HEAD", "refs/tags/v1.0.0", "refs/tags/v1.0.0^{}", "refs/tags/v1.1.0", "refs/tags/v1.1.0^{}"}
+		if !slices.Equal(refs, want) {
+			t.Fatalf("with v1.1.0 yanked, advertised %v, want %v", refs, want)
+		}
+
+		env.setVersionStatus(awaiting, "published")
+		if _, err := env.st.Pool().Exec(context.Background(), `UPDATE agent_versions SET scan_status = 'skipped' WHERE id = $1`, awaiting); err != nil {
+			t.Fatal(err)
+		}
+		for _, status := range []string{"published", "yanked"} {
+			env.setVersionStatus(awaiting, status)
+			refs, err = remoteRefs(t, env.cloneURL(agent.Name, ""), 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := []string{"HEAD", "refs/tags/v1.0.0", "refs/tags/v1.0.0^{}"}; !slices.Equal(refs, want) {
+				t.Fatalf("with v1.1.0 %s but admitted without a scan, advertised %v, want %v", status, refs, want)
+			}
 		}
 	})
 
