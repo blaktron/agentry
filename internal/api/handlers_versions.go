@@ -89,11 +89,106 @@ func versionToAPI(v registry.Version) AgentVersion {
 	return out
 }
 
+// canManageAgent says whether the caller manages the agent: the rung the
+// agent's shipped-knowledge records are served at.
+func canManageAgent(r *http.Request, a registry.Agent, role auth.AgentRole) bool {
+	return auth.CheckAgent(principalFrom(r.Context()),
+		auth.AgentResource{Public: a.Visibility == "public", EffectiveRole: role},
+		auth.ActAgentManage) == nil
+}
+
+// versionForCaller is the version as the caller may see it: the record of
+// who confirmed its shipped packs is served to those who manage the agent,
+// since it names an account and the stored packs the release was laid from.
+// handles caches the handle lookups of one response.
+func (s *Server) versionForCaller(r *http.Request, v registry.Version, manage bool, handles map[uuid.UUID]string) AgentVersion {
+	out := versionToAPI(v)
+	if !manage {
+		return out
+	}
+	rec := registry.ShippedKnowledgeOf(v)
+	if rec == nil {
+		return out
+	}
+	k := ShippedKnowledgeRecord{At: rec.At, Via: rec.Via, Packs: make([]ShippedPack, 0, len(rec.Packs))}
+	if rec.By != nil {
+		h, ok := handles[*rec.By]
+		if !ok {
+			if u, err := s.q().GetUserByID(r.Context(), *rec.By); err == nil {
+				h = u.Handle
+			}
+			handles[*rec.By] = h
+		}
+		if h != "" {
+			k.By = &h
+		}
+	}
+	for _, p := range rec.Packs {
+		sp := ShippedPack{Name: p.Name}
+		if p.Origin != nil {
+			o := ShippedPackOrigin{Kind: ShippedPackOriginKind(p.Origin.Kind), PackId: p.Origin.PackID}
+			if p.Origin.Org != "" {
+				org := p.Origin.Org
+				o.Org = &org
+			}
+			sp.Origin = &o
+		}
+		k.Packs = append(k.Packs, sp)
+	}
+	out.KnowledgeShipping = &k
+	return out
+}
+
+// problemKnowledgeShipping answers a release whose shipped packs are not
+// confirmed, or whose confirmation is wrong. The packs travel as `packs`
+// beside the words.
+func problemKnowledgeShipping(w http.ResponseWriter, r *http.Request, e *registry.ErrKnowledgeShipping) {
+	title := "Shipped knowledge is not confirmed"
+	if e.Slug == registry.SlugKnowledgeShippingInvalid {
+		title = "The shipped knowledge confirmation is not true"
+	}
+	writeProblemWith(w, r, http.StatusUnprocessableEntity, e.Slug, title, e.Detail, map[string]any{"packs": e.Packs})
+}
+
+// readKnowledgeShipping decodes the upload's knowledgeShipping part: a
+// JSON object, strictly, or nothing when the part is absent.
+func readKnowledgeShipping(raw string) (*registry.KnowledgeShipping, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "null" {
+		return nil, nil
+	}
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var body KnowledgeShipping
+	if err := dec.Decode(&body); err != nil {
+		return nil, fmt.Errorf("knowledgeShipping is not the JSON object the API describes: %w", err)
+	}
+	if dec.More() {
+		return nil, errors.New("knowledgeShipping holds more than one JSON value")
+	}
+	out := &registry.KnowledgeShipping{Packs: make([]registry.ShippedPack, 0, len(body.Packs))}
+	for _, p := range body.Packs {
+		sp := registry.ShippedPack{Name: p.Name}
+		if p.Origin != nil {
+			o := registry.ShippedPackOrigin{Kind: string(p.Origin.Kind), PackID: p.Origin.PackId}
+			if p.Origin.Org != nil {
+				o.Org = *p.Origin.Org
+			}
+			sp.Origin = &o
+		}
+		out.Packs = append(out.Packs, sp)
+	}
+	return out, nil
+}
+
 // writeSubmitError maps registry submission errors onto problems.
 func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err error) {
 	var vErr *registry.ErrValidation
 	var refused *registry.ErrAdmissionRefused
+	var shipping *registry.ErrKnowledgeShipping
 	switch {
+	case errors.As(err, &shipping):
+		problemKnowledgeShipping(w, r, shipping)
 	case errors.As(err, &vErr):
 		fields := make([]FieldError, 0, len(vErr.Issues))
 		for _, iss := range vErr.Issues {
@@ -143,7 +238,7 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 		return
 	}
 	defer ik.abandon(r)
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentPublish)
+	a, role, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentPublish)
 	if !ok {
 		return
 	}
@@ -188,7 +283,7 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 		s.writeSubmitError(w, r, err)
 		return
 	}
-	out := versionToAPI(version)
+	out := s.versionForCaller(r, version, canManageAgent(r, a, role), map[uuid.UUID]string{})
 	ik.complete(r, http.StatusAccepted, out)
 	writeJSON(w, http.StatusAccepted, out)
 }
@@ -249,14 +344,21 @@ func (s *Server) submitUpload(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		}
 		draftRun = &id
 	}
+	// The publisher's confirmation of the packs the archive ships.
+	shipping, err := readKnowledgeShipping(r.FormValue("knowledgeShipping"))
+	if err != nil {
+		problemValidation(w, r, sentence(err.Error()))
+		return registry.Version{}, nil
+	}
 	// The server rebuilds the archive from this workspace and its own digest
 	// is authoritative; a claimed digest that disagrees fails validation
 	// inside SubmitVersion (never trust client packing).
 	return s.reg.SubmitVersion(r.Context(), p, a, registry.SubmitInput{
-		Source:        "cli-upload",
-		Workspace:     ws,
-		ClaimedDigest: r.FormValue("digest"),
-		DraftRun:      draftRun,
+		Source:            "cli-upload",
+		Workspace:         ws,
+		ClaimedDigest:     r.FormValue("digest"),
+		DraftRun:          draftRun,
+		KnowledgeShipping: shipping,
 	}, auditEvent(r, audit.ActionVersionSubmit))
 }
 
@@ -265,7 +367,7 @@ func (s *Server) ListVersions(w http.ResponseWriter, r *http.Request, ns Namespa
 	if !s.requireDB(w, r) {
 		return
 	}
-	a, _, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentRead)
+	a, role, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentRead)
 	if !ok {
 		return
 	}
@@ -274,9 +376,11 @@ func (s *Server) ListVersions(w http.ResponseWriter, r *http.Request, ns Namespa
 		problemInternal(w, r)
 		return
 	}
+	manage := canManageAgent(r, a, role)
+	handles := map[uuid.UUID]string{}
 	out := make([]AgentVersion, 0, len(rows))
 	for _, v := range rows {
-		out = append(out, versionToAPI(v))
+		out = append(out, s.versionForCaller(r, v, manage, handles))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -300,11 +404,16 @@ func (s *Server) GetVersionInfo(w http.ResponseWriter, r *http.Request, ns Names
 	if !s.requireDB(w, r) {
 		return
 	}
-	_, v, ok := s.versionOrNotFound(w, r, ns, name, version, auth.ActAgentRead)
+	a, v, ok := s.versionOrNotFound(w, r, ns, name, version, auth.ActAgentRead)
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, versionToAPI(v))
+	role, err := s.reg.EffectiveRole(r.Context(), principalFrom(r.Context()), a)
+	if err != nil {
+		problemInternal(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.versionForCaller(r, v, canManageAgent(r, a, role), map[uuid.UUID]string{}))
 }
 
 // GetVersionManifest implements GET .../versions/{version}/manifest.

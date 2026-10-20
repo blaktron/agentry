@@ -402,6 +402,13 @@ type SubmitInput struct {
 	// from. A claim only: the scan asks the extension's DraftProvenance
 	// whether it holds, and the client is never believed.
 	DraftRun *uuid.UUID
+	// KnowledgeShipping is the publisher's confirmation of the packs an
+	// upload ships; a tag-built submission carries none.
+	KnowledgeShipping *KnowledgeShipping
+	// shippedVia names how a tag-built release's shipped packs are
+	// recorded, in place of ShippedViaTagPush: a fork's first version is
+	// copied, not pushed.
+	shippedVia string
 	// pipeline, when set, is where the version goes once recorded, in place
 	// of the service's own: a fork's first version is submitted by a
 	// worker, whose service keeps no hand-off of its own.
@@ -552,6 +559,13 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		}
 	}
 
+	// The packs the release ships are confirmed by its publisher, and each
+	// origin it claims is true, before anything is stored.
+	shipped, err := s.checkKnowledgeShipping(ctx, p, a, m, in, time.Now().UTC())
+	if err != nil {
+		return Version{}, err
+	}
+
 	// Admission (admission.go): after every core gate, before anything is
 	// stored. From here on, a failure hands the ticket back.
 	ticket, err := s.admit(ctx, Admission{
@@ -605,6 +619,10 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 		return Version{}, err
 	}
 
+	var shippingRecord []byte
+	if shipped != nil {
+		shippingRecord = shipped.record
+	}
 	versionID := newUUID()
 	err = s.st.WithTx(ctx, func(q *storegen.Queries) error {
 		// The agent as it is now, under its row lock: a delete or a retire
@@ -632,7 +650,7 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 			ID: versionID, AgentID: a.ID, Version: m.Version,
 			CommitSha: in.CommitSHA, Manifest: canonical, Capabilities: caps,
 			Channel: string(m.EffectiveChannel()), SubmittedBy: p.UserID, Source: in.Source,
-			SubmitterIpHash: ipHash, DraftRun: in.DraftRun,
+			SubmitterIpHash: ipHash, DraftRun: in.DraftRun, KnowledgeShipping: shippingRecord,
 		})
 		if err != nil {
 			return err
@@ -652,7 +670,13 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 			"agent": a.Namespace + "/" + a.Name, "version": m.Version,
 			"source": in.Source, "digest": info.Digest, "channel": string(m.EffectiveChannel()),
 		}
-		return s.aud.Write(ctx, q, e)
+		if err := s.aud.Write(ctx, q, e); err != nil {
+			return err
+		}
+		if shipped != nil {
+			return s.auditShippedOrgPacks(ctx, q, actorEvent, a, v, shipped.orgPacks)
+		}
+		return nil
 	})
 	if err != nil {
 		if isUniqueViolationErr(err) {

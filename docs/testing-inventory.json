@@ -611,6 +611,31 @@
           ]
         },
         {
+          "path": "internal/api/knowledge_shipping_test.go",
+          "tests": [
+            "TestShippingUploadNeedsTheAcknowledgement",
+            "TestAcknowledgedShippingIsRecorded",
+            "TestAReleaseShippingNothingIsUnaffected",
+            "TestShippedPackOriginIsHeldToTheFacts",
+            "TestAnOrganizationsPackShipsOnlyFromItsAdminIntoItsNamespace",
+            "TestOneAuditLinePerOrganizationPack",
+            "TestMakingAnAgentPublicNeedsTheAcknowledgement",
+            "TestAYankedVersionDoesNotHoldMakePublic",
+            "TestMakePublicIsDecidedAgainUnderTheRowLock",
+            "TestAForksFirstVersionRecordsThatItWasCopied",
+            "TestAnotherAccountsPackAnswersAsAMissingOne",
+            "TestAVersionsShippingRecordCannotBeChanged"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "real-time wait"
+          ]
+        },
+        {
           "path": "internal/api/knowledge_ships_test.go",
           "tests": [
             "TestReleaseShippingAPackIsScannedAndReported",
@@ -2238,6 +2263,16 @@
             "real-time wait",
             "explicit skip"
           ]
+        },
+        {
+          "path": "internal/gitsrv/knowledge_shipping_test.go",
+          "tests": [
+            "TestTagPushShippingIsRecordedAsTagPush"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         },
         {
           "path": "internal/gitsrv/lazy_init_test.go",

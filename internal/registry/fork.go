@@ -371,6 +371,7 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 	forker := audit.Event{Actor: p.UserID, ActorKind: audit.ActorUser}
 	_, err = s.SubmitVersion(ctx, p, fork, SubmitInput{
 		Source: SourceGitTag, Tag: tag, CommitSHA: commitSHA, Workspace: ws, pipeline: pipeline,
+		shippedVia: ShippedViaFork,
 	}, forker)
 	switch {
 	case err == nil, errors.Is(err, ErrScanNotScheduled):

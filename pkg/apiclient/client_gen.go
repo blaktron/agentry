@@ -1368,6 +1368,24 @@ func (e SearchHitQuarantineState) Valid() bool {
 	}
 }
 
+// Defines values for ShippedPackOriginKind.
+const (
+	ShippedPackOriginKindOrg ShippedPackOriginKind = "org"
+	ShippedPackOriginKindOwn ShippedPackOriginKind = "own"
+)
+
+// Valid indicates whether the value is a known member of the ShippedPackOriginKind enum.
+func (e ShippedPackOriginKind) Valid() bool {
+	switch e {
+	case ShippedPackOriginKindOrg:
+		return true
+	case ShippedPackOriginKindOwn:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UIInfoMode.
 const (
 	Authorize UIInfoMode = "authorize"
@@ -2146,6 +2164,9 @@ type AgentVersion struct {
 	CreatedAt    time.Time               `json:"createdAt"`
 	Id           openapi_types.UUID      `json:"id"`
 
+	// KnowledgeShipping Who confirmed that the version's shipped packs become readable with it, and how it was published. Served only to those who manage the QuickAgent. A version that has no record serves none.
+	KnowledgeShipping *ShippedKnowledgeRecord `json:"knowledgeShipping,omitempty"`
+
 	// ManifestSchemaVersion Schema major of the manifest snapshot this version carries: 1 (kind-classified, read through the v1 mapping) or 2 (modes). Clients that show a version's manifest read it accordingly.
 	ManifestSchemaVersion *AgentVersionManifestSchemaVersion `json:"manifestSchemaVersion,omitempty"`
 	PublishedAt           *time.Time                         `json:"publishedAt,omitempty"`
@@ -2703,6 +2724,11 @@ type KnowledgeScanReportFindingsPart string
 
 // KnowledgeScanReportFindingsSeverity defines model for KnowledgeScanReport.Findings.Severity.
 type KnowledgeScanReportFindingsSeverity string
+
+// KnowledgeShipping A publisher's confirmation that the knowledge packs a release ships become readable by everyone who can download it: one entry for each pack the package's manifest ships (`knowledge.ships`), no more and no fewer.
+type KnowledgeShipping struct {
+	Packs []ShippedPack `json:"packs"`
+}
 
 // KnowledgeUsage defines model for KnowledgeUsage.
 type KnowledgeUsage struct {
@@ -3387,6 +3413,18 @@ type SessionList struct {
 	Sessions []SessionInfo `json:"sessions"`
 }
 
+// ShippedKnowledgeRecord Who confirmed that the version's shipped packs become readable with it, and how it was published. Served only to those who manage the QuickAgent. A version that has no record serves none.
+type ShippedKnowledgeRecord struct {
+	At time.Time `json:"at"`
+
+	// By The handle of the account that confirmed it. Absent for a release published by a tag push, which carries no confirmation.
+	By    *string       `json:"by,omitempty"`
+	Packs []ShippedPack `json:"packs"`
+
+	// Via `client`: the upload carried the publisher's confirmation. `tag-push`: the release was built from a tag and carried none. `fork`: the first version of a fork, copied from the release it forks.
+	Via string `json:"via"`
+}
+
 // ShippedKnowledgeScan defines model for ShippedKnowledgeScan.
 type ShippedKnowledgeScan struct {
 	// Name The pack's name and its directory under `knowledge/` in the archive.
@@ -3395,6 +3433,27 @@ type ShippedKnowledgeScan struct {
 	// Report What a pack's scan read and found: a record, never a gate. The stages that read prose over every text file, then AI Review over `sources/` and then `wiki/` in chunks no larger than the judge declares it reads.
 	Report KnowledgeScanReport `json:"report"`
 }
+
+// ShippedPack defines model for ShippedPack.
+type ShippedPack struct {
+	// Name The pack's name, as the manifest ships it.
+	Name string `json:"name"`
+
+	// Origin The stored pack a shipped pack was laid down from. The registry holds the claim to the facts: the pack exists and is `ready`, it is the submitter's own (`own`) or the organization's (`org`), and its digest is the digest in the shipped pack's `manifest.json`. An organization's pack ships only from an administrator of the organization, and only into a QuickAgent in the organization's own namespace. A pack with no origin is the publisher's own files.
+	Origin *ShippedPackOrigin `json:"origin,omitempty"`
+}
+
+// ShippedPackOrigin The stored pack a shipped pack was laid down from. The registry holds the claim to the facts: the pack exists and is `ready`, it is the submitter's own (`own`) or the organization's (`org`), and its digest is the digest in the shipped pack's `manifest.json`. An organization's pack ships only from an administrator of the organization, and only into a QuickAgent in the organization's own namespace. A pack with no origin is the publisher's own files.
+type ShippedPackOrigin struct {
+	Kind ShippedPackOriginKind `json:"kind"`
+
+	// Org The organization's handle; present when `kind` is `org`.
+	Org    *string            `json:"org,omitempty"`
+	PackId openapi_types.UUID `json:"packId"`
+}
+
+// ShippedPackOriginKind defines model for ShippedPackOrigin.Kind.
+type ShippedPackOriginKind string
 
 // SshKey defines model for SshKey.
 type SshKey struct {
@@ -3751,6 +3810,9 @@ type DeleteAgentParams struct {
 
 // UpdateAgentJSONBody defines parameters for UpdateAgent.
 type UpdateAgentJSONBody struct {
+	// AcknowledgeShippedKnowledge The publisher's confirmation that the knowledge packs the QuickAgent's versions ship become readable by everyone who can download them once it is public, and hold no private data. Read only when `visibility` is `public`; it is not a setting and changes nothing else.
+	AcknowledgeShippedKnowledge *bool `json:"acknowledgeShippedKnowledge,omitempty"`
+
 	// AllowForcePush Allow non-fast-forward pushes to the default branch. Off by default; maintain only.
 	AllowForcePush  *bool `json:"allowForcePush,omitempty"`
 	AutoPublishTags *bool `json:"autoPublishTags,omitempty"`
@@ -3765,7 +3827,7 @@ type UpdateAgentJSONBody struct {
 	PipelineSkip *bool   `json:"pipelineSkip,omitempty"`
 	Summary      *string `json:"summary,omitempty"`
 
-	// Visibility The namespace's administrators only. A token needs `org:admin`, or `agent:manage` when the body sets visibility and nothing else. `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back. It is refused on a fork for good (`409 fork-stays-private`).
+	// Visibility The namespace's administrators only. A token needs `org:admin`, or `agent:manage` when the body sets visibility and nothing else. `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back. It is refused on a fork for good (`409 fork-stays-private`). Making a QuickAgent public while one of its versions, other than a yanked or rejected one, ships a knowledge pack needs `acknowledgeShippedKnowledge: true`, or the answer is `409 shipped-knowledge-unacknowledged`, which names the packs and the versions that ship them.
 	Visibility *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
 }
 
@@ -3833,6 +3895,9 @@ type SubmitVersionMultipartBody struct {
 
 	// DraftRun The hosted draft this package was published from (Edit with AI's Publish this version). A claim only: the scan asks the deployment's DraftProvenance whether the submitter ran that draft against the agent's current release and whether its recorded proof matches these files. When it does, the version's source becomes `drafter-revision` and S9 scans its manifest and instruction file as a first release's. Otherwise nothing changes. A core registry has no DraftProvenance and never grants it.
 	DraftRun *openapi_types.UUID `json:"draftRun,omitempty"`
+
+	// KnowledgeShipping A publisher's confirmation that the knowledge packs a release ships become readable by everyone who can download it: one entry for each pack the package's manifest ships (`knowledge.ships`), no more and no fewer.
+	KnowledgeShipping *KnowledgeShipping `json:"knowledgeShipping,omitempty"`
 }
 
 // GetVersionFileParams defines parameters for GetVersionFile.
@@ -4552,6 +4617,7 @@ type ClientInterface interface {
 	// SubmitVersionWithBody Submit a version for publication.
 	//
 	// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// A package that ships knowledge packs (the manifest's `knowledge.ships`) makes their contents readable by everyone who can download the release, so the upload must confirm it: the `knowledgeShipping` part, one entry for each pack shipped. Without it the upload is refused `422 knowledge-shipping-unacknowledged`, naming the packs. An entry may claim where the pack was laid down from (`origin`); a claim that is not true is refused `422 knowledge-shipping-invalid`, naming the pack. A tag submission (JSON {tag}) and a tag push carry no confirmation, and the version's record says it was published that way.
 	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes any type of body and a specified content type.
@@ -4562,6 +4628,7 @@ type ClientInterface interface {
 	// SubmitVersion Submit a version for publication.
 	//
 	// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// A package that ships knowledge packs (the manifest's `knowledge.ships`) makes their contents readable by everyone who can download the release, so the upload must confirm it: the `knowledgeShipping` part, one entry for each pack shipped. Without it the upload is refused `422 knowledge-shipping-unacknowledged`, naming the packs. An entry may claim where the pack was laid down from (`origin`); a claim that is not true is refused `422 knowledge-shipping-invalid`, naming the pack. A tag submission (JSON {tag}) and a tag push carry no confirmation, and the version's record says it was published that way.
 	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes a body of the `application/json` content type.
@@ -6269,6 +6336,7 @@ func (c *Client) ListVersions(ctx context.Context, ns Namespace, name AgentName,
 // SubmitVersionWithBody Submit a version for publication.
 //
 // Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// A package that ships knowledge packs (the manifest's `knowledge.ships`) makes their contents readable by everyone who can download the release, so the upload must confirm it: the `knowledgeShipping` part, one entry for each pack shipped. Without it the upload is refused `422 knowledge-shipping-unacknowledged`, naming the packs. An entry may claim where the pack was laid down from (`origin`); a claim that is not true is refused `422 knowledge-shipping-invalid`, naming the pack. A tag submission (JSON {tag}) and a tag push carry no confirmation, and the version's record says it was published that way.
 // A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes any type of body and a specified content type.
@@ -6289,6 +6357,7 @@ func (c *Client) SubmitVersionWithBody(ctx context.Context, ns Namespace, name A
 // SubmitVersion Submit a version for publication.
 //
 // Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// A package that ships knowledge packs (the manifest's `knowledge.ships`) makes their contents readable by everyone who can download the release, so the upload must confirm it: the `knowledgeShipping` part, one entry for each pack shipped. Without it the upload is refused `422 knowledge-shipping-unacknowledged`, naming the packs. An entry may claim where the pack was laid down from (`origin`); a claim that is not true is refused `422 knowledge-shipping-invalid`, naming the pack. A tag submission (JSON {tag}) and a tag push carry no confirmation, and the version's record says it was published that way.
 // A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes a body of the `application/json` content type.
@@ -16729,6 +16798,7 @@ type ClientWithResponsesInterface interface {
 	// SubmitVersionWithBodyWithResponse Submit a version for publication.
 	//
 	// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// A package that ships knowledge packs (the manifest's `knowledge.ships`) makes their contents readable by everyone who can download the release, so the upload must confirm it: the `knowledgeShipping` part, one entry for each pack shipped. Without it the upload is refused `422 knowledge-shipping-unacknowledged`, naming the packs. An entry may claim where the pack was laid down from (`origin`); a claim that is not true is refused `422 knowledge-shipping-invalid`, naming the pack. A tag submission (JSON {tag}) and a tag push carry no confirmation, and the version's record says it was published that way.
 	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -16739,6 +16809,7 @@ type ClientWithResponsesInterface interface {
 	// SubmitVersionWithResponse Submit a version for publication.
 	//
 	// Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+	// A package that ships knowledge packs (the manifest's `knowledge.ships`) makes their contents readable by everyone who can download the release, so the upload must confirm it: the `knowledgeShipping` part, one entry for each pack shipped. Without it the upload is refused `422 knowledge-shipping-unacknowledged`, naming the packs. An entry may claim where the pack was laid down from (`origin`); a claim that is not true is refused `422 knowledge-shipping-invalid`, naming the pack. A tag submission (JSON {tag}) and a tag push carry no confirmation, and the version's record says it was published that way.
 	// A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -19116,6 +19187,8 @@ type SubmitVersionResponse struct {
 	JSON202 *AgentVersion
 	// ApplicationproblemJSON402 the response for an HTTP 402 `application/problem+json` response
 	ApplicationproblemJSON402 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
 	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
 	ApplicationproblemJSON503 *Problem
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
@@ -19130,6 +19203,11 @@ func (r SubmitVersionResponse) GetJSON202() *AgentVersion {
 // GetApplicationproblemJSON402 returns the response for an HTTP 402 `application/problem+json` response
 func (r SubmitVersionResponse) GetApplicationproblemJSON402() *Problem {
 	return r.ApplicationproblemJSON402
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r SubmitVersionResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
 }
 
 // GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
@@ -26064,6 +26142,7 @@ func (c *ClientWithResponses) ListVersionsWithResponse(ctx context.Context, ns N
 // SubmitVersionWithBodyWithResponse Submit a version for publication.
 //
 // Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// A package that ships knowledge packs (the manifest's `knowledge.ships`) makes their contents readable by everyone who can download the release, so the upload must confirm it: the `knowledgeShipping` part, one entry for each pack shipped. Without it the upload is refused `422 knowledge-shipping-unacknowledged`, naming the packs. An entry may claim where the pack was laid down from (`origin`); a claim that is not true is refused `422 knowledge-shipping-invalid`, naming the pack. A tag submission (JSON {tag}) and a tag push carry no confirmation, and the version's record says it was published that way.
 // A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -26080,6 +26159,7 @@ func (c *ClientWithResponses) SubmitVersionWithBodyWithResponse(ctx context.Cont
 // SubmitVersionWithResponse Submit a version for publication.
 //
 // Two sources: JSON {tag} submits an existing repo tag (git-tag source); multipart/form-data with an `archive` part (tar.zst) submits a client-built package (cli-upload source; the server re-validates, re-packs deterministically, and compares digests: client packing is never trusted).
+// A package that ships knowledge packs (the manifest's `knowledge.ships`) makes their contents readable by everyone who can download the release, so the upload must confirm it: the `knowledgeShipping` part, one entry for each pack shipped. Without it the upload is refused `422 knowledge-shipping-unacknowledged`, naming the packs. An entry may claim where the pack was laid down from (`origin`); a claim that is not true is refused `422 knowledge-shipping-invalid`, naming the pack. A tag submission (JSON {tag}) and a tag push carry no confirmation, and the version's record says it was published that way.
 // A deployment with an admission extension (the hosted product's subscription tiers) may refuse a submission after every core check has passed and before anything is stored: `402` with the problem type `credits-exhausted` carries `balance`, `resetsAt` and `account` — the handle whose balance is short, which is the submitter's own or, for a member of a paid organization, the organization's — at the top level of the problem body. `402 subscription-inactive` refuses one whose payer is an organization that is awaiting payment or has lapsed, and carries `account` the same way. `503 admission-unavailable` means the check could not be reached and nothing was recorded. A core registry never answers any of them. The gate's verdict never depends on admission.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -29292,6 +29372,13 @@ func ParseSubmitVersionResponse(rsp *http.Response) (*SubmitVersionResponse, err
 			return nil, err
 		}
 		response.ApplicationproblemJSON402 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
 		var dest Problem

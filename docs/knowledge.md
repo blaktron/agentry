@@ -254,7 +254,10 @@ paid organization's shared packs and its members' in one pool.
 exporting it and deleting it are recorded in the organization's audit log
 (`org.knowledge_create`, `org.knowledge_update` with `exportable`,
 `org.knowledge_export`, `org.knowledge_delete`), each naming the pack and
-nothing of its content. The organization's packs and its key go with it
+nothing of its content. An administrator shipping one of the organization's
+packs with a release of a QuickAgent in the organization's namespace is
+recorded the same way (`org.knowledge_ship`, [below](#confirming-what-a-release-ships)).
+The organization's packs and its key go with it
 when it is erased after its decommission ([Erasure](#erasure)).
 
 ## The scan
@@ -319,6 +322,80 @@ layout, a `manifest.json` whose digest, bytes or pages are not the files
 beside it, or a file under `knowledge/` in no shipped pack. Each pack is
 held to its own caps, 10 MB and 2,000 files, outside the release's own
 quotas (V8).
+
+### Confirming what a release ships
+
+A pack in a release is readable by everyone who can download the release:
+anyone at all when the QuickAgent is public, and everyone who can see it
+when it is private. It stays in that version for good, and retiring or
+deleting the QuickAgent does not recall copies already downloaded. So the
+publisher confirms it, and the registry will not take a release that ships
+a pack without the confirmation.
+
+**An upload through the API** (`POST /agents/{ns}/{name}/versions` with an
+archive) carries a `knowledgeShipping` part when the archive ships packs: a
+JSON object with one entry for each pack the manifest ships.
+
+```json
+{"packs": [
+  {"name": "aws-docs"},
+  {"name": "team-runbook", "origin": {"kind": "org", "org": "acme", "packId": "6f1c…"}}
+]}
+```
+
+- **Without it** the upload is refused `422 knowledge-shipping-unacknowledged`,
+  and the problem's `packs` and its detail name the packs. A confirmation
+  that leaves one out is refused the same way, naming the one it left out.
+- **Each entry names a pack the release ships**, once. One that does not,
+  or a pack named twice, is `422 knowledge-shipping-invalid`, naming the
+  pack. A release that ships nothing needs no confirmation, and one that
+  sends an entry anyway is refused for it.
+- **An entry may claim an origin**: the stored pack the files were laid
+  down from, `{"kind": "own", "packId": …}` for one of the submitter's own
+  or `{"kind": "org", "org": …, "packId": …}` for an
+  [organization's](#shared-knowledge-in-an-organization). The registry
+  holds the claim to the facts, and a claim that is not true is
+  `422 knowledge-shipping-invalid`, naming the pack: the pack exists and is
+  `ready`, an `own` pack is the submitter's, and the pack's digest is the
+  digest in the shipped pack's `manifest.json`. An organization's pack ships
+  only from an administrator of the organization and only into a QuickAgent
+  in the organization's own namespace. An entry with no origin is the
+  publisher's own files, and is accepted as they are.
+- **An administrator who exports an organization's pack and copies it by
+  hand** ships it as their own files, with no origin. The registry cannot
+  tell, and the organization's audit log (below) has no line for it.
+
+**A tag push** carries no request, so it carries no confirmation. A release
+built from a pushed tag, or from `POST /agents/{ns}/{name}/versions` with
+`{"tag": …}`, is accepted when it ships packs, and its record says so. Whoever
+publishes by tag push is responsible for checking that the packs hold no
+private data.
+
+**What the version keeps.** Each version that ships packs keeps
+`{by, at, via, packs}`: who confirmed it (`by`, the account's handle),
+when, how the release was published (`client` for an upload with the
+confirmation, `tag-push` for a tag, `fork` for a fork's first version, which
+is a copy of the release it forks) and the packs with the origins claimed. A
+tag-push or fork record names no account. It is the version's
+`knowledgeShipping` in `GET /agents/{ns}/{name}/versions` and
+`…/versions/{version}`, served to those who manage the QuickAgent and to no
+one else, since it names an account and the stored packs the release came
+from. A version with no record serves none.
+
+**The organization's audit log.** Each pack with an `org` origin writes
+`org.knowledge_ship` to that organization's audit log
+(`GET /orgs/{org}/audit`), in the same transaction that creates the version:
+the pack, the agent, the version and the submitter, never a byte of the
+pack.
+
+**Making the QuickAgent public.** `PATCH /agents/{ns}/{name}` with
+`visibility: public` is refused `409 shipped-knowledge-unacknowledged` when
+any version of the QuickAgent other than a yanked or rejected one ships a
+pack, unless the body also carries `acknowledgeShippedKnowledge: true`. The
+problem's detail and its `versions` name the versions and their packs. The
+check runs again under the agent's row lock, so a version that lands while
+the request waits is counted. Yanking the versions that ship packs opens the
+way without it.
 
 The version's scan reads each shipped pack as this store's scan reads a
 pack — the same prose stages over every page and source, the same AI
