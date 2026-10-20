@@ -2429,6 +2429,17 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        },
+        {
+          "path": "internal/gitsrv/unsafe_refs_test.go",
+          "tests": [
+            "TestAcceptedRefsRefusesUnsafeNames",
+            "TestRefsAtWithNoPlainNameReadsNothing"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         }
       ]
     },
