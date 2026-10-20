@@ -549,10 +549,12 @@ func segmentCommand(seg []shellWord) (string, []shellWord) {
 	wrapped := ""
 	for i := 0; i < len(seg); i++ {
 		w := seg[i]
-		if wrapped == "" && s6Assign.MatchString(w.text) {
-			continue // an assignment before the command, quoted or not (X="a b" cmd)
+		if s6Assign.MatchString(w.text) {
+			// An assignment before the command, or after a wrapper that
+			// passes it on (sudo FOO=1 ssh …), quoted or not (X="a b" cmd).
+			continue
 		}
-		if wrapped != "" && !w.quoted && strings.HasPrefix(w.text, "-") {
+		if wrapped != "" && strings.HasPrefix(w.text, "-") {
 			if len(w.text) == 2 && strings.IndexByte(s6CmdWrappers[wrapped], w.text[1]) >= 0 {
 				i++
 			}
@@ -564,13 +566,17 @@ func segmentCommand(seg []shellWord) (string, []shellWord) {
 		if wrapped == "env" && strings.Contains(w.text, "=") {
 			continue
 		}
+		// The word's text is already unquoted, as the shell runs it:
+		// "curl", 'ssh' and c"url" are curl, ssh and curl. A quoted word
+		// with a space in it is a whole command line held as a string
+		// ("cat docs/mv"), never the name of a command that runs.
+		if w.quoted && strings.ContainsAny(w.text, " \t\n") {
+			return "", nil
+		}
 		name := w.text[strings.LastIndexByte(w.text, '/')+1:] // /usr/bin/ssh is ssh
-		if _, ok := s6CmdWrappers[name]; ok && !w.quoted {
+		if _, ok := s6CmdWrappers[name]; ok {
 			wrapped = name
 			continue
-		}
-		if w.quoted {
-			return "", nil
 		}
 		return name, seg[i+1:]
 	}
