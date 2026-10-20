@@ -24,7 +24,8 @@ info:
 
 
     Compatibility: changes within `/api/v1` are additive. A release declares
-    `modes`, the set of run modes it supports (autonomous | interactive);
+    `modes`, the set of run modes it supports (autonomous | interactive |
+    persistent);
     the search filter is `?mode=` and the facet is `mode`.
 
 
@@ -5767,13 +5768,16 @@ components:
         A run mode a release supports. `autonomous` runs from its
         source files, writes its output and receipts, and ends; `interactive`
         starts from the same plan and controls but the run is a conversation
-        with the user in the CLI or the desktop. A release declares one or both.
-      enum: [autonomous, interactive]
+        with the user in the CLI or the desktop; `persistent` is a
+        conversation the runner keeps between sessions, and is run only for
+        the runner's own built-in agents, so a client withholds Run for a
+        release that supports no other mode. A release declares at least one.
+      enum: [autonomous, interactive, persistent]
     AgentModes:
       type: array
       description: The run modes a release supports; at least one.
       minItems: 1
-      maxItems: 2
+      maxItems: 3
       uniqueItems: true
       items:
         $ref: "#/components/schemas/AgentMode"

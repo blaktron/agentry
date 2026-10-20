@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -107,7 +108,6 @@ func TestRepoSemaphoreHonorsContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer release()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -116,6 +116,12 @@ func TestRepoSemaphoreHonorsContext(t *testing.T) {
 	}
 	if n := sem.tracked(); n != 1 {
 		t.Fatalf("abandoned waiter left %d entries (want 1, the live holder)", n)
+	}
+	// The waiter that gave up held no reference: the holder leaving is the
+	// last one out.
+	release()
+	if n := sem.tracked(); n != 0 {
+		t.Fatalf("the repository is still tracked after its holder and its abandoned waiter left: %d entries", n)
 	}
 }
 
@@ -416,6 +422,66 @@ func TestAcquireGitBudgetsEachClientAddress(t *testing.T) {
 	if len(h.sem) != 0 || h.perRepo.tracked() != 0 || h.perClient.tracked() != 0 {
 		t.Fatalf("slots left held: global %d, repositories %d, addresses %d", len(h.sem), h.perRepo.tracked(), h.perClient.tracked())
 	}
+
+	// An operation that gives up while it waits hands back what it took:
+	// the address's slot and, past the repository, the repository's.
+	held := func(h *Handler, addr string) int {
+		h.perClient.mu.Lock()
+		defer h.perClient.mu.Unlock()
+		if slot, ok := h.perClient.live[addr]; ok {
+			return len(slot.ch)
+		}
+		return 0
+	}
+	t.Run("giving up at a full repository frees the address's slot", func(t *testing.T) {
+		h := &Handler{sem: make(chan struct{}, 8), perRepo: newRepoSemaphores(1), perClient: newClientSemaphores(2)}
+		repo := uuid.New()
+		holder, err := h.acquireGit(context.Background(), repo, greedy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gone, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, err := h.acquireGit(gone, repo, greedy); !errors.Is(err, context.Canceled) {
+			t.Fatalf("waiting on a full repository with a canceled context: %v", err)
+		}
+		if n := held(h, greedy); n != 1 {
+			t.Fatalf("the address holds %d slots after its second operation gave up, want 1", n)
+		}
+		holder()
+		if h.perClient.tracked() != 0 || h.perRepo.tracked() != 0 || len(h.sem) != 0 {
+			t.Fatalf("slots left held: global %d, repositories %d, addresses %d", len(h.sem), h.perRepo.tracked(), h.perClient.tracked())
+		}
+	})
+	t.Run("giving up at the full instance frees the repository's and the address's", func(t *testing.T) {
+		h := &Handler{sem: make(chan struct{}, 1), perRepo: newRepoSemaphores(2), perClient: newClientSemaphores(2)}
+		h.sem <- struct{}{} // another operation holds the only global slot
+		repo := uuid.New()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		errc := make(chan error, 1)
+		go func() {
+			_, err := h.acquireGit(ctx, repo, greedy)
+			errc <- err
+		}()
+		// Wait until the operation is past the repository and the address
+		// and is queued on the instance, then give up.
+		deadline := time.Now().Add(10 * time.Second)
+		for held(h, greedy) == 0 || h.perRepo.tracked() == 0 {
+			if time.Now().After(deadline) {
+				t.Fatal("the operation never took its address's and repository's slots")
+			}
+			runtime.Gosched()
+		}
+		cancel()
+		if err := <-errc; !errors.Is(err, context.Canceled) {
+			t.Fatalf("waiting on a full instance, then canceled: %v", err)
+		}
+		if h.perClient.tracked() != 0 || h.perRepo.tracked() != 0 || len(h.sem) != 1 {
+			t.Fatalf("after giving up: addresses %d, repositories %d, global %d held, want 0, 0 and the other operation's 1",
+				h.perClient.tracked(), h.perRepo.tracked(), len(h.sem))
+		}
+	})
 }
 
 // TestAcquireGitWithoutAnAddressSkipsTheBudget: an operation the server

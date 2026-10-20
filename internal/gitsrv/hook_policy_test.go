@@ -59,7 +59,7 @@ func runHook(old, new, ref string) (int, string) {
 // The version-tag namespace is immutable and gated on publish permission
 // whatever the case of the version's leading letter.
 func TestHookProtectsVersionTagsInEveryCase(t *testing.T) {
-	newHookRepo(t)
+	repo := newHookRepo(t)
 	anOID := strings.Repeat("a", 40)
 	for _, ref := range []string{"refs/tags/v1.0.0", "refs/tags/V1.0.0"} {
 		t.Run(ref, func(t *testing.T) {
@@ -78,6 +78,30 @@ func TestHookProtectsVersionTagsInEveryCase(t *testing.T) {
 	// A tag that is not a version tag is not in the namespace.
 	if code, msg := runHook(anOID, zeroesOID, "refs/tags/release-1"); code != 0 {
 		t.Fatalf("delete of a non-version tag was refused: %q", msg)
+	}
+	// The namespace is the tags, not any ref whose name starts with a v.
+	for _, ref := range []string{"refs/heads/v1.0.0", "refs/heads/V1.0.0", "v1.0.0"} {
+		if code, msg := runHook(anOID, zeroesOID, ref); code != 0 {
+			t.Fatalf("delete of %s was refused as a version tag: %q", ref, msg)
+		}
+	}
+	// Publish permission is the word true and nothing else.
+	commit := repo.commit(repo.tree("100644 blob " + repo.blob("hello") + "\tREADME.md\n"))
+	for _, value := range []string{"", "false", "1", "yes", "TRUE", "True", "t"} {
+		t.Setenv("AGENTRY_HOOK_CAN_PUBLISH", value)
+		if code, msg := runHook(zeroesOID, commit, "refs/tags/v1.0.0"); code == 0 || !strings.Contains(msg, "creating refs/tags/v1.0.0 requires publish permission on this agent") {
+			t.Fatalf("create of a version tag with CAN_PUBLISH=%q: code %d, %q", value, code, msg)
+		}
+	}
+	t.Setenv("AGENTRY_HOOK_CAN_PUBLISH", "true")
+	for _, ref := range []string{"refs/tags/v1.0.0", "refs/tags/V1.0.0"} {
+		if code, msg := runHook(zeroesOID, commit, ref); code != 0 {
+			t.Fatalf("create of %s with publish permission was refused: %q", ref, msg)
+		}
+	}
+	// Even then an existing version tag is immutable.
+	if code, msg := runHook(commit, zeroesOID, "refs/tags/v1.0.0"); code == 0 || !strings.Contains(msg, "immutable") {
+		t.Fatalf("delete of a version tag with publish permission: code %d, %q", code, msg)
 	}
 }
 
@@ -138,6 +162,69 @@ func TestHookTreeCheckFailsClosed(t *testing.T) {
 		for name, oid := range map[string]string{"leading segment": leading, "trailing segment": trailing} {
 			if code, msg := runHook(zeroesOID, oid, "refs/heads/feature"); code == 0 || !strings.Contains(msg, ".git") {
 				t.Fatalf("%s: code %d, %q", name, code, msg)
+			}
+		}
+	})
+
+	t.Run("a nested .git entry in any case", func(t *testing.T) {
+		r := newHookRepo(t)
+		for _, name := range []string{".GIT", ".Git", ".gIT"} {
+			inner := r.tree("100644 blob " + r.blob("x") + "\tconfig\n")
+			commit := r.commit(r.tree("040000 tree " + r.tree("040000 tree "+inner+"\t"+name+"\n") + "\tvendor\n"))
+			code, msg := runHook(zeroesOID, commit, "refs/heads/feature")
+			if code == 0 || !strings.Contains(msg, "nested .git entries are not allowed: vendor/"+name+"/config") {
+				t.Fatalf("%s directory: code %d, %q", name, code, msg)
+			}
+		}
+		// A name that only contains the segment is not the segment.
+		fine := r.commit(r.tree("100644 blob " + r.blob("x") + "\t.gitignore\n100644 blob " + r.blob("y") + "\tgit.txt\n"))
+		if code, msg := runHook(zeroesOID, fine, "refs/heads/feature"); code != 0 {
+			t.Fatalf("a .gitignore was refused: %q", msg)
+		}
+	})
+
+	t.Run("the single-file limit is exact", func(t *testing.T) {
+		r := newHookRepo(t)
+		const limit = 1048576
+		atLimit := r.commit(r.tree("100644 blob " + r.blob(strings.Repeat("x", limit)) + "\tbig.bin\n"))
+		if code, msg := runHook(zeroesOID, atLimit, "refs/heads/feature"); code != 0 {
+			t.Fatalf("a file of exactly the limit was refused: %q", msg)
+		}
+		overBlob := r.blob(strings.Repeat("x", limit+1))
+		// The file sits inside a directory so the refusal names its path.
+		over := r.commit(r.tree("040000 tree " + r.tree("100644 blob "+overBlob+"\tbig.bin\n") + "\tdir\n"))
+		if code, msg := runHook(zeroesOID, over, "refs/heads/feature"); code == 0 || !strings.Contains(msg, "dir/big.bin exceeds the 1 MB single-file limit") {
+			t.Fatalf("a file one byte over the limit: code %d, %q", code, msg)
+		}
+	})
+
+	t.Run("a tag of a single file is held to the limit too", func(t *testing.T) {
+		r := newHookRepo(t)
+		const limit = 1048576
+		tagOf := func(blob string) string {
+			return r.git("object "+blob+"\ntype blob\ntag note\ntagger t <t@example.test> 0 +0000\n\nnote\n", "mktag")
+		}
+		if code, msg := runHook(zeroesOID, tagOf(r.blob(strings.Repeat("x", limit))), "refs/tags/note"); code != 0 {
+			t.Fatalf("a tag of a file of exactly the limit was refused: %q", msg)
+		}
+		over := tagOf(r.blob(strings.Repeat("x", limit+1)))
+		if code, msg := runHook(zeroesOID, over, "refs/tags/note"); code == 0 || !strings.Contains(msg, over+" exceeds the 1 MB single-file limit") {
+			t.Fatalf("a tag of a file one byte over the limit: code %d, %q", code, msg)
+		}
+	})
+
+	t.Run("the limit is 25 MB when nothing sets it", func(t *testing.T) {
+		for _, unset := range []string{"", "not a number"} {
+			t.Setenv("AGENTRY_HOOK_MAX_BLOB_BYTES", unset)
+			r := newHookRepo(t)
+			const limit = 25 << 20
+			atLimit := r.commit(r.tree("100644 blob " + r.blob(strings.Repeat("x", limit)) + "\tbig.bin\n"))
+			if code, msg := runHook(zeroesOID, atLimit, "refs/heads/feature"); code != 0 {
+				t.Fatalf("MAX_BLOB_BYTES=%q: a file of 25 MB was refused: %q", unset, msg)
+			}
+			over := r.commit(r.tree("100644 blob " + r.blob(strings.Repeat("x", limit+1)) + "\tbig.bin\n"))
+			if code, msg := runHook(zeroesOID, over, "refs/heads/feature"); code == 0 || !strings.Contains(msg, "exceeds the 25 MB single-file limit") {
+				t.Fatalf("MAX_BLOB_BYTES=%q: a file one byte over 25 MB: code %d, %q", unset, code, msg)
 			}
 		}
 	})
