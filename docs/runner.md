@@ -505,13 +505,35 @@ done, and writes a draft. It never submits anything.
   the QuickAgent needs into its instruction in its own words, lists the
   pages it used in `sources` as `pack:<name>/<page>`, and declares
   `knowledge.accepts` when the QuickAgent will need the pack at run time. A
-  draft never `ships` a pack. A pack scanned in Agentry is not scanned
-  again, and what that scan flagged is withheld; any other pack is
+  draft ships a pack only when you name it with `--ship` (next item). A pack
+  scanned in Agentry is not scanned again, and what that scan flagged is withheld; any other pack is
   **scanned first**: AI Review reads every file of it with your Jev key, in
   the pack scan's chunks, before the draft starts, which for a large pack
   takes a while. What it flags, or cannot read, is cut from the copy the
   Drafter reads, and the notes name every file withheld under "Withheld by
   AI Review". `draft.json` records each pack under `knowledge`.
+- **Shipping a pack with the QuickAgent, with `--ship DIR|NAME`** (from
+  agentry-cli v0.6.155; repeatable, at most 5 packs, each at most 10 MB and
+  2,000 files). `--ship` reads the pack as `--knowledge` does, and also ships
+  it: every run of the QuickAgent reads it at `/knowledge/<name>`
+  ([packs a release ships](#shipping-a-pack-with-a-quickagent)). The task
+  tells the Drafter, so the instruction it writes says when to look in the
+  pack and to cite the pages it relied on. The draft ships **only the packs
+  you name**: the manifest's `knowledge.ships` is held to that list, an entry
+  for any other pack is removed and the notes name it, a pack you named that
+  the Drafter left out is added, and `publish.include` gets `knowledge/**`.
+  `package/` carries each pack whole under `knowledge/<name>/`, including any
+  file AI Review withheld from the copy the Drafter read, and `draft.json`
+  records each under `ships` (name, digest, pages, bytes and the `origin`,
+  when the pack was laid down from a stored one). An organization's shared
+  pack kept on this computer ships only with `--namespace ORG`, for a
+  QuickAgent in that organization's namespace, from one of its
+  administrators; the copy kept here must be the pack as Agentry holds it
+  now. A hosted draft names a pack its host laid down: `--knowledge DIR
+  --ship NAME`, with `--namespace` for an organization's pack. The manifest's
+  `namespace` stays `draft` either way. A shipped pack is readable by
+  everyone who can download the release; `agentry publish` asks you to
+  confirm each one.
 - **Where the words go.** The description, the searches and the pages go to
   the search provider, to TypeSafe and to the sites read, so the description
   should hold no secret; what the Drafter reads in your packs can shape its
@@ -4378,6 +4400,53 @@ names no pack.
   past 16 MiB compressed, the most the registry's upload takes; publish a
   larger release from its tag.
 
+### Shipping a pack with a QuickAgent
+
+`agentry knowledge ship PACK [--org ORG] [--dir DIR]` (from agentry-cli
+v0.6.155) lays a pack into the QuickAgent package in `DIR` (the working
+directory by default) so the release carries it and every run reads it at
+`/knowledge/PACK`. `PACK` is a pack kept on this computer, or your own pack in
+Agentry, which is downloaded first. The command:
+
+- copies the pack's files to `knowledge/PACK/`, with a `manifest.json` that
+  carries the tree's page count, size and digest, which the registry holds the
+  files to, and no pack id, builder or scan record;
+- adds `PACK` to `knowledge.ships` and `knowledge/**` to `publish.include` in
+  `agent.yaml`, keeping the rest of the file as written;
+- records where the pack came from in `.agentry/knowledge-ships.json`, beside
+  `agent.yaml` and never part of the release: the id of the pack's copy in
+  Agentry, when it has an unchanged one at this registry (`agentry knowledge
+  upload` makes one);
+- refuses a sixth pack, a pack past 10 MB with its `manifest.json` or 2,000
+  files, and an organization's pack unless you are an administrator of the
+  organization and the package's `namespace` is the organization's.
+
+Running it again on a shipped pack replaces it with the store's current
+content. `--org ORG` ships the pack ORG shares in Agentry, and `agentry
+knowledge ship --remove PACK` takes a pack out: its folder, its
+`knowledge.ships` entry and its record. `--json` prints the result.
+
+**Confirming at publish.** A shipped pack is readable by everyone who can
+download the release, and it stays in that version for good. `agentry publish`
+lists each shipped pack with its size and asks about it, one pack at a time:
+
+> **PACK (SIZE) becomes public.** Anyone can download it with this release, and
+> it stays in this version for good: retiring or deleting the QuickAgent later
+> does not recall copies already downloaded. Check that it holds no private
+> data: names, emails, customer records, internal hostnames, keys.
+
+For a private QuickAgent the first sentence reads "Everyone who can see this
+QuickAgent can read PACK (SIZE)". Type `yes` to ship the pack. `--yes` answers
+for scripts. The upload carries the confirmation, one entry for each pack and
+the origin the sidecar records, and the registry refuses a release that ships
+a pack without it ([confirming what a release
+ships](knowledge.md#confirming-what-a-release-ships)); a refusal names the
+pack. Off a terminal and without `--yes`, the command uploads nothing. A
+release submitted with `--tag` is asked the same, and the registry records the
+version as published from a tag, with no confirmation. `agentry publish`
+leaves the sidecar out of the release and refuses a `publish.include` that
+would put it in.
+
 ## A Writing Voice
 
 A Writing Voice is one file, `VOICE.md`, of instructions an LLM follows to
@@ -4574,7 +4643,7 @@ page covers authoring and publishing in depth.
 | `agentry list` | every install record in `installed.yaml` — the embedded installs and the runner consents — with whether each directory is still present (`--json`) |
 | `agentry info ns/name` / `agentry search` | a QuickAgent's page and capability contract; full-text search with the mode, capability, license and verified-org facets (`--json` on both) |
 | `agentry verify ns/name@version` | digest and DSSE attestation check against the pinned keys — an exit code for CI |
-| `agentry publish` | submits a workspace and follows the pipeline's event stream to the verdict |
+| `agentry publish` | submits a workspace and follows the pipeline's event stream to the verdict; asks you to confirm each knowledge pack the release ships (`--yes` for scripts) |
 | `agentry yank ns/name@version` | yanks a published version |
 | `agentry fork ns/name [--into NS] [--name NAME] [--yes] [--wait]` | forks a public QuickAgent into your own namespace, or `--into` an organization you publish for, under its name unless `--name` gives another ([Retire, delete and fork](api-conventions.md#retire-delete-and-fork) has the rules). A fork stays private for good, and its first version is a submission through the pipeline, charged like any. On a terminal the command says so and asks for a typed "yes"; off one it sends nothing without `--yes`. `--wait` follows the copy until the first version is submitted; `--json` prints the fork's record |
 | `agentry files ensure [--policy FILE]` | pulls the files image the policy names, by digest, and refreshes the ClamAV signatures, so no run has to download either; a sandbox host runs it at each update ([running with files](#running-with-files)) |
