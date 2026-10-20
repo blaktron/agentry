@@ -83,7 +83,7 @@ is a name missing from this table.
 | `gate.error` | WARN | the platform's own failure sent a version to review: stage errors, an unusable policy, the watchdog | `version`, `run`, and `stage_errors` or `kind` + `err` |
 | `scan.stage` | INFO | a scanner stage finished | `stage`, `outcome` (`ok`, `error`), `dur_ms`, `findings`, `err` |
 | `failopen.audit_stream_drop` | ERROR | an audit archive record was dropped on a full buffer | `action`, `id` |
-| `failopen.history_not_scanned` | WARN | a git history the S2 stage did not scan, or scanned only to its size cap; a history scan that failed (`S2/history-error`) holds the version for review and is not counted here | `stage`, `scanner`, `title` |
+| `failopen.history_not_scanned` | WARN | a git history the S2 stage did not scan; a history scan that failed (`S2/history-error`) or stopped at its size cap (`S2/history-truncated`) holds the version for review and is not counted here | `stage`, `scanner`, `title` |
 | `failopen.osv_not_checked` | WARN | a dependency set S7 did not check against OSV | `stage`, `scanner`, `title` |
 | `failopen.version_not_checked` | WARN | declared MCP server versions S7 did not check against their package registry: the check is off (`AGENTRY_SCAN_NPM_REGISTRY=none`), or npm or PyPI gave no answer, and the version publishes (`scanner` is `S7/version-not-checked`) | `stage`, `scanner`, `title` |
 | `failopen.osv_error` | WARN | an OSV lookup errored and left a declared server with no data (`scanner` is `S7/osv-no-data`; a server S7 does not cover makes the same finding and is not counted here) | `stage`, `scanner`, `title` |
