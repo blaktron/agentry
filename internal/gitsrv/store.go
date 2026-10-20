@@ -247,9 +247,45 @@ const initWorkStaleAfter = time.Hour
 // they only accumulate on the repository volume. It touches nothing whose
 // name is not exactly that form, and returns how many it removed.
 func (s *RepoStore) SweepInitLeftovers() (int, error) {
-	shards, err := os.ReadDir(s.dataDir)
+	n, err := sweepStaleWorkDirs(s.dataDir, isInitWorkName, initWorkStaleAfter)
 	if err != nil {
-		return 0, fmt.Errorf("gitsrv: sweep init leftovers: %w", err)
+		return n, fmt.Errorf("gitsrv: sweep init leftovers: %w", err)
+	}
+	return n, nil
+}
+
+// viewBuildInfix follows the repository id in the name of ReviewedView's
+// work directory, id + viewBuildInfix + a random suffix, which
+// SweepViewLeftovers recognises by the same constant.
+const viewBuildInfix = "-build-"
+
+// viewBuildStaleAfter is how old a ReviewedView work directory must be
+// before SweepViewLeftovers removes it: far longer than a view takes to
+// build, so a directory a reader is still building in is never touched.
+const viewBuildStaleAfter = time.Hour
+
+// SweepViewLeftovers removes the work directories ReviewedView leaves
+// under {dataDir}/views/{xx}/{uuid}-build-* when the process dies before
+// it renames or removes them, once they are older than
+// viewBuildStaleAfter. pruneViews matches only finished views, so without
+// the sweep these only accumulate on the repository volume. It touches
+// nothing whose name is not exactly that form, and returns how many it
+// removed.
+func (s *RepoStore) SweepViewLeftovers() (int, error) {
+	n, err := sweepStaleWorkDirs(filepath.Join(s.dataDir, "views"), isViewBuildName, viewBuildStaleAfter)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return n, fmt.Errorf("gitsrv: sweep view leftovers: %w", err)
+	}
+	return n, nil
+}
+
+// sweepStaleWorkDirs removes the directories directly inside root's shard
+// directories whose names match reports as work directories, once they
+// were last modified more than staleAfter ago. Links are never followed.
+func sweepStaleWorkDirs(root string, match func(shard, name string) bool, staleAfter time.Duration) (int, error) {
+	shards, err := os.ReadDir(root)
+	if err != nil {
+		return 0, err
 	}
 	removed := 0
 	var errs []error
@@ -257,19 +293,19 @@ func (s *RepoStore) SweepInitLeftovers() (int, error) {
 		if !shard.IsDir() || !isShardName(shard.Name()) {
 			continue
 		}
-		dir := filepath.Join(s.dataDir, shard.Name())
+		dir := filepath.Join(root, shard.Name())
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
 		for _, e := range entries {
-			if !e.IsDir() || !isInitWorkName(shard.Name(), e.Name()) {
+			if !e.IsDir() || !match(shard.Name(), e.Name()) {
 				continue
 			}
 			path := filepath.Join(dir, e.Name())
 			fi, err := os.Lstat(path)
-			if err != nil || !fi.IsDir() || time.Since(fi.ModTime()) < initWorkStaleAfter {
+			if err != nil || !fi.IsDir() || time.Since(fi.ModTime()) < staleAfter {
 				continue
 			}
 			if err := os.RemoveAll(path); err != nil {
@@ -297,6 +333,18 @@ func isInitWorkName(shard, name string) bool {
 		return false
 	}
 	id, suffix, ok := strings.Cut(rest, initWorkInfix)
+	if !ok || suffix == "" {
+		return false
+	}
+	u, err := uuid.Parse(id)
+	return err == nil && u.String() == id && id[:2] == shard
+}
+
+// isViewBuildName reports whether name, inside a views shard directory, is
+// a ReviewedView work directory: a repository id in that shard +
+// viewBuildInfix + the suffix os.MkdirTemp added.
+func isViewBuildName(shard, name string) bool {
+	id, suffix, ok := strings.Cut(name, viewBuildInfix)
 	if !ok || suffix == "" {
 		return false
 	}
@@ -432,7 +480,7 @@ func (s *RepoStore) ReviewedView(ctx context.Context, repoID uuid.UUID, tags map
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", err
 	}
-	tmp, err := os.MkdirTemp(dir, id+"-build-")
+	tmp, err := os.MkdirTemp(dir, id+viewBuildInfix)
 	if err != nil {
 		return "", err
 	}
