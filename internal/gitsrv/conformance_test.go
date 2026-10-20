@@ -209,6 +209,24 @@ func (e *gitEnv) cloneURLNS(ns, agent, pat string) string {
 	return fmt.Sprintf("http://token:%s@%s/%s/%s.git", pat, host, ns, agent)
 }
 
+// infoRefsAs fetches a service's ref advertisement with pat as the Basic
+// password (none when empty). The caller closes the body.
+func (e *gitEnv) infoRefsAs(t *testing.T, ns, agent, pat, service string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, e.cloneURLNS(ns, agent, "")+"/info/refs?service="+service, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pat != "" {
+		req.SetBasicAuth("token", pat)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("info/refs request: %v", err)
+	}
+	return res
+}
+
 // seedOrg creates an org the owner founds, optionally enforcing SSO.
 // Enforcement is set directly: the API surface for it belongs to
 // internal/api's org settings, not to the git layer under test.
@@ -411,6 +429,37 @@ func TestGitConformance(t *testing.T) {
 		out, err := gitRun(t, work, "push", env.cloneURL("pub-agent", "agy_bogusbogusbogusbogusbogusbogusbogusbogus"), "main")
 		if err == nil {
 			t.Fatalf("bogus PAT must fail:\n%s", out)
+		}
+	})
+
+	t.Run("an unknown PAT is refused, not read as anonymous", func(t *testing.T) {
+		// pub-agent has a reviewed version, so an anonymous reader is served
+		// its advertisement; a token that names no one must not be.
+		anon := env.infoRefsAs(t, env.owner.handle, "pub-agent", "", "git-upload-pack")
+		_ = anon.Body.Close()
+		if anon.StatusCode != http.StatusOK {
+			t.Fatalf("anonymous read of the reviewed versions: %d, want 200", anon.StatusCode)
+		}
+		res := env.infoRefsAs(t, env.owner.handle, "pub-agent", "agy_bogusbogusbogusbogusbogusbogusbogusbogus", "git-upload-pack")
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnauthorized || !strings.HasPrefix(res.Header.Get("WWW-Authenticate"), "Basic ") {
+			t.Fatalf("read with an unknown PAT: %d (WWW-Authenticate %q), want 401 asking for credentials", res.StatusCode, res.Header.Get("WWW-Authenticate"))
+		}
+	})
+
+	t.Run("an advertisement is typed and never cached", func(t *testing.T) {
+		for service, pat := range map[string]string{"git-upload-pack": env.owner.patRO, "git-receive-pack": env.owner.patRW} {
+			res := env.infoRefsAs(t, env.owner.handle, "pub-agent", pat, service)
+			_ = res.Body.Close()
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("%s advertisement: %d, want 200", service, res.StatusCode)
+			}
+			if got, want := res.Header.Get("Content-Type"), "application/x-"+service+"-advertisement"; got != want {
+				t.Errorf("%s advertisement Content-Type = %q, want %q", service, got, want)
+			}
+			if got := res.Header.Get("Cache-Control"); got != "no-cache" {
+				t.Errorf("%s advertisement Cache-Control = %q, want no-cache (a cached advertisement serves stale refs)", service, got)
+			}
 		}
 	})
 
@@ -696,6 +745,38 @@ func TestPushRejectionLeavesNoTrace(t *testing.T) {
 	if n := env.pushAudits(agent.ID); n != 1 {
 		t.Fatalf("repo.push audit rows = %d after a rejection, want 1", n)
 	}
+
+	// A git that exits with an error is not a push to record, even when its
+	// refs moved before it failed: bookkeeping follows a successful exit.
+	t.Run("git failing after it moved the refs leaves no trace", func(t *testing.T) {
+		realGit, err := exec.LookPath("git")
+		if err != nil {
+			t.Skip("git not installed")
+		}
+		failing := filepath.Join(t.TempDir(), "git")
+		script := "#!/bin/sh\n\"" + realGit + "\" \"$@\"\nstatus=$?\ncase \" $* \" in\n*\" --advertise-refs \"*) exit $status ;;\n*\" receive-pack \"*) exit 3 ;;\nesac\nexit $status\n"
+		if err := os.WriteFile(failing, []byte(script), 0o700); err != nil { //nolint:gosec // an executable test double
+			t.Fatal(err)
+		}
+		fenv := newGitEnvCfg(t, func(c *config.Config) { c.Git.BinPath = failing })
+		failed := fenv.seedAgent("gitfails", "public")
+		fwork := seedWorkdir(t, map[string]string{"agent.yaml": "schemaVersion: \"1\"\n"})
+		_, _ = gitRun(t, fwork, "push", fenv.cloneURL("gitfails", fenv.owner.patRW), "main")
+		head := strings.TrimSpace(mustGit(t, fwork, "rev-parse", "HEAD"))
+		if landed := strings.TrimSpace(mustGit(t, fenv.repos.Path(failed.RepoID), "rev-parse", "refs/heads/main")); landed != head {
+			t.Fatalf("the push did not land before git failed: main is %s, want %s", landed, head)
+		}
+		row, err := fenv.st.Queries().GetRepo(context.Background(), failed.RepoID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if row.LastPushAt != nil || row.SizeBytes != 0 {
+			t.Fatalf("a push whose git failed was bookkept: last_push_at=%v size=%d", row.LastPushAt, row.SizeBytes)
+		}
+		if n := fenv.pushAudits(failed.ID); n != 0 {
+			t.Fatalf("a push whose git failed wrote %d repo.push audit rows", n)
+		}
+	})
 }
 
 // TestReleaseArchiveIgnoresExportIgnore pins the invariant that the
@@ -809,11 +890,115 @@ func TestPreReceiveHookFailsClosed(t *testing.T) {
 		}
 	})
 
+	t.Run("stdin read error after a line the policy would accept", func(t *testing.T) {
+		// A branch deletion passes every check, so only the failed read can
+		// refuse this push.
+		var stderr bytes.Buffer
+		accepted := strings.Repeat("a", 40) + " " + zeroesOID + " refs/heads/feature\n"
+		in := io.MultiReader(strings.NewReader(accepted), errReader{})
+		if code := gitsrv.RunPreReceiveHook(in, &stderr); code == 0 {
+			t.Fatalf("hook accepted a push whose ref list it could not read in full: %q", stderr.String())
+		}
+		if want := "agentry: could not read the ref updates from git: stdin: connection reset\n"; stderr.String() != want {
+			t.Fatalf("refusal = %q, want %q", stderr.String(), want)
+		}
+	})
+
 	t.Run("malformed ref line", func(t *testing.T) {
 		var stderr bytes.Buffer
 		if code := gitsrv.RunPreReceiveHook(strings.NewReader("not a ref update\n"), &stderr); code == 0 {
 			t.Fatalf("hook accepted an unparsable ref update: %q", stderr.String())
 		}
+	})
+
+	t.Run("a line that is not exactly old, new and ref", func(t *testing.T) {
+		// Each of these would be a harmless branch deletion if the extra or
+		// missing field were overlooked.
+		for _, bad := range []string{
+			strings.Repeat("a", 40) + " " + zeroesOID,
+			"refs/heads/feature",
+			strings.Repeat("a", 40) + " " + zeroesOID + " refs/heads/feature extra",
+			strings.Repeat("a", 40) + " " + zeroesOID + " refs/heads/feature refs/heads/other",
+		} {
+			var stderr bytes.Buffer
+			if code := gitsrv.RunPreReceiveHook(strings.NewReader(bad+"\n"), &stderr); code == 0 || !strings.Contains(stderr.String(), "unreadable ref update from git") {
+				t.Fatalf("%q: code %d, %q, want a refusal naming the unreadable update", bad, code, stderr.String())
+			}
+		}
+	})
+
+	t.Run("blank lines are skipped", func(t *testing.T) {
+		var stderr bytes.Buffer
+		in := "\n" + strings.Repeat("a", 40) + " " + zeroesOID + " refs/heads/feature\n   \n\t\n"
+		if code := gitsrv.RunPreReceiveHook(strings.NewReader(in), &stderr); code != 0 {
+			t.Fatalf("blank lines around a deletion were refused: %q", stderr.String())
+		}
+	})
+}
+
+// TestPreReceiveHookProtectsTheDefaultBranch: the default branch is never
+// deleted, only moves forward unless the agent allows rewriting it, and the
+// rules are for that branch and no other.
+func TestPreReceiveHookProtectsTheDefaultBranch(t *testing.T) {
+	r := newHookRepo(t)
+	root := r.commit(r.tree("100644 blob " + r.blob("one") + "\ta.txt\n"))
+	next := r.git("", "commit-tree", r.tree("100644 blob "+r.blob("two")+"\ta.txt\n"), "-p", root, "-m", "next")
+	unrelated := r.commit(r.tree("100644 blob " + r.blob("other") + "\ta.txt\n"))
+	accepted := func(t *testing.T, old, new, ref string) {
+		t.Helper()
+		if code, msg := runHook(old, new, ref); code != 0 {
+			t.Fatalf("%s %s→%s was refused: %q", ref, old[:7], new[:7], msg)
+		}
+	}
+	refused := func(t *testing.T, old, new, ref, why string) {
+		t.Helper()
+		if code, msg := runHook(old, new, ref); code == 0 || !strings.Contains(msg, why) {
+			t.Fatalf("%s %s→%s: code %d, %q, want a refusal saying %q", ref, old[:7], new[:7], code, msg, why)
+		}
+	}
+
+	t.Run("main is the default when nothing names one", func(t *testing.T) {
+		t.Setenv("AGENTRY_HOOK_DEFAULT_BRANCH", "")
+		refused(t, root, zeroesOID, "refs/heads/main", "the default branch cannot be deleted")
+		accepted(t, root, zeroesOID, "refs/heads/trunk")
+		accepted(t, zeroesOID, root, "refs/heads/main")
+		accepted(t, root, next, "refs/heads/main")
+		refused(t, next, unrelated, "refs/heads/main", "force-push to the default branch is not allowed")
+	})
+
+	t.Run("the agent's default branch is the protected one", func(t *testing.T) {
+		t.Setenv("AGENTRY_HOOK_DEFAULT_BRANCH", "trunk")
+		refused(t, root, zeroesOID, "refs/heads/trunk", "the default branch cannot be deleted")
+		refused(t, next, unrelated, "refs/heads/trunk", "force-push to the default branch is not allowed")
+		accepted(t, root, zeroesOID, "refs/heads/main")
+		accepted(t, next, unrelated, "refs/heads/main")
+	})
+
+	t.Run("only that branch, not one that starts with its name", func(t *testing.T) {
+		t.Setenv("AGENTRY_HOOK_DEFAULT_BRANCH", "main")
+		for _, ref := range []string{"refs/heads/main-next", "refs/heads/mainline", "refs/heads/main/topic", "refs/tags/main", "refs/remotes/main"} {
+			accepted(t, root, zeroesOID, ref)
+			accepted(t, next, unrelated, ref)
+		}
+	})
+
+	t.Run("a rewrite is allowed only when the agent says true", func(t *testing.T) {
+		t.Setenv("AGENTRY_HOOK_DEFAULT_BRANCH", "main")
+		for _, value := range []string{"", "false", "1", "yes", "TRUE"} {
+			t.Setenv("AGENTRY_HOOK_ALLOW_FORCE", value)
+			refused(t, next, unrelated, "refs/heads/main", "force-push to the default branch is not allowed")
+		}
+		t.Setenv("AGENTRY_HOOK_ALLOW_FORCE", "true")
+		accepted(t, next, unrelated, "refs/heads/main")
+		// Deleting it stays refused whatever the setting.
+		refused(t, next, zeroesOID, "refs/heads/main", "the default branch cannot be deleted")
+	})
+
+	t.Run("a push that only moves forward needs no permission", func(t *testing.T) {
+		t.Setenv("AGENTRY_HOOK_DEFAULT_BRANCH", "main")
+		t.Setenv("AGENTRY_HOOK_ALLOW_FORCE", "false")
+		accepted(t, root, next, "refs/heads/main")
+		accepted(t, root, root, "refs/heads/main")
 	})
 }
 
@@ -846,6 +1031,70 @@ func TestPreReceiveHookWarnTier(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "exceeds") {
 		t.Fatalf("no quota refusal: %q", stderr.String())
+	}
+
+	// Exact limits, the words the pusher reads, and the tiers' defaults.
+	// The repository is now objects.pack plus a sparse 3 MB file.
+	big := filepath.Join(dir, "big.pack")
+	setSize := func(n int64) {
+		t.Helper()
+		f, err := os.OpenFile(big, os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Truncate(n); err != nil {
+			t.Fatal(err)
+		}
+		_ = f.Close()
+	}
+	run := func(warn, quota string) (int, string) {
+		t.Helper()
+		t.Setenv("AGENTRY_HOOK_WARN_BYTES", warn)
+		t.Setenv("AGENTRY_HOOK_QUOTA_BYTES", quota)
+		var out bytes.Buffer
+		return gitsrv.RunPreReceiveHook(strings.NewReader(line), &out), out.String()
+	}
+	const usage = 4096 + 3<<20
+	setSize(3 << 20)
+	if code, msg := run("1048576", "10485760"); code != 0 || msg != "agentry: warning: repository is 3 MB of the 10 MB quota\n" {
+		t.Fatalf("3 MB of a 10 MB quota: code %d, %q", code, msg)
+	}
+	if code, msg := run("1048576", "1048576"); code == 0 || msg != "agentry: repository exceeds the 1 MB size quota\n" {
+		t.Fatalf("3 MB of a 1 MB quota: code %d, %q", code, msg)
+	}
+	// Both tiers are exclusive: a repository exactly at one is not over it.
+	if code, msg := run(fmt.Sprint(usage), fmt.Sprint(usage)); code != 0 || msg != "" {
+		t.Fatalf("a repository exactly at its warn tier and quota: code %d, %q, want accepted without a warning", code, msg)
+	}
+	if code, msg := run(fmt.Sprint(usage-1), fmt.Sprint(usage)); code != 0 || !strings.Contains(msg, "warning: repository is 3 MB") {
+		t.Fatalf("a repository one byte over its warn tier: code %d, %q, want a warning", code, msg)
+	}
+	if code, msg := run("0", fmt.Sprint(usage-1)); code == 0 || !strings.Contains(msg, "exceeds") {
+		t.Fatalf("a repository one byte over its quota: code %d, %q, want a refusal", code, msg)
+	}
+	// A warn tier of zero is off.
+	if code, msg := run("0", "10485760"); code != 0 || msg != "" {
+		t.Fatalf("a warn tier of 0: code %d, %q, want no warning", code, msg)
+	}
+	// With nothing set the tiers are 25 MB and 100 MB, and so is the
+	// reading of a value that is not a number.
+	for _, unset := range []string{"", "lots"} {
+		setSize(30 << 20)
+		if code, msg := run(unset, unset); code != 0 || !strings.Contains(msg, "warning: repository is 30 MB of the 100 MB quota") {
+			t.Fatalf("30 MB with tiers %q: code %d, %q, want the default warn tier and quota", unset, code, msg)
+		}
+		setSize(24 << 20)
+		if code, msg := run(unset, unset); code != 0 || msg != "" {
+			t.Fatalf("24 MB with tiers %q: code %d, %q, want no warning", unset, code, msg)
+		}
+		setSize(100<<20 - 4096)
+		if code, msg := run(unset, unset); code != 0 || !strings.Contains(msg, "of the 100 MB quota") {
+			t.Fatalf("exactly 100 MB with tiers %q: code %d, %q, want accepted", unset, code, msg)
+		}
+		setSize(100<<20 - 4096 + 1)
+		if code, msg := run(unset, unset); code == 0 || msg != "agentry: repository exceeds the 100 MB size quota\n" {
+			t.Fatalf("one byte over 100 MB with tiers %q: code %d, %q", unset, code, msg)
+		}
 	}
 }
 

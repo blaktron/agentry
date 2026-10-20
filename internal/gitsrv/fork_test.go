@@ -3,6 +3,8 @@ package gitsrv_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -154,6 +156,22 @@ func TestForkCopiesOnlyTheReleasesHistoryAndWritesOneRenamingCommit(t *testing.T
 	if author := histGit(t, dir, "log", "-1", "--format=%an <%ae> / %cn", commit); author != "bob <bob@users.noreply.agentry> / Agentry" {
 		t.Fatalf("author = %q", author)
 	}
+	if got := histGit(t, dir, "log", "-1", "--date=raw", "--format=%ae|%ce|%ad|%cd|%P", commit); got != "bob@users.noreply.agentry|noreply@agentry|1700000000 +0000|1700000000 +0000|"+second {
+		t.Fatalf("author and committer addresses, dates and parent = %q", got)
+	}
+	// The clock written is the instant in UTC, whatever zone the caller's
+	// time carries.
+	west := time.Unix(1_700_000_000, 0).In(time.FixedZone("west", -8*3600))
+	other, err := repos.CommitFork(ctx, fork, registry.ForkCommit{
+		BaseCommit: second, ManifestPath: "agent.yaml", Manifest: renamed, Message: "again\n",
+		Refs: []string{"refs/heads/other"}, AuthorName: "bob", AuthorEmail: "bob@users.noreply.agentry", When: west,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := histGit(t, dir, "log", "-1", "--date=raw", "--format=%ad|%cd|%P", other); got != "1700000000 +0000|1700000000 +0000|" {
+		t.Fatalf("dates and parent of a commit with no Parent = %q", got)
+	}
 
 	// Copied, not shared: with the origin gone, the fork still has every
 	// object it needs.
@@ -200,6 +218,33 @@ func TestForkFromAnArchiveAndAnOriginNeverPushed(t *testing.T) {
 	if got := histGit(t, dir, "show", commit+":agent.yaml"); got != "namespace: bob" {
 		t.Fatalf("agent.yaml = %q", got)
 	}
+
+	// Modes follow the files: an executable stays one, nothing else becomes one,
+	// and the manifest is a plain file.
+	modes := t.TempDir()
+	for name, mode := range map[string]os.FileMode{"agent.yaml": 0o644, "run.sh": 0o755, "bin/tool": 0o750, "data.txt": 0o600} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(modes, name)), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(modes, name), []byte("x\n"), mode); err != nil { //nolint:gosec // modes are the point
+			t.Fatal(err)
+		}
+		if err := os.Chmod(filepath.Join(modes, name), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	moded, err := repos.CommitFork(ctx, fork, registry.ForkCommit{
+		Dir: modes, ManifestPath: "agent.yaml", Manifest: []byte("namespace: bob\n"),
+		Message: "Modes\n", Refs: []string{"refs/heads/modes"}, AuthorName: "bob", AuthorEmail: "bob@users.noreply.agentry", When: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "100644 blob %s\tagent.yaml\n100755 blob %s\tbin/tool\n100644 blob %s\tdata.txt\n100755 blob %s\trun.sh"
+	blob := func(path string) string { return histGit(t, dir, "rev-parse", moded+":"+path) }
+	if got := histGit(t, dir, "ls-tree", "-r", moded); got != fmt.Sprintf(want, blob("agent.yaml"), blob("bin/tool"), blob("data.txt"), blob("run.sh")) {
+		t.Fatalf("modes of the archive's files:\n%s", got)
+	}
 }
 
 func TestForkRefusesWhatIsNotAnObjectOrARef(t *testing.T) {
@@ -226,6 +271,69 @@ func TestForkRefusesWhatIsNotAnObjectOrARef(t *testing.T) {
 	}
 	if _, err := repos.ReadFileAt(ctx, fork, strings.Repeat("a", 40), "../etc/passwd"); err == nil {
 		t.Error("ReadFileAt read outside the tree")
+	}
+
+	// Each refusal is the store's own, before git runs, and says what it
+	// refused: git would turn some of these into other errors, or accept them.
+	const aCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	for _, tc := range []struct {
+		c    registry.ForkCommit
+		want string
+	}{
+		{registry.ForkCommit{BaseCommit: "--output=/tmp/x", ManifestPath: "agent.yaml"}, "is not a commit"},
+		{registry.ForkCommit{BaseCommit: "HEAD~1", ManifestPath: "agent.yaml"}, "is not a commit"},
+		{registry.ForkCommit{BaseCommit: strings.ToUpper(aCommit), ManifestPath: "agent.yaml"}, "is not a commit"},
+		{registry.ForkCommit{Dir: t.TempDir(), Parent: "main", ManifestPath: "agent.yaml"}, "is not a commit"},
+		{registry.ForkCommit{Dir: t.TempDir(), Parent: aCommit[:39], ManifestPath: "agent.yaml"}, "is not a commit"},
+		{registry.ForkCommit{Dir: t.TempDir(), ManifestPath: ""}, "is not a path"},
+		{registry.ForkCommit{Dir: t.TempDir(), ManifestPath: "-agent.yaml"}, "is not a path"},
+		{registry.ForkCommit{Dir: t.TempDir(), ManifestPath: "../agent.yaml"}, "is not a path"},
+		{registry.ForkCommit{Dir: t.TempDir(), ManifestPath: "a/../agent.yaml"}, "is not a path"},
+		{registry.ForkCommit{Dir: t.TempDir(), ManifestPath: "agent.yaml", Refs: []string{"refs/heads/../x"}}, "is not a ref name"},
+		{registry.ForkCommit{Dir: t.TempDir(), ManifestPath: "agent.yaml", Refs: []string{"-d"}}, "is not a ref name"},
+		{registry.ForkCommit{Dir: t.TempDir(), ManifestPath: "agent.yaml", Refs: []string{"heads/main"}}, "is not a ref name"},
+		{registry.ForkCommit{Dir: t.TempDir(), ManifestPath: "agent.yaml", Refs: []string{"refs/heads/a b"}}, "is not a ref name"},
+		{registry.ForkCommit{Dir: t.TempDir(), ManifestPath: "agent.yaml", Refs: []string{"refs/heads/ok", "refs/heads/a*"}}, "is not a ref name"},
+	} {
+		if _, err := repos.CommitFork(ctx, fork, tc.c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%+v: %v, want a refusal saying %q", tc.c, err, tc.want)
+		}
+	}
+
+	origin, _, second, unreviewed := originWithHistory(t, repos)
+	treeID := histGit(t, repos.Path(origin), "rev-parse", second+"^{tree}")
+	for what, id := range map[string]string{
+		"a tree": treeID, "a blob": unreviewed["file LATER.md"], "a commit that is not there": aCommit,
+		"a longer id that is not there": strings.Repeat("b", 64), "an uppercase id": strings.ToUpper(second), "a short id": second[:39],
+	} {
+		if ok, err := repos.HasCommit(ctx, origin, id); ok || err != nil {
+			t.Errorf("HasCommit(%s) = %v, %v, want false", what, ok, err)
+		}
+	}
+	if ok, err := repos.HasCommit(ctx, origin, second); !ok || err != nil {
+		t.Errorf("HasCommit(a commit of the repository) = %v, %v", ok, err)
+	}
+	if ok, err := repos.HasCommit(ctx, uuid.New(), second); ok || err != nil {
+		t.Errorf("HasCommit in a repository that is not there = %v, %v, want false and no error", ok, err)
+	}
+	for _, path := range []string{"", "-agent.yaml", "../agent.yaml", "dir/../agent.yaml"} {
+		if _, err := repos.ReadFileAt(ctx, origin, second, path); err == nil || !strings.Contains(err.Error(), "is not a file to read") {
+			t.Errorf("ReadFileAt(%q): %v, want 'is not a file to read'", path, err)
+		}
+	}
+	for _, commit := range []string{"", "HEAD", second[:39], strings.ToUpper(second)} {
+		if _, err := repos.ReadFileAt(ctx, origin, commit, "agent.yaml"); err == nil || !strings.Contains(err.Error(), "is not a file to read") {
+			t.Errorf("ReadFileAt(commit %q): %v, want 'is not a file to read'", commit, err)
+		}
+	}
+	if _, err := repos.ReadFileAt(ctx, origin, second, "no-such-file.txt"); !errors.Is(err, fs.ErrNotExist) || !strings.Contains(err.Error(), second[:12]+":no-such-file.txt") {
+		t.Errorf("ReadFileAt of a path the commit lacks: %v, want fs.ErrNotExist naming the commit and path", err)
+	}
+	if _, err := repos.ReadFileAt(ctx, origin, aCommit, "agent.yaml"); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("ReadFileAt in a commit that is not there: %v, want fs.ErrNotExist", err)
+	}
+	if got, err := repos.ReadFileAt(ctx, origin, second, "SKILL.md"); err != nil || string(got) != "second\n" {
+		t.Errorf("ReadFileAt(SKILL.md) = %q, %v", got, err)
 	}
 }
 
@@ -268,14 +376,20 @@ func TestForkFromAnArchiveNeverLetsGitReadItAsAWorkTree(t *testing.T) {
 	}
 	tree := t.TempDir()
 	crlf := "line one\r\nline two\r\n"
+	// A conversion configured in the fork's repository must not touch the
+	// release's bytes either.
+	histGit(t, repos.Path(fork), "config", "core.autocrlf", "true")
 	for rel, body := range map[string]string{".gitattributes": "* text=auto eol=lf\n*.md filter=evil\n", "notes.md": crlf, "agent.yaml": "x\n"} {
 		if err := os.WriteFile(filepath.Join(tree, rel), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	commit, err := repos.CommitFork(ctx, fork, registry.ForkCommit{Dir: tree, ManifestPath: "agent.yaml", Manifest: []byte("y\n"), Message: "m\n", Refs: []string{"refs/heads/main"}, AuthorName: "b", AuthorEmail: "b@x", When: time.Now()})
+	commit, err := repos.CommitFork(ctx, fork, registry.ForkCommit{Dir: tree, ManifestPath: "manifest.yaml", Manifest: []byte(crlf), Message: "m\n", Refs: []string{"refs/heads/main"}, AuthorName: "b", AuthorEmail: "b@x", When: time.Now()})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got := histGit(t, repos.Path(fork), "cat-file", "blob", commit+":manifest.yaml"); got != strings.TrimSpace(crlf) {
+		t.Fatalf("the manifest was committed as %q, want its own bytes", got)
 	}
 	cmd := exec.Command("git", "-C", repos.Path(fork), "cat-file", "blob", commit+":notes.md")
 	got, err := cmd.Output()
@@ -284,6 +398,23 @@ func TestForkFromAnArchiveNeverLetsGitReadItAsAWorkTree(t *testing.T) {
 	}
 	if string(got) != crlf {
 		t.Fatalf("notes.md was committed as %q, want the release's bytes %q", got, crlf)
+	}
+
+	// A link is never followed to what it names: the tree is refused.
+	linked := t.TempDir()
+	if err := os.WriteFile(filepath.Join(linked, "agent.yaml"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/etc/hostname", filepath.Join(linked, "notes.md")); err != nil {
+		t.Fatal(err)
+	}
+	fork = uuid.New()
+	if err := repos.CopyHistory(ctx, uuid.New(), fork, "main", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, err = repos.CommitFork(ctx, fork, registry.ForkCommit{Dir: linked, ManifestPath: "agent.yaml", Manifest: []byte("y\n"), Message: "m\n", Refs: []string{"refs/heads/main"}, AuthorName: "b", AuthorEmail: "b@x", When: time.Now()})
+	if !errors.Is(err, registry.ErrForkTree) || !strings.Contains(err.Error(), `"notes.md" is not a regular file`) {
+		t.Fatalf("a symlink in the archive: %v, want ErrForkTree naming it", err)
 	}
 }
 
