@@ -3667,6 +3667,20 @@
           ]
         },
         {
+          "path": "internal/scan/stages_s2_history_plus_test.go",
+          "tests": [
+            "TestS2HistoryReadsAddedLinesThatStartWithPlus",
+            "TestS2HistoryFileHeadersAreNotContent"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/scan/stages_s2_history_test.go",
           "tests": [
             "TestScanHistoryPatch",
