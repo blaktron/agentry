@@ -3356,6 +3356,7 @@
             "TestSuspiciousURLReadsTheHostAfterUserinfo",
             "TestS8URLReputationReadsUserinfoURLs",
             "TestSuspiciousURLReadsTheHostABrowserReads",
+            "TestSuspiciousURLMapsTheHostAsABrowserDoes",
             "TestS8URLReputationReadsEveryHiddenForm"
           ],
           "fuzz": [],
