@@ -49,7 +49,7 @@ func NewClassifierJudge(cfg JudgeConfig) *ClassifierJudge {
 	}
 	return &ClassifierJudge{
 		endpoint: strings.TrimSpace(cfg.BaseURL), apiKey: cfg.APIKey, model: model,
-		client:     &http.Client{Timeout: 60 * time.Second},
+		client:     &http.Client{Timeout: 60 * time.Second, CheckRedirect: refuseRedirect},
 		promptHash: RubricHash(rubricStatement, "provider=classifier", "model="+model, "axis=C1_injection", "thresholds=0.5/0.7/0.9"),
 	}
 }
@@ -117,7 +117,8 @@ func (j *ClassifierJudge) Judge(ctx context.Context, content JudgeContent) (Judg
 }
 
 // classify posts one chunk and returns the injection probability.
-func (j *ClassifierJudge) classify(ctx context.Context, text string) (float64, error) {
+func (j *ClassifierJudge) classify(ctx context.Context, text string) (p float64, err error) {
+	defer func() { err = redactKey(err, j.apiKey) }()
 	payload, err := json.Marshal(map[string]any{"inputs": text})
 	if err != nil {
 		return 0, err
@@ -140,11 +141,7 @@ func (j *ClassifierJudge) classify(ctx context.Context, text string) (float64, e
 		return 0, fmt.Errorf("scan: classifier response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		snippet := string(raw)
-		if len(snippet) > 200 {
-			snippet = snippet[:200]
-		}
-		return 0, fmt.Errorf("scan: classifier endpoint returned %d: %s", resp.StatusCode, snippet)
+		return 0, fmt.Errorf("scan: classifier endpoint returned %d: %s", resp.StatusCode, responseExcerpt(raw, j.apiKey))
 	}
 	return parseClassifierScores(raw)
 }

@@ -233,7 +233,7 @@ type CreateAgentInput struct {
 
 // Run modes an agent row may carry. The manifest package owns the
 // vocabulary; this mirror keeps the store free of a pkg/manifest import.
-var validModes = map[string]bool{"autonomous": true, "interactive": true}
+var validModes = map[string]bool{"autonomous": true, "interactive": true, "persistent": true}
 
 // normalizeModes validates a caller-supplied mode set, deriving the v1
 // default when none was given.
@@ -245,7 +245,7 @@ func normalizeModes(modes []string) ([]string, error) {
 	out := make([]string, 0, len(modes))
 	for _, m := range modes {
 		if !validModes[m] {
-			return nil, fmt.Errorf("%w: unknown mode %q (autonomous | interactive)", ErrDenied, m)
+			return nil, fmt.Errorf("%w: unknown mode %q (autonomous | interactive | persistent)", ErrDenied, m)
 		}
 		if seen[m] {
 			continue

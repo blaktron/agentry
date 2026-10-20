@@ -297,16 +297,16 @@ func validateClassification(s *issues, m *Manifest) {
 	switch m.Major() {
 	case 2:
 		if m.Kind != "" {
-			s.errf("V1", "kind", "kind is not a v2 field: declare modes (autonomous | interactive) instead")
+			s.errf("V1", "kind", "kind is not a v2 field: declare modes (autonomous | interactive | persistent) instead")
 		}
 		if len(m.Modes) == 0 {
-			s.errf("V1", "modes", "modes is required: at least one of autonomous | interactive")
+			s.errf("V1", "modes", "modes is required: at least one of autonomous | interactive | persistent")
 		}
 		seen := make(map[Mode]bool, len(m.Modes))
 		for i, mode := range m.Modes {
 			p := fmt.Sprintf("modes[%d]", i)
 			if !mode.Valid() {
-				s.errf("V1", p, "unknown mode %q (autonomous | interactive)", mode)
+				s.errf("V1", p, "unknown mode %q (autonomous | interactive | persistent)", mode)
 			}
 			if seen[mode] {
 				s.errf("V1", p, "duplicate mode %q", mode)
@@ -570,8 +570,10 @@ func validateInteractive(s *issues, m *Manifest) {
 	if h.IdleTimeoutSeconds < 0 {
 		s.errf("V10", "interactive.idleTimeoutSeconds", "idleTimeoutSeconds must be positive")
 	}
-	if !m.Supports(ModeInteractive) {
-		s.warnf("V10", "interactive", "interactive hints are declared but modes does not include interactive; they will never apply")
+	// A persistent session is a conversation too: it opens with the same
+	// message and takes the same idle hint.
+	if !m.Supports(ModeInteractive) && !m.Supports(ModePersistent) {
+		s.warnf("V10", "interactive", "interactive hints are declared but modes includes neither interactive nor persistent; they will never apply")
 	}
 }
 
