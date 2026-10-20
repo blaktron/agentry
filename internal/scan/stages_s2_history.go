@@ -32,6 +32,27 @@ const (
 
 var historyCommitRe = regexp.MustCompile(`^\x01([0-9a-f]{7,64})$`)
 
+// privateKeyRule is the secret rule that matches only a PEM private key's
+// BEGIN line. Every key's BEGIN line is alike, so the history scan reads the
+// key's body, the added text up to its END line, and tells keys apart by
+// that instead.
+const privateKeyRule = "private-key"
+
+var (
+	// privateKeyBeginRe is the private-key rule's own pattern.
+	privateKeyBeginRe = secretRuleRe(privateKeyRule)
+	privateKeyEndRe   = regexp.MustCompile(`-----END (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----`)
+	// keyBodyNoise is what is dropped from a key's body before it is
+	// compared: line breaks, escaped line breaks, quotes and indentation
+	// differ between copies of one key, the base64 text does not.
+	keyBodyNoise = regexp.MustCompile(`\\[nr]|[^A-Za-z0-9+/=]`)
+)
+
+// historyMaxKeyBody bounds how much of a private key's body the history
+// scan holds while it reads to the END line: a 4096-bit RSA key is about
+// 3 KiB.
+const historyMaxKeyBody = 16 << 10
+
 // s2History runs the history scan for git-tag sources. seen carries the
 // archive scan's rule|file|line keys purely for the report's benefit: a
 // secret still present at the tag is reported by the archive scan with
@@ -107,12 +128,58 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 		mac.Write([]byte(cand))
 		return ruleID + "|" + string(mac.Sum(nil))
 	}
+	seen := map[string]bool{}
+	// add records a finding unless its secret was already reported, and
+	// reports whether the finding limit stopped the scan.
+	add := func(key string, f Finding) (full bool) {
+		if seen[key] {
+			return false
+		}
+		seen[key] = true
+		if len(findings) >= historyMaxFindings {
+			return true
+		}
+		findings = append(findings, f)
+		return false
+	}
+	// key is the private key whose body is still being read: its finding
+	// is added once the END line, or the end of the added block, says
+	// which key it is.
+	var key *pendingKey
+	closeKey := func() bool {
+		if key == nil {
+			return false
+		}
+		k := key
+		key = nil
+		return add(secretKey(privateKeyRule, keyBodyNoise.ReplaceAllString(k.body.String(), "")), k.finding)
+	}
+	// readKey takes the part of text that belongs to the open key's body
+	// and closes the key at its END line, at another key's BEGIN line, or
+	// once the body passes historyMaxKeyBody.
+	readKey := func(text string) bool {
+		if key == nil {
+			return false
+		}
+		cut, done := len(text), false
+		if loc := privateKeyEndRe.FindStringIndex(text); loc != nil {
+			cut, done = loc[0], true
+		}
+		if loc := privateKeyBeginRe.FindStringIndex(text); loc != nil && loc[0] < cut {
+			cut, done = loc[0], true
+		}
+		key.body.WriteString(text[:cut])
+		if done || key.body.Len() > historyMaxKeyBody {
+			return closeKey()
+		}
+		return false
+	}
+
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64<<10), historyMaxLine)
 	var commit, file string
 	inHunk := false // past a file's "@@" line: every line is content until the next file or commit
 	var read int64
-	seen := map[string]bool{}
 	for sc.Scan() {
 		line := sc.Text()
 		read += int64(len(line)) + 1
@@ -120,10 +187,16 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 			return findings, true, nil
 		}
 		if m := historyCommitRe.FindStringSubmatch(line); m != nil {
+			if closeKey() {
+				return findings, true, nil
+			}
 			commit, file, inHunk = m[1], "", false
 			continue
 		}
 		if strings.HasPrefix(line, "diff --git ") {
+			if closeKey() {
+				return findings, true, nil
+			}
 			inHunk = false
 			continue
 		}
@@ -142,11 +215,18 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 		}
 		// Inside a hunk every line that starts with "+" is added content,
 		// whatever its own first character ("++" from a committed patch or
-		// a Markdown "+ " item included).
+		// a Markdown "+ " item included). Any other line ends the block of
+		// added lines a key's body is read from.
 		if len(line) < 2 || line[0] != '+' {
+			if closeKey() {
+				return findings, true, nil
+			}
 			continue
 		}
 		added := line[1:]
+		if readKey(added) {
+			return findings, true, nil
+		}
 		for _, rule := range secretRules {
 			// Every match on the line: two different keys on one line are
 			// two secrets to rotate.
@@ -159,15 +239,7 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 				if rule.entropyMin > 0 && rules.ShannonEntropy([]byte(cand)) < rule.entropyMin {
 					continue
 				}
-				key := secretKey(rule.id, cand)
-				if seen[key] {
-					continue
-				}
-				seen[key] = true
-				if len(findings) >= historyMaxFindings {
-					return findings, true, nil
-				}
-				findings = append(findings, Finding{
+				f := Finding{
 					Scanner: "S2/history-" + rule.id, Severity: rule.severity, Confidence: ConfHigh,
 					Title:    "Possible secret in git history: " + rule.id,
 					FilePath: file,
@@ -177,7 +249,21 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 						"reason": "the secret is in every clone of the repository even if a later commit removed it; rotate it",
 					},
 					Taxonomy: []string{"LLM03"},
-				})
+				}
+				if rule.id == privateKeyRule {
+					// A key opened earlier on this line ends here.
+					if closeKey() {
+						return findings, true, nil
+					}
+					key = &pendingKey{finding: f}
+					if readKey(added[end:]) {
+						return findings, true, nil
+					}
+					continue
+				}
+				if add(secretKey(rule.id, cand), f) {
+					return findings, true, nil
+				}
 			}
 		}
 	}
@@ -187,5 +273,25 @@ func scanHistoryPatch(r io.Reader) (findings []Finding, truncated bool, err erro
 		}
 		return findings, false, serr
 	}
+	if closeKey() {
+		return findings, true, nil
+	}
 	return findings, false, nil
+}
+
+// pendingKey is a private key the history scan has found the BEGIN line
+// of and is reading the body of.
+type pendingKey struct {
+	finding Finding
+	body    strings.Builder
+}
+
+// secretRuleRe is the pattern of the secret rule with the given id.
+func secretRuleRe(id string) *regexp.Regexp {
+	for _, rule := range secretRules {
+		if rule.id == id {
+			return rule.re
+		}
+	}
+	panic("scan: no secret rule " + id)
 }
