@@ -847,6 +847,13 @@ func buildHandler(ctx context.Context, cfg config.Config, st *store.Store, log *
 		if err := repos.PrepareHooks(); err != nil {
 			return nil, nil, err
 		}
+		// A process that died mid-init left its work directory on the
+		// volume; a crash always ends in a start, so the start sweeps.
+		if n, err := repos.SweepInitLeftovers(); err != nil {
+			log.Warn("git: sweep repository init leftovers", "err", err, "removed", n)
+		} else if n > 0 {
+			log.Info("git: removed repository init leftovers", "removed", n)
+		}
 		// The git role terminates untrusted git traffic and never
 		// signs, so it holds no key; `all` is also the worker and does.
 		var opts []api.Option
