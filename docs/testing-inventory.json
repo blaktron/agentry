@@ -3745,7 +3745,9 @@
           "path": "internal/scan/stages_s2_history_distinct_test.go",
           "tests": [
             "TestS2HistoryReportsEachDistinctSecret",
-            "TestS2HistoryFindingLimitSaysWhichLimit"
+            "TestS2HistoryFindingLimitSaysWhichLimit",
+            "TestS2HistoryDecoysCannotHideAnOlderSecret",
+            "TestS2HistorySizeCapHoldsTheVersion"
           ],
           "fuzz": [],
           "benchmarks": [],

@@ -2,6 +2,7 @@ package scan
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -76,20 +77,82 @@ func TestS2HistoryReportsEachDistinctSecret(t *testing.T) {
 	}
 }
 
-// TestS2HistoryFindingLimitSaysWhichLimit pins that a history stopped by the
-// finding limit says so, rather than claiming the size cap stopped it.
+// TestS2HistoryFindingLimitSaysWhichLimit pins that a history with more
+// findings than the report lists says how many more, and is not reported as
+// truncated, which is the size cap's finding.
 func TestS2HistoryFindingLimitSaysWhichLimit(t *testing.T) {
 	in := &Input{Source: "git-tag", History: func(context.Context) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader(historyAssignments(historyMaxFindings + 1))), nil
 	}}
 	findings, _ := s2History(context.Background(), in)
+	limit := 0
 	for _, f := range findings {
-		if f.Scanner == "S2/history-truncated" {
-			if f.Detail["maxFindings"] != historyMaxFindings || !strings.Contains(f.Title, "finding limit") {
-				t.Fatalf("truncation by the finding limit reads %q %v", f.Title, f.Detail)
+		switch f.Scanner {
+		case scannerHistoryTruncated:
+			t.Fatalf("a history read to its end is reported truncated: %+v", f)
+		case scannerHistoryFindingLimit:
+			limit++
+			if f.Severity != SevLow || f.Detail["maxFindings"] != historyMaxFindings || f.Detail["notShown"] != 1 {
+				t.Errorf("finding-limit finding = %+v", f)
 			}
-			return
 		}
 	}
-	t.Fatalf("no S2/history-truncated finding after %d distinct secrets", historyMaxFindings+1)
+	if limit != 1 {
+		t.Fatalf("%d finding-limit findings after %d distinct secrets, want 1", limit, historyMaxFindings+1)
+	}
+}
+
+// TestS2HistoryDecoysCannotHideAnOlderSecret pins that newer commits full of
+// distinct medium-rated decoys cannot push an older high-severity secret off
+// the report: the scan reads every commit, keeps the most severe findings,
+// and the version is held rather than published at the baseline.
+func TestS2HistoryDecoysCannotHideAnOlderSecret(t *testing.T) {
+	var decoys strings.Builder
+	for i := range historyMaxFindings {
+		fmt.Fprintf(&decoys, "token = %q\n", fakeBase64(fmt.Sprintf("decoy %d", i), 24))
+	}
+	patch := gitHistoryOf(t,
+		map[string]*string{"old.env": textOf("AWS_ACCESS_KEY_ID=AKIAI44QH8DHBEXAMPLE\n")},
+		map[string]*string{"old.env": nil},
+		map[string]*string{"decoys.conf": textOf(decoys.String())},
+	)
+	findings, _ := s2History(context.Background(), &Input{Source: "git-tag", History: func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(patch)), nil
+	}})
+	var aws, decoyFindings, limit int
+	for _, f := range findings {
+		switch f.Scanner {
+		case "S2/history-aws-access-key":
+			aws++
+			if f.FilePath != "old.env" {
+				t.Errorf("the older secret is placed in %q", f.FilePath)
+			}
+		case "S2/history-generic-assignment":
+			decoyFindings++
+		case scannerHistoryFindingLimit:
+			limit++
+		}
+	}
+	if aws != 1 || decoyFindings != historyMaxFindings-1 || limit != 1 {
+		t.Fatalf("aws=%d decoys=%d limit=%d, want 1, %d, 1: %+v", aws, decoyFindings, limit, historyMaxFindings-1, findings)
+	}
+	if got := Evaluate(GateInput{Findings: findings, Policy: DefaultBaseline()}); got.Outcome == OutcomePublish {
+		t.Fatalf("a history whose older secret sits behind decoys published: %+v", got)
+	}
+}
+
+// TestS2HistorySizeCapHoldsTheVersion pins that a history the scan stopped
+// reading at the size cap is not published at the baseline: older commits
+// went unread, so the gate sends it to a person whatever its other findings.
+func TestS2HistorySizeCapHoldsTheVersion(t *testing.T) {
+	findings, ran := s2History(context.Background(), &Input{Source: "git-tag", History: func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(io.MultiReader(&contextLines{size: historyPatchCap}, strings.NewReader("\n"))), nil
+	}})
+	if !ran || len(findings) != 1 || findings[0].Scanner != scannerHistoryTruncated {
+		t.Fatalf("findings = %+v ran=%v, want one %s", findings, ran, scannerHistoryTruncated)
+	}
+	got := Evaluate(GateInput{Findings: findings, Policy: DefaultBaseline()})
+	if got.Outcome != OutcomeNeedsReview || got.branch != branchCouldNotScan {
+		t.Fatalf("a history stopped at the size cap: %+v", got)
+	}
 }
