@@ -169,19 +169,18 @@ func (s *RepoStore) Path(repoID uuid.UUID) string {
 	return filepath.Join(s.dataDir, id[:2], id+".git")
 }
 
-// ErrRepoExists is InitBare's answer when the repository is already there.
-var ErrRepoExists = errors.New("gitsrv: repository already exists")
+// errRepoExists is InitBare's answer when the repository is already there.
+var errRepoExists = errors.New("gitsrv: repository already exists")
 
 // InitBare creates and configures a bare repository: default branch,
 // deny-delete-current, quota-derived receive.maxInputSize, policy hooks.
 // The repository is built in a private directory beside its final path and
-// renamed into place, so it appears complete or not at all, and of
-// concurrent calls for one repository exactly one succeeds and the others
-// get ErrRepoExists.
+// renamed into place, so it appears complete or not at all. Of concurrent
+// calls for one repository, one succeeds and the others get errRepoExists.
 func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranch string) error {
 	dir := s.Path(repoID)
 	if _, err := os.Stat(dir); err == nil {
-		return fmt.Errorf("%w: %s", ErrRepoExists, repoID)
+		return fmt.Errorf("%w: %s", errRepoExists, repoID)
 	}
 	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
 		return err
@@ -224,7 +223,7 @@ func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranc
 	// another call finished first is kept and this one is discarded.
 	if err := os.Rename(tmp, dir); err != nil {
 		if _, statErr := os.Stat(dir); statErr == nil {
-			return fmt.Errorf("%w: %s", ErrRepoExists, repoID)
+			return fmt.Errorf("%w: %s", errRepoExists, repoID)
 		}
 		return err
 	}
@@ -234,7 +233,7 @@ func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranc
 // EnsureBare makes the repository if it is not there yet. A repository that
 // exists, or that a concurrent call made first, is success.
 func (s *RepoStore) EnsureBare(ctx context.Context, repoID uuid.UUID, defaultBranch string) error {
-	if err := s.InitBare(ctx, repoID, defaultBranch); err != nil && !errors.Is(err, ErrRepoExists) {
+	if err := s.InitBare(ctx, repoID, defaultBranch); err != nil && !errors.Is(err, errRepoExists) {
 		return err
 	}
 	return nil
