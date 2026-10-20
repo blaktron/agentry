@@ -207,3 +207,24 @@ func queryName(packet []byte) string {
 	}
 	return strings.Join(labels, ".")
 }
+
+// A token is trimmed before it is judged, so a blank one verifies nothing:
+// not a blank record, not an empty one, and not a bare prefixed record with no
+// value. A real token is not matched by a record with no value either.
+func TestVerifyTXTRefusesWhatItCannotJudge(t *testing.T) {
+	domain := "acme.example"
+	name := TXTName(domain)
+	records := fakeResolver{txt: map[string][]string{name: {"", "   ", "agentry-domain-verification=", "agentry-domain-verification= "}}}
+	for _, token := range []string{"", " ", "\t", "  \n "} {
+		if ok, err := VerifyTXT(context.Background(), records, domain, token); err != nil || ok {
+			t.Errorf("token %q: ok=%v err=%v, want false/nil", token, ok, err)
+		}
+	}
+	if ok, err := VerifyTXT(context.Background(), records, domain, "tok-123"); err != nil || ok {
+		t.Errorf("a real token against records with no value: ok=%v err=%v, want false/nil", ok, err)
+	}
+	padded := fakeResolver{txt: map[string][]string{name: {"agentry-domain-verification=tok-123"}}}
+	if ok, err := VerifyTXT(context.Background(), padded, domain, "  tok-123 "); err != nil || !ok {
+		t.Errorf("a padded token against its record: ok=%v err=%v, want true/nil", ok, err)
+	}
+}

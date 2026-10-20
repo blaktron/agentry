@@ -65,7 +65,7 @@ var reservedTLDs = map[string]bool{
 // public mail provider, an IETF-reserved name, or a subdomain of either.
 // The comparison ignores case, surrounding space and a trailing dot.
 func Shared(domain string) bool {
-	d := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(domain), ".")))
+	d := normalize(domain)
 	if d == "" {
 		return true
 	}
@@ -90,5 +90,11 @@ func Of(email string) string {
 	if at < 0 {
 		return ""
 	}
-	return strings.ToLower(strings.TrimSpace(strings.TrimSuffix(email[at+1:], ".")))
+	return normalize(email[at+1:])
+}
+
+// normalize is a domain as Shared and Of compare it: lower case, without
+// leading space, and without any run of trailing dots and space, however long.
+func normalize(domain string) string {
+	return strings.ToLower(strings.TrimRight(strings.TrimSpace(domain), ". \t\r\n\v\f"))
 }

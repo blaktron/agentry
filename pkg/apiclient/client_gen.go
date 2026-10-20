@@ -145,6 +145,7 @@ func (e AgentGrantKind) Valid() bool {
 const (
 	Autonomous  AgentMode = "autonomous"
 	Interactive AgentMode = "interactive"
+	Persistent  AgentMode = "persistent"
 )
 
 // Valid indicates whether the value is a known member of the AgentMode enum.
@@ -153,6 +154,8 @@ func (e AgentMode) Valid() bool {
 	case Autonomous:
 		return true
 	case Interactive:
+		return true
+	case Persistent:
 		return true
 	default:
 		return false
@@ -2111,7 +2114,7 @@ type AgentGrant struct {
 // AgentGrantKind defines model for AgentGrant.Kind.
 type AgentGrantKind string
 
-// AgentMode A run mode a release supports. `autonomous` runs from its source files, writes its output and receipts, and ends; `interactive` starts from the same plan and controls but the run is a conversation with the user in the CLI or the desktop. A release declares one or both.
+// AgentMode A run mode a release supports. `autonomous` runs from its source files, writes its output and receipts, and ends; `interactive` starts from the same plan and controls but the run is a conversation with the user in the CLI or the desktop; `persistent` is a conversation the runner keeps between sessions, and is run only for the runner's own built-in agents, so a client withholds Run for a release that supports no other mode. A release declares at least one.
 type AgentMode string
 
 // AgentModes The run modes a release supports; at least one.
