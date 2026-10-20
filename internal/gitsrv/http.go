@@ -784,6 +784,11 @@ func (h *Handler) acceptedRefs(ctx context.Context, agent registry.Agent, want [
 	}
 	accepted := make([]RefUpdate, 0, len(want))
 	for _, ru := range want {
+		// A ref the repository cannot hold is never looked up, so its
+		// absence would read as a delete that happened.
+		if !safeRefName(ru.Ref) {
+			continue
+		}
 		cur, exists := have[ru.Ref]
 		if ru.New == zeroOID {
 			if !exists {
