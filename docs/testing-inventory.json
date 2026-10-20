@@ -3449,6 +3449,19 @@
           ]
         },
         {
+          "path": "internal/scan/judge_key_test.go",
+          "tests": [
+            "TestHTTPJudgesRefuseRedirects",
+            "TestHTTPJudgesRedactAnEchoedKey"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/scan/judge_model_test.go",
           "tests": [
             "TestRunRecordsTheModelIDNotTheProviderName"
