@@ -2065,6 +2065,27 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "internal/gitsrv/archive_test.go",
+          "tests": [
+            "TestArchiveCommitHoldsEveryBlobOfTheTree",
+            "TestArchiveCommitRefusesWhatIsNotACommit",
+            "TestArchiveFailsClosedOnInfoAttributes",
+            "TestArchiveTagResolvesToTheCommit",
+            "TestTagRefQualifiesOnlyPlainTagNames",
+            "TestVerifyArchiveCompleteNamesWhatWasDropped",
+            "TestArchiveCheckedAgainstTheTree",
+            "TestStartupRefusesAGitThatHonoursExportIgnore",
+            "TestExtractPlainTarIsDefensive"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/bookkeeping_test.go",
           "tests": [
             "TestPushBookkeepingRidesTheQueue",
@@ -2073,7 +2094,9 @@
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
-          "dependencyHints": []
+          "dependencyHints": [
+            "source/file contract"
+          ]
         },
         {
           "path": "internal/gitsrv/concurrency_test.go",
@@ -2094,6 +2117,7 @@
             "TestReleaseArchiveIgnoresExportIgnore",
             "TestGitEnforcedSSO",
             "TestPreReceiveHookFailsClosed",
+            "TestPreReceiveHookProtectsTheDefaultBranch",
             "TestPreReceiveHookWarnTier",
             "TestOrgStateGatesGit",
             "TestArchiveTagRefusesAnOptionShapedName"
@@ -2216,9 +2240,62 @@
           ]
         },
         {
+          "path": "internal/gitsrv/lazy_init_test.go",
+          "tests": [
+            "TestRefusedGitRequestCreatesNoRepository",
+            "TestCopyingForkGitRequestCreatesNoRepository",
+            "TestConcurrentFirstGitRequestsInitialiseOnce"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/limits_test.go",
+          "tests": [
+            "TestShippedLimitDefaults",
+            "TestNewHandlerBoundsGitWork",
+            "TestPushBudgetDefaultIsSixtyAnHour",
+            "TestPushBudgetRefusalWords",
+            "TestClientHostIsTheAddressPart",
+            "TestRPCAnswersWhatItCannotServe",
+            "TestGitEnvCarriesThePushPolicy",
+            "TestMountServesOnlyTheThreeSmartHTTPRoutes",
+            "TestGitClientIsTheResolvedAddress",
+            "TestFirstByteTimerRecordsTheFirstByteOnce",
+            "TestAcceptedRefsAreWhatTheRepositoryNowHolds",
+            "TestExecGitAnswersWhatItCannotServe",
+            "TestSafeRefName",
+            "TestGitFailuresAreNotAbsences",
+            "TestHermeticEnvIsolatesGit"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/pktline_test.go",
+          "tests": [
+            "TestParseReceiveCommands",
+            "TestCommandCaptureKeepsOnlyTheCommands"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/gitsrv/proxyproto_test.go",
           "tests": [
             "TestReadProxyHeader",
+            "TestReadProxyHeaderSaysWhenThereIsNone",
             "TestReadProxyHeaderConsumesOnlyTheHeader"
           ],
           "fuzz": [],
@@ -2296,6 +2373,22 @@
           ]
         },
         {
+          "path": "internal/gitsrv/ssh_session_test.go",
+          "tests": [
+            "TestParseGitCommand",
+            "TestSSHServesNothingButGitSessions",
+            "TestSSHStopsAfterTheAuthTries",
+            "TestHostKeyIsCreatedOnceAndKept",
+            "TestTruncateKeepsAtMostN"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/ssh_test.go",
           "tests": [
             "TestSSHTransportCloneAndPush",
@@ -2311,6 +2404,25 @@
           ]
         },
         {
+          "path": "internal/gitsrv/store_test.go",
+          "tests": [
+            "TestRepoStoreLayoutAndConfiguration",
+            "TestDiskUsageSumsFiles",
+            "TestRefsAtReadsOnlyTheNamedPlainRefs",
+            "TestTagsListsCommitTagsOnly",
+            "TestReviewedViewHoldsOnlyTheNamedTags",
+            "TestReviewedViewRefusesWhatIsNotATagOfACommit",
+            "TestReviewedViewsAreKeptWhileInUseAndPrunedWhenStale"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/unactivated_push_test.go",
           "tests": [
             "TestUnactivatedAccountCannotPush"
@@ -2319,6 +2431,21 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        },
+        {
+          "path": "internal/gitsrv/unsafe_refs_test.go",
+          "tests": [
+            "TestAcceptedRefsRefusesUnsafeNames",
+            "TestRefsAtWithNoPlainNameReadsNothing",
+            "TestSafeRefNameFollowsGit",
+            "TestAcceptedRefsRefusesNamesGitRefuses"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process"
+          ]
         }
       ]
     },
@@ -3218,6 +3345,17 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/url_reputation_test.go",
+          "tests": [
+            "TestSuspiciousURLReadsTheHostAfterUserinfo",
+            "TestS8URLReputationReadsUserinfoURLs"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         }
       ]
     },
@@ -3242,6 +3380,7 @@
           "path": "internal/scan/exectool_test.go",
           "tests": [
             "TestResolveExecTool",
+            "TestExecToolRunIsBoundedAndScrubbed",
             "TestRunGitleaksMergesReport",
             "TestRunGitleaksFailureIsAFinding",
             "TestSanitizeRuleID",
@@ -3266,8 +3405,10 @@
             "TestReportDigestFailsLoudly",
             "TestUnreadableFileBecomesFinding",
             "TestResumeNeverSkipsInventory",
+            "TestAFailedStageSendsTheRunToReview",
             "TestCacheableStagesMatchSpec",
-            "TestRubricHashChangesWithRubric"
+            "TestRubricHashChangesWithRubric",
+            "TestRunFoldsInTheConfiguredGitleaks"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3276,6 +3417,18 @@
             "source/file contract",
             "explicit skip"
           ]
+        },
+        {
+          "path": "internal/scan/imagemeta_fill_test.go",
+          "tests": [
+            "TestJPEGFillBytesDoNotEndTheMetadataWalk",
+            "TestJPEGFillBytesInjection",
+            "TestJPEGWalkStillStopsOnMalformedData"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         },
         {
           "path": "internal/scan/imagemeta_test.go",
@@ -3292,6 +3445,18 @@
           "dependencyHints": [
             "source/file contract"
           ]
+        },
+        {
+          "path": "internal/scan/imagemeta_unicode_test.go",
+          "tests": [
+            "TestEXIFUnicodeCommentFollowsTheFilesByteOrder",
+            "TestImageMetadataBigEndianUnicodeInjection",
+            "TestEXIFUnicodeCommentHostileBodies"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         },
         {
           "path": "internal/scan/judge_bedrock_test.go",
@@ -3327,9 +3492,24 @@
             "TestHTTPJudgeAnthropicProtocol",
             "TestHTTPJudgeBaseURLWithoutV1",
             "TestHTTPJudgeFailsClosed",
+            "TestParseJudgeJSON",
             "TestHTTPJudgeManipulatedOutputRoutesToReview",
             "TestNewJudgeProviderSelection",
             "TestHTTPJudgeRecordsUsage"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/scan/judge_key_test.go",
+          "tests": [
+            "TestHTTPJudgesRefuseRedirects",
+            "TestHTTPJudgesRedactAnEchoedKey",
+            "TestHTTPJudgeRedactsTheKeyFromExcerpts"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3356,7 +3536,9 @@
           "tests": [
             "TestStaticJudgeCategories",
             "TestStaticJudgeDetectsManipulation",
-            "TestRealisticBenignAgentScansClean"
+            "TestRealisticBenignAgentScansClean",
+            "TestJudgeProviderRubricHashes",
+            "TestVerdictFindingsCarryTheVerdict"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3418,7 +3600,9 @@
           "path": "internal/scan/osv_http_test.go",
           "tests": [
             "TestHTTPOSVQuery",
-            "TestHTTPOSVErrors"
+            "TestHTTPOSVErrors",
+            "TestHTTPOSVQueryBatchesAndBounds",
+            "TestOSVToFinding"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3433,6 +3617,7 @@
             "TestScanPackReadsEverySourceAndPage",
             "TestScanPackChunksUnderTheJudgeLimit",
             "TestScanPackWithNoJudgeSaysSo",
+            "TestScanProseRunsTheRuleStagesAndNoJudge",
             "TestScanPackRecordsAJudgeFailure",
             "TestScanPackRecordsAStageFailure"
           ],
@@ -3449,6 +3634,7 @@
             "TestExtractREADMEIgnoresNestedReadmes",
             "TestExtractREADMEReportsAbsence",
             "TestExtractREADMEHandlesAMissingStore",
+            "TestExtractREADMEInheritsTheExtractorsQuotas",
             "TestReadmeIndexTextIsBounded",
             "TestReadmeIndexTextTruncatesOnRuneBoundaries",
             "TestReadmeIndexTextStripsNulBytes",
@@ -3468,6 +3654,7 @@
             "TestS8PublisherSignalsSkipStaff",
             "TestS8NameSimilarity",
             "TestS8KeywordStuffing",
+            "TestS8KeywordLists",
             "TestBumpSize",
             "TestS9EscalationIsScopedToNewFindings",
             "TestS9ContentDiffIgnoresCommentLines",
@@ -3479,6 +3666,8 @@
             "TestBareDestinations",
             "TestS9NewEgressIsLowForAHost",
             "TestS9InstructionRewriteOnPatchBump",
+            "TestS9ReadsAProvedDrafterRevisionAsAFirstRelease",
+            "TestS8URLReputation",
             "TestS9FirstPublishSkips"
           ],
           "fuzz": [],
@@ -3519,6 +3708,20 @@
           ]
         },
         {
+          "path": "internal/scan/stages_s2_history_plus_test.go",
+          "tests": [
+            "TestS2HistoryReadsAddedLinesThatStartWithPlus",
+            "TestS2HistoryFileHeadersAreNotContent"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/scan/stages_s2_history_test.go",
           "tests": [
             "TestScanHistoryPatch",
@@ -3538,6 +3741,18 @@
             "TestS2ManifestEnv",
             "TestS2ManifestEnvWithoutFile",
             "TestS2ManifestOAuthValues"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/stages_s6_quoted_test.go",
+          "tests": [
+            "TestS6ReadsAQuotedCommandWord",
+            "TestS6SkipsAssignmentsAfterAWrapper",
+            "TestS6QuotedWordsThatAreNotCommands"
           ],
           "fuzz": [],
           "benchmarks": [],

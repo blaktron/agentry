@@ -2,6 +2,7 @@ package scan
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"reflect"
 	"strings"
@@ -33,6 +34,19 @@ func TestJudgeUsageReachesTheRunAndNotTheReport(t *testing.T) {
 	}
 	if res.JudgeUsage == nil || res.JudgeUsage.PromptTokens != 5 || res.JudgeUsage.CompletionTokens != 2 {
 		t.Fatalf("S5 must lift the judge's usage onto its result, got %+v", res.JudgeUsage)
+	}
+
+	// A whole run carries it, and the rubric version, onto its result and not
+	// into the report that is hashed and signed.
+	run := hardeningRun(t, usageJudge{&JudgeUsage{PromptTokens: 5, CompletionTokens: 2}}, RunParams{})
+	if run.JudgeUsage == nil || *run.JudgeUsage != (JudgeUsage{PromptTokens: 5, CompletionTokens: 2}) || run.JudgePromptHash != "sha256:x" {
+		t.Fatalf("run usage %+v, rubric %q", run.JudgeUsage, run.JudgePromptHash)
+	}
+	if blob, _ := json.Marshal(run.Report); strings.Contains(string(blob), "promptTokens") || strings.Contains(string(blob), `"usage"`) {
+		t.Fatalf("the signed report carries the usage: %s", blob)
+	}
+	if none := hardeningRun(t, usageJudge{}, RunParams{}); none.JudgeUsage != nil {
+		t.Fatalf("a judge that reports no use leaves none: %+v", none.JudgeUsage)
 	}
 
 	usageType := reflect.TypeOf(JudgeUsage{})

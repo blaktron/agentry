@@ -147,15 +147,34 @@ var shortenerHosts = map[string]bool{
 	"rebrand.ly": true, "shorturl.at": true,
 }
 
+// urlHost is the host a URL parser reads from an http(s) URL, lowercased:
+// the authority ends at the first "/", "?" or "#", the host follows its
+// last "@" (user:password@ is userinfo, not host), and a port is cut off.
+func urlHost(u string) string {
+	rest := u
+	if i := strings.Index(rest, "://"); i >= 0 {
+		rest = rest[i+3:]
+	}
+	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
+		rest = rest[:i]
+	}
+	if i := strings.LastIndexByte(rest, '@'); i >= 0 {
+		rest = rest[i+1:]
+	}
+	if strings.HasPrefix(rest, "[") { // an IPv6 literal keeps its colons
+		if i := strings.IndexByte(rest, ']'); i >= 0 {
+			rest = rest[:i+1]
+		}
+	} else if i := strings.IndexByte(rest, ':'); i >= 0 {
+		rest = rest[:i]
+	}
+	return strings.ToLower(rest)
+}
+
 // suspiciousURL returns a non-empty reason when a URL looks hostile:
 // punycode/homograph host or a known shortener.
 func suspiciousURL(u string) string {
-	rest := strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://")
-	host := rest
-	if i := strings.IndexAny(rest, "/:?#"); i >= 0 {
-		host = rest[:i]
-	}
-	host = strings.ToLower(host)
+	host := urlHost(u)
 	if strings.Contains(host, "xn--") {
 		return "punycode/homograph domain"
 	}

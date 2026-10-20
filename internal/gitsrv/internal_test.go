@@ -10,9 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"os"
 	"os/exec"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -107,7 +110,6 @@ func TestRepoSemaphoreHonorsContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer release()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -116,6 +118,12 @@ func TestRepoSemaphoreHonorsContext(t *testing.T) {
 	}
 	if n := sem.tracked(); n != 1 {
 		t.Fatalf("abandoned waiter left %d entries (want 1, the live holder)", n)
+	}
+	// The waiter that gave up held no reference: the holder leaving is the
+	// last one out.
+	release()
+	if n := sem.tracked(); n != 0 {
+		t.Fatalf("the repository is still tracked after its holder and its abandoned waiter left: %d entries", n)
 	}
 }
 
@@ -240,6 +248,26 @@ func (e *bkEnv) repo(id uuid.UUID) storegen.Repo {
 	return r
 }
 
+// pushAuditRow is what the newest repo.push audit row of an agent records.
+type pushAuditRow struct {
+	actor, org, targetKind *string
+	actorKind              string
+	refs                   string
+}
+
+func (e *bkEnv) latestPushAudit(agentID uuid.UUID) pushAuditRow {
+	e.t.Helper()
+	var r pushAuditRow
+	err := e.st.Pool().QueryRow(context.Background(),
+		`SELECT actor_id::text, actor_kind, org_id::text, target_kind, coalesce((detail->'refs')::text, '')
+		 FROM audit_events WHERE action = 'repo.push' AND target_id = $1
+		 ORDER BY occurred_at DESC LIMIT 1`, agentID).Scan(&r.actor, &r.actorKind, &r.org, &r.targetKind, &r.refs)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return r
+}
+
 func (e *bkEnv) pushAudits(agentID uuid.UUID) int {
 	e.t.Helper()
 	var n int
@@ -319,6 +347,120 @@ func TestAfterReceiveBookkeeping(t *testing.T) {
 		}
 		if after.LastPushAt == nil || !after.LastPushAt.After(*before.LastPushAt) {
 			t.Fatalf("last_push_at did not advance: %v → %v", before.LastPushAt, after.LastPushAt)
+		}
+	})
+
+	// The publication trigger gets exactly the updates the repository now
+	// reflects, with the agent and the pusher.
+	t.Run("an accepted push is handed to the publication trigger", func(t *testing.T) {
+		agent, commit := env.seedAgent("trigger")
+		var calls int
+		var gotAgent registry.Agent
+		var gotRefs []RefUpdate
+		var gotPusher *auth.Principal
+		env.h.PostReceive = func(_ context.Context, a registry.Agent, refs []RefUpdate, p *auth.Principal) {
+			calls++
+			gotAgent, gotRefs, gotPusher = a, refs, p
+		}
+		defer func() { env.h.PostReceive = nil }()
+
+		unapplied := strings.Repeat("1", 40)
+		env.h.afterReceive(context.Background(), agent, principal, pktCommands(
+			zeroOID+" "+commit+" refs/heads/main",
+			zeroOID+" "+unapplied+" refs/heads/feature"))
+
+		if calls != 1 {
+			t.Fatalf("the publication trigger ran %d times, want once", calls)
+		}
+		if want := []RefUpdate{{Old: zeroOID, New: commit, Ref: "refs/heads/main"}}; !slices.Equal(gotRefs, want) {
+			t.Fatalf("the trigger was handed %v, want only the accepted %v", gotRefs, want)
+		}
+		if gotAgent.ID != agent.ID || gotPusher != principal {
+			t.Fatalf("the trigger was handed agent %v and pusher %p, want %v and %p", gotAgent.ID, gotPusher, agent.ID, principal)
+		}
+	})
+
+	// A tag push publishes only when the agent allows it, the platform holds
+	// nothing against the agent, and the update creates a v* tag: a branch,
+	// another tag name and a deletion publish nothing. A submission the
+	// registry refuses is logged with the tag, which is how it is seen here.
+	t.Run("auto-publish submits only a created v tag of an agent that allows it", func(t *testing.T) {
+		agent, commit := env.seedAgent("autopub")
+		agent.AutoPublishTags, agent.QuarantineState = true, "none"
+		for _, ref := range []string{"refs/tags/v1.0.0", "refs/tags/release-1", "refs/heads/v3"} {
+			cmd := exec.Command("git", "-C", env.repos.Path(agent.RepoID), "update-ref", ref, commit) //nolint:gosec // test fixture
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("update-ref %s: %v\n%s", ref, err, out)
+			}
+		}
+		pushed := func(agent registry.Agent) []string {
+			rec := &recordedLog{}
+			previous := env.h.log
+			env.h.log = slog.New(rec)
+			defer func() { env.h.log = previous }()
+			env.h.afterReceive(context.Background(), agent, principal, pktCommands(
+				zeroOID+" "+commit+" refs/tags/v1.0.0",
+				zeroOID+" "+commit+" refs/tags/release-1",
+				zeroOID+" "+commit+" refs/heads/v3",
+				commit+" "+zeroOID+" refs/tags/v9.9.9"))
+			var tags []string
+			for _, line := range rec.lines {
+				if line.msg == "auto-publish refused" {
+					tags = append(tags, line.attrs["tag"])
+				}
+			}
+			return tags
+		}
+
+		if got := pushed(agent); !slices.Equal(got, []string{"v1.0.0"}) {
+			t.Fatalf("submissions attempted for %v, want only the created v1.0.0", got)
+		}
+		off := agent
+		off.AutoPublishTags = false
+		if got := pushed(off); len(got) != 0 {
+			t.Fatalf("an agent with auto-publish off had submissions attempted for %v", got)
+		}
+		for _, state := range []string{"quarantined", "blocked"} {
+			held := agent
+			held.QuarantineState = state
+			if got := pushed(held); len(got) != 0 {
+				t.Fatalf("an agent the platform has %s had submissions attempted for %v", state, got)
+			}
+		}
+	})
+
+	// The bookkeeping job fails, so the queue retries it, when the database
+	// refuses a write; a failed measurement alone does not.
+	t.Run("a failed size write fails the job before any audit row", func(t *testing.T) {
+		agent, _ := env.seedAgent("sizefail")
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		bk := NewPushBookkeeper(env.st, env.repos, env.h.aud, nil)
+		// The request ends between the measurement and the write.
+		bk.diskUsage = func(uuid.UUID) (int64, error) { cancel(); return 4096, nil }
+		err := bk.Run(ctx, RepoPushedArgs{AgentID: agent.ID, RepoID: agent.RepoID, ActorID: principal.UserID, Refs: []string{"refs/heads/main"}})
+		if err == nil || !strings.HasPrefix(err.Error(), "repo.pushed: size: ") {
+			t.Fatalf("Run = %v, want the size write's error", err)
+		}
+		if n := env.pushAudits(agent.ID); n != 0 {
+			t.Fatalf("audit rows after a failed size write = %d", n)
+		}
+	})
+
+	t.Run("a failed audit write fails the job", func(t *testing.T) {
+		agent, _ := env.seedAgent("auditfail")
+		// A NUL cannot be stored in a jsonb document, so the audit row is
+		// refused after the size has been written.
+		err := NewPushBookkeeper(env.st, env.repos, env.h.aud, nil).Run(context.Background(),
+			RepoPushedArgs{AgentID: agent.ID, RepoID: agent.RepoID, ActorID: principal.UserID, Refs: []string{"refs/heads/a\x00b"}})
+		if err == nil || !strings.HasPrefix(err.Error(), "repo.pushed: audit: ") {
+			t.Fatalf("Run = %v, want the audit write's error", err)
+		}
+		if r := env.repo(agent.RepoID); r.SizeBytes == 0 || r.LastPushAt == nil {
+			t.Fatalf("the size was not written before the audit row was refused: %+v", r)
+		}
+		if n := env.pushAudits(agent.ID); n != 0 {
+			t.Fatalf("audit rows after a refused audit write = %d", n)
 		}
 	})
 }
@@ -416,6 +558,66 @@ func TestAcquireGitBudgetsEachClientAddress(t *testing.T) {
 	if len(h.sem) != 0 || h.perRepo.tracked() != 0 || h.perClient.tracked() != 0 {
 		t.Fatalf("slots left held: global %d, repositories %d, addresses %d", len(h.sem), h.perRepo.tracked(), h.perClient.tracked())
 	}
+
+	// An operation that gives up while it waits hands back what it took:
+	// the address's slot and, past the repository, the repository's.
+	held := func(h *Handler, addr string) int {
+		h.perClient.mu.Lock()
+		defer h.perClient.mu.Unlock()
+		if slot, ok := h.perClient.live[addr]; ok {
+			return len(slot.ch)
+		}
+		return 0
+	}
+	t.Run("giving up at a full repository frees the address's slot", func(t *testing.T) {
+		h := &Handler{sem: make(chan struct{}, 8), perRepo: newRepoSemaphores(1), perClient: newClientSemaphores(2)}
+		repo := uuid.New()
+		holder, err := h.acquireGit(context.Background(), repo, greedy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gone, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, err := h.acquireGit(gone, repo, greedy); !errors.Is(err, context.Canceled) {
+			t.Fatalf("waiting on a full repository with a canceled context: %v", err)
+		}
+		if n := held(h, greedy); n != 1 {
+			t.Fatalf("the address holds %d slots after its second operation gave up, want 1", n)
+		}
+		holder()
+		if h.perClient.tracked() != 0 || h.perRepo.tracked() != 0 || len(h.sem) != 0 {
+			t.Fatalf("slots left held: global %d, repositories %d, addresses %d", len(h.sem), h.perRepo.tracked(), h.perClient.tracked())
+		}
+	})
+	t.Run("giving up at the full instance frees the repository's and the address's", func(t *testing.T) {
+		h := &Handler{sem: make(chan struct{}, 1), perRepo: newRepoSemaphores(2), perClient: newClientSemaphores(2)}
+		h.sem <- struct{}{} // another operation holds the only global slot
+		repo := uuid.New()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		errc := make(chan error, 1)
+		go func() {
+			_, err := h.acquireGit(ctx, repo, greedy)
+			errc <- err
+		}()
+		// Wait until the operation is past the repository and the address
+		// and is queued on the instance, then give up.
+		deadline := time.Now().Add(10 * time.Second)
+		for held(h, greedy) == 0 || h.perRepo.tracked() == 0 {
+			if time.Now().After(deadline) {
+				t.Fatal("the operation never took its address's and repository's slots")
+			}
+			runtime.Gosched()
+		}
+		cancel()
+		if err := <-errc; !errors.Is(err, context.Canceled) {
+			t.Fatalf("waiting on a full instance, then canceled: %v", err)
+		}
+		if h.perClient.tracked() != 0 || h.perRepo.tracked() != 0 || len(h.sem) != 1 {
+			t.Fatalf("after giving up: addresses %d, repositories %d, global %d held, want 0, 0 and the other operation's 1",
+				h.perClient.tracked(), h.perRepo.tracked(), len(h.sem))
+		}
+	})
 }
 
 // TestAcquireGitWithoutAnAddressSkipsTheBudget: an operation the server

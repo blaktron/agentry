@@ -169,16 +169,28 @@ func (s *RepoStore) Path(repoID uuid.UUID) string {
 	return filepath.Join(s.dataDir, id[:2], id+".git")
 }
 
+// errRepoExists is InitBare's answer when the repository is already there.
+var errRepoExists = errors.New("gitsrv: repository already exists")
+
 // InitBare creates and configures a bare repository: default branch,
 // deny-delete-current, quota-derived receive.maxInputSize, policy hooks.
+// The repository is built in a private directory beside its final path and
+// renamed into place, so it appears complete or not at all. Of concurrent
+// calls for one repository, one succeeds and the others get errRepoExists.
 func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranch string) error {
 	dir := s.Path(repoID)
 	if _, err := os.Stat(dir); err == nil {
-		return fmt.Errorf("gitsrv: repo %s already exists", repoID)
+		return fmt.Errorf("%w: %s", errRepoExists, repoID)
 	}
 	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
 		return err
 	}
+	work, err := os.MkdirTemp(filepath.Dir(dir), "."+filepath.Base(dir)+".init-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(work) }()
+	tmp := filepath.Join(work, "repo.git") // git makes it, with the usual mode
 	run := func(args ...string) error {
 		cmd := exec.CommandContext(ctx, s.gitBin, args...)
 		out, err := cmd.CombinedOutput()
@@ -187,7 +199,7 @@ func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranc
 		}
 		return nil
 	}
-	if err := run("init", "--bare", "-b", defaultBranch, dir); err != nil {
+	if err := run("init", "--bare", "-b", defaultBranch, tmp); err != nil {
 		return err
 	}
 	for _, kv := range [][2]string{
@@ -196,15 +208,32 @@ func (s *RepoStore) InitBare(ctx context.Context, repoID uuid.UUID, defaultBranc
 		{"uploadpack.allowFilter", "true"}, // partial clone
 		{"core.commitGraph", "true"},       // faster history walks on large repos
 	} {
-		if err := run("-C", dir, "config", kv[0], kv[1]); err != nil {
+		if err := run("-C", tmp, "config", kv[0], kv[1]); err != nil {
 			return err
 		}
 	}
 	// The repository's own copy of the shim, which git runs when it is
 	// started other than through Command; a receive-pack started through
 	// Command runs its own hooks directory's instead.
-	hookDir := filepath.Join(dir, "hooks")
+	hookDir := filepath.Join(tmp, "hooks")
 	if err := os.WriteFile(filepath.Join(hookDir, "pre-receive"), []byte(preReceiveShim), 0o755); err != nil { //nolint:gosec // hooks must be executable
+		return err
+	}
+	// rename(2) will not replace a non-empty directory, so a repository
+	// another call finished first is kept and this one is discarded.
+	if err := os.Rename(tmp, dir); err != nil {
+		if _, statErr := os.Stat(dir); statErr == nil {
+			return fmt.Errorf("%w: %s", errRepoExists, repoID)
+		}
+		return err
+	}
+	return nil
+}
+
+// EnsureBare makes the repository if it is not there yet. A repository that
+// exists, or that a concurrent call made first, is success.
+func (s *RepoStore) EnsureBare(ctx context.Context, repoID uuid.UUID, defaultBranch string) error {
+	if err := s.InitBare(ctx, repoID, defaultBranch); err != nil && !errors.Is(err, errRepoExists) {
 		return err
 	}
 	return nil
@@ -224,9 +253,11 @@ func (s *RepoStore) Remove(repoID uuid.UUID) error {
 // not exist. Push bookkeeping uses it to tell which requested updates were
 // actually applied: receive-pack exits 0 even when the pre-receive hook
 // rejects every command, so the repository — not the request — is the
-// authority on what changed.
+// authority on what changed. A name that is not a plain ref is never looked
+// up and never in the result; nil refs lists every ref.
 func (s *RepoStore) RefsAt(ctx context.Context, repoID uuid.UUID, refs []string) (map[string]string, error) {
 	args := []string{"-C", s.Path(repoID), "for-each-ref", "--format=%(objectname) %(refname)"}
+	patterns := 0
 	for _, ref := range refs {
 		// Only well-formed ref names become patterns: receive-pack commands
 		// come from the client, and a leading "-" or a glob would otherwise
@@ -235,6 +266,13 @@ func (s *RepoStore) RefsAt(ctx context.Context, repoID uuid.UUID, refs []string)
 			continue
 		}
 		args = append(args, ref)
+		patterns++
+	}
+	// Names that were all refused leave nothing to look up; with no
+	// pattern for-each-ref would list every ref. A nil refs still means
+	// every ref.
+	if refs != nil && patterns == 0 {
+		return map[string]string{}, nil
 	}
 	out, err := exec.CommandContext(ctx, s.gitBin, args...).Output() //nolint:gosec // fixed binary; ref names validated above
 	if err != nil {
@@ -377,12 +415,27 @@ func (s *RepoStore) pruneViews(repoID uuid.UUID, keep string) {
 }
 
 // safeRefName reports whether a client-supplied ref name is a plain,
-// fully-qualified ref: safe to hand to git as a literal pattern.
+// fully-qualified ref: safe to hand to git as a literal pattern, and a name
+// git itself accepts (git check-ref-format), so a ref it names can exist.
 func safeRefName(ref string) bool {
 	if !strings.HasPrefix(ref, "refs/") || len(ref) > 512 {
 		return false
 	}
-	return !strings.ContainsAny(ref, " \t\n*?[]\\^:~")
+	if strings.ContainsAny(ref, " \t\n*?[]\\^:~") || strings.Contains(ref, "..") || strings.Contains(ref, "@{") ||
+		strings.HasSuffix(ref, "/") || strings.HasSuffix(ref, ".") {
+		return false
+	}
+	for _, c := range ref {
+		if c < 0x20 || c == 0x7f {
+			return false
+		}
+	}
+	for _, part := range strings.Split(ref, "/") {
+		if part == "" || strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
+			return false
+		}
+	}
+	return true
 }
 
 // DiskUsage returns the repo's approximate size in bytes.

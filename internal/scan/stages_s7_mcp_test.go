@@ -3,6 +3,7 @@ package scan
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -62,6 +63,14 @@ func TestS7OfflineIsNotChecked(t *testing.T) {
 	if got := findScanner(res.Findings, "S7/osv-not-checked"); len(got) != 1 || got[0].Severity != SevInfo {
 		t.Fatalf("findings: %+v", res.Findings)
 	}
+
+	// The note counts every declared server, the ones it could not look up
+	// as well.
+	two := `{"schemaVersion":"2","capabilities":{"mcpServers":[{"pypi":"mcp-server-fetch","version":"0.6.2"},{"npm":"left-pad"}]}}`
+	res = S7MCPServers{}.Run(s7ctx(OfflineOSV{}, &MemoryMCPScanCache{}), &Input{ManifestJSON: []byte(two)})
+	if got := findScanner(res.Findings, "S7/osv-not-checked"); len(got) != 1 || got[0].Detail["servers"] != 2 || !strings.HasPrefix(got[0].Title, "2 declared MCP server(s)") {
+		t.Fatalf("findings: %+v", res.Findings)
+	}
 }
 
 // First sight asks the database and records the answer; a second submission
@@ -71,7 +80,7 @@ func TestS7OfflineIsNotChecked(t *testing.T) {
 func TestS7LooksUpOnceThenReadsTheRegistry(t *testing.T) {
 	osv := &fakeOSV{vulns: map[string][]OSVVulnerability{
 		"npm/@modelcontextprotocol/server-github@2026.1.2": {
-			{ID: "GHSA-aaaa-bbbb-cccc", Aliases: []string{"CVE-2026-0001"}, Summary: "SSRF in fetch", Severity: "high", FixedIn: []string{"2026.1.3"}},
+			{ID: "GHSA-aaaa-bbbb-cccc", Aliases: []string{"CVE-2026-0001"}, Summary: "SSRF in fetch", Severity: "high", FixedIn: []string{"2026.1.3"}, References: []string{"https://advisories.example.org/GHSA-aaaa-bbbb-cccc"}},
 			{ID: "GHSA-dddd-eeee-ffff", Summary: "Path traversal", Severity: "critical"},
 		},
 	}}
@@ -116,6 +125,58 @@ func TestS7LooksUpOnceThenReadsTheRegistry(t *testing.T) {
 	_ = later.Run(s7ctx(osv, cache), &Input{ManifestJSON: []byte(s7Manifest)})
 	if osv.calls != 2 {
 		t.Fatalf("osv calls after TTL = %d, want 2", osv.calls)
+	}
+
+	// A refresh keeps the time the version was first seen and moves the time
+	// it was last checked.
+	again, _ := cache.Get(context.Background(), "npm", "@modelcontextprotocol/server-github", "2026.1.2")
+	if !again.FirstSeen.Equal(gh.FirstSeen) || !again.LastChecked.After(gh.LastChecked) {
+		t.Fatalf("refreshed row: first seen %v (was %v), last checked %v (was %v)", again.FirstSeen, gh.FirstSeen, again.LastChecked, gh.LastChecked)
+	}
+
+	// What a finding says about its advisory: the advisory and where it is,
+	// its summary, aliases and references, the advisory's own severity, when
+	// the row was read, and a fix or a score only when there is one.
+	d := vulns[0].Detail
+	if d["ecosystem"] != "npm" || d["version"] != "2026.1.2" || d["advisory"] != "GHSA-aaaa-bbbb-cccc" || d["summary"] != "SSRF in fetch" || d["advisorySeverity"] != "high" ||
+		fmt.Sprint(d["aliases"]) != "[CVE-2026-0001]" || fmt.Sprint(d["references"]) != "[https://advisories.example.org/GHSA-aaaa-bbbb-cccc]" ||
+		d["checkedAt"] != gh.LastChecked.UTC().Format(time.RFC3339) {
+		t.Fatalf("detail: %+v", d)
+	}
+	if _, ok := d["cvssScore"]; ok {
+		t.Fatalf("a score was recorded for an advisory without one: %+v", d)
+	}
+	if _, ok := vulns[1].Detail["fixedIn"]; ok {
+		t.Fatalf("a fix was recorded for an advisory without one: %+v", vulns[1].Detail)
+	}
+	if vulns[1].Title != "Known vulnerability in npm:@modelcontextprotocol/server-github@2026.1.2: GHSA-dddd-eeee-ffff" {
+		t.Fatalf("title: %q", vulns[1].Title)
+	}
+
+	// A row answers for a day, to the minute: just under a day old it answers
+	// and a day old it is asked about again.
+	base := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		age   time.Duration
+		calls int
+	}{{24*time.Hour - time.Minute, 0}, {24 * time.Hour, 1}, {24*time.Hour + time.Minute, 1}} {
+		aged := &MemoryMCPScanCache{}
+		_ = aged.Put(context.Background(), MCPScanRecord{Ecosystem: "npm", Package: "@modelcontextprotocol/server-github", Version: "2026.1.2", Status: "safe", LastChecked: base})
+		_ = aged.Put(context.Background(), MCPScanRecord{Ecosystem: "pypi", Package: "mcp-server-fetch", Version: "0.6.2", Status: "safe", LastChecked: base})
+		fresh := &fakeOSV{}
+		stage := S7MCPServers{now: func() time.Time { return base.Add(tc.age) }}
+		_ = stage.Run(s7ctx(fresh, aged), &Input{ManifestJSON: []byte(s7Manifest)})
+		if fresh.calls != tc.calls {
+			t.Errorf("a row %v old: %d lookups, want %d", tc.age, fresh.calls, tc.calls)
+		}
+	}
+
+	// A row put without times is dated now and first seen then.
+	undated := &MemoryMCPScanCache{}
+	_ = undated.Put(context.Background(), MCPScanRecord{Ecosystem: "npm", Package: "x", Version: "1.0.0", Status: "safe"})
+	row, _ := undated.Get(context.Background(), "npm", "x", "1.0.0")
+	if time.Since(row.LastChecked) > time.Minute || row.LastChecked.IsZero() || !row.FirstSeen.Equal(row.LastChecked) {
+		t.Fatalf("an undated row: first seen %v, last checked %v", row.FirstSeen, row.LastChecked)
 	}
 }
 
@@ -184,6 +245,23 @@ func TestS7LookupErrorIsNoData(t *testing.T) {
 	if got := errs[0].Detail["servers"].([]string); len(got) != 1 || got[0] != "pypi:mcp-server-fetch@0.6.2" {
 		t.Fatalf("mixed unchecked servers: %v", got)
 	}
+
+	// A not-found row says the version was not published when it was written;
+	// it is no answer about advisories, so during an outage that server has no
+	// data either.
+	nf := &MemoryMCPScanCache{}
+	_ = nf.Put(context.Background(), MCPScanRecord{Ecosystem: "npm", Package: "@modelcontextprotocol/server-github", Version: "2026.1.2",
+		Status: "not-found", LastChecked: time.Now().Add(-time.Hour)})
+	_ = nf.Put(context.Background(), MCPScanRecord{Ecosystem: "pypi", Package: "mcp-server-fetch", Version: "0.6.2",
+		Status: "safe", LastChecked: time.Now().Add(-48 * time.Hour), Advisories: nil})
+	res = S7MCPServers{}.Run(s7ctx(osv, nf), &Input{ManifestJSON: []byte(s7Manifest)})
+	errs = findScanner(res.Findings, scannerOSVNoData)
+	if len(errs) != 1 {
+		t.Fatalf("not-found row findings: %+v", res.Findings)
+	}
+	if got := errs[0].Detail["servers"].([]string); len(got) != 1 || got[0] != "npm:@modelcontextprotocol/server-github@2026.1.2" {
+		t.Fatalf("a not-found row answered during an outage: %v", got)
+	}
 }
 
 func TestDeclaredMCPServersSorted(t *testing.T) {
@@ -193,6 +271,23 @@ func TestDeclaredMCPServersSorted(t *testing.T) {
 	}
 	if DeclaredMCPServers(nil) != nil || DeclaredMCPServers([]byte("{")) != nil {
 		t.Fatal("garbage manifests must yield nothing")
+	}
+
+	// Sorted by ecosystem, then package, then version, whatever the order of
+	// the manifest.
+	unsorted := `{"schemaVersion":"2","capabilities":{"mcpServers":[
+  {"pypi":"zeta","version":"1.0.0"},
+  {"npm":"b-pkg","version":"1.0.0"},
+  {"npm":"a-pkg","version":"2.0.0"},
+  {"pypi":"alpha","version":"3.0.0"},
+  {"npm":"a-pkg","version":"1.0.0"}
+]}}`
+	var order []string
+	for _, d := range DeclaredMCPServers([]byte(unsorted)) {
+		order = append(order, d.Ecosystem+":"+d.Package+"@"+d.Version)
+	}
+	if want := "npm:a-pkg@1.0.0 npm:a-pkg@2.0.0 npm:b-pkg@1.0.0 pypi:alpha@3.0.0 pypi:zeta@1.0.0"; strings.Join(order, " ") != want {
+		t.Fatalf("declared in order %v, want %s", order, want)
 	}
 }
 
@@ -207,6 +302,7 @@ func TestS7RatesAdvisoriesForTheGate(t *testing.T) {
 			{ID: "GHSA-high-84", Severity: "high", CVSSScore: score(8.4)},
 			{ID: "GHSA-high-none", Severity: "high"},
 			{ID: "GHSA-low", Severity: "low", CVSSScore: score(3.1)},
+			{ID: "PYSEC/Odd_ID.1", Severity: "low"},
 		},
 	}}
 	cache := &MemoryMCPScanCache{}
@@ -214,6 +310,7 @@ func TestS7RatesAdvisoriesForTheGate(t *testing.T) {
 	want := map[string]Severity{
 		"S7/mcp-vuln-ghsa-crit": SevCritical, "S7/mcp-vuln-ghsa-high-85": SevHigh,
 		"S7/mcp-vuln-ghsa-high-84": SevMedium, "S7/mcp-vuln-ghsa-high-none": SevHigh, "S7/mcp-vuln-ghsa-low": SevLow,
+		"S7/mcp-vuln-pysec-odd-id-1": SevLow, // an id is lower-cased and anything but letters, digits and dashes becomes a dash
 	}
 	got := findScanner(res.Findings, "S7/mcp-vuln-")
 	if len(got) != len(want) {
@@ -303,6 +400,22 @@ func TestS7NoDataForAServerItCannotLookUp(t *testing.T) {
 	if d := Evaluate(GateInput{Findings: res.Findings, Policy: DefaultBaseline()}); d.Outcome != OutcomePublish {
 		t.Fatalf("no data publishes at the baseline: %+v", d)
 	}
+
+	// One server is enough for the finding, whichever ecosystem it names.
+	for ref, m := range map[string]string{
+		"npm:left-pad":    `{"schemaVersion":"2","capabilities":{"mcpServers":[{"npm":"left-pad"}]}}`,
+		"pypi:no-version": `{"schemaVersion":"2","capabilities":{"mcpServers":[{"pypi":"no-version"}]}}`,
+	} {
+		osv := &fakeOSV{}
+		res := S7MCPServers{}.Run(s7ctx(osv, &MemoryMCPScanCache{}), &Input{ManifestJSON: []byte(m)})
+		nd := findScanner(res.Findings, scannerOSVNoData)
+		if len(nd) != 1 || osv.calls != 0 {
+			t.Fatalf("%s: calls=%d findings: %+v", ref, osv.calls, res.Findings)
+		}
+		if reasons := nd[0].Detail["reasons"].(map[string]string); len(reasons) != 1 || reasons[ref] != noDataNoVersion {
+			t.Fatalf("%s: reasons: %v", ref, reasons)
+		}
+	}
 }
 
 // A remote server has no package to look up: S7 reports it for what it is,
@@ -340,5 +453,26 @@ func TestS7ReportsARemoteServerWithoutLookingItUp(t *testing.T) {
 	off := S7MCPServers{}.Run(s7ctx(OfflineOSV{}, &MemoryMCPScanCache{}), &Input{ManifestJSON: []byte(m)})
 	if len(findScanner(off.Findings, scannerRemoteServer)) != 1 {
 		t.Fatalf("offline, the remote server went unreported: %+v", off.Findings)
+	}
+	if got := rs[0].Detail["host"]; got != "gmailmcp.googleapis.com" {
+		t.Fatalf("host = %v", got)
+	}
+
+	// With no scopes the finding says none and its scopes are an empty list,
+	// not null; two scopes are joined with a comma and a space.
+	m2 := `{"schemaVersion":"2","capabilities":{"mcpServers":[
+  {"url":"https://plain.example.org/mcp","auth":"none"},
+  {"url":"https://two.example.org/mcp","auth":"oauth","scopes":["read","write"]}
+]}}`
+	res2 := S7MCPServers{}.Run(s7ctx(OfflineOSV{}, &MemoryMCPScanCache{}), &Input{ManifestJSON: []byte(m2)})
+	rs2 := findScanner(res2.Findings, scannerRemoteServer)
+	if len(rs2) != 2 {
+		t.Fatalf("findings: %+v", res2.Findings)
+	}
+	if sc, ok := rs2[0].Detail["scopes"].([]string); !ok || sc == nil || len(sc) != 0 || strings.Contains(rs2[0].Title, "; scopes") || !strings.HasPrefix(rs2[0].Title, "Remote MCP server https://plain.example.org/mcp (auth none)") || rs2[0].Detail["host"] != "plain.example.org" {
+		t.Fatalf("a server with no scopes: %q %#v", rs2[0].Title, rs2[0].Detail)
+	}
+	if !strings.HasPrefix(rs2[1].Title, "Remote MCP server https://two.example.org/mcp (auth oauth; scopes read, write)") {
+		t.Fatalf("a server with two scopes: %q", rs2[1].Title)
 	}
 }
