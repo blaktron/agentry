@@ -74,6 +74,38 @@ func TestSuspiciousURLReadsTheHostABrowserReads(t *testing.T) {
 	}
 }
 
+// TestSuspiciousURLMapsTheHostAsABrowserDoes pins that the host is compared
+// after the mapping a browser applies to it: the full-width, half-width
+// ideographic and ideographic full stops read as ".", full-width letters
+// and hyphens as ASCII, and case is folded; and after trimming what no host
+// name holds, such as a comma that ends the authority. Each form is tried
+// with a shortener and with a punycode host.
+func TestSuspiciousURLMapsTheHostAsABrowserDoes(t *testing.T) {
+	const short, puny = "URL shortener hides destination", "punycode/homograph domain"
+	for _, c := range []struct {
+		url, want string
+	}{
+		{"https://bit\u3002ly/x", short},
+		{"https://bit\uFF0Ely/x", short},
+		{"https://bit\uFF61ly/x", short},
+		{"https://\uFF42\uFF49\uFF54\uFF0E\uFF4C\uFF59/x", short},    // every character full-width
+		{"https://\uFF22\uFF29\uFF34.\uFF2C\uFF39", short},           // full-width capitals
+		{"https://\uFF58\uFF4E\uFF0D\uFF0Dpple-43d\u3002com/", puny}, // a full-width "xn--"
+		{"https://user@\uFF58\uFF4E--pple-43d\uFF0Ecom:443/x", puny},
+		{"https://bit.ly,/x", short},
+		{"https://bit.ly,", short},
+		{"https://tinyurl.com,.:443/x", short},
+		{"https://xn--pple-43d.com,/", puny},
+		{"https://example\u3002com/x", ""},
+		{"https://bit\uFF0Ely\uFF0Eexample.com/x", ""},
+		{"https://[::1]:8080/x", ""},
+	} {
+		if got := suspiciousURL(c.url); got != c.want {
+			t.Errorf("suspiciousURL(%q) = %q, want %q", c.url, got, c.want)
+		}
+	}
+}
+
 // TestS8URLReputationReadsEveryHiddenForm pins the finding through the stage,
 // where the URL is first found in the line: the scheme in any case, a
 // backslash authority and a trailing dot, with a shortener and with a
