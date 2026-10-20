@@ -2429,6 +2429,21 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        },
+        {
+          "path": "internal/gitsrv/unsafe_refs_test.go",
+          "tests": [
+            "TestAcceptedRefsRefusesUnsafeNames",
+            "TestRefsAtWithNoPlainNameReadsNothing",
+            "TestSafeRefNameFollowsGit",
+            "TestAcceptedRefsRefusesNamesGitRefuses"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process"
+          ]
         }
       ]
     },
