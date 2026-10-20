@@ -3464,6 +3464,7 @@
             "TestS8PublisherSignalsSkipStaff",
             "TestS8NameSimilarity",
             "TestS8KeywordStuffing",
+            "TestS8KeywordLists",
             "TestBumpSize",
             "TestS9EscalationIsScopedToNewFindings",
             "TestS9ContentDiffIgnoresCommentLines",
@@ -3475,6 +3476,8 @@
             "TestBareDestinations",
             "TestS9NewEgressIsLowForAHost",
             "TestS9InstructionRewriteOnPatchBump",
+            "TestS9ReadsAProvedDrafterRevisionAsAFirstRelease",
+            "TestS8URLReputation",
             "TestS9FirstPublishSkips"
           ],
           "fuzz": [],
