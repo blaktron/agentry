@@ -3778,6 +3778,19 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/scan/stages_s6_quoted_options_test.go",
+          "tests": [
+            "TestS6ReadsAQuotedOption",
+            "TestS6QuotedListenIsAListen",
+            "TestS6AnLInAnOptionArgumentIsNoListen",
+            "TestS6ScpOperandsAfterDashDash"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/stages_s6_quoted_test.go",
           "tests": [
             "TestS6ReadsAQuotedCommandWord",
