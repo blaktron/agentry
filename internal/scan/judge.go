@@ -417,7 +417,7 @@ func NewHTTPJudge(cfg JudgeConfig) *HTTPJudge {
 		endpoint:   base + path,
 		apiKey:     cfg.APIKey,
 		model:      model,
-		client:     &http.Client{Timeout: 90 * time.Second},
+		client:     &http.Client{Timeout: 90 * time.Second, CheckRedirect: refuseRedirect},
 		promptHash: RubricHash(rubricStatement, "provider=http-"+cfg.Provider, "model="+model, judgePromptTemplate),
 	}
 }
@@ -465,7 +465,8 @@ FILES:
 // Judge implements JudgeProvider over the configured endpoint. Any failure
 // (transport, non-200, unparseable verdict) returns an error: S5 fails
 // closed toward review.
-func (j *HTTPJudge) Judge(ctx context.Context, content JudgeContent) (JudgeVerdict, error) {
+func (j *HTTPJudge) Judge(ctx context.Context, content JudgeContent) (verdict JudgeVerdict, err error) {
+	defer func() { err = redactKey(err, j.apiKey) }()
 	prompt := judgePrompt(content)
 
 	payload, err := json.Marshal(map[string]any{
@@ -499,18 +500,14 @@ func (j *HTTPJudge) Judge(ctx context.Context, content JudgeContent) (JudgeVerdi
 		return JudgeVerdict{}, fmt.Errorf("scan: judge response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		snippet := string(raw)
-		if len(snippet) > 200 {
-			snippet = snippet[:200]
-		}
-		return JudgeVerdict{}, fmt.Errorf("scan: judge endpoint returned %d: %s", resp.StatusCode, snippet)
+		return JudgeVerdict{}, fmt.Errorf("scan: judge endpoint returned %d: %s", resp.StatusCode, responseExcerpt(raw, j.apiKey))
 	}
 
 	text, usage, err := judgeResponse(j.protocol, raw)
 	if err != nil {
 		return JudgeVerdict{}, fmt.Errorf("scan: judge response: %w", err)
 	}
-	verdict, err := parseJudgeJSON(text)
+	verdict, err = parseJudgeJSON(text)
 	if err != nil {
 		return JudgeVerdict{}, err
 	}
@@ -523,6 +520,34 @@ func (j *HTTPJudge) Judge(ctx context.Context, content JudgeContent) (JudgeVerdi
 	verdict.PromptHash = j.promptHash
 	verdict.Usage = usage
 	return verdict, nil
+}
+
+// refuseRedirect makes a 3xx the answer itself, which the judge refuses as
+// it does any answer but 200. The key goes only to the configured address:
+// a redirect would carry a custom key header to any host, and Authorization
+// to the same host or a subdomain.
+func refuseRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+// redactKey strips the key from an error's text, since a provider can echo
+// the request back, keeping the error otherwise intact.
+func redactKey(err error, key string) error {
+	if err == nil || key == "" || !strings.Contains(err.Error(), key) {
+		return err
+	}
+	return errors.New(strings.ReplaceAll(err.Error(), key, "[key]"))
+}
+
+// responseExcerpt is the start of a refused response's body for an error,
+// the key stripped before the cut so no part of it survives at the edge.
+func responseExcerpt(raw []byte, key string) string {
+	s := string(raw)
+	if key != "" {
+		s = strings.ReplaceAll(s, key, "[key]")
+	}
+	if len(s) > 200 {
+		s = s[:200]
+	}
+	return s
 }
 
 // judgePrompt renders the shared rubric template with the content as data.
