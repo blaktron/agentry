@@ -2677,7 +2677,9 @@
             "TestRiverRescuesAJobItsWorkerLeftRunning",
             "TestRiverJobTimeoutLeavesRoomForTheRescue",
             "TestOpenSelectsDriver",
-            "TestCountWaitingCountsJobsThatHaveNotStarted"
+            "TestCountWaitingCountsJobsThatHaveNotStarted",
+            "TestRiverSamplesTheBacklogPerQueue",
+            "TestSettleRescuedGivesEachRescuedJobItsLastAttempt"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3925,6 +3927,7 @@
           "path": "internal/store/store_test.go",
           "tests": [
             "TestMigrateAndConnect",
+            "TestWithTxCommitsOnNilAndRollsBackOtherwise",
             "TestMigrateConcurrentFreshDatabase"
           ],
           "fuzz": [],
