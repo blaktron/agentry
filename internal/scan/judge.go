@@ -516,6 +516,13 @@ func (j *HTTPJudge) Judge(ctx context.Context, content JudgeContent) (verdict Ju
 	if reManipSymptom.MatchString(text) {
 		verdict.Manipulated = true
 	}
+	// An excerpt quotes the model, which can echo the request's key, and
+	// excerpts reach the scan report.
+	if j.apiKey != "" {
+		for k, e := range verdict.Excerpts {
+			verdict.Excerpts[k] = strings.ReplaceAll(e, j.apiKey, "[key]")
+		}
+	}
 	verdict.Model = j.model
 	verdict.PromptHash = j.promptHash
 	verdict.Usage = usage

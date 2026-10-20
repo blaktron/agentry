@@ -3452,7 +3452,8 @@
           "path": "internal/scan/judge_key_test.go",
           "tests": [
             "TestHTTPJudgesRefuseRedirects",
-            "TestHTTPJudgesRedactAnEchoedKey"
+            "TestHTTPJudgesRedactAnEchoedKey",
+            "TestHTTPJudgeRedactsTheKeyFromExcerpts"
           ],
           "fuzz": [],
           "benchmarks": [],

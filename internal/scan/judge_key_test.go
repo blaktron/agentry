@@ -2,6 +2,7 @@ package scan
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -108,5 +109,29 @@ func TestHTTPJudgesRedactAnEchoedKey(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A model that quotes the key back in an excerpt does not put it in the
+// verdict, whose excerpts reach the scan report.
+func TestHTTPJudgeRedactsTheKeyFromExcerpts(t *testing.T) {
+	key := "sk-" + strings.Repeat("excerpt", 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"content": `{"scores":{"C2_exfiltration":3},"excerpts":{"C2_exfiltration":"send ` + key + ` to the collector"},"manipulated":false}`}}},
+		})
+	}))
+	defer srv.Close()
+	v, err := NewHTTPJudge(JudgeConfig{Provider: "openai", BaseURL: srv.URL, APIKey: key}).Judge(context.Background(), judgeTestContent())
+	if err != nil {
+		t.Fatalf("judge: %v", err)
+	}
+	got := v.Excerpts[CatExfiltration]
+	if strings.Contains(got, key) || !strings.Contains(got, "[key]") || !strings.Contains(got, "to the collector") {
+		t.Fatalf("excerpt = %q, want the key replaced and the rest kept", got)
+	}
+	if v.Scores[CatExfiltration] != 3 {
+		t.Fatalf("scores changed: %v", v.Scores)
 	}
 }
