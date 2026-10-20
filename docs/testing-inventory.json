@@ -3426,7 +3426,21 @@
           "tests": [
             "TestJPEGFillBytesDoNotEndTheMetadataWalk",
             "TestJPEGFillBytesInjection",
-            "TestJPEGWalkStillStopsOnMalformedData"
+            "TestJPEGWalkStillStopsOnMalformedData",
+            "TestJPEGStuffedByteIsNotASegment"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/imagemeta_resync_test.go",
+          "tests": [
+            "TestJPEGWalkReachesEverySegment",
+            "TestJPEGHiddenSegmentInjection",
+            "TestJPEGSecondImageAfterTheEndIsRead",
+            "TestJPEGTrailingBinaryDataYieldsNoFinding"
           ],
           "fuzz": [],
           "benchmarks": [],

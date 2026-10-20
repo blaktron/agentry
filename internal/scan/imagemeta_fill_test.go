@@ -80,18 +80,16 @@ func TestJPEGFillBytesInjection(t *testing.T) {
 }
 
 // TestJPEGWalkStillStopsOnMalformedData pins that the walk ends, without a
-// panic, on fill bytes that run to the end of the data, a fill run before a
-// truncated length, and a non-marker byte where a marker belongs.
+// panic and without reading a text, on fill bytes that run to the end of the
+// data, a stuffed byte with no marker after it, a segment length the data
+// cuts short, and a segment length that cannot be.
 func TestJPEGWalkStillStopsOnMalformedData(t *testing.T) {
 	for name, data := range map[string][]byte{
-		"fill to the end":      append([]byte{0xFF, 0xD8}, bytes.Repeat([]byte{0xFF}, 64)...),
-		"fill then truncation": {0xFF, 0xD8, 0xFF, 0xFF, 0xFF, 0xFE, 0x00},
-		"fill then non-marker": {0xFF, 0xD8, 0xFF, 0xFF, 0x00, 0x10, 0x41, 0x41},
-		// A stuffed byte with a length that fits, then a real COM segment:
-		// the walk must stop at the stuffed byte, not step over it.
-		"stuffed byte": append([]byte{0xFF, 0xD8, 0xFF, 0xFF, 0x00, 0x00, 0x04, 0x41, 0x41, 0xFF, 0xFE, 0x00, 0x0E},
-			"hidden text!"...),
-		"not on a marker": {0xFF, 0xD8, 0x41, 0xFF, 0xFE, 0x00, 0x0C, 'h', 'i', 'd', 'd', 'e', 'n', ' ', 't', 'x'},
+		"fill to the end":          append([]byte{0xFF, 0xD8}, bytes.Repeat([]byte{0xFF}, 64)...),
+		"fill then truncation":     {0xFF, 0xD8, 0xFF, 0xFF, 0xFF, 0xFE, 0x00},
+		"fill then a stuffed byte": {0xFF, 0xD8, 0xFF, 0xFF, 0x00, 0x10, 0x41, 0x41},
+		"length past the data":     {0xFF, 0xD8, 0x41, 0xFF, 0xFE, 0x00, 0x0C, 'h', 'i', 'd', 'd', 'e', 'n', ' ', 't', 'x'},
+		"length below two":         append([]byte{0xFF, 0xD8, 0xFF, 0xFE, 0x00, 0x01}, "hidden text, never a segment"...),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := extractImageText(data); len(got) != 0 {
@@ -99,4 +97,12 @@ func TestJPEGWalkStillStopsOnMalformedData(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestJPEGStuffedByteIsNotASegment pins that FF 00 is stepped over as data:
+// the two bytes after it are never read as a segment length. Read as one,
+// 00 0C would skip the twelve bytes that hold the COM's start.
+func TestJPEGStuffedByteIsNotASegment(t *testing.T) {
+	data := append([]byte{0xFF, 0xD8, 0xFF, 0x00, 0x00, 0x0C, 0xFF, 0xFE, 0x00, 0x0E}, "hidden text!"...)
+	wantMeta(t, "stuffed byte", extractImageText(data), "JPEG:COM=hidden text!")
 }
