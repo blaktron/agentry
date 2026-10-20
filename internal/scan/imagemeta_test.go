@@ -54,7 +54,13 @@ func makePNG(text map[string]string, order []string) []byte {
 // makeJPEGWithEXIF builds a JPEG whose APP1 segment carries an
 // ImageDescription in IFD0 and a UserComment in the Exif sub-IFD.
 func makeJPEGWithEXIF(description, userComment string) []byte {
-	le := binary.LittleEndian
+	return makeJPEGWithEXIFComment(binary.LittleEndian, description, append([]byte("ASCII\x00\x00\x00"), userComment...))
+}
+
+// makeJPEGWithEXIFComment builds a JPEG whose Exif block is written in byte
+// order bo, with an ImageDescription and a raw UserComment (its 8-byte
+// character-code designator included).
+func makeJPEGWithEXIFComment(bo binary.ByteOrder, description string, comment []byte) []byte {
 	const (
 		ifd0Off = 8
 		ifd0Len = 2 + 2*12 + 4 // count + 2 entries + next pointer
@@ -63,27 +69,30 @@ func makeJPEGWithEXIF(description, userComment string) []byte {
 		dataOff = exifOff + exifLen
 	)
 	desc := append([]byte(description), 0)
-	comment := append([]byte("ASCII\x00\x00\x00"), []byte(userComment)...)
 
 	tiff := make([]byte, dataOff)
-	copy(tiff[0:2], "II")
-	le.PutUint16(tiff[2:4], 42)
-	le.PutUint32(tiff[4:8], ifd0Off)
+	if bo == binary.BigEndian {
+		copy(tiff[0:2], "MM")
+	} else {
+		copy(tiff[0:2], "II")
+	}
+	bo.PutUint16(tiff[2:4], 42)
+	bo.PutUint32(tiff[4:8], ifd0Off)
 
 	entry := func(buf []byte, tag, typ uint16, count, value uint32) {
-		le.PutUint16(buf[0:2], tag)
-		le.PutUint16(buf[2:4], typ)
-		le.PutUint32(buf[4:8], count)
-		le.PutUint32(buf[8:12], value)
+		bo.PutUint16(buf[0:2], tag)
+		bo.PutUint16(buf[2:4], typ)
+		bo.PutUint32(buf[4:8], count)
+		bo.PutUint32(buf[8:12], value)
 	}
-	le.PutUint16(tiff[ifd0Off:], 2)
+	bo.PutUint16(tiff[ifd0Off:], 2)
 	entry(tiff[ifd0Off+2:], 0x010E, 2, uint32(len(desc)), dataOff)
 	entry(tiff[ifd0Off+14:], 0x8769, 4, 1, exifOff)
-	le.PutUint32(tiff[ifd0Off+26:], 0) // no IFD1
+	bo.PutUint32(tiff[ifd0Off+26:], 0) // no IFD1
 
-	le.PutUint16(tiff[exifOff:], 1)
+	bo.PutUint16(tiff[exifOff:], 1)
 	entry(tiff[exifOff+2:], 0x9286, 7, uint32(len(comment)), dataOff+uint32(len(desc)))
-	le.PutUint32(tiff[exifOff+14:], 0)
+	bo.PutUint32(tiff[exifOff+14:], 0)
 
 	tiff = append(tiff, desc...)
 	tiff = append(tiff, comment...)
@@ -162,37 +171,41 @@ func TestExtractImageTextRejectsGarbage(t *testing.T) {
 
 // --- Pipeline-level fixture pair ----------------------------------------
 
-// TestImageMetadataInjectionFixture is the EXIF fixture pair, run
-// through the orchestrator: an image carrying an injection directive in its
-// metadata must produce an S3 finding, and an ordinary photograph with
-// ordinary caption metadata must not.
-func TestImageMetadataInjectionFixture(t *testing.T) {
+// scanImageForTest runs the whole scan over a package holding image, named
+// name, beside a readme that links it, and returns the scanners that found
+// something.
+func scanImageForTest(t *testing.T, name string, image []byte) map[string]bool {
+	t.Helper()
 	bundle, err := ruleset.Load()
 	if err != nil {
 		t.Fatalf("load ruleset: %v", err)
 	}
 	orch := NewOrchestrator(bundle, StaticProvider{}, nil)
-
-	run := func(t *testing.T, name string, image []byte) map[string]bool {
-		t.Helper()
-		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, "readme.md"),
-			[]byte("# Screenshot Skill\n\nAnnotates screenshots.\n\n![diagram](diagram.png)\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, name), image, 0o600); err != nil {
-			t.Fatal(err)
-		}
-		res := orch.Run(context.Background(), RunParams{
-			Input:  Input{Dir: dir, ManifestJSON: []byte(`{"capabilities":{}}`)},
-			Policy: DefaultBaseline(), Public: true,
-		})
-		got := map[string]bool{}
-		for _, f := range res.Findings {
-			got[f.Scanner] = true
-		}
-		return got
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "readme.md"),
+		[]byte("# Screenshot Skill\n\nAnnotates screenshots.\n\n![diagram](diagram.png)\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, name), image, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res := orch.Run(context.Background(), RunParams{
+		Input:  Input{Dir: dir, ManifestJSON: []byte(`{"capabilities":{}}`)},
+		Policy: DefaultBaseline(), Public: true,
+	})
+	got := map[string]bool{}
+	for _, f := range res.Findings {
+		got[f.Scanner] = true
+	}
+	return got
+}
+
+// TestImageMetadataInjectionFixture is the EXIF fixture pair, run
+// through the orchestrator: an image carrying an injection directive in its
+// metadata must produce an S3 finding, and an ordinary photograph with
+// ordinary caption metadata must not.
+func TestImageMetadataInjectionFixture(t *testing.T) {
+	run := scanImageForTest
 
 	t.Run("attack", func(t *testing.T) {
 		png := makePNG(map[string]string{
