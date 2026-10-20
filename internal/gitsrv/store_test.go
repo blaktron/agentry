@@ -450,3 +450,83 @@ func TestSweepInitLeftoversRemovesOnlyStaleWorkDirectories(t *testing.T) {
 		t.Errorf("repository HEAD = %s after the sweep, want refs/heads/main", got)
 	}
 }
+
+// TestSweepViewLeftoversRemovesOnlyStaleBuildDirectories: the work
+// directory a reviewed-view build leaves behind when the process dies is
+// removed once it is older than an hour; a finished view beside it, a build
+// directory young enough to be in use, and names that only resemble a build
+// directory are kept.
+func TestSweepViewLeftoversRemovesOnlyStaleBuildDirectories(t *testing.T) {
+	repos, data := storeAt(t, nil)
+
+	// No views directory yet: nothing to sweep, and no error.
+	if n, err := repos.SweepViewLeftovers(); err != nil || n != 0 {
+		t.Fatalf("sweep with no views = %d, %v; want 0, nil", n, err)
+	}
+
+	origin, _, second, _ := originWithHistory(t, repos)
+	view, err := repos.ReviewedView(context.Background(), origin, map[string]string{"refs/tags/v1.0.0": second}, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ageView(t, view, 3*time.Hour)
+
+	shard := viewDir(data, origin)
+	id := origin.String()
+	mk := func(path string, age time.Duration) string {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(path, "objects"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "HEAD"), []byte("ref: refs/heads/main\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		when := time.Now().Add(-age)
+		for _, p := range []string{filepath.Join(path, "objects"), filepath.Join(path, "HEAD"), path} {
+			if err := os.Chtimes(p, when, when); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return path
+	}
+	stale := mk(filepath.Join(shard, id+"-build-1234567"), 2*time.Hour)
+	young := mk(filepath.Join(shard, id+"-build-7654321"), time.Minute)
+	other := "cd" + id[2:]
+	kept := []string{
+		view,
+		young,
+		mk(filepath.Join(shard, id+"-build-"), 2*time.Hour),                            // no suffix
+		mk(filepath.Join(shard, "notauuid-build-1"), 2*time.Hour),                      // not a repository id
+		mk(filepath.Join(data, "views", "cd", id+"-build-1"), 2*time.Hour),             // in another id's shard
+		mk(filepath.Join(data, "views", "cd", other+"-0123456789ab.git"), 2*time.Hour), // a view, not a build
+		mk(filepath.Join(data, id[:2], id+"-build-1"), 2*time.Hour),                    // a repository shard, not views
+	}
+
+	// A link named like a stale build directory is not followed, and what
+	// it points at stays.
+	target := mk(filepath.Join(t.TempDir(), "elsewhere"), 2*time.Hour)
+	link := filepath.Join(shard, id+"-build-link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	kept = append(kept, link, target)
+
+	n, err := repos.SweepViewLeftovers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("removed %d directories, want 1", n)
+	}
+	if _, err := os.Lstat(stale); !os.IsNotExist(err) {
+		t.Errorf("stale build directory %s is still there (%v)", stale, err)
+	}
+	for _, p := range kept {
+		if _, err := os.Lstat(p); err != nil {
+			t.Errorf("%s was removed: %v", p, err)
+		}
+	}
+	if got := strings.TrimSpace(mustGit(t, view, "rev-parse", "HEAD")); got != second {
+		t.Errorf("view HEAD = %s after the sweep, want %s", got, second)
+	}
+}
