@@ -1,10 +1,12 @@
 package gitsrv_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -51,6 +53,64 @@ func newSSHClient(t *testing.T) *sshClient {
 		t.Fatal(err)
 	}
 	return &sshClient{keyPath: keyPath, pubLine: strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPub))), fp: ssh.FingerprintSHA256(sshPub)}
+}
+
+// signer is the client key as an SSH library signer, for tests that hold one
+// connection open across several commands.
+func (c *sshClient) signer(t *testing.T) ssh.Signer {
+	t.Helper()
+	raw, err := os.ReadFile(c.keyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.ParsePrivateKey(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signer
+}
+
+// dialSSH opens one authenticated connection to the in-process server.
+func dialSSH(t *testing.T, srv *gitsrv.SSHServer, c *sshClient) *ssh.Client {
+	t.Helper()
+	conn, err := ssh.Dial("tcp", srv.Addr().String(), &ssh.ClientConfig{
+		User:            "git",
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(c.signer(t))},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // test against an in-process server
+	})
+	if err != nil {
+		t.Fatalf("a registered key was refused: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
+}
+
+// sshExec runs one command in its own session on an open connection, with
+// the given environment requests sent first, and returns what the server
+// wrote and the exit status it reported. The command's stdin is one flush
+// packet, which a git service reads as the client ending the conversation.
+func sshExec(t *testing.T, conn *ssh.Client, env map[string]string, command string) (stdout, stderr string, exit int) {
+	t.Helper()
+	sess, err := conn.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sess.Close() }()
+	for name, value := range env {
+		if err := sess.Setenv(name, value); err != nil {
+			t.Fatalf("env %s was refused: %v", name, err)
+		}
+	}
+	var out, errOut bytes.Buffer
+	sess.Stdin, sess.Stdout, sess.Stderr = strings.NewReader("0000"), &out, &errOut
+	if err := sess.Run(command); err != nil {
+		var exitErr *ssh.ExitError
+		if !errors.As(err, &exitErr) {
+			t.Fatalf("%q: %v", command, err)
+		}
+		exit = exitErr.ExitStatus()
+	}
+	return out.String(), errOut.String(), exit
 }
 
 func (c *sshClient) gitSSHCommand() string {
@@ -161,6 +221,71 @@ func TestSSHTransportCloneAndPush(t *testing.T) {
 	if out, err := gitRunWithEnv(t, work, ownerEnv, "fetch", "-q", "origin"); err == nil {
 		t.Fatalf("revoked key must be refused:\n%s", out)
 	}
+
+	// One connection, several commands: the key is looked up again for every
+	// command, so a key revoked while the connection is open runs no more.
+	t.Run("a key revoked mid-connection runs no further command", func(t *testing.T) {
+		mid := newSSHClient(t)
+		env.seedSSHKey(env.owner.id, mid)
+		conn := dialSSH(t, sshSrv, mid)
+		readCmd := fmt.Sprintf("git-upload-pack '/%s/%s.git'", env.owner.handle, agent.Name)
+		out, errOut, exit := sshExec(t, conn, nil, readCmd)
+		if exit != 0 || !strings.Contains(out, "refs/heads/main") {
+			t.Fatalf("a command on a live key: exit %d, stdout %q, stderr %q", exit, out, errOut)
+		}
+		if _, err := env.st.Queries().RevokeSSHKey(context.Background(), storegen.RevokeSSHKeyParams{ID: env.sshKeyIDFor(mid), UserID: env.owner.id}); err != nil {
+			t.Fatal(err)
+		}
+		out, errOut, exit = sshExec(t, conn, nil, readCmd)
+		if exit != 1 || out != "" || !strings.Contains(errOut, "agentry: key no longer accepted") {
+			t.Fatalf("a command on the revoked key: exit %d, stdout %q, stderr %q, want exit 1, nothing served and %q", exit, out, errOut, "key no longer accepted")
+		}
+	})
+
+	// Pushing needs write, not read: a reader's receive-pack is refused at
+	// authorization, before git runs, on a public agent and on a private one
+	// the reader holds a read grant on, while the same reader's upload-pack
+	// on the private agent is served.
+	t.Run("a reader cannot push over SSH", func(t *testing.T) {
+		if err := env.st.Queries().UpsertAgentUserGrant(context.Background(), storegen.UpsertAgentUserGrantParams{
+			AgentID: private.ID, UserID: readerID, Role: "read",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		conn := dialSSH(t, sshSrv, reader)
+		pushPublic := fmt.Sprintf("git-receive-pack '/%s/%s.git'", env.owner.handle, agent.Name)
+		pushPrivate := fmt.Sprintf("git-receive-pack '/%s/%s.git'", env.owner.handle, private.Name)
+		readPrivate := fmt.Sprintf("git-upload-pack '/%s/%s.git'", env.owner.handle, private.Name)
+		for name, command := range map[string]string{"a public agent": pushPublic, "a private agent the reader may read": pushPrivate} {
+			out, errOut, exit := sshExec(t, conn, nil, command)
+			if exit != 1 || out != "" || !strings.Contains(errOut, "agentry: forbidden") {
+				t.Fatalf("receive-pack on %s: exit %d, stdout %q, stderr %q, want exit 1 and %q", name, exit, out, errOut, "agentry: forbidden")
+			}
+		}
+		if _, errOut, exit := sshExec(t, conn, nil, readPrivate); exit != 0 {
+			t.Fatalf("upload-pack on a private agent the reader may read: exit %d, stderr %q", exit, errOut)
+		}
+		if n := env.pushAudits(private.ID); n != 0 {
+			t.Fatalf("a refused push was bookkept: %d repo.push audits", n)
+		}
+	})
+
+	// The client asks for protocol v2 with the GIT_PROTOCOL environment
+	// request, as git does over ssh; without it the server speaks v0.
+	t.Run("the client's GIT_PROTOCOL request picks the protocol", func(t *testing.T) {
+		proto := newSSHClient(t)
+		env.seedSSHKey(env.owner.id, proto)
+		conn := dialSSH(t, sshSrv, proto)
+		readCmd := fmt.Sprintf("git-upload-pack '/%s/%s.git'", env.owner.handle, agent.Name)
+		out, errOut, exit := sshExec(t, conn, nil, readCmd)
+		if exit != 0 || !strings.Contains(out, "refs/heads/main") || strings.Contains(out, "version 2") {
+			t.Fatalf("without the request: exit %d, stdout %q, stderr %q, want a v0 advertisement of the refs", exit, out, errOut)
+		}
+		out, errOut, exit = sshExec(t, conn, map[string]string{"GIT_PROTOCOL": "version=2"}, readCmd)
+		if exit != 0 || !strings.Contains(out, "version 2") || strings.Contains(out, "refs/heads/main") {
+			t.Fatalf("with GIT_PROTOCOL=version=2: exit %d, stdout %q, stderr %q, want a v2 capability advertisement", exit, out, errOut)
+		}
+	})
 }
 
 func (e *gitEnv) sshKeyIDFor(c *sshClient) uuid.UUID {
