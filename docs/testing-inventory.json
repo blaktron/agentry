@@ -3727,6 +3727,17 @@
           ]
         },
         {
+          "path": "internal/scan/stages_s2_history_distinct_test.go",
+          "tests": [
+            "TestS2HistoryReportsEachDistinctSecret",
+            "TestS2HistoryFindingLimitSaysWhichLimit"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/stages_s2_history_plus_test.go",
           "tests": [
             "TestS2HistoryReadsAddedLinesThatStartWithPlus",
