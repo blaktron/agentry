@@ -246,7 +246,9 @@ func readIFD(tiff []byte, bo binary.ByteOrder, off int, out *[]metaString) int {
 		if val == nil {
 			continue
 		}
-		*out = appendMeta(*out, "EXIF:"+name, decodeEXIFString(tag, typ, val))
+		for _, text := range decodeEXIFString(tag, typ, val, bo) {
+			*out = appendMeta(*out, "EXIF:"+name, text)
+		}
 	}
 	return subIFD
 }
@@ -287,28 +289,42 @@ func exifTypeSize(typ uint16) int {
 }
 
 // decodeEXIFString turns a tag's raw bytes into text. UserComment is prefixed
-// by an 8-byte character-code designator; the XP* tags are UCS-2 little-endian
-// regardless of the file's byte order.
-func decodeEXIFString(tag, typ uint16, val []byte) string {
+// by an 8-byte character-code designator. Its UNICODE text is UTF-16: a byte
+// order mark, when present, says which order; without one the text is read
+// in the file's byte order and in the other, since writers disagree and the
+// file chooses, and both readings are scanned. The XP* tags are UCS-2
+// little-endian regardless of the file's byte order.
+func decodeEXIFString(tag, typ uint16, val []byte, bo binary.ByteOrder) []string {
 	switch {
 	case tag == 0x9286 && len(val) >= 8: // UserComment
 		code := strings.TrimRight(string(val[:8]), "\x00 ")
 		body := val[8:]
 		if code == "UNICODE" {
-			return decodeUTF16LE(body)
+			switch {
+			case bytes.HasPrefix(body, []byte{0xFE, 0xFF}):
+				return []string{decodeUTF16(body[2:], binary.BigEndian)}
+			case bytes.HasPrefix(body, []byte{0xFF, 0xFE}):
+				return []string{decodeUTF16(body[2:], binary.LittleEndian)}
+			}
+			other := binary.ByteOrder(binary.LittleEndian)
+			if bo == binary.LittleEndian {
+				other = binary.BigEndian
+			}
+			return []string{decodeUTF16(body, bo), decodeUTF16(body, other)}
 		}
-		return string(bytes.TrimRight(body, "\x00"))
+		return []string{string(bytes.TrimRight(body, "\x00"))}
 	case tag >= 0x9C9B && tag <= 0x9C9F && typ == 1: // XP* tags are UCS-2LE
-		return decodeUTF16LE(val)
+		return []string{decodeUTF16(val, binary.LittleEndian)}
 	}
-	return string(bytes.TrimRight(val, "\x00"))
+	return []string{string(bytes.TrimRight(val, "\x00"))}
 }
 
-// decodeUTF16LE decodes UCS-2 little-endian bytes, stopping at the first NUL.
-func decodeUTF16LE(b []byte) string {
+// decodeUTF16 decodes UTF-16 bytes in byte order bo, stopping at the first
+// NUL.
+func decodeUTF16(b []byte, bo binary.ByteOrder) string {
 	u := make([]uint16, 0, len(b)/2)
 	for i := 0; i+1 < len(b); i += 2 {
-		c := binary.LittleEndian.Uint16(b[i : i+2])
+		c := bo.Uint16(b[i : i+2])
 		if c == 0 {
 			break
 		}
