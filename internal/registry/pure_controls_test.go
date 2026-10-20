@@ -20,6 +20,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/entitlements"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 type fakeAdmitter struct {
@@ -331,6 +332,8 @@ func TestNormalizeModesDefaultsDeduplicatesAndRefusesUnknownModes(t *testing.T) 
 		{"none given", nil, "autonomous"},
 		{"empty", []string{}, "autonomous"},
 		{"interactive alone", []string{"interactive"}, "interactive"},
+		{"persistent alone", []string{"persistent"}, "persistent"},
+		{"all three", []string{"autonomous", "interactive", "persistent"}, "autonomous,interactive,persistent"},
 		{"both, once each", []string{"interactive", "autonomous"}, "interactive,autonomous"},
 		{"repeats dropped, order kept", []string{"interactive", "autonomous", "interactive", "autonomous"}, "interactive,autonomous"},
 	} {
@@ -339,7 +342,7 @@ func TestNormalizeModesDefaultsDeduplicatesAndRefusesUnknownModes(t *testing.T) 
 			t.Errorf("%s: %v, %v; want %s", tc.name, got, err, tc.want)
 		}
 	}
-	for _, bad := range []string{"batch", "", "Autonomous"} {
+	for _, bad := range []string{"batch", "", "Autonomous", "Persistent"} {
 		got, err := normalizeModes([]string{"autonomous", bad})
 		if !errors.Is(err, ErrDenied) || !strings.Contains(err.Error(), fmt.Sprintf("unknown mode %q", bad)) || got != nil {
 			t.Errorf("mode %q: %v, %v; want ErrDenied naming it", bad, got, err)
@@ -407,5 +410,20 @@ func TestForkRefusalsAreRecognisedAndPutInWords(t *testing.T) {
 	}
 	if got := (&forkRefusal{detail: "the copy cannot succeed"}).Error(); got != "the copy cannot succeed" {
 		t.Errorf("forkRefusal reads %q", got)
+	}
+}
+
+// The registry's copy of the mode vocabulary is the manifest's set: a
+// release the manifest validates is never refused here for its modes.
+func TestValidModesAreTheManifestsModes(t *testing.T) {
+	for _, mode := range []manifest.Mode{manifest.ModeAutonomous, manifest.ModeInteractive, manifest.ModePersistent} {
+		if !validModes[string(mode)] {
+			t.Errorf("the registry refuses the manifest's mode %q", mode)
+		}
+	}
+	for mode := range validModes {
+		if !manifest.Mode(mode).Valid() {
+			t.Errorf("the registry takes %q, which the manifest refuses", mode)
+		}
 	}
 }

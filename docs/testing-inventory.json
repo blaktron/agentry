@@ -1874,6 +1874,7 @@
             "TestOIDC_ExchangeCreatesClaims",
             "TestOIDC_IssuerPinning",
             "TestOIDC_NonceMismatchRejected",
+            "TestOIDC_EmptyExpectedNonceRefused",
             "TestOIDC_EmailVerifiedSurfaced",
             "TestOIDC_PreferredUsernameSurfaced",
             "TestOIDC_RawCarriesEveryClaim",
@@ -2027,7 +2028,8 @@
           "path": "internal/dnsx/resolver_test.go",
           "tests": [
             "TestVerifyTXT",
-            "TestSystemResolverLooksUpUnderTheContext"
+            "TestSystemResolverLooksUpUnderTheContext",
+            "TestVerifyTXTRefusesWhatItCannotJudge"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2063,6 +2065,27 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "internal/gitsrv/archive_test.go",
+          "tests": [
+            "TestArchiveCommitHoldsEveryBlobOfTheTree",
+            "TestArchiveCommitRefusesWhatIsNotACommit",
+            "TestArchiveFailsClosedOnInfoAttributes",
+            "TestArchiveTagResolvesToTheCommit",
+            "TestTagRefQualifiesOnlyPlainTagNames",
+            "TestVerifyArchiveCompleteNamesWhatWasDropped",
+            "TestArchiveCheckedAgainstTheTree",
+            "TestStartupRefusesAGitThatHonoursExportIgnore",
+            "TestExtractPlainTarIsDefensive"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/bookkeeping_test.go",
           "tests": [
             "TestPushBookkeepingRidesTheQueue",
@@ -2092,6 +2115,7 @@
             "TestReleaseArchiveIgnoresExportIgnore",
             "TestGitEnforcedSSO",
             "TestPreReceiveHookFailsClosed",
+            "TestPreReceiveHookProtectsTheDefaultBranch",
             "TestPreReceiveHookWarnTier",
             "TestOrgStateGatesGit",
             "TestArchiveTagRefusesAnOptionShapedName"
@@ -2214,9 +2238,62 @@
           ]
         },
         {
+          "path": "internal/gitsrv/lazy_init_test.go",
+          "tests": [
+            "TestRefusedGitRequestCreatesNoRepository",
+            "TestCopyingForkGitRequestCreatesNoRepository",
+            "TestConcurrentFirstGitRequestsInitialiseOnce"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/limits_test.go",
+          "tests": [
+            "TestShippedLimitDefaults",
+            "TestNewHandlerBoundsGitWork",
+            "TestPushBudgetDefaultIsSixtyAnHour",
+            "TestPushBudgetRefusalWords",
+            "TestClientHostIsTheAddressPart",
+            "TestRPCAnswersWhatItCannotServe",
+            "TestGitEnvCarriesThePushPolicy",
+            "TestMountServesOnlyTheThreeSmartHTTPRoutes",
+            "TestGitClientIsTheResolvedAddress",
+            "TestFirstByteTimerRecordsTheFirstByteOnce",
+            "TestAcceptedRefsAreWhatTheRepositoryNowHolds",
+            "TestExecGitAnswersWhatItCannotServe",
+            "TestSafeRefName",
+            "TestGitFailuresAreNotAbsences",
+            "TestHermeticEnvIsolatesGit"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/pktline_test.go",
+          "tests": [
+            "TestParseReceiveCommands",
+            "TestCommandCaptureKeepsOnlyTheCommands"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/gitsrv/proxyproto_test.go",
           "tests": [
             "TestReadProxyHeader",
+            "TestReadProxyHeaderSaysWhenThereIsNone",
             "TestReadProxyHeaderConsumesOnlyTheHeader"
           ],
           "fuzz": [],
@@ -2294,6 +2371,22 @@
           ]
         },
         {
+          "path": "internal/gitsrv/ssh_session_test.go",
+          "tests": [
+            "TestParseGitCommand",
+            "TestSSHServesNothingButGitSessions",
+            "TestSSHStopsAfterTheAuthTries",
+            "TestHostKeyIsCreatedOnceAndKept",
+            "TestTruncateKeepsAtMostN"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/gitsrv/ssh_test.go",
           "tests": [
             "TestSSHTransportCloneAndPush",
@@ -2306,6 +2399,25 @@
             "child process",
             "source/file contract",
             "explicit skip"
+          ]
+        },
+        {
+          "path": "internal/gitsrv/store_test.go",
+          "tests": [
+            "TestRepoStoreLayoutAndConfiguration",
+            "TestDiskUsageSumsFiles",
+            "TestRefsAtReadsOnlyTheNamedPlainRefs",
+            "TestTagsListsCommitTagsOnly",
+            "TestReviewedViewHoldsOnlyTheNamedTags",
+            "TestReviewedViewRefusesWhatIsNotATagOfACommit",
+            "TestReviewedViewsAreKeptWhileInUseAndPrunedWhenStale"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "child process",
+            "source/file contract"
           ]
         },
         {
@@ -2404,7 +2516,8 @@
           "path": "internal/maildomains/maildomains_test.go",
           "tests": [
             "TestSharedNamesNobodyOwns",
-            "TestOfReadsTheDomain"
+            "TestOfReadsTheDomain",
+            "TestSharedHoldsForAnyNumberOfTrailingDots"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -2687,7 +2800,8 @@
             "TestSeatsAreSpentByMembersAndInvitationsAndDoorsAreNamed",
             "TestRefusalSentencesAndConstraintViolations",
             "TestNormalizeModesDefaultsDeduplicatesAndRefusesUnknownModes",
-            "TestForkRefusalsAreRecognisedAndPutInWords"
+            "TestForkRefusalsAreRecognisedAndPutInWords",
+            "TestValidModesAreTheManifestsModes"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3277,6 +3391,18 @@
           ]
         },
         {
+          "path": "internal/scan/imagemeta_fill_test.go",
+          "tests": [
+            "TestJPEGFillBytesDoNotEndTheMetadataWalk",
+            "TestJPEGFillBytesInjection",
+            "TestJPEGWalkStillStopsOnMalformedData"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/imagemeta_test.go",
           "tests": [
             "TestExtractImageTextPNG",
@@ -3291,6 +3417,18 @@
           "dependencyHints": [
             "source/file contract"
           ]
+        },
+        {
+          "path": "internal/scan/imagemeta_unicode_test.go",
+          "tests": [
+            "TestEXIFUnicodeCommentFollowsTheFilesByteOrder",
+            "TestImageMetadataBigEndianUnicodeInjection",
+            "TestEXIFUnicodeCommentHostileBodies"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         },
         {
           "path": "internal/scan/judge_bedrock_test.go",
@@ -3330,6 +3468,20 @@
             "TestHTTPJudgeManipulatedOutputRoutesToReview",
             "TestNewJudgeProviderSelection",
             "TestHTTPJudgeRecordsUsage"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
+          "path": "internal/scan/judge_key_test.go",
+          "tests": [
+            "TestHTTPJudgesRefuseRedirects",
+            "TestHTTPJudgesRedactAnEchoedKey",
+            "TestHTTPJudgeRedactsTheKeyFromExcerpts"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4052,13 +4204,20 @@
           "path": "pkg/extension/agentryd_apiqueue_test.go",
           "tests": [
             "TestExtensionJobsSplitsTheAPIQueue",
-            "TestAPIRoleDrainsTheAPIQueue"
+            "TestAPIRoleDrainsTheAPIQueue",
+            "TestRolesThatNeedADatabaseRefuseToStartWithoutOne",
+            "TestRunWithRefusesAnUnknownRoleAndOneThatCannotRun",
+            "TestRootCmdHasTheRolesAndOnlyTheWorkerTakesQueues",
+            "TestAPIRoleWithoutADatabaseServesTheExtensions",
+            "TestServeHTTPReportsAListenFailureAndStopsWithItsContext"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
             "database fixture",
+            "HTTP transport",
+            "source/file contract",
             "real-time wait",
             "explicit skip"
           ]
@@ -4097,7 +4256,12 @@
             "TestRegisterAuditActionKeepsTheExtensionPrefix",
             "TestBindHandsTheBaseURL",
             "TestApplyExtensionsBindsAndRegistersActions",
+            "TestApplyExtensionsRefusesARepeatedOrMalformedName",
+            "TestDepsAdaptersFollowThePoolAndKeepTheExtensionsName",
+            "TestMigrateExtensionsSkipsThoseWithoutMigrationsAndReportsAFailure",
             "TestPeriodicTickerEnqueuesNowAndOnThePeriod",
+            "TestReconcileTickerEnqueuesTheWatchdogOnTheCoreQueue",
+            "TestRegisterJobsRegistersEveryHandlerAndEnqueuesOnlyPeriodicJobs",
             "TestNoopSatisfiesTheInterface",
             "TestParseQueues",
             "TestScopeAllows",
@@ -4106,6 +4270,7 @@
             "TestBindHandsTheKnowledgeStore",
             "TestApplyExtensionsRegistersTheAccountEraser",
             "TestBindHandsTheVoiceStore",
+            "TestVoiceStoreProposesOnlyTheSourcesAVoiceWriterHas",
             "TestBindHandsTheServersMeter",
             "TestBindHandsTheReportSettings",
             "TestBindHandsTheMembersDoor"
@@ -4132,7 +4297,9 @@
           "tests": [
             "TestApplyExtensionsWiresTheIdentitySeam",
             "TestOneDirectoryPerDeployment",
-            "TestTheIdentityEventsAreTheCoresNames"
+            "TestSignInHookAuditsTheRememberedBrowserUnderTheExtensionsName",
+            "TestTheIdentityEventsAreTheCoresNames",
+            "TestTheSeamsNamesAreTheCoresNames"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4645,7 +4812,9 @@
             "TestCanonicalJSONV2",
             "TestV2SchemaFileShape",
             "TestV2SchemaEnvShape",
-            "TestCanonicalJSONV2Env"
+            "TestCanonicalJSONV2Env",
+            "TestPersistentModeParsesAndIsKnown",
+            "TestV2SchemaModesAreTheGoSet"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4763,7 +4932,8 @@
           "tests": [
             "TestBundleTarRoundTrip",
             "TestBundleTarDeterministic",
-            "TestUntarBundleRejectsStructure"
+            "TestUntarBundleRejectsStructure",
+            "TestUntarBundleRefusesNamesWindowsGivesAMeaning"
           ],
           "fuzz": [],
           "benchmarks": [],

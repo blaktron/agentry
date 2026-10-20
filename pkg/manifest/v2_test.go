@@ -146,6 +146,8 @@ func TestV2ClassificationRules(t *testing.T) {
 		{"empty modes", func(m *Manifest) { m.Modes = []Mode{} }, "modes"},
 		{"unknown mode", func(m *Manifest) { m.Modes = []Mode{"batch"} }, "modes[0]"},
 		{"duplicate mode", func(m *Manifest) { m.Modes = []Mode{ModeAutonomous, ModeAutonomous} }, "modes[1]"},
+		{"duplicate persistent", func(m *Manifest) { m.Modes = []Mode{ModePersistent, ModePersistent} }, "modes[1]"},
+		{"mode names are case-sensitive", func(m *Manifest) { m.Modes = []Mode{"Persistent"} }, "modes[0]"},
 		{"v1 skill entrypoint", func(m *Manifest) { m.Entrypoints.Skill = "SKILL.md" }, "entrypoints.skill"},
 		{"mcp entrypoint", func(m *Manifest) {
 			m.Entrypoints.MCP = &MCPEntrypoint{Command: "node", Transport: TransportStdio}
@@ -170,6 +172,12 @@ func TestV2ClassificationPasses(t *testing.T) {
 	}{
 		{"autonomous only", func(m *Manifest) { m.Modes = []Mode{ModeAutonomous}; m.Interactive = nil }},
 		{"interactive only", func(m *Manifest) { m.Modes = []Mode{ModeInteractive} }},
+		// A persistent release may carry an opening and intake questions,
+		// as an interactive one does, with no warning that they never apply.
+		{"persistent only, with an opening and intake", func(m *Manifest) { m.Modes = []Mode{ModePersistent} }},
+		{"persistent beside the other modes", func(m *Manifest) {
+			m.Modes = []Mode{ModeAutonomous, ModeInteractive, ModePersistent}
+		}},
 		{"no entrypoints block: AGENT.md by default", func(m *Manifest) { m.Entrypoints = Entrypoints{} }},
 		{"SKILL.md-shaped instruction", func(m *Manifest) { m.Entrypoints.Instruction = "SKILL.md" }},
 		{"no intake", func(m *Manifest) { m.Intake = nil }},
@@ -641,5 +649,50 @@ publish:
 	want := `{"capabilities":{"mcpServers":[{"egress":["api.github.com"],"env":{"GITHUB_PERMISSION":"read-only","LOGS_DIR":"/tmp/logs"},"npm":"github-mcp-server-js","secrets":["GITHUB_TOKEN"],"tools":["list_issues"],"version":"0.1.7"}]},"modes":["autonomous"],"name":"tiny","namespace":"acme","publish":{"include":["agent.yaml","AGENT.md"]},"schemaVersion":"2","summary":"Tiny agent on a declared server","version":"0.1.0"}`
 	if string(got) != want {
 		t.Fatalf("canonical v2 env:\n got: %s\nwant: %s", got, want)
+	}
+}
+
+// TestPersistentModeParsesAndIsKnown: a manifest that declares the
+// persistent mode alone parses under the closed schema and supports it.
+func TestPersistentModeParsesAndIsKnown(t *testing.T) {
+	m := mustParse(t, strings.Replace(v2YAML, "modes: [autonomous, interactive]", "modes: [persistent]", 1))
+	if !m.Supports(ModePersistent) || m.Supports(ModeAutonomous) || m.Supports(ModeInteractive) {
+		t.Fatalf("SupportedModes = %v, want [persistent]", m.SupportedModes())
+	}
+	wantClean(t, Validate(m))
+	for _, mode := range []Mode{ModeAutonomous, ModeInteractive, ModePersistent} {
+		if !mode.Valid() {
+			t.Errorf("%q is not Valid", mode)
+		}
+	}
+	for _, mode := range []Mode{"", "batch", "Persistent", "persistent "} {
+		if mode.Valid() {
+			t.Errorf("%q is Valid", mode)
+		}
+	}
+}
+
+// TestV2SchemaModesAreTheGoSet: the schema's modes enum is the Go set, in
+// order, so a tool that validates against the schema agrees with Validate.
+func TestV2SchemaModesAreTheGoSet(t *testing.T) {
+	raw, err := os.ReadFile("../../schemas/agent-manifest-2.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties struct {
+			Modes struct {
+				Items struct {
+					Enum []string `json:"enum"`
+				} `json:"items"`
+			} `json:"modes"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	want := modeStrings([]Mode{ModeAutonomous, ModeInteractive, ModePersistent})
+	if got := schema.Properties.Modes.Items.Enum; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("schema modes enum = %v, want %v", got, want)
 	}
 }

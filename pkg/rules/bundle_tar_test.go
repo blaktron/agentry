@@ -256,3 +256,47 @@ func TestUntarBundleRejectsStructure(t *testing.T) {
 		t.Errorf("write error: err = %v, entries written %v, want the error and only a.yaml", err, seen)
 	}
 }
+
+// A name Windows gives a meaning to is refused before anything is written:
+// a colon (a drive-relative name, an alternate data stream), a reserved device
+// name in any case and with any extension, a trailing dot or space, and the
+// characters and control codes its file systems refuse. Names that only look
+// like one are kept.
+func TestUntarBundleRefusesNamesWindowsGivesAMeaning(t *testing.T) {
+	for _, c := range []struct{ name, entry, wantErr string }{
+		{"a drive-relative name", "C:x.yaml", "colon"},
+		{"an alternate data stream", "bundle.yaml:stream.yaml", "colon"},
+		{"the null device", "NUL.yaml", "reserved device name"},
+		{"the console, lower case", "con.yaml", "reserved device name"},
+		{"a serial port", "COM1.yaml", "reserved device name"},
+		{"a serial port with a superscript digit", "COM\u00b9.yaml", "reserved device name"},
+		{"a printer port, mixed case", "lPt9.yml", "reserved device name"},
+		{"a device with a double extension", "AUX.rules.yaml", "reserved device name"},
+		{"a device with a trailing space before the extension", "PRN .yaml", "reserved device name"},
+		{"the console input", "CONIN$.yaml", "reserved device name"},
+		{"a trailing dot", "rules.yaml.", "ends in a dot or a space"},
+		{"a trailing space", "rules.yaml ", "ends in a dot or a space"},
+		{"a question mark", "what?.yaml", "'?'"},
+		{"a pipe", "a|b.yaml", "'|'"},
+		{"a control character", "a\x01b.yaml", "control character"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var written []string
+			_, err := rules.UntarBundle(tarWith(t, "ok.yaml", "rules: []", c.entry, "rules: []"), func(n string, _ []byte) error {
+				written = append(written, n)
+				return nil
+			})
+			if err == nil || !strings.Contains(err.Error(), "not a plain file name on every system") || !strings.Contains(err.Error(), c.wantErr) {
+				t.Fatalf("err = %v, want a refusal naming %q", err, c.wantErr)
+			}
+			if len(written) != 1 || written[0] != "ok.yaml" {
+				t.Fatalf("written %q, want only the entry before the hostile one", written)
+			}
+		})
+	}
+	for _, name := range []string{"con-rules.yaml", "nullish.yaml", "COM10.yaml", "auxiliary.yml", "rules.v2.yaml"} {
+		if _, err := rules.UntarBundle(tarWith(t, name, "rules: []"), func(string, []byte) error { return nil }); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
