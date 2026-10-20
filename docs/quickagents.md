@@ -460,6 +460,22 @@ publish:
 | `accepts.prompt` | one plain line: no control or format characters, not blank |
 | schema | v2 only; a v1 manifest carrying `knowledge` is refused (V1) |
 
+**The confirmation.** A pack in a release is readable by everyone who can
+download it, and stays in that version for good, so the publisher confirms
+it. An upload through the API that ships packs carries a
+`knowledgeShipping` part with one entry for each pack, or it is refused
+`422 knowledge-shipping-unacknowledged`; the version keeps who confirmed
+it, and making a QuickAgent public while a version ships a pack needs
+`acknowledgeShippedKnowledge: true` or is refused `409
+shipped-knowledge-unacknowledged`. An organization's shared pack ships only
+from an administrator of the organization into a QuickAgent in the
+organization's namespace, and the organization's audit log records it
+(`org.knowledge_ship`). A release published by pushing its tag has no
+request to carry the confirmation and is accepted without it: the version's
+record says it was published by tag push, and whoever pushes the tag is
+responsible for checking that the packs hold no private data
+([knowledge.md](knowledge.md#confirming-what-a-release-ships)).
+
 **The contract.** The names a release ships are part of the capability
 contract a person consents to: the version's `capabilities` carry them as
 `knowledge`, and a release that ships a pack the installed one did not

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
@@ -16,14 +17,29 @@ import (
 // the pack's name in the version's contract, and an install re-asked when
 // a later release ships one more.
 
+// shippedPackTree is a small pack's tree.
+func shippedPackTree() []scan.PackFile {
+	return []scan.PackFile{
+		{Path: "wiki/index.md", Content: []byte("# Index\n\n- [EC2](topics/ec2.md)\n")},
+		{Path: "wiki/log.md", Content: []byte("# Log\n")},
+		{Path: "wiki/topics/ec2.md", Content: []byte("---\ntitle: EC2\n---\nAn instance is a virtual machine. [src: doc:ec2.txt]\n")},
+		{Path: "sources/ec2.txt", Content: []byte("An EC2 instance is a virtual machine in the cloud.\n")},
+	}
+}
+
 // shippedPackFiles is a small pack's files, keyed by their archive path.
 func shippedPackFiles(t *testing.T, name string) map[string]string {
 	t.Helper()
-	tree := map[string][]byte{
-		"wiki/index.md":      []byte("# Index\n\n- [EC2](topics/ec2.md)\n"),
-		"wiki/log.md":        []byte("# Log\n"),
-		"wiki/topics/ec2.md": []byte("---\ntitle: EC2\n---\nAn instance is a virtual machine. [src: doc:ec2.txt]\n"),
-		"sources/ec2.txt":    []byte("An EC2 instance is a virtual machine in the cloud.\n"),
+	return shippedFilesOf(t, name, shippedPackTree())
+}
+
+// shippedFilesOf lays a tree down as a release carries it, under
+// knowledge/<name>/ with the manifest.json its digest, bytes and pages make.
+func shippedFilesOf(t *testing.T, name string, files []scan.PackFile) map[string]string {
+	t.Helper()
+	tree := map[string][]byte{}
+	for _, f := range files {
+		tree[f.Path] = f.Content
 	}
 	digest, bytes, pages, err := manifest.KnowledgeTreeDigest(tree)
 	if err != nil {

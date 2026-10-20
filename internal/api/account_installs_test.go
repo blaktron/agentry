@@ -65,7 +65,11 @@ func (env *testEnv) publishVersions(t *testing.T, author caller, ns, name string
 		return ""
 	}
 	for _, rel := range releases {
-		if code, body := env.uploadVersionCLI(ns, name, pat, rel.files); code != http.StatusAccepted {
+		fields := map[string]string{}
+		if ack := acknowledgeShippedPacks(rel.files); ack != "" {
+			fields["knowledgeShipping"] = ack
+		}
+		if code, body := env.uploadVersionCLIWithFields(ns, name, pat, rel.files, fields); code != http.StatusAccepted {
 			t.Fatalf("publish %s/%s %s: %d %s", ns, name, rel.version, code, body)
 		}
 		switch st := settle(rel.version); st {

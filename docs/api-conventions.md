@@ -94,6 +94,17 @@ only a version that passed the gate is ever public. A version admitted
 without a scan carries `scanStatus: skipped` on the version and on
 resolve, its report `verdict: unscanned`, and has no attestation.
 
+Shipped knowledge packs have three refusals of their own. A release
+uploaded with an archive that ships packs and no `knowledgeShipping` part,
+or with one that leaves a pack out, is `422
+knowledge-shipping-unacknowledged`; an entry for a pack the release does
+not ship, or an origin that is not true, is `422
+knowledge-shipping-invalid`; both carry the pack names as `packs`. `PATCH`
+to public while a version other than a yanked or rejected one ships a pack,
+without `acknowledgeShippedKnowledge: true`, is `409
+shipped-knowledge-unacknowledged`, carrying `versions`. See
+[knowledge.md](knowledge.md#confirming-what-a-release-ships).
+
 A publisher puts away their own agent in two ways,
 both open to the namespace's administrators. `POST
 /agents/{ns}/{name}/retire` makes it private and marks it `retiredAt`.

@@ -992,6 +992,7 @@ func TestActionRegistryIsAppendOnly(t *testing.T) {
 		"org.knowledge_update",
 		"org.knowledge_delete",
 		"org.knowledge_export",
+		"org.knowledge_ship",
 		"org.member_pending",
 		"org.decommission",
 		"org.erase",
