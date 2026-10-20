@@ -246,7 +246,9 @@ func readIFD(tiff []byte, bo binary.ByteOrder, off int, out *[]metaString) int {
 		if val == nil {
 			continue
 		}
-		*out = appendMeta(*out, "EXIF:"+name, decodeEXIFString(tag, typ, val, bo))
+		for _, text := range decodeEXIFString(tag, typ, val, bo) {
+			*out = appendMeta(*out, "EXIF:"+name, text)
+		}
 	}
 	return subIFD
 }
@@ -287,10 +289,12 @@ func exifTypeSize(typ uint16) int {
 }
 
 // decodeEXIFString turns a tag's raw bytes into text. UserComment is prefixed
-// by an 8-byte character-code designator, and its UNICODE text is UTF-16 in
-// the file's byte order unless a byte order mark says otherwise; the XP* tags
-// are UCS-2 little-endian regardless of the file's byte order.
-func decodeEXIFString(tag, typ uint16, val []byte, bo binary.ByteOrder) string {
+// by an 8-byte character-code designator. Its UNICODE text is UTF-16: a byte
+// order mark, when present, says which order; without one the text is read
+// in the file's byte order and in the other, since writers disagree and the
+// file chooses, and both readings are scanned. The XP* tags are UCS-2
+// little-endian regardless of the file's byte order.
+func decodeEXIFString(tag, typ uint16, val []byte, bo binary.ByteOrder) []string {
 	switch {
 	case tag == 0x9286 && len(val) >= 8: // UserComment
 		code := strings.TrimRight(string(val[:8]), "\x00 ")
@@ -298,17 +302,21 @@ func decodeEXIFString(tag, typ uint16, val []byte, bo binary.ByteOrder) string {
 		if code == "UNICODE" {
 			switch {
 			case bytes.HasPrefix(body, []byte{0xFE, 0xFF}):
-				return decodeUTF16(body[2:], binary.BigEndian)
+				return []string{decodeUTF16(body[2:], binary.BigEndian)}
 			case bytes.HasPrefix(body, []byte{0xFF, 0xFE}):
-				return decodeUTF16(body[2:], binary.LittleEndian)
+				return []string{decodeUTF16(body[2:], binary.LittleEndian)}
 			}
-			return decodeUTF16(body, bo)
+			other := binary.ByteOrder(binary.LittleEndian)
+			if bo == binary.LittleEndian {
+				other = binary.BigEndian
+			}
+			return []string{decodeUTF16(body, bo), decodeUTF16(body, other)}
 		}
-		return string(bytes.TrimRight(body, "\x00"))
+		return []string{string(bytes.TrimRight(body, "\x00"))}
 	case tag >= 0x9C9B && tag <= 0x9C9F && typ == 1: // XP* tags are UCS-2LE
-		return decodeUTF16(val, binary.LittleEndian)
+		return []string{decodeUTF16(val, binary.LittleEndian)}
 	}
-	return string(bytes.TrimRight(val, "\x00"))
+	return []string{string(bytes.TrimRight(val, "\x00"))}
 }
 
 // decodeUTF16 decodes UTF-16 bytes in byte order bo, stopping at the first

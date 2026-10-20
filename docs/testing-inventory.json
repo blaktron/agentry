@@ -3407,7 +3407,8 @@
           "path": "internal/scan/imagemeta_unicode_test.go",
           "tests": [
             "TestEXIFUnicodeCommentFollowsTheFilesByteOrder",
-            "TestImageMetadataBigEndianUnicodeInjection"
+            "TestImageMetadataBigEndianUnicodeInjection",
+            "TestEXIFUnicodeCommentHostileBodies"
           ],
           "fuzz": [],
           "benchmarks": [],
