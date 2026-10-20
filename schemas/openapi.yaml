@@ -1887,9 +1887,22 @@ paths:
                     refused on a retired agent (`409
                     agent-retired`): Restore is how a retired agent comes
                     back. It is refused on a fork for good (`409
-                    fork-stays-private`).
+                    fork-stays-private`). Making a QuickAgent public
+                    while one of its versions, other than a yanked or
+                    rejected one, ships a knowledge pack needs
+                    `acknowledgeShippedKnowledge: true`, or the answer is
+                    `409 shipped-knowledge-unacknowledged`, which names the
+                    packs and the versions that ship them.
                   type: string
                   enum: [public, private]
+                acknowledgeShippedKnowledge:
+                  description: >-
+                    The publisher's confirmation that the knowledge packs
+                    the QuickAgent's versions ship become readable by
+                    everyone who can download them once it is public, and
+                    hold no private data. Read only when `visibility` is
+                    `public`; it is not a setting and changes nothing else.
+                  type: boolean
                 autoPublishTags:
                   type: boolean
                 allowForcePush:
@@ -2242,6 +2255,17 @@ paths:
         server re-validates, re-packs deterministically, and compares
         digests: client packing is never trusted).
 
+        A package that ships knowledge packs (the manifest's
+        `knowledge.ships`) makes their contents readable by everyone who can
+        download the release, so the upload must confirm it: the
+        `knowledgeShipping` part, one entry for each pack shipped. Without
+        it the upload is refused `422 knowledge-shipping-unacknowledged`,
+        naming the packs. An entry may claim where the pack was laid down
+        from (`origin`); a claim that is not true is refused `422
+        knowledge-shipping-invalid`, naming the pack. A tag submission (JSON
+        {tag}) and a tag push carry no confirmation, and the version's
+        record says it was published that way.
+
         A deployment with an admission extension (the hosted product's
         subscription tiers) may refuse a submission after every core check
         has passed and before anything is stored: `402` with the problem
@@ -2280,6 +2304,8 @@ paths:
                 digest:
                   type: string
                   description: Client-computed sha256 digest to cross-check.
+                knowledgeShipping:
+                  $ref: "#/components/schemas/KnowledgeShipping"
                 draftRun:
                   type: string
                   format: uuid
@@ -2293,6 +2319,9 @@ paths:
                     scans its manifest and instruction file as a first
                     release's. Otherwise nothing changes. A core registry
                     has no DraftProvenance and never grants it.
+            encoding:
+              knowledgeShipping:
+                contentType: application/json
       responses:
         "202":
           description: Version accepted into the pipeline.
@@ -2300,6 +2329,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AgentVersion"
+        "422":
+          description: >-
+            The package or its confirmation was refused. Among the
+            problem types, `knowledge-shipping-unacknowledged` (a package
+            that ships packs with no confirmation, or one that leaves a
+            pack out; `packs` names them at the top level of the problem)
+            and `knowledge-shipping-invalid` (an entry names a pack the
+            release does not ship, or claims an origin that is not true;
+            `packs` names it).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         "402":
           description: >-
             Refused by the deployment's admission extension (problem type
@@ -6695,6 +6737,86 @@ components:
           format: date-time
         yankReason:
           type: string
+        knowledgeShipping:
+          $ref: "#/components/schemas/ShippedKnowledgeRecord"
+
+    KnowledgeShipping:
+      type: object
+      description: >-
+        A publisher's confirmation that the knowledge packs a release ships
+        become readable by everyone who can download it: one entry for each
+        pack the package's manifest ships (`knowledge.ships`), no more and
+        no fewer.
+      required: [packs]
+      additionalProperties: false
+      properties:
+        packs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShippedPack"
+
+    ShippedPack:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: The pack's name, as the manifest ships it.
+        origin:
+          $ref: "#/components/schemas/ShippedPackOrigin"
+
+    ShippedPackOrigin:
+      type: object
+      description: >-
+        The stored pack a shipped pack was laid down from. The registry
+        holds the claim to the facts: the pack exists and is `ready`, it is
+        the submitter's own (`own`) or the organization's (`org`), and its
+        digest is the digest in the shipped pack's `manifest.json`. An
+        organization's pack ships only from an administrator of the
+        organization, and only into a QuickAgent in the organization's own
+        namespace. A pack with no origin is the publisher's own files.
+      required: [kind, packId]
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum: [own, org]
+        org:
+          type: string
+          description: The organization's handle; present when `kind` is `org`.
+        packId:
+          type: string
+          format: uuid
+
+    ShippedKnowledgeRecord:
+      type: object
+      description: >-
+        Who confirmed that the version's shipped packs become readable with
+        it, and how it was published. Served only to those who manage the
+        QuickAgent. A version that has no record serves none.
+      required: [at, via, packs]
+      properties:
+        by:
+          type: string
+          description: >-
+            The handle of the account that confirmed it. Absent for a
+            release published by a tag push, which carries no confirmation.
+        at:
+          type: string
+          format: date-time
+        via:
+          type: string
+          x-extensible-enum: [client, tag-push, fork]
+          description: >-
+            `client`: the upload carried the publisher's confirmation.
+            `tag-push`: the release was built from a tag and carried none.
+            `fork`: the first version of a fork, copied from the release it
+            forks.
+        packs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShippedPack"
 
     ResolveResult:
       type: object

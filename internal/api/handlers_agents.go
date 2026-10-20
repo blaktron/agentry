@@ -333,6 +333,9 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, ns Namespace, 
 // to it later counts as a setting, and one that cannot be compared stops
 // the build.
 func visibilityOnly(req UpdateAgentJSONBody) bool {
+	// The confirmation of shipped knowledge is read with the visibility it
+	// accompanies; it is not a setting.
+	req.AcknowledgeShippedKnowledge = nil
 	return req.Visibility != nil && req == UpdateAgentJSONBody{Visibility: req.Visibility}
 }
 
@@ -390,6 +393,22 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	if req.Visibility != nil && string(*req.Visibility) == "public" && a.ForkedFromAgentID != nil {
 		problemForkStaysPrivate(w, r)
 		return
+	}
+	// Making the agent public makes every pack its versions ship readable
+	// by anyone: the publisher confirms that first. Decided again under
+	// the row lock below.
+	acknowledged := req.AcknowledgeShippedKnowledge != nil && *req.AcknowledgeShippedKnowledge
+	if req.Visibility != nil && string(*req.Visibility) == "public" && a.Visibility != "public" && !acknowledged {
+		shipping, err := registry.VersionsShippingKnowledge(r.Context(), s.q(), a.ID)
+		if err != nil {
+			s.log.ErrorContext(r.Context(), "update agent: shipped knowledge", "agent", a.ID, "err", err)
+			problemInternal(w, r)
+			return
+		}
+		if len(shipping) > 0 {
+			problemShippedKnowledgeUnacknowledged(w, r, shipping)
+			return
+		}
 	}
 	if req.AllowForcePush != nil && *req.AllowForcePush != a.AllowForcePush && !permits(auth.ActAgentAdminister) {
 		problemForbidden(w, r, "Allowing force pushes rewrites history everyone else is working from, so it needs the "+a.Namespace+" namespace's administrators.")
@@ -526,6 +545,17 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 			return errRefused
 		}
 		if visibility == "public" && locked.Visibility != "public" {
+			shipping, err := registry.VersionsShippingKnowledge(r.Context(), q, a.ID)
+			if err != nil {
+				return err
+			}
+			if len(shipping) > 0 && !acknowledged {
+				refuse = func() { problemShippedKnowledgeUnacknowledged(w, r, shipping) }
+				return errRefused
+			}
+			if len(shipping) > 0 {
+				detail["acknowledgedShippedKnowledge"] = true
+			}
 			n, err := q.CountUnscannedVersionsStanding(r.Context(), a.ID)
 			if err != nil {
 				return err

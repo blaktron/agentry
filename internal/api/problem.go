@@ -234,6 +234,23 @@ func problemAgentUnscanned(w http.ResponseWriter, r *http.Request, standing int6
 	writeProblemWith(w, r, http.StatusConflict, "agent-unscanned", "Unscanned versions cannot be made public", detail, map[string]any{"unscanned": standing})
 }
 
+// problemShippedKnowledgeUnacknowledged refuses making a QuickAgent public
+// while a version ships knowledge packs and the publisher has not confirmed
+// that they become readable by everyone. The versions and their packs travel
+// as `versions` beside the words.
+func problemShippedKnowledgeUnacknowledged(w http.ResponseWriter, r *http.Request, shipping []registry.ShippingVersion) {
+	parts := make([]string, 0, len(shipping))
+	versions := make([]map[string]any, 0, len(shipping))
+	for _, v := range shipping {
+		parts = append(parts, fmt.Sprintf("%s ships %s", v.Version, strings.Join(v.Packs, ", ")))
+		versions = append(versions, map[string]any{"version": v.Version, "packs": v.Packs})
+	}
+	writeProblemWith(w, r, http.StatusConflict, "shipped-knowledge-unacknowledged", "Shipped knowledge is not confirmed",
+		"Once this QuickAgent is public, everyone can download what its versions ship and read it: "+strings.Join(parts, "; ")+
+			". Confirm that these hold no private data with acknowledgeShippedKnowledge, or leave it private.",
+		map[string]any{"versions": versions})
+}
+
 // problemForkStaysPrivate refuses making a fork public:
 // a fork is private for good, to keep Publisher Earnings with the
 // QuickAgent's own publisher.

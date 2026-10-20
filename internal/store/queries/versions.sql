@@ -1,9 +1,19 @@
 -- Agent versions + state machine.
 
 -- name: CreateAgentVersion :one
-INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabilities, channel, submitted_by, source, submitter_ip_hash, draft_run)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO agent_versions (id, agent_id, version, commit_sha, manifest, capabilities, channel, submitted_by, source, submitter_ip_hash, draft_run, knowledge_shipping)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING *;
+
+-- name: ListVersionsShippingKnowledge :many
+-- The versions of an agent that ship knowledge packs and have not been
+-- yanked or rejected: the releases whose packs are, or can still become,
+-- readable by whoever can download them. The pack names are the contract's.
+SELECT version, status, (capabilities->'knowledge')::jsonb AS packs FROM agent_versions
+WHERE agent_id = $1 AND status NOT IN ('yanked', 'rejected')
+  AND jsonb_typeof(capabilities->'knowledge') = 'array'
+  AND jsonb_array_length(capabilities->'knowledge') > 0
+ORDER BY created_at, version;
 
 -- name: MarkVersionDrafterRevision :execrows
 -- The scan proved the version's claimed draft: the source becomes
