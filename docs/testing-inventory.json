@@ -2413,7 +2413,8 @@
             "TestReviewedViewHoldsOnlyTheNamedTags",
             "TestReviewedViewRefusesWhatIsNotATagOfACommit",
             "TestReviewedViewsAreKeptWhileInUseAndPrunedWhenStale",
-            "TestSweepInitLeftoversRemovesOnlyStaleWorkDirectories"
+            "TestSweepInitLeftoversRemovesOnlyStaleWorkDirectories",
+            "TestSweepViewLeftoversRemovesOnlyStaleBuildDirectories"
           ],
           "fuzz": [],
           "benchmarks": [],
