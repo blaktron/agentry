@@ -397,9 +397,9 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 				// The check is off, or a registry gave no answer: the
 				// version publishes without it.
 				path, ev = metrics.FailOpenVersionNotChecked, logevent.FailOpenVersionNotChecked
-			// S2/history-error is not one: it holds the version (the gate
-			// forces review on it).
-			case "S2/history-not-scanned", "S2/history-truncated":
+			// S2/history-error and S2/history-truncated are not: they hold
+			// the version (the gate forces review on them).
+			case "S2/history-not-scanned":
 				path, ev = metrics.FailOpenHistoryNotScanned, logevent.FailOpenHistoryNotScanned
 			default:
 				continue
