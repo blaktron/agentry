@@ -484,8 +484,9 @@ done, and writes a draft. It never submits anything.
   without one the Drafter does not run.
 - **The web tools** (`web_search`, `web_read`, `registry_search`) are the
   Drafter's; the Knowledge Creator has `web_search` and `web_read` but never
-  `registry_search` ([below](#knowledge-packs)), and the compiler refuses
-  all three to any other package. They run in the
+  `registry_search` ([below](#knowledge-packs)), the Voice Writer only
+  `web_read`, for the addresses it is given ([below](#a-writing-voice)),
+  and the compiler refuses all three to any other package. They run in the
   tools container, which holds the scan and search keys; the agent container
   holds no Jev key, no search key and no registry credential. `web_read`
   makes GET requests only, over http and https on ports 80 and 443, to
@@ -1352,9 +1353,9 @@ lower them for your own host.
 | a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
 | `browser` | the browser server, a container of its own on the run's own browser network with Chromium's sandbox on, whose one route out is the run's browse proxy, which resolves every name itself and admits only the sites you named with their subdomains, the declared hosts, or any public site where the policy's `browser.allowPublicWeb` allows `scope: public`; browser secrets in a 0600 file bound into that server alone; in a hosted run public sites only ([the browser](#the-browser-a-site-to-test-named-at-run-time)) |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane; before the agent starts they are checked by ClamAV and read in the files image's container (no network, every capability dropped, the files read-only), and their text is mounted read-only at `/inputs-text`; the always-granted `list_inputs`, `read_input` and `search_inputs` serve both ([running with files](#running-with-files)); job output and receipts live on the separate `/out` volume |
-| the scratch folder (the runner's grant to every release, never a built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
-| `export_pdf` (granted with the scratch folder) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
-| `grep` and `glob` (granted with the scratch folder) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
+| the scratch folder (the runner's grant to every release and every built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
+| `export_pdf` (granted with the scratch folder to every release, never to a built-in) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
+| `grep` and `glob` (granted with the scratch folder, a built-in's included) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds and, on Linux through the run's docker filter, every capability dropped but each kind's own ([above](#container-limits-dockerlimits)) |
 | the gateway's reach into the docker daemon | only through the run's docker filter, which admits the run's own containers, networks and volumes and checks every create (every decision in `receipts/docker-filter.log`). It never gives a container the daemon's default bridge (CLI v0.6.122 or later): a container that names no network gets none, or the one run network it names as an endpoint, and one that names several endpoints with no primary network, or an endpoint named `default` or `bridge`, is refused. Where the daemon shares this machine's kernel the CLI serves it on a socket mounted in place of the daemon's; where the daemon runs in a virtual machine (Docker Desktop, Colima, Lima, a podman machine) it runs in a container of the run's own ([container engines](#container-engines)), from the runner image, with no network, every capability dropped and a read-only root, and serves its socket in a volume the gateway mounts at `/var/run`; the gateway starts only once it is ready. Elsewhere the gateway holds the daemon's own socket, and the receipt's `daemon` line says so |
 | the agent container itself | internal-only network; reachable endpoints: the gateway (Bearer token) and the egress proxy (allowlist = `model.proxyAllow`); `/plan` is its only mount |
@@ -2283,9 +2284,20 @@ adds a browser, a site, a host or a secret, or moves from `site` to
 From agentry-cli v0.6.82 every release's run and session gets a
 **scratch folder** and the **`export_pdf`** tool, with five report themes.
 They are the runner's grants, not lines of
-the contract: no manifest declares them, an install asks no consent for
-them, and the built-in packages have neither. A hosted run has them on a
+the contract: no manifest declares them, and an install asks no consent for
+them. A hosted run has them on a
 sandbox host whose runhost carries that CLI release.
+
+From agentry-cli v0.6.143 every built-in package has the scratch folder too, with
+[`grep` and `glob`](#searching-files-grep-and-glob), but never `export_pdf`:
+what a built-in writes is read by the application (a pack's pages, a
+`VOICE.md`, a report or a draft), not handed to a person as a document. Each
+built-in's instruction says what the folder is for: the Creator keeps its
+plan and a copy of each page it will rewrite there, the Voice Writer its
+notes on each sample before it writes the voice once, the Examiner its
+checklist of the files it has read, and the Drafter its working notes.
+Nothing in it leaves the run: a built-in's output goes through
+`write_report` alone.
 
 ### What the tools container mounts
 
@@ -2470,8 +2482,7 @@ Within it:
   type, the saved path and the first page, naming the `scratch_read` call
   that reads on. A body that holds the value of one of the run's secrets is
   refused rather than saved. The egress, redirect and credential rules are
-  the same as for any `fetch`. A built-in, which has no scratch folder, is
-  shown the first page and told the rest was not kept.
+  the same as for any `fetch`.
 - **Anything else is cut with a notice.** Every other result, errors
   included, is cut at the budget with a line saying it was and how much.
 
@@ -3103,9 +3114,15 @@ tools, **`grep`** and **`glob`**. `grep` searches
 the contents of files with a regular expression and `glob` lists files by
 a path pattern. They find files; reading one stays with the tool that
 already reads it. Like the scratch folder they are the runner's grant, not
-a line of the contract: no manifest declares them, an install asks no
-consent for them, and the built-in packages do not have them. A hosted run
-has them once its sandbox host carries that release.
+a line of the contract: no manifest declares them, and an install asks no
+consent for them. A hosted run
+has them once its sandbox host carries that release. From agentry-cli
+v0.6.143 the built-in packages have them too, over the areas each one has:
+the Knowledge Creator its documents, the pack it extends and its scratch
+folder; the Voice Writer its samples and its scratch folder; the Drafter its
+packs and its scratch folder. The Examiner's searches cover its scratch
+folder and its guide, never its inputs: the QuickAgent it examines reaches
+its model only through `read_input`, after AI Review has read it.
 
 ### What they search
 
@@ -3440,7 +3457,12 @@ a network line that names web tools: the Drafter's names `web_search`,
 `web_read` and `registry_search`, and a Knowledge Creator build that
 searches names `web_search` and `web_read`, followed by "**Reading the
 web.** web_read opens only an address one of your web_search results gave,
-exactly as given: search first."
+exactly as given: search first." A Voice Writer run given addresses whose
+pages need scripts names `web_read` alone, followed by "**Reading the web.**
+web_read opens only an address your task names, exactly as given. You have
+no web_search. AI Review reads every page before you do; a page it flagged,
+or could not scan, is withheld: you get only its address and why. Never
+guess at what a withheld page said."
 
 To read the text your own QuickAgent's model gets, compile it the same way
 (`agentry run --local DIR --allow-unsigned --dry-run`) and open the
@@ -4151,8 +4173,13 @@ documents as it does any run's files ([running with files](#running-with-files))
 ClamAV and then the files image's readers, in a container with no network
 and every capability dropped, then the Hybrid Analysis lookup. A document either check
 refuses stops the build with exit 11, naming it. Markdown, text, HTML,
-CSV, JSON, YAML and source files pass as they are; an archive is listed as
-not read, since a pack keeps each document as given.
+CSV, JSON, YAML and source files pass as they are. An archive's files are
+read as documents of their own, each named `<archive>/<member>` and cited
+`[src: doc:<archive>/<member>]`, and kept in the pack under
+`sources/<archive>/<member>`; a member whose name is not a plain one
+(letters, digits, `.`, `-` and `_` in each part) is listed as not read,
+and two members whose names differ only in case refuse the build, naming
+both, since they would be one file on a computer whose names ignore case.
 Then the Creator compiles their
 text into pages against the model your policy names, and the build applies
 what it wrote. A local build costs no credits and is not scanned; the pack
@@ -4160,9 +4187,52 @@ records `not scanned`. `--timeout`, `--max-turns` and `--max-cost` bound
 the run, and an `add` with the same documents continues a build that
 stopped.
 
+**A repository or a web address.** From agentry-cli v0.6.146 a build also
+takes a git repository and files at web addresses, beside its documents or
+instead of them:
+
+- `--repo URL[@REF]`, repeatable, at most 10: an https address, with
+  `@BRANCH`, `@TAG` or `@COMMIT` for a ref other than the default branch.
+  Its text files, code and docs, are read as documents under
+  `repo-<host>-<path>/` (each `/` of the path written `-`). Nothing inside
+  `.git` is fetched, and the receipt names the commit the ref resolved to.
+- `--url URL`, repeatable, at most 20: one file fetched with one https GET,
+  often a PDF or a text file, and read as a document under its own name. An
+  archive's files are read as any archive's are, above. A page drawn by
+  scripts is not a document: a build that searches the web reads it with a
+  rendered `web_read` instead ([below](#knowledge-packs)).
+- `--source-token HOST=ENV_NAME`, repeatable: the access token for a host,
+  from the environment variable named. Without one, a source takes the key
+  saved for its host in the system keychain (service `agentry`, account
+  `source:<host>`), then a prompt on a terminal, then none, as a run's
+  [input source](#input-sources-a-repository-or-a-file-at-a-web-address)
+  does. The token is used by the fetch step alone and is sent to that host
+  alone; it never reaches the Creator, a log, the receipt or the pack.
+
+The fetch is the run's own [input-source](#input-sources-a-repository-or-a-file-at-a-web-address)
+step, in the files image behind a proxy that reaches public addresses only.
+It runs after the documents are staged and before they are decoded, so what
+it fetches goes through the same malware check and decode as a document. The
+Creator fetches nothing itself. A source is fetched within what the pack has
+left: its bytes less the documents, and its 2,000 files less what the pack
+holds, the documents and a reserve of 300 for the pages; a build whose
+documents alone would pass 2,000 files is refused before the Creator runs.
+Like a document, what is fetched is not read by AI Review before the
+Creator reads it. What is fetched is kept in the pack under `sources/` and cited `doc:`, as a
+document is. A repository or an address counts as a document for the web's
+default (below), so a new pack given only sources searches only with
+`--web`. The receipt has a line for each source, and `--json` names each
+one under `sources[]` ([machine-readable output](#machine-readable-output)).
+
+```bash
+agentry knowledge create uuid-docs --repo https://github.com/google/uuid@v1.6.0
+agentry knowledge add uuid-docs --url https://example.com/rfc9562.pdf
+agentry knowledge create handbook --repo https://github.com/you/handbook --source-token github.com=GITHUB_TOKEN
+```
+
 **Searching the web.** `--web` lets the Creator search; `--no-web` forbids
-it. With neither, a new pack with no `--file` searches and anything else
-does not: `add`, and any build with documents, since its searches would
+it. With neither, a new pack with no `--file`, `--repo` or `--url`
+searches and anything else does not: `add`, and any build with documents, since its searches would
 carry what the Creator read in them to the search provider. The Creator's
 `web_search` and `web_read` are the Drafter's tools, AI Review reading
 every result first with your own Jev key, and a search provider of your own
@@ -4177,6 +4247,48 @@ documents and the pack first and to search only for what they do not hold.
 A page it wrote from the web cites `[src: web:<url>]`, and what it took from
 its model's own knowledge `[src: model]`; the pack lint accepts both beside
 `[src: doc:<path>]`, and no web page's text is kept in the pack.
+
+**Pages drawn by scripts.** From agentry-cli v0.6.145 the Creator's
+`web_read` reads a page as a browser draws it when the page needs scripts
+to show its text, which most documentation portals and single-page sites
+do:
+
+- **When it renders.** `web_read` first reads the page as before, with one
+  GET. It renders an HTML page whose text comes to under 1,024 bytes, and a
+  page the model asks for with `render: true`. A render that fails, or that
+  the site answers with an error status, keeps the plain text, with a note
+  saying so.
+- **What it may open.** The same addresses as a plain read: one of the
+  build's own searches returned, exactly as given. A page that takes the
+  browser to another site is not read.
+- **How.** The engine starts one container of the browser image for each
+  page: Chromium with its sandbox on, every capability dropped, a read-only
+  root and no new privileges, on an internal network of its own whose one
+  way out is a proxy that admits public addresses on ports 80 and 443
+  alone. It renders two pages at a time, at most 120 in a run, each within
+  120 seconds. Nothing of the run is mounted into it, no secret reaches it,
+  and its browser profile goes with it.
+- **What it reads.** The rendered page's text goes through the same AI
+  Review as a plain read before the model sees it, and is cut to the same
+  32 KiB. A render is one of the build's page reads.
+- **What it never does.** The model never drives the browser and has no
+  `browser_*` tool: nothing clicks, types, fills a form, uploads a file,
+  takes a secret or keeps a cookie from one page to the next.
+- **The receipt** names the browser image, how many pages were rendered and
+  how many renders failed (`web.render`, `web.render.image`,
+  `web.render.pages`), and keeps the proxy's decisions in
+  `receipts/render-proxy.log`.
+
+A built-in is never granted the browser that a release declares with
+[`capabilities.browser`](#the-browser-a-site-to-test-named-at-run-time);
+the render is a service behind `web_read`, not a tool.
+
+**The Creator's guide.** The Knowledge Creator ships a guide of its own, the
+read-only pack `pack-writing-guide`, mounted beside the pack it extends: how a
+good page reads, citing, a build from many documents, from a repository and
+from the web. It is part of the binary, held to the embedded package's
+digest like the rest of it. A pack of that name given to a build is
+refused.
 
 **Keeping packs: the local store.** Packs are kept under the runner home,
 in `~/.agentry/runner/knowledge/<pack id>/`, which Agentry Desktop shares.
@@ -4280,10 +4392,49 @@ the voice by a note (an AI Edit), with samples that show the change if you
 give them; the note is the change to make. `--brief TEXT` says how you want to sound. `set FILE|-`
 keeps your own text instead. The Voice Writer is a package this binary
 embeds and runs with the attestation state `builtin`, against the model
-your policy names: it costs no credits, and nothing it reads or writes is
-reviewed. `--timeout` (by default the policy's or 1,800 s, whichever is
+your policy names: it costs no credits, and neither the files it reads nor
+the voice it writes is reviewed (the pages of web addresses are, below).
+`--timeout` (by default the policy's or 1,800 s, whichever is
 longer), `--max-turns` and `--max-cost`
 bound its run.
+
+**Samples from web addresses.** From agentry-cli v0.6.146 `create`,
+`improve` and `edit` also take `--url URL`, repeatable, at most 20: the https address of a page of your
+writing, such as a blog post or a newsletter issue, beside the files or
+instead of them.
+
+- **Fetched first.** Before the run, each address is fetched by the same
+  step as a run's [`url` input source](#a-file-at-a-web-address-url), behind
+  a proxy that reaches public addresses only, and decoded with the other
+  samples; an address that is a non-public address literal is refused
+  before anything runs.
+- **Always read by AI Review.** Each page's text is read by AI Review,
+  with your own TypeSafe key, before the Voice Writer sees it: an HTML page
+  as its text alone, which is what the Voice Writer then reads. A page AI
+  Review flags or cannot scan is withheld and named in the task, the
+  receipt and the output, and each file of an archive at an address is
+  decided on its own. Without the key, the addresses are refused with the
+  reason; files alone need none.
+- **Rendered where needed.** A page whose text comes from scripts (HTML
+  with under 1,024 bytes of text) is not made a sample. The Voice Writer
+  reads it during the run with `web_read`, which it is granted for that run
+  alone: it opens only the addresses given, exactly as given, renders the
+  page as the Knowledge Creator's does ([pages drawn by
+  scripts](#knowledge-packs)), and has AI Review read the rendered
+  text first. A page of that kind is withheld instead when its address has
+  a query, when it came as a file inside an archive, or when the build
+  cannot render pages. The Voice Writer has no `web_search`.
+
+The Voice Writer reads a page as a sample of your own writing, not the
+site's navigation, comments or quotes of others. It ships a guide of its
+own, the read-only pack `style-guide`: the dimensions of a voice, reading a
+web page, a worked example, and what a voice may never say, which are the
+questions AI Review asks of a voice ([The review](voice.md#the-review)).
+
+```bash
+agentry voice create --url https://you.example/blog/one --url https://you.example/blog/two
+agentry voice edit --note "Shorter sentences" --url https://you.example/newsletter/42
+```
 
 **Keeping it.** This computer keeps at most one voice, in
 `~/.agentry/runner/voice/`: `voice.sealed` (the text under a data key of
@@ -4374,8 +4525,8 @@ key variable's **name** only.
 | `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made and each send to a [destination](#destinations-sending-a-runs-result-somewhere): `destination`, `kind`, `host` and `onMyNetwork` for a send, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
 | `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts), `corrections` (how many slips were corrected), `repaired` (whether the one repair turn ran) and `check` (AI Review's check as one word: `pass`, `flagged`, `not_scanned`, or `unanswered`; absent for a draft that could not be rendered). The envelope's usage is both turns' together. A draft that stops before the Drafter runs still writes one envelope with its class and stage |
-| `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
-| `voice create\|improve\|edit … --output-format json` | the Voice Writer run's result envelope, as `run … --output-format json` writes one, with the build's report under `voice`: `job` (create, improve or edit), `sha256`, `bytes`, `kept` (kept on this computer) or `written` (the `--write` file), `samples[]`, `skipped[]`, `cut[]` (samples cut short or left out by `--max-text-bytes`), `receipts` |
+| `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `sources[]` (each `--repo` and `--url`: `kind` repository or url, `url` with any query hidden, `ref`, `commit`, `document` it is cited under, `files`, `bytes`, `leftOut` by reason, and `token`, where the token came from (flag, keychain or prompt), never the token itself), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
+| `voice create\|improve\|edit … --output-format json` | the Voice Writer run's result envelope, as `run … --output-format json` writes one, with the build's report under `voice`: `job` (create, improve or edit), `sha256`, `bytes`, `kept` (kept on this computer) or `written` (the `--write` file), `samples[]`, `skipped[]`, `cut[]` (samples cut short or left out by `--max-text-bytes`), `pages[]` (each `--url`: `url` with any query hidden, `sample`, the sample it became when it was read before the run, `rendered` when the Voice Writer read it with `web_read`, `withheld`, why AI Review did not pass it or it could not be read, `withheldMembers` of an archive, and `bytes`), `receipts` |
 | `voice show --json` | the record kept beside the voice: `schema`, `id`, `sha256`, `bytes`, `source`, `created`, `updated`, `alwaysAttach`, `creator` (`cli`, `model`) |
 | `voice status --json` | `local` (that record, or null), `registry`, `signedIn`, `account` (the account's voice as the registry answers `GET /voice`), `error` (why the account could not be read) |
 | `voice upload --json` | the account's voice as the registry answers it after the upload (with `--wait`, after the verdict) |

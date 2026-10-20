@@ -171,7 +171,10 @@ Every client goes through the routes above, and none moves a voice between
 a computer and the account on its own:
 
 - **The CLI** keeps this computer's voice and runs the Voice Writer free
-  ([A Writing Voice](runner.md#a-writing-voice)). `agentry voice upload`
+  ([A Writing Voice](runner.md#a-writing-voice)), over files of your
+  writing and, with `--url`, pages of it on the web, which AI Review reads
+  first with your own TypeSafe key
+  ([samples from web addresses](runner.md#a-writing-voice)). `agentry voice upload`
   puts that text to `PUT /voice` with the source `upload` and changes
   nothing on the computer; `download` keeps the account's live version on
   the computer, held to its digest; `status` shows both; `attach on|off
@@ -179,7 +182,8 @@ a computer and the account on its own:
 - **The desktop** shows the two voices as two cards, **Local Voice** and
   **Cloud Voice**. The Local Voice page edits this computer's voice, runs
   **Edit with AI** on this computer for no credits (a note and optional
-  samples; with no voice, **Write with AI** creates one), and moves the
+  samples or web addresses of your writing; with no voice, **Write with
+  AI** creates one), and moves the
   voice: **Upload to Cloud** is the CLI's upload and **Download Cloud
   version** its download. Each says *Already the same* when the digests
   match and asks before it replaces a voice that looks newer. The Cloud
@@ -187,8 +191,9 @@ a computer and the account on its own:
   `PUT /voice` with the source `edit`, Edit with AI In Agentry, Discard,
   Restore and Delete, and the `alwaysAttach` switch.
 - **The site** has two cards on the Dashboard's Voice page. **AI Voice
-  Writer** runs the hosted Voice Writer: a new voice from samples, or an
-  Edit with AI, a note saying what should change with optional samples.
+  Writer** runs the hosted Voice Writer: a new voice from samples, web
+  addresses of your writing or both, or an Edit with AI, a note saying what
+  should change with optional samples or addresses.
   **Voice settings** holds the account's voice in an editor whose Save is
   `PUT /voice` with the source `edit`, Discard for a pending version,
   Restore, Delete, and the `alwaysAttach` switch, which Settings → Profile
@@ -212,7 +217,10 @@ described with the rest of its runs on [Hosted runs](hosted-runs.md):
   proposes what it writes as the pending version
   ([A hosted Voice Writer run](hosted-runs.md#a-hosted-voice-writer-run)).
   An AI Edit takes optional samples beside its note, as `agentry voice
-  edit --file` does. Each costs 20 credits flat, AI Review included, and a person on Standard
+  edit --file` does. Each of the three also takes web addresses of the
+  person's writing (`urls`, at most 20), each page read by AI Review before
+  the Voice Writer reads it and a page drawn by scripts rendered in a
+  headless browser. Each costs 20 credits flat, AI Review included, and a person on Standard
   starts one a billing cycle, whichever of the three.
 - **A run in the voice**: a hosted run or session created with
   `voice: true` is handed the runner's live version at the hand-off
