@@ -56,6 +56,15 @@ func TestS6ReportsTheBrowserToolsAReleaseDoesNotGrant(t *testing.T) {
 	}
 	f := got[0]
 	tools, _ := f.Detail["tools"].([]string)
+	// The title lists the tools in the order called for, cut at 160 bytes; the
+	// detail lists them all, with the line each is first called for.
+	all := strings.Join(tools, ", ")
+	if len(all) <= 160 || !strings.HasSuffix(f.Title, "): "+all[:160]) {
+		t.Errorf("title = %q, want the tools cut at 160 of %d bytes", f.Title, len(all))
+	}
+	if lines, _ := f.Detail["lines"].([]int); len(lines) != len(tools) || lines[0] != f.LineStart {
+		t.Errorf("lines = %v for %d tools, first at %d", f.Detail["lines"], len(tools), f.LineStart)
+	}
 	if f.Severity != SevHigh || f.Confidence != ConfHigh || f.FilePath != "AGENT.md" || f.LineStart < 1 ||
 		f.Detail["path"] != "capabilities.browser" || f.Detail["grant"] != "browser" ||
 		!slices.Contains(tools, "browser_click") || slices.Contains(tools, "browser_pdf_save") ||
@@ -99,5 +108,26 @@ func TestS6ReportsEachGrantOnce(t *testing.T) {
 	}
 	if fs := (S6Scripts{}).Run(testStageContext(t), v1).Findings; len(fs) != 1 || fs[0].Scanner != scannerUngrantedTool {
 		t.Errorf("v1 prompt-agent: got %+v", fs)
+	}
+
+	// The instruction is the first candidate present, and it must be text:
+	// when AGENT.md is there but is not text, PROMPT.md is not read in its
+	// place; nor is anything read when the file is absent.
+	call := []byte("Open the page with browser_navigate.\n")
+	for name, files := range map[string][]FileEntry{
+		"the first candidate is not text":    {{Path: "AGENT.md", IsText: false, Content: call}, {Path: "PROMPT.md", IsText: true, Content: call}},
+		"the first candidate has no content": {{Path: "AGENT.md", IsText: true}, {Path: "PROMPT.md", IsText: true, Content: call}},
+		"no instruction file":                {{Path: "NOTES.md", IsText: true, Content: call}},
+		"the only candidate is not text":     {{Path: "PROMPT.md", IsText: false, Content: call}},
+	} {
+		in := &Input{ManifestJSON: []byte(`{"schemaVersion":"1","kind":"prompt-agent","capabilities":{}}`), Files: files}
+		if fs := (S6Scripts{}).Run(testStageContext(t), in).Findings; len(fs) != 0 {
+			t.Errorf("%s: got %+v", name, fs)
+		}
+	}
+	// With AGENT.md absent, PROMPT.md is the instruction.
+	in = &Input{ManifestJSON: []byte(`{"schemaVersion":"1","kind":"prompt-agent","capabilities":{}}`), Files: []FileEntry{{Path: "PROMPT.md", IsText: true, Content: call}}}
+	if fs := (S6Scripts{}).Run(testStageContext(t), in).Findings; len(fs) != 1 || fs[0].FilePath != "PROMPT.md" {
+		t.Errorf("PROMPT.md as the instruction: got %+v", fs)
 	}
 }
