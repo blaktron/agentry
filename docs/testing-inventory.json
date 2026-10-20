@@ -3353,7 +3353,9 @@
           "path": "internal/scan/url_reputation_test.go",
           "tests": [
             "TestSuspiciousURLReadsTheHostAfterUserinfo",
-            "TestS8URLReputationReadsUserinfoURLs"
+            "TestS8URLReputationReadsUserinfoURLs",
+            "TestSuspiciousURLReadsTheHostABrowserReads",
+            "TestS8URLReputationReadsEveryHiddenForm"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3426,7 +3428,21 @@
           "tests": [
             "TestJPEGFillBytesDoNotEndTheMetadataWalk",
             "TestJPEGFillBytesInjection",
-            "TestJPEGWalkStillStopsOnMalformedData"
+            "TestJPEGWalkStillStopsOnMalformedData",
+            "TestJPEGStuffedByteIsNotASegment"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/imagemeta_resync_test.go",
+          "tests": [
+            "TestJPEGWalkReachesEverySegment",
+            "TestJPEGHiddenSegmentInjection",
+            "TestJPEGSecondImageAfterTheEndIsRead",
+            "TestJPEGTrailingBinaryDataYieldsNoFinding"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3454,7 +3470,9 @@
           "tests": [
             "TestEXIFUnicodeCommentFollowsTheFilesByteOrder",
             "TestImageMetadataBigEndianUnicodeInjection",
-            "TestEXIFUnicodeCommentHostileBodies"
+            "TestEXIFUnicodeCommentHostileBodies",
+            "TestUTF16TextAfterANULIsScanned",
+            "TestNULReadings"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3711,6 +3729,17 @@
           ]
         },
         {
+          "path": "internal/scan/stages_s2_history_distinct_test.go",
+          "tests": [
+            "TestS2HistoryReportsEachDistinctSecret",
+            "TestS2HistoryFindingLimitSaysWhichLimit"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/stages_s2_history_plus_test.go",
           "tests": [
             "TestS2HistoryReadsAddedLinesThatStartWithPlus",
@@ -3744,6 +3773,19 @@
             "TestS2ManifestEnv",
             "TestS2ManifestEnvWithoutFile",
             "TestS2ManifestOAuthValues"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "internal/scan/stages_s6_quoted_options_test.go",
+          "tests": [
+            "TestS6ReadsAQuotedOption",
+            "TestS6QuotedListenIsAListen",
+            "TestS6AnLInAnOptionArgumentIsNoListen",
+            "TestS6ScpOperandsAfterDashDash"
           ],
           "fuzz": [],
           "benchmarks": [],

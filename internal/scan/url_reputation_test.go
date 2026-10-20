@@ -40,3 +40,57 @@ func TestS8URLReputationReadsUserinfoURLs(t *testing.T) {
 		}
 	}
 }
+
+// TestSuspiciousURLReadsTheHostABrowserReads pins the forms that reach the
+// same host as the plain link they imitate: a backslash in the authority,
+// which a browser reads as "/" in an http(s) URL, and a trailing dot, which
+// names the same host; with a shortener and with a punycode host each, and
+// the look-alikes that do not reach it. Where a browser and a parser that
+// keeps the backslash read different hosts, either reading counts.
+func TestSuspiciousURLReadsTheHostABrowserReads(t *testing.T) {
+	const short, puny = "URL shortener hides destination", "punycode/homograph domain"
+	for _, c := range []struct {
+		url, want string
+	}{
+		{`https://bit.ly\@example.com/x`, short},
+		{`https://bit.ly\x`, short},
+		{`https://user@bit.ly\x`, short},
+		{`https://xn--pple-43d.com\@example.com/x`, puny},
+		{"https://bit.ly./x", short},
+		{"https://bit.ly.", short},
+		{"https://user@tinyurl.com.:443/x", short},
+		{"https://xn--pple-43d.com./", puny},
+		// A parser that keeps the backslash reads bit.ly here, where a
+		// browser opens example.com: either reading counts.
+		{`https://example.com\@bit.ly/x`, short},
+		{`https://example.com\@xn--pple-43d.com/x`, puny},
+		{"https://XN--PPLE-43D.COM./", puny},
+		{"https://example.com./x", ""},
+		{"https://bit.ly.example.com/x", ""},
+	} {
+		if got := suspiciousURL(c.url); got != c.want {
+			t.Errorf("suspiciousURL(%q) = %q, want %q", c.url, got, c.want)
+		}
+	}
+}
+
+// TestS8URLReputationReadsEveryHiddenForm pins the finding through the stage,
+// where the URL is first found in the line: the scheme in any case, a
+// backslash authority and a trailing dot, with a shortener and with a
+// punycode host.
+func TestS8URLReputationReadsEveryHiddenForm(t *testing.T) {
+	for _, line := range []string{
+		"See HTTPS://bit.ly/x for setup.",
+		"See Https://xn--pple-43d.com/ for setup.",
+		"See hTTp://tinyurl.com/x for setup.",
+		`See https://bit.ly\@example.com/x for setup.`,
+		`See https://xn--pple-43d.com\@example.com/x for setup.`,
+		"See https://bit.ly./x for setup.",
+		"See https://xn--pple-43d.com./ for setup.",
+	} {
+		got := scannerSet(S8Metadata{}.Run(testStageContext(t), &Input{Files: files("readme.md", "# Tool\n\n"+line+"\n")}).Findings)
+		if _, ok := got["S8/url-reputation"]; !ok {
+			t.Errorf("%s: no S8/url-reputation (got %v)", line, got)
+		}
+	}
+}
