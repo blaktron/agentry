@@ -1,0 +1,9 @@
+technique: "Benign twin: the same line with both values placeholders"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{}}
+expect: []
+forbid:
+  - S2/aws-secret-key
+  - S2/generic-assignment
+expectClean: true

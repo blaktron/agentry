@@ -20,6 +20,9 @@ paths = [
   '''testdata/attack-corpus/manifest-env-token-unquoted/agent\.yaml''',
   '''testdata/attack-corpus/manifest-env-token-unquoted/expected\.yaml''',
   '''testdata/attack-corpus/s3-encoded-blob-benign/readme\.md''',
+  # A generated credential-shaped value behind a placeholder of the same rule
+  # on one line: the scanner must find the second value.
+  '''testdata/attack-corpus/s2-key-behind-placeholder/agent\.md''',
   # The model-input bench's benign API reference: a curl
   # example with a placeholder bearer token, on purpose, so the bench shows
   # the scan does not withhold documentation of a credential.

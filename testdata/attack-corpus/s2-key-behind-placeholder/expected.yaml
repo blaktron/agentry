@@ -1,0 +1,8 @@
+technique: "A secret behind a placeholder of the same rule on one line (S2)"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{}}
+expect:
+  - S2/aws-secret-key
+forbid: []
+expectClean: false
