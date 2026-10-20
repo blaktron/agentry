@@ -143,12 +143,22 @@ func jpegText(data []byte) []metaString {
 			// file. Either way there is nothing further to read structurally.
 			return out
 		}
+		// Any number of 0xFF fill bytes may precede a marker (ITU T.81
+		// B.1.1.2); a padded marker must not end the walk.
+		for pos+1 < len(data) && data[pos+1] == 0xFF {
+			pos++
+		}
+		if pos+4 > len(data) {
+			return out
+		}
 		marker := data[pos+1]
 		switch marker {
 		case 0xD8, 0x01: // SOI, TEM — no payload
 			pos += 2
 			continue
 		case 0xD9, 0xDA: // EOI, start of scan — metadata is behind us
+			return out
+		case 0x00: // a stuffed byte, never a marker: not a segment boundary
 			return out
 		}
 		if marker >= 0xD0 && marker <= 0xD7 { // RSTn — no payload
