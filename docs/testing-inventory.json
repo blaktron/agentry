@@ -3388,6 +3388,18 @@
           ]
         },
         {
+          "path": "internal/scan/imagemeta_fill_test.go",
+          "tests": [
+            "TestJPEGFillBytesDoNotEndTheMetadataWalk",
+            "TestJPEGFillBytesInjection",
+            "TestJPEGWalkStillStopsOnMalformedData"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/imagemeta_test.go",
           "tests": [
             "TestExtractImageTextPNG",
