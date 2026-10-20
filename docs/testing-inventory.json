@@ -3707,6 +3707,18 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/scan/stages_s6_quoted_test.go",
+          "tests": [
+            "TestS6ReadsAQuotedCommandWord",
+            "TestS6SkipsAssignmentsAfterAWrapper",
+            "TestS6QuotedWordsThatAreNotCommands"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/stages_s6_test.go",
           "tests": [
             "TestS6UndeclaredEverything",
