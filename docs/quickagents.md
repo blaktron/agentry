@@ -564,8 +564,8 @@ Closed vocabulary. Omitted or empty means a **pure-text QuickAgent**
 `scratch_read`, `scratch_write` and `scratch_search`, `export_pdf`, and
 `grep` and `glob` over its inputs, its scratch folder and any attached
 knowledge, nothing else; the last seven are the runner's grants to every
-release but a built-in, not
-lines of the contract). The registry scans releases
+release, not lines of the contract, and a built-in has all of them but
+`export_pdf`). The registry scans releases
 against these declarations, an install prompts on them (egress/exec need
 typed consent; a widened contract re-asks on upgrade), and the runner
 turns each line into a concrete control. The same contract covers support
@@ -932,9 +932,9 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 |---|---|
 | (always) | `write_report`: write files into the run's output folder, and mark the one the person asked for as the run's [deliverable](#deliverables) |
 | (always) | `list_inputs`, `read_input`, `search_inputs`: the run's provided input files, read-only |
-| (always, but for the built-ins) | `scratch_list`, `scratch_read`, `scratch_write`, `scratch_search`: the run's [scratch folder](runner.md#the-scratch-folder) at `/scratch`, private to the run and deleted at its end |
+| (always) | `scratch_list`, `scratch_read`, `scratch_write`, `scratch_search`: the run's [scratch folder](runner.md#the-scratch-folder) at `/scratch`, private to the run and deleted at its end |
 | (always, but for the built-ins) | `export_pdf`: a Markdown report as a PDF in `reports/`, in the form the agent picks (`report`, the default, `letter` or `memo`) and laid out in the person's [report theme](runner.md#the-report-theme) |
-| (always, but for the built-ins) | `grep`, `glob`: [search file contents](runner.md#searching-files-grep-and-glob) by regular expression and list files by path pattern with ripgrep, one area a call, only what the run's other tools read: `/inputs`, `/knowledge/<pack>`, `/scratch`, and `/workspace` only with `filesystem.read`. ripgrep runs with an empty environment, as a user of its own when the tools server is root, a fixed argument list that never starts another program, and caps on memory and time; where the machine has Landlock it also reads only the searched area and writes nothing, and at Landlock ABI 4 or later opens no TCP connection |
+| (always) | `grep`, `glob`: [search file contents](runner.md#searching-files-grep-and-glob) by regular expression and list files by path pattern with ripgrep, one area a call, only what the run's other tools read: `/inputs`, `/knowledge/<pack>`, `/scratch`, and `/workspace` only with `filesystem.read`. ripgrep runs with an empty environment, as a user of its own when the tools server is root, a fixed argument list that never starts another program, and caps on memory and time; where the machine has Landlock it also reads only the searched area and writes nothing, and at Landlock ABI 4 or later opens no TCP connection |
 | `filesystem.read` | `fs_read`, `fs_list` |
 | `filesystem.write` | `fs_write` |
 | `network.egress` hosts | `fetch` (with optional declared-secret auth) |
@@ -1116,7 +1116,53 @@ Before submitting, `agentry review .` runs the built-in Examiner on your
 own computer: the registry's rules, AI Review's questions and a model's
 reading of the files, with the outcome the gate would be expected to
 reach. It submits nothing, and the registry's scan at submission is the
-one that counts.
+one that counts. It needs your own TypeSafe key (`$TYPESAFE_API_KEY`, or
+the keychain entry) and costs no credits.
+
+What it checks, over the files a submission would carry:
+
+- **The registry's rules.** The manifest rules and the offline scanners
+  `agentry validate` runs (S1, S3, S4), under the registry's current rule
+  bundle; a shipped knowledge pack's text, as the registry's stage for
+  packs reads it; the registry's record of each declared MCP server; and
+  the registry's baseline policy.
+- **The instruction against the contract** (from agentry-cli v0.6.145).
+  The registry's check of which runner tools an instruction calls for: an
+  instruction that calls a tool such as `browser_*`, `host_*`,
+  `run_command`, `fetch` or `fs_write` without the contract line that
+  grants it is a high `S6/ungranted-tool` finding at the instruction's
+  first call, as it is at submission.
+- **AI Review.** AI Review's questions over the package, read from the
+  run's own record of what AI Review answered, never from what the model
+  says.
+- **The Examiner's reading.** Its model reads every file through AI Review
+  first (a flagged file is withheld from it and named instead) and reports
+  what it found. Its reading is reported but never counts toward the
+  outcome.
+
+The expected outcome is reached as the registry's gate reaches it, from the
+capabilities the registry itself derives from the manifest: a browser line
+on any public site, or one that does not read, is held for review as `"*"`
+egress is, and a policy that names `browser` or `targetHosts` is applied. It
+is `published`, `needs_review` (held for a security reviewer), `rejected`,
+`refused_at_submit` (the manifest rules refuse it), or `undetermined` when
+something the gate weighs did not answer here and the best and the worst
+answer would decide differently; the exit code says which (`0`, `20`, `21`,
+`22`, `23`).
+
+The report names what it could not run on your computer: the secrets and
+scripts stages, the publisher signals, the diff against your last published
+version, an organization's policy, and the checks a run in Agentry makes
+when it starts (a target host, a browser on any public site where the
+deployment does not allow one, a browser's site that is not a public address
+on port 80 or 443).
+
+The Examiner ships a guide of its own, the read-only pack `review-guide`:
+the contract's lines and what reaching past each looks like, and which of
+the registry's checks ran here. It is part of the binary and is the one file
+its model reads that AI Review did not read first. The names of the
+package's files are not read by AI Review: the Examiner treats them as part
+of what it examines.
 
 Every door checks the same quotas (V8): at most 2,000 files and 10 MiB in
 the archive, 2 MiB per file (5 MiB per image), and 1 MiB of text files in
