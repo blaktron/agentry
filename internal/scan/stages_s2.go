@@ -47,7 +47,6 @@ var secretRules = []secretRule{
 
 func (s S2Secrets) Run(sc stageContext, in *Input) StageResult {
 	var findings []Finding
-	seen := map[string]bool{}
 	lineSeen := map[string]bool{}
 	for _, f := range in.Files {
 		if !f.IsText || f.Content == nil {
@@ -56,33 +55,26 @@ func (s S2Secrets) Run(sc stageContext, in *Input) StageResult {
 		lines := strings.Split(string(f.Content), "\n")
 		for i, line := range lines {
 			for _, rule := range secretRules {
-				loc := rule.re.FindStringSubmatch(line)
-				if loc == nil {
-					continue
-				}
-				if rule.entropyMin > 0 {
-					cand := loc[0]
-					if rule.group > 0 && rule.group < len(loc) {
-						cand = loc[rule.group]
+				// Every match on the line: two keys of one rule on one line
+				// are two secrets to rotate, told apart by their column.
+				for _, loc := range rule.re.FindAllStringSubmatchIndex(line, -1) {
+					start, end := loc[0], loc[1]
+					if g := rule.group; g > 0 && 2*g+1 < len(loc) && loc[2*g] >= 0 {
+						start, end = loc[2*g], loc[2*g+1]
 					}
-					if rules.ShannonEntropy([]byte(cand)) < rule.entropyMin {
+					if rule.entropyMin > 0 && rules.ShannonEntropy([]byte(line[start:end])) < rule.entropyMin {
 						continue
 					}
+					lineSeen[f.Path+"|"+strconv.Itoa(i+1)] = true
+					findings = append(findings, Finding{
+						Scanner: "S2/" + rule.id, Severity: rule.severity, Confidence: ConfHigh,
+						Title: "Possible secret: " + rule.id, FilePath: f.Path,
+						LineStart: i + 1, LineEnd: i + 1,
+						Excerpt:  redact(line),
+						Detail:   map[string]any{"rule": rule.id, "column": start + 1},
+						Taxonomy: []string{"LLM03"},
+					})
 				}
-				key := f.Path + "|" + rule.id + "|" + strconv.Itoa(i)
-				if seen[key] {
-					continue
-				}
-				seen[key] = true
-				lineSeen[f.Path+"|"+strconv.Itoa(i+1)] = true
-				findings = append(findings, Finding{
-					Scanner: "S2/" + rule.id, Severity: rule.severity, Confidence: ConfHigh,
-					Title: "Possible secret: " + rule.id, FilePath: f.Path,
-					LineStart: i + 1, LineEnd: i + 1,
-					Excerpt:  redact(line),
-					Detail:   map[string]any{"rule": rule.id},
-					Taxonomy: []string{"LLM03"},
-				})
 			}
 		}
 	}

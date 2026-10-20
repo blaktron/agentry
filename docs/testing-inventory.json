@@ -3730,6 +3730,17 @@
           ]
         },
         {
+          "path": "internal/scan/stages_s2_every_match_test.go",
+          "tests": [
+            "TestS2ArchiveReportsEveryMatchOnALine",
+            "TestS2HistoryTellsPrivateKeysApart"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/stages_s2_history_distinct_test.go",
           "tests": [
             "TestS2HistoryReportsEachDistinctSecret",
