@@ -3404,6 +3404,17 @@
           ]
         },
         {
+          "path": "internal/scan/imagemeta_unicode_test.go",
+          "tests": [
+            "TestEXIFUnicodeCommentFollowsTheFilesByteOrder",
+            "TestImageMetadataBigEndianUnicodeInjection"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/judge_bedrock_test.go",
           "tests": [
             "TestBedrockJudgeContract",
