@@ -485,7 +485,9 @@ func TestRiverRunsJobAndCompletes(t *testing.T) {
 			t.Error("a job inserted without a notification was never picked up by polling")
 		}
 		stop()
-		<-done
+		if err := <-done; err != nil {
+			t.Logf("worker stopped: %v", err)
+		}
 	})
 
 	// The envelope is River's job args: an empty one marshals as JSON null,
@@ -1218,7 +1220,9 @@ func TestRiverSamplesTheBacklogPerQueue(t *testing.T) {
 		go func() { done <- c.Work(workCtx, q) }()
 		waitFor("the first sample", func() bool { _, ok := metricValue(t, mx, "QueueDepth", `queue="`+q+`"`); return ok })
 		stop()
-		<-done
+		if err := <-done; err != nil {
+			t.Logf("worker stopped: %v", err)
+		}
 		if v, _ := metricValue(t, mx, "QueueDepth", `queue="`+q+`"`); v != "0" {
 			t.Errorf("depth of the empty queue %s = %s, want 0", q, v)
 		}
@@ -1251,7 +1255,9 @@ func TestRiverSamplesTheBacklogPerQueue(t *testing.T) {
 		waitFor("the two waiting jobs to be sampled", func() bool { return depth() == "2" })
 		close(letGo)
 		stop()
-		<-done
+		if err := <-done; err != nil {
+			t.Logf("worker stopped: %v", err)
+		}
 	})
 }
 
