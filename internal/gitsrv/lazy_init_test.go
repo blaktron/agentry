@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -103,8 +104,19 @@ func TestCopyingForkGitRequestCreatesNoRepository(t *testing.T) {
 	if denial == nil || denial.status != http.StatusConflict {
 		t.Fatalf("denial = %+v, want status %d", denial, http.StatusConflict)
 	}
+	if !strings.Contains(denial.message, "still being copied") {
+		t.Fatalf("denial message = %q, want it to say the fork is still being copied", denial.message)
+	}
 	if _, err := os.Stat(e.repos.Path(agent.RepoID)); !os.IsNotExist(err) {
 		t.Fatalf("a request for a fork being copied made its repository (stat err %v)", err)
+	}
+
+	// Only a caller who may read the fork is told it exists: a fork is
+	// private, so a stranger gets a missing path's answer, not the notice.
+	stranger := e.seedUser("bkc" + e.sfx)
+	strangerP := &auth.Principal{UserID: stranger, Handle: "bkc" + e.sfx, Via: "session", EmailVerified: true}
+	if _, _, _, denial := e.h.authorizeGit(ctx, "bko"+e.sfx, agent.Name, strangerP, auth.ActAgentRepoRead); denial == nil || denial.status != http.StatusNotFound {
+		t.Fatalf("a stranger reading a fork being copied: %+v, want status %d", denial, http.StatusNotFound)
 	}
 }
 

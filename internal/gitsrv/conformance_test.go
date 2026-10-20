@@ -209,6 +209,24 @@ func (e *gitEnv) cloneURLNS(ns, agent, pat string) string {
 	return fmt.Sprintf("http://token:%s@%s/%s/%s.git", pat, host, ns, agent)
 }
 
+// infoRefsAs fetches a service's ref advertisement with pat as the Basic
+// password (none when empty). The caller closes the body.
+func (e *gitEnv) infoRefsAs(t *testing.T, ns, agent, pat, service string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, e.cloneURLNS(ns, agent, "")+"/info/refs?service="+service, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pat != "" {
+		req.SetBasicAuth("token", pat)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("info/refs request: %v", err)
+	}
+	return res
+}
+
 // seedOrg creates an org the owner founds, optionally enforcing SSO.
 // Enforcement is set directly: the API surface for it belongs to
 // internal/api's org settings, not to the git layer under test.
@@ -411,6 +429,37 @@ func TestGitConformance(t *testing.T) {
 		out, err := gitRun(t, work, "push", env.cloneURL("pub-agent", "agy_bogusbogusbogusbogusbogusbogusbogusbogus"), "main")
 		if err == nil {
 			t.Fatalf("bogus PAT must fail:\n%s", out)
+		}
+	})
+
+	t.Run("an unknown PAT is refused, not read as anonymous", func(t *testing.T) {
+		// pub-agent has a reviewed version, so an anonymous reader is served
+		// its advertisement; a token that names no one must not be.
+		anon := env.infoRefsAs(t, env.owner.handle, "pub-agent", "", "git-upload-pack")
+		_ = anon.Body.Close()
+		if anon.StatusCode != http.StatusOK {
+			t.Fatalf("anonymous read of the reviewed versions: %d, want 200", anon.StatusCode)
+		}
+		res := env.infoRefsAs(t, env.owner.handle, "pub-agent", "agy_bogusbogusbogusbogusbogusbogusbogusbogus", "git-upload-pack")
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnauthorized || !strings.HasPrefix(res.Header.Get("WWW-Authenticate"), "Basic ") {
+			t.Fatalf("read with an unknown PAT: %d (WWW-Authenticate %q), want 401 asking for credentials", res.StatusCode, res.Header.Get("WWW-Authenticate"))
+		}
+	})
+
+	t.Run("an advertisement is typed and never cached", func(t *testing.T) {
+		for service, pat := range map[string]string{"git-upload-pack": env.owner.patRO, "git-receive-pack": env.owner.patRW} {
+			res := env.infoRefsAs(t, env.owner.handle, "pub-agent", pat, service)
+			_ = res.Body.Close()
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("%s advertisement: %d, want 200", service, res.StatusCode)
+			}
+			if got, want := res.Header.Get("Content-Type"), "application/x-"+service+"-advertisement"; got != want {
+				t.Errorf("%s advertisement Content-Type = %q, want %q", service, got, want)
+			}
+			if got := res.Header.Get("Cache-Control"); got != "no-cache" {
+				t.Errorf("%s advertisement Cache-Control = %q, want no-cache (a cached advertisement serves stale refs)", service, got)
+			}
 		}
 	})
 
@@ -696,6 +745,38 @@ func TestPushRejectionLeavesNoTrace(t *testing.T) {
 	if n := env.pushAudits(agent.ID); n != 1 {
 		t.Fatalf("repo.push audit rows = %d after a rejection, want 1", n)
 	}
+
+	// A git that exits with an error is not a push to record, even when its
+	// refs moved before it failed: bookkeeping follows a successful exit.
+	t.Run("git failing after it moved the refs leaves no trace", func(t *testing.T) {
+		realGit, err := exec.LookPath("git")
+		if err != nil {
+			t.Skip("git not installed")
+		}
+		failing := filepath.Join(t.TempDir(), "git")
+		script := "#!/bin/sh\n\"" + realGit + "\" \"$@\"\nstatus=$?\ncase \" $* \" in\n*\" --advertise-refs \"*) exit $status ;;\n*\" receive-pack \"*) exit 3 ;;\nesac\nexit $status\n"
+		if err := os.WriteFile(failing, []byte(script), 0o700); err != nil { //nolint:gosec // an executable test double
+			t.Fatal(err)
+		}
+		fenv := newGitEnvCfg(t, func(c *config.Config) { c.Git.BinPath = failing })
+		failed := fenv.seedAgent("gitfails", "public")
+		fwork := seedWorkdir(t, map[string]string{"agent.yaml": "schemaVersion: \"1\"\n"})
+		_, _ = gitRun(t, fwork, "push", fenv.cloneURL("gitfails", fenv.owner.patRW), "main")
+		head := strings.TrimSpace(mustGit(t, fwork, "rev-parse", "HEAD"))
+		if landed := strings.TrimSpace(mustGit(t, fenv.repos.Path(failed.RepoID), "rev-parse", "refs/heads/main")); landed != head {
+			t.Fatalf("the push did not land before git failed: main is %s, want %s", landed, head)
+		}
+		row, err := fenv.st.Queries().GetRepo(context.Background(), failed.RepoID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if row.LastPushAt != nil || row.SizeBytes != 0 {
+			t.Fatalf("a push whose git failed was bookkept: last_push_at=%v size=%d", row.LastPushAt, row.SizeBytes)
+		}
+		if n := fenv.pushAudits(failed.ID); n != 0 {
+			t.Fatalf("a push whose git failed wrote %d repo.push audit rows", n)
+		}
+	})
 }
 
 // TestReleaseArchiveIgnoresExportIgnore pins the invariant that the
