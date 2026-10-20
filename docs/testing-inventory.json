@@ -3353,7 +3353,9 @@
           "path": "internal/scan/url_reputation_test.go",
           "tests": [
             "TestSuspiciousURLReadsTheHostAfterUserinfo",
-            "TestS8URLReputationReadsUserinfoURLs"
+            "TestS8URLReputationReadsUserinfoURLs",
+            "TestSuspiciousURLReadsTheHostABrowserReads",
+            "TestS8URLReputationReadsEveryHiddenForm"
           ],
           "fuzz": [],
           "benchmarks": [],
