@@ -2434,12 +2434,16 @@
           "path": "internal/gitsrv/unsafe_refs_test.go",
           "tests": [
             "TestAcceptedRefsRefusesUnsafeNames",
-            "TestRefsAtWithNoPlainNameReadsNothing"
+            "TestRefsAtWithNoPlainNameReadsNothing",
+            "TestSafeRefNameFollowsGit",
+            "TestAcceptedRefsRefusesNamesGitRefuses"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
-          "dependencyHints": []
+          "dependencyHints": [
+            "child process"
+          ]
         }
       ]
     },
