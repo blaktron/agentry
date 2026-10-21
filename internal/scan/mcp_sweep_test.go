@@ -37,7 +37,7 @@ func (f *sweepOSV) Query(_ context.Context, pkgs []scan.OSVPackage) (map[string]
 	return out, nil
 }
 
-func mcpServerManifest(ns, name, version string) string {
+func mcpServerManifest(ns, name, version, pkg string) string {
 	return `schemaVersion: "2"
 name: ` + name + `
 namespace: ` + ns + `
@@ -49,7 +49,7 @@ entrypoints:
   instruction: SKILL.md
 capabilities:
   mcpServers:
-    - npm: mcp-sweep-fixture
+    - npm: ` + pkg + `
       version: "0.1.0"
 publish:
   include: [agent.yaml, README.md, SKILL.md, LICENSE]
@@ -57,8 +57,9 @@ publish:
 }
 
 // The daily sweep: a server version that was clean at
-// publication (a fixture package name of its own: this binary's pipeline tests
-// share a database, and mcp_server_scans is keyed by version) and now
+// publication (a fixture package name of its own for each run: the scanned-server
+// registry is keyed by package version, so a row left by an earlier run of the
+// test would answer the first publish without asking) and now
 // carries a high advisory opens one alert per published
 // version declaring it and tells each author once; a yanked version's alert
 // closes with the transition; a withdrawn advisory closes the rest.
@@ -69,9 +70,10 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	osv := &sweepOSV{vulns: map[string][]scan.OSVVulnerability{}}
 	e.pipe.SetMCPScanning(osv, scan.NewStoreMCPScanCache(e.st))
 	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
+	pkg := "mcp-sweep-fixture-" + suffix()
 	files := func(name string) map[string]string {
 		return map[string]string{
-			"agent.yaml": mcpServerManifest(u.Handle, name, "1.0.0"),
+			"agent.yaml": mcpServerManifest(u.Handle, name, "1.0.0", pkg),
 			"README.md":  "# " + name + "\n",
 			"SKILL.md":   "Summarize the input.\n",
 			"LICENSE":    "Apache-2.0\n",
@@ -90,7 +92,7 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	// published at the same time would otherwise be re-checked and counted
 	// here.
 	backdate := func() {
-		if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours' WHERE ecosystem = 'npm' AND package = 'mcp-sweep-fixture'`); err != nil {
+		if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours' WHERE ecosystem = 'npm' AND package = $1`, pkg); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -103,7 +105,7 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 	}
 
 	// The database learns of a high advisory for that exact version.
-	osv.vulns["npm/mcp-sweep-fixture@0.1.0"] = []scan.OSVVulnerability{{ID: "GHSA-xvch-5gv4-984h", Aliases: []string{"CVE-2021-44906"}, Severity: "high", Summary: "Prototype Pollution", FixedIn: []string{"1.2.6"}}}
+	osv.vulns["npm/"+pkg+"@0.1.0"] = []scan.OSVVulnerability{{ID: "GHSA-xvch-5gv4-984h", Aliases: []string{"CVE-2021-44906"}, Severity: "high", Summary: "Prototype Pollution", FixedIn: []string{"1.2.6"}}}
 	backdate()
 	sum, err = e.pipe.MCPSweep(ctx)
 	if err != nil || sum.AlertsOpened != 2 || sum.Vulnerable != 1 {
@@ -113,12 +115,12 @@ func TestMCPSweepOpensAndResolvesAlerts(t *testing.T) {
 		t.Fatalf("author notices: %d, want 2", len(notifier.mcpAlerts))
 	}
 	n := notifier.mcpAlerts[0]
-	if n.ToEmail != u.Email || n.Server != "npm:mcp-sweep-fixture@0.1.0" || n.Severity != "high" || len(n.Advisories) != 1 || n.FixedIn[0] != "1.2.6" || n.Version != "1.0.0" {
+	if n.ToEmail != u.Email || n.Server != "npm:"+pkg+"@0.1.0" || n.Severity != "high" || len(n.Advisories) != 1 || n.FixedIn[0] != "1.2.6" || n.Version != "1.0.0" {
 		t.Fatalf("notice: %+v", n)
 	}
 	// The sweep writes the row as read since scores were kept, so
 	// S7 answers from it rather than asking again.
-	if rec, _ := scan.NewStoreMCPScanCache(e.st).Get(ctx, "npm", "mcp-sweep-fixture", "0.1.0"); rec == nil || len(rec.Advisories) != 1 || !rec.Advisories[0].Scored {
+	if rec, _ := scan.NewStoreMCPScanCache(e.st).Get(ctx, "npm", pkg, "0.1.0"); rec == nil || len(rec.Advisories) != 1 || !rec.Advisories[0].Scored {
 		t.Fatalf("swept row: %+v", rec)
 	}
 	open1, _ := e.st.Queries().ListOpenMCPDependencyAlertsForVersion(ctx, v1.ID)
@@ -176,15 +178,16 @@ func TestMCPSweepRespectsEmailPreference(t *testing.T) {
 	if _, err := e.st.Pool().Exec(ctx, `INSERT INTO user_notification_settings (user_id, email_dependency_alerts) VALUES ($1, false)`, e.owner); err != nil {
 		t.Fatal(err)
 	}
-	manifest := strings.ReplaceAll(mcpServerManifest(u.Handle, "quiet-owner", "1.0.0"), "mcp-sweep-fixture", "quiet-fixture")
+	pkg := "quiet-fixture-" + suffix()
+	manifest := mcpServerManifest(u.Handle, "quiet-owner", "1.0.0", pkg)
 	v := e.publish("quiet-owner", "public", map[string]string{
 		"agent.yaml": manifest, "README.md": "# quiet\n", "SKILL.md": "Summarize.\n", "LICENSE": "Apache-2.0\n",
 	})
 	if v.Status != "published" {
 		t.Fatalf("publish: %s", v.Status)
 	}
-	osv.vulns["npm/quiet-fixture@0.1.0"] = []scan.OSVVulnerability{{ID: "GHSA-quiet", Severity: "high", Summary: "x"}}
-	if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours' WHERE ecosystem = 'npm' AND package = 'quiet-fixture'`); err != nil {
+	osv.vulns["npm/"+pkg+"@0.1.0"] = []scan.OSVVulnerability{{ID: "GHSA-quiet", Severity: "high", Summary: "x"}}
+	if _, err := e.st.Pool().Exec(ctx, `UPDATE mcp_server_scans SET last_checked_at = now() - interval '25 hours' WHERE ecosystem = 'npm' AND package = $1`, pkg); err != nil {
 		t.Fatal(err)
 	}
 	sum, err := e.pipe.MCPSweep(ctx)
