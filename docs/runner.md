@@ -3980,6 +3980,32 @@ for everything that goes through the gateway, and `receipts/proxy.log`
 records every CONNECT the harness made, so the enforcement record stays
 honest about which half is which.
 
+### When the model is at capacity
+
+Sometimes the model's provider answers that the model is at capacity:
+OpenAI's "Selected model is at capacity", Anthropic's `overloaded_error` or
+HTTP 529, an HTTP 503, or Google's `UNAVAILABLE`. That answer is about the
+moment, not about the run, so with every adapter the runner waits 60 seconds
+and sends the request again:
+
+- **A session's turn** is sent again on the same session. That covers an
+  interactive session, a persistent agent, and a Codex run on a ChatGPT plan,
+  which is driven as one turn.
+- **A harness that runs the task as one process** (docker-agent, `claude -p`,
+  `codex exec`) is started again, but only if it failed before its first tool
+  call. A harness whose tools already ran is not started again, because those
+  tools would run twice.
+
+Each wait is announced, on stderr for an autonomous run and as a notice in a
+session. The runner waits at most 10 times for one turn or one run, and never
+when the wait would end after the run's `--timeout`. The timeout counts from
+the harness's first start, not from each new start. When the waits run out,
+the run fails as the harness (exit 14) with the provider's words. The receipts
+keep every attempt, and the run's usage counts them all.
+
+A 429 is not a capacity answer. On a model sign-in it is the plan's limit,
+which is never retried ([Outcomes](#outcomes)).
+
 ## Model sign-ins
 
 A **model sign-in** is your own grant that lets the runs on **your computer**
