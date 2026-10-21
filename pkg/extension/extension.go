@@ -548,6 +548,14 @@ type Deps struct {
 	// Orgs is the core's organization store as an extension may act on
 	// it. nil when the server runs without a database.
 	Orgs Orgs
+	// OrgGate is the core's organization-state gate as an extension may
+	// ask it: whether an organization is there to be read or acted on.
+	// A route that names an organization asks it before it answers, so a
+	// suspended or erased organization is absent to an extension as it is
+	// to the core's own routes. Principal.OrgRoles is a person's
+	// memberships and says nothing of the organization's state. nil when
+	// the server runs without a database.
+	OrgGate OrgGate
 	// Agents is the core's read of an agent as an extension may ask it.
 	// nil when the server runs without a database.
 	Agents Agents
@@ -842,6 +850,27 @@ type Orgs interface {
 	// call did it; an organization that is not active, or unknown, is
 	// false with no error.
 	Decommission(ctx context.Context, orgID uuid.UUID, reason string) (bool, error)
+}
+
+// OrgGate answers for an organization's state the way the core's own
+// routes do, so that an extension mirrors none of the rule in SQL. The core
+// enforces an organization's state in one place (registry.OrgGate) for its
+// API, listings, SCIM and git; an extension's routes never pass through the
+// core's authorization, so they ask here. An organization is active,
+// suspended by platform staff, in its decommission hold (read-only for the
+// configured period) or erased.
+type OrgGate interface {
+	// Readable reports whether the organization is there to be read: it is
+	// active or in its decommission hold. A suspended organization, an
+	// erased one and one that does not exist are the same false with no
+	// error, and a route answers each as not found, as the core's do. An
+	// error is a fault to answer as one, never as an absence.
+	Readable(ctx context.Context, orgID uuid.UUID) (bool, error)
+	// Writable reports whether an act that changes the organization or
+	// spends what it holds is permitted: only an active organization
+	// permits it. One in its decommission hold is readable and not
+	// writable; a suspended, erased or unknown one is neither.
+	Writable(ctx context.Context, orgID uuid.UUID) (bool, error)
 }
 
 // BlobStore is the core's object store: put (write-once per key, so an
