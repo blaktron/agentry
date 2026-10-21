@@ -253,16 +253,63 @@ func TestTheTableNamesEachRunnerToolOnce(t *testing.T) {
 // A megabyte of instruction in one paragraph, naming a tool fifty thousand
 // times, is read in time linear in its length: the reading runs inside the
 // publication scan, on text an author controls.
+//
+// The test compares times measured in the same run instead of bounding one
+// against the clock: a busy machine slows both alike, where a fixed limit is
+// missed by whatever else happens to be running. Reading one text of eight
+// units takes as long as reading a text of one unit eight times when the
+// time is linear in the length, and eight times as long when it is
+// quadratic (or far longer, at this size). The two sides run for about the
+// same time, so a busy machine disturbs them alike. Each is measured several
+// times, interleaved, with the fastest of each compared, and a comparison
+// that fails is made again: reading in quadratic time exceeds the limit
+// every time, a pause on a busy machine does not.
 func TestALargeInstructionIsReadInLinearTime(t *testing.T) {
-	instr := strings.Repeat("then use browser_click and ", 40000) + "\n" + strings.Repeat("x", 1<<20)
-	start := time.Now()
-	got := toolgrant.Check(caps(t, ""), instr)
-	if d := time.Since(start); d > 3*time.Second {
-		t.Fatalf("took %s", d)
+	const (
+		unit     = 2500
+		factor   = 8
+		rounds   = 4
+		attempts = 3
+		// Between linear (1) and quadratic (8) growth, above the spread of
+		// linear readings on a machine running far more than it has cores.
+		limit = 5.0
+	)
+	instruction := func(n int) string {
+		return strings.Repeat("then use browser_click and ", n) + "\n" + strings.Repeat("x", 27*n)
 	}
-	if !slices.Equal(tools(got), []string{"browser_click"}) {
-		t.Fatalf("got %v", tools(got))
+	small, large := instruction(unit), instruction(unit*factor)
+	c := caps(t, "")
+	read := func(text string, times int) time.Duration {
+		start := time.Now()
+		for range times {
+			got := toolgrant.Check(c, text)
+			if !slices.Equal(tools(got), []string{"browser_click"}) {
+				t.Fatalf("got %v", tools(got))
+			}
+		}
+		return max(time.Since(start), time.Nanosecond)
 	}
+	fastest := func(best, d time.Duration) time.Duration {
+		if best == 0 || d < best {
+			return d
+		}
+		return best
+	}
+	var ratios []float64
+	for range attempts {
+		var smallBest, largeBest time.Duration
+		for range rounds {
+			smallBest = fastest(smallBest, read(small, factor))
+			largeBest = fastest(largeBest, read(large, 1))
+		}
+		ratio := float64(largeBest) / float64(smallBest)
+		if ratio <= limit {
+			return
+		}
+		ratios = append(ratios, ratio)
+	}
+	t.Fatalf("reading one text %d times as long took %.1f times as long as reading the short one %d times, in each of %d comparisons; linear reading takes about as long",
+		factor, ratios, factor, attempts)
 }
 
 // The answer is bounded however the instruction is written: a name past
