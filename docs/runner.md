@@ -3992,16 +3992,19 @@ and sends the request again:
   interactive session, a persistent agent, and a Codex run on a ChatGPT plan,
   which is driven as one turn.
 - **A harness that runs the task as one process** (docker-agent, `claude -p`,
-  `codex exec`) is started again, but only if it failed before its first tool
-  call. A harness whose tools already ran is not started again, because those
-  tools would run twice.
+  `codex exec`) is started again.
+
+Either happens only if the turn or the run failed before its first tool call.
+One whose tools already ran is not sent again, because those tools could run
+twice: it fails at once with the provider's words.
 
 Each wait is announced, on stderr for an autonomous run and as a notice in a
-session. The runner waits at most 10 times for one turn or one run, and never
-when the wait would end after the run's `--timeout`. The timeout counts from
-the harness's first start, not from each new start. When the waits run out,
-the run fails as the harness (exit 14) with the provider's words. The receipts
-keep every attempt, and the run's usage counts them all.
+session. The runner waits at most 10 times for one turn or one run. It never
+waits when the wait would end after the run's `--timeout` or a session's wall
+limit, or when a session's idle limit is a minute or less. The timeout counts
+from the harness's first start, not from each new start. When the waits run
+out, the run fails as the harness (exit 14) with the provider's words. The
+receipts keep every attempt, and the run's usage counts them all.
 
 A 429 is not a capacity answer. On a model sign-in it is the plan's limit,
 which is never retried ([Outcomes](#outcomes)).
