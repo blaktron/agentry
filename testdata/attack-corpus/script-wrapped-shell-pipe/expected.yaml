@@ -1,0 +1,8 @@
+technique: "Support script pipes a download into a shell that env and sudo wrap (S6 remote-exec)"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"network":{"egress":["get.tooling.invalid.example"]},"exec":{"commands":["sh","curl","env","sudo"]}}}
+expect:
+  - S6/remote-exec
+forbid: []
+expectClean: false

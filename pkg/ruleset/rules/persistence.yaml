@@ -1,4 +1,4 @@
-# Family: persistence (§8.3 S4). Directives that try to write attacker content
+# Family: persistence (S4). Directives that try to write attacker content
 # into the consuming agent's durable memory, config, or instruction store.
 rules:
   - id: persistence-001

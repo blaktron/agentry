@@ -1,9 +1,8 @@
-# Family: tool-coercion (§8.3 S4). Directives addressed to the consuming
+# Family: tool-coercion (S4). Directives addressed to the consuming
 # runtime telling it to run a command/tool as a hidden precondition.
 # tool-coercion-002's first form fires only where its lead word opens a
 # directive (the anchor exfiltration's rules take since 0.4.0), not on a
-# security review's list of the sinks it looks for (ruleset 0.4.2,
-# agentry#1037).
+# security review's list of the sinks it looks for (ruleset 0.4.2).
 rules:
   - id: tool-coercion-001
     family: tool-coercion

