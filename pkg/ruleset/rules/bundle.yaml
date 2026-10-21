@@ -1,7 +1,7 @@
-# Agentry S4 injection-signature rule bundle (PLAN §8.3, shipped as
-# ruleset_releases). This manifest gives the bundle its semantic version,
-# which is recorded on every scan_run and pinned in the CLI release (D-12).
-version: "0.4.15"
+# Agentry S4 injection-signature rule bundle. This manifest gives the bundle
+# its semantic version, which is recorded on every scan_run and pinned in the
+# CLI release.
+version: "0.4.16"
 notes: >
   v1 signature set: the six S4 injection families (instruction-override,
   exfiltration, tool-coercion, credential-harvest, persistence,
@@ -14,17 +14,16 @@ notes: >
   capability or an attempted injection reaches a person whatever the
   auto-publish threshold — S6/undeclared-env, and AI Review's
   C1_injection and C3_undeclared_capability at score 2 — and that content
-  a stage could not read forces review (agentry#771). 0.2.3 changes no
+  a stage could not read forces review. 0.2.3 changes no
   signature and no rating: it is the first ruleset whose registration also
-  judges the review queue again and publishes what now passes the gate
-  (agentry#772), released so that redo runs. 0.3.0 changes no signature
+  judges the review queue again and publishes what now passes the gate, released so that redo runs. 0.3.0 changes no signature
   and no rating: it moves the platform baseline's auto-publish threshold
-  from low to medium (agentry#773). A version whose worst finding is
+  from low to medium. A version whose worst finding is
   medium publishes with the finding on its report; a high finding, or
   content a stage could not read, goes to a person; a critical one is
   rejected. The threshold is released with this version and kept beside
   it in pkg/ruleset, not in this manifest. 0.3.1 changes no signature: it
-  re-rates S7's advisory findings (agentry#774). An advisory's CVSS v3.x
+  re-rates S7's advisory findings. An advisory's CVSS v3.x
   and v4.0 vectors are scored; a Critical advisory is a critical finding;
   a High one is high from a base score of 8.5 and medium below it, and
   high with no usable score; an advisory with no word of its database's
@@ -33,7 +32,7 @@ notes: >
   ecosystem it does not cover, no pinned version) is one medium finding,
   S7/osv-no-data, in place of S7/osv-error. The threshold stays medium.
   0.3.2 changes no signature: it loosens three hidden-content and
-  release-diff ratings that held what is not a major risk (agentry#775).
+  release-diff ratings that held what is not a major risk.
   S3/zero-width no longer fires for a zero-width joiner inside an emoji
   ZWJ sequence or for a byte-order mark at the start of a file; it still
   fires for the same code points anywhere else. S9/new-obfuscation fires
@@ -46,20 +45,18 @@ notes: >
   high on a patch release for any other host or an email recipient.
   S9/escalated is unchanged. The threshold stays medium.
   0.3.3 changes no signature and no rating: it narrows where the
-  bundle-level suppressions below look (agentry#845). They are read over
+  bundle-level suppressions below look. They are read over
   the paragraph that holds a hit, and a Markdown heading now ends that
   paragraph, so a heading such as "# Findings" or "## Review" over a live
   directive no longer suppresses it; a hit on a heading line is judged by
   that line alone. The threshold stays medium.
   0.3.4 changes no signature and no rating: a heading is one to six
-  hashes followed by any Unicode space, not only an ASCII space or tab
-  (agentry#851). Production's red team found that a no-break space after
+  hashes followed by any Unicode space, not only an ASCII space or tab. A no-break space after
   the hashes ("##\u00a0Findings"), which reads as a heading but is not one
   to CommonMark, kept the line in the directive's paragraph and let its
   word suppress the directive. The threshold stays medium.
   0.4.0 holds a release only for what it does not declare, or for an
-  injection technique (agentry#893; plan quickagents-that-run.md D7 as
-  answered by the operator, 2026-10-05). The credential-harvest and
+  injection technique. The credential-harvest and
   exfiltration rules fire on a directive addressed to the agent (an
   imperative at the start of a sentence, list item or clause, or after
   "then", "please", "you", "you must", "don't forget to" and the like),
@@ -71,7 +68,7 @@ notes: >
   a host, address, secret, credential file or program it does not declare
   (an email recipient is never declared), and for any of the three when
   nothing of the kind is declared; medium for declared egress hosts,
-  declared programs outside DR-64's base commands, and a text that names
+  declared programs outside the base commands every run has, and a text that names
   no secret or program where the capability is declared; low for named
   declared secrets, base commands and declared MCP servers. The
   injection families keep their ratings, and S9 no longer escalates a
@@ -80,15 +77,14 @@ notes: >
   value is a documented placeholder (an RFC 2606 name, a template marker,
   with nothing secret-shaped left beside it), and AI Review rates
   exfiltration and destructive actions medium at most, deceiving the user
-  high from a probable score (the operator's instruction of 2026-10-06),
+  high from a probable score,
   and asks the undeclared-capability question about what the text
   instructs, not what it describes. The threshold stays medium.
   0.4.1 changes no signature and no rating. AI Review is given the
   release's stated purpose (its name, summary and guide overview), and
   the undeclared-capability question holds only an action that is
   dangerous, needs a capability the release does not declare, and is out
-  of line with that purpose (the operator's instruction of 2026-10-10,
-  agentry#1044): the runner holds every run to what is declared, so an
+  of line with that purpose: the runner holds every run to what is declared, so an
   undeclared capability that serves the purpose fails safe at run time.
   Released so that registering it judges the review queue again. The
   threshold stays medium.
@@ -96,17 +92,16 @@ notes: >
   credential-harvest rules to tool-coercion-002's first form: its lead
   word (always, first, immediately, silently, automatically, at startup,
   on load, when you start) must open a sentence, list item or clause, or
-  follow "then", "please", "you must" and the like (agentry#1037). A
-  drafted codebase scanner on production was held for "the first
-  character, `find -exec`, `curl -o`", its list of the option-injection
-  sinks it looks for. No other signature and no rating changes. The
+  follow "then", "please", "you must" and the like . A list of the
+  option-injection sinks a scanner looks for ("the first character,
+  `find -exec`, `curl -o`") is not a directive. No other signature and no rating changes. The
   threshold stays medium.
   0.4.3 changes no signature. The destinations a hit names, and S9's
-  new destinations in content, are read with one grammar (agentry#958):
+  new destinations in content, are read with one grammar:
   characters no host name holds are trimmed from a URL host's ends, so a
   declared host in a Markdown code span or bold text is the declared host
-  (a drafted scanner on production was held for `api.osv.dev` keyed with
-  its closing backtick), while one inside a name keeps the whole name;
+  (`api.osv.dev` keyed with its closing backtick is the declared host),
+  while one inside a name keeps the whole name;
   a backslash ends S9's authority as it ended S4's; an IPv4 address must
   be one. S9 finds bare hosts under any top-level domain ICANN delegates
   rather than a list of sixteen, and IPv4 addresses, so a patch that
@@ -115,18 +110,18 @@ notes: >
   no path or port after it, and in program source a dotted name outside
   a string, is not a host. The threshold stays medium.
   0.4.4 changes no signature. It narrows S9's bare names in Markdown's
-  code (agentry#958): 0.4.3's rescan on dev drew new mediums for
-  `window.name`, `request.post`, `application.properties` and
-  `app.zip/src/UserDao.java`, words and files under delegated TLDs. In a
+  code : 0.4.3 read `window.name`, `request.post`,
+  `application.properties` and `app.zip/src/UserDao.java`, words and files
+  under delegated TLDs, as hosts. In a
   code span or a fenced block a bare name now counts when it is quoted,
   has a path after it, or is under a TLD hosts are usually under (com,
   net, org, io, dev, ai, co, app, cloud, xyz, edu, gov, a country code
   that is not also a field name, a special-use name); .java joins the
   file-like domains, and a port after a file name is no longer evidence
-  of a host (agent.md:12). Prose outside code keeps 0.4.3's rule. The
+  of a host. Prose outside code keeps 0.4.3's rule. The
   threshold stays medium.
   0.4.5 changes no signature and no rating. It names the release that
-  taught AI Review what a target host grants (agentry#1092, DEV-242): the
+  taught AI Review what a target host grants the
   rubric's statement of the runner's grants says a machine listed under
   capabilities.targetHosts may be run and administered through the host
   tools, while reaching another machine from it or sending what it reads
@@ -135,7 +130,7 @@ notes: >
   scp, sftp or rsync. The threshold stays medium.
   0.4.6 changes no signature and no rating. It names the release whose
   S6 reads an ssh, scp, sftp or rsync destination written user@host or
-  user@host:path as a host the script reaches (agentry#1095); before it,
+  user@host:path as a host the script reaches; before it,
   every user@host was skipped with curl's @file argument. Only the
   destination and jump-host words of the command a segment runs are read
   (past assignments and wrappers such as sudo or sshpass), so an e-mail
@@ -143,13 +138,12 @@ notes: >
   runs remotely is not a host. The threshold stays medium.
   0.4.7 changes no signature and no rating. It names the release whose
   S6 reads a shell command written with its path (/usr/bin/curl), inside
-  backticks or escaped with a backslash (\curl) as that command
-  (agentry#1148): a network call, a filesystem write, ssh's destination,
+  backticks or escaped with a backslash (\curl) as that command: a network call, a filesystem write, ssh's destination,
   and a pipe into a path-qualified shell (| /bin/sh) as remote execution.
   A word that only contains a command's name (/etc/ssh/sshd_config,
   mycurl) is still not the command. The threshold stays medium.
   0.4.8 changes no signature and no rating. It names the release whose
-  S6 reads the host forms it did not (agentry#1149): IPv4 and bracketed
+  S6 reads the host forms it did not: IPv4 and bracketed
   IPv6 addresses, ftp, sftp, scp, ssh, rsync, telnet and ws URLs and a
   URL's userinfo, a destination with no user or a dynamic one
   ($(whoami)@host), ssh-copy-id, autossh, mosh and sshfs, a destination a
@@ -158,7 +152,7 @@ notes: >
   addresses are not hosts. The threshold stays medium.
   0.4.9 changes no signature. It names the release whose rating by
   declaration and S9 read a declared browser (capabilities.browser) as
-  a way out the release declares (agentry#1198): an exfiltration or
+  a way out the release declares: an exfiltration or
   credential-harvest hit that names a host the browser may open (its
   hosts, exact or below a "*." entry; any host for a public browser),
   or names none where a browser host is declared, is medium, not high
@@ -253,9 +247,20 @@ notes: >
   letters fold to ASCII, the ideographic and full-width full stops read as
   dots, case is lowered) and trims what no host name holds, such as a
   comma after the host. The threshold stays medium.
+  0.4.16 changes no signature and no rating. It names the release whose S6
+  reads a fetched script or a decoded payload piped into a shell or an
+  interpreter past whatever wraps it: env, sudo with its options, command,
+  exec, nohup, a quoted path and $SHELL are read as the command the
+  segment runs, by base name (curl ... | env sh, | sudo -E /bin/sh,
+  | "$SHELL", base64 -d x | /usr/bin/env sh), and the command that feeds
+  the pipe is read the same way (/usr/bin/curl, sudo curl). A pipe into a
+  command that only resembles one (| env jq, | sudo tee f,
+  | /usr/bin/shasum, command -v sh) is not read. This version's comments
+  and notes describe the rules and the stages only. The threshold stays
+  medium.
 
 # Bundle-level suppressions, applied to every rule in addition to its own
-# (§17.3 precision requirement). These capture DESCRIPTIVE FRAMING: prose that
+# (a precision requirement). These capture DESCRIPTIVE FRAMING: prose that
 # catalogues an attack technique rather than issuing it. Security
 # documentation, review checklists, and defensive skills all legitimately
 # contain the same verbs and nouns as the attacks they describe — and an agent
@@ -266,8 +271,7 @@ notes: >
 # prose wraps, and its marker can sit on the line before the match. A blank
 # line or a Markdown heading ends the paragraph (a heading is judged alone,
 # since 0.3.3), so one descriptive phrase cannot whitelist a whole file. The
-# residual risk is stated plainly in the deviations register (DEV-010,
-# agentry-notes): an attacker who wraps a live directive in cataloguing
+# residual risk: an attacker who wraps a live directive in cataloguing
 # language, or sets a descriptive sentence beside it in the same paragraph,
 # evades the S4 hit, and is then left to S3, S5, S6, and S9 — which is why the
 # pipeline is layered rather than a single gate.

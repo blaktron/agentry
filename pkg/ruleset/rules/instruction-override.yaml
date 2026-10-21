@@ -1,4 +1,4 @@
-# Family: instruction-override (§8.3 S4). Text that tries to countermand the
+# Family: instruction-override (S4). Text that tries to countermand the
 # consuming agent's own instructions or impersonate a privileged role.
 rules:
   - id: instruction-override-001

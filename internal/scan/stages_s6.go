@@ -211,7 +211,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 			comment := isCommentLineOf(class, line)
 			// Remote execution is reported even in a comment — a commented
 			// `curl … | sh` is an instruction to whoever reads the script.
-			if s6RemoteExe.MatchString(line) {
+			if s6RemoteExe.MatchString(line) || pipesInto(line, fetchesRemote) {
 				sev := SevHigh
 				if comment {
 					sev = SevLow
@@ -231,7 +231,7 @@ func (S6Scripts) Run(sc stageContext, in *Input) StageResult {
 			if class == scriptShell {
 				cmdNet, cmdWrite, cmdEval = shellCommands(line)
 			}
-			if s6Decoded.MatchString(line) || s6HexBlob.MatchString(line) || (s6Eval.MatchString(line) && class != scriptShell) || (class == scriptShell && (s6Eval.MatchString(line) || cmdEval)) {
+			if s6Decoded.MatchString(line) || pipesInto(line, decodesBase64) || s6HexBlob.MatchString(line) || (s6Eval.MatchString(line) && class != scriptShell) || (class == scriptShell && (s6Eval.MatchString(line) || cmdEval)) {
 				findings = append(findings, Finding{
 					Scanner: "S6/obfuscated-exec", Severity: SevHigh, Confidence: ConfMedium,
 					Title:    "Script executes decoded or dynamically built code",
@@ -872,6 +872,10 @@ type shellWord struct {
 	text   string
 	quoted bool
 	redir  bool
+	// pipedFrom is set on the first word of a command whose input is the
+	// output of the command before it in a pipeline (a single | or |&), and
+	// holds that command's words.
+	pipedFrom []shellWord
 }
 
 // shellSegments splits a shell line into its commands' words: a new
@@ -893,9 +897,17 @@ func shellSegmentsAt(line string, depth int) [][]shellWord {
 	var cur strings.Builder
 	inWord, quoted, redirect := false, false, false
 	var quote byte
+	// last is the most recent command ended at this level, and pipeFrom the
+	// producer the next command's first word records when a | just ended
+	// one.
+	var last, pipeFrom []shellWord
 	flush := func() {
 		if inWord {
-			seg = append(seg, shellWord{text: cur.String(), quoted: quoted, redir: redirect})
+			w := shellWord{text: cur.String(), quoted: quoted, redir: redirect}
+			if len(seg) == 0 {
+				w.pipedFrom, pipeFrom = pipeFrom, nil
+			}
+			seg = append(seg, w)
 			redirect = false
 		}
 		cur.Reset()
@@ -905,6 +917,7 @@ func shellSegmentsAt(line string, depth int) [][]shellWord {
 		flush()
 		if len(seg) > 0 {
 			segs = append(segs, seg)
+			last = seg
 		}
 		seg = nil
 	}
@@ -961,6 +974,13 @@ func shellSegmentsAt(line string, depth int) [][]shellWord {
 			}
 		case strings.IndexByte(";|&()`", c) >= 0:
 			endSeg()
+			switch {
+			case c == '|' && (i+1 >= len(line) || line[i+1] != '|') && (i == 0 || line[i-1] != '|'):
+				pipeFrom = last // a pipe; |& is one too, its & changes nothing
+			case c == '&' && i > 0 && line[i-1] == '|':
+			default:
+				pipeFrom = nil
+			}
 		default:
 			cur.WriteByte(c)
 			inWord = true
@@ -968,6 +988,65 @@ func shellSegmentsAt(line string, depth int) [][]shellWord {
 	}
 	endSeg()
 	return segs
+}
+
+// s6PipedShellTargets are the commands that run what they are fed.
+var s6PipedShellTargets = regexp.MustCompile(`^(?:sh|bash|zsh|node|perl|python[0-9.]*|\$SHELL|\$\{SHELL\})$`)
+
+// pipesInto reports whether a line pipes the output of a command that
+// producer accepts into a shell or interpreter, reading each side as the
+// command its segment runs, past assignments and wrappers (env, sudo with its
+// options, command, exec, nohup), by base name: | env sh, | sudo -E /bin/sh,
+// | "/bin/sh" and | $SHELL all run the input. command -v sh looks a shell up
+// and runs nothing.
+func pipesInto(line string, producer func(cmd string, args []shellWord) bool) bool {
+	if !strings.Contains(line, "|") {
+		return false
+	}
+	for _, seg := range expandSegments(line, 0) {
+		if seg[0].pipedFrom == nil {
+			continue
+		}
+		cmd, _ := segmentCommand(seg)
+		if !s6PipedShellTargets.MatchString(cmd) || s6Lookup(seg) {
+			continue
+		}
+		if pc, pargs := segmentCommand(seg[0].pipedFrom); producer(pc, pargs) {
+			return true
+		}
+	}
+	return false
+}
+
+// s6Lookup reports a segment that asks the shell where a command is
+// (command -v, command -V) instead of running it.
+func s6Lookup(seg []shellWord) bool {
+	for i, w := range seg {
+		if w.text == "command" && i+1 < len(seg) && (seg[i+1].text == "-v" || seg[i+1].text == "-V") {
+			return true
+		}
+	}
+	return false
+}
+
+// fetchesRemote is a pipesInto producer: curl or wget.
+func fetchesRemote(cmd string, _ []shellWord) bool { return cmd == "curl" || cmd == "wget" }
+
+// decodesBase64 is a pipesInto producer: base64 asked to decode, as -d,
+// -D, --decode or a cluster of short flags holding one of them.
+func decodesBase64(cmd string, args []shellWord) bool {
+	if cmd != "base64" {
+		return false
+	}
+	for _, a := range args {
+		switch {
+		case a.text == "--decode":
+			return true
+		case len(a.text) > 1 && a.text[0] == '-' && a.text[1] != '-' && strings.ContainsAny(a.text, "dD"):
+			return true
+		}
+	}
+	return false
 }
 
 // s6CloseParen is the index of the ) that closes a $( opened before from,

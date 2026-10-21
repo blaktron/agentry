@@ -3882,6 +3882,7 @@
             "TestS6UserAtHostThatIsNotADestination",
             "TestS6ReadsAPathQualifiedOrWrappedCommand",
             "TestS6CommandNameInsideAWordIsNotACommand",
+            "TestS6ReadsAPipeIntoAWrappedShell",
             "TestS6ReadsAPathQualifiedWriteAndShell",
             "TestS6ReadsTheHostFormsOf1149",
             "TestS6ReadsAnAddressInPython",
