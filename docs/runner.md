@@ -3992,7 +3992,9 @@ and sends the request again:
   interactive session, a persistent agent, and a Codex run on a ChatGPT plan,
   which is driven as one turn.
 - **A harness that runs the task as one process** (docker-agent, `claude -p`,
-  `codex exec`) is started again.
+  `codex exec`) is started again. Such a harness may first retry on its own
+  for a few seconds; the runner reads the error it reports and the last lines
+  of its stderr.
 
 Either happens only if the turn or the run failed before its first tool call.
 One whose tools already ran is not sent again, because those tools could run
