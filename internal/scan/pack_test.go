@@ -438,11 +438,10 @@ func TestScanPackRecordsAJudgeFailure(t *testing.T) {
 
 func TestScanPackRecordsAStageFailure(t *testing.T) {
 	o := packOrchestrator(t, NoneProvider{})
-	o.stageTimeout = time.Nanosecond
-	// A stage that finishes before the deadline is noticed reports its findings
-	// instead of the timeout, so the text is long enough that none does.
-	prose := strings.Repeat("A line of ordinary prose for the scanners to read.\n", 20000)
-	r := o.ScanPack(context.Background(), []PackFile{{Path: "wiki/index.md", Content: []byte("# Index\n")}, {Path: "wiki/topics/long.md", Content: []byte(prose)}})
+	// A limit that has already passed: no stage is started, so every rule
+	// stage reports the timeout whatever the scheduling.
+	o.stageTimeout = -time.Nanosecond
+	r := o.ScanPack(context.Background(), []PackFile{{Path: "wiki/index.md", Content: []byte("# Index\n")}, {Path: "wiki/topics/page.md", Content: []byte("A line of ordinary prose for the scanners to read.\n")}})
 	var failed []string
 	for _, st := range r.Stages {
 		if st.Failed {

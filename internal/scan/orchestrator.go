@@ -409,6 +409,14 @@ func (o *Orchestrator) runStage(sc stageContext, st Stage, in *Input) (res Stage
 		}
 	}()
 
+	// A stage whose limit has already passed is not started. Started, it
+	// could finish before this goroutine next ran and be reported as having
+	// finished in time, so whether a timeout was recorded would depend on
+	// scheduling.
+	if err := stageCtx.Err(); err != nil {
+		return StageResult{Scanner: st.ID(), Err: err}
+	}
+
 	done := make(chan StageResult, 1)
 	go func() {
 		defer func() {
