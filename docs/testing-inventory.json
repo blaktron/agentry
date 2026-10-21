@@ -845,7 +845,8 @@
             "TestSecurityReviewerIsFirstPartyOnly",
             "TestCreateOrgRequiresVerifiedEmail",
             "TestOnePendingOrgPerAccount",
-            "TestLastAdminGuardHoldsUnderConcurrentDemotions"
+            "TestLastAdminGuardHoldsUnderConcurrentDemotions",
+            "TestRoleChangeAnswersWithTheRowsDoors"
           ],
           "fuzz": [],
           "benchmarks": [],

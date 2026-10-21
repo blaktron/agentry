@@ -330,3 +330,44 @@ func TestLastAdminGuardHoldsUnderConcurrentDemotions(t *testing.T) {
 		t.Fatalf("admins left: %d, want 1", admins)
 	}
 }
+
+// TestRoleChangeAnswersWithTheRowsDoors: the answer to a role change
+// carries how the member arrived, as the members list does, whatever the
+// role it sets; a person who joined by invitation reads false for both.
+func TestRoleChangeAnswersWithTheRowsDoors(t *testing.T) {
+	env := newTestEnv(t)
+	adminH := env.register("rd-admin")
+	env.verifyEmail(adminH)
+	admin := env.login(adminH)
+	orgH := "rdorg" + env.sfx
+	env.createOrg(admin, orgH)
+
+	scimH, domainH, inviteH := env.register("rd-scim"), env.register("rd-domain"), env.register("rd-invited")
+	env.seedMembership(orgH, scimH, "member", "active")
+	env.seedMembership(orgH, domainH, "member", "active")
+	env.joinOrg(admin, orgH, inviteH)
+	for h, col := range map[string]string{scimH: "via_scim", domainH: "via_domain"} {
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`UPDATE memberships SET `+col+` = true
+			  WHERE org_id = (SELECT id FROM handles WHERE handle = $1) AND user_id = (SELECT id FROM handles WHERE handle = $2)`, orgH, h); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, tc := range []struct {
+		handle             string
+		viaScim, viaDomain bool
+	}{{scimH, true, false}, {domainH, false, true}, {inviteH, false, false}} {
+		var got struct {
+			Role      string `json:"role"`
+			State     string `json:"state"`
+			ViaScim   bool   `json:"viaScim"`
+			ViaDomain bool   `json:"viaDomain"`
+		}
+		env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+tc.handle, map[string]any{"role": "admin"}, &got, http.StatusOK)
+		if got.Role != "admin" || got.State != "active" || got.ViaScim != tc.viaScim || got.ViaDomain != tc.viaDomain {
+			t.Fatalf("role change of %s answered %+v, want viaScim=%v viaDomain=%v",
+				tc.handle, got, tc.viaScim, tc.viaDomain)
+		}
+	}
+}
