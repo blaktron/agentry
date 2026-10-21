@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go at `go.mod`'s `go` line, 1.27.2 today (`brew install go`; an older `go`
+- Go at `go.mod`'s `go` line, 1.27.3 today (`brew install go`; an older `go`
   fetches that toolchain itself). There is no JavaScript build: the server's
   own pages are Go templates.
 - Docker (preferred) **or** PostgreSQL 16 locally (`brew install postgresql@16`);

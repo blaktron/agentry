@@ -17,7 +17,7 @@
 # the host cached, and with the image's GOTOOLCHAIN=local a stale one either
 # refuses a newer go line or builds with the older Go. CI fails
 # when this tag and go.mod's go line differ, so a bump moves both.
-FROM golang:1.27.2 AS build
+FROM golang:1.27.3 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
