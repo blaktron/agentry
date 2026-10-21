@@ -3443,6 +3443,7 @@
         {
           "path": "internal/scan/hardening_internal_test.go",
           "tests": [
+            "TestAStageWhoseLimitHasPassedIsNotStarted",
             "TestStagePanicKeepsValueAndStack",
             "TestReportDigestFailsLoudly",
             "TestUnreadableFileBecomesFinding",
@@ -3457,6 +3458,7 @@
           "fixtureEntryPoint": false,
           "dependencyHints": [
             "source/file contract",
+            "real-time wait",
             "explicit skip"
           ]
         },

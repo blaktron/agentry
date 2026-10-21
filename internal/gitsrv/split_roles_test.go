@@ -153,9 +153,15 @@ func TestSplitGitRoleStuckSubmissionIsRejected(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	// Inside the cap the watchdog leaves it alone.
-	if n, err := env.reg.ReconcileStuckSubmissions(ctx); err != nil || n != 0 {
-		t.Fatalf("watchdog inside the cap: moved %d, err %v", n, err)
+	// Inside the cap the watchdog leaves it alone. The watchdog acts on
+	// every stuck submission in the database, and the test packages share
+	// one, so the count of rows it moved is not this test's to assert: the
+	// version's own row is.
+	if _, err := env.reg.ReconcileStuckSubmissions(ctx); err != nil {
+		t.Fatalf("watchdog inside the cap: %v", err)
+	}
+	if _, status, _, _ = env.versionRow("splitstuck"); status != "submitted" {
+		t.Fatalf("watchdog inside the cap moved the version to %q, want it left submitted", status)
 	}
 	if _, err := env.st.Pool().Exec(ctx,
 		`UPDATE agent_versions SET updated_at = now() - interval '121 minutes' WHERE id = $1::uuid`, id); err != nil {

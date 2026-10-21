@@ -433,6 +433,102 @@ own OAuth client for a vendor that registers no app on the fly (Google:
 `https://accounts.google.com`), reading the secret from the terminal without
 echo or from stdin; `client list` and `client remove <issuer>` manage them.
 
+### `agentry agent`
+
+Starts, talks to and stops the **persistent agents**: built-in agents the
+runner keeps between conversations. Using them is explained in
+[Persistent agents](https://docs.secureagentry.net/agentry/persistent-agents/);
+the files, sockets and grants behind the commands are under
+[Persistent agents](#persistent-agents) below. An agent is named by its
+built-in's name: `main` (Agentry Helper, which runs only in Agentry Desktop),
+`assistant` and `coder`.
+
+| Command | Does | `--json` |
+|---|---|---|
+| `list` | the agents with `running`, `stopped`, `disabled` or `desktop only`, who runs a running one, since when, and its segment | yes |
+| `show <name> [--transcript N]` | state, segment, usage, share folder, [roster](#the-roster), volumes and folder; `--transcript N` adds the last N transcript lines | yes |
+| `enable <name>`, `disable <name>` | allows or stops allowing a start; `disable` needs the agent stopped and keeps its conversation and files | no |
+| `start <name> [--yes] [--policy FILE]` | agrees to what is given for the first time (`--yes`, else asked at a terminal), then starts the agent in the background and prints `supervisor.log` until its socket answers (at most 20 minutes) | yes: the status |
+| `stop <name>` | ends the segment and prints its envelope file | yes: `status`, `resultFile`, `error` |
+| `chat <name>` | the terminal chat, after the last 500 transcript lines; leaving it leaves the agent running | no |
+| `attach <name> --json` | `chat` for a program ([below](#attach-for-a-program)); refused without `--json` and on Windows | required |
+| `grant <name> <entry> on\|off [--yes]` | switches a roster entry; a running agent takes it at its next turn | yes: the roster |
+| `configure <name> …` | name, personality, share folder, servers, packs, ports, dev server; flags below | yes: the roster |
+| `reset <name> [--confirm NAME]` | puts a stopped agent back to its defaults; asks for the agent's name, or takes `--confirm` with no terminal | no |
+
+`start` needs the agent enabled, the container engine available and the
+operator policy resolved (`--policy` names another file, as for `run`).
+`--json` on `list` prints one object per agent (`agent`, `displayName`,
+`state`, and `holder` and `status` while it runs); on `show` it adds `config`,
+`usage`, `volumes`, `stateDir`, `share`, `roster` and `transcript`.
+
+`reset` removes the agent's two volumes, its transcript, usage totals, share
+verdicts and installed servers, and every choice in `config.yaml` but whether
+the agent is enabled (its name, personality, servers, packs, switches,
+agreements, share folder, ports, dev server and run-on-start). It keeps the
+segments' receipts, every file in the share folder, model sign-ins and a dev
+server's sign-in in the keychain. Its next start is a first segment and asks
+for agreement again. A CLI before v0.6.158 keeps the choices in
+`config.yaml` and removes only the conversation and the agent's own files.
+
+#### `agentry agent configure`
+
+At least one flag. Several change together.
+
+| Flag | Meaning |
+|---|---|
+| `--name TEXT` | the name the agent goes by; empty clears it; at most 64 bytes, one printable line |
+| `--personality-file FILE` | the personality, UTF-8 text of at most 32 KiB |
+| `--share DIR` | the share folder (made absolute, `~` expanded); empty returns to `~/agentry/<agent>share`; refused folders are listed under [the share folder](#the-share-folder-and-the-data-volume) |
+| `--run-on-start true\|false` | start the agent when Agentry Desktop starts |
+| `--add-server FILE` | one MCP server in a QuickAgent manifest's [server shape](#declared-mcp-servers), YAML of at most 64 KiB, unknown fields refused |
+| `--remove-server server:ID` | removes a server and its switch and agreement |
+| `--knowledge PACK`, `--no-knowledge PACK` | adds or removes a [knowledge pack](#knowledge-packs) kept on this computer |
+| `--allow-vulnerable-mcp` | adds a package server whose version the registry rates high or critical |
+| `--port NAME=NUMBER`, `--no-port NAME` | `coder` only: publishes or closes a [port](#published-ports) |
+| `--dev-host user@host[:port]` | `coder` only: saves the [dev server](#the-dev-server), readied at the terminal |
+| `--dev-key FILE` | with `--dev-host`: sign in with this private key (its path is kept in the keychain) |
+| `--dev-passphrase ENV`, `--dev-password ENV` | with `--dev-host`: the name of an environment variable that holds the value; a flag never takes the secret, and with none the CLI asks at a terminal |
+| `--no-dev-host` | removes the dev server and its agreement, and leaves its sign-in in the keychain |
+| `--policy FILE` | the policy whose `hosts` lists the dev server is held to |
+| `--yes` | agrees to what the change turns on, here and in `grant` |
+
+A change that turns on something not yet agreed to on this computer (a switch,
+a pack, a server, a port, another share folder, a dev server) asks at the
+terminal first.
+
+#### Refusals
+
+| Exit | Meaning |
+|---|---|
+| `2` usage | an unknown agent; any command but `list` and `show` on `main`; `start` on a disabled agent or one another process runs (the message names the holder); `stop`, `chat` or `attach` on an agent that is not running; `disable` or `reset` on a running one; `reset` with a name that does not match, or with no terminal and no `--confirm`; `configure` with no flag or with `--dev-host` beside `--no-dev-host`; a change the roster refuses (an unknown entry, a share folder on the refused list, a repeated port) |
+| `11` policy | the change or start needs agreement and none was given: `--json` without `--yes`, no terminal without `--yes`, or the answer was no; a dev server outside the policy's host lists; a package server version the registry rates high or critical |
+| `1` | the container engine is not available; the supervisor did not start |
+| `15` | the agent did not answer within 20 minutes of `start` |
+
+With `--json` and no `--yes`, a start or change that needs agreement changes
+nothing, prints the sentences to agree to on stdout and exits `11`:
+
+```json
+{"agent":"coder","needsAgreement":[{"id":"commands","line":"Runs any program it chooses …"}]}
+```
+
+A program shows the sentences to the person and runs the command again with
+`--yes` once they agree. Other exit codes are as under
+[Exit codes, stage and reason](#exit-codes-stage-and-reason).
+
+#### Attach for a program
+
+`agentry agent attach <name> --json` speaks the session protocol of
+`agentry run --session-protocol`
+([Driving a session from a program](#driving-a-session-from-a-program)): JSON
+commands a line on stdin (`send`, `end`) and the agent's events as JSON lines
+on descriptor 3, which the driver opens. A `send` while another chat's turn is
+in flight is refused as `busy`. `end`, or the end of input, detaches and leaves
+the agent running. It takes no files (`add` is refused; put them in the share
+folder). A reader on descriptor 3 that stops taking events is let go; the
+events are in the transcript. Needs CLI v0.6.157 or later.
+
 ### `agentry install <ref>`
 
 The default target is the runner home (explicitly, `--target runner`):
@@ -677,6 +773,281 @@ The CLI checks every draft in four steps:
       calls, and what is left of `--max-cost`. Its receipts are in
       `DIR/repair/`, and the usage lines it narrates count from the first
       turn's total.
+
+## Persistent agents
+
+A persistent agent is a built-in agent whose release declares the run mode
+`persistent` ([Run modes](#run-modes)). Its conversation and its files outlive
+each start and stop; each start-to-stop is a **segment**, an interactive
+session with its own receipts and no idle, time, turn or cost cap. It always
+runs its harness in a container, on the model the operator policy names. The
+commands are under [`agentry agent`](#agentry-agent); the user's view is
+[Persistent agents](https://docs.secureagentry.net/agentry/persistent-agents/).
+
+### The agent folder
+
+`<runner home>/persistent/<name>/` (the runner home is `~/.agentry/runner`
+unless relocated):
+
+| Path | Holds |
+|---|---|
+| `config.yaml` | what the person chose and where the conversation stands (below); mode 0600 |
+| `transcript.ndjson` | the conversation: user and assistant turns, tool calls, errors, permissions denied, files added, notices and each segment's end; one `segment_start` line per segment says whether it continued the conversation and, if not, why. Streamed chunks are left out |
+| `usage.json` | `segments`, `inputTokens`, `outputTokens`, `totalTokens`, `userTurns`, `toolCalls`, summed over the segments' envelopes |
+| `supervisor.log` | what the detached supervisor prints, including, from CLI v0.6.158, a `stage:` line as each step of a segment's start is reached; replaced at each start |
+| `owner.lock`, `owner.json` | the owner lock and who holds it |
+| `share-verdicts.json` | the share's malware verdicts, kept between segments |
+| `profile/servers/` | the installed copies of the MCP servers the person added |
+| `segments/<run>/` | one segment: its `receipts/` and its result envelope, which `agentry agent stop` names |
+
+`config.yaml` keeps `enabled`, `runOnStart`, `displayName`, `personality`,
+`conversation` (`adapter`, `id`), `segments`, `share`, `servers`, `knowledge`,
+`switches`, `consented`, `devHost` (`host`, `hostKey`) and `ports` (`name`,
+`port`). The dev server's sign-in is never in it. A build refuses a file written
+at a higher `version` than it knows, rather than drop what it does not.
+
+| `version` | Written when it holds | Added |
+|---|---|---|
+| `2` | always | the share folder, servers, packs, switches and agreements |
+| `3` | a dev server | `devHost` |
+| `4` | a port | `ports` |
+
+The sockets are in `<runner home>/s/`, beside the runs': `agent-<name>.sock`
+and `agent-<name>-app.sock`, mode 0600 in a 0700 folder.
+
+### Segments
+
+A segment ends when the agent is stopped, when a change to its roster reaches
+its next turn (the next segment starts at once), when its owner quits, and
+when its harness ends by itself (the agent then stops). If the next segment
+after a change cannot start, the agent stops and the chat says why. A stopped
+agent's volumes are kept; only [`reset`](#agentry-agent) removes them. Each
+segment's usage is added to `usage.json` when it ends.
+
+**Continuing.** The harness's conversation id is kept in `config.yaml` with the
+adapter that stored it, and is offered to that adapter alone. docker-agent
+loads it with `session/load`, Claude Code is started with `--resume`, codex
+with `thread/resume`, Copilot with `session.resume`. The harness's store is the
+agent's own session volume. When the conversation does not continue (a first
+segment, a store the harness cannot load, another harness), the envelope's
+`persistent.resumeReason` says why, and the new conversation's first turn
+carries the last exchange from the transcript: the person's last turn and the
+agent's answer, each quoted and cut at 4,000 bytes (`[cut]`), so neither can
+pass for the frame around it.
+
+**First-turn frames.** A turn can start with a parenthesised note, in this
+order: the carried exchange; for a segment a roster change started, the
+entries switched off and on since the agent was last told, by roster name and
+quoted; the person's name and personality when they changed. A turn that fails
+keeps the change note for the next. The Coding agent is also told, after a
+restart, that every program it had running in the background has ended.
+
+**The envelope** has `harness.mode: persistent` and a `persistent` block:
+`agent`, `segment`, `resumed`, `resumeReason`, `volumes` (`session`, `data`),
+`share` (the folder mounted; empty with the share off) and `roster[]` (`id`,
+`kind`, `name`, `grantedBy`, `on`, `line`): what the agent had that segment.
+
+**Plan lines** in `capabilities_enforced`:
+
+| Line | Says |
+|---|---|
+| `persistent.files` | the data volume and share mounts, the tool root, and whether the share is checked |
+| `persistent.appLink` | the app link's tools and how it is held |
+| `persistent.appLink.transport` | a bind of the supervisor's socket, or the relay |
+| `persistent.ports` | the published ports; present when `commands` is on and a port is |
+
+### The share folder and the data volume
+
+The tools server mounts two folders under `/agent`, and `fs_list`, `fs_read`,
+`fs_write`, `grep` and `glob` are rooted there:
+
+| Agent sees | Is | Notes |
+|---|---|---|
+| `share/` | the person's share folder, default `~/agentry/<name>share` | read-write and live; the one host folder the gateway may write besides the output folder, bound by its exact path |
+| `data/` | the volume `agentry-persistent-<name>-data` | read-write, in the tools server alone; kept until reset |
+
+The harness's store is the volume `agentry-persistent-<name>-session`. Both
+volumes carry `agentry.persistent=<name>` and no run label, so neither a
+segment's teardown nor the sweep of a dead run removes them.
+
+**The checks.** For Agentry Helper and the Assistant, before each turn the
+runner copies what is new or changed in the share (at most 2,000 files and
+512 MiB a check), runs the decode step's ClamAV check over the copies
+([ClamAV, on every file](#clamav-on-every-file)) and records a verdict per
+file; each is a line of `receipts/share-checks.ndjson`. `fs_read` reads a file
+whole (at most 64 MiB) only if its bytes have a verdict that is not a finding,
+or the agent wrote it; `grep` leaves out files whose size and time are not
+those of a checked file. A file ClamAV finds is refused, naming the signature;
+one it cannot check (no signatures, past the limits) is read unchecked and the
+chat says so. A file added mid-turn waits for the next turn. **The Coding agent's
+share is read as it is, with no check.**
+
+**Refused share folders.** A path that is not clean and absolute, is reached
+through a link, or has a colon past a drive; a filesystem root, the home folder
+or a folder that holds it; a hidden folder of the home folder or anything in
+one; the runner home, Agentry's configuration, or a folder that holds or is
+inside either; a system folder outside the home folder and the mounted volumes.
+A default share is made at the first start; a chosen one must exist.
+
+### The roster
+
+What an agent has is its roster: one value that the agreement, `show`, the
+desktop and the envelope all render. Entries, in order: folders, the Coding
+agent's grant, packs, servers.
+
+| Id | Kind | Default | Granted by |
+|---|---|---|---|
+| `share` | `files` | on, switchable | built-in |
+| `data` | `files` | on, `fixed` | built-in |
+| `commands`, `egress`, `browser` | `tools` | on (`coder` only) | built-in |
+| `devhost` | `host` | on when saved | you |
+| `port:<name>` | `port` | on when added | you |
+| `knowledge:<pack>` | `knowledge` | on when added | you |
+| `server:<id>` | `server` | on when added | you |
+
+An entry's state is `on`, `off`, `pending` (switched since the running segment
+started; the next turn applies it) or `needs-sign-in` (an OAuth server, which
+cannot be switched on). Its **sentence** says what it gives the agent.
+
+**Agreement.** Turning an entry on records its sentence in `consented`; an
+entry that is on and whose current sentence differs from the recorded one (a
+new share folder changes it) is not agreed to. A change that widens the roster
+is refused until agreed, a start refuses an unagreed entry that is on, and so
+does every next segment. Turning an entry off and on again under the same
+sentence asks nothing. The agent has no tool that changes its roster.
+
+**A change** to a running agent goes through the owner socket's `change`, the
+supervisor alone writing `config.yaml`. Name and personality are not grants:
+they reach the agent, quoted, at its next turn. A package server is installed
+when a segment starts, so that start waits for the install, and its container
+sees its own store and never the share. Packs and servers are added with
+`agentry agent configure` ([above](#agentry-agent)).
+
+### The supervisor and its owner socket
+
+One process owns a running agent: the detached `agentry agent supervise` that
+`start` launches, or Agentry Desktop in its own process. It holds `owner.lock`
+(a flock, `LockFileEx` on Windows, released by the kernel when the process
+dies), so a second owner is refused with the holder's client, pid and start
+time, and an agent whose owner died starts again.
+
+The owner socket speaks JSON lines. A command is one object naming exactly one
+of:
+
+| Command | Answer |
+|---|---|
+| `{"attach":{}}` | every event of the segment from now on, as `{"event":…}`; a watcher that stops reading is let go |
+| `{"send":{"text":"…"}}` | one turn; the events carry the answer |
+| `{"status":{}}` | `{"status":…}`: `segment`, `run`, `adapter`, `model`, `resumed`, `busy`, `usage`, `pending` |
+| `{"roster":{}}` | `{"roster":[…]}`, with `pending` entries |
+| `{"change":{…}}` | the roster after the change, or a refusal |
+| `{"stop":{}}` | `{"stopped":{"status","resultFile","error"}}` |
+
+A refusal is an `error` event with `refused` set to `malformed` (not exactly
+one command, or an empty `send`), `busy` (a turn is in flight), `ended` (the
+segment has ended), `change` (the change is invalid) or `consent` (the change
+widens the roster; the reply also lists the sentences to agree to, and the
+command is sent again with `consent` set).
+
+`chat` and `attach` connect here and send text and nothing else, so either
+reaches an agent whichever client owns it; ending a chat closes the connection
+and leaves the agent running. `stop` ends the segment without a final result,
+writes its envelope, closes both sockets and releases the lock.
+
+### The app link
+
+The app link is how an agent reaches the application that runs it. The
+Assistant and Agentry Helper have one; the Coding agent has none. It is the
+runner image's `agentry-applink` MCP server, started by the gateway with no
+network, the person's ids and one mount. It reaches a socket of the
+supervisor's own, apart from the owner socket, that takes one tool call per
+connection and nothing that changes the roster, sends a turn or stops the
+agent. At most four calls are answered at once; each call and answer is a line
+of `receipts/applink.log`, cut at 4 KiB.
+
+| Agent | Tools | Answered by |
+|---|---|---|
+| Assistant | `self_configure` (`name`, `personality`) | the supervisor: saves the name and personality and nothing else; an unknown argument refuses the call |
+| Agentry Helper | `registry_search`, `quickagent_show`, `quickagent_install`, `quickagent_run`, `run_result`, `installed_list`, `schedule_add`, `schedule_list`, `schedule_pause`, `schedule_remove`, `settings_open`, `docs_read` | Agentry Desktop, each through the application's own operation and consent |
+
+**Where the engine's daemon runs in a virtual machine** (Docker Desktop,
+Colima, a podman machine), a socket on this computer cannot be bound into a
+container, so the segment starts a relay of its own: the runner image's
+`applink-relay`, with no network, every capability dropped but `CHOWN`, a
+read-only root and one mount, the volume `agentry-<run>-applink` at
+`/run/agentry`. The app link mounts that volume in place of the socket. The
+CLI carries each `{id, request}` frame from the relay's stdio, over the
+engine's own attach, to the supervisor's app link socket, never the owner
+socket. Only a tool call crosses: the relay refuses any other line and the
+bridge drops any other frame. `persistent.appLink.transport` says which ran;
+the relay's errors are in `receipts/applink-relay.log`.
+
+### The Coding agent's grant
+
+The Coding agent builds and runs software. Its grant is four roster entries
+(and the ports below), on by default and agreed to at its first start, which
+the compiler accepts for this built-in alone, never beside the web tools, the
+review grant or a manifest's own egress, exec, target host or browser.
+
+**Programs (`commands`).** `run_command` runs any program, with no allowlist, in
+the Coding agent's exec image: built on this machine from `images.coder`, the
+agentry-coder toolchain image pinned by digest (an operator's override must be
+pinned too), with the runner binary copied in. A program is named on the
+image's `PATH` or by path and runs in a `dir` beneath `/agent`, as the person's
+ids (root on a rootless engine, which is the person), with `HOME` at
+`/agent/data/.home` and an environment of `PATH`, `HOME`, `LANG` and the
+toolchain's settings. Landlock holds its writes to `/tmp`, the scratch folder
+and `/agent`; where there is no Landlock, no program runs. It has its own
+process group, at most 600 seconds and the output cap of a call.
+
+**Open egress (`egress`).** The tools server and its programs are on the
+segment's own web network and `fetch` reaches any address, the person's local
+network and this computer's services included. The model is reached only
+through the runner's model proxy. A knowledge pack that is on can be read by
+the programs and, with egress on, sent on.
+
+**Browser (`browser`).** The browser server with public scope, behind the browse
+proxy ([The browser](#the-browser-a-site-to-test-named-at-run-time)).
+
+#### The dev server
+
+`devhost` is one SSH server, saved with `user@host[:port]` and the SHA256
+fingerprint of the host key the person accepted (`devHost` in `config.yaml`).
+The sign-in is in the system keychain, a key as its path. Each segment readies
+the server with no terminal, holds its key to the pin (another key refuses the
+segment), and the agent reaches it as the target host `dev` through the host
+link ([Target hosts](#target-hosts-a-server-named-at-run-time)). The address is
+held to the policy's `hosts` lists. A computer with no system keychain cannot
+keep the sign-in.
+
+#### Published ports
+
+A `port:<name>` entry publishes what the agent serves in its sandbox on this
+computer. A name is 1 to 32 lower-case letters, digits and hyphens; a number is
+1024 to 65535; at most 8 ports, each name and number once. Only the person adds
+one. The relay works only while `commands` is on, for each port that is on:
+the runner listens on this computer's loopback at `127.0.0.1` and, where there
+is one, `::1`, at that number, and carries each connection into the tools
+server's own loopback at the same number through the engine's exec of the
+runner binary's `port-relay` mode. The engine publishes no container port, so
+it works with `egress` off, and nothing listens on a port the roster does not
+name. A program may listen on `127.0.0.1` or `0.0.0.0`. At most 64 connections
+are carried at once; a connection before the tools server runs (it starts at
+the agent's first tool call) is closed. A port another program holds is not
+published. `receipts/port-relay.log` says which were published and which were
+refused. Needs CLI v0.6.157 or later.
+
+#### Background programs
+
+`run_command` with `background` starts a program that outlives the call, such
+as a dev server. The call returns after about three seconds with an id (`bg1`,
+`bg2`, …) and the first output; a program that ends sooner is answered as a
+foreground call. A background program is confined as a foreground one is but
+has no time limit (`background` and `timeoutSeconds` are exclusive). Its latest
+64 KiB of output is kept; `background_output` reads one program (or lists all)
+and `stop_background` ends one and its process group. At most four run at once.
+Every one ends with the tools server, at the end of the segment, and the agent
+is told so on its next turn. Needs CLI v0.6.157 or later.
 
 ## MCP profiles
 
