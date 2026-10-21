@@ -774,6 +774,19 @@
           ]
         },
         {
+          "path": "internal/api/org_gate_seam_test.go",
+          "tests": [
+            "TestOrgGateSeamAnswersAsTheCoreDoes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/org_identity_entitlement_test.go",
           "tests": [
             "TestDowngradeNeverLoosensIdentity"
@@ -4463,6 +4476,16 @@
           "dependencyHints": [
             "HTTP transport"
           ]
+        },
+        {
+          "path": "pkg/extension/org_gate_test.go",
+          "tests": [
+            "TestOrgGateIsBoundAndAnswersByState"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         }
       ]
     },

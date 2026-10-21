@@ -271,8 +271,8 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	if ext.deps.Knowledge != nil {
 		t.Fatal("a server without a database handed out the knowledge store")
 	}
-	if ext.deps.Orgs != nil || ext.deps.Agents != nil || ext.deps.Principals != nil || ext.deps.ScheduleCredentials != nil {
-		t.Fatal("a server without a database handed out an organization, agent, principal or schedule-credential read: each reads a row")
+	if ext.deps.Orgs != nil || ext.deps.OrgGate != nil || ext.deps.Agents != nil || ext.deps.Principals != nil || ext.deps.ScheduleCredentials != nil {
+		t.Fatal("a server without a database handed out an organization, organization-gate, agent, principal or schedule-credential read: each reads a row")
 	}
 	if ext.deps.Voice != nil || ext.deps.ReportSettings != nil {
 		t.Fatal("a server without a database handed out the voice store or the report settings")
