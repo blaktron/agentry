@@ -252,7 +252,7 @@ func TestShippedPackIncompleteScanFailsClosed(t *testing.T) {
 	// A rule stage that cannot finish is named in the reason, and only those
 	// that could not (here every stage times out at once).
 	timed := packOrchestrator(t, &recordingJudge{limit: 4096})
-	timed.stageTimeout = time.Nanosecond
+	timed.stageTimeout = -time.Nanosecond
 	release := &Input{Dir: shippingRelease(t, nil), ManifestJSON: []byte(shipsManifest)}
 	if r := (S1Inventory{}).Run(stageContext{ctx: context.Background(), log: slog.New(slog.DiscardHandler)}, release); r.Err != nil {
 		t.Fatal(r.Err)

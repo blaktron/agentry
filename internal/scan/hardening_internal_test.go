@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blaktron/agentry/pkg/ruleset"
 )
@@ -62,6 +63,34 @@ type panickingStage struct{ id string }
 func (s panickingStage) ID() string { return s.id }
 func (s panickingStage) Run(stageContext, *Input) StageResult {
 	panic("index out of range parsing frontmatter")
+}
+
+// recordingStage signals that it was started.
+type recordingStage struct{ started chan struct{} }
+
+func (*recordingStage) ID() string { return "S3" }
+func (s *recordingStage) Run(stageContext, *Input) StageResult {
+	close(s.started)
+	return StageResult{Scanner: "S3"}
+}
+
+// A stage whose limit has already passed is reported as timed out and is not
+// started: a started stage could finish before the wait for it next ran, and
+// whether the timeout was recorded would depend on scheduling.
+func TestAStageWhoseLimitHasPassedIsNotStarted(t *testing.T) {
+	o := NewOrchestrator(nil, StaticProvider{}, slog.New(slog.DiscardHandler))
+	o.stageTimeout = -time.Nanosecond
+	st := &recordingStage{started: make(chan struct{})}
+	res := o.runStage(stageContext{ctx: context.Background(), log: o.log}, st, &Input{})
+	if !errors.Is(res.Err, context.DeadlineExceeded) {
+		t.Fatalf("a stage past its limit: error %v, want the deadline", res.Err)
+	}
+	// A stage that is started runs within moments of the call returning.
+	select {
+	case <-st.started:
+		t.Fatal("a stage past its limit was started")
+	case <-time.After(100 * time.Millisecond):
+	}
 }
 
 // TestStagePanicKeepsValueAndStack pins that a recovered stage panic carries
