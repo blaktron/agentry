@@ -646,8 +646,10 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 
 	current := auth.RoleNone
 	state := ""
+	viaScim, viaDomain := false, false
 	if m, err := s.q().GetMembership(r.Context(), storegen.GetMembershipParams{OrgID: orgRow.ID, UserID: target.ID}); err == nil {
 		current, state = auth.OrgRole(m.Role), m.State
+		viaScim, viaDomain = m.ViaScim, m.ViaDomain
 	}
 	// The precise gate first, so that whether a handle is a member of this
 	// organization is not something an unauthorized caller learns from
@@ -703,10 +705,10 @@ func (s *Server) SetOrgMember(w http.ResponseWriter, r *http.Request, org OrgHan
 		problemInternal(w, r)
 		return
 	}
-	via, activeState := false, MembershipState("active")
+	activeState := MembershipState("active")
 	writeJSON(w, http.StatusOK, Membership{
 		User: PublicUser{Handle: target.Handle, DisplayName: target.DisplayName},
-		Role: OrgRole(requested), ViaScim: &via, State: &activeState,
+		Role: OrgRole(requested), ViaScim: &viaScim, ViaDomain: &viaDomain, State: &activeState,
 	})
 }
 
