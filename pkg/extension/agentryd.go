@@ -369,6 +369,25 @@ func (o serverOrgs) Decommission(ctx context.Context, orgID uuid.UUID, reason st
 	return o.srv.DecommissionOrgByExtension(ctx, orgID, reason)
 }
 
+// orgGateOf adapts the server's organization gate to OrgGate: nil without
+// a database, the way Deps.DB is.
+func orgGateOf(srv *api.Server, pool *pgxpool.Pool) OrgGate {
+	if pool == nil {
+		return nil
+	}
+	return serverOrgGate{srv}
+}
+
+type serverOrgGate struct{ srv *api.Server }
+
+func (g serverOrgGate) Readable(ctx context.Context, orgID uuid.UUID) (bool, error) {
+	return g.srv.OrgReadable(ctx, orgID)
+}
+
+func (g serverOrgGate) Writable(ctx context.Context, orgID uuid.UUID) (bool, error) {
+	return g.srv.OrgWritable(ctx, orgID)
+}
+
 // agentsOf adapts the server's agent read to Agents: nil without a
 // database, the way Deps.DB is.
 func agentsOf(srv *api.Server, pool *pgxpool.Pool) Agents {
@@ -999,7 +1018,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if b, ok := e.(Binds); ok {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
-				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), Agents: agentsOf(srv, pool), Principals: principalsOf(srv, pool),
+				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), OrgGate: orgGateOf(srv, pool), Agents: agentsOf(srv, pool), Principals: principalsOf(srv, pool),
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),

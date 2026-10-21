@@ -341,6 +341,40 @@ func (s *Server) AgentPublishable(ctx context.Context, p *auth.Principal, ns, na
 	return registry.Agent{}, false, err
 }
 
+// OrgReadable is the core's organization gate for
+// pkg/extension.Deps.OrgGate: whether the organization is there to be read,
+// as the core's own routes decide it through registry.OrgGate. An active
+// organization and one in its decommission hold are readable; a suspended
+// one, an erased one and one that does not exist are the same false with no
+// error, so an extension answers each as absent, as the core does. An
+// unreadable state is a fault, never permission.
+func (s *Server) OrgReadable(ctx context.Context, orgID uuid.UUID) (bool, error) {
+	return s.orgPermits(ctx, orgID, auth.ActOrgMembersRead)
+}
+
+// OrgWritable is OrgReadable for an act that changes the organization or
+// spends what it holds: only an active organization permits it, so one in
+// its decommission hold is readable and not writable, and a suspended,
+// erased or unknown one is neither.
+func (s *Server) OrgWritable(ctx context.Context, orgID uuid.UUID) (bool, error) {
+	return s.orgPermits(ctx, orgID, auth.ActOrgMembersManage)
+}
+
+func (s *Server) orgPermits(ctx context.Context, orgID uuid.UUID, act auth.Action) (bool, error) {
+	if s.reg == nil {
+		return false, errors.New("api: no registry to read organizations from")
+	}
+	err := s.reg.OrgGate(ctx, orgID, act)
+	var gate *registry.OrgGateError
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, registry.ErrNotFound), errors.As(err, &gate):
+		return false, nil
+	}
+	return false, err
+}
+
 // PrincipalForUser is the principal the core would hold for userID with no
 // credential presented, for pkg/extension.Deps.Principals: the
 // account's current standing and memberships as a session would carry them
