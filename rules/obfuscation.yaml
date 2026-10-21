@@ -1,4 +1,4 @@
-# Family: obfuscation (§8.3 S4). Markers that the real instructions are
+# Family: obfuscation (S4). Markers that the real instructions are
 # encoded/hidden and must be decoded and followed.
 rules:
   - id: obfuscation-001

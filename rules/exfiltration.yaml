@@ -1,4 +1,4 @@
-# Family: exfiltration (§8.3 S4). Directives telling the consuming agent to
+# Family: exfiltration (S4). Directives telling the consuming agent to
 # send conversation content, data, or secrets to an external destination.
 rules:
   - id: exfiltration-001

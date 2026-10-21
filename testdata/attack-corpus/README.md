@@ -132,6 +132,13 @@ forms; S6 reports `S6/undeclared-network` and the version goes to a person.
 Its twin `script-quoted-command-benign` is the same script with the host
 declared in `network.egress`.
 
+S6 over a support script (ruleset 0.4.16): `script-wrapped-shell-pipe` is a
+shell script that pipes a download into a shell behind a wrapper
+(`| env sh`, `| sudo -E /bin/sh`), which runs the download exactly as a bare
+`| sh`; S6 reports `S6/remote-exec`. Its twin `script-wrapped-shell-pipe-benign`
+pipes the same downloads, behind the same wrappers, into `jq` and `tee`, which
+run nothing they are fed.
+
 S6 over a support script (ruleset 0.4.14): `script-quoted-option` is a shell
 script whose `ssh` reaches an undeclared host with its options quoted
 (`ssh '-p' 2222 '-o' BatchMode=yes deploy@…`), which the shell runs exactly

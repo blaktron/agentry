@@ -1,4 +1,4 @@
-# Family: destructive (§8.3 S4). Natural-language instructions that direct the
+# Family: destructive (S4). Natural-language instructions that direct the
 # consuming agent to destroy data or infrastructure. This family exists because
 # of the July 2025 Amazon Q extension incident: the payload was not code and
 # not obfuscated — it was an English sentence telling the agent to reduce the
@@ -20,7 +20,7 @@ rules:
     references:
       - "OWASP LLM01: Prompt Injection"
       - "OWASP ASI05: Unexpected Code Execution"
-      - "Amazon Q extension wiper prompt (2025-07), PLAN Appendix A"
+      - "Amazon Q extension wiper prompt (2025-07)"
     patterns:
       - '\b(delete|remove|wipe|erase|destroy|purge|shred|nuke)\b[^.\n]{0,40}\b(all|every|each|entire|whole)\b[^.\n]{0,40}\b(files?|directory|directories|folders?|data|backups?|volumes?|buckets?|resources?|instances?|databases?|snapshots?)\b'
       - '\b(clean|reset|restore|wipe|return)\b[^.\n]{0,40}\b(system|machine|host|environment|workstation|laptop)\b[^.\n]{0,40}\bfactory\b'

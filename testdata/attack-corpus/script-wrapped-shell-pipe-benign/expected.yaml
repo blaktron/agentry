@@ -1,0 +1,9 @@
+technique: "Benign twin: a download piped into jq and tee behind the same wrappers, no shell"
+version: "1.0.0"
+manifest: |
+  {"license":"MIT","capabilities":{"network":{"egress":["get.tooling.invalid.example"]},"filesystem":{"write":"workspace"},"exec":{"commands":["sh","curl","env","jq","sudo","tee"]}}}
+expect: []
+forbid:
+  - S6/remote-exec
+  - S6/obfuscated-exec
+expectClean: true
