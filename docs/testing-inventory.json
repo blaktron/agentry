@@ -4496,6 +4496,17 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "pkg/gatecases/declaration_test.go",
+          "tests": [
+            "TestDeclarationReadsEveryField",
+            "TestDeclarationOfNothing"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "pkg/gatecases/gatecases_test.go",
           "tests": [
             "TestTheEmbeddedTableLoads",

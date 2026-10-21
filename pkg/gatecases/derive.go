@@ -1,10 +1,13 @@
 package gatecases
 
 import (
+	"encoding/json"
 	"sort"
 	"strings"
 
 	"github.com/blaktron/agentry/internal/manifestcaps"
+	"github.com/blaktron/agentry/pkg/manifest"
+	"github.com/blaktron/agentry/pkg/rules"
 )
 
 // The capability tokens DeclaredCapabilities names, as a publication
@@ -80,4 +83,55 @@ func UnrestrictedNetwork(manifestJSON []byte) bool {
 	}
 	b, declared, ok := c.Browser()
 	return declared && (!ok || b.IsPublic())
+}
+
+// Declaration is what a manifest declares, as S4's rating by declaration
+// (rules.RateByDeclaration) reads it, from its canonical JSON. The scanner
+// rates S4 with it, and a client restating the gate's rating reads it the
+// same way. An unreadable manifest declares nothing but the base commands,
+// so every capability family's hit is high.
+func Declaration(manifestJSON []byte) rules.Declared {
+	d := rules.Declared{BaseCommands: manifest.BaseExecCommands()}
+	c, ok := manifestcaps.Read(manifestJSON)
+	if !ok {
+		return d
+	}
+	for _, h := range c.Network.Egress.Hosts {
+		switch h {
+		case "", "none":
+		case "*":
+			d.EgressAny = true
+		default:
+			d.Egress = append(d.Egress, strings.ToLower(h))
+		}
+	}
+	for _, h := range c.RemoteServerHosts() {
+		d.ServerHosts = append(d.ServerHosts, strings.ToLower(h))
+	}
+	d.MCPServers = len(c.MCPServers) > 0
+	// A browser's hosts are hosts the release declares. A
+	// line that does not read declares none here, the side this rating
+	// fails toward.
+	if b, declared, ok := c.Browser(); declared && ok {
+		d.BrowserAny = b.IsPublic()
+		d.BrowserHosts = c.BrowserHosts()
+	}
+	d.Secrets = append([]string(nil), c.Secrets...)
+	for _, srv := range c.MCPServers {
+		d.Secrets = append(d.Secrets, srv.Secrets...)
+	}
+	d.FileWrite = manifestcaps.NotNone(c.Filesystem.Write)
+	if manifestcaps.NotNone(c.Exec) {
+		var x struct {
+			Commands []string `json:"commands"`
+		}
+		// An exec block that does not decode names no command: every
+		// program a hit names then reads as undeclared, which holds.
+		_ = json.Unmarshal(c.Exec, &x)
+		d.Exec = x.Commands
+		if d.Exec == nil {
+			d.Exec = []string{}
+		}
+	}
+	return d
 }
