@@ -8,7 +8,7 @@ cmd/agentryd on every platform it is released for (linux, darwin and windows);
 do not edit it by hand.
 
 ==============================================================================
-Go standard library 1.27.2
+Go standard library 1.27.3
 License: BSD-3-Clause
 ------------------------------------------------------------------------------
 
