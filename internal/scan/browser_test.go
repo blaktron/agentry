@@ -146,11 +146,38 @@ func TestABrowserIsAWideningAndAPolicyCanBlockIt(t *testing.T) {
 		t.Fatalf("S9 on an added browser: %+v", widened)
 	}
 
+	// A browser the previous release had declared is not widened again, and
+	// one of an odd shape names no host to report as new.
+	same := &Input{PrevManifestJSON: []byte(browserManifest(siteBrowser)), ManifestJSON: []byte(browserManifest(siteBrowser))}
+	if got := s9ManifestDiff(same); len(got) != 0 {
+		t.Fatalf("S9 on an unchanged browser: %+v", got)
+	}
+	odd := &Input{PrevManifestJSON: []byte(`{"schemaVersion":"2","name":"x","capabilities":{}}`), ManifestJSON: []byte(browserManifest(`{"scope":7}`))}
+	var hosts int
+	for _, f := range s9ManifestDiff(odd) {
+		if f.Scanner == "S9/new-egress" {
+			hosts++
+		}
+	}
+	if hosts != 0 {
+		t.Fatalf("S9 reported %d new hosts for a browser line that does not read", hosts)
+	}
+
 	sub := registry.PolicySubmission{ManifestJSON: []byte(browserManifest(siteBrowser))}
 	if issues := CheckSubmissionPolicy(Policy{BlockedCapabilities: []string{"browser"}}, sub); len(issues) != 1 || !strings.Contains(issues[0].Error(), `"browser"`) {
 		t.Fatalf("a policy blocking browser: %v", issues)
 	}
 	if issues := CheckSubmissionPolicy(Policy{BlockedCapabilities: []string{"network"}}, sub); len(issues) != 0 {
 		t.Fatalf("a policy blocking network refuses a browser: %v", issues)
+	}
+	// A blocked name is read trimmed, and every blocked capability the
+	// manifest declares is named, in order.
+	if issues := CheckSubmissionPolicy(Policy{BlockedCapabilities: []string{" browser "}}, sub); len(issues) != 1 || !strings.Contains(issues[0].Error(), "browser") {
+		t.Fatalf("a policy blocking \" browser \": %v", issues)
+	}
+	both := registry.PolicySubmission{ManifestJSON: []byte(`{"schemaVersion":"2","name":"x","capabilities":{"network":{"egress":["api.example.com"]},"browser":` + siteBrowser + `}}`)}
+	issues := CheckSubmissionPolicy(Policy{BlockedCapabilities: []string{"network", "exec", "browser"}}, both)
+	if len(issues) != 2 || !strings.Contains(issues[0].Error(), `"browser"`) || !strings.Contains(issues[1].Error(), `"network"`) {
+		t.Fatalf("a policy blocking network, exec and browser: %v; want browser then network", issues)
 	}
 }
