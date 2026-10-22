@@ -335,7 +335,8 @@
     "fixture": "csv-quality",
     "class": "good",
     "descriptionFile": "long.description.txt",
-    "what": "a long description (about 14 KB, past 8 KiB): the same task as the fixture's, told at length, with the Drafter's draft as it came back"
+    "what": "a long description (about 14 KB, past 8 KiB) beside the long instruction (about 29 KB): the task told at length and a draft that does it, under the 48 KiB state bound",
+    "instructionFile": "long.AGENT.md"
   },
   {
     "fixture": "csv-quality",
