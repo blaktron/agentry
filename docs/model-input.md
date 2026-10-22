@@ -126,10 +126,11 @@ logged. With no judge to scan the results the search is not made at all.
 ## The check of a finished draft
 
 The request is `{"description": …, "files": [{"path": …, "content": …}]}`:
-the person's description, at most 8,192 bytes, and every text file of the
-rendered package, `agent.yaml` and its instruction file among them, at
-most 32 files and 65,536 bytes in all. Each path must be relative and
-clean and named once, and each file UTF-8. A package with no
+the person's description, at most 24,576 bytes (24 KiB; a longer one is
+`422 validation`), and every text file of the rendered package,
+`agent.yaml` and its instruction file among them, at most 32 files and
+65,536 bytes in all. Each path must be relative and clean and named
+once, and each file UTF-8. A package with no
 `agent.yaml`, one that does not parse, or one without the instruction file
 it names is `422 draft-unreadable`, and one past the bounds is
 `413 draft-too-large`. Neither is asked anything, and a job's call is not
@@ -203,7 +204,7 @@ the check with an older core, or a registry older than 0.4.10's, gets no
 
 Each half answers `pass`, `flagged` or `not_scanned` on its own. A half
 the judge could not answer for (an error, a timeout, or for the draft set
-a part past its bound of 8, 16 and 32 KiB, or a state past 48 KiB in
+a part past its bound of 24, 16 and 32 KiB, or a state past 48 KiB in
 all) is `not_scanned`, with its failure word, never a pass. The texts are constants in `pkg/judge`, and
 nothing of the package is rendered into them.
 

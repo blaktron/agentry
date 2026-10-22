@@ -745,7 +745,7 @@ The CLI checks every draft in four steps:
     - The rubric's findings are recorded with the severity the pipeline's
       stage S5 would give each, and none is sent to the repair turn. At
       publish a high one sends the version to review, not to refusal.
-    - A description over 8 KiB is not checked, and neither is a draft that
+    - A description over 24 KiB is not checked, and neither is a draft that
       could not be rendered.
     - A pass does not mean the draft does all of the task. The pipeline
       scans the whole version at publish whatever the check said.
