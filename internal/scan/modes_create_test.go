@@ -14,6 +14,7 @@ import (
 	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/registry"
+	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
 func (e *pipeEnv) ownerPrincipal(ctx context.Context) (*auth.Principal, string) {
@@ -31,6 +32,21 @@ func TestCreateAgentModes(t *testing.T) {
 	ctx := context.Background()
 	p, ns := e.ownerPrincipal(ctx)
 	ev := audit.Event{Actor: e.owner, ActorKind: audit.ActorUser}
+	facet := func() map[string]int64 {
+		t.Helper()
+		rows, err := e.st.Queries().SearchFacetModes(ctx, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		counts := map[string]int64{}
+		for _, r := range rows {
+			counts[r.Mode] = r.N
+		}
+		return counts
+	}
+	// The database is shared with the rest of the package, so the facet is
+	// read against what it held before this test created anything.
+	before := facet()
 
 	t.Run("defaults to autonomous when none given", func(t *testing.T) {
 		a, err := e.reg.CreateAgent(ctx, p, registry.CreateAgentInput{
@@ -96,18 +112,30 @@ func TestCreateAgentModes(t *testing.T) {
 	})
 
 	t.Run("mode facet counts public agents per mode", func(t *testing.T) {
-		rows, err := e.st.Queries().SearchFacetModes(ctx, "")
+		counts := facet()
+		// Two public agents above support autonomous; one supports
+		// interactive; one supports persistent. The private agent that
+		// supports all three is not counted.
+		for mode, want := range map[string]int64{"autonomous": 2, "interactive": 1, "persistent": 1} {
+			if got := counts[mode] - before[mode]; got != want {
+				t.Fatalf("facet count of %s grew by %d, want %d (before %v, now %v)", mode, got, want, before, counts)
+			}
+		}
+	})
+
+	t.Run("mode facet leaves out a blocked agent", func(t *testing.T) {
+		a, err := e.reg.Resolve(ctx, ns, "modes-both")
 		if err != nil {
 			t.Fatal(err)
 		}
-		counts := map[string]int64{}
-		for _, r := range rows {
-			counts[r.Mode] = r.N
+		if err := e.st.Queries().SetAgentQuarantineState(ctx, storegen.SetAgentQuarantineStateParams{ID: a.ID, QuarantineState: "blocked"}); err != nil {
+			t.Fatal(err)
 		}
-		// Two public agents above support autonomous; one supports
-		// interactive; one supports persistent.
-		if counts["autonomous"] < 2 || counts["interactive"] < 1 || counts["persistent"] < 1 {
-			t.Fatalf("facet counts %v: want autonomous ≥ 2, interactive ≥ 1 and persistent ≥ 1", counts)
+		counts := facet()
+		for mode, want := range map[string]int64{"autonomous": 1, "interactive": 0, "persistent": 1} {
+			if got := counts[mode] - before[mode]; got != want {
+				t.Fatalf("with modes-both blocked, facet count of %s grew by %d, want %d", mode, got, want)
+			}
 		}
 	})
 }

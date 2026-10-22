@@ -9,6 +9,9 @@ package scan_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -24,6 +27,7 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/pkg/attest"
 	"github.com/blaktron/agentry/pkg/draftproof"
 )
 
@@ -41,12 +45,18 @@ type fakeDrafts struct {
 	mu      sync.Mutex
 	records []draftRecord
 	asked   []scan.DraftClaim
+	// err is the answer to every question while set: a lookup that could not
+	// be made.
+	err error
 }
 
 func (f *fakeDrafts) Revised(_ context.Context, c scan.DraftClaim) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.asked = append(f.asked, c)
+	if f.err != nil {
+		return false, f.err
+	}
 	for _, r := range f.records {
 		if r.run == c.Run && r.account == c.Account && r.namespace == c.Namespace && r.name == c.Name &&
 			r.baseline == c.Baseline && r.digestOf == c.BaselineDigest && r.proof == c.Proof {
@@ -60,6 +70,12 @@ func (f *fakeDrafts) set(r ...draftRecord) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.records = r
+}
+
+func (f *fakeDrafts) fail(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.err = err
 }
 
 func (f *fakeDrafts) questions() int {
@@ -186,6 +202,17 @@ func (e *pipeEnv) publishFiles(name string, files map[string]string) storegen.Ag
 // claiming the draft run (nil: an ordinary upload).
 func (e *pipeEnv) publishRevision(name string, files map[string]string, run *uuid.UUID) storegen.AgentVersion {
 	e.t.Helper()
+	v, err := e.submitRevision(name, files, run)
+	if err != nil {
+		e.t.Fatalf("submit: %v", err)
+	}
+	return v
+}
+
+// submitRevision is publishRevision returning the submission's error, with
+// the version as it stands.
+func (e *pipeEnv) submitRevision(name string, files map[string]string, run *uuid.UUID) (storegen.AgentVersion, error) {
+	e.t.Helper()
 	ctx := context.Background()
 	u, _ := e.st.Queries().GetUserByID(ctx, e.owner)
 	p := &auth.Principal{UserID: e.owner, Handle: u.Handle, Via: "session", EmailVerified: true,
@@ -194,17 +221,14 @@ func (e *pipeEnv) publishRevision(name string, files map[string]string, run *uui
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	v, err := e.reg.SubmitVersion(ctx, p, a, registry.SubmitInput{
+	v, serr := e.reg.SubmitVersion(ctx, p, a, registry.SubmitInput{
 		Source: "cli-upload", Workspace: writeWorkspace(e.t, files), DraftRun: run,
 	}, audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
-	if err != nil {
-		e.t.Fatalf("submit: %v", err)
-	}
 	final, err := e.st.Queries().GetVersionByID(ctx, v.ID)
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	return final
+	return final, serr
 }
 
 func (e *pipeEnv) findings(v storegen.AgentVersion) []storegen.Finding {
@@ -268,33 +292,44 @@ func TestAClaimedDraftWithoutAMatchingRecordGetsTheFullDiff(t *testing.T) {
 		name   string
 		record func(run uuid.UUID, base storegen.AgentVersion, name string) []draftRecord
 		noSeam bool
+		// files adjusts the revision's files; unasked says the claim is never
+		// put to the seam (a package the proof cannot read).
+		files   func(map[string]string)
+		unasked bool
 	}{
-		{"no record", func(uuid.UUID, storegen.AgentVersion, string) []draftRecord { return nil }, false},
+		{"no record", func(uuid.UUID, storegen.AgentVersion, string) []draftRecord { return nil }, false, nil, false},
 		{"another run", func(_ uuid.UUID, base storegen.AgentVersion, name string) []draftRecord {
 			return []draftRecord{recordFor(t, uuid.New(), e.owner, u.Handle, name, base, rugPull)}
-		}, false},
+		}, false, nil, false},
 		{"another account", func(run uuid.UUID, base storegen.AgentVersion, name string) []draftRecord {
 			return []draftRecord{recordFor(t, run, other, u.Handle, name, base, rugPull)}
-		}, false},
+		}, false, nil, false},
 		{"another baseline", func(run uuid.UUID, base storegen.AgentVersion, name string) []draftRecord {
 			r := recordFor(t, run, e.owner, u.Handle, name, base, rugPull)
 			r.baseline = "0.9.0"
 			return []draftRecord{r}
-		}, false},
+		}, false, nil, false},
 		{"another baseline archive", func(run uuid.UUID, base storegen.AgentVersion, name string) []draftRecord {
 			r := recordFor(t, run, e.owner, u.Handle, name, base, rugPull)
 			r.digestOf = "sha256:" + strings.Repeat("0", 64)
 			return []draftRecord{r}
-		}, false},
+		}, false, nil, false},
 		{"one changed line", func(run uuid.UUID, base storegen.AgentVersion, name string) []draftRecord {
 			return []draftRecord{recordFor(t, run, e.owner, u.Handle, name, base,
 				strings.Replace(rugPull, "the full thread", "the thread", 1))}
-		}, false},
+		}, false, nil, false},
 		{"a changed manifest", func(run uuid.UUID, base storegen.AgentVersion, name string) []draftRecord {
 			return []draftRecord{recordFor(t, run, e.owner, u.Handle, name, base, rugPull, "mcp-audit.invalid.example")}
-		}, false},
+		}, false, nil, false},
 		{"no draftprovenance", func(run uuid.UUID, base storegen.AgentVersion, name string) []draftRecord {
 			return []draftRecord{recordFor(t, run, e.owner, u.Handle, name, base, rugPull)}
+		}, true, nil, false},
+		// The manifest names no instruction file, so there is nothing the
+		// proof could read: the claim is not put to the seam at all.
+		{"a package the proof cannot read", func(run uuid.UUID, base storegen.AgentVersion, name string) []draftRecord {
+			return []draftRecord{recordFor(t, run, e.owner, u.Handle, name, base, rugPull)}
+		}, false, func(f map[string]string) {
+			f["agent.yaml"] = strings.Replace(f["agent.yaml"], "entrypoints:\n  instruction: AGENT.md\n", "", 1)
 		}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -309,7 +344,15 @@ func TestAClaimedDraftWithoutAMatchingRecordGetsTheFullDiff(t *testing.T) {
 				e.pipe.SetDraftProvenance(nil)
 				defer e.pipe.SetDraftProvenance(drafts)
 			}
-			v := e.publishRevision(name, revisionFiles(u.Handle, name, "1.0.1", rugPull), &run)
+			files := revisionFiles(u.Handle, name, "1.0.1", rugPull)
+			if tc.files != nil {
+				tc.files(files)
+			}
+			asked := drafts.questions()
+			v := e.publishRevision(name, files, &run)
+			if put := drafts.questions() - asked; (put == 0) != (tc.unasked || tc.noSeam) {
+				t.Fatalf("the claim was put to the seam %d times; unasked is expected: %v", put, tc.unasked || tc.noSeam)
+			}
 			if v.Source != "cli-upload" || v.DraftBaseline != nil {
 				t.Fatalf("a claim with no matching record made the version %q (baseline %v)", v.Source, v.DraftBaseline)
 			}
@@ -325,6 +368,32 @@ func TestAClaimedDraftWithoutAMatchingRecordGetsTheFullDiff(t *testing.T) {
 			}
 		})
 	}
+
+	// A lookup that cannot be made is neither answer: the scan fails and is
+	// retried, the version stays in scanning, and the retry decides.
+	t.Run("a lookup that cannot be made", func(t *testing.T) {
+		name := "claim-lookup"
+		base := e.publish(name, "public", baseFiles(u.Handle, name))
+		run := uuid.New()
+		const host = "mcp-audit.invalid.example"
+		drafts.set(recordFor(t, run, e.owner, u.Handle, name, base, rugPull, host))
+		drafts.fail(errors.New("the enterprise lookup is down"))
+		v, err := e.submitRevision(name, revisionFiles(u.Handle, name, "1.0.1", rugPull, host), &run)
+		if err == nil || !strings.Contains(err.Error(), "draft provenance") {
+			t.Fatalf("submission with the lookup down returned %v, want the scan's failure", err)
+		}
+		if v.Status != "scanning" || v.Source != "cli-upload" {
+			t.Fatalf("version after a failed lookup is %s / %s, want scanning / cli-upload", v.Status, v.Source)
+		}
+		drafts.fail(nil)
+		if err := e.pipe.Scan(context.Background(), v.ID, "publish"); err != nil {
+			t.Fatalf("retry: %v", err)
+		}
+		again := versionStatus(t, e, v.ID)
+		if again.Source != scan.SourceDrafterRevision || again.Status != "published" {
+			t.Fatalf("version after the retry is %s / %s, want a proved revision, published", again.Status, again.Source)
+		}
+	})
 }
 
 // TestAVerifiedRevisionIsScannedAsAFirstRelease: the postmark-mcp shape in
@@ -363,6 +432,28 @@ func TestAVerifiedRevisionIsScannedAsAFirstRelease(t *testing.T) {
 	if v.Source != scan.SourceDrafterRevision || v.DraftBaseline == nil || *v.DraftBaseline != "1.0.0" {
 		t.Fatalf("a proved revision is %q against %v, want drafter-revision against 1.0.0", v.Source, v.DraftBaseline)
 	}
+	// What it is signed as is what it was proved to be.
+	att, err := e.st.Queries().GetAttestation(ctx, v.ID)
+	if err != nil {
+		t.Fatalf("a proved revision (%s) has no attestation: %v", v.Status, err)
+	}
+	var env attest.DSSEEnvelope
+	if err := json.Unmarshal(att.DsseEnvelope, &env); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := base64.StdEncoding.DecodeString(env.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var signedAs struct {
+		Predicate attest.PublishPredicate `json:"predicate"`
+	}
+	if err := json.Unmarshal(payload, &signedAs); err != nil {
+		t.Fatal(err)
+	}
+	if signedAs.Predicate.Source != scan.SourceDrafterRevision {
+		t.Fatalf("a proved revision is attested as source %q, want %s", signedAs.Predicate.Source, scan.SourceDrafterRevision)
+	}
 	// The registry asked with its own reading of the version.
 	if len(drafts.asked) == 0 {
 		t.Fatal("DraftProvenance was never asked")
@@ -376,6 +467,19 @@ func TestAVerifiedRevisionIsScannedAsAFirstRelease(t *testing.T) {
 	fs := e.findings(v)
 	if !has(fs, "S9/drafter-revision", "") {
 		t.Fatalf("no S9/drafter-revision finding: %v", scannersOf(fs))
+	}
+	for _, f := range fs {
+		if f.Scanner != "S9/drafter-revision" {
+			continue
+		}
+		var d map[string]any
+		if err := json.Unmarshal(f.Detail, &d); err != nil {
+			t.Fatal(err)
+		}
+		files := []any{"agent.yaml", "AGENT.md"}
+		if f.Severity != "info" || d["draftRun"] != run.String() || d["baseline"] != "1.0.0" || !reflect.DeepEqual(d["proved"], files) || !reflect.DeepEqual(d["baselineProved"], files) {
+			t.Fatalf("S9/drafter-revision = %s %v, want info naming the draft run, the baseline and the proved files of both sides", f.Severity, d)
+		}
 	}
 	for _, s := range []string{"S9/new-egress-content", "S9/new-obfuscation", "S9/instruction-rewrite", "S9/escalated"} {
 		if has(fs, s, "") {
@@ -527,6 +631,77 @@ func TestTheSourceMovesOnlyOnceAndOnlyWhenProved(t *testing.T) {
 	n, err := e.st.Queries().MarkVersionDrafterRevision(ctx, storegen.MarkVersionDrafterRevisionParams{ID: plain.ID, DraftBaseline: &plain.Version})
 	if err != nil || n != 0 {
 		t.Fatalf("a version that claimed no draft was marked (%d, %v)", n, err)
+	}
+	// Nor is a version already decided that did claim one, nor one already
+	// proved; a version still scanning is marked only when it claimed a draft.
+	claimedName := "immutable-claimed"
+	e.publish(claimedName, "public", baseFiles(u.Handle, claimedName))
+	unproved := e.publishRevision(claimedName, revisionFiles(u.Handle, claimedName, "1.0.1", cleanInstructions), &run)
+	if unproved.Status != "published" || unproved.DraftRun == nil || unproved.Source != "cli-upload" {
+		t.Fatalf("setup: the unproved claim is %s / %s (draft run %v)", unproved.Status, unproved.Source, unproved.DraftRun)
+	}
+	baseline := "1.0.0"
+	for name, id := range map[string]uuid.UUID{"a decided claim": unproved.ID, "a proved revision": v.ID} {
+		if n, err := e.st.Queries().MarkVersionDrafterRevision(ctx, storegen.MarkVersionDrafterRevisionParams{ID: id, DraftBaseline: &baseline}); err != nil || n != 0 {
+			t.Fatalf("%s was marked (%d, %v)", name, n, err)
+		}
+	}
+	agent := mustAgent(t, e, u.Handle, claimedName)
+	scanning := func(version string, claim *uuid.UUID) uuid.UUID {
+		t.Helper()
+		id := uuid.New()
+		if _, err := pool.Exec(ctx, `INSERT INTO agent_versions (id, agent_id, version, manifest, capabilities, status, submitted_by, source, channel, draft_run)
+			VALUES ($1, $2, $3, '{}', '{}', 'scanning', $4, 'cli-upload', 'stable', $5)`, id, agent.ID, version, e.owner, claim); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	if n, err := e.st.Queries().MarkVersionDrafterRevision(ctx, storegen.MarkVersionDrafterRevisionParams{ID: scanning("2.0.0", nil), DraftBaseline: &baseline}); err != nil || n != 0 {
+		t.Fatalf("a scanning version that claimed no draft was marked (%d, %v)", n, err)
+	}
+	claim := uuid.New()
+	marked := scanning("2.0.1", &claim)
+	if n, err := e.st.Queries().MarkVersionDrafterRevision(ctx, storegen.MarkVersionDrafterRevisionParams{ID: marked, DraftBaseline: &baseline}); err != nil || n != 1 {
+		t.Fatalf("a scanning version that claimed a draft was not marked (%d, %v)", n, err)
+	}
+	if n, err := e.st.Queries().MarkVersionDrafterRevision(ctx, storegen.MarkVersionDrafterRevisionParams{ID: marked, DraftBaseline: &baseline}); err != nil || n != 0 {
+		t.Fatalf("a version already marked was marked again (%d, %v)", n, err)
+	}
+	if got := versionStatus(t, e, marked); got.Source != scan.SourceDrafterRevision || got.DraftBaseline == nil || *got.DraftBaseline != baseline {
+		t.Fatalf("the marked version is %s against %v, want drafter-revision against %s", got.Source, got.DraftBaseline, baseline)
+	}
+
+	// Only a cli-upload moves: a git-tag version that claimed a draft is not
+	// marked while it scans, and its claim is never asked about.
+	tagged := uuid.New()
+	if _, err := pool.Exec(ctx, `INSERT INTO agent_versions (id, agent_id, version, manifest, capabilities, status, submitted_by, source, channel, draft_run)
+		VALUES ($1, $2, '2.0.2', '{}', '{}', 'scanning', $3, 'git-tag', 'stable', $4)`, tagged, agent.ID, e.owner, claim); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := e.st.Queries().MarkVersionDrafterRevision(ctx, storegen.MarkVersionDrafterRevisionParams{ID: tagged, DraftBaseline: &baseline}); err != nil || n != 0 {
+		t.Fatalf("a scanning git-tag version that claimed a draft was marked (%d, %v)", n, err)
+	}
+	tagName := "immutable-tag"
+	tagBase := e.publish(tagName, "public", baseFiles(u.Handle, tagName))
+	tagRun := uuid.New()
+	drafts.set(recordFor(t, tagRun, e.owner, u.Handle, tagName, tagBase, rugPull))
+	asked := len(drafts.asked)
+	principal := &auth.Principal{UserID: e.owner, Handle: u.Handle, Via: "session", EmailVerified: true, OrgRoles: map[uuid.UUID]auth.OrgRole{}}
+	a, err := e.reg.Resolve(ctx, u.Handle, tagName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tv, err := e.reg.SubmitVersion(ctx, principal, a, registry.SubmitInput{
+		Source: "git-tag", Tag: "v1.0.1", Workspace: writeWorkspace(t, revisionFiles(u.Handle, tagName, "1.0.1", rugPull)), DraftRun: &tagRun,
+	}, audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := versionStatus(t, e, tv.ID); got.Source != "git-tag" || got.DraftBaseline != nil {
+		t.Fatalf("a git-tag revision that claimed a draft is %s against %v, want git-tag", got.Source, got.DraftBaseline)
+	}
+	if len(drafts.asked) != asked {
+		t.Fatalf("a git-tag version's draft claim was asked about: %+v", drafts.asked[asked:])
 	}
 }
 
