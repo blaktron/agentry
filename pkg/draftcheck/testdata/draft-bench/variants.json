@@ -332,6 +332,20 @@
     "what": "the long csv instruction under the weather-brief description: a long draft made for another task"
   },
   {
+    "fixture": "csv-quality",
+    "class": "good",
+    "descriptionFile": "long.description.txt",
+    "what": "a long description (about 14 KB, past 8 KiB) beside the long instruction (about 29 KB): the task told at length and a draft that does it, under the 48 KiB state bound",
+    "instructionFile": "long.AGENT.md"
+  },
+  {
+    "fixture": "csv-quality",
+    "class": "off_task",
+    "descriptionFile": "long.description.txt",
+    "draftFrom": "weather-brief",
+    "what": "the long csv description under the weather-brief draft: a draft made for another task, asked beside a description past 8 KiB"
+  },
+  {
     "fixture": "weather-brief",
     "class": "wont_run",
     "replace": [

@@ -77,7 +77,7 @@ func TestADraftPastItsBoundsOrAFailedJudgeIsNotScanned(t *testing.T) {
 	// The refusal says which sizes were seen and which bounds they broke,
 	// and the record of the model and question set is still filled.
 	res := s.Scan(context.Background(), DraftInput{Description: "dd", ManifestJSON: []byte("mmm"), Instruction: strings.Repeat("i", 32769)})
-	if res.Err == nil || res.Err.Error() != "judge: a draft of 2/3/32769 bytes is past the bounds 8192/16384/32768, 49152 in all" ||
+	if res.Err == nil || res.Err.Error() != "judge: a draft of 2/3/32769 bytes is past the bounds 24576/16384/32768, 49152 in all" ||
 		res.Model != DefaultModel || res.QuestionSet != s.QuestionSet() || res.Usage.Requests != 0 {
 		t.Fatalf("the refusal: %+v", res)
 	}
@@ -120,7 +120,7 @@ func TestALongDraftedInstructionIsAskedWholeUpToTheBound(t *testing.T) {
 		t.Fatalf("every part at its bound, past the state's: %+v, asked %d", res, len(f.asked))
 	}
 
-	// Each bound is inclusive and its own: a description of 8192 bytes, a
+	// Each bound is inclusive and its own: a description of 24576 bytes, a
 	// manifest of 16384 and a state of 49152 are asked, one byte more of any
 	// is not. The sizes are spelled out, not read from the constants.
 	for _, c := range []struct {
@@ -128,8 +128,11 @@ func TestALongDraftedInstructionIsAskedWholeUpToTheBound(t *testing.T) {
 		desc, man, i int
 		asked        bool
 	}{
-		{"description at its bound", 8192, 0, 0, true},
-		{"description one over", 8193, 0, 0, false},
+		{"description at its bound", 24576, 0, 0, true},
+		{"description one over", 24577, 0, 0, false},
+		{"description at its bound beside a small manifest and instruction", 24576, 1024, 2048, true},
+		{"description and instruction at the state's bound", 16384, 0, 32768, true},
+		{"description and instruction one over the state's bound", 16385, 0, 32768, false},
 		{"manifest at its bound", 0, 16384, 0, true},
 		{"manifest one over", 0, 16385, 0, false},
 		{"instruction at its bound", 0, 0, 32768, true},
@@ -144,8 +147,30 @@ func TestALongDraftedInstructionIsAskedWholeUpToTheBound(t *testing.T) {
 			t.Fatalf("%s: %+v, asked %d, want asked=%v", c.name, res, len(f.asked), c.asked)
 		}
 	}
-	if DraftMaxDescription != 8192 || DraftMaxManifest != 16384 {
-		t.Fatalf("bounds %d and %d, want 8 KiB and 16 KiB", DraftMaxDescription, DraftMaxManifest)
+	if DraftMaxDescription != 24576 || DraftMaxManifest != 16384 {
+		t.Fatalf("bounds %d and %d, want 24 KiB and 16 KiB", DraftMaxDescription, DraftMaxManifest)
+	}
+}
+
+// The description bound is 24 KiB, the most a client accepts for a
+// draft's task: a description of 20 KiB and one at the bound, each with
+// a small manifest and instruction, is asked whole in one request. One
+// byte more is not scanned, the error names the bound, and the question
+// is never asked of a cut description.
+func TestALongDescriptionIsAskedWholeUpToTheBound(t *testing.T) {
+	for _, n := range []int{20 << 10, 24 << 10} {
+		f := &fakeAsker{answer: quiet}
+		long := strings.Repeat("d", n)
+		res := NewDraftScanner(f).Scan(context.Background(), DraftInput{Description: long, ManifestJSON: make([]byte, 2048), Instruction: strings.Repeat("i", 4096)})
+		if res.Verdict != VerdictPass || res.Failure != "" || len(f.asked) != 1 || f.asked[0]["description"] != long {
+			t.Fatalf("a %d-byte description: %+v, asked %d", n, res, len(f.asked))
+		}
+	}
+	f := &fakeAsker{answer: quiet}
+	res := NewDraftScanner(f).Scan(context.Background(), DraftInput{Description: strings.Repeat("d", 24<<10+1), Instruction: "x"})
+	if res.Verdict != VerdictNotScanned || res.Failure != FailureTooLarge || len(f.asked) != 0 ||
+		res.Err == nil || !strings.Contains(res.Err.Error(), "past the bounds 24576/16384/32768") {
+		t.Fatalf("one byte over: %+v, asked %d", res, len(f.asked))
 	}
 }
 
