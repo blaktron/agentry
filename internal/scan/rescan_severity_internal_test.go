@@ -27,6 +27,15 @@ func TestRescanSeverityKeepsTheOldBarForTheReratedFindings(t *testing.T) {
 		{"S6's ungranted tools", Finding{Scanner: "S6/ungranted-tool", Severity: SevHigh}, SevMedium},
 		{"another S6 high", Finding{Scanner: "S6/undeclared-exec", Severity: SevHigh}, SevHigh},
 		{"a critical", Finding{Scanner: "S1/binary-executable", Severity: SevCritical}, SevCritical},
+		{"C1 at 3, read back from JSON", Finding{Scanner: "S5/C1_injection", Severity: SevHigh, Detail: map[string]any{"score": 3.0}}, SevHigh},
+		{"C6 at 2 is not a probable high", Finding{Scanner: "S5/C6_destructive_actions", Severity: SevHigh, Detail: map[string]any{"score": 2}}, SevHigh},
+		{"C2 at 2 is not a probable high", Finding{Scanner: "S5/C2_exfiltration", Severity: SevHigh, Detail: map[string]any{"score": 2}}, SevHigh},
+		{"C5 at 2 is not a probable high", Finding{Scanner: "S5/C5_obfuscation", Severity: SevHigh, Detail: map[string]any{"score": 2}}, SevHigh},
+		{"a pack's C6 at 2 is not a probable high", Finding{Scanner: "SK/S5/C6_destructive_actions", Severity: SevHigh, Detail: map[string]any{"score": 2}}, SevHigh},
+		{"a category of another stage at 2", Finding{Scanner: "S4/C1_injection", Severity: SevHigh, Detail: map[string]any{"score": 2}}, SevHigh},
+		{"a score that is not a number", Finding{Scanner: "S5/C1_injection", Severity: SevHigh, Detail: map[string]any{"score": "2"}}, SevHigh},
+		{"a medium stays medium", Finding{Scanner: "S6/undeclared-env", Severity: SevMedium}, SevMedium},
+		{"a low stays low", Finding{Scanner: "S6/ungranted-tool", Severity: SevLow}, SevLow},
 	}
 	for _, tc := range cases {
 		if got := rescanSeverity(tc.f); got != tc.want {

@@ -84,6 +84,9 @@ func TestReinstatePublishesOnlyWhatTheGateNowPasses(t *testing.T) {
 	if err != nil || run.Trigger != "manual" {
 		t.Fatalf("latest run = %+v (%v); want the reinstate's own scan", run, err)
 	}
+	if held.StatusReason == nil || !strings.Contains(*held.StatusReason, "appeal upheld") || !strings.Contains(*held.StatusReason, "would not publish it") {
+		t.Fatalf("status reason %v does not say the gate would not publish it under the reinstate's reason", held.StatusReason)
+	}
 
 	// The scan now passes: the second reinstate publishes the quarantined
 	// version through the gate's verdict.
@@ -101,6 +104,26 @@ func TestReinstatePublishesOnlyWhatTheGateNowPasses(t *testing.T) {
 	closed := reviewItem(t, e, item.ID)
 	if closed.State != "superseded" || closed.Rationale == nil || !strings.Contains(*closed.Rationale, "second look") {
 		t.Fatalf("review item = %s %v; want superseded with the reinstate's reason", closed.State, closed.Rationale)
+	}
+	if !strings.Contains(*after.StatusReason, "the gate published it") {
+		t.Fatalf("status reason %q does not say the gate published it", *after.StatusReason)
+	}
+	// The supersession is on the audit trail with the reason and the run.
+	finalRun, err := e.st.Queries().LatestScanRunForVersion(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw []byte
+	if err := e.st.Pool().QueryRow(ctx, `SELECT detail FROM audit_events WHERE action = 'review.decision' AND target_id = $1`, item.ID).Scan(&raw); err != nil {
+		t.Fatalf("no review.decision audit event for the superseded item: %v", err)
+	}
+	var detail map[string]any
+	if err := json.Unmarshal(raw, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail["decision"] != "superseded" || detail["version_id"] != v.ID.String() || detail["target"] != "published" ||
+		detail["reason"] != "second look" || detail["run_id"] != finalRun.ID.String() {
+		t.Fatalf("review.decision detail = %v, want the supersession by this reinstate's scan", detail)
 	}
 	if n := attestationCount(t, e, v.ID); n != 1 {
 		t.Fatalf("attestations = %d, want the one signed at the first publish", n)
@@ -153,6 +176,26 @@ func TestReinstateGivesAHeldVersionAReviewItem(t *testing.T) {
 	if got := versionStatus(t, e, v.ID).Status; got != string(registry.StatusQuarantined) {
 		t.Fatalf("status = %s, want quarantined", got)
 	}
+
+	// An organization's agent is held on the platform queue too: a reinstate
+	// is the platform's act.
+	org := e.seedOrg("reinstateorg" + suffix())
+	oscores := map[scan.JudgeCategory]int{}
+	e.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, scoredProvider{scores: &oscores}, nil))
+	ov := e.publishOrg(org, "orgbyhand", "public", benignFiles(org.handle, "orgbyhand", "1.0.0"))
+	if ov.Status != "published" {
+		t.Fatalf("setup: org version status %s", ov.Status)
+	}
+	if err := e.pipe.Quarantine(ctx, ov.ID, "abuse report", staffEvent()); err != nil {
+		t.Fatal(err)
+	}
+	oscores[scan.CatDeception] = 3
+	if _, err := e.pipe.Reinstate(ctx, ov.AgentID, "appeal upheld"); err != nil {
+		t.Fatal(err)
+	}
+	if item := pendingItem(t, e, ov.ID); item.Queue != "platform" || item.OrgID != nil {
+		t.Fatalf("review item of a held org version on queue %q (org %v), want the platform queue", item.Queue, item.OrgID)
+	}
 }
 
 // With a queue, reinstate only queues the scans: nothing is published or
@@ -169,8 +212,9 @@ func TestReinstateQueuesTheScansAndMovesNothing(t *testing.T) {
 	if err != nil || asked != 1 {
 		t.Fatalf("asked %d, err %v; want 1", asked, err)
 	}
-	if strings.Join(q.kinds, ",") != scan.JobReinstateScan+"@sandbox" {
-		t.Fatalf("enqueued %v, want the reinstate scan on the sandbox queue", q.kinds)
+	if strings.Join(q.kinds, ",") != scan.JobReinstateScan+"@sandbox" || len(q.args) != 1 ||
+		q.args[0] != any(scan.ReinstateScanArgs{VersionID: v.ID, Reason: "appeal upheld"}) {
+		t.Fatalf("enqueued %v with %v, want the reinstate scan for this version and reason on the sandbox queue", q.kinds, q.args)
 	}
 	if got := versionStatus(t, e, v.ID).Status; got != string(registry.StatusBlocked) {
 		t.Fatalf("status before the worker runs = %s, want blocked", got)
@@ -185,6 +229,19 @@ func TestReinstateQueuesTheScansAndMovesNothing(t *testing.T) {
 	}
 	if got := versionStatus(t, e, v.ID).Status; got != string(registry.StatusPublished) {
 		t.Fatalf("status after the job = %s, want published", got)
+	}
+
+	// A copy of the job that arrives once the version is published judges
+	// nothing: no new run, no change.
+	runs := countRows(t, e, `SELECT count(*) FROM scan_runs WHERE version_id = $1`, v.ID)
+	if err := q2.handlers[scan.JobReinstateScan](ctx, queue.Job{Kind: scan.JobReinstateScan, Args: raw, Attempt: 2}); err != nil {
+		t.Fatalf("reinstate job for a version no longer held: %v", err)
+	}
+	if again := countRows(t, e, `SELECT count(*) FROM scan_runs WHERE version_id = $1`, v.ID); again != runs {
+		t.Fatalf("a reinstate job for a published version judged it again (%d runs → %d)", runs, again)
+	}
+	if got := versionStatus(t, e, v.ID).Status; got != string(registry.StatusPublished) {
+		t.Fatalf("status after the repeated job = %s, want published", got)
 	}
 }
 
@@ -205,6 +262,46 @@ func TestAReinstateBlockedAgainBeforeItsScanPublishesNothing(t *testing.T) {
 	}
 	if got := versionStatus(t, e, v.ID).Status; got != string(registry.StatusBlocked) {
 		t.Fatalf("status = %s, want blocked: the agent is blocked", got)
+	}
+	if n := attestationCount(t, e, v.ID); n != 1 {
+		t.Fatalf("attestations = %d, want the one signed at the first publish", n)
+	}
+
+	// A reviewer who publishes the version while the reinstate's scan runs
+	// keeps their result: the reinstate finds the version moved and is not an
+	// error.
+	m := newPipeEnv(t)
+	mv, magent, mscores := publishedWithJudge(t, m, "moved")
+	*mscores = map[scan.JudgeCategory]int{scan.CatInjection: 3}
+	if err := m.pipe.RescanSweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := versionStatus(t, m, mv.ID).Status; got != string(registry.StatusQuarantined) {
+		t.Fatalf("setup: status %s, want quarantined", got)
+	}
+	item := pendingItem(t, m, mv.ID)
+	decided := false
+	m.pipe.SetOrchestratorForTest(scan.NewOrchestrator(nil, decidingJudge{decide: func() {
+		if !decided {
+			decided = true
+			approve(t, m, mv.ID)
+		}
+	}}, nil))
+	asked, err := m.pipe.Reinstate(ctx, magent.ID, "appeal upheld")
+	if err != nil || asked != 1 {
+		t.Fatalf("reinstate beside a reviewer's decision: asked %d, err %v; want 1, nil", asked, err)
+	}
+	if !decided {
+		t.Fatal("setup: the reviewer never decided during the scan")
+	}
+	if got := versionStatus(t, m, mv.ID).Status; got != string(registry.StatusPublished) {
+		t.Fatalf("status = %s, want published by the reviewer", got)
+	}
+	if got := reviewItem(t, m, item.ID); got.State != "approved" || got.DecidedBy == nil {
+		t.Fatalf("review item = %s by %v, want the reviewer's approval kept", got.State, got.DecidedBy)
+	}
+	if n := attestationCount(t, m, mv.ID); n != 1 {
+		t.Fatalf("attestations = %d, want 1", n)
 	}
 }
 

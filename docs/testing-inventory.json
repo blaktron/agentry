@@ -3135,6 +3135,7 @@
             "TestJudgePromptHashIsRecorded",
             "TestReviewDecisionRollsBackOnBadTransition",
             "TestApprovalRefusesToSignAnEmptyDigest",
+            "TestAKeylessApprovalIsHandedToTheWorkerAndPublishedOnce",
             "TestQuarantineNotifiesAuthorAndEmitsAdvisoryEvent",
             "TestQuarantineWithholdsMailFromUnverifiedAuthor",
             "TestStageErrorPersistsPipelineErrorFinding",
@@ -3147,8 +3148,7 @@
           "fixtureEntryPoint": false,
           "dependencyHints": [
             "database fixture",
-            "source/file contract",
-            "explicit skip"
+            "source/file contract"
           ]
         },
         {
@@ -3256,7 +3256,8 @@
             "TestSignPayloadIsSignOverTheEncodedStatement",
             "TestRegisterSigningKeyRecordsAndRetires",
             "TestReattestSweepCountersignsWithTheNewKey",
-            "TestReattestSweepRefusesAStatementThatIsNotTheRows"
+            "TestReattestSweepRefusesAStatementThatIsNotTheRows",
+            "TestStartupEnqueuesTheSweepsTheTablesNeed"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3279,7 +3280,8 @@
             "TestRedoReviewQueueYieldsToAReviewerWhoDecidesMeanwhile",
             "TestANewRulesetEnqueuesTheSweepAndTheRedo",
             "TestARulesetJobRunsOnlyUnderItsOwnRuleset",
-            "TestANewRulesetsJobsOutlastARollingDeploy"
+            "TestANewRulesetsJobsOutlastARollingDeploy",
+            "TestTheWorkersJobHandlersDoTheirWork"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3372,12 +3374,15 @@
           "path": "internal/scan/signing_test.go",
           "tests": [
             "TestAttestationRoundTrip",
+            "TestFileSignerLoadsItsKeyFromAFile",
             "TestNoneProviderForcesReview"
           ],
           "fuzz": [],
           "benchmarks": [],
           "fixtureEntryPoint": false,
-          "dependencyHints": []
+          "dependencyHints": [
+            "source/file contract"
+          ]
         },
         {
           "path": "internal/scan/testdb_test.go",

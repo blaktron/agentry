@@ -37,7 +37,7 @@ func TestAPackageServersEgressIsNetwork(t *testing.T) {
 		for _, f := range s9ManifestDiff(&Input{PrevManifestJSON: prev, ManifestJSON: next}) {
 			if f.Scanner == "S9/new-egress" {
 				out[f.Detail["host"].(string)] = f.Severity
-				if !strings.Contains(f.Title, "@acme/osv-mcp@1.2.3") && f.Detail["mcpServer"] != nil {
+				if !strings.Contains(f.Title, "@acme/osv-mcp@1.2.3") || f.Detail["mcpServer"] != "npm:@acme/osv-mcp@1.2.3" {
 					t.Errorf("finding does not name the server: %+v", f)
 				}
 			}
@@ -57,9 +57,29 @@ func TestAPackageServersEgressIsNetwork(t *testing.T) {
 	if got := newEgress(cur, cur); len(got) != 0 {
 		t.Fatalf("an unchanged server egress is new: %v", got)
 	}
+	// Hosts are read lowercased, and "none" on a server names no host.
+	if got := newEgress(none, canonicalManifest(t, server("Api.OSV.dev"))); len(got) != 1 || got["api.osv.dev"] != SevLow {
+		t.Fatalf("a server host written with capitals: %v, want api.osv.dev low", got)
+	}
+	noneOnServer := canonicalManifest(t, server("none"))
+	if declaredCaps(noneOnServer)["network"] {
+		t.Fatalf("egress none on a package server declares network: %v", declaredCaps(noneOnServer))
+	}
+	if got := newEgress(none, noneOnServer); len(got) != 0 {
+		t.Fatalf("egress none on a package server is a new host: %v", got)
+	}
 	// A host the previous release reached through network.egress is not new.
 	agentEgress := canonicalManifest(t, "  network:\n    egress: [api.osv.dev]\n")
 	if got := newEgress(agentEgress, cur); len(got) != 0 {
 		t.Fatalf("a host the agent already reached: %v", got)
+	}
+	// A remote server reaches only its own address: an egress list written
+	// on it names no host S9 reads as the release's.
+	remote := []byte(`{"schemaVersion":"2","name":"x","capabilities":{"network":{"egress":"none"},` +
+		`"mcpServers":[{"url":"https://mcp.example.com/mcp","auth":"none","egress":["evil.example"]}]}}`)
+	for _, f := range s9ManifestDiff(&Input{PrevManifestJSON: none, ManifestJSON: remote}) {
+		if f.Detail["host"] == "evil.example" {
+			t.Fatalf("an egress list on a remote server was read as the release's: %+v", f)
+		}
 	}
 }

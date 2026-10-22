@@ -13,6 +13,9 @@ func TestNewlyAlertable(t *testing.T) {
 	high := OSVVulnerability{ID: "GHSA-h", Severity: "high"}
 	crit := OSVVulnerability{ID: "GHSA-c", Severity: "critical"}
 	low := OSVVulnerability{ID: "GHSA-l", Severity: "low"}
+	medium := OSVVulnerability{ID: "GHSA-m", Severity: "medium"}
+	lowThenHigh := OSVVulnerability{ID: "GHSA-r", Severity: "low"}
+	rerated := OSVVulnerability{ID: "GHSA-r", Severity: "high"}
 	cases := []struct {
 		name string
 		prev *MCPScanRecord
@@ -26,6 +29,12 @@ func TestNewlyAlertable(t *testing.T) {
 		{"already known", &MCPScanRecord{Status: "vulnerable", Advisories: []OSVVulnerability{high}}, MCPScanRecord{Advisories: []OSVVulnerability{high}}, nil, ""},
 		{"one more serious advisory", &MCPScanRecord{Status: "vulnerable", Advisories: []OSVVulnerability{high}}, MCPScanRecord{Advisories: []OSVVulnerability{high, crit}}, []string{"GHSA-c"}, "critical"},
 		{"low then high on the same server", &MCPScanRecord{Status: "vulnerable", Advisories: []OSVVulnerability{low}}, MCPScanRecord{Advisories: []OSVVulnerability{low, high}}, []string{"GHSA-h"}, "high"},
+		{"a medium is not an alert", &MCPScanRecord{Status: "safe"}, MCPScanRecord{Advisories: []OSVVulnerability{medium}}, nil, ""},
+		{"a critical already known", &MCPScanRecord{Status: "vulnerable", Advisories: []OSVVulnerability{crit}}, MCPScanRecord{Advisories: []OSVVulnerability{crit}}, nil, ""},
+		{"an advisory re-rated from low to high", &MCPScanRecord{Status: "vulnerable", Advisories: []OSVVulnerability{lowThenHigh}}, MCPScanRecord{Advisories: []OSVVulnerability{rerated}}, []string{"GHSA-r"}, "high"},
+		{"two new, the worse last", &MCPScanRecord{Status: "safe"}, MCPScanRecord{Advisories: []OSVVulnerability{high, crit}}, []string{"GHSA-h", "GHSA-c"}, "critical"},
+		{"two new, the worse first", &MCPScanRecord{Status: "safe"}, MCPScanRecord{Advisories: []OSVVulnerability{crit, high}}, []string{"GHSA-c", "GHSA-h"}, "critical"},
+		{"new ones among known and lower ones", &MCPScanRecord{Status: "vulnerable", Advisories: []OSVVulnerability{high}}, MCPScanRecord{Advisories: []OSVVulnerability{low, medium, high, crit}}, []string{"GHSA-c"}, "critical"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
