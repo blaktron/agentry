@@ -744,7 +744,7 @@ func TestEveryQuestionSetHashNamesEachQuestionsWording(t *testing.T) {
 	}
 	if got, want := draftHash(DefaultModel), of(cat(
 		[]string{"agentry/draft-check/v1", "provider=typesafe", model, "state=description,manifest,instruction"}, qs(DraftQuestions()),
-		[]string{"bounds=8192/16384/32768/49152", "thresholds=0.5/0.7/0.9", "flag=2", "band=0.30/0.70", "samples=3"})...); got != want {
+		[]string{"bounds=24576/16384/32768/49152", "thresholds=0.5/0.7/0.9", "flag=2", "band=0.30/0.70", "samples=3"})...); got != want {
 		t.Fatalf("draft hash is not the one spelled out:\n got %s\nwant %s", got, want)
 	}
 	if got, want := voiceHash(DefaultModel), of(cat(

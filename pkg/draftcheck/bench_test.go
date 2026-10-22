@@ -66,6 +66,9 @@ type benchVariant struct {
 	// Description replaces the fixture's description: one that gives what
 	// the draft still asks for.
 	Description string `json:"description,omitempty"`
+	// DescriptionFile, a file in the fixture's folder, replaces the
+	// description: a long one.
+	DescriptionFile string `json:"descriptionFile,omitempty"`
 	// InstructionFile, a file in the fixture's folder, replaces the
 	// instruction: one that does only part of the task.
 	InstructionFile string `json:"instructionFile,omitempty"`
@@ -122,6 +125,13 @@ func (v benchVariant) build(t *testing.T) Package {
 	}
 	if v.Description != "" {
 		p.Description = v.Description
+	}
+	if v.DescriptionFile != "" {
+		b, err := os.ReadFile(filepath.Join(benchDir, v.Fixture, v.DescriptionFile))
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.Description = strings.TrimSpace(string(b))
 	}
 	for i, f := range p.Files {
 		switch f.Path {
@@ -192,7 +202,10 @@ func TestTheDraftBenchCorpusReads(t *testing.T) {
 	// keeps a long instruction past it, the length the Drafter writes for a
 	// run with no network.
 	const preRaise = 24 << 10
-	long := 0
+	// preDescription is 8 KiB: the corpus keeps a description past it, a
+	// task told at length.
+	const preDescription = 8 << 10
+	long, longDescriptions := 0, 0
 	for _, v := range readVariants(t) {
 		if _, ok := benchTargets[v.Class]; !ok || v.What == "" {
 			t.Fatalf("%s: class %q, what %q", v.Fixture, v.Class, v.What)
@@ -210,6 +223,15 @@ func TestTheDraftBenchCorpusReads(t *testing.T) {
 			}
 		}
 		classes[v.Class]++
+		if len(p.Description) > preDescription {
+			if len(p.Description) > judge.DraftMaxDescription {
+				t.Fatalf("%s/%s: a %d-byte description is past the draft set's bound", v.Fixture, v.Class, len(p.Description))
+			}
+			if len(p.Description)+len(rd.ManifestJSON)+len(rd.Instruction) > judge.DraftMaxState {
+				t.Fatalf("%s/%s: the draft's state is past the draft set's bound", v.Fixture, v.Class)
+			}
+			longDescriptions++
+		}
 		if len(rd.Instruction) > preRaise {
 			if len(rd.Instruction) > judge.DraftMaxInstruction {
 				t.Fatalf("%s/%s: a %d-byte instruction is past the draft set's bound", v.Fixture, v.Class, len(rd.Instruction))
@@ -222,6 +244,9 @@ func TestTheDraftBenchCorpusReads(t *testing.T) {
 	}
 	if long == 0 {
 		t.Fatalf("no variant has an instruction past %d bytes", preRaise)
+	}
+	if longDescriptions < 2 {
+		t.Fatalf("%d variants have a description past %d bytes, want a good and an off-task one", longDescriptions, preDescription)
 	}
 	for c := range benchTargets {
 		if classes[c] == 0 {

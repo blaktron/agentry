@@ -249,6 +249,44 @@ func TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet(t *testing.T) {
 	}
 }
 
+// A description of up to 24 KiB, the most a client accepts for a draft's
+// task, is checked and reaches the draft set whole; one byte more is
+// refused with the bound named, and the judge is not asked.
+func TestTheDraftCheckTakesADescriptionUpTo24KiB(t *testing.T) {
+	fj := &draftJudge{}
+	env := newTestEnvWith(t, func(s *api.Server) { s.SetDraftChecker(draftcheck.New(fj)) })
+	staff := staffCaller(t, env, "dc-long-staff")
+	files := draftFiles("# Weather\nFetch the forecast and write three lines.\n")
+
+	for _, n := range []int{20 << 10, 24 << 10} {
+		desc := strings.Repeat("d", n)
+		st, b, p := checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": files})
+		if st != http.StatusOK || b.Draft.Verdict != "pass" || b.Rubric.Verdict != "pass" {
+			t.Fatalf("a %d-byte description: %d %+v %+v", n, st, b, p)
+		}
+		fj.mu.Lock()
+		last := fj.state[len(fj.state)-1]
+		fj.mu.Unlock()
+		if last["description"] != desc {
+			t.Fatalf("a %d-byte description reached the draft set as %d bytes", n, len(last["description"]))
+		}
+	}
+
+	fj.mu.Lock()
+	before := len(fj.asked)
+	fj.mu.Unlock()
+	st, _, p := checkDraft(t, env, staff, nil, map[string]any{"description": strings.Repeat("d", 24<<10+1), "files": files})
+	if st != http.StatusUnprocessableEntity || !strings.Contains(p.Detail, "24576") {
+		t.Fatalf("one byte over: %d %+v", st, p)
+	}
+	fj.mu.Lock()
+	after := len(fj.asked)
+	fj.mu.Unlock()
+	if after != before {
+		t.Fatalf("a refused description asked the judge %d times", after-before)
+	}
+}
+
 // The check answers staff by session and an admitted job credential, never
 // a token whatever its scopes, and a job's check is admitted as the check
 // op and recorded against it.

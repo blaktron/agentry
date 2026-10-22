@@ -529,6 +529,7 @@
           "tests": [
             "TestTheDraftCheckFlagsOnlyWhatTheGateHolds",
             "TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet",
+            "TestTheDraftCheckTakesADescriptionUpTo24KiB",
             "TestTheDraftCheckAnswersStaffAndAdmittedJobsOnly",
             "TestTheDraftCheckIsOffWithoutAJevJudge",
             "TestTheDraftCheckListsTheToolsTheManifestDoesNotGrant",
@@ -4567,6 +4568,7 @@
             "TestADraftQuestionAtTheLineFlagsTheDraft",
             "TestADraftPastItsBoundsOrAFailedJudgeIsNotScanned",
             "TestALongDraftedInstructionIsAskedWholeUpToTheBound",
+            "TestALongDescriptionIsAskedWholeUpToTheBound",
             "TestTheRubricReadsAPackageChunkByChunkWithItsContract",
             "TestTheRubricStateSaysWhatTheRunnerGrantsEveryRun",
             "TestTheRubricStateCarriesTheReleasesPurpose"

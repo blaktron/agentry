@@ -6250,7 +6250,7 @@ components:
       properties:
         description:
           type: string
-          maxLength: 8192
+          maxLength: 24576
           description: >-
             The person's description the draft was made from, as the
             Drafter read it. It is asked about as data, beside the draft.
