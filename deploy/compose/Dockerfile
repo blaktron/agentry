@@ -35,7 +35,10 @@ FROM ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9
 FROM debian:trixie-slim
 # git: required by the git and all roles (bare-repo hosting).
 # ca-certificates: outbound TLS — OIDC discovery, webhook delivery, S3, KMS.
+# The upgrade takes the security archive's current packages, the CA bundle
+# among them; the base image is rebuilt only now and then.
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install --no-install-recommends -y git ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 65532 nonroot \
