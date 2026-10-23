@@ -388,7 +388,7 @@
       "oneOf": [
         { "required": ["npm", "version"], "not": { "anyOf": [ { "required": ["pypi"] }, { "required": ["url"] } ] } },
         { "required": ["pypi", "version"], "not": { "anyOf": [ { "required": ["npm"] }, { "required": ["url"] } ] } },
-        { "required": ["url", "auth"], "not": { "anyOf": [ { "required": ["npm"] }, { "required": ["pypi"] }, { "required": ["version"] }, { "required": ["egress"] }, { "required": ["env"] }, { "required": ["oauth"] } ] } }
+        { "required": ["url", "auth"], "not": { "anyOf": [ { "required": ["npm"] }, { "required": ["pypi"] }, { "required": ["version"] }, { "required": ["egress"] }, { "required": ["env"] }, { "required": ["args"] }, { "required": ["oauth"] } ] } }
       ],
       "properties": {
         "npm": { "type": "string", "minLength": 1, "description": "npm package name." },
@@ -409,6 +409,18 @@
             "type": "string",
             "maxLength": 512,
             "pattern": "^[^\\p{Cc}]*$",
+            "not": { "anyOf": [ { "pattern": "\\$[A-Za-z0-9_{*#@!?$-]" }, { "allOf": [ { "pattern": "\\{\\{" }, { "pattern": "\\}\\}" } ] } ] }
+          }
+        },
+        "args": {
+          "type": "array",
+          "maxItems": 16,
+          "description": "The arguments a package server's command starts with, after the package's own entry: each one literal word, passed to the server's program as one argument with no shell. Values the runner's gateway would rewrite (as for env) are refused by pkg/manifest, as are format characters.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[^\\s\\p{Cc}]+$",
             "not": { "anyOf": [ { "pattern": "\\$[A-Za-z0-9_{*#@!?$-]" }, { "allOf": [ { "pattern": "\\{\\{" }, { "pattern": "\\}\\}" } ] } ] }
           }
         },

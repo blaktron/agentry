@@ -263,6 +263,9 @@ func validateRemoteServer(s *issues, p string, major int, srv MCPServer) {
 	if len(srv.Env) > 0 {
 		s.errf("V5", p+".env", "a remote server takes no env: it runs at its vendor")
 	}
+	if len(srv.Args) > 0 {
+		s.errf("V5", p+".args", "a remote server takes no args: it runs at its vendor")
+	}
 	if srv.OAuth != nil {
 		s.errf("V5", p+".oauth", "a remote server takes no oauth block: declare auth: oauth and its scopes")
 	}

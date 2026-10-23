@@ -320,3 +320,54 @@ func TestS2ManifestOAuthValues(t *testing.T) {
 		t.Errorf("excerpt = %q, want %q", got[1].Excerpt, want)
 	}
 }
+
+// TestS2ManifestArgs: a package server's args are read by env's two
+// rules. A credential flag's value is named, whether it follows `=` or
+// stands as the next argument; a token-shaped value is found under any
+// flag or alone; a plain flag, a short switch under a credential flag and
+// a flag after a bare credential flag are configuration. Each finding
+// names the argument's position and the value's length, never the value.
+func TestS2ManifestArgs(t *testing.T) {
+	args := []string{
+		"mcp",                              // 0: a subcommand
+		"--api-key=" + fakeHexToken()[:10], // 1: a credential flag's value
+		"--token",                          // 2: a bare credential flag...
+		"hunter22hunter",                   // 3: ...and its value
+		"--workspace=" + fakeHexToken(),    // 4: token-shaped under a plain flag
+		fakeHexToken(),                     // 5: token-shaped alone
+		"--password",                       // 6: a bare credential flag...
+		"--read-only",                      // 7: ...followed by a flag, not a value
+		"--secret-key=off",                 // 8: a short switch
+		"--log-file=/var/lib/agentry/cache/a1b2c3d4e5f6g7h8i9j0/log", // 9: a path
+	}
+	raw, err := json.Marshal(map[string]any{"capabilities": map[string]any{"mcpServers": []any{
+		map[string]any{"npm": "first", "version": "1.0.0"},
+		map[string]any{"pypi": "second", "version": "2.0.0", "args": args},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, f := range (S2Secrets{}).Run(stageContext{ctx: context.Background()}, &Input{ManifestJSON: raw}).Findings {
+		if !strings.HasPrefix(f.Scanner, "S2/args-") {
+			continue
+		}
+		key := f.Detail["key"].(string)
+		got[key] = f.Scanner
+		if f.Detail["entry"] != 1 || f.Detail["server"] != "pypi:second" || f.Severity != SevMedium {
+			t.Errorf("%s: %+v", key, f)
+		}
+		if strings.Contains(f.Excerpt, fakeHexToken()[:10]) || strings.Contains(f.Title, fakeHexToken()[:10]) || strings.Contains(f.Excerpt, "hunter22") {
+			t.Errorf("%s leaks the value: %q / %q", key, f.Title, f.Excerpt)
+		}
+	}
+	want := map[string]string{
+		"args[1]": "S2/args-secret-name",
+		"args[3]": "S2/args-secret-name",
+		"args[4]": "S2/args-token-value",
+		"args[5]": "S2/args-token-value",
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("args findings = %v, want %v", got, want)
+	}
+}

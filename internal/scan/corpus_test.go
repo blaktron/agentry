@@ -202,6 +202,7 @@ var corpusPublishesAtLow = map[string]string{
 var corpusPublishesAtMedium = func() map[string]string {
 	m := map[string]string{
 		"incident-clawhavoc":           "S8's publisher velocity is a medium campaign signal",
+		"manifest-args-token":          "S2's credential-flag and token-shaped values in a declared server's args are medium",
 		"manifest-env-token-plain-key": "S2's token-shaped value in a declared server's env is medium",
 		"manifest-env-token-unquoted":  "S2's secret-named env key and token-shaped value are medium",
 		"s3-css-hidden":                "S3's CSS-hidden heuristic is medium",

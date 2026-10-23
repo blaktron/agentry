@@ -150,3 +150,48 @@ func TestANewPackageServersLineNamesItsOwnGrants(t *testing.T) {
 		})
 	}
 }
+
+// TestAPackageServersArgsAreAskedAboutAgain: a new server's line names its
+// args, and any change to them at the same pin, a dropped argument
+// included, is a widening, since it starts a different command.
+func TestAPackageServersArgsAreAskedAboutAgain(t *testing.T) {
+	srv := func(args ...string) Capabilities {
+		return Capabilities{MCPServers: []MCPServer{{PyPI: "semgrep", Version: "1.182.0", Egress: []string{"semgrep.dev"}, Args: args}}}
+	}
+	tests := []struct {
+		name     string
+		old, new Capabilities
+		widened  []string
+	}{
+		{
+			name:    "a new server names its args",
+			new:     srv("mcp", "--read-only"),
+			widened: []string{"adds MCP server: pypi:semgrep@1.182.0 (args mcp --read-only; network egress to semgrep.dev; every tool it serves)"},
+		},
+		{
+			name: "an added argument", old: srv("mcp"), new: srv("mcp", "--allow-write"),
+			widened: []string{"changes args of MCP server pypi:semgrep@1.182.0: mcp --allow-write (was mcp)"},
+		},
+		{
+			name: "a dropped argument", old: srv("mcp", "--read-only"), new: srv("mcp"),
+			widened: []string{"changes args of MCP server pypi:semgrep@1.182.0: mcp (was mcp --read-only)"},
+		},
+		{
+			name: "args reordered", old: srv("a", "b"), new: srv("b", "a"),
+			widened: []string{"changes args of MCP server pypi:semgrep@1.182.0: b a (was a b)"},
+		},
+		{
+			name: "args taken away", old: srv("mcp"), new: srv(),
+			widened: []string{"changes args of MCP server pypi:semgrep@1.182.0: none (was mcp)"},
+		},
+		{name: "unchanged", old: srv("mcp"), new: srv("mcp")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := DiffCapabilities(tt.old, tt.new)
+			if !slices.Equal(d.Widened, tt.widened) || len(d.Narrowed) != 0 {
+				t.Fatalf("widened %q narrowed %q, want widened %q", d.Widened, d.Narrowed, tt.widened)
+			}
+		})
+	}
+}

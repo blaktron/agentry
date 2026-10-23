@@ -3844,7 +3844,8 @@
             "TestEnvSecretNamed",
             "TestS2ManifestEnv",
             "TestS2ManifestEnvWithoutFile",
-            "TestS2ManifestOAuthValues"
+            "TestS2ManifestOAuthValues",
+            "TestS2ManifestArgs"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4722,7 +4723,8 @@
           "tests": [
             "TestDiffCapabilitiesComparesAPackageServersOwnCapabilities",
             "TestAServerSecretsOptionalMarkingIsNotADiff",
-            "TestANewPackageServersLineNamesItsOwnGrants"
+            "TestANewPackageServersLineNamesItsOwnGrants",
+            "TestAPackageServersArgsAreAskedAboutAgain"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4903,7 +4905,10 @@
             "TestMCPServerEnvRefusals",
             "TestMCPServerEnvLiteralShapes",
             "TestMCPServerEnvDuplicateKeyRejected",
-            "TestMCPServerEnvIsV2Only"
+            "TestMCPServerEnvIsV2Only",
+            "TestMCPServerArgsValid",
+            "TestMCPServerArgsRefusals",
+            "TestMCPServerArgsIsV2Only"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5012,7 +5017,9 @@
             "TestV2SchemaEnvShape",
             "TestCanonicalJSONV2Env",
             "TestPersistentModeParsesAndIsKnown",
-            "TestV2SchemaModesAreTheGoSet"
+            "TestV2SchemaModesAreTheGoSet",
+            "TestV2SchemaArgsShape",
+            "TestV2SchemaRemoteServerRefusesArgs"
           ],
           "fuzz": [],
           "benchmarks": [],

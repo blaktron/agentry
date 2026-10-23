@@ -1,0 +1,10 @@
+technique: "Benign twin: a server that is a subcommand of its package's CLI, and plain flags whose values are a list, a path, a number, a timestamp and a URL, a credential named under secrets"
+version: "1.0.0"
+manifest: |
+  {"schemaVersion":"2","license":"MIT","capabilities":{"mcpServers":[{"pypi":"semgrep","version":"1.182.0","egress":["semgrep.dev"],"args":["mcp"]},{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"secrets":["GITHUB_TOKEN"],"egress":["api.github.com"],"args":["--stdio","--read-only","--toolsets=repos,issues","--log-file=/var/lib/agentry/cache/code-check/server.log","--token-budget=120000","--since=2026-09-14T00:00:00Z","--api-url=https://api.github.com/graphql"]}]}}
+expect: []
+forbid:
+  - S2/args-secret-name
+  - S2/args-token-value
+  - S2/generic-assignment
+expectClean: true

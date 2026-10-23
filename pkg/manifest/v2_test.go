@@ -696,3 +696,105 @@ func TestV2SchemaModesAreTheGoSet(t *testing.T) {
 		t.Fatalf("schema modes enum = %v, want %v", got, want)
 	}
 }
+
+// TestV2SchemaArgsShape pins the mcpServer.args schema beside the Go
+// rules: the count and length caps are the constants, an argument is one
+// word with no control character, and the literal rule is env's. (Format
+// characters and non-ASCII spaces are Go's alone; TestMCPServerArgsRefusals
+// holds them.)
+func TestV2SchemaArgsShape(t *testing.T) {
+	raw, err := os.ReadFile("../../schemas/agent-manifest-2.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs struct {
+			MCPServer struct {
+				Properties struct {
+					Args struct {
+						Type     string `json:"type"`
+						MaxItems int    `json:"maxItems"`
+						Items    struct {
+							Type      string `json:"type"`
+							MinLength int    `json:"minLength"`
+							MaxLength int    `json:"maxLength"`
+							Pattern   string `json:"pattern"`
+							Not       struct {
+								AnyOf []struct {
+									Pattern string `json:"pattern"`
+									AllOf   []struct {
+										Pattern string `json:"pattern"`
+									} `json:"allOf"`
+								} `json:"anyOf"`
+							} `json:"not"`
+						} `json:"items"`
+					} `json:"args"`
+				} `json:"properties"`
+			} `json:"mcpServer"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	args := schema.Defs.MCPServer.Properties.Args
+	if args.Type != "array" || args.MaxItems != MaxMCPServerArgs {
+		t.Fatalf("args: type %q, maxItems %d (want array, %d)", args.Type, args.MaxItems, MaxMCPServerArgs)
+	}
+	it := args.Items
+	if it.Type != "string" || it.MinLength != 1 || it.MaxLength != MaxMCPServerArgLen {
+		t.Fatalf("args item: type %q, length %d..%d (want string, 1..%d)", it.Type, it.MinLength, it.MaxLength, MaxMCPServerArgLen)
+	}
+	wordRE := regexp.MustCompile(it.Pattern)
+	for _, v := range []string{"mcp", "--toolsets=repos,issues", "50$"} {
+		if !wordRE.MatchString(v) {
+			t.Fatalf("args pattern %q refuses %q", it.Pattern, v)
+		}
+	}
+	for _, v := range []string{"a b", "a\tb", "a\nb", "a\x01b", ""} {
+		if wordRE.MatchString(v) {
+			t.Fatalf("args pattern %q accepts %q", it.Pattern, v)
+		}
+	}
+	refused := it.Not.AnyOf
+	if len(refused) != 2 || refused[0].Pattern != envExpandRE.String() || len(refused[1].AllOf) != 2 {
+		t.Fatalf("args item not/anyOf = %+v (want [%s, allOf [{{ }}]])", refused, envExpandRE)
+	}
+}
+
+// TestV2SchemaRemoteServerRefusesArgs: the remote branch of mcpServer's
+// oneOf lists args among the fields a remote server may not carry.
+func TestV2SchemaRemoteServerRefusesArgs(t *testing.T) {
+	raw, err := os.ReadFile("../../schemas/agent-manifest-2.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs struct {
+			MCPServer struct {
+				OneOf []struct {
+					Required []string `json:"required"`
+					Not      struct {
+						AnyOf []struct {
+							Required []string `json:"required"`
+						} `json:"anyOf"`
+					} `json:"not"`
+				} `json:"oneOf"`
+			} `json:"mcpServer"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	for _, branch := range schema.Defs.MCPServer.OneOf {
+		if !slices.Contains(branch.Required, "url") {
+			continue
+		}
+		for _, not := range branch.Not.AnyOf {
+			if slices.Equal(not.Required, []string{"args"}) {
+				return
+			}
+		}
+		t.Fatalf("the remote branch does not refuse args: %+v", branch.Not.AnyOf)
+	}
+	t.Fatal("no remote branch in mcpServer.oneOf")
+}

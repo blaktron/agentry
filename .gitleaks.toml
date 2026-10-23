@@ -13,12 +13,14 @@ paths = [
   # A placeholder helm value in an acceptance script.
   '''scripts/acceptance/helm\.sh''',
   # Attack-corpus fixtures that carry a fake credential on purpose: the
-  # scanner must find it (manifest-env-*), or must not be fooled by a
+  # scanner must find it (manifest-env-*, manifest-args-token), or must not be fooled by a
   # credential-shaped token in benign text (s3-encoded-blob-benign).
   '''testdata/attack-corpus/manifest-env-secret/agent\.yaml''',
   '''testdata/attack-corpus/manifest-env-secret/expected\.yaml''',
   '''testdata/attack-corpus/manifest-env-token-unquoted/agent\.yaml''',
   '''testdata/attack-corpus/manifest-env-token-unquoted/expected\.yaml''',
+  '''testdata/attack-corpus/manifest-args-token/agent\.yaml''',
+  '''testdata/attack-corpus/manifest-args-token/expected\.yaml''',
   '''testdata/attack-corpus/s3-encoded-blob-benign/readme\.md''',
   # A generated credential-shaped value behind a placeholder of the same rule
   # on one line: the scanner must find the second value.

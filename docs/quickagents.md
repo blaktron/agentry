@@ -712,6 +712,10 @@ capabilities:
     - pypi: mcp-server-fetch
       version: 0.6.2
       egress: ["*"]
+    - pypi: semgrep
+      version: 1.182.0
+      args: [mcp]                  # the server is a subcommand of the package's CLI
+      egress: [semgrep.dev]
 ```
 
 Each entry names exactly one package — `npm:` or `pypi:` — and an **exact
@@ -767,6 +771,24 @@ literal value"); a trailing `$` or a single brace pair is literal and
 passes. The runner refuses the same shapes at plan time, and with them an
 empty value and the `@@` marker of its own run placeholders.
 
+**`args`** on a package server entry are the arguments its command
+starts with, after the package's own entry point: `[mcp]` for a server that
+is a subcommand of a larger command-line tool, or a flag such as
+`--read-only`. Each argument reaches the server's program as one argument,
+as written: there is no shell, so nothing is split, quoted or substituted.
+The rules (a v2 field): at most 16 arguments per server; each one word of at
+most 256 characters, not empty, with no whitespace, control or format
+character; and literal, by the same rule as `env` values (a `$` the gateway
+would expand, or a `{{ }}` template, is refused). A remote server takes no
+`args`. Like `env`, they are written in the manifest, so they are in the
+release diff, the archive digest and the review; the install consent names
+them, and any change to them at the same pin (an argument added, dropped or
+moved) asks for consent again, since it starts a different command. A
+credential does not belong here: the secret scanner reads each argument, and
+a value after a flag named like a credential (`--api-key=…`, or the argument
+after a bare `--token`), or a token-shaped value under any flag, is a medium
+finding, as for `env`. Declare it under `secrets` instead.
+
 **Declared servers are scanned too.** At submission, stage S7 checks each
 declared package version against the OSV vulnerability database and reports
 every advisory as a finding, CVE ids and fixed versions included. A
@@ -817,7 +839,7 @@ capabilities:
   at most 512 characters). Its host counts as network: a namespace's
   `blockedCapabilities: [network]` refuses it, and a new host in an update
   is a low `S9/new-egress` finding. The address's host is the server's one network
-  destination, so it takes no `version`, `egress`, `env` or `oauth`.
+  destination, so it takes no `version`, `egress`, `env`, `args` or `oauth`.
   `auth` is required. `auth: secret` sends exactly one declared secret as
   the bearer header, `auth: none` sends nothing, and `auth: oauth` needs
   the person's **connection**.

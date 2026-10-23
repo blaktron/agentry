@@ -146,8 +146,64 @@ func s2ManifestEnv(in *Input, lineSeen map[string]bool) []Finding {
 	}
 	for i, srv := range m.Capabilities.MCPServers {
 		findings = append(findings, s2ManifestOAuth(i, srv)...)
+		findings = append(findings, s2ManifestArgs(i, srv)...)
 	}
 	return findings
+}
+
+// s2ManifestArgs reads a package server's args by env's two rules, an
+// argument being a value its program receives as surely as an env one:
+// a flag named like a credential carrying a value (`--api-key=…`, or the
+// next argument after a bare `--api-key`), and a token-shaped argument or
+// flag value under any name.
+func s2ManifestArgs(entry int, srv manifest.MCPServer) []Finding {
+	var out []Finding
+	for j, arg := range srv.Args {
+		key := "args[" + strconv.Itoa(j) + "]"
+		flag, value, hasValue := strings.Cut(arg, "=")
+		if !hasValue || !strings.HasPrefix(flag, "-") {
+			flag, value = "", arg
+		}
+		if flag == "" && j > 0 && !strings.HasPrefix(arg, "-") {
+			if prev := srv.Args[j-1]; !strings.Contains(prev, "=") && argSecretFlag(prev) {
+				flag = prev
+			}
+		}
+		switch {
+		case flag != "" && argSecretFlag(flag) && len(value) >= envSecretNamedMinLen:
+			out = append(out, argFinding("args-secret-name",
+				"Possible secret in the args of MCP server "+srv.SourceID()+" ("+key+"): a credential flag's value; declare it under secrets",
+				srv, entry, key, len(value)))
+		case envTokenShaped(value):
+			out = append(out, argFinding("args-token-value",
+				"Possible secret in the args of MCP server "+srv.SourceID()+" ("+key+"): token-shaped value; an argument is literal, a credential is a secret",
+				srv, entry, key, len(value)))
+		}
+	}
+	return out
+}
+
+// argSecretFlag reports whether an argument is a flag named like a
+// credential (`--api-key`, `--token`), by env's suffixes with the flag's
+// dashes read as underscores.
+func argSecretFlag(arg string) bool {
+	name, _, _ := strings.Cut(arg, "=")
+	if !strings.HasPrefix(name, "-") {
+		return false
+	}
+	return envSecretNamed(strings.ReplaceAll(strings.TrimLeft(name, "-"), "-", "_"))
+}
+
+// argFinding shapes an args finding: the argument's position and its
+// value's length, never the value (as envFinding).
+func argFinding(rule, title string, srv manifest.MCPServer, entry int, key string, n int) Finding {
+	return Finding{
+		Scanner: "S2/" + rule, Severity: SevMedium, Confidence: ConfMedium,
+		Title:    title,
+		Excerpt:  key + ": " + strings.Repeat("*", 8) + " (" + strconv.Itoa(n) + " characters)",
+		Detail:   map[string]any{"rule": rule, "server": srv.SourceID(), "key": key, "entry": entry},
+		Taxonomy: []string{"LLM03"},
+	}
 }
 
 // oauthFieldRE splits a template or a value into the runs an author
