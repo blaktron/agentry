@@ -162,7 +162,11 @@ credential-named key: both manifest-pass findings), `manifest-env-token-plain-ke
 benign twins `manifest-env-secret-benign` (the credential named under
 `secrets`) and `manifest-env-config-benign` (long configuration values — a
 URL, a path, a timezone, a model name, a timestamp, a digest, a number, a
-mode, an id — under plain keys). The two token fixtures cannot carry a
+mode, an id — under plain keys). A declared package server's `args` are
+read the same way: `manifest-args-token` (a value after a bare credential
+flag, and a token-shaped value under a plain flag: both findings) and its twin
+`manifest-args-benign` (a subcommand, and plain flags whose values are a
+list, a path, a number, a timestamp and a URL). The three token fixtures cannot carry a
 self-evident placeholder, since the shape is what the rule reads; their
 values were generated for the corpus.
 

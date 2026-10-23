@@ -1,0 +1,9 @@
+technique: "A declared server's args carry a credential: the value after a bare credential flag, and a token-shaped flag value under a plain name (S2's manifest pass). Both values were generated for the corpus and are no credential."
+version: "1.0.0"
+manifest: |
+  {"schemaVersion":"2","license":"MIT","capabilities":{"mcpServers":[{"npm":"github-mcp-server-js","version":"0.1.7","tools":["list_issues"],"egress":["api.github.com"],"args":["--stdio","--api-key","poYeULbeQaLs41SdWWhwPLTja99aVDmPY1YfFtVe","--workspace=uj7ltueMnG2ph1VO4jrUWP9vkXnvyZHDDnF8"]}]}}
+expect:
+  - S2/args-secret-name
+  - S2/args-token-value
+forbid: []
+expectClean: false

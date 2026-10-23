@@ -7,6 +7,7 @@ package manifest
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -455,5 +456,85 @@ func TestMCPServerEnvIsV2Only(t *testing.T) {
 `)))
 	if !strings.Contains(text, "env is a v2 field") {
 		t.Fatalf("v1 manifest accepted env:\n%s", text)
+	}
+}
+
+// TestMCPServerArgsValid: a package server's args ride the entry in order,
+// and the limits admit their exact size.
+func TestMCPServerArgsValid(t *testing.T) {
+	doc := mcpManifestV2(`    - pypi: semgrep
+      version: 1.182.0
+      egress: [semgrep.dev]
+      args: [mcp]
+    - npm: server-x
+      version: 1.0.0
+      args: [--stdio, "--toolsets=repos,issues", --price=50$, "--note={b}"]
+`)
+	if blocking := Blocking(issuesFor(t, doc)); len(blocking) > 0 {
+		t.Fatalf("valid args rejected: %v", blocking)
+	}
+	m, _ := Parse([]byte(doc))
+	if got := m.Capabilities.MCPServers[1].Args; !slices.Equal(got, []string{"--stdio", "--toolsets=repos,issues", "--price=50$", "--note={b}"}) {
+		t.Fatalf("args = %q", got)
+	}
+
+	full := make([]string, MaxMCPServerArgs)
+	for i := range full {
+		full[i] = fmt.Sprintf("--a%d", i)
+	}
+	for name, yaml := range map[string]string{
+		"args at the cap":                          "    - npm: server-x\n      version: 1.0.0\n      args: [" + strings.Join(full, ", ") + "]\n",
+		"an argument of the cap":                   "    - npm: server-x\n      version: 1.0.0\n      args: [\"" + strings.Repeat("x", MaxMCPServerArgLen) + "\"]\n",
+		"an argument of the cap in two-byte runes": "    - npm: server-x\n      version: 1.0.0\n      args: [\"" + strings.Repeat("\xc3\xa9", MaxMCPServerArgLen) + "\"]\n",
+	} {
+		if blocking := blockingText(issuesFor(t, mcpManifestV2(yaml))); blocking != "" {
+			t.Fatalf("%s refused:\n%s", name, blocking)
+		}
+	}
+}
+
+// TestMCPServerArgsRefusals: one failing fixture per rule, each naming the
+// argument's position.
+func TestMCPServerArgsRefusals(t *testing.T) {
+	tooMany := make([]string, MaxMCPServerArgs+1)
+	for i := range tooMany {
+		tooMany[i] = "a"
+	}
+	pkg := "    - npm: server-x\n      version: 1.0.0\n      args: "
+	cases := map[string]struct {
+		yaml string
+		want string
+	}{
+		"too many":            {pkg + "[" + strings.Join(tooMany, ", ") + "]\n", "capabilities.mcpServers[0].args: at most 16 args may be declared per server (got 17)"},
+		"empty":               {pkg + "[mcp, \"\"]\n", "capabilities.mcpServers[0].args[1]: an argument must not be empty"},
+		"too long":            {pkg + "[\"" + strings.Repeat("x", MaxMCPServerArgLen+1) + "\"]\n", "capabilities.mcpServers[0].args[0]: an argument must be at most 256 characters (got 257)"},
+		"a space":             {pkg + "[\"--title=a b\"]\n", "capabilities.mcpServers[0].args[0]: an argument must be one word with no whitespace, control or format character (found U+0020)"},
+		"a newline":           {pkg + "[\"a\\nb\"]\n", "(found U+000A)"},
+		"a control character": {pkg + "[\"a\\x01b\"]\n", "(found U+0001)"},
+		"a C1 control":        {pkg + "[\"a\\u0085b\"]\n", "(found U+0085)"},
+		"a format character":  {pkg + "[\"a\\u202eb\"]\n", "(found U+202E)"},
+		"a dollar name":       {pkg + "[\"--token=$GITHUB_TOKEN\"]\n", "capabilities.mcpServers[0].args[0]: argument contains a $"},
+		"a dollar brace":      {pkg + "[\"${B}\"]\n", "argument contains a $"},
+		"a template":          {pkg + "[\"x{{y}}z\"]\n", "argument contains a $ the runner's gateway would expand, or a {{ }} template; declare a literal argument"},
+		"on a remote server":  {"    - url: https://mcp.example.com/mcp\n      auth: none\n      args: [mcp]\n", "capabilities.mcpServers[0].args: a remote server takes no args: it runs at its vendor"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			text := blockingText(issuesFor(t, mcpManifestV2(tc.yaml)))
+			if !strings.Contains(text, tc.want) {
+				t.Fatalf("expected a blocking issue containing %q, got:\n%s", tc.want, text)
+			}
+		})
+	}
+}
+
+// TestMCPServerArgsIsV2Only: a v1 document may not carry args.
+func TestMCPServerArgsIsV2Only(t *testing.T) {
+	text := blockingText(issuesFor(t, mcpManifest(`    - npm: server-x
+      version: 1.0.0
+      args: [mcp]
+`)))
+	if !strings.Contains(text, "args is a v2 field") {
+		t.Fatalf("v1 manifest accepted args:\n%s", text)
 	}
 }
