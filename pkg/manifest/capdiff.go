@@ -290,6 +290,9 @@ func describeNewServer(srv MCPServer) string {
 		}
 		parts = append(parts, "env "+strings.Join(pairs, ", "))
 	}
+	if len(srv.Args) > 0 {
+		parts = append(parts, "args "+strings.Join(srv.Args, " "))
+	}
 	if srv.IsRemote() {
 		a := "auth " + string(srv.Auth)
 		if len(srv.Scopes) > 0 {
@@ -331,6 +334,15 @@ func describePackageServerOwnCaps(srv MCPServer) []string {
 	return parts
 }
 
+// describeArgs is a server's args as its consent line names them: the
+// words in order, or "none".
+func describeArgs(args []string) string {
+	if len(args) == 0 {
+		return "none"
+	}
+	return strings.Join(args, " ")
+}
+
 func describeOAuth(o *MCPOAuth) string {
 	s := "issuer " + o.Issuer
 	if len(o.Scopes) > 0 {
@@ -356,6 +368,13 @@ func (d *CapabilityDiff) appendServerDiff(id string, prev, next MCPServer) {
 		if _, still := next.Env[k]; !still {
 			d.Narrowed = append(d.Narrowed, fmt.Sprintf("drops env %s of MCP server %s", k, id))
 		}
+	}
+
+	// A package server's args: any change starts a different command, so
+	// it is asked again whichever way it goes, an argument dropped
+	// included (it may have been the one that kept the server read-only).
+	if !slices.Equal(prev.Args, next.Args) {
+		d.Widened = append(d.Widened, fmt.Sprintf("changes args of MCP server %s: %s (was %s)", id, describeArgs(next.Args), describeArgs(prev.Args)))
 	}
 
 	// A remote server's auth: any change is a different sign-in, asked

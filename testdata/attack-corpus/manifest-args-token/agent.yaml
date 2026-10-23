@@ -1,0 +1,16 @@
+schemaVersion: "2"
+name: issue-digest
+namespace: acme
+modes: [autonomous]
+version: 1.0.0
+summary: "Summarizes the open issues of one repository"
+license: MIT
+capabilities:
+  mcpServers:
+    - npm: github-mcp-server-js
+      version: 0.1.7
+      tools: [list_issues]
+      egress: [api.github.com]
+      args: [--stdio, --api-key, poYeULbeQaLs41SdWWhwPLTja99aVDmPY1YfFtVe, --workspace=uj7ltueMnG2ph1VO4jrUWP9vkXnvyZHDDnF8]
+publish:
+  include: [agent.yaml, AGENT.md]

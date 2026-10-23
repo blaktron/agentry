@@ -492,6 +492,12 @@ type MCPServer struct {
 	// that is also a declared secret is refused, so a value is either
 	// configuration in the contract or a secret from the profile.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+	// Args are the arguments a package server's command starts with (v2,
+	// V5), after the package's own entry: `[mcp]` for a server that is a
+	// subcommand of a larger CLI. Each is one literal word, written in the
+	// manifest so it is in the diff, the digest and the review; a remote
+	// server takes none.
+	Args []string `yaml:"args,omitempty" json:"args,omitempty"`
 	// OAuth gives a package server an OAuth sign-in (v2): the person's
 	// connection's access token reaches the server through Env or
 	// Files, rendered by the runner, and never a refresh token or a

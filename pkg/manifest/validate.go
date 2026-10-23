@@ -769,6 +769,13 @@ const (
 	MaxMCPServerEnvValue   = 512
 )
 
+// MaxMCPServerArgs caps the arguments one declared package server starts
+// with, and MaxMCPServerArgLen the length of one argument (V5, v2).
+const (
+	MaxMCPServerArgs   = 16
+	MaxMCPServerArgLen = 256
+)
+
 // envExpandRE matches what the runner's gateway would rewrite in a
 // declared env value: a `$` followed by a name character, `{` or a
 // special shell parameter — the shapes os.Expand substitutes.
@@ -887,6 +894,7 @@ func validateMCPServers(s *issues, m *Manifest) {
 			}
 		}
 		validateMCPServerEnv(s, p, m.Major(), srv, agentSecrets)
+		validateMCPServerArgs(s, p, m.Major(), srv)
 		validateMCPOAuth(s, p, m.Major(), srv, agentSecrets)
 	}
 }
@@ -1013,6 +1021,46 @@ func validateMCPServerEnv(s *issues, p string, major int, srv MCPServer, agentSe
 		}
 		if !LiteralEnvValue(value) {
 			s.errf("V5", np, "value contains a $ the runner's gateway would expand, or a {{ }} template; declare a literal value")
+		}
+	}
+}
+
+// validateMCPServerArgs checks a package server's args: a v2 field of at
+// most MaxMCPServerArgs arguments, each one non-empty word of at most
+// MaxMCPServerArgLen characters with no whitespace, control or format
+// character, and literal by LiteralEnvValue, since the runner's gateway
+// expands a command's arguments as it does a server's env. A word is what
+// the server's program receives as one argument: there is no shell, so
+// nothing is split, quoted or substituted on the way.
+func validateMCPServerArgs(s *issues, p string, major int, srv MCPServer) {
+	if len(srv.Args) == 0 {
+		return
+	}
+	ap := p + ".args"
+	if major != 2 {
+		s.errf("V1", ap, "args is a v2 field; set schemaVersion: 2")
+		return
+	}
+	if len(srv.Args) > MaxMCPServerArgs {
+		s.errf("V5", ap, "at most %d args may be declared per server (got %d)", MaxMCPServerArgs, len(srv.Args))
+	}
+	for j, arg := range srv.Args {
+		jp := fmt.Sprintf("%s[%d]", ap, j)
+		if arg == "" {
+			s.errf("V5", jp, "an argument must not be empty")
+			continue
+		}
+		if n := utf8.RuneCountInString(arg); n > MaxMCPServerArgLen {
+			s.errf("V5", jp, "an argument must be at most %d characters (got %d)", MaxMCPServerArgLen, n)
+		}
+		for _, r := range arg {
+			if unicode.IsSpace(r) || unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+				s.errf("V5", jp, "an argument must be one word with no whitespace, control or format character (found %U)", r)
+				break
+			}
+		}
+		if !LiteralEnvValue(arg) {
+			s.errf("V5", jp, "argument contains a $ the runner's gateway would expand, or a {{ }} template; declare a literal argument")
 		}
 	}
 }
