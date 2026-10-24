@@ -972,7 +972,7 @@ of `receipts/applink.log`, cut at 4 KiB.
 | Assistant and Agentry Helper | `registry_search`, `quickagent_show`, `quickagent_install`, `quickagent_run`, `run_result`, `installed_list`, `schedule_add`, `schedule_list`, `schedule_pause`, `schedule_remove`, `settings_open`, `docs_read` | Agentry Desktop, each through the application's own operation and consent |
 
 The Assistant lists every tool Agentry Helper does, so it can do whatever the
-Helper can (CLI v0.6.183 and Agentry Desktop 0.6.159 or later). Agentry
+Helper can (CLI v0.6.183 and Agentry Desktop 0.6.160 or later). Agentry
 Desktop answers those tools for each agent in its own name: a dialog names
 the Assistant by its title, then the name it goes by. A run takes files from
 that agent's own share folder, and a run the person agreed to for one agent
