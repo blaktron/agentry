@@ -146,22 +146,23 @@ nothing, and write no ledger line.
 A run is created with the caps of the payer's tier, and the sandbox host
 gives them to the CLI as its `--timeout` and `--max-turns`.
 
-| Tier | Wall time | Turns | Tokens | Credits held |
-|---|---|---|---|---|
-| Standard | 300 s | 20 | 500,000 | 20 |
-| Pro | 900 s | 60 | 5,000,000 | 200 |
-| Business | Pro's | Pro's | Pro's | 200 |
-| Enterprise | Pro's | Pro's | Pro's | 200 |
+| Tier | Wall time | Turns | Credits held |
+|---|---|---|---|
+| Standard | 300 s | 20 | 20 |
+| Pro | 900 s | 60 | 200 |
+| Business | Pro's | Pro's | 200 |
+| Enterprise | Pro's | Pro's | 200 |
+
+Each tier also has a token cap, set in the deployment's configuration.
 
 Those numbers are a deployment's configuration, not constants:
 `AGENTRY_RUNS_CAPS_STANDARD`, `AGENTRY_RUNS_CAPS_PRO`,
 `AGENTRY_RUNS_CAPS_BUSINESS` and `AGENTRY_RUNS_CAPS_ENTERPRISE` are
 `seconds,turns,tokens` — the organization tiers take Pro's numbers unless a
 deployment sets them apart, since a member has everything Pro has — and
-`AGENTRY_RUNS_INPUT_TOKENS_PER_CREDIT` (50,000) and
-`AGENTRY_RUNS_OUTPUT_TOKENS_PER_CREDIT` (25,000) are the two rates the hold
-and the settlement are computed at: 1,000 credits buy about US$5 of
-inference at US$0.10 a million input tokens and US$0.20 a million output.
+`AGENTRY_RUNS_INPUT_TOKENS_PER_CREDIT` and
+`AGENTRY_RUNS_OUTPUT_TOKENS_PER_CREDIT` are the two rates the hold and the
+settlement are computed at, each the tokens one credit buys.
 `AGENTRY_RUNS_TOKENS_PER_CREDIT` is not a setting: a deployment that sets it
 is stopped at start-up with a message naming the two, as is one that sets a
 zero rate, an empty cap or a zero timeout, rather than running with a price
@@ -1005,7 +1006,7 @@ price (`AGENTRY_RUNS_DRAFT_SEARCHES`, 10, at
 settle inside it, under its own ledger reasons (`draft_hold`, then `draft`
 and `draft_release`, or `draft_refund`). Its caps are
 `AGENTRY_RUNS_DRAFT_SECONDS` (1,800 s), `AGENTRY_RUNS_DRAFT_MAX_TURNS` (300)
-and `AGENTRY_RUNS_DRAFT_MAX_TOKENS` (5,000,000). Unlike a build's, the token
+and `AGENTRY_RUNS_DRAFT_MAX_TOKENS`. Unlike a build's, the token
 cap is not what the hold buys: a draft may use more than it is charged for,
 and what it uses past its hold is the platform's cost.
 The status route's `draft.tokenCredits` (39, the
@@ -1612,12 +1613,12 @@ destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
 
 | Variable | Default | What |
 |---|---|---|
-| `AGENTRY_RUNS_CAPS_STANDARD` | `300,20,500000` | the Standard tier's seconds, turns, tokens |
-| `AGENTRY_RUNS_CAPS_PRO` | `900,60,5000000` | the Pro tier's seconds, turns, tokens |
+| `AGENTRY_RUNS_CAPS_STANDARD` | 300 seconds, 20 turns and the deployment's token cap | the Standard tier's seconds, turns, tokens |
+| `AGENTRY_RUNS_CAPS_PRO` | 900 seconds, 60 turns and the deployment's token cap | the Pro tier's seconds, turns, tokens |
 | `AGENTRY_RUNS_CAPS_BUSINESS` | Pro's | the Business tier's seconds, turns, tokens |
 | `AGENTRY_RUNS_CAPS_ENTERPRISE` | Pro's | the Enterprise tier's seconds, turns, tokens |
-| `AGENTRY_RUNS_INPUT_TOKENS_PER_CREDIT` | `50000` | the input tokens a credit buys |
-| `AGENTRY_RUNS_OUTPUT_TOKENS_PER_CREDIT` | `25000` | the output tokens a credit buys; a run's hold is its token cap at this rate |
+| `AGENTRY_RUNS_INPUT_TOKENS_PER_CREDIT` | the deployment's | the input tokens a credit buys |
+| `AGENTRY_RUNS_OUTPUT_TOKENS_PER_CREDIT` | the deployment's | the output tokens a credit buys; a run's hold is its token cap at this rate |
 | `AGENTRY_RUNS_BUILD_CREDITS` | `201` | what a knowledge build holds and the most it costs, its scan's 1 credit included; the rest buys its token cap at the input rate |
 | `AGENTRY_RUNS_BUILD_SECONDS_STANDARD` | `900` | a knowledge build's wall time on Standard |
 | `AGENTRY_RUNS_BUILD_SECONDS_{PRO,BUSINESS,ENTERPRISE}` | `3600` | a knowledge build's wall time on the tiers above |
@@ -1625,7 +1626,7 @@ destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
 | `AGENTRY_RUNS_BUILD_SEARCHES` | `30` | the web searches the registry brokers for one knowledge build |
 | `AGENTRY_RUNS_BUILD_PAGES` | `60` | the pages AI Review reads for one knowledge build |
 | `AGENTRY_RUNS_DRAFT_CREDITS` | `40` | what a hosted draft holds, and the most it costs the account |
-| `AGENTRY_RUNS_DRAFT_MAX_TOKENS` | `5000000` | a hosted draft's token cap; the host stops it at this cap's price at the output rate, and what it uses past its hold is the platform's |
+| `AGENTRY_RUNS_DRAFT_MAX_TOKENS` | the deployment's | a hosted draft's token cap; the host stops it at this cap's price at the output rate, and what it uses past its hold is the platform's |
 | `AGENTRY_RUNS_DRAFT_SEARCHES` | `10` | the web searches the registry brokers for one draft |
 | `AGENTRY_RUNS_DRAFT_SEARCH_CREDITS` | `1` | what one search costs a draft |
 | `AGENTRY_RUNS_DRAFT_PAGES` | `60` | the pages AI Review reads for one draft |
