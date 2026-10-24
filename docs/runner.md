@@ -968,7 +968,16 @@ of `receipts/applink.log`, cut at 4 KiB.
 | Agent | Tools | Answered by |
 |---|---|---|
 | Assistant | `self_configure` (`name`, `personality`) | the supervisor: saves the name and personality and nothing else; an unknown argument refuses the call |
-| Agentry Helper | `registry_search`, `quickagent_show`, `quickagent_install`, `quickagent_run`, `run_result`, `installed_list`, `schedule_add`, `schedule_list`, `schedule_pause`, `schedule_remove`, `settings_open`, `docs_read` | Agentry Desktop, each through the application's own operation and consent |
+| Assistant | `task_add`, `task_list`, `task_update`, `task_remove` | the supervisor: keeps the agent's own tasks, which its heartbeat fires |
+| Assistant and Agentry Helper | `registry_search`, `quickagent_show`, `quickagent_install`, `quickagent_run`, `run_result`, `installed_list`, `schedule_add`, `schedule_list`, `schedule_pause`, `schedule_remove`, `settings_open`, `docs_read` | Agentry Desktop, each through the application's own operation and consent |
+
+The Assistant lists every tool Agentry Helper does, so it can do whatever the
+Helper can (CLI v0.6.183 and Agentry Desktop 0.6.160 or later). Agentry
+Desktop answers those tools for each agent in its own name: a dialog names
+the Assistant by its title, then the name it goes by. A run takes files from
+that agent's own share folder, and a run the person agreed to for one agent
+is asked again for another. Run from the CLI alone, with no Agentry Desktop,
+these tools answer that only Agentry Desktop answers them.
 
 **Where the engine's daemon runs in a virtual machine** (Docker Desktop,
 Colima, a podman machine), a socket on this computer cannot be bound into a
