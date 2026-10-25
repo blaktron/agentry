@@ -858,8 +858,7 @@ capabilities:
   name and exact version and the very same `oauth` block, so a release that
   changes the version, a scope, a file or an env entry of that block is not
   vetted and gets no Agentry app. The registry lists its connectors at
-  `GET /api/v1/connectors`; today they are GitHub's and Asana's own remote
-  servers, used for hosted runs.
+  `GET /api/v1/connectors`.
 - **An `oauth` block on a package server** names the authorization server
   (`issuer`, `https://`), the `scopes` consent asks for, and how the access
   token reaches the server:

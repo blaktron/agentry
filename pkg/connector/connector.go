@@ -82,11 +82,18 @@ type Server struct {
 	Package *Package `yaml:"package,omitempty" json:"package,omitempty"`
 }
 
+// Ecosystem is the package registry a package server is installed from.
+type Ecosystem string
+
+const (
+	EcosystemNPM  Ecosystem = "npm"
+	EcosystemPyPI Ecosystem = "pypi"
+)
+
 // Package is a vetted package server.
 type Package struct {
-	// Ecosystem is npm or pypi.
-	Ecosystem string `yaml:"ecosystem" json:"ecosystem"`
-	Name      string `yaml:"name" json:"name"`
+	Ecosystem Ecosystem `yaml:"ecosystem" json:"ecosystem"`
+	Name      string    `yaml:"name" json:"name"`
 	// Version is exact: a newer version is not vetted until it is listed.
 	Version string `yaml:"version" json:"version"`
 	// OAuth is the whole oauth block a release must declare.
@@ -111,15 +118,53 @@ func (c Connector) Vets(server manifest.MCPServer) bool {
 }
 
 // underAddress reports whether addr is base or an address under it: https,
-// the same host, no user information, and the same path or one below it.
+// the same host (ASCII letters compared without case, any other character
+// refused), no user information, no "." or ".." path segment (encoded or
+// not, since a server that resolves them would serve an address outside
+// base), and the same path or one below it.
 func underAddress(addr, base string) bool {
 	u, err := url.Parse(addr)
 	b, berr := url.Parse(base)
-	if err != nil || berr != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, b.Host) || u.User != nil {
+	if err != nil || berr != nil || u.Scheme != "https" || !sameASCIIHost(u.Host, b.Host) || u.User != nil || hasDotSegment(u.Path) {
 		return false
 	}
 	p, want := strings.TrimRight(u.Path, "/"), strings.TrimRight(b.Path, "/")
 	return p == want || strings.HasPrefix(p, want+"/")
+}
+
+// sameASCIIHost compares two hosts letter by letter, ignoring the case of
+// ASCII letters alone, so no Unicode case folding can make another name
+// equal to a listed one.
+func sameASCIIHost(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		x, y := a[i], b[i]
+		if x >= 0x80 || y >= 0x80 {
+			return false
+		}
+		if 'A' <= x && x <= 'Z' {
+			x += 'a' - 'A'
+		}
+		if 'A' <= y && y <= 'Z' {
+			y += 'a' - 'A'
+		}
+		if x != y {
+			return false
+		}
+	}
+	return true
+}
+
+// hasDotSegment reports whether a decoded path holds a "." or ".." segment.
+func hasDotSegment(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "." || seg == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 // is reports whether server is this package, at this version, with this
@@ -129,11 +174,11 @@ func (p Package) is(server manifest.MCPServer) bool {
 		return false
 	}
 	switch p.Ecosystem {
-	case "npm":
+	case EcosystemNPM:
 		if server.NPM != p.Name || server.PyPI != "" {
 			return false
 		}
-	case "pypi":
+	case EcosystemPyPI:
 		if server.PyPI != p.Name || server.NPM != "" {
 			return false
 		}
@@ -272,7 +317,7 @@ func (c Connector) validate() error {
 			return errors.New("a server is either a remote address or a package")
 		case s.Remote != "" && !plainHTTPS(s.Remote):
 			return fmt.Errorf("the address %q is not a plain https address", s.Remote)
-		case s.Package != nil && s.Package.Ecosystem != "npm" && s.Package.Ecosystem != "pypi":
+		case s.Package != nil && s.Package.Ecosystem != EcosystemNPM && s.Package.Ecosystem != EcosystemPyPI:
 			return fmt.Errorf("unknown ecosystem %q", s.Package.Ecosystem)
 		case s.Package != nil && (s.Package.Name == "" || s.Package.Version == ""):
 			return errors.New("a package needs its name and exact version")

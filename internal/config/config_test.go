@@ -732,8 +732,8 @@ func TestConnectorPublicClients(t *testing.T) {
 	if got := cfg.Connectors.PublicClients["microsoft-365"]; got != "from-the-file" {
 		t.Fatalf("from the file: %q", got)
 	}
-	if ConnectorPublicClientEnv("microsoft-365") != "AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID" {
-		t.Fatalf("the variable: %s", ConnectorPublicClientEnv("microsoft-365"))
+	if connectorPublicClientEnv("microsoft-365") != "AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID" {
+		t.Fatalf("the variable: %s", connectorPublicClientEnv("microsoft-365"))
 	}
 	t.Setenv("AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID", "0f6d5e1a-2b3c-4d5e-8f90-123456789abc")
 	if cfg, err = Load(path); err != nil || cfg.Connectors.PublicClients["microsoft-365"] != "0f6d5e1a-2b3c-4d5e-8f90-123456789abc" {

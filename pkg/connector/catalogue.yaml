@@ -32,8 +32,7 @@ connectors:
     servers:
       - remote: https://api.githubcopilot.com/mcp
 
-  # Asana's V2 server alone: V1 at /sse is shut down and is never given
-  # the app.
+  # Only the /v2 address and those under it match.
   - id: asana
     vendor: Asana
     name: Asana
@@ -42,9 +41,8 @@ connectors:
     servers:
       - remote: https://mcp.asana.com/v2
 
-  # Microsoft 365's servers are listed once they have been surveyed; until
-  # then the entry carries only the public client id a deployment
-  # configures for it.
+  # No server is listed: the entry vets nothing and carries only the public
+  # client id a deployment configures for it.
   - id: microsoft-365
     vendor: Microsoft
     name: Microsoft 365

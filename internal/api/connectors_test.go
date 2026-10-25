@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/pkg/connector"
 )
 
 type connectorList struct {
@@ -56,6 +58,15 @@ func TestConnectorsServeTheConfiguredPublicClientID(t *testing.T) {
 	for _, word := range []string{"secret", "issuer", "grant", "servers"} {
 		if strings.Contains(strings.ToLower(string(body)), word) {
 			t.Errorf("the answer holds %q: %s", word, body)
+		}
+	}
+}
+
+// Every strategy the catalogue uses is one the API's answer can carry.
+func TestEveryCatalogueStrategyIsInTheAPI(t *testing.T) {
+	for _, c := range connector.Builtin().All() {
+		if !api.ConnectorInfoStrategy(c.Strategy).Valid() {
+			t.Errorf("%s: strategy %q is not in the API's enum", c.ID, c.Strategy)
 		}
 	}
 }

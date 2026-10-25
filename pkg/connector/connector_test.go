@@ -69,6 +69,12 @@ func TestGitHubAndAsanaGoOnlyToTheirOwnServers(t *testing.T) {
 		"https://evil.example/mcp":                       false,
 		"http://api.githubcopilot.com/mcp":               false,
 		"https://user@api.githubcopilot.com/mcp":         false,
+		"https://api.githubcopilot.com/mcp/../admin":     false,
+		"https://api.githubcopilot.com/mcp/%2e%2e/admin": false,
+		"https://api.githubcopilot.com/mcp/./readonly":   false,
+		"https://api.githubcopilot.com/mcp/%2E/readonly": false,
+		"https://api.githubc\u043epilot.com/mcp":         false,
+		"https://api.githubcopilot.com:443/mcp":          false,
 	} {
 		got, ok := c.Match(remote(u), ghIssuer)
 		if ok != want || (ok && got.ID != "github") {
@@ -78,8 +84,10 @@ func TestGitHubAndAsanaGoOnlyToTheirOwnServers(t *testing.T) {
 	if got, ok := c.Match(remote("https://mcp.asana.com/v2/mcp"), asIssuer+"/"); !ok || got.ID != "asana" {
 		t.Error("Asana's V2 server did not match")
 	}
-	if _, ok := c.Match(remote("https://mcp.asana.com/sse"), asIssuer); ok {
-		t.Error("Asana's V1 address matched")
+	for _, v1 := range []string{"https://mcp.asana.com/sse", "https://mcp.asana.com/v2/../sse", "https://mcp.asana.com/v2/%2e%2e/sse", "https://mcp.a\u017fana.com/v2"} {
+		if _, ok := c.Match(remote(v1), asIssuer); ok {
+			t.Errorf("%s matched Asana's V2 entry", v1)
+		}
 	}
 	if _, ok := c.Match(remote("https://api.githubcopilot.com/mcp/"), asIssuer); ok {
 		t.Error("GitHub's server matched at Asana's issuer")
@@ -164,9 +172,15 @@ func TestTheCatalogueCannotBeChangedThroughWhatItReturns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, _ := c.Lookup("example-mail")
-	got.Servers[0].Package.Version = "9.9.9"
-	got.Servers[0].Package.OAuth.Scopes[0] = "everything"
+	looked, _ := c.Lookup("example-mail")
+	matched, _ := c.Match(vettedPackage(), "https://login.example.com")
+	listed := c.All()[0]
+	for _, got := range []Connector{looked, matched, listed} {
+		got.Servers[0].Package.Version = "9.9.9"
+		got.Servers[0].Package.OAuth.Scopes[0] = "everything"
+		got.Servers[0].Package.OAuth.Env["MAIL_TOKEN"] = "elsewhere"
+		got.Servers = nil
+	}
 	if _, ok := c.Match(vettedPackage(), "https://login.example.com"); !ok {
 		t.Fatal("a change to a returned connector reached the catalogue")
 	}

@@ -700,8 +700,8 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 // catalogue this build carries, each with the public client id this
 // deployment configured for it, where its app is a public client. It
 // serves configuration and the catalogue alone, so it needs no store and
-// no credential, and it can list no secret: a public client id is the
-// only client value the configuration holds for a connector.
+// no credential. Its answer has a field for a public client id and none
+// for any other client value.
 func (s *Server) GetConnectors(w http.ResponseWriter, r *http.Request) {
 	all := connector.Builtin().All()
 	out := ConnectorList{Connectors: make([]ConnectorInfo, 0, len(all))}

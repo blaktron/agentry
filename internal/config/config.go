@@ -873,7 +873,7 @@ func applyEnv(c *Config) error {
 		if !k.HasPublicClient() {
 			continue
 		}
-		v, ok := os.LookupEnv(ConnectorPublicClientEnv(k.ID))
+		v, ok := os.LookupEnv(connectorPublicClientEnv(k.ID))
 		if !ok {
 			continue
 		}
@@ -1239,13 +1239,10 @@ func (c Config) validateNotify() error {
 	return nil
 }
 
-// validateKnowledge refuses a knowledge sealing key that is not 32 bytes of
-// base64, or that is the auth sealing key: a key of its own, so that what
-// opens the webhook secrets does not also open every pack, and a negative cap.
-// ConnectorPublicClientEnv is the environment variable that sets a
+// connectorPublicClientEnv is the environment variable that sets a
 // connector's public client id: AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID
 // for microsoft-365.
-func ConnectorPublicClientEnv(id string) string {
+func connectorPublicClientEnv(id string) string {
 	return "AGENTRY_CONNECTOR_" + strings.ToUpper(strings.ReplaceAll(id, "-", "_")) + "_PUBLIC_CLIENT_ID"
 }
 
@@ -1271,6 +1268,9 @@ func (c Config) validateConnectors() error {
 	return nil
 }
 
+// validateKnowledge refuses a knowledge sealing key that is not 32 bytes of
+// base64, or that is the auth sealing key: a key of its own, so that what
+// opens the webhook secrets does not also open every pack, and a negative cap.
 func (c Config) validateKnowledge() error {
 	if c.Limits.KnowledgeBytesPerAccount < 0 {
 		return fmt.Errorf("config: limits.knowledgeBytesPerAccount must be >= 0 (0 is no cap)")

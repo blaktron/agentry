@@ -1029,7 +1029,8 @@
           "path": "internal/api/connectors_test.go",
           "tests": [
             "TestConnectorsListsTheCatalogue",
-            "TestConnectorsServeTheConfiguredPublicClientID"
+            "TestConnectorsServeTheConfiguredPublicClientID",
+            "TestEveryCatalogueStrategyIsInTheAPI"
           ],
           "fuzz": [],
           "benchmarks": [],
