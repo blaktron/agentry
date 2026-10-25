@@ -701,6 +701,33 @@ mailbox or have every `email_*` flag off in `user_notification_settings`
 (`PUT /user/notifications`): a verified stamp on an invented
 address is how a registry bounces mail from its own test data.
 
+### Connectors' public client ids
+
+Agentry's connectors (the vendors' servers Agentry has vetted, listed at
+`GET /api/v1/connectors`) sign in with an app registered with each vendor.
+For a connector whose app is a public client (strategy `agentry-public`),
+register a public client with the vendor for your deployment and give the
+server its id. The registry then serves it on that route, for clients'
+local sign-ins. A public client id is not a secret, and no client secret
+is configured here.
+
+```yaml
+connectors:
+  publicClients:
+    microsoft-365: "<the app's client id>"
+```
+
+The environment form is `AGENTRY_CONNECTOR_<ID>_PUBLIC_CLIENT_ID`, the id
+upper-cased with hyphens as underscores
+(`AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID`); set but empty, it
+removes the file's value. The server refuses to start with an id for a
+connector it does not know, for one whose app is confidential, or with a
+value that is not one word of at most 256 characters. With none
+configured, the route lists the connectors without ids. The compose stack
+passes `AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID` from its `.env`;
+the Helm chart takes the variable in `api.extraEnv`, or the setting in its
+configuration file.
+
 ### Limits and quotas
 
 The quotas are configuration (`limits.*`; the rate limits also as

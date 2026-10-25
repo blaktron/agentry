@@ -221,6 +221,9 @@ services:
       AGENTRY_UI_MODE: ${AGENTRY_UI_MODE:-full}
       AGENTRY_BRAND_NAME: ${AGENTRY_BRAND_NAME:-}
       AGENTRY_IDP_LOGOUT_URL: ${AGENTRY_IDP_LOGOUT_URL:-}
+      # The public client id of the deployment's Microsoft 365 app, served at
+      # GET /api/v1/connectors; empty serves none.
+      AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID: ${AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID:-}
       # Behind the `edge` service the server sees exactly one proxy hop:
       # set AGENTRY_TRUSTED_PROXIES=1 in .env when the edge is the entry
       # point, and AGENTRY_COOKIE_SECURE=true once it serves a certificate

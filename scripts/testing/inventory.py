@@ -42,6 +42,7 @@ PURPOSES = {
     "internal/webhook": "Signed webhook delivery and guarded external HTTP",
     "pkg/archive": "Reproducible packing and hostile archive extraction",
     "pkg/attest": "DSSE envelope signing and verification",
+    "pkg/connector": "Connector catalogue validation and which servers get an Agentry app",
     "pkg/draftcheck": "Draft reading, review stages and benchmark corpora",
     "pkg/draftproof": "Canonical proof of a draft's rendered package",
     "pkg/egressguard": "Address and redirect guards at the actual HTTP dial boundary",

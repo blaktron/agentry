@@ -128,6 +128,29 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /connectors:
+    get:
+      operationId: getConnectors
+      tags: [meta]
+      summary: Agentry's connectors and this deployment's public client ids.
+      description: >
+        Every connector this build's catalogue holds: the vendor products
+        whose servers Agentry has vetted. A connector whose app is a public
+        client carries the `publicClientId` this deployment registered for
+        it, which a client uses for a local sign-in to that connector's
+        servers; it is absent where the deployment has configured none.
+        No client secret is ever listed.
+      security: []
+      responses:
+        "200":
+          description: The connectors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectorList"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /auth/verify-email:
     post:
       operationId: verifyEmail
@@ -4571,6 +4594,48 @@ components:
             there, since its discovery fails.
           items:
             type: string
+
+    ConnectorList:
+      type: object
+      required: [connectors]
+      properties:
+        connectors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConnectorInfo'
+
+    ConnectorInfo:
+      type: object
+      required: [id, vendor, name, strategy]
+      description: >
+        One connector of Agentry's catalogue. A declared server gets the
+        connector's app only when it is one of the connector's vetted
+        servers, matched by the client from the catalogue it is built with.
+      properties:
+        id:
+          type: string
+          description: Stable id, such as `github` or `microsoft-365`.
+          example: microsoft-365
+        vendor:
+          type: string
+          example: Microsoft
+        name:
+          type: string
+          example: Microsoft 365
+        strategy:
+          type: string
+          description: >
+            How the connector's app signs a person in:
+            `agentry-confidential` (Agentry's web client, whose secret stays
+            with the deployment) or `agentry-public` (a public client id
+            with no secret, listed here when configured).
+          enum: [agentry-confidential, agentry-public]
+        publicClientId:
+          type: string
+          description: >
+            The public client id this deployment registered for the
+            connector (configuration `connectors.publicClients`); absent
+            where none is configured or the strategy takes none.
 
     BrandInfo:
       type: object

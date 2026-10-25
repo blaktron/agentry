@@ -17,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/blaktron/agentry/pkg/connector"
 	"github.com/blaktron/agentry/pkg/judge"
 	"github.com/blaktron/agentry/pkg/websearch"
 )
@@ -59,10 +60,23 @@ type Config struct {
 	UI        UI        `yaml:"ui"`
 	Brand     Brand     `yaml:"brand"`
 	Knowledge Knowledge `yaml:"knowledge"`
+	// Connectors is what the deployment configures for Agentry's
+	// connectors (pkg/connector).
+	Connectors Connectors `yaml:"connectors"`
 	// MinCLIVersion, when set, is advertised via GET /api/v1/meta so the CLI
 	// can warn (or refuse, on a major gap) before talking to an API it
 	// predates. Empty = no minimum advertised.
 	MinCLIVersion string `yaml:"minCLIVersion"`
+}
+
+// Connectors configures Agentry's connectors for this deployment.
+type Connectors struct {
+	// PublicClients maps a connector's id to the public client id of the
+	// app this deployment registered for it, which GET /api/v1/connectors
+	// serves to clients for their local sign-ins. Only a connector whose
+	// strategy is agentry-public takes one. A public client id is not a
+	// secret; a client secret is never configured here.
+	PublicClients map[string]string `yaml:"publicClients"`
 }
 
 // HTTP configures listeners. Git traffic may share Addr (self-host) or use
@@ -852,6 +866,27 @@ func applyEnv(c *Config) error {
 		return err
 	}
 
+	// Connectors: AGENTRY_CONNECTOR_<ID>_PUBLIC_CLIENT_ID for each
+	// connector that takes a public client id, the id upper-cased with
+	// its hyphens as underscores; set but empty removes it.
+	for _, k := range connector.Builtin().All() {
+		if !k.HasPublicClient() {
+			continue
+		}
+		v, ok := os.LookupEnv(connectorPublicClientEnv(k.ID))
+		if !ok {
+			continue
+		}
+		if c.Connectors.PublicClients == nil {
+			c.Connectors.PublicClients = map[string]string{}
+		}
+		if v = strings.TrimSpace(v); v == "" {
+			delete(c.Connectors.PublicClients, k.ID)
+		} else {
+			c.Connectors.PublicClients[k.ID] = v
+		}
+	}
+
 	// Telemetry.
 	str("AGENTRY_MIN_CLI_VERSION", &c.MinCLIVersion)
 	str("AGENTRY_OTEL_ENDPOINT", &c.Telemetry.OTLPEndpoint)
@@ -1017,6 +1052,9 @@ func (c Config) Validate() error {
 	}
 	if !c.DevMode && c.Auth.SealingKey == "" {
 		return fmt.Errorf("config: auth.sealingKey is required outside dev mode")
+	}
+	if err := c.validateConnectors(); err != nil {
+		return err
 	}
 	if err := c.validateKnowledge(); err != nil {
 		return err
@@ -1197,6 +1235,35 @@ func (c Config) validateNotify() error {
 	// (mailpit) there is no password, so the pairing only bites in real use.
 	if c.SMTP.Username != "" && !c.SMTP.StartTLS && !c.DevMode {
 		return fmt.Errorf("config: smtp.startTLS must be true when smtp.username is set outside dev mode")
+	}
+	return nil
+}
+
+// connectorPublicClientEnv is the environment variable that sets a
+// connector's public client id: AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID
+// for microsoft-365.
+func connectorPublicClientEnv(id string) string {
+	return "AGENTRY_CONNECTOR_" + strings.ToUpper(strings.ReplaceAll(id, "-", "_")) + "_PUBLIC_CLIENT_ID"
+}
+
+// publicClientRE is a client id as vendors issue them: one word of
+// letters, digits and the punctuation ids carry, at most 256 characters.
+var publicClientRE = regexp.MustCompile(`^[A-Za-z0-9._~:/@+=-]{1,256}$`)
+
+// validateConnectors refuses a public client id for a connector this build
+// does not know or whose strategy takes none, and one that is not a single
+// word, so a typo or a pasted secret block stops the server at start-up.
+func (c Config) validateConnectors() error {
+	for id, client := range c.Connectors.PublicClients {
+		k, ok := connector.Builtin().Lookup(id)
+		switch {
+		case !ok:
+			return fmt.Errorf("config: connectors.publicClients: no connector %q in this build", id)
+		case !k.HasPublicClient():
+			return fmt.Errorf("config: connectors.publicClients: %q signs in with Agentry's confidential app and takes no public client id", id)
+		case !publicClientRE.MatchString(client):
+			return fmt.Errorf("config: connectors.publicClients.%s is not a client id (one word, at most 256 characters)", id)
+		}
 	}
 	return nil
 }

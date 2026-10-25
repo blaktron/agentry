@@ -1026,6 +1026,21 @@
           ]
         },
         {
+          "path": "internal/api/connectors_test.go",
+          "tests": [
+            "TestConnectorsListsTheCatalogue",
+            "TestConnectorsServeTheConfiguredPublicClientID",
+            "TestEveryCatalogueStrategyIsInTheAPI"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/console_test.go",
           "tests": [
             "TestReviewBundleCarriesDetail",
@@ -2048,7 +2063,9 @@
             "TestKnowledgeSealingKeyFromEnv",
             "TestSignInOIDCIsOneProvider",
             "TestSignInOIDCFromEnv",
-            "TestJudgeBaseURLIsHTTPSWhereAKeyIsSent"
+            "TestJudgeBaseURLIsHTTPSWhereAKeyIsSent",
+            "TestConnectorPublicClients",
+            "TestConnectorPublicClientsAreValidated"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4244,6 +4261,28 @@
           "path": "pkg/attest/attest_test.go",
           "tests": [
             "TestEnvelopeRoundTrip"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/connector",
+      "behavior": "Connector catalogue validation and which servers get an Agentry app",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/connector/connector_test.go",
+          "tests": [
+            "TestTheBuiltinCatalogueListsItsConnectors",
+            "TestTheCatalogueHoldsNoCredential",
+            "TestGitHubAndAsanaGoOnlyToTheirOwnServers",
+            "TestAPackageMatchesOnlyAsListed",
+            "TestTheCatalogueCannotBeChangedThroughWhatItReturns",
+            "TestParseRefusesAMalformedCatalogue"
           ],
           "fuzz": [],
           "benchmarks": [],

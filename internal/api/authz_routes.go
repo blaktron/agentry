@@ -229,6 +229,7 @@ var routeAuthz = map[string]RouteDecl{
 	"unwrapOrgKnowledgeKey":    {Action: auth.ActOrgKnowledgeRead, OrgScoped: true, HiddenFromOutsiders: true},
 	"getOrgKnowledgeUsage":     {Action: auth.ActOrgKnowledgeRead, OrgScoped: true, HiddenFromOutsiders: true},
 	"getMeta":                  {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
+	"getConnectors":            {Action: auth.ActPublicRead, Anonymous: true, NoAuthz: true},
 	"getOrg":                   {Action: auth.ActOrgRead, OrgScoped: true, Anonymous: true},
 	"getUserProfile":           {Action: auth.ActPublicRead, Anonymous: true},
 	"listOrgAudit":             {Action: auth.ActOrgAuditRead, OrgScoped: true},

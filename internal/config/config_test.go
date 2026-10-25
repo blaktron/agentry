@@ -716,3 +716,52 @@ func TestJudgeBaseURLIsHTTPSWhereAKeyIsSent(t *testing.T) {
 		}
 	}
 }
+
+// A connector's public client id comes from the file or from its own
+// environment variable, which wins and, set empty, removes it.
+func TestConnectorPublicClients(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "agentry.yaml")
+	if err := os.WriteFile(path, []byte("env: dev\ndevMode: true\nconnectors:\n  publicClients:\n    microsoft-365: from-the-file\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Connectors.PublicClients["microsoft-365"]; got != "from-the-file" {
+		t.Fatalf("from the file: %q", got)
+	}
+	if connectorPublicClientEnv("microsoft-365") != "AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID" {
+		t.Fatalf("the variable: %s", connectorPublicClientEnv("microsoft-365"))
+	}
+	t.Setenv("AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID", "0f6d5e1a-2b3c-4d5e-8f90-123456789abc")
+	if cfg, err = Load(path); err != nil || cfg.Connectors.PublicClients["microsoft-365"] != "0f6d5e1a-2b3c-4d5e-8f90-123456789abc" {
+		t.Fatalf("the environment did not win: %v %v", cfg.Connectors.PublicClients, err)
+	}
+	t.Setenv("AGENTRY_CONNECTOR_MICROSOFT_365_PUBLIC_CLIENT_ID", "")
+	if cfg, err = Load(path); err != nil || len(cfg.Connectors.PublicClients) != 0 {
+		t.Fatalf("an empty variable did not remove it: %v %v", cfg.Connectors.PublicClients, err)
+	}
+}
+
+// A public client id for a connector this build does not know, for one
+// whose app is confidential, or that is not one word is refused at load.
+func TestConnectorPublicClientsAreValidated(t *testing.T) {
+	for name, entry := range map[string]string{
+		"an unknown connector":  "nobody: abc",
+		"a confidential app":    "github: Ov23liGitHubApp",
+		"more than one word":    "microsoft-365: \"abc def\"",
+		"a pasted secret block": "microsoft-365: \"-----BEGIN PRIVATE KEY-----\\nabc\"",
+		"too long":              "microsoft-365: " + strings.Repeat("a", 257),
+	} {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "agentry.yaml")
+		if err := os.WriteFile(path, []byte("env: dev\ndevMode: true\nconnectors:\n  publicClients:\n    "+entry+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "connectors.publicClients") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
