@@ -423,7 +423,7 @@ connection again. With several versions installed, name one.
 ### `agentry connections`
 
 `list` shows every kept connection: the release (ref and digest), the
-server, the issuer, the client kind (`own`, `cimd`, `dcr`), the scopes, its
+server, the issuer, the client kind (`agentry`, `own`, `cimd`, `dcr`), the scopes, its
 state (`connected`, or `broken` with the vendor's reason), the last use, and
 whether its secret half is in the OS keychain or a file. Never a token.
 `remove <ns/name[@version]>` (or `--all`; `--server ADDRESS` narrows it)
@@ -1208,8 +1208,13 @@ its own; the same version's later runs reuse it without asking.
   none is asked for what its own 401 names, else nothing (the vendor's
   default), never every scope its metadata lists. A vendor that grants more
   than was asked is said to have.
-- **Which client the consent screen names.** Your own OAuth client for that
-  issuer, where you keep one; else Agentry's native client metadata document,
+- **Which client the consent screen names.** Agentry's own app, where
+  Agentry has vetted the server for its vendor (one of the connectors your
+  registry lists at `GET /api/v1/connectors`) and your registry serves that
+  app's public client id (needs CLI v0.6.201 or later; the id is kept under
+  the runner home's `connectors/` and asked for again once a day, and only
+  a registry reached over `https://` is asked). Else your own OAuth client
+  for that issuer, where you keep one; else Agentry's native client metadata document,
   where the vendor takes one and it is served; else a client registered with
   the vendor for this connection ("Agentry Desktop"). A vendor that allows
   none of these, as Google does, needs your own client: the CLI asks for its
