@@ -1,0 +1,51 @@
+# Agentry's connectors: the vendors' servers Agentry has vetted, and the
+# app Agentry has registered with each vendor for them. A server declared
+# in a QuickAgent's manifest gets a connector's app only when it is one of
+# the connector's servers (connector.go says how a server matches).
+#
+# Each entry:
+#   id        stable, lowercase: what configuration and clients name it by
+#   vendor    the company, as people know it
+#   name      the product, as people know it
+#   strategy  agentry-confidential: Agentry's web client, whose secret stays
+#               with the deployment
+#             agentry-public: a public client id (no secret), which the
+#               registry serves to clients from the deployment's
+#               configuration, and Agentry's web client hosted
+#   issuer    the vendor's authorization server, as its metadata names
+#             itself (needed once the entry lists servers)
+#   grantURL  where the vendor revokes a grant when its metadata offers no
+#             revocation endpoint; {client_id} is replaced
+#   servers   what the entry vets, each one of:
+#               remote: a vendor's https address; it and the addresses
+#                 under it match
+#               package: one package by ecosystem (npm, pypi), name,
+#                 exact version and its whole oauth block
+#             An entry with no servers vets nothing yet.
+connectors:
+  - id: github
+    vendor: GitHub
+    name: GitHub
+    strategy: agentry-confidential
+    issuer: https://github.com/login/oauth
+    grantURL: https://api.github.com/applications/{client_id}/grant
+    servers:
+      - remote: https://api.githubcopilot.com/mcp
+
+  # Asana's V2 server alone: V1 at /sse is shut down and is never given
+  # the app.
+  - id: asana
+    vendor: Asana
+    name: Asana
+    strategy: agentry-confidential
+    issuer: https://app.asana.com
+    servers:
+      - remote: https://mcp.asana.com/v2
+
+  # Microsoft 365's servers are listed once they have been surveyed; until
+  # then the entry carries only the public client id a deployment
+  # configures for it.
+  - id: microsoft-365
+    vendor: Microsoft
+    name: Microsoft 365
+    strategy: agentry-public

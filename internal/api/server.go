@@ -38,6 +38,7 @@ import (
 	"github.com/blaktron/agentry/internal/version"
 	"github.com/blaktron/agentry/internal/voice"
 	"github.com/blaktron/agentry/internal/webhook"
+	"github.com/blaktron/agentry/pkg/connector"
 	"github.com/blaktron/agentry/pkg/ruleset"
 	"github.com/blaktron/agentry/pkg/websearch"
 )
@@ -693,6 +694,25 @@ func (s *Server) GetMeta(w http.ResponseWriter, r *http.Request) {
 		meta.MinCLIVersion = &s.cfg.MinCLIVersion
 	}
 	writeJSON(w, http.StatusOK, meta)
+}
+
+// GetConnectors implements GET /api/v1/connectors: every connector of the
+// catalogue this build carries, each with the public client id this
+// deployment configured for it, where its app is a public client. It
+// serves configuration and the catalogue alone, so it needs no store and
+// no credential, and it can list no secret: a public client id is the
+// only client value the configuration holds for a connector.
+func (s *Server) GetConnectors(w http.ResponseWriter, r *http.Request) {
+	all := connector.Builtin().All()
+	out := ConnectorList{Connectors: make([]ConnectorInfo, 0, len(all))}
+	for _, c := range all {
+		info := ConnectorInfo{Id: c.ID, Vendor: c.Vendor, Name: c.Name, Strategy: ConnectorInfoStrategy(c.Strategy)}
+		if id := s.cfg.Connectors.PublicClients[c.ID]; id != "" && c.HasPublicClient() {
+			info.PublicClientId = &id
+		}
+		out.Connectors = append(out.Connectors, info)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // Readyz is the readiness handler for a role that assembles its own mux —

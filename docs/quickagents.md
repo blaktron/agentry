@@ -848,6 +848,18 @@ capabilities:
   needs it, and kept for that version's later runs. It belongs to that one
   version. Another QuickAgent, or another version of this one, makes its
   own.
+- **Agentry's connectors.** For some vendors Agentry has registered an app
+  of its own and vetted the vendor's servers. A declared server that is
+  one of those servers gets Agentry's app without the release naming it;
+  every other server signs in with the person's own client, a client
+  metadata document or dynamic registration. A remote server matches when
+  it is the vendor's listed address or an address under it, over
+  `https://`. A package server matches only with the listed ecosystem,
+  name and exact version and the very same `oauth` block, so a release that
+  changes the version, a scope, a file or an env entry of that block is not
+  vetted and gets no Agentry app. The registry lists its connectors at
+  `GET /api/v1/connectors`; today they are GitHub's and Asana's own remote
+  servers, used for hosted runs.
 - **An `oauth` block on a package server** names the authorization server
   (`issuer`, `https://`), the `scopes` consent asks for, and how the access
   token reaches the server:
