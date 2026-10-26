@@ -83,4 +83,25 @@ func TestWebPaths(t *testing.T) {
 			check("reportCardURL", p.reportCardURL("acme/widget", "1.0.0+build"), c.report)
 		})
 	}
+
+	// Whatever a destination names is escaped for the place it lands: a
+	// path segment, or a query value (where "+" and "&" would otherwise
+	// change what the link says).
+	t.Run("what a destination names is escaped for its place", func(t *testing.T) {
+		site := newWebPaths(config.Config{BaseURL: "https://reg.example", Web: config.Web{URL: "https://site.example"}})
+		core := newWebPaths(config.Config{BaseURL: "https://reg.example"})
+		for _, c := range []struct{ what, got, want string }{
+			{"invitation token", site.invitationURL("a/b c?d"), "https://site.example/invitations/a%2Fb%20c%3Fd"},
+			{"organization handle", site.orgConsoleURL("a b/c"), "https://site.example/orgs/a%20b%2Fc/admin"},
+			{"version on the site", site.reportCardURL("acme/widget", "1.0.0 rc/1"), "https://site.example/acme/widget/versions/1.0.0%20rc%2F1"},
+			{"version on the API", core.reportCardURL("acme/widget", "1.0.0 rc/1"), "https://reg.example/api/v1/agents/acme/widget/versions/1.0.0%20rc%2F1/report"},
+			{"verification token on the site", site.verifyEmailURL("a+b c/d&e=f"), "https://site.example/auth/verify-email?token=a%2Bb+c%2Fd%26e%3Df"},
+			{"verification token on the server", core.verifyEmailURL("a+b c/d&e=f"), "https://reg.example/ui/verify-email?token=a%2Bb+c%2Fd%26e%3Df"},
+			{"sign-in message on the site", site.login("a+b&c=d"), "https://site.example/login?error=a%2Bb%26c%3Dd"},
+		} {
+			if c.got != c.want {
+				t.Errorf("%s = %q, want %q", c.what, c.got, c.want)
+			}
+		}
+	})
 }

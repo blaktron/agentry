@@ -1,9 +1,15 @@
 package api_test
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // The catalog events a registry action emits:
@@ -69,5 +75,58 @@ func TestWebhookCatalogEventsAreEmitted(t *testing.T) {
 		if !got[want] {
 			t.Errorf("%s delivery not recorded (have %v)", want, got)
 		}
+	}
+
+	// Only what the endpoint subscribed to, once each, and what each tells
+	// a consumer.
+	rows, err := env.st.Pool().Query(context.Background(),
+		`SELECT event_type, payload FROM webhook_deliveries WHERE endpoint_id = $1`, hook.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	data := map[string]map[string]any{}
+	for rows.Next() {
+		var ev string
+		var raw []byte
+		if err := rows.Scan(&ev, &raw); err != nil {
+			t.Fatal(err)
+		}
+		var wire struct {
+			Event string         `json:"event"`
+			Data  map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(raw, &wire); err != nil {
+			t.Fatal(err)
+		}
+		if _, dup := data[ev]; dup {
+			t.Errorf("%s was delivered twice", ev)
+		}
+		if wire.Event != ev {
+			t.Errorf("a %s delivery carries the event %q", ev, wire.Event)
+		}
+		data[ev] = wire.Data
+	}
+	if len(data) != 4 {
+		t.Errorf("deliveries by event = %v, want exactly the four subscribed to", data)
+	}
+	if d := data["agent.created"]; d["namespace"] != orgH || d["name"] != "hooked" || d["visibility"] != "private" || fmt.Sprint(d["modes"]) != "[autonomous]" || len(d) != 4 {
+		t.Errorf("agent.created data = %v, want namespace %s, name hooked, modes [autonomous], visibility private", d, orgH)
+	}
+	if d := data["policy.updated"]; d["org"] != orgH || fmt.Sprint(d["keys"]) != "[requireEvals]" || len(d) != 2 {
+		t.Errorf("policy.updated data = %v, want org %s and keys [requireEvals]", d, orgH)
+	}
+	if d := data["version.submitted"]; d["version"] != "1.0.0" || d["source"] != "cli-upload" || d["channel"] != "stable" || len(d) != 3 {
+		t.Errorf("version.submitted data = %v, want version 1.0.0, source cli-upload, channel stable", d)
+	}
+	d := data["scan.completed"]
+	vid, _ := d["versionId"].(string)
+	rid, _ := d["runId"].(string)
+	digest, _ := d["reportDigest"].(string)
+	_, verr := uuid.Parse(vid)
+	_, rerr := uuid.Parse(rid)
+	if verr != nil || rerr != nil || d["version"] != "1.0.0" || d["outcome"] != "published" || !strings.HasPrefix(digest, "sha256:") ||
+		d["reason"] == nil || d["reason"] == "" || d["findings"] == nil || len(d) != 7 {
+		t.Errorf("scan.completed data = %v, want version 1.0.0 and its id and the run id as uuids, outcome published, a sha256 report digest, a reason and findings", d)
 	}
 }

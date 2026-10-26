@@ -24,7 +24,7 @@ func TestCreatingAnEndpointKeepsItsTokenOutOfTheAuditEvent(t *testing.T) {
 	env.verifyEmail(owner)
 	sess := env.login(owner)
 	orgH := "waorg" + env.sfx
-	env.createOrg(sess, orgH)
+	orgID := env.createOrg(sess, orgH)
 
 	const pathToken, queryToken = "tok_PATH_5d41402abc4b", "tok_QUERY_7d793037a076"
 	const host = "https://hooks.example.test"
@@ -61,6 +61,45 @@ func TestCreatingAnEndpointKeepsItsTokenOutOfTheAuditEvent(t *testing.T) {
 		for _, secret := range []string{pathToken, queryToken, "pw_USERINFO", "frag_FRAGMENT", "/services"} {
 			if strings.Contains(text, secret) {
 				t.Errorf("the %s carries %q: %s", name, secret, text)
+			}
+		}
+	}
+
+	// The row is the organization's, about the endpoint, and lists what the
+	// endpoint subscribed to.
+	var kind, rowOrg, rowHost, rowEvents string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT target_kind, org_id::text, detail->>'host', (detail->'events')::text FROM audit_events WHERE action = 'webhook.create' AND target_id = $1`,
+		created.Id).Scan(&kind, &rowOrg, &rowHost, &rowEvents); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "webhook" || rowOrg != orgID || rowHost != host || rowEvents != `["version.published"]` {
+		t.Fatalf("audit row = kind %q org %q host %q events %s, want webhook, %s, %s, [\"version.published\"]", kind, rowOrg, rowHost, rowEvents, orgID, host)
+	}
+
+	// A port is part of the host and stays; an address with no host at all
+	// is named "the endpoint". Neither lets the rest of the address in.
+	for _, c := range []struct{ name, url, want string }{
+		{"a port", "https://user2:pw_USER2_aa11@hooks2.example.test:8443/x/tok_PATH2_bb22?key=tok_QUERY2_cc33", "https://hooks2.example.test:8443"},
+		{"no host", "https:///only/tok_PATH3_dd44?key=tok_QUERY3_ee55", "the endpoint"},
+	} {
+		var ep struct {
+			Id string `json:"id"`
+		}
+		env.doJSON(sess, http.MethodPost, "/api/v1/orgs/"+orgH+"/webhooks", map[string]any{
+			"url": c.url, "events": []string{"version.published"},
+		}, &ep, http.StatusCreated)
+		var row string
+		if err := env.st.Pool().QueryRow(context.Background(),
+			`SELECT detail->>'host' FROM audit_events WHERE action = 'webhook.create' AND target_id = $1`, ep.Id).Scan(&row); err != nil {
+			t.Fatal(err)
+		}
+		if row != c.want {
+			t.Errorf("%s: the audit row names %q, want %q", c.name, row, c.want)
+		}
+		for _, secret := range []string{"pw_USER2", "tok_PATH2", "tok_QUERY2", "tok_PATH3", "tok_QUERY3", "/x/", "/only"} {
+			if strings.Contains(row, secret) || strings.Contains(logs.String(), secret) {
+				t.Errorf("%s: the audit row or the log carries %q", c.name, secret)
 			}
 		}
 	}
