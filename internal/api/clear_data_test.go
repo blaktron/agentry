@@ -24,6 +24,7 @@ func TestClearCurrentUserData(t *testing.T) {
 	var mu sync.Mutex
 	var seen []api.Event
 	env := newTestEnvWith(t, func(s *api.Server) {
+		s.SetVoiceJudge(&stubVoiceJudge{set: "sha256:clear-data-set"})
 		s.AddEventHook(func(_ context.Context, ev api.Event) {
 			if ev.Kind == "user.data_cleared" {
 				mu.Lock()
@@ -53,6 +54,7 @@ func TestClearCurrentUserData(t *testing.T) {
 	uid := env.selfID(sess)
 	_, pat := env.mintPAT(sess, "cd-pat", "agent:read")
 	_, _ = env.mintPAT(sess, "cd-pat-2", "repo:read")
+	_, voicePAT := env.mintPAT(sess, "cd-voice", "voice:write")
 	env.doJSON(sess, http.MethodPost, "/api/v1/user/ssh-keys", map[string]any{"title": "laptop", "publicKey": testPublicKeyLine(t)}, nil, http.StatusCreated)
 	if _, err := env.st.Pool().Exec(ctx,
 		`INSERT INTO trusted_devices (id, user_id, token_sha256, expires_at) VALUES (gen_random_uuid(), $1, decode(md5(random()::text), 'hex'), now() + interval '30 days')`, uid); err != nil {
@@ -87,6 +89,13 @@ func TestClearCurrentUserData(t *testing.T) {
 	// A knowledge pack: the clear takes it, the key that
 	// opens it and its sealed tree.
 	kn := seedKnowledge(t, env, knowledge.User(uuid.MustParse(uid)))
+
+	// A Writing Voice: the clear takes it with the key it is sealed under.
+	env.doJSON(caller{name: "voice", pat: voicePAT}, http.MethodPut, "/api/v1/voice", map[string]any{"text": voiceText(1), "source": "upload"}, nil, http.StatusAccepted)
+	var voices int
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM voices WHERE user_id = $1`, uid).Scan(&voices); err != nil || voices != 1 {
+		t.Fatalf("voices before clearing: %d (%v), want 1", voices, err)
+	}
 
 	var liveTokens int
 	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM pats WHERE user_id = $1 AND revoked_at IS NULL`, uid).Scan(&liveTokens); err != nil || liveTokens < 2 {
@@ -129,6 +138,7 @@ func TestClearCurrentUserData(t *testing.T) {
 		"notification settings":    count(`SELECT count(*) FROM user_notification_settings WHERE user_id = $1`, uid),
 		"report settings":          count(`SELECT count(*) FROM user_report_settings WHERE user_id = $1`, uid),
 		"unconsumed desktop codes": count(`SELECT count(*) FROM desktop_grants WHERE user_id = $1 AND consumed_at IS NULL`, uid),
+		"writing voices":           count(`SELECT count(*) FROM voices WHERE user_id = $1`, uid),
 	} {
 		if n != 0 {
 			t.Errorf("%s after clearing: %d, want 0", what, n)
@@ -165,6 +175,9 @@ func TestClearCurrentUserData(t *testing.T) {
 	}
 	var d map[string]any
 	_ = json.Unmarshal(detail, &d)
+	if d["knowledgeObjects"] != float64(1) || d["voice"] != true {
+		t.Errorf("audit detail = %s, want one knowledge object and a voice", detail)
+	}
 	if d["tokens"] != float64(liveTokens) || d["sshKeys"] != float64(1) || d["trustedDevices"] != float64(1) || d["desktopCodes"] != float64(1) || d["otherSessions"] != float64(1) || d["installs"] != float64(1) || d["notificationSettingsReset"] != true || d["reportSettingsReset"] != true {
 		t.Errorf("audit detail = %s", detail)
 	}
@@ -178,5 +191,15 @@ func TestClearCurrentUserData(t *testing.T) {
 	defer mu.Unlock()
 	if len(seen) != 1 || seen[0].UserID.String() != uid {
 		t.Fatalf("user.data_cleared: %+v, want one event for %s", seen, uid)
+	}
+	// What they hear is what the audit row counted.
+	if got := seen[0].Payload["tokens"]; got != int64(liveTokens) {
+		t.Errorf("user.data_cleared payload tokens = %v, want %d", got, liveTokens)
+	}
+	if got := seen[0].Payload["sshKeys"]; got != int64(1) {
+		t.Errorf("user.data_cleared payload sshKeys = %v, want 1", got)
+	}
+	if _, ok := seen[0].Payload["extensions"]; ok {
+		t.Errorf("user.data_cleared payload names extensions with none registered: %v", seen[0].Payload)
 	}
 }

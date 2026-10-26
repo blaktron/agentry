@@ -18,12 +18,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/notify"
+	"github.com/blaktron/agentry/internal/queue"
 )
 
 // signInThroughFakeOIDC signs in through the fake directory and returns
@@ -139,6 +141,30 @@ func TestFoldInAtSignIn(t *testing.T) {
 	if u.PendingOrg == nil || u.PendingOrg.Handle != org || u.PendingOrg.DisplayName != "Fold Corp" || u.PendingOrg.Via != "domain" {
 		t.Fatalf("GET /user pendingOrg = %+v, want %s via domain", u.PendingOrg, org)
 	}
+	// The row is a plain member's, through the domain door and not the
+	// provisioning one, and its audit event says who, where and why.
+	var role string
+	var viaScim bool
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT m.role, m.via_scim FROM memberships m JOIN handles h ON h.id = m.org_id WHERE h.handle = $1 AND m.user_id = $2::uuid`,
+		org, userID).Scan(&role, &viaScim); err != nil {
+		t.Fatal(err)
+	}
+	if role != "member" || viaScim {
+		t.Fatalf("the folded-in membership: role %q, via scim %v, want a member through the domain door", role, viaScim)
+	}
+	var auditActor string
+	var auditRaw []byte
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT a.actor_kind || ':' || coalesce(a.actor_id::text, ''), a.detail FROM audit_events a JOIN handles h ON h.id = a.org_id
+		  WHERE a.action = 'org.member_pending' AND h.handle = $1 AND a.target_id = $2::uuid`, org, userID).Scan(&auditActor, &auditRaw); err != nil {
+		t.Fatal(err)
+	}
+	var auditBody map[string]any
+	_ = json.Unmarshal(auditRaw, &auditBody)
+	if auditActor != "user:"+userID || auditBody["via"] != "domain" || auditBody["domain"] != domain || auditBody["state"] != "pending" {
+		t.Fatalf("org.member_pending audit row: %s %s", auditActor, auditRaw)
+	}
 	// Pending confers nothing: the members list is the admin's, and the
 	// person's org list says pending.
 	if res := env.do(person, http.MethodGet, "/api/v1/orgs/"+org+"/members", nil); res.StatusCode != http.StatusForbidden {
@@ -185,6 +211,15 @@ func TestFoldInAtSignIn(t *testing.T) {
 	uid, _ = signInThroughFakeOIDC(t, env3, public)
 	if state, _ := membershipOf(t, env3, org, uid); state != "" {
 		t.Fatalf("a public mail domain was folded in: %q", state)
+	}
+	// Nor does the sweep fold in the accounts known at a public mail domain
+	// for an organization that carries one.
+	var plantedOrgID uuid.UUID
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT id FROM handles WHERE handle = $1`, org).Scan(&plantedOrgID); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := env.srvObj.RunFoldInSweep(context.Background(), plantedOrgID, "gmail.com"); err != nil || n != 0 {
+		t.Fatalf("the sweep folded %d accounts in at a public mail domain (err %v)", n, err)
 	}
 	if _, err := env.st.Pool().Exec(context.Background(),
 		`UPDATE orgs SET domain = $2 WHERE id = (SELECT id FROM handles WHERE handle = $1)`, org, domain); err != nil {
@@ -250,6 +285,37 @@ func TestFoldInAtSignIn(t *testing.T) {
 	if u := env4.userOf(c); u.PendingOrg != nil {
 		t.Fatalf("pendingOrg for a member elsewhere: %+v", u.PendingOrg)
 	}
+
+	// A domain an organization has claimed but not proved is not its domain:
+	// nobody is folded in until the claim is verified.
+	claimDomain := "claim" + env.sfx + ".io"
+	founderH := env.register("fold-claimer")
+	env.verifyEmail(founderH)
+	claimOrg := "claimorg" + env.sfx
+	env.doJSON(env.login(founderH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": claimOrg, "displayName": "Claim Corp", "domain": "none"}, nil, http.StatusCreated)
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO domain_claims (id, org_id, domain, verification_token) SELECT gen_random_uuid(), id, $2, 'claim-token' FROM handles WHERE handle = $1`,
+		claimOrg, claimDomain); err != nil {
+		t.Fatal(err)
+	}
+	claimant := newFakeOIDC(t)
+	claimant.email = "before-" + env.sfx + "@" + claimDomain
+	envC := newDirectoryEnv(t, claimant)
+	uid, _ = signInThroughFakeOIDC(t, envC, claimant)
+	if state, _ := membershipOf(t, envC, claimOrg, uid); state != "" {
+		t.Fatalf("folded in at an unverified domain claim: %q", state)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE domain_claims SET verified_at = now() WHERE domain = $1`, claimDomain); err != nil {
+		t.Fatal(err)
+	}
+	proven := newFakeOIDC(t)
+	proven.email = "after-" + env.sfx + "@" + claimDomain
+	envP := newDirectoryEnv(t, proven)
+	uid, _ = signInThroughFakeOIDC(t, envP, proven)
+	if state, via := membershipOf(t, envP, claimOrg, uid); state != "pending" || !via {
+		t.Fatalf("after the claim was verified: state=%q viaDomain=%v, want pending via the domain", state, via)
+	}
 }
 
 // TestFoldInSweepAndDecisions: the sweep on creation finds the accounts
@@ -271,6 +337,15 @@ func TestFoldInSweepAndDecisions(t *testing.T) {
 	erinH := env.registerEmail("sw-erin", "erin@"+domain)
 	env.verifyEmail(erinH)
 	env.doJSON(env.login(erinH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "erins" + env.sfx, "displayName": "Erin's", "domain": "none"}, nil, http.StatusCreated)
+	// Hank, verified, but suspended; Ivan, verified at a subdomain of the
+	// domain, which is another domain.
+	hankH := env.registerEmail("sw-hank", "hank@"+domain)
+	env.verifyEmail(hankH)
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE users SET state = 'suspended' WHERE id = (SELECT id FROM handles WHERE handle = $1)`, hankH); err != nil {
+		t.Fatal(err)
+	}
+	ivanH := env.registerEmail("sw-ivan", "ivan@mail."+domain)
+	env.verifyEmail(ivanH)
 	// Frank, verified, already waiting in Erin's organization (as the
 	// IdP's door would leave him): one pending place per person.
 	frankH := env.registerEmail("sw-frank", "frank@"+domain)
@@ -304,7 +379,7 @@ func TestFoldInSweepAndDecisions(t *testing.T) {
 			t.Fatalf("%s after the sweep: %q %v, want pending", h, state, err)
 		}
 	}
-	for _, h := range []string{daveH, erinH, frankH} {
+	for _, h := range []string{daveH, erinH, frankH, hankH, ivanH} {
 		var cnt int
 		_ = env.st.Pool().QueryRow(context.Background(),
 			`SELECT count(*) FROM memberships m JOIN handles h ON h.id = m.user_id WHERE h.handle = $1 AND m.org_id = $2`, h, orgID).Scan(&cnt)
@@ -334,6 +409,18 @@ func TestFoldInSweepAndDecisions(t *testing.T) {
 	}
 	if viaDomain != 2 {
 		t.Fatalf("members via the domain: %d in %+v, want 2", viaDomain, members)
+	}
+
+	// A person already waiting in another organization is not folded in at
+	// sign-in either, nor does the sign-in disturb the place they hold.
+	frankIdp := newFakeOIDC(t)
+	frankIdp.email = "frank@" + domain
+	frankID, _ := signInThroughFakeOIDC(t, newDirectoryEnv(t, frankIdp), frankIdp)
+	if state, _ := membershipOf(t, env, org, frankID); state != "" {
+		t.Fatalf("frank, waiting in another organization, was folded in at sign-in: %q", state)
+	}
+	if state, _ := membershipOf(t, env, "erins"+env.sfx, frankID); state != "pending" {
+		t.Fatalf("frank's place in the other organization: %q, want pending", state)
 	}
 
 	// Approval: Bob is a member, the flag stays, pendingOrg goes.
@@ -379,6 +466,19 @@ func TestFoldInSweepAndDecisions(t *testing.T) {
 	if declines != 0 {
 		t.Fatalf("the decline outlived the invitation: %d rows", declines)
 	}
+
+	// The domain is compared the way a mail domain is read: whatever its
+	// case, and only the domain itself.
+	ginaH := env.registerEmail("sw-gina", "gina@"+strings.ToUpper(domain))
+	env.verifyEmail(ginaH)
+	if n, err := env.srvObj.RunFoldInSweep(context.Background(), orgID, domain); err != nil || n != 1 {
+		t.Fatalf("the sweep after an upper-case address at the domain folded %d (err %v), want 1 (gina)", n, err)
+	}
+	var ginaState string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT m.state FROM memberships m JOIN handles h ON h.id = m.user_id WHERE h.handle = $1 AND m.org_id = $2`, ginaH, orgID).Scan(&ginaState); err != nil || ginaState != "pending" {
+		t.Fatalf("gina after the sweep: %q %v, want pending", ginaState, err)
+	}
 }
 
 // digestNotifier records the pending-members digests.
@@ -418,7 +518,7 @@ func (n *digestNotifier) to(email string) []notify.PendingMembersNotice {
 // nothing; a person who arrives later is named in the next digest, alone.
 func TestPendingMembersDigestIsBatchedAndVerifiedOnly(t *testing.T) {
 	mails := &digestNotifier{Notifier: notify.LogNotifier{}}
-	env := newTestEnvWith(t, func(s *api.Server) { s.SetNotifier(mails) })
+	env := newTestEnvCfg(t, func(c *config.Config) { c.Web.URL = "https://site.example" }, func(s *api.Server) { s.SetNotifier(mails) })
 	domain := "digest" + env.sfx + ".io"
 	adminH := env.registerEmail("dg-admin", "admin@"+domain)
 	env.verifyEmail(adminH)
@@ -435,6 +535,29 @@ func TestPendingMembersDigestIsBatchedAndVerifiedOnly(t *testing.T) {
 	otherH := env.registerEmailUnverified("dg-other", "other@"+domain)
 	if _, err := env.st.Pool().Exec(context.Background(),
 		`INSERT INTO memberships (org_id, user_id, role, state) SELECT $1, id, 'admin', 'active' FROM handles WHERE handle = $2`, orgID, otherH); err != nil {
+		t.Fatal(err)
+	}
+	// Admins and members who must not be mailed: an admin who turned the
+	// organization mails off, one who is suspended, and a plain member.
+	quietH := env.registerEmail("dg-quiet", "quiet@"+domain)
+	env.verifyEmail(quietH)
+	env.doJSON(env.login(quietH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
+		"email": map[string]any{"dependencyAlerts": false, "quarantine": false, "reviewDecisions": false, "advisories": false, "orgInvites": false},
+		"web":   map[string]any{"dependencyAlerts": false},
+	}, nil, http.StatusOK)
+	for h, seat := range map[string]struct{ role, state string }{
+		quietH: {"admin", "active"},
+		env.registerEmail("dg-susp", "susp@"+domain):   {"admin", "active"},
+		env.registerEmail("dg-plain", "plain@"+domain): {"member", "active"},
+	} {
+		env.verifyEmail(h)
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`INSERT INTO memberships (org_id, user_id, role, state) SELECT $1, id, $3, $4 FROM handles WHERE handle = $2`, orgID, h, seat.role, seat.state); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE users SET state = 'suspended' WHERE id = (SELECT id FROM handles WHERE handle = $1)`, "dg-susp"+env.sfx); err != nil {
 		t.Fatal(err)
 	}
 	// Two people at the domain, folded in by the sweep.
@@ -467,12 +590,20 @@ func TestPendingMembersDigestIsBatchedAndVerifiedOnly(t *testing.T) {
 		t.Fatalf("the admin's digest: %+v", got)
 	}
 	for _, m := range got[0].Members {
-		if m.Via != "domain" || !strings.HasSuffix(m.Email, "@"+domain) || m.Handle == "" {
+		if m.Via != "domain" || !strings.HasSuffix(m.Email, "@"+domain) || m.Handle == "" || m.Since.IsZero() {
 			t.Fatalf("member in the digest: %+v", m)
 		}
 	}
+	if want := "https://site.example/orgs/" + org + "/admin"; got[0].ConsoleURL != want {
+		t.Fatalf("the digest's console link = %q, want %q", got[0].ConsoleURL, want)
+	}
 	if len(mails.to("other@"+domain)) != 0 {
 		t.Fatal("an admin with an unverified address was mailed")
+	}
+	for _, addr := range []string{"quiet", "susp", "plain"} {
+		if len(mails.to(addr+"@"+domain)) != 0 {
+			t.Fatalf("%s@%s was mailed the digest", addr, domain)
+		}
 	}
 	// Named once: the next run has nothing to say to this admin.
 	if _, err := env.srvObj.RunPendingMembersDigest(context.Background(), uuid.Nil); err != nil {
@@ -492,5 +623,170 @@ func TestPendingMembersDigestIsBatchedAndVerifiedOnly(t *testing.T) {
 	got = mails.to("admin@" + domain)
 	if len(got) != 2 || len(got[1].Members) != 1 || !strings.HasPrefix(got[1].Members[0].Handle, "dg-dave") {
 		t.Fatalf("the latecomer's digest: %+v", got)
+	}
+
+	// Whichever door they came through: a person provisioned by the
+	// directory is named as such, and an admin who has not been approved
+	// yet is named, not mailed. An organization that is suspended is mailed
+	// nothing, and the person waits for the day it is not.
+	erinH := env.registerEmail("dg-erin", "erin@"+domain)
+	env.verifyEmail(erinH)
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO memberships (org_id, user_id, role, via_scim, state) SELECT $1, id, 'admin', true, 'pending' FROM handles WHERE handle = $2`, orgID, erinH); err != nil {
+		t.Fatal(err)
+	}
+	setOrgState := func(state string) {
+		t.Helper()
+		if _, err := env.st.Pool().Exec(context.Background(), `UPDATE orgs SET state = $2 WHERE id = $1`, orgID, state); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setOrgState("suspended")
+	t.Cleanup(func() { setOrgState("active") })
+	if mailed, err := env.srvObj.RunPendingMembersDigest(context.Background(), orgID); err != nil || mailed != 0 {
+		t.Fatalf("digest for a suspended organization: mailed %d (err %v), want 0", mailed, err)
+	}
+	if got := mails.to("admin@" + domain); len(got) != 2 {
+		t.Fatalf("a suspended organization's admin was mailed: %+v", got)
+	}
+	setOrgState("active")
+	if mailed, err := env.srvObj.RunPendingMembersDigest(context.Background(), orgID); err != nil || mailed != 1 {
+		t.Fatalf("digest once the organization is active again: mailed %d (err %v), want 1", mailed, err)
+	}
+	got = mails.to("admin@" + domain)
+	if len(got) != 3 || len(got[2].Members) != 1 || got[2].Members[0].Via != "scim" || !strings.HasPrefix(got[2].Members[0].Handle, "dg-erin") {
+		t.Fatalf("the provisioned person's digest: %+v", got)
+	}
+	if len(mails.to("erin@"+domain)) != 0 {
+		t.Fatal("an admin who is still pending was mailed")
+	}
+
+	// One organization's digest leaves the others' to their own run.
+	otherAdminH := env.registerEmail("dg-b-admin", "admin@digestb"+env.sfx+".io")
+	env.verifyEmail(otherAdminH)
+	orgB := "digestb" + env.sfx
+	env.doJSON(env.login(otherAdminH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": orgB, "displayName": "Digest B"}, nil, http.StatusCreated)
+	var orgBID uuid.UUID
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT id FROM handles WHERE handle = $1`, orgB).Scan(&orgBID); err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range []string{"dg-b-pending", "dg-a-pending"} {
+		env.verifyEmail(env.registerEmail(h, h+"@elsewhere"+env.sfx+".io"))
+	}
+	for h, target := range map[string]uuid.UUID{"dg-b-pending": orgBID, "dg-a-pending": orgID} {
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`INSERT INTO memberships (org_id, user_id, role, state) SELECT $1, id, 'member', 'pending' FROM handles WHERE handle = $2`, target, h+env.sfx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if mailed, err := env.srvObj.RunPendingMembersDigest(context.Background(), orgID); err != nil || mailed != 1 {
+		t.Fatalf("digest for one organization: mailed %d (err %v), want 1", mailed, err)
+	}
+	var waiting int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM memberships WHERE org_id = $1 AND state = 'pending' AND admins_notified_at IS NULL`, orgBID).Scan(&waiting); err != nil || waiting != 1 {
+		t.Fatalf("the other organization's waiting members after the first one's digest: %d (%v), want 1", waiting, err)
+	}
+	if len(mails.to("admin@digestb"+env.sfx+".io")) != 0 {
+		t.Fatal("the other organization's admin was mailed by the first one's digest")
+	}
+	if _, err := env.srvObj.RunPendingMembersDigest(context.Background(), uuid.Nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(mails.to("admin@digestb"+env.sfx+".io")) != 1 {
+		t.Fatal("the other organization's admin was not mailed by the run for every organization")
+	}
+
+	// An organization none of whose admins can be written to has its
+	// pending members marked told all the same: they are on the console,
+	// and a daily retry would never end.
+	silentAdminH := env.registerEmail("dg-c-admin", "admin@digestc"+env.sfx+".io")
+	env.verifyEmail(silentAdminH)
+	orgC := "digestc" + env.sfx
+	env.doJSON(env.login(silentAdminH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": orgC, "displayName": "Digest C"}, nil, http.StatusCreated)
+	var orgCID uuid.UUID
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT id FROM handles WHERE handle = $1`, orgC).Scan(&orgCID); err != nil {
+		t.Fatal(err)
+	}
+	env.verifyEmail(env.registerEmail("dg-c-pending", "dg-c-pending@elsewhere"+env.sfx+".io"))
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO memberships (org_id, user_id, role, state) SELECT $1, id, 'member', 'pending' FROM handles WHERE handle = $2`, orgCID, "dg-c-pending"+env.sfx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE users SET email_verified_at = NULL WHERE id = (SELECT id FROM handles WHERE handle = $1)`, silentAdminH); err != nil {
+		t.Fatal(err)
+	}
+	if mailed, err := env.srvObj.RunPendingMembersDigest(context.Background(), orgCID); err != nil || mailed != 0 {
+		t.Fatalf("digest for an organization no admin of which can be mailed: mailed %d (err %v), want 0", mailed, err)
+	}
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM memberships WHERE org_id = $1 AND state = 'pending' AND admins_notified_at IS NULL`, orgCID).Scan(&waiting); err != nil || waiting != 0 {
+		t.Fatalf("pending members left unmarked in an organization no admin of which can be mailed: %d (%v)", waiting, err)
+	}
+}
+
+// TestFoldInJobsRunOnTheQueue: an organization created at a domain makes the
+// sweep a job; the worker folds in the accounts already known at the domain,
+// and that organization's admins are mailed the digest at once, while another
+// organization's pending members wait for the daily run, whose period is the
+// configured one or a day.
+func TestFoldInJobsRunOnTheQueue(t *testing.T) {
+	mails := &digestNotifier{Notifier: notify.LogNotifier{}}
+	env := newTestEnvWith(t, func(s *api.Server) { s.SetNotifier(mails) })
+	ctx := context.Background()
+	domain := "jobs" + env.sfx + ".io"
+	bobH := env.registerEmail("jb-bob", "bob@"+domain)
+	env.verifyEmail(bobH)
+
+	// Another organization with a pending member nobody has been told about.
+	otherAdminH := env.registerEmail("jb-oa", "admin@jobsother"+env.sfx+".io")
+	env.verifyEmail(otherAdminH)
+	otherOrg := "jobsother" + env.sfx
+	env.doJSON(env.login(otherAdminH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": otherOrg, "displayName": "Jobs Other"}, nil, http.StatusCreated)
+	waitingH := env.registerEmail("jb-wait", "wait@elsewhere"+env.sfx+".io")
+	env.verifyEmail(waitingH)
+	if _, err := env.st.Pool().Exec(ctx,
+		`INSERT INTO memberships (org_id, user_id, role, state) SELECT o.id, u.id, 'member', 'pending' FROM handles o, handles u WHERE o.handle = $1 AND u.handle = $2`,
+		otherOrg, waitingH); err != nil {
+		t.Fatal(err)
+	}
+
+	adminH := env.registerEmail("jb-admin", "admin@"+domain)
+	env.verifyEmail(adminH)
+	org := "jobsorg" + env.sfx
+	env.doJSON(env.login(adminH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": org, "displayName": "Jobs Corp"}, nil, http.StatusCreated)
+	if _, folded := membershipOf(t, env, org, userIDOf(t, env, bobH).String()); folded {
+		t.Fatal("bob was folded in before any worker ran")
+	}
+
+	// The worker: the sweep job folds bob in and asks for this organization's
+	// digest, which is the next job.
+	q := queue.NewRiverClient(env.st, nil)
+	q.SetTestOnly(true)
+	env.srvObj.RegisterQueueHandlers(q)
+	for range 3 {
+		q.Drain(ctx, "core")
+	}
+	if state, via := membershipOf(t, env, org, userIDOf(t, env, bobH).String()); state != "pending" || !via {
+		t.Fatalf("bob after the worker ran: state=%q viaDomain=%v, want pending via the domain", state, via)
+	}
+	got := mails.to("admin@" + domain)
+	if len(got) != 1 || got[0].Org != org || len(got[0].Members) != 1 || got[0].Members[0].Handle != bobH {
+		t.Fatalf("the organization's admin was mailed %+v, want one digest naming bob", got)
+	}
+	var waiting int
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM memberships m JOIN handles h ON h.id = m.org_id WHERE h.handle = $1 AND m.state = 'pending' AND m.admins_notified_at IS NULL`, otherOrg).Scan(&waiting); err != nil || waiting != 1 {
+		t.Fatalf("the other organization's waiting members after the sweep's digest: %d (%v), want 1", waiting, err)
+	}
+
+	if got := api.PendingDigestPeriod(config.Config{}); got != 24*time.Hour {
+		t.Fatalf("the digest period of a configuration that names none = %s, want a day", got)
+	}
+	cfg := config.Default()
+	cfg.Orgs.PendingDigestEvery = 6 * time.Hour
+	if got := api.PendingDigestPeriod(cfg); got != 6*time.Hour {
+		t.Fatalf("the configured digest period = %s, want 6h", got)
 	}
 }

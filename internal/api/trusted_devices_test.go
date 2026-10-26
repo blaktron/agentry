@@ -34,6 +34,7 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -47,6 +48,7 @@ import (
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/testidp"
 )
 
@@ -81,7 +83,38 @@ func userIDOf(t *testing.T, env *testEnv, handle string) uuid.UUID {
 // signInRequest stands in for the sign-in callback's request, which the
 // mint and the use record facts from.
 func signInRequest() *http.Request {
-	return httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/oidc/callback", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/oidc/callback", nil)
+	r.Header.Set("User-Agent", "td-test/1.0")
+	return r
+}
+
+// deviceAudit is the audit rows of an action about an account, oldest first:
+// who acted, and what the row says.
+func deviceAudit(t *testing.T, env *testEnv, action string, userID uuid.UUID) (actors []string, details []map[string]any) {
+	t.Helper()
+	rows, err := env.st.Pool().Query(context.Background(),
+		`SELECT actor_kind || ':' || coalesce(actor_id::text, ''), detail FROM audit_events
+		  WHERE action = $1 AND target_id = $2 ORDER BY occurred_at, id`, action, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var actor string
+		var raw []byte
+		if err := rows.Scan(&actor, &raw); err != nil {
+			t.Fatal(err)
+		}
+		var d map[string]any
+		if err := json.Unmarshal(raw, &d); err != nil {
+			t.Fatal(err)
+		}
+		actors, details = append(actors, actor), append(details, d)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return actors, details
 }
 
 // earnTrustedDevice makes a fresh account and remembers a browser for it the
@@ -168,10 +201,14 @@ func TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor(t *testing.T) {
 		amr      []string
 		authTime time.Time
 	}{
-		"no second factor":           {[]string{"pwd"}, time.Now()},
-		"no amr at all":              {nil, time.Now()},
-		"no auth_time":               {[]string{"otp"}, time.Time{}},
-		"a factor answered long ago": {[]string{"otp"}, time.Now().Add(-time.Hour)},
+		"no second factor":                  {[]string{"pwd"}, time.Now()},
+		"no amr at all":                     {nil, time.Now()},
+		"no auth_time":                      {[]string{"otp"}, time.Time{}},
+		"a factor answered long ago":        {[]string{"otp"}, time.Now().Add(-time.Hour)},
+		"a factor answered ten minutes ago": {[]string{"otp"}, time.Now().Add(-10 * time.Minute)},
+		"a factor answered six minutes ago": {[]string{"otp"}, time.Now().Add(-6 * time.Minute)},
+		"an auth_time an hour ahead":        {[]string{"otp"}, time.Now().Add(time.Hour)},
+		"an auth_time six minutes ahead":    {[]string{"otp"}, time.Now().Add(6 * time.Minute)},
 	} {
 		if _, _, err := env.srvObj.MintRememberedBrowser(signInRequest(), id, ev.amr, ev.authTime, nil); !errors.Is(err, api.ErrNoSecondFactor) {
 			t.Errorf("%s: mint err = %v, want ErrNoSecondFactor", name, err)
@@ -181,8 +218,39 @@ func TestTrustedDeviceIsEarnedOnlyByAnsweringTheSecondFactor(t *testing.T) {
 		t.Fatalf("%d records minted without a fresh second factor", n)
 	}
 
+	// A factor answered four minutes ago, or an auth_time four minutes ahead
+	// of this clock, is still fresh.
+	for name, authTime := range map[string]time.Time{
+		"four minutes ago":   time.Now().Add(-4 * time.Minute),
+		"four minutes ahead": time.Now().Add(4 * time.Minute),
+	} {
+		fresh := userIDOf(t, env, env.register("td-win"+strings.ReplaceAll(name, " ", "")))
+		if _, _, err := env.srvObj.MintRememberedBrowser(signInRequest(), fresh, []string{"pwd", "otp"}, authTime, nil); err != nil {
+			t.Errorf("a factor answered %s earned no remembered browser: %v", name, err)
+		}
+	}
+
+	// An account that is not active is remembered nowhere, and a record it
+	// held before is no longer honoured.
+	_, suspended, suspendedToken := earnTrustedDevice(t, env, "td-suspended")
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE users SET state = 'suspended' WHERE id = $1`, suspended); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := env.srvObj.MintRememberedBrowser(signInRequest(), suspended, []string{"otp"}, time.Now(), nil); err == nil || errors.Is(err, api.ErrNoSecondFactor) {
+		t.Errorf("a suspended account's mint err = %v, want a refusal of the account", err)
+	}
+	if n := countDevices(t, env, suspended); n != 1 {
+		t.Errorf("%d records for a suspended account after a refused mint, want the 1 it had", n)
+	}
+	requireRemembered(t, env, suspended, suspendedToken, false)
+
 	_, other, token := earnTrustedDevice(t, env, "td-earn2")
 	requireRemembered(t, env, other, token, true)
+	// The mint is audited as the person, with what the sign-in said.
+	actors, details := deviceAudit(t, env, "user.trusted_device_add", other)
+	if len(actors) != 1 || actors[0] != "user:"+other.String() || details[0]["via"] != "test" {
+		t.Fatalf("user.trusted_device_add rows: %v %v, want one by the person with the sign-in's detail", actors, details)
+	}
 	// The use did not mint a second credential, which is what keeps the
 	// lifetime absolute: one browser earns one record.
 	if n := countDevices(t, env, other); n != 1 {
@@ -256,6 +324,8 @@ func TestTrustedDeviceRefusesADeadCredential(t *testing.T) {
 	cases := []struct {
 		name  string
 		token string
+		// user, when set, is the account asking instead of the owner.
+		user uuid.UUID
 		// kill mutates the stored row before the use, for the cases where
 		// the token is genuine but the record behind it is not live.
 		kill func(t *testing.T)
@@ -287,13 +357,38 @@ func TestTrustedDeviceRefusesADeadCredential(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:  "an account that does not exist",
+			token: token,
+			user:  uuid.New(),
+		},
+		{
+			name:  "an account that is not active",
+			token: token,
+			kill: func(t *testing.T) {
+				// A live record again, behind an account that is not.
+				if _, err := env.st.Pool().Exec(ctx,
+					`UPDATE trusted_devices SET revoked_at = NULL, expires_at = now() + interval '1 hour'
+					  WHERE token_sha256 = $1`, auth.HashToken(token)); err != nil {
+					t.Fatal(err)
+				}
+				requireRemembered(t, env, id, token, true)
+				if _, err := env.st.Pool().Exec(ctx, `UPDATE users SET state = 'suspended' WHERE id = $1`, id); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.kill != nil {
 				tc.kill(t)
 			}
-			requireRemembered(t, env, id, tc.token, false)
+			who := id
+			if tc.user != uuid.Nil {
+				who = tc.user
+			}
+			requireRemembered(t, env, who, tc.token, false)
 		})
 	}
 }
@@ -341,6 +436,10 @@ func TestTrustedDeviceExpiryIsAbsoluteNotSliding(t *testing.T) {
 	_, id, token := earnTrustedDevice(t, env, "td-absolute")
 
 	before := fetchDeviceRow(t, env, id)
+	// The stored lifetime is the configured one, from now.
+	if left := time.Until(before.expiresAt); left < deviceTTL-5*time.Minute || left > deviceTTL+time.Minute {
+		t.Fatalf("the record expires in %s, want the configured %s", left, deviceTTL)
+	}
 	requireRemembered(t, env, id, token, true)
 	after := fetchDeviceRow(t, env, id)
 	if !after.expiresAt.Equal(before.expiresAt) {
@@ -362,6 +461,20 @@ func TestTrustedDeviceExpiryIsAbsoluteNotSliding(t *testing.T) {
 	}
 	if n := countDevices(t, env, id); n != 1 {
 		t.Fatalf("%d records after one earn and one use, want exactly 1", n)
+	}
+	// The use is audited as the person, naming the record; a detail the
+	// caller passes cannot rename the record.
+	if _, err := env.srvObj.UseRememberedBrowser(signInRequest(), id, token, map[string]any{"via": "second", "device": "forged"}); err != nil {
+		t.Fatal(err)
+	}
+	actors, details := deviceAudit(t, env, "user.trusted_device_use", id)
+	if len(actors) != 2 {
+		t.Fatalf("%d user.trusted_device_use rows after two uses, want 2", len(actors))
+	}
+	for i, via := range []string{"test", "second"} {
+		if actors[i] != "user:"+id.String() || details[i]["device"] != before.id.String() || details[i]["via"] != via {
+			t.Fatalf("use %d audit row: %s %v, want the person, record %s and via %q", i+1, actors[i], details[i], before.id, via)
+		}
 	}
 }
 
@@ -393,6 +506,17 @@ func TestTrustedDeviceStoresOnlyTheHash(t *testing.T) {
 	}
 	if strings.Contains(whole, token) {
 		t.Fatal("the issued token is recoverable from the stored row")
+	}
+
+	// The record describes the browser to its owner: the address and user
+	// agent of the sign-in that earned it.
+	var ip, agent string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT coalesce(host(ip), ''), coalesce(user_agent, '') FROM trusted_devices WHERE id = $1`, row.id).Scan(&ip, &agent); err != nil {
+		t.Fatal(err)
+	}
+	if ip != "192.0.2.1" || agent != "td-test/1.0" {
+		t.Fatalf("the record holds address %q and user agent %q, want the sign-in's", ip, agent)
 	}
 }
 
@@ -491,12 +615,14 @@ func TestTrustedDeviceSweepDeletesOnlyWhatHasExpired(t *testing.T) {
 	expired := insertTrustedDevice(t, env, userID)
 	revoked := insertTrustedDevice(t, env, userID)
 	revokedExpired := insertTrustedDevice(t, env, userID)
+	expiringSoon := insertTrustedDevice(t, env, userID)
 	for _, stmt := range []struct {
 		sql, token string
 	}{
 		{`UPDATE trusted_devices SET expires_at = now() - interval '1 minute' WHERE token_sha256 = $1`, expired},
 		{`UPDATE trusted_devices SET revoked_at = now() WHERE token_sha256 = $1`, revoked},
 		{`UPDATE trusted_devices SET revoked_at = now() - interval '2 days', expires_at = now() - interval '1 minute' WHERE token_sha256 = $1`, revokedExpired},
+		{`UPDATE trusted_devices SET expires_at = now() + interval '1 hour' WHERE token_sha256 = $1`, expiringSoon},
 	} {
 		if _, err := env.st.Pool().Exec(ctx, stmt.sql, auth.HashToken(stmt.token)); err != nil {
 			t.Fatal(err)
@@ -518,6 +644,8 @@ func TestTrustedDeviceSweepDeletesOnlyWhatHasExpired(t *testing.T) {
 		"revoked, not expired": {revoked, "revoked"},
 		// A revoked record is kept to its own lifetime, and then it goes too.
 		"revoked and expired": {revokedExpired, "gone"},
+		// A record is kept to the second of its own expiry, not a day short.
+		"expiring in an hour": {expiringSoon, "live"},
 	} {
 		if got := deviceState(t, env, tc.token); got != tc.want {
 			t.Errorf("%s record after the sweep: %s, want %s", name, got, tc.want)
@@ -538,12 +666,20 @@ func TestTrustedDeviceSweepDeletesOnlyWhatHasExpired(t *testing.T) {
 func TestTrustedDeviceSurvivesLogout(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
 	h, id, token := earnTrustedDevice(t, env, "td-logout")
-	out := env.do(env.login(h), http.MethodPost, "/api/v1/auth/logout", nil)
+	session := env.login(h)
+	out := env.do(session, http.MethodPost, "/api/v1/auth/logout", nil)
 	_ = out.Body.Close()
 	if out.StatusCode != http.StatusNoContent {
 		t.Fatalf("logout: %d", out.StatusCode)
 	}
 	requireNoCookie(t, out.Cookies(), trustedDeviceCookie)
+	// What logout does end is the session, and its cookie.
+	requireClearedCookie(t, out.Cookies(), "agentry_session", false)
+	after := env.do(session, http.MethodGet, "/api/v1/user", nil)
+	_ = after.Body.Close()
+	if after.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("the signed-out session: %d, want 401", after.StatusCode)
+	}
 	requireRemembered(t, env, id, token, true)
 }
 
@@ -554,7 +690,43 @@ func TestTrustedDeviceSurvivesLogout(t *testing.T) {
 func TestTrustedDeviceSurvivesSignOutEverywhereElse(t *testing.T) {
 	env := newTrustedDeviceEnv(t)
 	h, id, token := earnTrustedDevice(t, env, "td-elsewhere")
-	env.login(h)
-	env.doJSON(env.login(h), http.MethodDelete, "/api/v1/user/sessions", nil, nil, http.StatusNoContent)
+	elsewhere := env.login(h)
+	here := env.login(h)
+	env.doJSON(here, http.MethodDelete, "/api/v1/user/sessions", nil, nil, http.StatusNoContent)
+	// The session control ends the other browser's session and spares this one.
+	gone := env.do(elsewhere, http.MethodGet, "/api/v1/user", nil)
+	_ = gone.Body.Close()
+	kept := env.do(here, http.MethodGet, "/api/v1/user", nil)
+	_ = kept.Body.Close()
+	if gone.StatusCode != http.StatusUnauthorized || kept.StatusCode != http.StatusOK {
+		t.Fatalf("after signing out everywhere else: the other session %d (want 401), this one %d (want 200)", gone.StatusCode, kept.StatusCode)
+	}
 	requireRemembered(t, env, id, token, true)
+}
+
+// TestTrustedDeviceSweepRunsOnTheQueue: the worker role runs the sweep as a
+// job: an enqueued sweep removes the expired record and leaves the live one.
+func TestTrustedDeviceSweepRunsOnTheQueue(t *testing.T) {
+	env := newTrustedDeviceEnv(t)
+	ctx := context.Background()
+	userID := userIDOf(t, env, env.register("td-queue")).String()
+	live := insertTrustedDevice(t, env, userID)
+	expired := insertTrustedDevice(t, env, userID)
+	if _, err := env.st.Pool().Exec(ctx,
+		`UPDATE trusted_devices SET expires_at = now() - interval '1 minute' WHERE token_sha256 = $1`, auth.HashToken(expired)); err != nil {
+		t.Fatal(err)
+	}
+	q := queue.NewRiverClient(env.st, nil)
+	q.SetTestOnly(true)
+	env.srvObj.RegisterQueueHandlers(q)
+	if _, err := q.Enqueue(ctx, api.JobTrustedDeviceSweep, "core", struct{}{}); err != nil {
+		t.Fatal(err)
+	}
+	q.Drain(ctx, "core")
+	if got := deviceState(t, env, expired); got != "gone" {
+		t.Errorf("the expired record after the queued sweep: %s, want gone", got)
+	}
+	if got := deviceState(t, env, live); got != "live" {
+		t.Errorf("the live record after the queued sweep: %s, want live", got)
+	}
 }

@@ -10,7 +10,13 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/config"
 )
 
 func TestDesktopGrantExchange(t *testing.T) {
@@ -28,6 +34,44 @@ func TestDesktopGrantExchange(t *testing.T) {
 		map[string]any{"state": state}, &grant, http.StatusCreated)
 	if grant.Code == "" || grant.ExpiresAt == "" {
 		t.Fatalf("grant lacks code or expiry: %+v", grant)
+	}
+	if !strings.HasPrefix(grant.Code, "agd_") {
+		t.Fatalf("grant code %q lacks the agd_ prefix", grant.Code[:min(len(grant.Code), 6)])
+	}
+	// The code is good for a minute.
+	expires, err := time.Parse(time.RFC3339Nano, grant.ExpiresAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if left := time.Until(expires); left < 50*time.Second || left > 61*time.Second {
+		t.Fatalf("grant expires in %s, want a minute", left)
+	}
+	// The app's state is a nonce of 8 to 128 letters, digits, hyphens and
+	// underscores, the whole of it.
+	for _, tc := range []struct {
+		name, state string
+		want        int
+	}{
+		{"seven characters", "abcdefg", http.StatusUnprocessableEntity},
+		{"eight characters", "abcdefgh", http.StatusCreated},
+		{"128 characters", strings.Repeat("a", 128), http.StatusCreated},
+		{"129 characters", strings.Repeat("a", 129), http.StatusUnprocessableEntity},
+		{"hyphen and underscore", "ab-cd_ef-gh_ij", http.StatusCreated},
+		{"a space", "abcd efgh", http.StatusUnprocessableEntity},
+		{"a punctuation mark", "abcdefgh!", http.StatusUnprocessableEntity},
+		{"junk before it", "!!abcdefgh", http.StatusUnprocessableEntity},
+		{"a newline after it", "abcdefgh\n", http.StatusUnprocessableEntity},
+		{"empty", "", http.StatusUnprocessableEntity},
+	} {
+		res := env.do(sess, http.MethodPost, "/api/v1/user/tokens/desktop-grant", map[string]any{"state": tc.state})
+		b, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != tc.want {
+			t.Errorf("state with %s: %d %s, want %d", tc.name, res.StatusCode, b, tc.want)
+		}
+		if tc.want == http.StatusUnprocessableEntity && !strings.Contains(string(b), `"state"`) {
+			t.Errorf("state with %s: the refusal does not name the state field: %s", tc.name, b)
+		}
 	}
 
 	exchange := func(code, st string) (int, map[string]any) {
@@ -53,9 +97,54 @@ func TestDesktopGrantExchange(t *testing.T) {
 	if tok == "" {
 		t.Fatal("exchange returned no token")
 	}
+	if !strings.HasPrefix(tok, auth.PATPrefix) {
+		t.Fatalf("the exchanged token lacks the %q prefix", auth.PATPrefix)
+	}
+	if name, _ := pat["name"].(string); !strings.HasPrefix(name, "Agentry Desktop (") {
+		t.Fatalf("the exchanged token is named %q, want an Agentry Desktop token", name)
+	}
+	// It lives as long as a token may.
+	patExpires, err := time.Parse(time.RFC3339Nano, pat["expiresAt"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if off := time.Until(patExpires) - config.Default().Auth.PATMaxTTL; off < -time.Hour || off > time.Hour {
+		t.Fatalf("the exchanged token expires %s from the maximum lifetime", off)
+	}
+	// The exchange is audited as the person, naming the grant it consumed.
+	var auditActor, auditUser string
+	var auditDetail []byte
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT actor_kind, actor_id::text, detail FROM audit_events WHERE action = 'pat.create' AND target_id = $1::uuid`, pat["id"]).
+		Scan(&auditActor, &auditUser, &auditDetail); err != nil {
+		t.Fatalf("audit pat.create: %v", err)
+	}
+	var grantID string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT id::text FROM desktop_grants WHERE code_sha256 = $1`, auth.HashToken(grant.Code)).Scan(&grantID); err != nil {
+		t.Fatal(err)
+	}
+	var auditBody map[string]any
+	_ = json.Unmarshal(auditDetail, &auditBody)
+	if auditActor != "user" || auditUser != env.selfID(sess) || auditBody["via"] != "desktop-exchange" || auditBody["grant"] != grantID {
+		t.Fatalf("pat.create audit row: actor %s %s, detail %s", auditActor, auditUser, auditDetail)
+	}
 	scopes, _ := pat["scopes"].([]any)
 	if len(scopes) != 13 {
 		t.Fatalf("desktop PAT scopes = %v, want the thirteen desktop scopes", scopes)
+	}
+	var granted []string
+	for _, sc := range scopes {
+		granted = append(granted, sc.(string))
+	}
+	slices.Sort(granted)
+	wantScopes := []string{
+		"agent:manage", "agent:publish", "agent:read", "knowledge:read", "knowledge:write",
+		"repo:read", "repo:write", "run:read", "run:write", "secret:write",
+		"user:profile", "voice:read", "voice:write",
+	}
+	if !slices.Equal(granted, wantScopes) {
+		t.Fatalf("desktop PAT scopes = %v, want exactly %v", granted, wantScopes)
 	}
 	has := map[string]bool{}
 	for _, sc := range scopes {
@@ -144,6 +233,7 @@ func TestErasureConsumesDesktopGrants(t *testing.T) {
 	sess := env.login(h)
 	uid := env.selfID(sess)
 	other := env.login(h) // the session that mints the code
+	_, _ = env.mintPAT(sess, "dsk-erase-pat", "user:profile")
 
 	const state = "app-nonce-erase-0123456789"
 	var grant struct {
@@ -180,6 +270,15 @@ func TestErasureConsumesDesktopGrants(t *testing.T) {
 	}
 	if livePATs != 0 {
 		t.Fatalf("live PATs for the erased account: %d, want 0", livePATs)
+	}
+	var allPATs, liveSessions int
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT (SELECT count(*) FROM pats WHERE user_id = $1),
+		        (SELECT count(*) FROM sessions WHERE user_id = $1 AND revoked_at IS NULL)`, uid).Scan(&allPATs, &liveSessions); err != nil {
+		t.Fatal(err)
+	}
+	if allPATs != 1 || liveSessions != 0 {
+		t.Fatalf("after erasure: %d PATs kept as revoked (want the one it had), %d live sessions (want 0)", allPATs, liveSessions)
 	}
 
 	var detail []byte

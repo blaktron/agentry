@@ -43,7 +43,14 @@ func (p *probeEraser) erase(ctx context.Context, tx api.ErasureTx, userID uuid.U
 
 func newErasureProbe(t *testing.T, env *testEnv) *probeEraser {
 	t.Helper()
-	p := &probeEraser{table: "erasure_probe_" + env.sfxDigits()}
+	return newNamedErasureProbe(t, env, "")
+}
+
+// newNamedErasureProbe is a probe with a table of its own, for a test that
+// registers more than one eraser.
+func newNamedErasureProbe(t *testing.T, env *testEnv, name string) *probeEraser {
+	t.Helper()
+	p := &probeEraser{table: "erasure_probe_" + name + env.sfxDigits()}
 	ctx := context.Background()
 	if _, err := env.st.Pool().Exec(ctx, `CREATE TABLE `+p.table+` (user_id uuid NOT NULL, kind text NOT NULL)`); err != nil {
 		t.Fatal(err)
@@ -82,15 +89,20 @@ func auditDetail(t *testing.T, env *testEnv, action, userID string) map[string]a
 // TestAccountEraserCommitsWithTheErasure: the eraser is called once, with
 // the account and AccountErased and a handle that cannot commit, its write
 // lands with the erasure, and the user.delete event counts its rows under
-// its name.
+// its name. Every registered eraser is called, each counted under its own
+// name.
 func TestAccountEraserCommitsWithTheErasure(t *testing.T) {
-	var probe *probeEraser
+	var probe, second *probeEraser
 	env := newTestEnvWith(t, func(s *api.Server) {
 		s.AddAccountEraser("probe", func(ctx context.Context, tx api.ErasureTx, id uuid.UUID, k api.AccountErasureKind) (int64, error) {
 			return probe.erase(ctx, tx, id, k)
 		})
+		s.AddAccountEraser("second", func(ctx context.Context, tx api.ErasureTx, id uuid.UUID, k api.AccountErasureKind) (int64, error) {
+			return second.erase(ctx, tx, id, k)
+		})
 	})
 	probe = newErasureProbe(t, env)
+	second = newNamedErasureProbe(t, env, "b")
 
 	h := env.register("es-erase")
 	env.verifyEmail(h)
@@ -104,9 +116,15 @@ func TestAccountEraserCommitsWithTheErasure(t *testing.T) {
 	if probe.ended {
 		t.Fatal("the eraser was handed a transaction it could commit")
 	}
+	if got := second.rows(t, env, uid); len(got) != 1 || got[0] != string(api.AccountErased) {
+		t.Fatalf("second eraser calls = %v, want one %q", got, api.AccountErased)
+	}
+	if second.ended {
+		t.Fatal("the second eraser was handed a transaction it could commit")
+	}
 	d := auditDetail(t, env, "user.delete", uid)
-	if ext, _ := d["extensions"].(map[string]any); ext["probe"] != float64(1) {
-		t.Fatalf("user.delete detail = %v, want extensions.probe = 1", d)
+	if ext, _ := d["extensions"].(map[string]any); ext["probe"] != float64(1) || ext["second"] != float64(1) || len(ext) != 2 {
+		t.Fatalf("user.delete detail = %v, want extensions.probe = 1 and extensions.second = 1", d)
 	}
 }
 

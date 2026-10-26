@@ -1,6 +1,9 @@
 package api
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The two reserved lists differ in exactly one cell: a first-party name is
 // creatable as an org by platform staff, a root path by nobody.
@@ -62,6 +65,8 @@ func TestHandleSeed(t *testing.T) {
 		{"chris.young@contoso.test", "cy@contoso.test", "sub", "chris.young"}, // a UPN gives its local part
 		{"___", "chris@example.test", "sub", "chris"},                         // no valid handle in it
 		{"", "", "github-42", "github-42"},
+		{"  blaktron ", "chris@example.test", "sub", "blaktron"}, // the name is trimmed
+		{"@contoso.test", "chris@example.test", "sub", "chris"},  // an address with no local part
 	}
 	for _, c := range cases {
 		if got := handleSeed(c.username, c.email, c.subject); got != c.want {
@@ -75,6 +80,34 @@ func TestHandleSeed(t *testing.T) {
 	if got := sanitizeHandle(handleSeed("admin", "x@y.test", "s")); got != "admin-1" {
 		t.Errorf("a reserved username = %q, want admin-1", got)
 	}
+	// A derived handle is lower case, letters, digits and hyphens only,
+	// without edge hyphens, at most 39 characters, and never a reserved name.
+	for _, tc := range []struct{ in, want string }{
+		{"Chris.Young", "chris-young"},
+		{"  Mixed Case  ", "mixed-case"},
+		{"a_b.c", "a-b-c"},
+		{"--a--", "a"},
+		{"a..b", "a-b"},
+		{"---", ""},
+		{"", ""},
+		{"ui", "ui-1"},
+		{"agentry", "agentry-1"},
+		{strings.Repeat("a", 39), strings.Repeat("a", 39)},
+		{strings.Repeat("a", 40), strings.Repeat("a", 39)},
+		{strings.Repeat("a", 50), strings.Repeat("a", 39)},
+		// The cut lands on a hyphen: it does not end the handle.
+		{strings.Repeat("a", 38) + "-b", strings.Repeat("a", 38)},
+	} {
+		if got := sanitizeHandle(tc.in); got != tc.want {
+			t.Errorf("sanitizeHandle(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	if got := truncateHandle("abc-def", 4); got != "abc" {
+		t.Errorf("truncateHandle(abc-def, 4) = %q, want abc", got)
+	}
+	if got := truncateHandle("abc", 4); got != "abc" {
+		t.Errorf("truncateHandle(abc, 4) = %q, want abc", got)
+	}
 }
 
 func TestHandleRequestedDetail(t *testing.T) {
@@ -86,5 +119,19 @@ func TestHandleRequestedDetail(t *testing.T) {
 	}
 	if d := handleRequestedDetail("blaktron", "blaktron-1a2b3c"); d["handleRequested"] != "blaktron" {
 		t.Errorf("fallback not recorded: %v", d)
+	}
+	// Handles are case-insensitive, and the username is trimmed before it is
+	// compared and before it is recorded.
+	if d := handleRequestedDetail("Blaktron", "blaktron"); d != nil {
+		t.Errorf("a handle differing only in case recorded %v", d)
+	}
+	if d := handleRequestedDetail("  blaktron ", "blaktron"); d != nil {
+		t.Errorf("a padded username agreeing with the handle recorded %v", d)
+	}
+	if d := handleRequestedDetail("  blaktron ", "blaktron-1a2b3c"); d["handleRequested"] != "blaktron" {
+		t.Errorf("padded fallback recorded %v, want the trimmed username", d)
+	}
+	if d := handleRequestedDetail("   ", "chris"); d != nil {
+		t.Errorf("a blank username recorded %v", d)
 	}
 }
