@@ -61,7 +61,13 @@ type Options struct {
 	// session is revoked (the directory's end-session flow).
 	IdPLogoutURL string
 	CookieSecure bool
-	Log          *slog.Logger
+	// TrustProxy reports whether a request reached the server through a
+	// reverse proxy whose forwarded headers it believes (config
+	// http.trustedProxies and http.trustedProxyCIDRs). Only then is
+	// X-Forwarded-Host taken as the address the browser used; nil trusts
+	// no proxy.
+	TrustProxy func(*http.Request) bool
+	Log        *slog.Logger
 }
 
 type handler struct {
@@ -160,11 +166,7 @@ func (h *handler) refuse(w http.ResponseWriter, r *http.Request, status int, tit
 // crafted Referer cannot turn this into an off-site link.
 func (h *handler) wayBack(r *http.Request) (string, string) {
 	if u, err := url.Parse(r.Header.Get("Referer")); err == nil {
-		host := r.Header.Get("X-Forwarded-Host")
-		if host == "" {
-			host = r.Host
-		}
-		if u.Host == "" || u.Host == host {
+		if u.Host == "" || u.Host == h.requestHost(r) {
 			if p := safeNext(u.EscapedPath(), ""); p != "" {
 				return p, "Go back"
 			}
@@ -258,9 +260,23 @@ func (h *handler) homeURL() string {
 	return "/ui/"
 }
 
+// requestHost is the host the browser addressed: X-Forwarded-Host when a
+// trusted proxy forwarded the request, else Host. Any client can send
+// X-Forwarded-Host, so from a peer that is not a trusted proxy it is
+// ignored.
+func (h *handler) requestHost(r *http.Request) string {
+	if h.opt.TrustProxy != nil && h.opt.TrustProxy(r) {
+		if host := r.Header.Get("X-Forwarded-Host"); host != "" {
+			return host
+		}
+	}
+	return r.Host
+}
+
 // sameOrigin is the same rule the hosted site applies to its form posts:
-// Sec-Fetch-Site when the browser sends it, else Origin against Host.
-func sameOrigin(r *http.Request) bool {
+// Sec-Fetch-Site when the browser sends it, else Origin against the host the
+// browser addressed.
+func (h *handler) sameOrigin(r *http.Request) bool {
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" {
 		return site == "same-origin" || site == "none"
 	}
@@ -268,19 +284,15 @@ func sameOrigin(r *http.Request) bool {
 	if origin == "" {
 		return true
 	}
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
-	}
 	u, err := url.Parse(origin)
-	return err == nil && u.Host == host
+	return err == nil && u.Host == h.requestHost(r)
 }
 
 // acceptForm parses a form post and applies the two checks every mutation
 // gets: same origin, and the hidden _csrf field matching the CSRF cookie
 // (a double submit on top of the API's own header check).
 func (h *handler) acceptForm(w http.ResponseWriter, r *http.Request) bool {
-	if !sameOrigin(r) {
+	if !h.sameOrigin(r) {
 		h.refuseCrossOrigin(w, r)
 		return false
 	}
