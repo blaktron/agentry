@@ -989,6 +989,7 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 			Providers:    s.socialProviders(),
 			IdPLogoutURL: s.cfg.Auth.IdPLogoutURL,
 			CookieSecure: s.cfg.Auth.CookieSecure,
+			TrustProxy:   newProxyTrust(s.cfg.HTTP).peerTrusted,
 			Log:          s.log,
 		})
 		root = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

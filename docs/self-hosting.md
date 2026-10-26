@@ -975,6 +975,14 @@ controller's pod range; behind a cloud balancer, its subnets. The chart's
 `config.http.trustedProxyCIDRs` is empty by default and should be set with
 `trustedProxies`.
 
+The same peer test decides whether the server's own pages under `/ui/` read
+`X-Forwarded-Host`. When a browser sends no `Sec-Fetch-Site`, a form post is
+accepted only if its `Origin` names the host the browser addressed: the
+forwarded host on a request whose peer passes that test, and the `Host` header on
+every other request. A proxy that rewrites `Host` therefore needs
+`trustedProxies` set for those browsers; the compose edge passes the
+browser's `Host` through, so it works either way.
+
 `http.proxyRequestID: true` (`AGENTRY_PROXY_REQUEST_ID=true`) additionally
 says the hop in front **sets** `X-Request-Id` on every request it forwards
 — the compose edge does (`proxy_set_header X-Request-Id $request_id`); an

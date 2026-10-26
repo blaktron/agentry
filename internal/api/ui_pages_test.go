@@ -232,8 +232,8 @@ func TestCoreUISignInAccountAndDeviceAuthorize(t *testing.T) {
 			{"no fetch metadata, no origin", nil, form(csrf), []string{session, csrf}, http.StatusSeeOther, callback},
 			{"no fetch metadata, this origin", map[string]string{"Origin": br.env.srv.URL}, form(csrf), []string{session, csrf}, http.StatusSeeOther, callback},
 			{"no fetch metadata, another origin", map[string]string{"Origin": "https://elsewhere.example"}, form(csrf), []string{session, csrf}, http.StatusForbidden, "Form refused"},
-			{"origin matched by the forwarded host", map[string]string{"Origin": "https://registry.example", "X-Forwarded-Host": "registry.example"}, form(csrf), []string{session, csrf}, http.StatusSeeOther, callback},
-			{"another origin behind a forwarded host", map[string]string{"Origin": "https://elsewhere.example", "X-Forwarded-Host": "registry.example"}, form(csrf), []string{session, csrf}, http.StatusForbidden, "Form refused"},
+			{"a forwarded host from a proxy the server does not trust", map[string]string{"Origin": "https://registry.example", "X-Forwarded-Host": "registry.example"}, form(csrf), []string{session, csrf}, http.StatusForbidden, "Form refused"},
+			{"this origin beside an untrusted forwarded host", map[string]string{"Origin": br.env.srv.URL, "X-Forwarded-Host": "registry.example"}, form(csrf), []string{session, csrf}, http.StatusSeeOther, callback},
 			{"no token in the form", map[string]string{"Sec-Fetch-Site": "same-origin"}, form(""), []string{session, csrf}, http.StatusForbidden, "Form token mismatch"},
 			{"another token in the form", map[string]string{"Sec-Fetch-Site": "same-origin"}, form("csrf_other"), []string{session, csrf}, http.StatusForbidden, "Form token mismatch"},
 			{"no token cookie and none in the form", map[string]string{"Sec-Fetch-Site": "same-origin"}, form(""), []string{session, ""}, http.StatusForbidden, "Form token mismatch"},
@@ -250,6 +250,27 @@ func TestCoreUISignInAccountAndDeviceAuthorize(t *testing.T) {
 				}
 			} else if !strings.Contains(body, c.want) || res.Header.Get("Location") != "" {
 				t.Errorf("%s: %s, want the refusal %q", c.name, body, c.want)
+			}
+		}
+	})
+
+	t.Run("behind a trusted proxy the origin is matched against the forwarded host", func(t *testing.T) {
+		br := newUIBrowser(t, func(c *config.Config) { c.HTTP.TrustedProxies = 1 })
+		br.signIn()
+		session, csrf := cookieOf(br.jar, br.base, "agentry_session"), cookieOf(br.jar, br.base, "agentry_csrf")
+		form := url.Values{"port": {"40123"}, "state": {"state_abcdefgh"}, "_csrf": {csrf}}.Encode()
+		for _, c := range []struct {
+			name   string
+			hdr    map[string]string
+			status int
+		}{
+			{"the forwarded host's origin", map[string]string{"Origin": "https://registry.example", "X-Forwarded-Host": "registry.example"}, http.StatusSeeOther},
+			{"another origin", map[string]string{"Origin": "https://elsewhere.example", "X-Forwarded-Host": "registry.example"}, http.StatusForbidden},
+			{"the inner address instead of the forwarded host", map[string]string{"Origin": br.env.srv.URL, "X-Forwarded-Host": "registry.example"}, http.StatusForbidden},
+		} {
+			res, body := br.rawPost("/ui/authorize", c.hdr, form, session, csrf)
+			if res.StatusCode != c.status {
+				t.Errorf("%s: %d %s, want %d", c.name, res.StatusCode, body, c.status)
 			}
 		}
 	})
