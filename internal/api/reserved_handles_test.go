@@ -25,6 +25,11 @@ func TestReservedHandlesAreRefused(t *testing.T) {
 		if in.status != http.StatusOK || in.handle == "" || in.handle == h {
 			t.Fatalf("sign-in asking for %q: %d, handle %q", h, in.status, in.handle)
 		}
+		// The handle keeps the name asked for, suffixed: the reserved
+		// form with -1, or, when that is taken, the derived fallback.
+		if !strings.HasPrefix(in.handle, h+"-") {
+			t.Fatalf("sign-in asking for %q got handle %q, want the name with a suffix", h, in.handle)
+		}
 	}
 	owner := env.register("resv")
 	env.verifyEmail(owner)
