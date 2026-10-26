@@ -10,6 +10,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -123,9 +124,10 @@ func TestWebhookSeamDeliversToTheEndpointNamed(t *testing.T) {
 		t.Fatalf("deliveries = %+v, want one agent.dependency_alert", got)
 	}
 	var payload struct {
-		Event string            `json:"event"`
-		ID    string            `json:"id"`
-		Data  map[string]string `json:"data"`
+		Event     string            `json:"event"`
+		ID        string            `json:"id"`
+		CreatedAt time.Time         `json:"created_at"`
+		Data      map[string]string `json:"data"`
 	}
 	var raw []byte
 	if err := env.st.Pool().QueryRow(context.Background(),
@@ -135,7 +137,7 @@ func TestWebhookSeamDeliversToTheEndpointNamed(t *testing.T) {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.Event != "agent.dependency_alert" || payload.ID == "" || payload.Data["severity"] != "critical" {
+	if payload.Event != "agent.dependency_alert" || payload.ID == "" || payload.Data["severity"] != "critical" || time.Since(payload.CreatedAt) > time.Minute || time.Until(payload.CreatedAt) > time.Second {
 		t.Fatalf("the wire payload is %s, want the catalog's shape around the extension's data", raw)
 	}
 
@@ -186,6 +188,22 @@ func TestWebhookSeamDeliversToTheEndpointNamed(t *testing.T) {
 			t.Fatalf("the seam describes an endpoint with %q", k)
 		}
 	}
+	if fmt.Sprint(eps[0]["Events"]) != "[version.published]" {
+		t.Fatalf("the seam lists the endpoint's events as %v, want [version.published]", eps[0]["Events"])
+	}
+	// A second endpoint, active: both are listed, the newer first, each with
+	// its own state and events.
+	var hook2 struct {
+		Id string `json:"id"`
+	}
+	env.doJSON(owner, http.MethodPost, "/api/v1/orgs/"+orgH+"/webhooks", map[string]any{
+		"url": "https://example.invalid/second", "events": []string{"agent.dependency_alert", "member.added"},
+	}, &hook2, http.StatusCreated)
+	env.doJSON(owner, http.MethodGet, "/api/v1/x/probe/endpoints/"+orgID, nil, &eps, http.StatusOK)
+	if len(eps) != 2 || eps[0]["ID"] != hook2.Id || eps[0]["Active"] != true || fmt.Sprint(eps[0]["Events"]) != "[agent.dependency_alert member.added]" ||
+		eps[1]["ID"] != hook.Id || eps[1]["Active"] != false {
+		t.Fatalf("endpoints = %v, want the second (active, two events) then the first (inactive)", eps)
+	}
 	env.doJSON(owner, http.MethodGet, "/api/v1/x/probe/endpoints/"+uuid.New().String(), nil, &eps, http.StatusOK)
 	if len(eps) != 0 {
 		t.Fatalf("an unknown organization has endpoints: %v", eps)
@@ -204,13 +222,14 @@ func TestWebhookSeamDeliveryRidesTheCoresTransport(t *testing.T) {
 	env.createOrg(owner, orgH)
 
 	var mu sync.Mutex
-	var gotSig, gotEvent string
+	var gotSig, gotEvent, gotDelivery string
 	var gotBody []byte
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
 		gotSig = r.Header.Get(webhook.SignatureHeader)
 		gotEvent = r.Header.Get("X-Agentry-Event")
+		gotDelivery = r.Header.Get("X-Agentry-Delivery")
 		gotBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -236,11 +255,13 @@ func TestWebhookSeamDeliveryRidesTheCoresTransport(t *testing.T) {
 	})
 	disp.RegisterHandlers(q)
 
+	sentAt := time.Now()
 	if err := disp.Deliver(context.Background(), uuid.MustParse(created.Id), "agent.dependency_alert",
 		map[string]any{"agent": orgH + "/thing", "severity": "critical"}); err != nil {
 		t.Fatalf("deliver: %v", err)
 	}
 	q.Drain(context.Background(), "core")
+	drainedAt := time.Now()
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -250,6 +271,7 @@ func TestWebhookSeamDeliveryRidesTheCoresTransport(t *testing.T) {
 	if err := webhook.Verify([]byte(created.Secret), gotBody, gotSig, time.Now()); err != nil {
 		t.Fatalf("the routed delivery's signature does not verify with the endpoint's secret: %v", err)
 	}
+	checkSignature(t, created.Secret, gotBody, gotSig, sentAt, drainedAt)
 	var deliveries []struct {
 		EventType   string     `json:"eventType"`
 		StatusCode  *int       `json:"statusCode"`
@@ -258,5 +280,8 @@ func TestWebhookSeamDeliveryRidesTheCoresTransport(t *testing.T) {
 	env.doJSON(owner, http.MethodGet, "/api/v1/orgs/"+orgH+"/webhooks/"+created.Id+"/deliveries", nil, &deliveries, http.StatusOK)
 	if len(deliveries) != 1 || deliveries[0].EventType != "agent.dependency_alert" || deliveries[0].DeliveredAt == nil || deliveries[0].StatusCode == nil || *deliveries[0].StatusCode != 200 {
 		t.Fatalf("the endpoint's log = %+v, want the one routed delivery, delivered", deliveries)
+	}
+	if rows := env.ledger(t, created.Id); len(rows) != 1 || gotDelivery != rows[0].ID {
+		t.Fatalf("the delivery header = %q, want the ledger row's id (%+v)", gotDelivery, rows)
 	}
 }
