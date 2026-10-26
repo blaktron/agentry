@@ -28,6 +28,11 @@ func TestUnactivated(t *testing.T) {
 		{true, "ada@example.test", false},
 		{false, "ada@github.social.local", false},
 		{false, "ADA@GITHUB.SOCIAL.LOCAL", false},
+		// The placeholder is the address's end, not a part of it: a real
+		// address that merely mentions it is unconfirmed like any other.
+		{false, "ada@github.social.local.example.test", true},
+		{false, "ada.social.local@example.test", true},
+		{false, "", true},
 	} {
 		at := &now
 		if !tc.verified {
@@ -90,6 +95,42 @@ func TestUnactivatedWritesFollowTheSpec(t *testing.T) {
 	for id := range unactivatedOperations {
 		if !seen[id] {
 			t.Errorf("the allowed operation %s is not a writing operation in the spec", id)
+		}
+	}
+	// Reads of every kind pass, whatever the path.
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodOptions} {
+		for _, p := range []string{"/api/v1/user", "/api/v1/user/tokens", "/api/v1/orgs/acme/members", "/ui/account", "/"} {
+			if !unactivatedMayWrite(method, p) {
+				t.Errorf("%s %s refused: reads are never refused", method, p)
+			}
+		}
+	}
+	// A trailing slash names the same route, and a path segment that is
+	// empty or missing is not a token id.
+	for _, tc := range []struct {
+		method, path string
+		want         bool
+	}{
+		{http.MethodPost, "/api/v1/user/email-verification/", true},
+		{http.MethodDelete, "/api/v1/user/tokens/x1/", true},
+		{http.MethodDelete, "/api/v1/user/tokens//", false},
+		{http.MethodDelete, "/api/v1/user/tokens", false},
+		{http.MethodDelete, "/api/v1/user/tokens/x1/extra", false},
+		{http.MethodDelete, "/api/v1/user/sessions/x1", true},
+		{http.MethodDelete, "/api/v1/user/sessions/x1/extra", false},
+		{http.MethodDelete, "/api/v1/user/trusted-devices/x1", false},
+		{http.MethodPut, "/api/v1/user/email-verification", false},
+		{http.MethodPost, "/api/v1/user/email-verificationx", false},
+		{http.MethodPost, "api/v1/user/email-verification", false},
+	} {
+		if got := unactivatedMayWrite(tc.method, tc.path); got != tc.want {
+			t.Errorf("unactivatedMayWrite(%s, %q) = %v, want %v", tc.method, tc.path, got, tc.want)
+		}
+	}
+	// A trailing /* matches what lies under the prefix and nothing beside it.
+	for path, want := range map[string]bool{"/a/b": true, "/a/b/c": true, "/a": false, "/a/": true, "/ab/c": false, "/b/a/c": false} {
+		if got := pathMatches("/a/*", path); got != want {
+			t.Errorf("pathMatches(/a/*, %q) = %v, want %v", path, got, want)
 		}
 	}
 	// Outside the generated surface: an extension's writes are refused.

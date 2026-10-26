@@ -100,7 +100,8 @@
           "tests": [
             "TestFoldInAtSignIn",
             "TestFoldInSweepAndDecisions",
-            "TestPendingMembersDigestIsBatchedAndVerifiedOnly"
+            "TestPendingMembersDigestIsBatchedAndVerifiedOnly",
+            "TestFoldInJobsRunOnTheQueue"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -174,7 +175,8 @@
             "TestErasureDeletesTrustedDevices",
             "TestTrustedDeviceSweepDeletesOnlyWhatHasExpired",
             "TestTrustedDeviceSurvivesLogout",
-            "TestTrustedDeviceSurvivesSignOutEverywhereElse"
+            "TestTrustedDeviceSurvivesSignOutEverywhereElse",
+            "TestTrustedDeviceSweepRunsOnTheQueue"
           ],
           "fuzz": [],
           "benchmarks": [],
