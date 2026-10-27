@@ -31,6 +31,21 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
    and name the key `OPENAI_API_KEY`: the provider name and the variable
    name are passed to the harness as given (see the
    [provider table](quickagents.md#machine-setup-agentry-setup)).
+   **A model server on this computer** (Ollama, LM Studio, llama.cpp,
+   vLLM) is named as you reach it, `http://localhost:<port>/v1` or the
+   computer's own name (CLI v0.6.206 or later). The run's egress proxy
+   reaches it at the container engine's host gateway, and a harness that
+   runs in a container is given the name `agentry-host.internal` in place
+   of `localhost`, because inside its container `localhost` is the
+   container itself; the receipt's `llm-proxy.hosts` line says so. On
+   Docker Desktop that reaches a server listening on loopback alone; on
+   Docker Engine and podman the server must listen on an address the
+   containers reach, such as all addresses (`0.0.0.0`; for Ollama,
+   `OLLAMA_HOST=0.0.0.0`). An endpoint whose name does not resolve on
+   this computer fails at the first model call with "the model
+   endpoint's host … does not resolve: check the endpoint's address in
+   the model settings". A Tailscale name has no `.local` form, so use the
+   short name or the full tailnet name.
    A provider can also be paid by **your own plan or account** instead of a
    key: `--api-key-kind chatgpt-plan` (provider `openai`),
    `--api-key-kind claude-signin` (`anthropic`), `--provider copilot` with
