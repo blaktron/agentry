@@ -2584,7 +2584,9 @@ lacks it).
 
 - It starts headless, with an isolated profile (nothing is kept between
   runs), Chromium's own sandbox on, a 1280×720 viewport, the `testing` and
-  `pdf` capabilities, and the browse proxy as its proxy.
+  `pdf` capabilities, and the browse proxy as its proxy. It runs with
+  `--codegen none`, so an action's result does not carry the Playwright
+  code the server generated for it.
 - It runs as your uid (the image's own user where the machine has none to
   give, on Windows), with every capability dropped, `no-new-privileges`, a
   read-only root, and a home and `/tmp` in memory. Under runc the docker
@@ -2892,6 +2894,14 @@ Within it:
   `[page: bytes 0–48567 of 409262; continue with offset 48567]`, and the
   last one with `…; end of file]`. A binary file's base64 page
   (`read_input`'s `original` view, `scratch_read`'s) fits too. A 400 KiB file is about nine calls under docker-agent.
+- **A page read twice in a turn is answered "unchanged".** When `fs_read`,
+  `read_input`, `knowledge_read` or `scratch_read` is called again in the
+  same turn with the same arguments, and the page it would serve has the
+  same bytes, the answer is `unchanged since your earlier call in this
+  turn; call again with fresh: true for the text`: the earlier result is
+  still in the conversation. A file that changed, another page, or
+  `fresh: true` is served as usual. The log of reads starts again at each
+  turn and after each compaction, and an autonomous run is one turn.
 - **Listings and searches stop and say so.** `fs_list`, `scratch_list` and
   `list_inputs` take an entry `offset` and end a partial listing with
   `[entries 1–812 of 3000; continue with offset 812]`; `search_inputs`
