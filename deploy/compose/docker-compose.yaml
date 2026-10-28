@@ -46,7 +46,7 @@ x-logging: &rotated
 services:
   postgres:
     logging: *rotated
-    image: postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+    image: postgres:16.15@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c
     restart: unless-stopped
     environment:
       POSTGRES_USER: agentry
@@ -76,7 +76,7 @@ services:
     # health check and the bucket bootstrap below use, and runs as uid 65532,
     # so a volume that an image running as root wrote needs a one-time chown
     # (docs/self-hosting.md, "What the stack exposes").
-    image: &minio-image ghcr.io/blaktron/agentry-minio:latest@sha256:709099319add48dfb44aa596a7070d3ddd8dd04d7ae881765719aec29df9e510
+    image: &minio-image ghcr.io/blaktron/agentry-minio:latest@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
