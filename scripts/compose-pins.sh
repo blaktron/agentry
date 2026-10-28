@@ -248,7 +248,8 @@ STUB
   chmod +x "$dir/stub-429"
   INSPECT="$dir/stub-429"
   t "online: an unreadable registry passes with a warning" 0 run "$script" check --online
-  if ! grep -q "not checked, the registry could not be read (unexpected status from HEAD request: 429" "$dir/out" || grep -q "no longer served" "$dir/out"; then
+  if ! grep "not checked, the registry could not be read (unexpected status from HEAD request: 429" "$dir/out" >/dev/null ||
+    grep "no longer served" "$dir/out" >/dev/null; then
     echo "FAIL online: an unreadable registry is not reported as not checked"
     sed 's/^/    /' "$dir/out"
     fails=$((fails + 1))
