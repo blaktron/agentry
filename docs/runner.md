@@ -2813,7 +2813,10 @@ The save keeps `fetch`'s rules and adds its own:
   hosts (or any host under the policy-gated `*`), and every redirect hop
   is checked against the same list before it is followed.
 - **Credentials through `auth` alone.** An `Authorization`, `Cookie` or
-  `Proxy-Authorization` header is refused, as for any `fetch`.
+  `Proxy-Authorization` header is refused, as for any `fetch`. The model is
+  offered `auth` only when the manifest grants the run a secret, and an
+  `auth` with nothing in it (no `env`, no `header`) is a request without
+  credentials (CLI v0.6.1000 or later).
 - **No granted secret is kept.** A body that holds a granted secret's
   value, found even where it straddles the parts the body is copied in,
   stops the save, and nothing is left at the path. A body the host sends
@@ -4525,6 +4528,8 @@ model, the author or the person wrote; at most eight), for some codes a
 | `plan-limit` | the agent: your plan refused the model's calls for its usage limit (exit 16; never retried) | none | — |
 | `org-policy` | the agent: an organization's or enterprise's policy at the model vendor refused the run (exit 11; Copilot only) | none | `client-disabled`, `managed-approval` |
 | `out-of-credits` | the agent: the model's provider answered 402, or said so: the account that pays has no credits (exit 16; never retried) | none | — |
+| `answer-in-reasoning` | the output: the release's output is schema-checked and the model ended the run on its reasoning, with no final message after it (exit 17); the reasoning is never taken as the result | none | — |
+| `tool-call-as-text` | the output: the model's final message is a tool call written in its own markup, which its provider's server did not parse into a call, so the agent stopped before it finished (exit 14; a one-shot run with a text result, CLI v0.6.1000 or later). The message stays the run's `result` and in the receipts. A local model's server must parse the model's tool calls (its chat template or tool-call setting) | none | — |
 | `host-refused` | readying a [target host](#target-hosts-a-server-named-at-run-time) before anything starts, or the host link's sign-in when the gateway starts it: a host the run will not reach (exit 11, except `host-unreachable` at the host link's start, exit 13) | the target host's question id (never its name or address) | `host-address` (an address a target host never is, one the policy's `hosts` lists exclude, or a name with no IPv4 address), `host-key-unknown` (a key on no file, not accepted at a terminal), `host-key-changed` (a key other than the one on file, or a revoked one), `host-auth` (the host did not accept the sign-in), `host-credential` (no sign-in given, or one that cannot be used; also an unanswered host), `host-unreachable` (the host did not answer on its port), `hosted` (a hosted run never reaches a target host) |
 
 The four model sign-in codes carry no names; the vendor's own words about a
