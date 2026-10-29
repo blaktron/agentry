@@ -3767,7 +3767,7 @@ type WebhookEndpointCreated struct {
 type WebhookInput struct {
 	Events []string `json:"events"`
 
-	// Url HTTPS endpoint (https is required).
+	// Url An absolute https:// URL with a host, and a port from 1 to 65535 if it names one.
 	Url string `json:"url"`
 }
 
@@ -4071,7 +4071,9 @@ type CreateTeamJSONBody struct {
 type UpdateWebhookJSONBody struct {
 	Active *bool     `json:"active,omitempty"`
 	Events *[]string `json:"events,omitempty"`
-	Url    *string   `json:"url,omitempty"`
+
+	// Url An absolute https:// URL with a host, and a port from 1 to 65535 if it names one.
+	Url *string `json:"url,omitempty"`
 }
 
 // ListWebhookDeliveriesParams defines parameters for ListWebhookDeliveries.

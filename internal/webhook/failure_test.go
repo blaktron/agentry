@@ -136,3 +136,18 @@ func TestADeliveryFailureStillSaysWhatWentWrong(t *testing.T) {
 		t.Errorf("a refused connection: %q names no host", got["a refused connection"])
 	}
 }
+
+// EndpointHost keeps the scheme, the host and its port, and names an address
+// with no host "the endpoint", so nothing after the host reaches a log line.
+func TestEndpointHostKeepsOnlyTheSchemeAndHost(t *testing.T) {
+	for raw, want := range map[string]string{
+		"https://svc:" + userToken + "@hooks.example.test/" + pathToken + "?k=" + queryToken: "https://hooks.example.test",
+		"https://hooks.example.test:8443/x?k=" + queryToken:                                  "https://hooks.example.test:8443",
+		"https:///only/" + pathToken + "?key=" + queryToken:                                  "the endpoint",
+		"https://hooks.example.test:" + pathToken + "/x":                                     "the endpoint",
+	} {
+		if got := EndpointHost(raw); got != want {
+			t.Errorf("EndpointHost(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}
