@@ -6,9 +6,9 @@
 # were last working.
 #
 # workflow_run workflows run from the default branch's copy of this file
-# (main), so it takes effect once promoted. workflow_dispatch with dry_run
-# prints what it would post for a given run, which is how it is checked
-# without posting.
+# (dev), so a change takes effect when it merges into dev. workflow_dispatch
+# with dry_run prints what it would post for a given run, which is how it is
+# checked without posting.
 name: post-merge
 on:
   workflow_run:
