@@ -48,6 +48,12 @@ const (
 	// ActionUserDataClear records a user clearing their credentials,
 	// installs and settings while keeping the account.
 	ActionUserDataClear Action = "user.data_clear"
+	// Platform staff acting on a person's account: suspending it (every
+	// credential revoked), reinstating it, and signing it out everywhere.
+	// Each row names the staff member as the actor and carries the reason.
+	ActionUserSuspend   Action = "user.suspend"
+	ActionUserReinstate Action = "user.reinstate"
+	ActionUserSignOut   Action = "user.sign_out_everywhere"
 
 	// Orgs & teams.
 	ActionOrgCreate       Action = "org.create"
@@ -167,6 +173,7 @@ func init() {
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
 		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDataClear, ActionUserDirectoryErase, ActionUserStaffSync,
+		ActionUserSuspend, ActionUserReinstate, ActionUserSignOut,
 		ActionTrustedDeviceAdd, ActionTrustedDeviceRevoke, ActionTrustedDeviceUse,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,

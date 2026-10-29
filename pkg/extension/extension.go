@@ -613,6 +613,10 @@ type Deps struct {
 	// provisions people on a directory's word. nil when the server runs
 	// without a database.
 	Members Members
+	// Accounts is the core's door for platform staff acting on a person's
+	// account through an extension's own console. nil when the server
+	// runs without a database.
+	Accounts Accounts
 	// RememberedBrowsers mints and checks remembered browsers under the
 	// core's rules, audited under the extension's name. nil when the
 	// server runs without a database.
@@ -1021,6 +1025,58 @@ var (
 	ErrOrgNotProvisionable = api.ErrOrgNotProvisionable
 	ErrAddressUnproven     = api.ErrAddressUnproven
 	ErrStaffOrgDomain      = registry.ErrStaffOrgDomain
+)
+
+// Accounts is the core's door for platform staff acting on a person's
+// account from an extension's console: reading what the account is and
+// holds, and suspending, reinstating or signing it out. The extension
+// decides whom and when, and hands over the principal of the staff member
+// acting; what each act does stays the core's, and the core checks the
+// actor again itself: an active platform-staff account, and for a change a
+// signed-in session acting on someone else. Each change takes a reason of
+// at most 500 characters, is audited with the actor and the reason under
+// the extension's name, and mails the person at a confirmed address.
+type Accounts interface {
+	// Facts reads the account, the actor's own included: its state,
+	// standing, memberships, live sessions by client and time, and live
+	// tokens by name and scope. Never a secret.
+	Facts(ctx context.Context, actor *Principal, userID uuid.UUID) (AccountFacts, error)
+	// Suspend suspends the account and revokes every session, token, SSH
+	// key, remembered browser and unused desktop sign-in code; it is no
+	// longer platform staff. Changed is false when it was already
+	// suspended.
+	Suspend(ctx context.Context, actor *Principal, userID uuid.UUID, reason string) (AccountChange, error)
+	// Reinstate makes a suspended account active again and revokes every
+	// credential once more, so nothing from before comes back. Changed is
+	// false when it was already active.
+	Reinstate(ctx context.Context, actor *Principal, userID uuid.UUID, reason string) (AccountChange, error)
+	// SignOut ends every session and forgets every remembered browser;
+	// tokens and SSH keys keep working. Changed is false when there was
+	// nothing to end.
+	SignOut(ctx context.Context, actor *Principal, userID uuid.UUID, reason string) (AccountChange, error)
+}
+
+// AccountFacts is what Accounts.Facts reads of an account.
+type AccountFacts = api.AccountFacts
+
+// AccountOrg, AccountSession and AccountToken are its parts.
+type (
+	AccountOrg     = api.AccountOrg
+	AccountSession = api.AccountSession
+	AccountToken   = api.AccountToken
+)
+
+// AccountChange is what an Accounts act did.
+type AccountChange = api.AccountChange
+
+// The refusals of Accounts.
+var (
+	ErrActorNotStaff = api.ErrActorNotStaff
+	ErrActorSession  = api.ErrActorSession
+	ErrSelfAct       = api.ErrSelfAct
+	ErrNoAccount     = api.ErrNoAccount
+	ErrAccountErased = api.ErrAccountErased
+	ErrReasonLength  = api.ErrReasonLength
 )
 
 // RememberedBrowsers is the core's remembered-browser credential as an

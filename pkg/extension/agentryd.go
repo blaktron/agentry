@@ -645,6 +645,36 @@ func (m serverMembers) Deprovision(ctx context.Context, orgID, userID uuid.UUID)
 	return m.srv.DeprovisionMember(ctx, m.name, orgID, userID)
 }
 
+// accountsOf adapts the server's account door to Accounts under the
+// extension's name: nil without a database, the way Deps.DB is.
+func accountsOf(srv *api.Server, pool *pgxpool.Pool, name string) Accounts {
+	if pool == nil {
+		return nil
+	}
+	return serverAccounts{srv: srv, name: name}
+}
+
+type serverAccounts struct {
+	srv  *api.Server
+	name string
+}
+
+func (a serverAccounts) Facts(ctx context.Context, actor *Principal, userID uuid.UUID) (AccountFacts, error) {
+	return a.srv.AccountFacts(ctx, actor, userID)
+}
+
+func (a serverAccounts) Suspend(ctx context.Context, actor *Principal, userID uuid.UUID, reason string) (AccountChange, error) {
+	return a.srv.SuspendAccount(ctx, a.name, actor, userID, reason)
+}
+
+func (a serverAccounts) Reinstate(ctx context.Context, actor *Principal, userID uuid.UUID, reason string) (AccountChange, error) {
+	return a.srv.ReinstateAccount(ctx, a.name, actor, userID, reason)
+}
+
+func (a serverAccounts) SignOut(ctx context.Context, actor *Principal, userID uuid.UUID, reason string) (AccountChange, error) {
+	return a.srv.SignOutAccount(ctx, a.name, actor, userID, reason)
+}
+
 // signInHookOf hands an extension's hook the sign-in with a remembered
 // browser that is audited under the extension's name, whatever detail the
 // extension asks for.
@@ -1022,7 +1052,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
-				Staff: staffOf(srv, pool), Members: membersOf(srv, pool, e.Name()), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name()), Sealer: sealerOf(srv, e.Name())})
+				Staff: staffOf(srv, pool), Members: membersOf(srv, pool, e.Name()), Accounts: accountsOf(srv, pool, e.Name()), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name()), Sealer: sealerOf(srv, e.Name())})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
