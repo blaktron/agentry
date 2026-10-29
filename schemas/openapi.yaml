@@ -3632,6 +3632,7 @@ paths:
               properties:
                 url:
                   type: string
+                  description: An absolute https:// URL with a host, and a port from 1 to 65535 if it names one.
                 events:
                   type: array
                   items:
@@ -7396,7 +7397,7 @@ components:
       properties:
         url:
           type: string
-          description: HTTPS endpoint (https is required).
+          description: An absolute https:// URL with a host, and a port from 1 to 65535 if it names one.
         events:
           type: array
           items:

@@ -71,8 +71,10 @@ func TestAFailedDeliveryKeepsTheEndpointsTokenOut(t *testing.T) {
 	disp.RegisterHandlers(q)
 
 	// An address the client cannot even build a request from: its port is
-	// the token, and the parser quotes what it stopped at. It belongs to a
-	// second organization, whose delivery rate is its own.
+	// the token, and the parser quotes what it stopped at. The API refuses
+	// such an address, so it is written straight to the store over one the
+	// API accepted. It belongs to a second organization, whose delivery rate
+	// is its own.
 	const portToken = "tok_PORT_8f14e45fceea"
 	owner2 := env.register("wf-owner2")
 	env.verifyEmail(owner2)
@@ -83,9 +85,13 @@ func TestAFailedDeliveryKeepsTheEndpointsTokenOut(t *testing.T) {
 		Id string `json:"id"`
 	}
 	env.doJSON(sess2, http.MethodPost, "/api/v1/orgs/"+org2H+"/webhooks", map[string]any{
-		"url":    "https://hooks.example.test:" + portToken + "/hook/tok_PATH_c9f0f895fb98?key=tok_QUERY_45c48cce2e2d",
+		"url":    "https://hooks.example.test/hook",
 		"events": []string{"version.published"},
 	}, &unparsable, http.StatusCreated)
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE webhook_endpoints SET url = $1 WHERE id = $2`,
+		"https://hooks.example.test:"+portToken+"/hook/tok_PATH_c9f0f895fb98?key=tok_QUERY_45c48cce2e2d", unparsable.Id); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := disp.Emit(context.Background(), uuid.MustParse(orgID), "version.published",
 		map[string]any{"version": "1.2.3"}); err != nil {

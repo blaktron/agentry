@@ -3,6 +3,8 @@ package api
 import (
 	"fmt"
 	"net/http"
+	neturl "net/url"
+	"strconv"
 	"strings"
 
 	"github.com/blaktron/agentry/internal/audit"
@@ -26,10 +28,11 @@ func webhookToAPI(row storegen.WebhookEndpoint) WebhookEndpoint {
 	}
 }
 
-// validateWebhookInput checks the URL is https and every event is known.
+// validateWebhookInput checks the URL is a deliverable https address and
+// every event is known.
 func validateWebhookInput(url string, events []string) *FieldError {
-	if !strings.HasPrefix(strings.ToLower(url), "https://") {
-		return &FieldError{Field: "url", Message: "Must be an https:// URL."}
+	if fe := validateWebhookURL(url); fe != nil {
+		return fe
 	}
 	if len(events) == 0 {
 		return &FieldError{Field: "events", Message: "Must list at least one event."}
@@ -37,6 +40,29 @@ func validateWebhookInput(url string, events []string) *FieldError {
 	for _, e := range events {
 		if !webhook.ValidEvent(e) {
 			return &FieldError{Field: "events", Message: "Lists an unknown event: " + e + "."}
+		}
+	}
+	return nil
+}
+
+// validateWebhookURL refuses an address the delivery client could not send
+// to: not https, not parsable, with no host, or with a port outside 1-65535.
+// No message repeats the address, since its path, query and user information
+// routinely carry the endpoint's secret.
+func validateWebhookURL(raw string) *FieldError {
+	if !strings.HasPrefix(strings.ToLower(raw), "https://") {
+		return &FieldError{Field: "url", Message: "Must be an https:// URL."}
+	}
+	u, err := neturl.Parse(raw)
+	if err != nil {
+		return &FieldError{Field: "url", Message: "Is not a valid URL. Check the host and the port."}
+	}
+	if u.Hostname() == "" {
+		return &FieldError{Field: "url", Message: "Must name a host after https://."}
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return &FieldError{Field: "url", Message: "Must have a port from 1 to 65535."}
 		}
 	}
 	return nil

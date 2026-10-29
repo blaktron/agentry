@@ -77,11 +77,10 @@ func TestCreatingAnEndpointKeepsItsTokenOutOfTheAuditEvent(t *testing.T) {
 		t.Fatalf("audit row = kind %q org %q host %q events %s, want webhook, %s, %s, [\"version.published\"]", kind, rowOrg, rowHost, rowEvents, orgID, host)
 	}
 
-	// A port is part of the host and stays; an address with no host at all
-	// is named "the endpoint". Neither lets the rest of the address in.
+	// A port is part of the host and stays, and does not let the rest of the
+	// address in.
 	for _, c := range []struct{ name, url, want string }{
 		{"a port", "https://user2:pw_USER2_aa11@hooks2.example.test:8443/x/tok_PATH2_bb22?key=tok_QUERY2_cc33", "https://hooks2.example.test:8443"},
-		{"no host", "https:///only/tok_PATH3_dd44?key=tok_QUERY3_ee55", "the endpoint"},
 	} {
 		var ep struct {
 			Id string `json:"id"`
@@ -97,7 +96,7 @@ func TestCreatingAnEndpointKeepsItsTokenOutOfTheAuditEvent(t *testing.T) {
 		if row != c.want {
 			t.Errorf("%s: the audit row names %q, want %q", c.name, row, c.want)
 		}
-		for _, secret := range []string{"pw_USER2", "tok_PATH2", "tok_QUERY2", "tok_PATH3", "tok_QUERY3", "/x/", "/only"} {
+		for _, secret := range []string{"pw_USER2", "tok_PATH2", "tok_QUERY2", "/x/"} {
 			if strings.Contains(row, secret) || strings.Contains(logs.String(), secret) {
 				t.Errorf("%s: the audit row or the log carries %q", c.name, secret)
 			}
