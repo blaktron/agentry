@@ -1054,8 +1054,9 @@ var (
 
 // Accounts is the core's door for platform staff acting on a person's
 // account from an extension's console: reading what the account is and
-// holds, suspending, reinstating or signing it out, and telling the person
-// that their second factors were removed at the directory. The extension
+// holds, suspending, reinstating, signing out or erasing it, resending its
+// activation link, and telling the person that their second factors were
+// removed at the directory. The extension
 // decides whom and when, and hands over the principal of the staff member
 // acting; what each act does stays the core's, and the core checks the
 // actor again itself: an active platform-staff account, and for a change a
@@ -1087,6 +1088,19 @@ type Accounts interface {
 	// nothing in the registry changes. It reports whether a notice went:
 	// false with no error is an unconfirmed address.
 	TellSecondFactorsRemoved(ctx context.Context, actor *Principal, userID uuid.UUID, removed int) (bool, error)
+	// Erase erases the account as the person's own erasure does, the
+	// directory's half and its retries included, with its published
+	// public versions yanked; the person is mailed at a confirmed address.
+	// An organization's last admin is refused (ErrLastAdmin, with the
+	// organization in a LastAdminError). r is the request the extension
+	// acts in.
+	Erase(r *http.Request, actor *Principal, userID uuid.UUID, reason string) (AccountErasure, error)
+	// ResendActivation sends an unactivated account a new activation link
+	// under the person's own limits, and returns when another may go.
+	// Refused for an activated account (ErrAlreadyActivated), one with no
+	// address (ErrNoAddress), one not active (ErrNotActive), and inside
+	// the limits (ActivationTooSoonError).
+	ResendActivation(ctx context.Context, actor *Principal, userID uuid.UUID, reason string) (time.Time, error)
 }
 
 // AccountFacts is what Accounts.Facts reads of an account.
@@ -1102,6 +1116,16 @@ type (
 // AccountChange is what an Accounts act did.
 type AccountChange = api.AccountChange
 
+// AccountErasure is what Accounts.Erase did.
+type AccountErasure = api.AccountErasure
+
+// LastAdminError and ActivationTooSoonError carry what a refusal of
+// Accounts.Erase and Accounts.ResendActivation names.
+type (
+	LastAdminError         = api.LastAdminError
+	ActivationTooSoonError = api.ActivationTooSoonError
+)
+
 // The refusals of Accounts.
 var (
 	ErrActorNotStaff = api.ErrActorNotStaff
@@ -1110,6 +1134,11 @@ var (
 	ErrNoAccount     = api.ErrNoAccount
 	ErrAccountErased = api.ErrAccountErased
 	ErrReasonLength  = api.ErrReasonLength
+	ErrLastAdmin     = api.ErrLastAdmin
+
+	ErrAlreadyActivated = api.ErrAlreadyActivated
+	ErrNoAddress        = api.ErrNoAddress
+	ErrNotActive        = api.ErrNotActive
 )
 
 // RememberedBrowsers is the core's remembered-browser credential as an

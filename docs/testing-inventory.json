@@ -965,7 +965,10 @@
             "TestNoAccountMailToAnUnconfirmedAddress",
             "TestAccountFactsReadsWhatTheAccountHolds",
             "TestSuspendingStaffEndsTheirStaff",
-            "TestTellingOfRemovedSecondFactors"
+            "TestTellingOfRemovedSecondFactors",
+            "TestStaffEraseIsThePersonsOwnErasure",
+            "TestStaffEraseRefusals",
+            "TestStaffResendActivation"
           ],
           "fuzz": [],
           "benchmarks": [],

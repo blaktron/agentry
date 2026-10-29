@@ -54,6 +54,9 @@ const (
 	ActionUserSuspend   Action = "user.suspend"
 	ActionUserReinstate Action = "user.reinstate"
 	ActionUserSignOut   Action = "user.sign_out_everywhere"
+	// ActionUserActivationResend is platform staff sending an unactivated
+	// account a new activation link.
+	ActionUserActivationResend Action = "user.activation_resend"
 
 	// Orgs & teams.
 	ActionOrgCreate       Action = "org.create"
@@ -173,7 +176,7 @@ func init() {
 		ActionUserRegister, ActionUserLogin, ActionUserLoginFailed,
 		ActionUserLogout, ActionUserEmailVerified, ActionUserUpdate,
 		ActionUserTOTPEnabled, ActionPATCreate, ActionPATRevoke, ActionSSHKeyAdd, ActionSSHKeyRemove, ActionUserDelete, ActionUserDataClear, ActionUserDirectoryErase, ActionUserStaffSync,
-		ActionUserSuspend, ActionUserReinstate, ActionUserSignOut,
+		ActionUserSuspend, ActionUserReinstate, ActionUserSignOut, ActionUserActivationResend,
 		ActionTrustedDeviceAdd, ActionTrustedDeviceRevoke, ActionTrustedDeviceUse,
 		ActionOrgCreate, ActionOrgUpdate, ActionOrgMemberSet,
 		ActionOrgMemberRemove, ActionOrgInviteCreate, ActionOrgInviteRevoke,

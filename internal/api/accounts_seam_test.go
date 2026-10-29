@@ -10,13 +10,16 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/auth"
+	"github.com/blaktron/agentry/internal/knowledge"
 	"github.com/blaktron/agentry/internal/notify"
 )
 
@@ -454,5 +457,161 @@ func TestTellingOfRemovedSecondFactors(t *testing.T) {
 	}
 	if c := a.mails.changes(); len(c) != 1 {
 		t.Fatalf("mails %v, want only the first notice", c)
+	}
+}
+
+// TestStaffEraseIsThePersonsOwnErasure: staff erasing an account is the
+// person's own erasure: credentials dead, the row pseudonymized and its
+// handle retired, published versions yanked with their digests kept, the
+// knowledge pack gone. Every row names the staff member and the reason,
+// and the person is mailed before their address goes. An erased account
+// cannot be erased again.
+func TestStaffEraseIsThePersonsOwnErasure(t *testing.T) {
+	a := newAccountsEnv(t)
+	ctx := context.Background()
+	h := a.register("ac-erase")
+	a.verifyEmail(h)
+	sess := a.login(h)
+	id := uuid.MustParse(a.selfID(sess))
+	agent := "erasable-" + a.sfx
+	a.publishUnder(t, sess, h, agent)
+	_, pat := a.mintPAT(sess, "ac-erase-pat", "agent:read")
+	kn := seedKnowledge(t, a.testEnv, knowledge.User(id))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/x/directory/staff/accounts/1/erase", nil)
+
+	got, err := a.srv.EraseAccount(r, "directory", a.staff, id, "asked by mail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PublishedVersions != 1 || !got.Notified {
+		t.Fatalf("erasure: %+v", got)
+	}
+	for _, c := range []caller{sess, {name: "pat", pat: pat}} {
+		res := a.do(c, http.MethodGet, "/api/v1/user", nil)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("%s after the erasure: %d, want 401", c.name, res.StatusCode)
+		}
+	}
+	assertKnowledgeGone(t, a.testEnv, kn)
+	var state, email, handle string
+	if err := a.st.Pool().QueryRow(ctx, `SELECT u.state, u.email::text, hd.handle FROM users u JOIN handles hd ON hd.id = u.id WHERE u.id = $1`, id).Scan(&state, &email, &handle); err != nil {
+		t.Fatal(err)
+	}
+	if state != "deleted" || email != "deleted+"+id.String()+"@invalid.invalid" || handle == h {
+		t.Fatalf("the account row: %s %s %s", state, email, handle)
+	}
+	var status, digest string
+	if err := a.st.Pool().QueryRow(ctx, `SELECT av.status, coalesce(av.archive_digest, '') FROM agent_versions av JOIN agents ag ON ag.id = av.agent_id WHERE ag.name = $1`, agent).Scan(&status, &digest); err != nil {
+		t.Fatal(err)
+	}
+	if status != "yanked" || digest == "" {
+		t.Fatalf("the published version: %s, digest %q", status, digest)
+	}
+	if n := a.count(t, `SELECT count(*) FROM audit_events WHERE action = 'user.delete' AND target_id = $1 AND actor_id = $2
+		AND detail->>'reason' = 'asked by mail' AND detail->>'via' = 'extension' AND detail->>'extension' = 'directory' AND detail->>'publishedContent' = 'yank'`, id, a.staff.UserID); n != 1 {
+		t.Fatalf("user.delete rows naming the staff member and the reason: %d", n)
+	}
+	if n := a.count(t, `SELECT count(*) FROM audit_events WHERE action = 'version.transition' AND detail->>'to' = 'yanked' AND actor_id = $1`, a.staff.UserID); n != 1 {
+		t.Fatalf("the yank's rows naming the staff member: %d", n)
+	}
+	a.mails.mu.Lock()
+	sent := append([]notify.AccountNotice(nil), a.mails.sent...)
+	a.mails.mu.Unlock()
+	if len(sent) != 1 || sent[0].Change != notify.AccountErased || sent[0].ToEmail != h+"@example.test" || sent[0].Handle != h {
+		t.Fatalf("mails %+v", sent)
+	}
+	if _, err := a.srv.EraseAccount(r, "directory", a.staff, id, "again"); !errors.Is(err, api.ErrAccountErased) {
+		t.Fatalf("erasing an erased account: %v, want ErrAccountErased", err)
+	}
+}
+
+// TestStaffEraseRefusals: one's own account, a token, someone who is not
+// staff, an organization's last admin and a missing reason are refused,
+// and the account is left as it was.
+func TestStaffEraseRefusals(t *testing.T) {
+	a := newAccountsEnv(t)
+	h := a.register("ac-erase-no")
+	a.verifyEmail(h)
+	sess := a.login(h)
+	id := uuid.MustParse(a.selfID(sess))
+	org := "ac-erase-org" + a.sfxDigits()
+	a.createOrg(sess, org)
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+
+	for _, c := range []struct {
+		name  string
+		actor *auth.Principal
+		user  uuid.UUID
+		want  error
+	}{
+		{"staff on their own account", a.staff, a.staff.UserID, api.ErrSelfAct},
+		{"a staff token", &auth.Principal{UserID: a.staff.UserID, Via: "pat"}, id, api.ErrActorSession},
+		{"someone who is not staff", &auth.Principal{UserID: id, Via: "session", PlatformStaff: true}, a.staff.UserID, api.ErrActorNotStaff},
+		{"an organization's last admin", a.staff, id, api.ErrLastAdmin},
+	} {
+		if _, err := a.srv.EraseAccount(r, "directory", c.actor, c.user, "why"); !errors.Is(err, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, err, c.want)
+		}
+	}
+	var last api.LastAdminError
+	if _, err := a.srv.EraseAccount(r, "directory", a.staff, id, "why"); !errors.As(err, &last) || last.Org != org {
+		t.Fatalf("the last admin's organization: %v", err)
+	}
+	if _, err := a.srv.EraseAccount(r, "directory", a.staff, id, "  "); err == nil {
+		t.Fatal("an erasure without a reason was accepted")
+	}
+	if s := a.state(t, id); s != "active" {
+		t.Fatalf("a refused erasure moved the account to %q", s)
+	}
+	if c := a.mails.changes(); len(c) != 0 {
+		t.Fatalf("a refused erasure mailed %v", c)
+	}
+}
+
+// TestStaffResendActivation: an unactivated account gets a new link, under
+// the person's own interval, audited with the staff member and the
+// reason; an activated account and a suspended one are refused.
+func TestStaffResendActivation(t *testing.T) {
+	a := newAccountsEnv(t)
+	ctx := context.Background()
+	h := a.registerUnverified("ac-resend")
+	id := uuid.MustParse(a.selfID(a.login(h)))
+	if _, err := a.st.Pool().Exec(ctx, `DELETE FROM email_verifications WHERE user_id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := a.srv.ResendActivation(ctx, "directory", a.staff, id, "lost the first mail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.After(time.Now()) {
+		t.Fatalf("resend after %v, want a time ahead", after)
+	}
+	if n := a.count(t, `SELECT count(*) FROM email_verifications WHERE user_id = $1`, id); n != 1 {
+		t.Fatalf("activation links: %d, want 1", n)
+	}
+	if n := a.count(t, `SELECT count(*) FROM audit_events WHERE action = 'user.activation_resend' AND target_id = $1 AND actor_id = $2 AND detail->>'reason' = 'lost the first mail'`, id, a.staff.UserID); n != 1 {
+		t.Fatalf("user.activation_resend rows: %d", n)
+	}
+	var soon api.ActivationTooSoonError
+	if _, err := a.srv.ResendActivation(ctx, "directory", a.staff, id, "again"); !errors.As(err, &soon) || !soon.After.After(time.Now()) {
+		t.Fatalf("a second link at once: %v, want ActivationTooSoonError", err)
+	}
+	if _, err := a.srv.ResendActivation(ctx, "directory", a.staff, a.staff.UserID, "mine"); !errors.Is(err, api.ErrSelfAct) {
+		t.Fatalf("one's own account: %v", err)
+	}
+
+	done := a.register("ac-resend-done")
+	a.verifyEmail(done)
+	doneID := uuid.MustParse(a.selfID(a.login(done)))
+	if _, err := a.srv.ResendActivation(ctx, "directory", a.staff, doneID, "why"); !errors.Is(err, api.ErrAlreadyActivated) {
+		t.Fatalf("an activated account: %v, want ErrAlreadyActivated", err)
+	}
+	if _, err := a.st.Pool().Exec(ctx, `UPDATE users SET state = 'suspended' WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.srv.ResendActivation(ctx, "directory", a.staff, id, "why"); !errors.Is(err, api.ErrNotActive) {
+		t.Fatalf("a suspended account: %v, want ErrNotActive", err)
 	}
 }

@@ -679,6 +679,14 @@ func (a serverAccounts) TellSecondFactorsRemoved(ctx context.Context, actor *Pri
 	return a.srv.TellSecondFactorsRemoved(ctx, actor, userID, removed)
 }
 
+func (a serverAccounts) Erase(r *http.Request, actor *Principal, userID uuid.UUID, reason string) (AccountErasure, error) {
+	return a.srv.EraseAccount(r, a.name, actor, userID, reason)
+}
+
+func (a serverAccounts) ResendActivation(ctx context.Context, actor *Principal, userID uuid.UUID, reason string) (time.Time, error) {
+	return a.srv.ResendActivation(ctx, a.name, actor, userID, reason)
+}
+
 // signInHookOf hands an extension's hook the sign-in with a remembered
 // browser that is audited under the extension's name, whatever detail the
 // extension asks for.

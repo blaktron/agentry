@@ -74,7 +74,7 @@ type Notifier interface {
 	Rendered(ctx context.Context, n RenderedNotice) error
 	// AccountChanged tells a person that platform staff changed their
 	// account's access: suspended it, reinstated it, signed it out
-	// everywhere, or removed its second factors. It is a security notice, sent whatever the person's
+	// everywhere, removed its second factors, or erased it. It is a security notice, sent whatever the person's
 	// switches say, and only to a confirmed address.
 	AccountChanged(ctx context.Context, n AccountNotice) error
 }
@@ -90,6 +90,8 @@ const (
 	// AccountSecondFactorsRemoved is second factors removed at the
 	// person's directory; AccountNotice.Removed says how many.
 	AccountSecondFactorsRemoved AccountNoticeKind = "second-factors-removed"
+	// AccountErased is the account erased by platform staff.
+	AccountErased AccountNoticeKind = "erased"
 )
 
 // AccountNotice is the mail for one staff act on an account.
@@ -500,6 +502,14 @@ func (r renderer) account(n AccountNotice) message {
 			"You can sign in again. The sessions, tokens and SSH keys the\n" +
 			"suspension revoked stay revoked: make new tokens and keys in your\n" +
 			"settings where you need them.\n"
+	case AccountErased:
+		subject = r.registry + ": your account is erased"
+		body = "Platform staff erased the " + r.registry + " account " + n.Handle + ".\n\n" +
+			"Its personal data, sessions, access tokens and SSH keys are gone, its\n" +
+			"published public versions are yanked, and its sign-in account is\n" +
+			"removed. This cannot be undone. You can make a new account with\n" +
+			"this address if you want one.\n\n" +
+			"If you did not ask for this, write to the people who run " + r.registry + ".\n"
 	case AccountSecondFactorsRemoved:
 		what := "one second factor"
 		if n.Removed > 1 {
