@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,8 +73,8 @@ type Notifier interface {
 	// names the mail class in the log line, never the body.
 	Rendered(ctx context.Context, n RenderedNotice) error
 	// AccountChanged tells a person that platform staff changed their
-	// account's access: suspended it, reinstated it, or signed it out
-	// everywhere. It is a security notice, sent whatever the person's
+	// account's access: suspended it, reinstated it, signed it out
+	// everywhere, removed its second factors, or erased it. It is a security notice, sent whatever the person's
 	// switches say, and only to a confirmed address.
 	AccountChanged(ctx context.Context, n AccountNotice) error
 }
@@ -86,6 +87,11 @@ const (
 	AccountSuspended  AccountNoticeKind = "suspended"
 	AccountReinstated AccountNoticeKind = "reinstated"
 	AccountSignedOut  AccountNoticeKind = "signed-out"
+	// AccountSecondFactorsRemoved is second factors removed at the
+	// person's directory; AccountNotice.Removed says how many.
+	AccountSecondFactorsRemoved AccountNoticeKind = "second-factors-removed"
+	// AccountErased is the account erased by platform staff.
+	AccountErased AccountNoticeKind = "erased"
 )
 
 // AccountNotice is the mail for one staff act on an account.
@@ -93,6 +99,9 @@ type AccountNotice struct {
 	ToEmail string
 	Handle  string
 	Change  AccountNoticeKind
+	// Removed is how many second factors were removed, for
+	// AccountSecondFactorsRemoved.
+	Removed int
 }
 
 // RenderedNotice is a message composed outside the core, to be carried in
@@ -493,6 +502,25 @@ func (r renderer) account(n AccountNotice) message {
 			"You can sign in again. The sessions, tokens and SSH keys the\n" +
 			"suspension revoked stay revoked: make new tokens and keys in your\n" +
 			"settings where you need them.\n"
+	case AccountErased:
+		subject = r.registry + ": your account is erased"
+		body = "Platform staff erased the " + r.registry + " account " + n.Handle + ".\n\n" +
+			"Its personal data, sessions, access tokens and SSH keys are gone, its\n" +
+			"published public versions are yanked, and its sign-in account is\n" +
+			"removed. This cannot be undone. You can make a new account with\n" +
+			"this address if you want one.\n\n" +
+			"If you did not ask for this, write to the people who run " + r.registry + ".\n"
+	case AccountSecondFactorsRemoved:
+		what := "one second factor"
+		if n.Removed > 1 {
+			what = strconv.Itoa(n.Removed) + " second factors"
+		}
+		subject = r.registry + ": second factors removed from your account"
+		body = "Platform staff removed " + what + " from the " + r.registry + " account " + n.Handle + ":\n" +
+			"an authenticator app, a security key or a set of recovery codes that\n" +
+			"no longer signs in to it. Your password, if you have one, is unchanged.\n\n" +
+			"Once you are signed in, set up a new second factor in your settings.\n" +
+			"If you did not ask for this, write to the people who run " + r.registry + ".\n"
 	default:
 		subject = r.registry + ": you were signed out everywhere"
 		body = "Platform staff signed the " + r.registry + " account " + n.Handle + " out everywhere:\n" +

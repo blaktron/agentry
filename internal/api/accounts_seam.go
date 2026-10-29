@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -33,7 +34,42 @@ var (
 	ErrNoAccount     = errors.New("api: no such account")
 	ErrAccountErased = errors.New("api: the account is erased")
 	ErrReasonLength  = errors.New("api: a staff act's reason is at most 500 characters")
+	// ErrLastAdmin is an erasure refused because the account is an
+	// organization's last admin; LastAdminError names the organization.
+	ErrLastAdmin = errors.New("api: the account is an organization's last admin")
+	// The refusals of ResendActivation.
+	ErrAlreadyActivated = errors.New("api: the account's address is already confirmed")
+	ErrNoAddress        = errors.New("api: the account has no address a link can reach")
+	ErrNotActive        = errors.New("api: the account is not active")
 )
+
+// LastAdminError is ErrLastAdmin with the organization the account must
+// hand over first.
+type LastAdminError struct{ Org string }
+
+func (e LastAdminError) Error() string        { return ErrLastAdmin.Error() + ": " + e.Org }
+func (e LastAdminError) Is(target error) bool { return target == ErrLastAdmin }
+
+// ActivationTooSoonError is ResendActivation's refusal inside the interval
+// or the daily cap between two links, with when another may go.
+type ActivationTooSoonError struct{ After time.Time }
+
+func (e ActivationTooSoonError) Error() string {
+	return "api: an activation link went to this account recently; another may go at " + e.After.UTC().Format(time.RFC3339)
+}
+
+// AccountErasure is what EraseAccount did.
+type AccountErasure struct {
+	// PublishedVersions counts the account's published public versions,
+	// each yanked.
+	PublishedVersions int64
+	// Directory is the directory half's outcome, as the person's own
+	// erasure reports it (X-Agentry-Directory-Erasure); empty without a
+	// directory.
+	Directory string
+	// Notified is true when the person was mailed at a confirmed address.
+	Notified bool
+}
 
 // accountReasonMax bounds the reason a staff act is audited with.
 const accountReasonMax = 500
@@ -190,6 +226,197 @@ func (s *Server) SignOutAccount(ctx context.Context, ext string, actor *auth.Pri
 		out.Changed = out.Sessions+out.RememberedBrowsers+out.DesktopGrants > 0
 		return nil
 	}, notify.AccountSignedOut)
+}
+
+// TellSecondFactorsRemoved tells the person that platform staff removed
+// removed of their second factors, an act an extension made at the
+// person's directory and audits itself. The core holds no second factor,
+// so it changes nothing here; it keeps the notice, which is a security
+// notice like the other acts' and so goes out whatever the person's mail
+// switches say, and only to a confirmed address. The actor is checked as
+// for every change. It reports whether the notice was handed to the
+// notifier: false with no error is an address that may not be written to.
+func (s *Server) TellSecondFactorsRemoved(ctx context.Context, actor *auth.Principal, userID uuid.UUID, removed int) (bool, error) {
+	if s.st == nil {
+		return false, errors.New("api: no database to read accounts from")
+	}
+	if removed < 1 {
+		return false, errors.New("api: a notice of removed second factors names at least one")
+	}
+	q := s.q()
+	if err := checkAccountActor(ctx, q, actor, userID, true); err != nil {
+		return false, err
+	}
+	u, err := q.GetUserByID(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrNoAccount
+	}
+	if err != nil {
+		return false, err
+	}
+	if u.State == "deleted" {
+		return false, ErrAccountErased
+	}
+	if u.EmailVerifiedAt == nil || auth.SyntheticAddress(u.Email) {
+		return false, nil
+	}
+	notice := notify.AccountNotice{ToEmail: u.Email, Handle: u.Handle, Change: notify.AccountSecondFactorsRemoved, Removed: removed}
+	if err := s.notifier.AccountChanged(ctx, notice); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// EraseAccount erases userID's account for the staff member actor: the
+// person's own erasure (eraseAccountNow), with the account's published
+// public versions yanked, because staff do not choose an organization to
+// hand them to. The actor is checked as for every change, again inside
+// the erasure's transaction under both row locks, and the reason is in
+// the user.delete row. An organization's last admin is refused, as the
+// person's own erasure refuses it. The person is mailed at a confirmed
+// address, captured before the erasure scrubs it. r is the request the
+// extension acts in, which the audit rows and the directory half read.
+func (s *Server) EraseAccount(r *http.Request, ext string, actor *auth.Principal, userID uuid.UUID, reason string) (AccountErasure, error) {
+	var out AccountErasure
+	if s.st == nil {
+		return out, errors.New("api: no database to erase accounts in")
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return out, errors.New("api: a staff act on an account needs a reason")
+	}
+	if len([]rune(reason)) > accountReasonMax {
+		return out, ErrReasonLength
+	}
+	ctx := r.Context()
+	q := s.q()
+	if err := checkAccountActor(ctx, q, actor, userID, true); err != nil {
+		return out, err
+	}
+	u, err := q.GetUserByID(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, ErrNoAccount
+	}
+	if err != nil {
+		return out, err
+	}
+	if u.State == "deleted" {
+		return out, ErrAccountErased
+	}
+	if org, err := q.GetOrgWhereUserIsLastAdmin(ctx, userID); err == nil {
+		return out, LastAdminError{Org: org}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return out, err
+	}
+	if out.PublishedVersions, err = q.CountPublishedVersionsByUser(ctx, userID); err != nil {
+		return out, err
+	}
+	agents, err := q.ListPersonalNamespaceAgents(ctx, userID)
+	if err != nil {
+		return out, err
+	}
+	by := &staffEraser{actor: actor.UserID, ext: ext, reason: reason, check: func(tq *storegen.Queries) error {
+		first, second := actor.UserID, userID
+		if strings.Compare(first.String(), second.String()) > 0 {
+			first, second = second, first
+		}
+		for _, id := range []uuid.UUID{first, second} {
+			if err := tq.LockUser(ctx, id); err != nil {
+				return err
+			}
+		}
+		if err := checkAccountActor(ctx, tq, actor, userID, true); err != nil {
+			return err
+		}
+		again, err := tq.GetUserByID(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if again.State == "deleted" {
+			return ErrAccountErased
+		}
+		if org, err := tq.GetOrgWhereUserIsLastAdmin(ctx, userID); err == nil {
+			return LastAdminError{Org: org}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		return nil
+	}}
+	if out.Directory, err = s.eraseAccountNow(r, userID, u.Email, agents, "yank", out.PublishedVersions, uuid.Nil, by); err != nil {
+		return AccountErasure{}, err
+	}
+	if u.EmailVerifiedAt != nil && !auth.SyntheticAddress(u.Email) {
+		notice := notify.AccountNotice{ToEmail: u.Email, Handle: u.Handle, Change: notify.AccountErased}
+		if err := s.notifier.AccountChanged(ctx, notice); err != nil {
+			s.log.WarnContext(ctx, "notify: account notice", "change", string(notice.Change), "err", err)
+		} else {
+			out.Notified = true
+		}
+	}
+	return out, nil
+}
+
+// ResendActivation sends an unactivated account a new activation link for
+// the staff member actor, under the limits the person's own resend has
+// (one link in five minutes, ten a day). An account already activated, one
+// with no address a link can reach and one not active are refused. It is
+// audited as user.activation_resend with the actor and the reason, and
+// returns when another link may go.
+func (s *Server) ResendActivation(ctx context.Context, ext string, actor *auth.Principal, userID uuid.UUID, reason string) (time.Time, error) {
+	if s.st == nil {
+		return time.Time{}, errors.New("api: no database to act on accounts in")
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return time.Time{}, errors.New("api: a staff act on an account needs a reason")
+	}
+	if len([]rune(reason)) > accountReasonMax {
+		return time.Time{}, ErrReasonLength
+	}
+	var (
+		token, email, handle string
+		after                time.Time
+	)
+	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		if err := checkAccountActor(ctx, q, actor, userID, true); err != nil {
+			return err
+		}
+		u, err := q.GetUserByID(ctx, userID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNoAccount
+		}
+		if err != nil {
+			return err
+		}
+		switch {
+		case u.State == "deleted":
+			return ErrAccountErased
+		case u.State != "active":
+			return ErrNotActive
+		case u.EmailVerifiedAt != nil:
+			return ErrAlreadyActivated
+		case auth.SyntheticAddress(u.Email):
+			return ErrNoAddress
+		}
+		token, after, err = issueActivation(ctx, q, userID, true)
+		var soon errActivationTooSoon
+		if errors.As(err, &soon) {
+			return ActivationTooSoonError{After: soon.after}
+		}
+		if err != nil {
+			return err
+		}
+		email, handle = u.Email, u.Handle
+		return s.auditW.Write(ctx, q, audit.Event{
+			Actor: actor.UserID, ActorKind: audit.ActorUser, Action: audit.ActionUserActivationResend, TargetKind: "user", TargetID: userID,
+			Detail: map[string]any{"via": "extension", "extension": ext, "reason": reason},
+		})
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	s.mailActivation(ctx, email, handle, token)
+	return after, nil
 }
 
 // accountAct runs one staff act on userID under the person's row lock:

@@ -1526,7 +1526,8 @@ func TestDialAndSendSpeaksSMTP(t *testing.T) {
 
 // TestAccountNoticesSayWhatChanged: each staff act's mail names the
 // account and says what the change means for the person, and the
-// suspension's says that nothing revoked comes back.
+// suspension's says that nothing revoked comes back. One removed second
+// factor is counted in words.
 func TestAccountNoticesSayWhatChanged(t *testing.T) {
 	r := renderer{registry: "Agentry"}
 	for _, c := range []struct {
@@ -1537,10 +1538,16 @@ func TestAccountNoticesSayWhatChanged(t *testing.T) {
 		{AccountSuspended, "Agentry: your account is suspended", "none of\nthem comes back"},
 		{AccountReinstated, "Agentry: your account is reinstated", "revoked stay revoked"},
 		{AccountSignedOut, "Agentry: you were signed out everywhere", "Your access tokens and SSH keys still work."},
+		{AccountSecondFactorsRemoved, "Agentry: second factors removed from your account", "removed 2 second factors from"},
+		{AccountErased, "Agentry: your account is erased", "This cannot be undone."},
 	} {
-		m := r.account(AccountNotice{ToEmail: "p@example.test", Handle: "alice", Change: c.change})
+		m := r.account(AccountNotice{ToEmail: "p@example.test", Handle: "alice", Change: c.change, Removed: 2})
 		if m.Subject != c.subject || !strings.Contains(m.Body, " alice") || !strings.Contains(m.Body, c.says) || !strings.Contains(m.Body, "Do not reply") {
 			t.Errorf("%s: %q\n%s", c.change, m.Subject, m.Body)
 		}
+	}
+	one := r.account(AccountNotice{ToEmail: "p@example.test", Handle: "alice", Change: AccountSecondFactorsRemoved, Removed: 1})
+	if !strings.Contains(one.Body, "removed one second factor from") || !strings.Contains(one.Body, "set up a new second factor") {
+		t.Errorf("one removed:\n%s", one.Body)
 	}
 }
