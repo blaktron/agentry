@@ -192,6 +192,45 @@ func (s *Server) SignOutAccount(ctx context.Context, ext string, actor *auth.Pri
 	}, notify.AccountSignedOut)
 }
 
+// TellSecondFactorsRemoved tells the person that platform staff removed
+// removed of their second factors, an act an extension made at the
+// person's directory and audits itself. The core holds no second factor,
+// so it changes nothing here; it keeps the notice, which is a security
+// notice like the other acts' and so goes out whatever the person's mail
+// switches say, and only to a confirmed address. The actor is checked as
+// for every change. It reports whether the notice was handed to the
+// notifier: false with no error is an address that may not be written to.
+func (s *Server) TellSecondFactorsRemoved(ctx context.Context, actor *auth.Principal, userID uuid.UUID, removed int) (bool, error) {
+	if s.st == nil {
+		return false, errors.New("api: no database to read accounts from")
+	}
+	if removed < 1 {
+		return false, errors.New("api: a notice of removed second factors names at least one")
+	}
+	q := s.q()
+	if err := checkAccountActor(ctx, q, actor, userID, true); err != nil {
+		return false, err
+	}
+	u, err := q.GetUserByID(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrNoAccount
+	}
+	if err != nil {
+		return false, err
+	}
+	if u.State == "deleted" {
+		return false, ErrAccountErased
+	}
+	if u.EmailVerifiedAt == nil || auth.SyntheticAddress(u.Email) {
+		return false, nil
+	}
+	notice := notify.AccountNotice{ToEmail: u.Email, Handle: u.Handle, Change: notify.AccountSecondFactorsRemoved, Removed: removed}
+	if err := s.notifier.AccountChanged(ctx, notice); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // accountAct runs one staff act on userID under the person's row lock:
 // the actor checked, the act, its audit row (only when something changed)
 // and the staff rule recomputed, in one transaction; then the mail to the

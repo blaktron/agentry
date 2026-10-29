@@ -964,7 +964,8 @@
             "TestTheAccountDoorChecksItsActor",
             "TestNoAccountMailToAnUnconfirmedAddress",
             "TestAccountFactsReadsWhatTheAccountHolds",
-            "TestSuspendingStaffEndsTheirStaff"
+            "TestSuspendingStaffEndsTheirStaff",
+            "TestTellingOfRemovedSecondFactors"
           ],
           "fuzz": [],
           "benchmarks": [],

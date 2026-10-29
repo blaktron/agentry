@@ -1054,7 +1054,8 @@ var (
 
 // Accounts is the core's door for platform staff acting on a person's
 // account from an extension's console: reading what the account is and
-// holds, and suspending, reinstating or signing it out. The extension
+// holds, suspending, reinstating or signing it out, and telling the person
+// that their second factors were removed at the directory. The extension
 // decides whom and when, and hands over the principal of the staff member
 // acting; what each act does stays the core's, and the core checks the
 // actor again itself: an active platform-staff account, and for a change a
@@ -1079,6 +1080,13 @@ type Accounts interface {
 	// tokens and SSH keys keep working. Changed is false when there was
 	// nothing to end.
 	SignOut(ctx context.Context, actor *Principal, userID uuid.UUID, reason string) (AccountChange, error)
+	// TellSecondFactorsRemoved mails the person a security notice that
+	// staff removed removed (at least one) of their second factors at
+	// the directory, after the extension removed them and audited it.
+	// The actor is checked as for a change; there is no reason, as
+	// nothing in the registry changes. It reports whether a notice went:
+	// false with no error is an unconfirmed address.
+	TellSecondFactorsRemoved(ctx context.Context, actor *Principal, userID uuid.UUID, removed int) (bool, error)
 }
 
 // AccountFacts is what Accounts.Facts reads of an account.
