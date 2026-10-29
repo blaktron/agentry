@@ -433,6 +433,19 @@
           ]
         },
         {
+          "path": "internal/api/webhook_url_check_test.go",
+          "tests": [
+            "TestAWebhookAddressTheClientCannotSendToIsRefused"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/webpaths_test.go",
           "tests": [
             "TestWebPaths"
@@ -4189,7 +4202,8 @@
           "path": "internal/webhook/failure_test.go",
           "tests": [
             "TestADeliveryFailureNamesTheHostNeverThePathOrQuery",
-            "TestADeliveryFailureStillSaysWhatWentWrong"
+            "TestADeliveryFailureStillSaysWhatWentWrong",
+            "TestEndpointHostKeepsOnlyTheSchemeAndHost"
           ],
           "fuzz": [],
           "benchmarks": [],
