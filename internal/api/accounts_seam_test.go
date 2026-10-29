@@ -398,3 +398,61 @@ func TestSuspendingStaffEndsTheirStaff(t *testing.T) {
 		t.Fatal("a reinstated member of the staff organization is not staff again")
 	}
 }
+
+// TestTellingOfRemovedSecondFactors: the notice that staff removed second
+// factors goes to the person's confirmed address and changes nothing in
+// the registry. It is refused to anyone but a staff member's session acting
+// on someone else, and for no factor at all; an unconfirmed address is
+// told nothing.
+func TestTellingOfRemovedSecondFactors(t *testing.T) {
+	a := newAccountsEnv(t)
+	ctx := context.Background()
+	h := a.register("ac-factors")
+	a.verifyEmail(h)
+	sess := a.login(h)
+	id := uuid.MustParse(a.selfID(sess))
+
+	sent, err := a.srv.TellSecondFactorsRemoved(ctx, a.staff, id, 2)
+	if err != nil || !sent {
+		t.Fatalf("telling: sent %v, %v", sent, err)
+	}
+	a.mails.mu.Lock()
+	got := a.mails.sent
+	a.mails.mu.Unlock()
+	if len(got) != 1 || got[0].Change != notify.AccountSecondFactorsRemoved || got[0].Removed != 2 || got[0].Handle != h {
+		t.Fatalf("mails %+v", got)
+	}
+	if s := a.state(t, id); s != "active" {
+		t.Fatalf("the notice moved the account to %q", s)
+	}
+	a.doJSON(sess, http.MethodGet, "/api/v1/user", nil, nil, http.StatusOK)
+
+	for _, c := range []struct {
+		name    string
+		actor   *auth.Principal
+		user    uuid.UUID
+		removed int
+		want    error
+	}{
+		{"a staff token", &auth.Principal{UserID: a.staff.UserID, Via: "pat"}, id, 1, api.ErrActorSession},
+		{"someone who is not staff", &auth.Principal{UserID: id, Via: "session", PlatformStaff: true}, a.staff.UserID, 1, api.ErrActorNotStaff},
+		{"staff on their own account", a.staff, a.staff.UserID, 1, api.ErrSelfAct},
+		{"an account that is not there", a.staff, uuid.New(), 1, api.ErrNoAccount},
+		{"no factor removed", a.staff, id, 0, nil},
+	} {
+		sent, err := a.srv.TellSecondFactorsRemoved(ctx, c.actor, c.user, c.removed)
+		if sent || err == nil || (c.want != nil && !errors.Is(err, c.want)) {
+			t.Errorf("%s: sent %v, %v, want %v", c.name, sent, err, c.want)
+		}
+	}
+
+	if _, err := a.st.Pool().Exec(ctx, `UPDATE users SET email_verified_at = NULL WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if sent, err := a.srv.TellSecondFactorsRemoved(ctx, a.staff, id, 1); err != nil || sent {
+		t.Fatalf("an unconfirmed address: sent %v, %v", sent, err)
+	}
+	if c := a.mails.changes(); len(c) != 1 {
+		t.Fatalf("mails %v, want only the first notice", c)
+	}
+}
