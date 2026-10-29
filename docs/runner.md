@@ -839,6 +839,15 @@ after a change cannot start, the agent stops and the chat says why. A stopped
 agent's volumes are kept; only [`reset`](#agentry-agent) removes them. Each
 segment's usage is added to `usage.json` when it ends.
 
+**A turn that cannot finish does not end the segment.** A turn the plan's
+usage limit refuses fails with one `error` event, `plan limit reached: ` and
+the vendor's words, and the agent keeps running, so the next turn tries again
+once the limit resets; every other run still ends at
+[`plan-limit`](#outcomes). A turn stopped through the owner socket's
+`interrupt` closes as an `assistant_turn` with what the agent had said and the
+stop reason `interrupted`. Both need CLI v0.6.1004 or later; an earlier CLI stops
+the agent at its plan's limit and cannot stop a turn.
+
 **Continuing.** The harness's conversation id is kept in `config.yaml` with the
 adapter that stored it, and is offered to that adapter alone. docker-agent
 loads it with `session/load`, Claude Code is started with `--resume`, codex
@@ -957,10 +966,12 @@ of:
 | `{"roster":{}}` | `{"roster":[…]}`, with `pending` entries |
 | `{"change":{…}}` | the roster after the change, or a refusal |
 | `{"stop":{}}` | `{"stopped":{"status","resultFile","error"}}` |
+| `{"interrupt":{}}` | stops the turn in flight, the person's or one the agent runs on its own, and answers `{"interrupted":{"stopped":true}}` once it has ended, or `"stopped":false` when no turn was in flight (CLI v0.6.1004 or later) |
 
 A refusal is an `error` event with `refused` set to `malformed` (not exactly
 one command, or an empty `send`), `busy` (a turn is in flight), `ended` (the
-segment has ended), `change` (the change is invalid) or `consent` (the change
+segment has ended), `change` (the change is invalid), `interrupt` (the harness did not stop
+the turn) or `consent` (the change
 widens the roster; the reply also lists the sentences to agree to, and the
 command is sent again with `consent` set).
 
@@ -4373,7 +4384,7 @@ can end in four ways that have their own `reason` ([the table](#exit-codes-stage
 
 | Outcome | Exit | `reason.code` | When |
 |---|---|---|---|
-| plan limit | 16 | `plan-limit` | the plan refused the model's calls for its usage limit: said once in the vendor's words, never retried, never a success even when the harness exits 0. A reset time appears only when the vendor gave one (Claude Code does; the Codex and Copilot adapters do not invent one) |
+| plan limit | 16 | `plan-limit` | the plan refused the model's calls for its usage limit: said once in the vendor's words, never retried, never a success even when the harness exits 0. A reset time appears only when the vendor gave one (Claude Code does; the Codex and Copilot adapters do not invent one). A persistent agent's turn fails instead, and the agent keeps running ([segments](#segments)) |
 | sign-in missing | 11 | `signin-missing` | the run spends a sign-in and was given none it could use, or one of another kind: refused before the daemon, naming the fix, and never on a hosted run |
 | organization policy | 11 | `org-policy` | an organization's or enterprise's policy at the model vendor refused the run; Copilot only |
 | out of credits | 16 | `out-of-credits` | the provider answered 402 or said so in words: the account that pays has no credits left; never retried; not specific to a connected key |
