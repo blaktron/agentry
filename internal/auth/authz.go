@@ -124,6 +124,10 @@ type Principal struct {
 	// ScheduleScopes and the schedule's id, every scope gate reads it as
 	// it reads a token's (ScopeBound), and it is never presented over
 	// HTTP.
+	// "extension" is a bearer token an extension minted for its own routes
+	// (pkg/extension.TakesOwnTokens): the middleware accepts it only under
+	// that extension's mount, it carries no scopes and no roles, and every
+	// scope gate reads it as scope-bound, so it can do nothing in the core.
 	Via string
 	// Scopes holds a PAT's scopes, or a schedule's ScheduleScopes; nil
 	// for sessions.
@@ -157,12 +161,12 @@ type Principal struct {
 }
 
 // ScopeBound reports whether the principal acts only within its Scopes:
-// a token, or a schedule's credential. A session carries the
+// a token, a schedule's credential, or an extension's own token. A session carries the
 // account's full authority instead, and a "user" principal is no caller at
 // all. Every scope gate asks this rather than naming "pat", so a credential
 // minted with a fixed scope set is never read as a session.
 func (p *Principal) ScopeBound() bool {
-	return p != nil && (p.Via == "pat" || p.Via == "schedule")
+	return p != nil && (p.Via == "pat" || p.Via == "schedule" || p.Via == "extension")
 }
 
 // SSOSatisfied reports whether the caller meets an org's enforced-SSO

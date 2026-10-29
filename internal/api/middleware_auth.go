@@ -49,6 +49,10 @@ type principalOpts struct {
 	// into a lost event). The authed class
 	// and everything else still apply.
 	unthrottled map[string]bool
+	// tokens is the bearer token kind the mount's extension mints for its
+	// own routes (SetExtensionTokens); nil everywhere else, so such a token
+	// is unrecognized on any other path.
+	tokens *extensionTokens
 }
 
 func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) http.Handler {
@@ -66,6 +70,18 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 					return
 				}
 				p = pp
+			} else if opts.tokens != nil && strings.HasPrefix(tok, opts.tokens.prefix) {
+				uid, ok, err := opts.tokens.resolve(r.Context(), tok)
+				switch {
+				case err != nil:
+					s.log.Error("extension token", "path", r.URL.Path, "err", err)
+					problemInternal(w, r)
+					return
+				case !ok || uid == uuid.Nil:
+					problemUnauthorized(w, r, "This token is invalid or expired.")
+					return
+				}
+				p = &auth.Principal{UserID: uid, Via: "extension"}
 			} else {
 				problemUnauthorized(w, r, "The bearer token was not recognized.")
 				return

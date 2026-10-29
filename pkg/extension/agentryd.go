@@ -1028,6 +1028,10 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if u, ok := e.(Unthrottles); ok {
 			srv.SetExtensionUnthrottled(e.Name(), u.UnthrottledRoutes())
 		}
+		if t, ok := e.(TakesOwnTokens); ok {
+			own := t.OwnTokens()
+			srv.SetExtensionTokens(e.Name(), own.Prefix, api.ExtensionTokenResolver(own.Resolve))
+		}
 		if r := e.Entitlements(); r != nil {
 			srv.SetEntitlements(r)
 		}

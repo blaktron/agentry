@@ -1543,7 +1543,10 @@ committed events and add worker jobs, with `GET /api/v1/meta` listing what is
 loaded. An extension may also admit or refuse a submission after every core
 check and before anything is stored (`Admits`), name a route of its own
 the anonymous rate class skips (`Unthrottles`: a payment provider's signed
-webhook), receive the database pool, the logger, an audit writer and a meter
+webhook), accept bearer tokens it mints itself for its own routes
+(`TakesOwnTokens`: an `agy…_` prefix of its own, valid only under its own
+mount, where the caller carries no scopes and no roles, and "not recognized"
+everywhere else), receive the database pool, the logger, an audit writer and a meter
 for its own metrics at start-up (`Binds`), delete the rows it keeps about a person inside the
 account erasure's and the data clear's own transaction (`ErasesAccounts`),
 run a job on a period, and register audit actions under its own name.

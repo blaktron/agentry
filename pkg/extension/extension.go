@@ -418,6 +418,31 @@ type Unthrottles interface {
 	UnthrottledRoutes() []string
 }
 
+// TakesOwnTokens is an extension that mints bearer tokens of its own for
+// its own routes: a credential narrower than a token of the account's,
+// for a caller that can present nothing but `Authorization: Bearer`, such
+// as a model client inside a run's container. The core accepts such a
+// token under /api/v1/x/<name>/ alone and asks Resolve whose it is; the
+// principal it becomes has Via "extension", the user's id, no scopes and
+// no roles, so no route of the core's would admit it even if it reached
+// one. On every other path, the core's routes and other extensions'
+// mounts included, the token is "not recognized" (401).
+type TakesOwnTokens interface {
+	OwnTokens() OwnTokens
+}
+
+// OwnTokens is an extension's bearer token kind.
+type OwnTokens struct {
+	// Prefix starts every such token: "agy", one to four lowercase letters
+	// and an underscore, none of the core's own (agy_, agys_, agyi_, agyv_,
+	// agyd_) and none another extension claims. A wrong one panics at
+	// start-up.
+	Prefix string
+	// Resolve says whose a token is, or false for one the extension does
+	// not know (never issued, expired, ended). An error answers 500.
+	Resolve func(ctx context.Context, token string) (userID uuid.UUID, ok bool, err error)
+}
+
 // Principal is the resolved caller; Principal(ctx) reads it in a route.
 type Principal = auth.Principal
 
