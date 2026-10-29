@@ -1184,6 +1184,20 @@
           ]
         },
         {
+          "path": "internal/api/extension_tokens_test.go",
+          "tests": [
+            "TestExtensionOwnTokensResolveUnderTheirMountAlone",
+            "TestExtensionOwnTokensUnknownOrFailing",
+            "TestExtensionOwnTokensRefuseABadDeclaration"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/gdpr_test.go",
           "tests": [
             "TestAccountErasureFlow"

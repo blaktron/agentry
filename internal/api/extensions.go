@@ -54,7 +54,29 @@ type extensionMount struct {
 	name        string
 	routes      func(*http.ServeMux)
 	unthrottled map[string]bool
+	tokens      *extensionTokens
 }
+
+// ExtensionTokenResolver says whose an extension's own bearer token is: the
+// user it was minted for, or false for one the extension does not know
+// (never issued, expired or ended).
+type ExtensionTokenResolver func(ctx context.Context, token string) (uuid.UUID, bool, error)
+
+// extensionTokens is the bearer token kind an extension mints for its own
+// routes.
+type extensionTokens struct {
+	prefix  string
+	resolve ExtensionTokenResolver
+}
+
+// reExtensionTokenPrefix is the shape of an extension's token prefix: the
+// registry's own "agy" family, so a leaked token names where it came from
+// and secret scanners that know agy_ catch it, and a letter or more that
+// no token of the core's uses.
+var reExtensionTokenPrefix = regexp.MustCompile(`^agy[a-z]{1,4}_$`)
+
+// coreTokenPrefixes are the core's own kinds, which no extension may claim.
+var coreTokenPrefixes = []string{auth.PATPrefix, auth.SessionPrefix, auth.InvitePrefix, auth.VerificationPrefix, auth.TrustedDevicePrefix}
 
 var reUnthrottledRoute = regexp.MustCompile(`^(GET|POST|PUT|PATCH|DELETE) /[A-Za-z0-9_./-]*$`)
 
@@ -192,6 +214,42 @@ func (s *Server) SetExtensionUnthrottled(name string, routes []string) {
 		}
 		s.extensions[i].unthrottled = m
 		return
+	}
+	panic("api: extension not registered: " + name)
+}
+
+// SetExtensionTokens lets the extension registered as name accept bearer
+// tokens it mints itself, of the given prefix, under its own mount and
+// nowhere else. Resolve is asked for each one; a token it knows becomes a
+// principal with Via "extension", the user's id, no scopes and no roles.
+// A prefix of the wrong shape, one of the core's, one another extension
+// claimed, a nil resolver or an unknown extension panics at start-up,
+// where it is found.
+func (s *Server) SetExtensionTokens(name, prefix string, resolve ExtensionTokenResolver) {
+	if !reExtensionTokenPrefix.MatchString(prefix) {
+		panic("api: extension " + name + ": token prefix must match " + reExtensionTokenPrefix.String() + ", got " + prefix)
+	}
+	for _, core := range coreTokenPrefixes {
+		if prefix == core {
+			panic("api: extension " + name + ": token prefix " + prefix + " is the core's")
+		}
+	}
+	if resolve == nil {
+		panic("api: extension " + name + ": a token prefix needs a resolver")
+	}
+	for _, m := range s.extensions {
+		if m.tokens != nil && m.tokens.prefix == prefix {
+			panic("api: extensions " + m.name + " and " + name + " both claim the token prefix " + prefix)
+		}
+	}
+	for i := range s.extensions {
+		if s.extensions[i].name == name {
+			if s.extensions[i].tokens != nil {
+				panic("api: extension " + name + ": token prefix set twice")
+			}
+			s.extensions[i].tokens = &extensionTokens{prefix: prefix, resolve: resolve}
+			return
+		}
 	}
 	panic("api: extension not registered: " + name)
 }
@@ -496,7 +554,7 @@ func (s *Server) mountExtensions(mux httpmux.Mux) {
 		// Not Mount: the names are the extensions', so no entry in
 		// authz_routes.go can list them. The prefix rule declares this mount
 		// point and the extension's own matrix declares what sits behind it.
-		mux.Handle(prefix+"/", s.principalMiddlewareOpts(http.StripPrefix(prefix, sub), principalOpts{unthrottled: unthrottled}))
+		mux.Handle(prefix+"/", s.principalMiddlewareOpts(http.StripPrefix(prefix, sub), principalOpts{unthrottled: unthrottled, tokens: m.tokens}))
 	}
 }
 
