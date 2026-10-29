@@ -71,6 +71,28 @@ type Notifier interface {
 	// transport and the frame are the core's and its copy is not. kind
 	// names the mail class in the log line, never the body.
 	Rendered(ctx context.Context, n RenderedNotice) error
+	// AccountChanged tells a person that platform staff changed their
+	// account's access: suspended it, reinstated it, or signed it out
+	// everywhere. It is a security notice, sent whatever the person's
+	// switches say, and only to a confirmed address.
+	AccountChanged(ctx context.Context, n AccountNotice) error
+}
+
+// AccountNoticeKind is what platform staff did to an account.
+type AccountNoticeKind string
+
+// The acts AccountChanged tells of.
+const (
+	AccountSuspended  AccountNoticeKind = "suspended"
+	AccountReinstated AccountNoticeKind = "reinstated"
+	AccountSignedOut  AccountNoticeKind = "signed-out"
+)
+
+// AccountNotice is the mail for one staff act on an account.
+type AccountNotice struct {
+	ToEmail string
+	Handle  string
+	Change  AccountNoticeKind
 }
 
 // RenderedNotice is a message composed outside the core, to be carried in
@@ -347,6 +369,12 @@ func (n LogNotifier) Rendered(_ context.Context, notice RenderedNotice) error {
 	return nil
 }
 
+// AccountChanged implements Notifier.
+func (n LogNotifier) AccountChanged(_ context.Context, notice AccountNotice) error {
+	n.logger().Info("notify: account notice not sent (no sender configured)", "change", string(notice.Change), "to", logx.MaskEmail(notice.ToEmail))
+	return nil
+}
+
 // OrgPendingMembers implements Notifier.
 func (n LogNotifier) OrgPendingMembers(_ context.Context, notice PendingMembersNotice) error {
 	n.logger().Info("notify: org pending members",
@@ -443,6 +471,37 @@ func (r renderer) verification(handle, token string) message {
 		"If you did not create an account named " + handle + ", do not use the\n" +
 		thing + ": someone may have signed up with your address. Ignore this message.\n"
 	return message{Subject: r.registry + ": activate your account", Body: body + r.footer()}
+}
+
+// account is the mail for a staff act on a person's account. It says what
+// changed and what it means for the person, and where to turn if they did
+// not expect it; it never names the staff member or the reason, which are
+// in the audit log for an investigator.
+func (r renderer) account(n AccountNotice) message {
+	var subject, body string
+	switch n.Change {
+	case AccountSuspended:
+		subject = r.registry + ": your account is suspended"
+		body = "Platform staff suspended the " + r.registry + " account " + n.Handle + ".\n\n" +
+			"While it is suspended, nobody can sign in to it or use it. Every\n" +
+			"session, access token and SSH key it had is revoked, and none of\n" +
+			"them comes back if the account is reinstated.\n\n" +
+			"If you think this is a mistake, write to the people who run " + r.registry + ".\n"
+	case AccountReinstated:
+		subject = r.registry + ": your account is reinstated"
+		body = "Platform staff reinstated the " + r.registry + " account " + n.Handle + ".\n\n" +
+			"You can sign in again. The sessions, tokens and SSH keys the\n" +
+			"suspension revoked stay revoked: make new tokens and keys in your\n" +
+			"settings where you need them.\n"
+	default:
+		subject = r.registry + ": you were signed out everywhere"
+		body = "Platform staff signed the " + r.registry + " account " + n.Handle + " out everywhere:\n" +
+			"every session it had ended, the command line's and the desktop\n" +
+			"app's included, and every browser it had remembered was forgotten.\n" +
+			"Your access tokens and SSH keys still work.\n\n" +
+			"Sign in again to carry on.\n"
+	}
+	return message{Subject: subject, Body: body + r.footer()}
 }
 
 func (r renderer) quarantine(n QuarantineNotice) message {

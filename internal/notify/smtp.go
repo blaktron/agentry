@@ -133,6 +133,11 @@ func (n *SMTPNotifier) OrgPendingMembers(ctx context.Context, notice PendingMemb
 	return n.deliver(ctx, notice.ToEmail, n.render.pendingMembers(notice), "org_pending_members")
 }
 
+// AccountChanged implements Notifier.
+func (n *SMTPNotifier) AccountChanged(ctx context.Context, notice AccountNotice) error {
+	return n.deliver(ctx, notice.ToEmail, n.render.account(notice), "account_"+string(notice.Change))
+}
+
 // Rendered implements Notifier. The subject and the address are checked
 // for header injection in compose like every other message's; the body is
 // text and cannot carry a header.
