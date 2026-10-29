@@ -151,3 +151,10 @@ WHERE id = $1;
 -- The handle is retired, not recycled: renaming it to a reserved sentinel
 -- keeps the global namespace free of impersonation of a deleted account.
 UPDATE handles SET handle = $2, reserved = true WHERE id = $1;
+
+-- name: SetUserState :execrows
+-- A staff act moves an account between active and suspended, and only
+-- from the state it names: an erased account is never moved back, and a
+-- second suspension changes nothing.
+UPDATE users SET state = @to_state, updated_at = now()
+WHERE id = @id AND state = @from_state;

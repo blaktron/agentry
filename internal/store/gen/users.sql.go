@@ -601,6 +601,28 @@ func (q *Queries) SetUserPlatformStaff(ctx context.Context, arg SetUserPlatformS
 	return err
 }
 
+const setUserState = `-- name: SetUserState :execrows
+UPDATE users SET state = $1, updated_at = now()
+WHERE id = $2 AND state = $3
+`
+
+type SetUserStateParams struct {
+	ToState   string    `json:"to_state"`
+	ID        uuid.UUID `json:"id"`
+	FromState string    `json:"from_state"`
+}
+
+// A staff act moves an account between active and suspended, and only
+// from the state it names: an erased account is never moved back, and a
+// second suspension changes nothing.
+func (q *Queries) SetUserState(ctx context.Context, arg SetUserStateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserState, arg.ToState, arg.ID, arg.FromState)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateUserDisplayName = `-- name: UpdateUserDisplayName :one
 UPDATE users SET display_name = $2, updated_at = now() WHERE id = $1 RETURNING id
 `

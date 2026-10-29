@@ -394,6 +394,7 @@ func TestDepsAdaptersFollowThePoolAndKeepTheExtensionsName(t *testing.T) {
 		{"report settings", func(p *pgxpool.Pool) any { return reportSettingsOf(srv, p) }, false},
 		{"staff", func(p *pgxpool.Pool) any { return staffOf(srv, p) }, false},
 		{"members", func(p *pgxpool.Pool) any { return membersOf(srv, p, "directory") }, false},
+		{"accounts", func(p *pgxpool.Pool) any { return accountsOf(srv, p, "directory") }, false},
 		{"remembered browsers", func(p *pgxpool.Pool) any { return rememberedBrowsersOf(srv, p, "directory") }, false},
 		{"knowledge", func(p *pgxpool.Pool) any { return knowledgeOf(srv, p) }, true},
 		{"voice", func(p *pgxpool.Pool) any { return voiceOf(srv, p) }, true},
@@ -1111,6 +1112,55 @@ func TestBindHandsTheReportSettings(t *testing.T) {
 	}
 	if got, _ := r.settings.Design(ctx, other); !bytes.Equal(got, classic.Canonical()) {
 		t.Fatalf("the other person's design moved: %s", got)
+	}
+}
+
+// accountsReader keeps the account door it was bound with.
+type accountsReader struct {
+	noop
+	accounts Accounts
+}
+
+func (a *accountsReader) Name() string   { return "accounts-reader" }
+func (a *accountsReader) Bind(deps Deps) { a.accounts = deps.Accounts }
+
+// TestBindHandsTheAccountsDoor: a server with a database hands an extension
+// the core's account door, which checks its actor itself: a principal
+// claiming staff for an account that is not staff is refused. What each
+// act does is the API's tests'.
+func TestBindHandsTheAccountsDoor(t *testing.T) {
+	st := migratedStore(t)
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
+	a := &accountsReader{}
+	applyExtensions(srv, []Extension{a})
+	if a.accounts == nil {
+		t.Fatal("a server with a database handed out no account door")
+	}
+	ctx := context.Background()
+	actor, target := uuid.New(), uuid.New()
+	for _, id := range []uuid.UUID{actor, target} {
+		if _, err := st.Pool().Exec(ctx, `INSERT INTO handles (id, handle, kind) VALUES ($1, $2, 'user')`, id, "ad-"+id.String()[:8]); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Pool().Exec(ctx, `INSERT INTO users (id, email, email_verified_at) VALUES ($1, $2, now())`, id, id.String()+"@example.test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claim := &Principal{UserID: actor, Via: "session", PlatformStaff: true}
+	if _, err := a.accounts.Suspend(ctx, claim, target, "test"); !errors.Is(err, ErrActorNotStaff) {
+		t.Fatalf("a principal that only claims staff: %v, want ErrActorNotStaff", err)
+	}
+	if _, err := st.Pool().Exec(ctx, `UPDATE users SET platform_staff = true WHERE id = $1`, actor); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := a.accounts.Suspend(ctx, claim, target, "test"); err != nil || !got.Changed {
+		t.Fatalf("staff suspending through the door: %+v %v", got, err)
+	}
+	if f, err := a.accounts.Facts(ctx, claim, target); err != nil || f.State != "suspended" {
+		t.Fatalf("facts after the suspension: %+v %v", f, err)
 	}
 }
 

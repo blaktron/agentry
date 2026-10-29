@@ -51,6 +51,7 @@ const (
 	StaffSyncSignIn     = "sign-in"
 	StaffSyncMembership = "membership"
 	StaffSyncErasure    = "erasure"
+	StaffSyncState      = "account-state"
 	StaffSyncStartup    = "startup"
 )
 

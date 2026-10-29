@@ -957,6 +957,24 @@
           ]
         },
         {
+          "path": "internal/api/accounts_seam_test.go",
+          "tests": [
+            "TestStaffSuspendRevokesEveryCredentialAndReinstateRestoresNone",
+            "TestStaffSignOutKeepsTokensAndKeys",
+            "TestTheAccountDoorChecksItsActor",
+            "TestNoAccountMailToAnUnconfirmedAddress",
+            "TestAccountFactsReadsWhatTheAccountHolds",
+            "TestSuspendingStaffEndsTheirStaff"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/admitted_stores_test.go",
           "tests": [
             "TestAStoredAdmissionIsRecordedWithWhatItPaidFor",
@@ -2692,7 +2710,8 @@
             "TestOrgAccessRequestMailPointsAtTheConsole",
             "TestOrgPendingMembersDigestNamesEachDoor",
             "TestRenderedMailCarriesTheTextInTheFrame",
-            "TestDialAndSendSpeaksSMTP"
+            "TestDialAndSendSpeaksSMTP",
+            "TestAccountNoticesSayWhatChanged"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4505,6 +4524,7 @@
             "TestVoiceStoreProposesOnlyTheSourcesAVoiceWriterHas",
             "TestBindHandsTheServersMeter",
             "TestBindHandsTheReportSettings",
+            "TestBindHandsTheAccountsDoor",
             "TestBindHandsTheMembersDoor"
           ],
           "fuzz": [],
