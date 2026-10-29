@@ -168,6 +168,50 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		}
 	}
 
+	dir, err := s.eraseAccountNow(r, p.UserID, user.Email, agents, disposition, publishedCount, transferOrgID, nil)
+	if err != nil {
+		s.log.ErrorContext(r.Context(), "gdpr delete", "err", err)
+		problemInternal(w, r)
+		return
+	}
+
+	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
+	// A header on the 204, not a body: the contract is additive-only.
+	if dir != "" {
+		w.Header().Set(directoryErasureHeader, dir)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// staffEraser is the staff member erasing an account through the account
+// door (EraseAccount): who, through which extension, why, and the check of
+// the actor that runs inside the erasure's own transaction.
+type staffEraser struct {
+	actor  uuid.UUID
+	ext    string
+	reason string
+	check  func(tq *storegen.Queries) error
+}
+
+// eraseAccountNow is an account's erasure once its checks have passed: the
+// published versions yanked (with disposition yank), the registry's half in
+// one transaction with its user.delete row, the knowledge erasure finished,
+// then the directory's half and account.erased. The person's own erasure
+// and platform staff's (by, which also names the actor in the audit) are
+// this one function, so what staff erase is exactly what the person would.
+// It returns the directory half's outcome.
+func (s *Server) eraseAccountNow(r *http.Request, userID uuid.UUID, email string, agents []storegen.ListPersonalNamespaceAgentsRow,
+	disposition string, publishedCount int64, transferOrgID uuid.UUID, by *staffEraser) (string, error) {
+	q := s.q()
+	// Every row of a staff erasure names the staff member as its actor,
+	// whatever principal the request carries.
+	event := func(a audit.Action) audit.Event {
+		e := auditEvent(r, a)
+		if by != nil {
+			e.Actor, e.ActorKind = by.actor, audit.ActorUser
+		}
+		return e
+	}
 	// Yank outside the erasure transaction: each yank is its own audited
 	// state-machine transition and must not be rolled back by a later
 	// failure — a yanked version is safe, a half-erased account is not.
@@ -186,7 +230,7 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 				if v.Status != string(registry.StatusPublished) {
 					continue
 				}
-				e := auditEvent(r, audit.ActionVersionYank)
+				e := event(audit.ActionVersionYank)
 				e.Detail = map[string]any{"reason": "author account deleted"}
 				if err := s.reg.Transition(r.Context(), v.ID, registry.StatusYanked,
 					"author account deleted", e); err != nil {
@@ -197,14 +241,23 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	}
 
 	var erased erasedRows
-	err = s.st.WithPgxTx(r.Context(), func(tx pgx.Tx, tq *storegen.Queries) error {
+	err := s.st.WithPgxTx(r.Context(), func(tx pgx.Tx, tq *storegen.Queries) error {
+		if by != nil {
+			if err := by.check(tq); err != nil {
+				return err
+			}
+		}
 		var err error
-		erased, err = s.eraseAccountIn(r.Context(), tx, tq, p.UserID, user.Email, "user-requested erasure", auditEvent(r, audit.ActionUserStaffSync))
+		reason := "user-requested erasure"
+		if by != nil {
+			reason = "erased by platform staff"
+		}
+		erased, err = s.eraseAccountIn(r.Context(), tx, tq, userID, email, reason, event(audit.ActionUserStaffSync))
 		if err != nil {
 			return err
 		}
-		e := auditEvent(r, audit.ActionUserDelete)
-		e.TargetKind, e.TargetID = "user", p.UserID
+		e := event(audit.ActionUserDelete)
+		e.TargetKind, e.TargetID = "user", userID
 		e.Detail = map[string]any{
 			"publishedContent":  disposition,
 			"publishedVersions": publishedCount,
@@ -217,15 +270,16 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 		if transferOrgID != uuid.Nil {
 			e.OrgID = transferOrgID
 		}
+		if by != nil {
+			e.Detail["via"], e.Detail["extension"], e.Detail["reason"] = "extension", by.ext, by.reason
+		}
 		return s.auditW.Write(r.Context(), tq, e)
 	})
 	if err != nil {
-		s.log.ErrorContext(r.Context(), "gdpr delete", "err", err)
-		problemInternal(w, r)
-		return
+		return "", err
 	}
 
-	s.knowledge.FinishErasure(r.Context(), knowledge.User(p.UserID), erased.knowledgeKeys)
+	s.knowledge.FinishErasure(r.Context(), knowledge.User(userID), erased.knowledgeKeys)
 
 	// The other half: with credentials in the directory service
 	// the person's sign-in account — email, display name, password hash —
@@ -237,21 +291,17 @@ func (s *Server) DeleteCurrentUser(w http.ResponseWriter, r *http.Request, param
 	// does not undo the erasure that already happened: a failed attempt is
 	// handed to a retrying job, and the response says where the
 	// directory step stands so the site can tell the person.
-	e := auditEvent(r, audit.ActionUserDirectoryErase)
-	e.Actor, e.ActorKind = p.UserID, audit.ActorUser
-	dir := s.eraseInDirectory(r, e, p.UserID, user.Email)
+	e := event(audit.ActionUserDirectoryErase)
+	if by == nil {
+		e.Actor, e.ActorKind = userID, audit.ActorUser
+	}
+	dir := s.eraseInDirectory(r, e, userID, email)
 
 	// The extensions hear it after the directory's first attempt, so one
 	// that keeps a copy of the account elsewhere acts on an erasure that has
 	// committed.
-	s.fireAccountErased(r.Context(), p.UserID, user.Email)
-
-	clearCookie(w, sessionCookieName, s.cfg.Auth.CookieSecure)
-	// A header on the 204, not a body: the contract is additive-only.
-	if dir != "" {
-		w.Header().Set(directoryErasureHeader, dir)
-	}
-	w.WriteHeader(http.StatusNoContent)
+	s.fireAccountErased(r.Context(), userID, email)
+	return dir, nil
 }
 
 // transferAgents moves every agent in a personal namespace to an org, in one

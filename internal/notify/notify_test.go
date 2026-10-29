@@ -1539,6 +1539,7 @@ func TestAccountNoticesSayWhatChanged(t *testing.T) {
 		{AccountReinstated, "Agentry: your account is reinstated", "revoked stay revoked"},
 		{AccountSignedOut, "Agentry: you were signed out everywhere", "Your access tokens and SSH keys still work."},
 		{AccountSecondFactorsRemoved, "Agentry: second factors removed from your account", "removed 2 second factors from"},
+		{AccountErased, "Agentry: your account is erased", "This cannot be undone."},
 	} {
 		m := r.account(AccountNotice{ToEmail: "p@example.test", Handle: "alice", Change: c.change, Removed: 2})
 		if m.Subject != c.subject || !strings.Contains(m.Body, " alice") || !strings.Contains(m.Body, c.says) || !strings.Contains(m.Body, "Do not reply") {
