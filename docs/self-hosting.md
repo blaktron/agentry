@@ -1296,10 +1296,11 @@ source defaults apply.
 
 The script cross-compiles the CLI for macOS (arm64, amd64), Linux (amd64,
 arm64) and Windows (amd64) — it is pure Go — and builds the desktop app
-for Linux when the GTK/WebKit dev headers are present and for Windows when
-the Wails CLI is on `PATH`. The macOS desktop app cannot be built there:
-a Mac builds it (`scripts/build-darwin.sh` in the desktop repository,
-which produces a zip of the universal application bundle), and the script
+for Linux when the GTK 4 and WebKitGTK 6.0 development headers are present.
+The Windows desktop app comes only from a signed release bundle, and the
+macOS desktop app cannot be built there: a Mac builds it
+(`scripts/build-darwin.sh` in the desktop repository, which produces a zip of
+the universal application bundle), and the script
 brings that zip in with `--import DIR` — every artifact in `DIR` is copied
 into the output before the checksums are written, so it is listed like the
 rest; a `SHA256SUMS` beside it, written by the Mac, is checked before the
