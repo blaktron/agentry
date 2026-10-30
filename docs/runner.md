@@ -728,8 +728,9 @@ The CLI checks every draft in four steps:
       the package registries your runs install from (the policy's
       `mcpRegistries`). A version the registry does not publish, one with no
       program to start, or one whose `engines.node` or `requires_python`
-      excludes the runtime the runner uses (Node 24.21.0, Python 3.12.14) is
-      refused by the rules. A registry that does not answer is this
+      excludes every runtime the runner can use (Node 26.13.0; Python
+      3.15.2, or 3.14.10 for a server that does not accept 3.15) is refused
+      by the rules. A registry that does not answer is this
       machine's problem, not the draft's: the server is listed under "MCP
       servers not checked". The names and versions go to the package
       registry, from this machine, and nothing else does.
@@ -1558,6 +1559,7 @@ its digest, so a run record says which file a run obeyed.
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
+| `images.pythonFallbackRuntime` | the pinned Python image used instead of `images.pythonRuntime` for a PyPI server whose `requires_python` excludes the default's Python (by default Python 3.14); a policy that sets its own `images.pythonRuntime` gets exactly that image and no fallback |
 | `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode ([Unsafe Mode](agentry/unsafe-mode.md)) |
 | `images.files` | the files image a run's files are read and checked in, pinned by digest (the default is the one the CLI release names) ([running with files](#running-with-files)) |
 | `images.hostlink` | the hostlink image the host link is built on, the OpenSSH client a run reaches a [target host](#target-hosts-a-server-named-at-run-time) with, pinned by digest (the default is the one the CLI release names) |
