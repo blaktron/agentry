@@ -2169,7 +2169,7 @@ for a hosted run given two documents, one of a type Hybrid Analysis is
 asked about, with the package versions cut:
 
 > the inputs were decoded before the run, in agentry-decode:83ac5a7a15027347
-> (built on ghcr.io/blaktron/agentry-files:2026.10.04.3@sha256:f8da034b…)
+> (built on ghcr.io/blaktron/agentry-files:2026.10.30.6@sha256:effd241f…)
 > with no network, every capability dropped and the inputs read-only, by
 > bsdcat, bsdtar, clamscan, file, java, pandoc, pdftotext and tesseract (…)
 > and the runner's own spreadsheet, slide, zip and tar readers: 2 decoded,
@@ -4195,7 +4195,7 @@ thread, and an autonomous turn longer than the token's hour fails on a 401.
 **Which harness.** The `codex-image` adapter: OpenAI's Codex, unmodified, in
 the `agentry-codex` image that agentry-dockerimages builds from OpenAI's
 release binary after checking it against OpenAI's signature. The CLI pins the
-image by digest (`ghcr.io/blaktron/agentry-codex:0.162.0-2026.10.09.1@sha256:…`
+image by digest (`ghcr.io/blaktron/agentry-codex:0.166.0-2026.10.30.4@sha256:…`
 is its default for `images.harnessImages.codex-image`), and the CLI's CI
 verifies that digest against the signing workflow's identity on every pull
 request. An `images.harnessImages` entry of your own is yours to verify. `codex-image` may also run on an
