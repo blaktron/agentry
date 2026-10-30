@@ -66,7 +66,9 @@ you would rather not run a container.
 
 **Spec-first for the API.** Edit `schemas/openapi.yaml`, run `make generate`,
 then implement the generated interface method. CI fails on generated-code drift
-and on breaking changes within `/api/v1`.
+and on breaking changes within `/api/v1`. `make generate` builds the generator
+from its own module, `tools/oapi-codegen`; update it there (`cd tools/oapi-codegen`,
+`GOWORK=off go get -u tool`, `go mod tidy`), not in the server's `go.mod`.
 
 **Every route declares its authorization.** Add an entry to `routeAuthz` in
 `internal/api/authz_routes.go`. A route with no declaration fails CI — that

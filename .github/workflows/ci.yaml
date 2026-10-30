@@ -230,6 +230,9 @@ jobs:
           # `go mod tidy -diff` fails when go.mod/go.sum do not match the code.
           go mod verify
           go mod tidy -diff
+          # The OpenAPI generator is a module of its own; its graph is
+          # checked the same way.
+          (cd tools/oapi-codegen && go mod verify && go mod tidy -diff)
       # The osv-scanner release binary (v2.5.1, when this was written) is built
       # with Go 1.26 and cannot load this go 1.27 module for call analysis,
       # so the action degrades to a lockfile-only scan and re-reports
@@ -238,7 +241,9 @@ jobs:
       # the runner's Go 1.27 toolchain instead, which restores call
       # analysis — the same mechanism `make deps-audit` uses locally.
       - name: osv-scanner (go.mod)
-        run: go run "github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION}" scan --lockfile=go.mod
+        run: |
+          set -euo pipefail
+          go run "github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION}" scan --lockfile=go.mod --lockfile=tools/oapi-codegen/go.mod
 
   # Third-party verification of the attestations this code signs
   # cosign — which shares no code with pkg/attest —

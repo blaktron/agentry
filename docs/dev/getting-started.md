@@ -23,7 +23,7 @@ curl localhost:8080/api/v1/meta
 | Command | What |
 |---|---|
 | `make check` | the CI gate: generated-code drift, the embedded rule bundle in sync, lint, tests, build |
-| `make generate` | regenerate the OpenAPI server and Go client, and sqlc, after editing `schemas/` or `internal/store/queries/` |
+| `make generate` | regenerate the OpenAPI server and Go client (built from `tools/oapi-codegen`, a module of its own), and sqlc, after editing `schemas/` or `internal/store/queries/` |
 | `make test` | Go tests; DB tests need `AGENTRY_TEST_DATABASE_URL` (`./scripts/dev/pg.sh test-url`), whose role may create databases: `internal/scan`, whose sweeps act on every row, runs in its own `<db>_scan` beside it |
 | `./scripts/acceptance/smoke.sh` | boots the stack against a database and reaches the API through the generated Go client (`make e2e` runs it) |
 | `./scripts/acceptance/auth.sh` | the authorization matrix, the personal-access-token lifecycle and an audit row for every mutating call |

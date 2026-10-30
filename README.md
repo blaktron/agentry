@@ -83,6 +83,7 @@ nginx edge. For a real deployment, see
 | `examples/` | small example QuickAgent packages that publish through the pipeline |
 | `deploy/` | the headless Compose stack and the Helm chart |
 | `schemas/` | the OpenAPI spec and the code generator configuration |
+| `tools/oapi-codegen` | the OpenAPI generator's own Go module, so its dependencies stay out of the server's `go.mod` |
 | `docs/` | the pages published at docs.secureagentry.net |
 
 The CLI is [agentry-cli](https://github.com/blaktron/agentry-cli); it depends
