@@ -1549,7 +1549,11 @@ mount, where the caller carries no scopes and no roles, and "not recognized"
 everywhere else), receive the database pool, the logger, an audit writer and a meter
 for its own metrics at start-up (`Binds`), delete the rows it keeps about a person inside the
 account erasure's and the data clear's own transaction (`ErasesAccounts`),
-run a job on a period, and register audit actions under its own name.
+keep a keyed hash of an erased account's address, never the address, for as long
+as it needs to recognize the same mailbox signing up again
+(`RemembersErasedAddresses`, with `Deps.ErasedAddressKey` to key a new account's
+address the same way), run a job on a period, and register audit actions under
+its own name.
 
 An extension can also be the deployment's directory, the service that holds
 people's sign-in accounts. It supplies the directory the registry erases

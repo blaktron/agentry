@@ -1064,7 +1064,8 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
-				Staff: staffOf(srv, pool), Members: membersOf(srv, pool, e.Name()), Accounts: accountsOf(srv, pool, e.Name()), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name()), Sealer: sealerOf(srv, e.Name())})
+				Staff: staffOf(srv, pool), Members: membersOf(srv, pool, e.Name()), Accounts: accountsOf(srv, pool, e.Name()), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name()), Sealer: sealerOf(srv, e.Name()),
+				ErasedAddressKey: srv.ErasedAddressKey})
 		}
 		srv.RegisterExtension(e.Name(), e.Routes)
 		if u, ok := e.(Unthrottles); ok {
@@ -1089,6 +1090,9 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		}
 		if x, ok := e.(ErasesAccounts); ok {
 			srv.AddAccountEraser(e.Name(), x.EraseAccount)
+		}
+		if x, ok := e.(RemembersErasedAddresses); ok {
+			srv.AddErasedAddressRememberer(e.Name(), x.ErasedAddress)
 		}
 		if v, ok := e.(AdmitsVoice); ok {
 			if a := v.VoiceAdmitter(); a != nil {
