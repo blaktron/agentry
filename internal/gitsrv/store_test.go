@@ -464,7 +464,7 @@ func TestSweepViewLeftoversRemovesOnlyStaleBuildDirectories(t *testing.T) {
 		t.Fatalf("sweep with no views = %d, %v; want 0, nil", n, err)
 	}
 
-	origin, _, second, _ := originWithHistory(t, repos)
+	origin, _, second, _ := originWithHistoryID(t, repos, uuid.MustParse("cd03a1a0-0551-4579-a26c-74f5f2d2b26b"))
 	view, err := repos.ReviewedView(context.Background(), origin, map[string]string{"refs/tags/v1.0.0": second}, second)
 	if err != nil {
 		t.Fatal(err)
@@ -491,15 +491,19 @@ func TestSweepViewLeftoversRemovesOnlyStaleBuildDirectories(t *testing.T) {
 	}
 	stale := mk(filepath.Join(shard, id+"-build-1234567"), 2*time.Hour)
 	young := mk(filepath.Join(shard, id+"-build-7654321"), time.Minute)
-	other := "cd" + id[2:]
+	otherShard := "cd"
+	if otherShard == id[:2] {
+		otherShard = "ce"
+	}
+	other := otherShard + id[2:]
 	kept := []string{
 		view,
 		young,
-		mk(filepath.Join(shard, id+"-build-"), 2*time.Hour),                            // no suffix
-		mk(filepath.Join(shard, "notauuid-build-1"), 2*time.Hour),                      // not a repository id
-		mk(filepath.Join(data, "views", "cd", id+"-build-1"), 2*time.Hour),             // in another id's shard
-		mk(filepath.Join(data, "views", "cd", other+"-0123456789ab.git"), 2*time.Hour), // a view, not a build
-		mk(filepath.Join(data, id[:2], id+"-build-1"), 2*time.Hour),                    // a repository shard, not views
+		mk(filepath.Join(shard, id+"-build-"), 2*time.Hour),                                  // no suffix
+		mk(filepath.Join(shard, "notauuid-build-1"), 2*time.Hour),                            // not a repository id
+		mk(filepath.Join(data, "views", otherShard, id+"-build-1"), 2*time.Hour),             // in another id's shard
+		mk(filepath.Join(data, "views", otherShard, other+"-0123456789ab.git"), 2*time.Hour), // a view, not a build
+		mk(filepath.Join(data, id[:2], id+"-build-1"), 2*time.Hour),                          // a repository shard, not views
 	}
 
 	// A link named like a stale build directory is not followed, and what
