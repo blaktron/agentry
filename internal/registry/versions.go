@@ -596,10 +596,15 @@ func (s *Service) SubmitVersion(ctx context.Context, p *auth.Principal, a Agent,
 	}
 
 	// cli-upload: never trust client packing — the server-built
-	// digest is authoritative; a claimed digest must agree.
+	// digest is authoritative; a claimed digest must agree. The same files
+	// packed by a client built with another release of the archive
+	// compressor give another digest, so the message names that cause: the
+	// person cannot fix anything but the client.
 	if in.ClaimedDigest != "" && in.ClaimedDigest != info.Digest {
 		return Version{}, &ErrValidation{Issues: []error{
-			fmt.Errorf("client archive digest %s does not match server-built %s", in.ClaimedDigest, info.Digest)}}
+			fmt.Errorf("the client packed this archive differently from the registry (client digest %s, registry digest %s): "+
+				"update the client to a release that matches this registry, then publish again",
+				in.ClaimedDigest, info.Digest)}}
 	}
 
 	key := ArchiveKey(info.Digest)
