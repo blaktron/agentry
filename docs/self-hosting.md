@@ -12,7 +12,7 @@ front of this same server; a registry does not need one, and
 
 ## What you need
 
-- PostgreSQL 16 (the only hard dependency)
+- PostgreSQL 18 (the only hard dependency)
 - Somewhere to put files. A local disk is fine to start; S3 for production
 - The `git` binary on the host running the git role
 - Optionally: a model for AI Review, the pipeline's automated adjudication
@@ -79,7 +79,7 @@ real SMTP.
 ## Quickstart from source
 
 ```bash
-brew install go postgresql@16       # or your platform's equivalent
+brew install go postgresql@18       # or your platform's equivalent
 make db-up                          # private Postgres cluster on :5477
 make build
 ./bin/agentryd migrate
@@ -933,6 +933,50 @@ no longer serves, or a tag that has moved since the pin was written.
 The object store in the stack is MinIO, from Chainguard's build of the MinIO
 source, which is licensed AGPL-3.0. It runs as a separate service that the
 server reaches over the S3 API, and it is not part of Agentry.
+
+### Moving a compose stack from PostgreSQL 16 to 18
+
+The stack runs PostgreSQL 18, whose image keeps its cluster in
+`/var/lib/postgresql/18/docker` and declares `/var/lib/postgresql` as its
+volume. A stack created with a compose file that ran PostgreSQL 16 keeps its
+cluster in the volume `<project>_pgdata`, which PostgreSQL 18 cannot open.
+The new file uses a volume of its own, `<project>_pgdata18`, so the old one
+is never mounted by mistake and stays as your way back. A fresh stack needs
+nothing: it starts on an empty `pgdata18`. An existing stack moves by dump and
+restore (`<project>` is the compose project name, `compose` for
+`deploy/compose`; use the same `-f` files you start the stack with):
+
+```bash
+cd agentry/deploy/compose            # still on the checkout that runs PostgreSQL 16
+# 1. Stop every service that writes, keep postgres. Record the row counts.
+docker compose --profile server stop $(docker compose --profile server config --services | grep -vx postgres)
+cat > counts.sql <<'SQL'
+SELECT table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name), false, true, '')))[1]::text::bigint AS rows
+FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY 1;
+SQL
+docker compose exec -T postgres psql -U agentry -d agentry_dev -tA < counts.sql > counts-before.txt
+# 2. Dump every database and role.
+docker compose exec -T postgres pg_dumpall -U agentry > pg-dumpall.sql
+# 3. Move to the checkout that runs PostgreSQL 18 and start only its postgres.
+git pull
+docker compose up -d postgres        # creates <project>_pgdata18, empty
+# 4. Restore. The new cluster already holds the role and database named by
+#    POSTGRES_USER and POSTGRES_DB, which the dump creates again.
+docker compose exec -T postgres psql -U agentry -d postgres -qc 'DROP DATABASE agentry_dev'
+sed '/^CREATE ROLE agentry;$/d' pg-dumpall.sql \
+  | docker compose exec -T postgres psql -U agentry -d postgres -v ON_ERROR_STOP=1 -q > /dev/null
+docker compose exec -T postgres vacuumdb -U agentry --all --analyze-only
+# 5. Compare and start.
+docker compose exec -T postgres psql -U agentry -d agentry_dev -tA < counts.sql > counts-after.txt
+diff counts-before.txt counts-after.txt && echo "row counts match"
+docker compose --profile server up -d
+```
+
+To go back, check out the earlier compose file and run `docker compose up -d`:
+the old volume is untouched. Remove it (`docker volume rm <project>_pgdata`)
+once you no longer need that way back. If your stack has more databases than
+`agentry_dev` (a site overlay adds some), the dump and the restore carry them
+all; add their counts to the comparison with the same query.
 
 ### Rate limits at the edge
 

@@ -2,7 +2,7 @@
 #
 # OPERATOR-SUPPLIED DEPENDENCIES (NOT bundled by this chart, by design — the
 # services stay external):
-#   * PostgreSQL 16 — set secret.databaseUrl (or existingSecret key
+#   * PostgreSQL 18 — set secret.databaseUrl (or existingSecret key
 #     AGENTRY_DATABASE_URL). agentryd runs migrations on start when
 #     config.migrateOnStart=true.
 #   * Object storage — S3 or any S3-compatible store (MinIO, Ceph). Set

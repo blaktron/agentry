@@ -15,11 +15,11 @@ DB_URL="$(./scripts/dev/pg.sh url)"
 # as scripts/dev/pg.sh).
 PGBIN="${PGBIN:-}"
 if [ -z "$PGBIN" ]; then
-  for cand in /opt/homebrew/opt/postgresql@16/bin /usr/local/opt/postgresql@16/bin; do
+  for cand in /opt/homebrew/opt/postgresql@18/bin /usr/local/opt/postgresql@18/bin; do
     [ -x "$cand/psql" ] && PGBIN="$cand" && break
   done
 fi
-[ -n "$PGBIN" ] || { echo "psql not found; install postgresql@16 or set PGBIN" >&2; exit 1; }
+[ -n "$PGBIN" ] || { echo "psql not found; install postgresql@18 or set PGBIN" >&2; exit 1; }
 
 TMP="$(mktemp -d)"
 SERVER_PID=""

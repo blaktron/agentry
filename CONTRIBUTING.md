@@ -34,7 +34,7 @@ updates the page in `docs/` that describes it in the same PR.
 ## Development setup
 
 ```bash
-brew install go postgresql@16 sqlc golangci-lint   # or your platform's equivalent
+brew install go postgresql@18 sqlc golangci-lint   # or your platform's equivalent
 make db-up                                          # local Postgres on :5477
 make dev                                            # migrations + agentryd all on :8080
 ```

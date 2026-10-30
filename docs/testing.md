@@ -41,7 +41,7 @@ which entry points run; a listed support file is not another executed test.
 
 ## Postgres fixtures
 
-Set `AGENTRY_TEST_DATABASE_URL` to a dedicated PostgreSQL 16 test server.
+Set `AGENTRY_TEST_DATABASE_URL` to a dedicated PostgreSQL 18 test server.
 Its account needs permission to create/drop databases. API and scan binaries
 call `testdb.Main` from TestMain: each process creates a random sibling
 database, preserves connection query options, redirects its test DSN to it,
