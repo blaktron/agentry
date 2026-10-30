@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local PostgreSQL 16 lifecycle for machines without Docker.
+# Local PostgreSQL 18 lifecycle for machines without Docker.
 # Creates a private cluster under .devdata/pg on port 5477 with
 # databases agentry_dev and agentry_test, role agentry/agentry.
 set -euo pipefail
@@ -10,12 +10,12 @@ export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
 PGBIN="${PGBIN:-}"
 if [ -z "$PGBIN" ]; then
-  for cand in /opt/homebrew/opt/postgresql@16/bin /usr/local/opt/postgresql@16/bin; do
+  for cand in /opt/homebrew/opt/postgresql@18/bin /usr/local/opt/postgresql@18/bin; do
     [ -x "$cand/pg_ctl" ] && PGBIN="$cand" && break
   done
 fi
 if [ -z "$PGBIN" ]; then
-  echo "postgresql@16 not found; install it or set PGBIN" >&2
+  echo "postgresql@18 not found; install it or set PGBIN" >&2
   exit 1
 fi
 

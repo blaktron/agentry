@@ -46,7 +46,7 @@ x-logging: &rotated
 services:
   postgres:
     logging: *rotated
-    image: postgres:16.15@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c
+    image: postgres:18.6@sha256:979bccfde35445db618c65107d27d08c6c21339d8dc3ad4c830c6633947be0e4
     restart: unless-stopped
     environment:
       POSTGRES_USER: agentry
@@ -55,7 +55,14 @@ services:
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # The PostgreSQL 18 image keeps its cluster in /var/lib/postgresql/18/docker
+      # and declares /var/lib/postgresql as its volume, so the mount is that
+      # directory. The volume has a new name on purpose: a volume that holds an
+      # older major's cluster at its root would be mounted here without error
+      # and the server would initialise an empty cluster beside it. An old
+      # volume is moved by dump and restore (docs/self-hosting.md, "Upgrading
+      # PostgreSQL"); it is never mounted here.
+      - pgdata18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agentry -d agentry_dev"]
       interval: 5s
@@ -405,7 +412,7 @@ networks:
         - subnet: ${AGENTRY_INGRESS_SUBNET:-172.16.255.240/28}
 
 volumes:
-  pgdata:
+  pgdata18:
   miniodata:
   gitdata:
   # Mounted at /data/storage: the audit stream's files.

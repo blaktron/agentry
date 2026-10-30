@@ -5,7 +5,7 @@
 - Go at `go.mod`'s `go` line, 1.27.3 today (`brew install go`; an older `go`
   fetches that toolchain itself). There is no JavaScript build: the server's
   own pages are Go templates.
-- Docker (preferred) **or** PostgreSQL 16 locally (`brew install postgresql@16`);
+- Docker (preferred) **or** PostgreSQL 18 locally (`brew install postgresql@18`);
   `scripts/dev/pg.sh` runs a private cluster under `.devdata/pg` for machines
   without Docker
 - `sqlc` for query codegen (`brew install sqlc` or `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`)
@@ -13,7 +13,7 @@
 ## Quick start
 
 ```bash
-make db-up          # local Postgres 16 on :5477 (or: docker compose -f deploy/compose/docker-compose.yaml up -d)
+make db-up          # local Postgres 18 on :5477 (or: docker compose -f deploy/compose/docker-compose.yaml up -d)
 make dev            # migrations + agentryd all on :8080
 curl localhost:8080/api/v1/meta
 ```

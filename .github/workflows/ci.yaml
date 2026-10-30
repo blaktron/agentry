@@ -64,7 +64,7 @@ jobs:
     timeout-minutes: 35
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: agentry
           POSTGRES_PASSWORD: agentry
