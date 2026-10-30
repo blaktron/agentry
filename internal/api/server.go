@@ -111,6 +111,9 @@ type Server struct {
 	// accountErasers delete an extension's rows about an account inside
 	// the erasure and data-clear transactions.
 	accountErasers []namedEraser
+	// addressRememberers are the extensions that remember an erased
+	// account's address by its key (AddErasedAddressRememberer).
+	addressRememberers []namedRememberer
 	// mounted is every pattern the recorder was given, in registration
 	// order; empty until NewHandler builds the handler.
 	mounted []string

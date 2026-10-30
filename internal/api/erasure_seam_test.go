@@ -8,7 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -204,5 +206,88 @@ func TestAccountEraserHearsTheDataClear(t *testing.T) {
 	d := auditDetail(t, env, "user.data_clear", uid)
 	if ext, _ := d["extensions"].(map[string]any); ext["probe"] != float64(1) {
 		t.Fatalf("user.data_clear detail = %v, want extensions.probe = 1", d)
+	}
+}
+
+// TestErasedAddressIsRememberedBeforeTheErasers: an account erasure hands
+// each rememberer the account's address key once, never the address, in
+// the erasure's transaction and before the erasers run; a rememberer that
+// fails rolls the erasure back; a data clear, which keeps the account,
+// calls none.
+func TestErasedAddressIsRememberedBeforeTheErasers(t *testing.T) {
+	var srv *api.Server
+	var remembered, probe *probeEraser
+	fail := false
+	env := newTestEnvWith(t, func(s *api.Server) {
+		srv = s
+		s.AddErasedAddressRememberer("probe", func(ctx context.Context, tx api.ErasureTx, id uuid.UUID, key string) error {
+			if _, err := tx.Exec(ctx, `INSERT INTO `+remembered.table+` (user_id, kind) VALUES ($1, $2)`, id, key); err != nil {
+				return err
+			}
+			if fail {
+				return errors.New("probe: refused")
+			}
+			return nil
+		})
+		// The eraser records how many keys were remembered when it ran.
+		s.AddAccountEraser("probe", func(ctx context.Context, tx api.ErasureTx, id uuid.UUID, k api.AccountErasureKind) (int64, error) {
+			var n int
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM `+remembered.table+` WHERE user_id = $1`, id).Scan(&n); err != nil {
+				return 0, err
+			}
+			_, err := tx.Exec(ctx, `INSERT INTO `+probe.table+` (user_id, kind) VALUES ($1, $2)`, id, fmt.Sprintf("%s after %d", k, n))
+			return 1, err
+		})
+	})
+	remembered = newNamedErasureProbe(t, env, "addr")
+	probe = newNamedErasureProbe(t, env, "after")
+
+	address := func(uid string) string {
+		var email string
+		if err := env.st.Pool().QueryRow(context.Background(), `SELECT email FROM users WHERE id = $1`, uid).Scan(&email); err != nil {
+			t.Fatal(err)
+		}
+		return email
+	}
+
+	h := env.register("ea-erase")
+	env.verifyEmail(h)
+	sess := env.login(h)
+	uid := env.selfID(sess)
+	email := address(uid)
+
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/clear-data", nil, nil, http.StatusNoContent)
+	if got := remembered.rows(t, env, uid); len(got) != 0 {
+		t.Fatalf("a data clear remembered the address: %v", got)
+	}
+
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
+	got := remembered.rows(t, env, uid)
+	if len(got) != 1 || got[0] != srv.ErasedAddressKey(email) {
+		t.Fatalf("remembered %v, want the one key %q", got, srv.ErasedAddressKey(email))
+	}
+	if strings.Contains(got[0], email) || strings.Contains(got[0], strings.Split(email, "@")[0]) {
+		t.Fatalf("the remembered key %q carries the address", got[0])
+	}
+	if after := probe.rows(t, env, uid); len(after) != 2 || after[1] != string(api.AccountErased)+" after 1" {
+		t.Fatalf("eraser calls = %v, want the erasure's after the key was remembered", after)
+	}
+
+	// A rememberer that fails leaves the account as it was.
+	fail = true
+	h2 := env.register("ea-fail")
+	env.verifyEmail(h2)
+	sess2 := env.login(h2)
+	uid2 := env.selfID(sess2)
+	res := env.do(sess2, http.MethodPost, "/api/v1/user/delete", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("erasure with a failing rememberer: %d, want 500", res.StatusCode)
+	}
+	if got := remembered.rows(t, env, uid2); len(got) != 0 {
+		t.Fatalf("the failing rememberer's write survived: %v", got)
+	}
+	if address(uid2) == "" || strings.HasPrefix(address(uid2), "deleted+") {
+		t.Fatal("the account was erased though its rememberer failed")
 	}
 }

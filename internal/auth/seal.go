@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hkdf"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -91,4 +92,18 @@ func (s *Sealer) For(purpose string) (*Sealer, error) {
 		return nil, fmt.Errorf("auth: sealer gcm: %w", err)
 	}
 	return &Sealer{aead: aead, key: key}, nil
+}
+
+// MAC is HMAC-SHA256 of msg under a key derived from this sealer's for one
+// purpose (HKDF-SHA256), distinct from every sealing key For derives: a
+// value keyed this way can be compared to another keyed the same way, and
+// cannot be turned back into msg without the server's sealing key.
+func (s *Sealer) MAC(purpose string, msg []byte) ([]byte, error) {
+	key, err := hkdf.Key(sha256.New, s.key, nil, "agentry mac: "+purpose, 32)
+	if err != nil {
+		return nil, fmt.Errorf("auth: derive a mac key: %w", err)
+	}
+	m := hmac.New(sha256.New, key)
+	_, _ = m.Write(msg)
+	return m.Sum(nil), nil
 }

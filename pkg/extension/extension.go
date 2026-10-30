@@ -131,6 +131,20 @@ type ErasesAccounts interface {
 	EraseAccount(ctx context.Context, tx ErasureTx, userID uuid.UUID, kind AccountErasureKind) (int64, error)
 }
 
+// RemembersErasedAddresses is the optional interface for an extension that
+// must know an address again after its account is erased: a free
+// allowance or a trial that erasing an account and signing up again would
+// otherwise renew. The core calls ErasedAddress inside the transaction of
+// POST /user/delete, before the extensions' erasers, with the erased
+// account's address key (Deps.ErasedAddressKey of the address it held).
+// It is never called for a data clear, which keeps the account. The
+// address itself is never given: the extension keeps the key, and only
+// for as long as it needs it, and compares a later account's key to it.
+// tx is the erasure's, as an eraser's is; an error fails the erasure.
+type RemembersErasedAddresses interface {
+	ErasedAddress(ctx context.Context, tx ErasureTx, userID uuid.UUID, addressKey string) error
+}
+
 // ErasureTx is the core's erasure transaction as an eraser may use it:
 // Exec, Query and QueryRow, never Commit or Rollback.
 type ErasureTx = api.ErasureTx
@@ -653,6 +667,14 @@ type Deps struct {
 	// address it erases. It opens none of the server's own sealed values
 	// and none of another extension's. Never nil.
 	Sealer Sealer
+	// ErasedAddressKey is an address's key as RemembersErasedAddresses
+	// is given it: the address normalized (lowercase, trimmed, without a
+	// +tag, and for Gmail without the local part's dots, on gmail.com),
+	// then keyed with HMAC-SHA256 under a key derived from the server's
+	// sealing key for this purpose alone, hex. Every form of one mailbox
+	// has one key, and it cannot be turned back into the address without
+	// the sealing key. Never nil.
+	ErasedAddressKey func(email string) string
 	// BaseURL is the deployment's public origin, the address the core's
 	// own links are built on (config baseURL, or AGENTRY_BASE_URL over
 	// it), without a trailing slash: for an extension that must name an

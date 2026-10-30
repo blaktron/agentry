@@ -77,7 +77,8 @@
           "tests": [
             "TestAccountEraserCommitsWithTheErasure",
             "TestAccountEraserFailureRollsBackTheErasure",
-            "TestAccountEraserHearsTheDataClear"
+            "TestAccountEraserHearsTheDataClear",
+            "TestErasedAddressIsRememberedBeforeTheErasers"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1159,6 +1160,17 @@
             "database fixture",
             "HTTP transport"
           ]
+        },
+        {
+          "path": "internal/api/erased_address_test.go",
+          "tests": [
+            "TestNormalizeAddressFoldsOneMailboxsForms",
+            "TestErasedAddressKeyIsOneKeyPerMailbox"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         },
         {
           "path": "internal/api/extension_callbacks_test.go",
