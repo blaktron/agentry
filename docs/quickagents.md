@@ -61,6 +61,8 @@ never stored; only the environment variable *name* that will hold it.
 | `openai` | gpt-5.2 | `OPENAI_API_KEY` | api.openai.com:443 |
 | `google` | gemini-3-pro | `GEMINI_API_KEY` | generativelanguage.googleapis.com:443 |
 | `openrouter`, `poe`, `huggingface` | none: you type the model id | `OPENROUTER_API_KEY`, `POE_API_KEY`, `HF_TOKEN` | openrouter.ai, api.poe.com, router.huggingface.co :443 |
+| `vultr` | none: you pick one from Vultr's model list or pass `--model` | `VULTR_INFERENCE_API_KEY` | api.vultrinference.com:443 |
+| `agentry` | chosen by the registry; `--model` is not used | none: your Agentry credits, signed in with `agentry login` | the registry you are signed in to |
 | `copilot` | asked | none: your Copilot plan, signed in with GitHub | the Copilot API host of your plan |
 | `custom` | asked | asked | derived from `--base-url` |
 
@@ -69,6 +71,15 @@ Copilot plan, or by an account you connect at OpenRouter, Poe or Hugging
 Face, signed in through your browser. These are
 [model sign-ins](runner.md#model-sign-ins); setup asks which way to pay
 where there is a choice.
+
+A local run can also be paid with the credits of the SecureAgentry account
+this computer is signed in to: `agentry setup --provider agentry` after
+`agentry login`. Each run, and each persistent agent, opens a credits
+session of its own, and the agent container holds only that session's
+token, never your sign-in. Only the default harness, docker-agent, takes
+this provider. [Pay for local runs with Agentry
+credits](https://docs.secureagentry.net/agentry/pay-with-credits/) has the
+details.
 
 For an **OpenAI-compatible endpoint** (a gateway, a hosted open-weight
 model, a vendor's compatible mode) use `--provider openai --base-url
