@@ -184,7 +184,21 @@ it; each one's notes give its command. Earlier branch builds, with `n` below
 accepts them.
 
 A release's binaries are covered by its `SHA256SUMS`, which is signed the
-same way; its notes give the commands for that release:
+same way. A release signed with cosign 3 lists `SHA256SUMS.sigstore.json`, a
+Sigstore bundle that holds the signature, the certificate and the log entry in
+one file; check it with cosign 3:
+
+```bash
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity https://github.com/blaktron/agentry-release/.github/workflows/core.yaml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+```
+
+A release that lists `SHA256SUMS.sig` and `SHA256SUMS.pem` instead was signed
+before the bundle, and cosign 3 still checks it with the certificate and the
+signature as separate files (it prints a deprecation notice for the two
+flags):
 
 ```bash
 cosign verify-blob --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
@@ -192,6 +206,9 @@ cosign verify-blob --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS
 ```
+
+Each release's notes give the command for that release; use the
+`core-dev.yaml` identity for a prerelease.
 
 A chart (or an image) is checked before it is installed:
 

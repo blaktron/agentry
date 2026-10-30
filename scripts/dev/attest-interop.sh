@@ -3,7 +3,7 @@
 # envelopes with cosign — a verifier that shares no code with pkg/attest.
 # Fails when cosign disagrees with us about DSSE or in-toto. Needs cosign
 # on PATH (CI: sigstore/cosign-installer; locally:
-# go install github.com/sigstore/cosign/v2/cmd/cosign@latest).
+# go install github.com/sigstore/cosign/v3/cmd/cosign@latest).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 command -v cosign >/dev/null || { echo "attest-interop: cosign not on PATH"; exit 2; }
