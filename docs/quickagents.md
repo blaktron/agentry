@@ -872,7 +872,11 @@ capabilities:
   `GET /api/v1/connectors`.
 - **An `oauth` block on a package server** names the authorization server
   (`issuer`, `https://`), the `scopes` consent asks for, and how the access
-  token reaches the server:
+  token reaches the server. For Microsoft 365 the issuer is
+  `https://login.microsoftonline.com/<tenant>/v2.0`, with `organizations`,
+  `consumers`, `common` or a tenant id as `<tenant>`, and the scopes are
+  Microsoft Graph's (for example `https://graph.microsoft.com/Mail.Read`
+  and `offline_access`, without which Microsoft gives no refresh token):
   - `files`: at most four, each a plain file name in the server's token
     folder (letters, digits, `.`, `_`, `-` and `@`, at most 64; `@` for a
     server that looks its file up by an account's email, as
