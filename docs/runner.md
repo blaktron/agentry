@@ -1250,6 +1250,22 @@ its own; the same version's later runs reuse it without asking.
   is in Testing, add the account you sign in with under Audience → Test
   users (Google refuses any other), and expect its sign-ins to stop after
   7 days unless the app is published or Internal.
+- **Microsoft Entra ID** (Microsoft 365, Outlook.com). An issuer, or a
+  remote server's authorization server, of the form
+  `https://login.microsoftonline.com/<tenant>/v2.0` signs in at Microsoft
+  (needs CLI v0.6.1007 or later). `<tenant>` is `organizations` for work
+  or school accounts, `consumers` for personal Microsoft accounts,
+  `common` for either, or a tenant id; a tenant's domain name is not
+  taken. These authorities, on Microsoft's own sign-in host and nowhere
+  else, are read the way Microsoft publishes them: the shared issuer of
+  `common` and `organizations`, and PKCE with S256, which Microsoft takes
+  without listing it. Their endpoints must be on that host. No `resource`
+  parameter is sent, which Microsoft refuses. Microsoft registers no app on
+  the fly, so the consent needs your own Entra app, a public client (no
+  secret), kept with `agentry connections client set <the issuer>
+  --client-id <its application id>`. Microsoft offers no revocation:
+  removing the connection forgets it here and records "not offered by the
+  vendor", and the app's access is removed in your Microsoft account.
 - **Where it is kept.** Under the runner home's `connections/`: a `0600`
   record per release and server that holds no token, and its refresh token
   in the OS keychain, or a `0600` file beside the record where no keychain
