@@ -450,6 +450,12 @@ func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Que
 			return out, err
 		}
 	}
+	// An extension that must know the address again after this (a free
+	// allowance renewed by erasing and signing up again) is given its key,
+	// never the address, before the erasers run.
+	if err := s.rememberErasedAddress(ctx, tx, userID, email); err != nil {
+		return out, err
+	}
 	// What extensions keep about the account goes in this transaction
 	// too, after every step of the core's own.
 	if out.extensions, err = s.eraseInExtensions(ctx, tx, userID, AccountErased); err != nil {
