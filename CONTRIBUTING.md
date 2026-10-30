@@ -249,6 +249,32 @@ whose license restricts competing use — both would contaminate the
 distribution. New dependencies need a line in the PR
 description explaining why an existing one will not do.
 
+## Moving the archive compressor
+
+`pkg/archive.BuildArchive` writes every release's archive, and the zstd encoder
+in `github.com/klauspost/compress` shapes its bytes: a new release of that
+module can change them for the same files. The digest of the archive is what a
+release's signature, its scan and every install bind, and the registry repacks
+every upload and refuses one whose claimed digest differs from its own build.
+The registry and every client that packs therefore have to use the same
+release, and a move is a deliberate, visible change. `TestArchiveGoldenDigest`
+in `pkg/archive` pins the bytes of a fixed fixture and fails, with these steps
+in its message, when anything that shapes them moves.
+
+1. Move `github.com/klauspost/compress` to the same release in this repository,
+   `agentry-cli`, `agentry-desktop` and the enterprise build, in lockstep.
+2. Replace `goldenArchiveDigest` in `pkg/archive/golden_test.go` with the
+   digest the failing test reports. The test is never loosened or skipped.
+3. In `agentry-cli`, give every built-in package a new version with a new line
+   in `builtins.lock`: their digests are frozen, and `agentry builtins publish`
+   needs the registry's own build to equal the CLI's.
+4. Release the core and the CLI together, the desktop with them. A client built
+   with the previous release packs a different archive, so the registry refuses
+   its uploads with a message telling it to update, and it cannot publish until
+   it does.
+5. Never rebuild or re-archive a published release. Its archive stays the
+   bytes that were signed and scanned; only new versions use the new encoder.
+
 ## Releasing
 
 Releases are cut by the maintainers. Each is a `vX.Y.Z` tag (or a
