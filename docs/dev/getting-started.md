@@ -59,8 +59,9 @@ implement the new interface method on `internal/api.Server`. All SQL lives in
 The registry is one of several repositories that move together:
 [agentry-cli](https://github.com/blaktron/agentry-cli) (the CLI and the
 runner, Go), [agentry-desktop](https://github.com/blaktron/agentry-desktop)
-(Wails: Go plus a React frontend; on Linux it needs the GTK 3 and WebKit2GTK
-4.1 development headers to build) and [agentry-mcp](https://github.com/blaktron/agentry-mcp)
+(Wails v3: Go plus a React frontend; on Linux it needs the GTK 4 and
+WebKitGTK 6.0 development headers to build, and runs on Debian 13, Ubuntu 24.04
+or Fedora 44 and later) and [agentry-mcp](https://github.com/blaktron/agentry-mcp)
 (an MCP server that drives the installed `agentry` CLI so Claude Code,
 Codex or any MCP host can search, install, run and hold a session with
 QuickAgents).
