@@ -1169,6 +1169,15 @@ applies to QuickAgents as it does to everything here: a release is
 need: the contract is what the scan, the install's consent and the runner
 all work from.
 
+A submission from a client carries the digest of the archive the client
+packed. The registry builds the archive itself from the same files and
+refuses the submission, `422` with a validation error, when its digest
+differs, because a release is identified by its own build's digest. A client
+released with another archive compressor than the registry's packs other
+bytes for the same files; the error then says the client packed the archive
+differently and should be updated. Update the CLI or the desktop app and
+publish again.
+
 `agentry publish` and a tag push both need the QuickAgent's **record**,
 which the CLI never creates: a first publish of a name with no record is
 answered 404. Create it at `/new` on the site, which asks for the

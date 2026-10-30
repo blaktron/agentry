@@ -260,6 +260,8 @@ jobs:
           # break `go mod verify` for everyone.
           cache: false
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.4
       - run: make attest-interop
 
   # Container image scan. The registry-side scan covers what is deployed;

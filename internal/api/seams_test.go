@@ -188,6 +188,10 @@ func TestAdmissionVoidedWhenTheRowNeverLands(t *testing.T) {
 	if status != http.StatusUnprocessableEntity {
 		t.Fatalf("mismatched digest: got %d %s", status, body)
 	}
+	if !strings.Contains(body, "packed this archive differently from the registry") ||
+		!strings.Contains(body, "update the client to a release that matches this registry") {
+		t.Fatalf("the refusal does not say the client packed differently and must update: %s", body)
+	}
 	adm.mu.Lock()
 	defer adm.mu.Unlock()
 	if adm.tickets != 1 || len(adm.voided) != 1 {
