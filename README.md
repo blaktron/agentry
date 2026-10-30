@@ -24,7 +24,7 @@ guarantees.
 - Go at the version on the `go` line of `go.mod` (an older `go` fetches that
   toolchain itself). There is no JavaScript build: the server's pages are Go
   templates.
-- Docker with Compose, or PostgreSQL 16 locally (`scripts/dev/pg.sh` runs a
+- Docker with Compose, or PostgreSQL 18 locally (`scripts/dev/pg.sh` runs a
   private cluster).
 - `sqlc` for query code generation (`make generate`).
 - `golangci-lint` for `make lint` (the target skips it when it is absent).
@@ -49,7 +49,7 @@ run `make generate`, then implement the new method on `internal/api.Server`.
 ## Run it locally
 
 ```bash
-make db-up      # local Postgres 16 on :5477
+make db-up      # local Postgres 18 on :5477
 make dev        # migrations, then agentryd (all roles) on :8080
 curl localhost:8080/api/v1/meta
 ```
@@ -83,6 +83,7 @@ nginx edge. For a real deployment, see
 | `examples/` | small example QuickAgent packages that publish through the pipeline |
 | `deploy/` | the headless Compose stack and the Helm chart |
 | `schemas/` | the OpenAPI spec and the code generator configuration |
+| `tools/oapi-codegen` | the OpenAPI generator's own Go module, so its dependencies stay out of the server's `go.mod` |
 | `docs/` | the pages published at docs.secureagentry.net |
 
 The CLI is [agentry-cli](https://github.com/blaktron/agentry-cli); it depends

@@ -5,7 +5,7 @@
 - Go at `go.mod`'s `go` line, 1.27.3 today (`brew install go`; an older `go`
   fetches that toolchain itself). There is no JavaScript build: the server's
   own pages are Go templates.
-- Docker (preferred) **or** PostgreSQL 16 locally (`brew install postgresql@16`);
+- Docker (preferred) **or** PostgreSQL 18 locally (`brew install postgresql@18`);
   `scripts/dev/pg.sh` runs a private cluster under `.devdata/pg` for machines
   without Docker
 - `sqlc` for query codegen (`brew install sqlc` or `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`)
@@ -13,7 +13,7 @@
 ## Quick start
 
 ```bash
-make db-up          # local Postgres 16 on :5477 (or: docker compose -f deploy/compose/docker-compose.yaml up -d)
+make db-up          # local Postgres 18 on :5477 (or: docker compose -f deploy/compose/docker-compose.yaml up -d)
 make dev            # migrations + agentryd all on :8080
 curl localhost:8080/api/v1/meta
 ```
@@ -23,7 +23,7 @@ curl localhost:8080/api/v1/meta
 | Command | What |
 |---|---|
 | `make check` | the CI gate: generated-code drift, the embedded rule bundle in sync, lint, tests, build |
-| `make generate` | regenerate the OpenAPI server and Go client, and sqlc, after editing `schemas/` or `internal/store/queries/` |
+| `make generate` | regenerate the OpenAPI server and Go client (built from `tools/oapi-codegen`, a module of its own), and sqlc, after editing `schemas/` or `internal/store/queries/` |
 | `make test` | Go tests; DB tests need `AGENTRY_TEST_DATABASE_URL` (`./scripts/dev/pg.sh test-url`), whose role may create databases: `internal/scan`, whose sweeps act on every row, runs in its own `<db>_scan` beside it |
 | `./scripts/acceptance/smoke.sh` | boots the stack against a database and reaches the API through the generated Go client (`make e2e` runs it) |
 | `./scripts/acceptance/auth.sh` | the authorization matrix, the personal-access-token lifecycle and an audit row for every mutating call |
@@ -59,8 +59,9 @@ implement the new interface method on `internal/api.Server`. All SQL lives in
 The registry is one of several repositories that move together:
 [agentry-cli](https://github.com/blaktron/agentry-cli) (the CLI and the
 runner, Go), [agentry-desktop](https://github.com/blaktron/agentry-desktop)
-(Wails: Go plus a React frontend; on Linux it needs the GTK 3 and WebKit2GTK
-4.1 development headers to build) and [agentry-mcp](https://github.com/blaktron/agentry-mcp)
+(Wails v3: Go plus a React frontend; on Linux it needs the GTK 4 and
+WebKitGTK 6.0 development headers to build, and runs on Debian 13, Ubuntu 24.04
+or Fedora 44 and later) and [agentry-mcp](https://github.com/blaktron/agentry-mcp)
 (an MCP server that drives the installed `agentry` CLI so Claude Code,
 Codex or any MCP host can search, install, run and hold a session with
 QuickAgents).

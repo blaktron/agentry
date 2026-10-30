@@ -31,7 +31,7 @@ env:
   GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
   SQLC_VERSION: v1.31.1
   OSV_SCANNER_VERSION: v2.7.0
-  OASDIFF_VERSION: v1.34.1
+  OASDIFF_VERSION: v1.35.0
 
 # One run per ref: a new push to a PR cancels the superseded run (self-hosted
 # capacity is a handful of runners, not a cloud).
@@ -64,7 +64,7 @@ jobs:
     timeout-minutes: 35
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: agentry
           POSTGRES_PASSWORD: agentry
@@ -74,20 +74,20 @@ jobs:
           --health-cmd "pg_isready -U agentry" --health-interval 5s
           --health-timeout 3s --health-retries 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Point the tests at the service's mapped port
         run: echo "AGENTRY_TEST_DATABASE_URL=postgres://agentry:agentry@localhost:${{ job.services.postgres.ports['5432'] }}/agentry_test?sslmode=disable" >> "$GITHUB_ENV"
       # The fork-guard check parses the workflows with PyYAML; setup-python
       # brings a clean interpreter, so PyYAML is installed rather than assumed.
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.15"
       - run: python3 -m pip install --quiet --disable-pip-version-check pyyaml==6.0.3
       - name: no fork-reachable job on a self-hosted runner
         run: make workflows-check
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           # The runners share one persistent host module cache; restoring
@@ -98,7 +98,7 @@ jobs:
       - name: Install sqlc
         run: go install "github.com/sqlc-dev/sqlc/cmd/sqlc@${SQLC_VERSION}"
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           # The runner keeps its own lint cache between jobs; the action's
@@ -167,17 +167,17 @@ jobs:
     env:
       UNSLOP_SKIP: "1"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # The runner image is Ubuntu-based and ships python3; the scripts are
       # stdlib-only and need 3.9 or newer. This pins the version when the tool
       # cache has it and is allowed to fail, so a runner without it falls back
       # to the image's own python3 rather than turning the job red on setup.
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         continue-on-error: true
         with:
-          python-version: "3.12"
+          python-version: "3.15"
       - run: python3 --version
       - name: posture sentences and never list
         run: scripts/prose/check.sh
@@ -188,10 +188,10 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           # The runners share one persistent host module cache; restoring
@@ -208,10 +208,10 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           # The runners share one persistent host module cache; restoring
@@ -230,6 +230,9 @@ jobs:
           # `go mod tidy -diff` fails when go.mod/go.sum do not match the code.
           go mod verify
           go mod tidy -diff
+          # The OpenAPI generator is a module of its own; its graph is
+          # checked the same way.
+          (cd tools/oapi-codegen && go mod verify && go mod tidy -diff)
       # The osv-scanner release binary (v2.5.1, when this was written) is built
       # with Go 1.26 and cannot load this go 1.27 module for call analysis,
       # so the action degrades to a lockfile-only scan and re-reports
@@ -238,7 +241,9 @@ jobs:
       # the runner's Go 1.27 toolchain instead, which restores call
       # analysis — the same mechanism `make deps-audit` uses locally.
       - name: osv-scanner (go.mod)
-        run: go run "github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION}" scan --lockfile=go.mod
+        run: |
+          set -euo pipefail
+          go run "github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION}" scan --lockfile=go.mod --lockfile=tools/oapi-codegen/go.mod
 
   # Third-party verification of the attestations this code signs
   # cosign — which shares no code with pkg/attest —
@@ -248,10 +253,10 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           # The runners share one persistent host module cache; restoring
@@ -259,7 +264,9 @@ jobs:
           # extracting into the same directory, leaves partial modules that
           # break `go mod verify` for everyone.
           cache: false
-      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.4
       - run: make attest-interop
 
   # Container image scan. The registry-side scan covers what is deployed;
@@ -271,7 +278,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     continue-on-error: true
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # --pull: the builder is pinned to go.mod's Go, but the runtime base
@@ -294,10 +301,10 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: helm lint + template (scripts/acceptance/helm.sh)
         run: ./scripts/acceptance/helm.sh
       - name: no web object in the rendered chart
@@ -319,11 +326,11 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           # Shared persistent module cache on the self-hosted runners; the
@@ -358,7 +365,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false

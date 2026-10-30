@@ -51,9 +51,12 @@ vuln:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 ## generate: regenerate the OpenAPI server and Go client, and sqlc queries
+## (oapi-codegen builds from its own module, tools/oapi-codegen, so its
+## dependency graph stays out of the server's go.mod)
 generate:
-	$(GO) tool oapi-codegen -config schemas/codegen-server.yaml schemas/openapi.yaml
-	$(GO) tool oapi-codegen -config schemas/codegen-goclient.yaml schemas/openapi.yaml
+	GOWORK=off $(GO) -C tools/oapi-codegen build -o $(CURDIR)/$(BIN_DIR)/oapi-codegen github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
+	$(BIN_DIR)/oapi-codegen -config schemas/codegen-server.yaml schemas/openapi.yaml
+	$(BIN_DIR)/oapi-codegen -config schemas/codegen-goclient.yaml schemas/openapi.yaml
 	@if command -v sqlc >/dev/null 2>&1; then sqlc generate; else echo "sqlc not installed; skipped"; fi
 
 ## generate-check: fail if generated code drifted from the spec/queries

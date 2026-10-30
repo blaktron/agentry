@@ -7,7 +7,7 @@ Roles deployed:
   worker  x{{ .Values.worker.replicaCount }}   (queues: {{ if .Values.worker.queues }}{{ .Values.worker.queues }}{{ else }}all{{ end }})
 
 1. Operator-supplied dependencies (NOT bundled):
-   - PostgreSQL 16 via secret key AGENTRY_DATABASE_URL
+   - PostgreSQL 18 via secret key AGENTRY_DATABASE_URL
 {{- if .Values.secret.existingSecret }}
      (from existing secret "{{ .Values.secret.existingSecret }}")
 {{- end }}

@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(cd "$(dirname "$0")/../.." && pwd)"
 
 EDGE_IMAGE=$(awk '/image: nginx:/{print $2; exit}' deploy/compose/docker-compose.yaml)
-PY_IMAGE=${PY_IMAGE:-python:3.12-slim}
+PY_IMAGE=${PY_IMAGE:-python:3.15-slim}
 P="de-$(openssl rand -hex 4)"
 NET="$P-net"
 SCRATCH=${AGENTRY_SCRATCH_DIR:-$HOME/scratch}
