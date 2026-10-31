@@ -2769,6 +2769,7 @@
             "TestEmailAllowedDefaultsAndKinds",
             "TestEmailPermittedRequiresVerifiedAddress",
             "TestScheduleSwitchIsItsOwn",
+            "TestRunSwitchesAreOffByDefaultAndTheirOwn",
             "TestBugReportSwitchIsItsOwn",
             "TestAllowsEmailDecisionAndLogsWithoutADatabase"
           ],
