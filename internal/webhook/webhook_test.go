@@ -224,6 +224,7 @@ func TestEventCatalog(t *testing.T) {
 		"version.rejected", "version.needs_review", "version.yanked",
 		"agent.quarantined", "agent.reinstated", "advisory.published", "agent.dependency_alert",
 		"scan.completed", "member.added", "member.removed", "policy.updated",
+		"run.ended",
 	}
 	if got := AllEvents(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("AllEvents = %v, want %v", got, want)
@@ -233,7 +234,7 @@ func TestEventCatalog(t *testing.T) {
 			t.Errorf("ValidEvent(%q) = false", e)
 		}
 	}
-	for _, e := range []string{"", "ping", "agent.created ", "AGENT.CREATED", "agent", "version.deleted"} {
+	for _, e := range []string{"", "ping", "agent.created ", "AGENT.CREATED", "agent", "version.deleted", "run.started", "run_ended"} {
 		if ValidEvent(e) {
 			t.Errorf("ValidEvent(%q) = true", e)
 		}

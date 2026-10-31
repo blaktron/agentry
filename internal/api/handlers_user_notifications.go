@@ -34,11 +34,11 @@ func (s *Server) GetUserNotificationSettings(w http.ResponseWriter, r *http.Requ
 
 // UpdateUserNotificationSettings implements PUT /user/notifications: a full
 // replace of the switches every client knows, sent back as read and
-// changed — with three exceptions. billing, schedules
-// and bugReports may be omitted, and an
-// omitted one keeps the row's value: clients predate them, and reading an
-// absence as false would switch that mail off for anyone who saved any
-// other setting. The keep is the
+// changed — with five exceptions. billing, schedules, bugReports,
+// runFailures and runFinished may be omitted, and an omitted one keeps
+// the row's value: clients predate them, and reading an absence as a
+// value would move a switch the client never showed, off for the first
+// three and never on for the run kinds. The keep is the
 // statement's own (COALESCE in the upsert), so two clients writing at
 // once cannot resurrect a value neither sent.
 func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.Request) {
@@ -60,9 +60,11 @@ func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.R
 		EmailReviewDecisions:  req.Email.ReviewDecisions,
 		EmailAdvisories:       req.Email.Advisories,
 		EmailOrgInvites:       req.Email.OrgInvites,
-		EmailBilling:          req.Email.Billing,    // nil keeps the row's value
-		EmailSchedules:        req.Email.Schedules,  // nil keeps the row's value
-		EmailBugReports:       req.Email.BugReports, // nil keeps the row's value
+		EmailBilling:          req.Email.Billing,     // nil keeps the row's value
+		EmailSchedules:        req.Email.Schedules,   // nil keeps the row's value
+		EmailBugReports:       req.Email.BugReports,  // nil keeps the row's value
+		EmailRunFailures:      req.Email.RunFailures, // nil keeps the row's value
+		EmailRunFinished:      req.Email.RunFinished, // nil keeps the row's value
 		WebDependencyAlerts:   req.Web.DependencyAlerts,
 	})
 	if err != nil {
@@ -79,6 +81,7 @@ func notificationSettingsToAPI(row storegen.UserNotificationSetting) Notificatio
 			DependencyAlerts: row.EmailDependencyAlerts, Quarantine: row.EmailQuarantine,
 			ReviewDecisions: row.EmailReviewDecisions, Advisories: row.EmailAdvisories, OrgInvites: row.EmailOrgInvites,
 			Billing: &row.EmailBilling, Schedules: &row.EmailSchedules, BugReports: &row.EmailBugReports,
+			RunFailures: &row.EmailRunFailures, RunFinished: &row.EmailRunFinished,
 		},
 		Web: WebNotificationSettings{DependencyAlerts: row.WebDependencyAlerts},
 	}

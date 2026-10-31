@@ -713,8 +713,10 @@ type Notifier interface {
 // message about billing is what the person's billing switch governs, and
 // a dependency alert routed to them is what their dependency-alert
 // switch governs, wherever it came from; a notice about one of their
-// schedules is what their schedules switch governs; and a notice that a
-// bug report they filed is fixed is what their bug-report switch governs.
+// schedules is what their schedules switch governs; a notice that a
+// bug report they filed is fixed is what their bug-report switch governs;
+// and a hosted run's outcome is what their two run switches govern, one
+// for a failure and one for a completion.
 type NotifyKind string
 
 const (
@@ -735,6 +737,14 @@ const (
 	// bug fixed", quoting the report and any note staff added. Never
 	// sent for a report closed without a fix.
 	NotifyBugReport NotifyKind = "bug_report"
+	// NotifyRunFailure is the hosted build's mail for a run that failed
+	// after it started or was refused by the queue: a run, a draft, a
+	// knowledge build or a scheduled fire. The person's switch for it is
+	// off until they turn it on.
+	NotifyRunFailure NotifyKind = "run_failure"
+	// NotifyRunFinished is the hosted build's mail for a run that
+	// completed. Its switch is off until the person turns it on.
+	NotifyRunFinished NotifyKind = "run_finished"
 )
 
 // Webhooks lets an extension deliver an event to one of an organization's
@@ -768,6 +778,13 @@ type WebhookEndpointRef = api.WebhookEndpointRef
 // extension routing the alert delivers it as, so the destination it
 // names reads the same event a subscription would have given it.
 const EventAgentDependencyAlert = webhook.EventAgentDependencyAlert
+
+// EventRunEnded is the catalog event a hosted run's end is delivered as:
+// an organization's endpoint subscribes to it by this name, and the
+// extension that runs QuickAgents In Agentry delivers it to each
+// subscribed endpoint through Webhooks.Deliver. The core emits none
+// itself.
+const EventRunEnded = webhook.EventRunEnded
 
 // Agents answers whether a principal may read an agent the way the core's
 // own routes decide it — the effective role over the namespace and the
