@@ -556,6 +556,17 @@ re-resolves per attempt, requires every resolved address to be public
 unicast, dials the verified IP to defeat DNS rebinding, and follows no
 redirects.
 
+An endpoint subscribes to events by name, from a closed catalogue:
+`agent.created`, `version.submitted`, `version.published`,
+`version.rejected`, `version.needs_review`, `version.yanked`,
+`agent.quarantined`, `agent.reinstated`, `advisory.published`,
+`agent.dependency_alert`, `scan.completed`, `member.added`,
+`member.removed`, `policy.updated` and `run.ended`. A name outside it is
+refused with `422`. `run.ended` is delivered when a run of one of the
+organization's QuickAgents In Agentry ends, in any state, and only by a
+registry that runs QuickAgents; a registry without that service accepts
+the subscription and never delivers it.
+
 `POST /orgs/{org}/webhooks/{id}/ping` records its delivery with event type
 `ping`, which is deliberately absent from the subscribable event catalogue;
 nobody subscribes to a ping. It otherwise travels the ordinary path, same

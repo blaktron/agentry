@@ -615,6 +615,14 @@ var extensionMailKinds = map[string]notify.Kind{
 	// the bug-reports extension's
 	// "Reported bug fixed" mail, under its own switch.
 	"bug_report": notify.KindBugReport,
+	// A hosted run that failed after it started or was refused by the
+	// queue (a run, a draft, a knowledge build, a scheduled fire): the
+	// runs extension's mail, under its own switch, off until the person
+	// turns it on.
+	"run_failure": notify.KindRunFailure,
+	// A hosted run that completed: the same extension's mail, under its
+	// own switch, off by default too.
+	"run_finished": notify.KindRunFinished,
 }
 
 // OrgAdminIDs is pkg/extension.Deps.Notifier.OrgAdmins: the active

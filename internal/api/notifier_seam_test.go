@@ -244,6 +244,57 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 	if code != http.StatusUnprocessableEntity || mails.count() != 4 {
 		t.Fatalf("the switch's own name as a kind: %d, want a refusal", code)
 	}
+
+	// The two run kinds: a run's failure and a run's completion each go
+	// under their own switch, which is off until the person turns it on
+	// — so a verified address with untouched settings gets neither; on,
+	// each goes as its kind and no other; an unverified address gets
+	// nothing; and the switches' own names are not kinds.
+	for _, rk := range []struct{ kind, field, subject string }{
+		{"run_failure", "runFailures", "acme/report failed"},
+		{"run_finished", "runFinished", "acme/report finished"},
+	} {
+		before := mails.count()
+		code, out, _ = send(t, verifiedID, rk.kind, rk.subject, "x")
+		if code != http.StatusOK || out.Sent || mails.count() != before {
+			t.Fatalf("%s with the switch at its default: %d sent=%t, %d messages; want accepted and not sent", rk.kind, code, out.Sent, mails.count())
+		}
+		env.doJSON(env.login(verifiedH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
+			"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, rk.field: true},
+			"web":   map[string]any{"dependencyAlerts": true},
+		}, nil, http.StatusOK)
+		code, out, _ = send(t, verifiedID, rk.kind, rk.subject, "The run ended; open it In Agentry.")
+		if code != http.StatusOK || !out.Sent || mails.count() != before+1 || mails.last().Kind != notify.Kind(rk.field) {
+			t.Fatalf("%s to a verified person who turned it on: %d sent=%t, %d messages, last kind %q", rk.kind, code, out.Sent, mails.count(), mails.last().Kind)
+		}
+		code, out, _ = send(t, env.userID(unverifiedH), rk.kind, rk.subject, "x")
+		if code != http.StatusOK || out.Sent || mails.count() != before+1 {
+			t.Fatalf("an unverified address was sent a %s notice", rk.kind)
+		}
+		env.doJSON(env.login(verifiedH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
+			"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, rk.field: false},
+			"web":   map[string]any{"dependencyAlerts": true},
+		}, nil, http.StatusOK)
+		code, out, _ = send(t, verifiedID, rk.kind, rk.subject, "x")
+		if code != http.StatusOK || out.Sent || mails.count() != before+1 {
+			t.Fatalf("the %s switch off, and the notice went anyway", rk.field)
+		}
+		code, _, _ = send(t, verifiedID, rk.field, rk.subject, "x")
+		if code != http.StatusUnprocessableEntity || mails.count() != before+1 {
+			t.Fatalf("the switch's own name %q as a kind: %d, want a refusal", rk.field, code)
+		}
+	}
+	// Turning one run switch on left the other where it was.
+	var settings struct {
+		Email map[string]*bool `json:"email"`
+	}
+	env.doJSON(env.login(verifiedH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
+		"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, "runFailures": true},
+		"web":   map[string]any{"dependencyAlerts": true},
+	}, &settings, http.StatusOK)
+	if f, d := settings.Email["runFailures"], settings.Email["runFinished"]; f == nil || !*f || d == nil || *d {
+		t.Fatalf("runFailures on: runFailures=%v runFinished=%v, want on and off", f, d)
+	}
 }
 
 func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
@@ -304,10 +355,12 @@ func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
 // The settings round trip for the switches a client may omit, and the
 // hazard they were built to avoid: a client that predates a switch and
 // writes the other settings back leaves it as it was, rather than turning
-// it off by omission. billing, schedules and bugReports each, and no
+// it off by omission. billing, schedules and bugReports each (on by
+// default), runFailures and runFinished each (off by default), and no
 // write touches another.
 func TestOptionalSwitchesSurviveAnOlderClientsWrite(t *testing.T) {
-	optional := []string{"billing", "schedules", "bugReports"}
+	defaults := map[string]bool{"billing": true, "schedules": true, "bugReports": true, "runFailures": false, "runFinished": false}
+	optional := []string{"billing", "schedules", "bugReports", "runFailures", "runFinished"}
 	for _, field := range optional {
 		t.Run(field, func(t *testing.T) {
 			env := newTestEnv(t)
@@ -320,8 +373,8 @@ func TestOptionalSwitchesSurviveAnOlderClientsWrite(t *testing.T) {
 			}
 			value := func() *bool { return got.Email[field] }
 			env.doJSON(sess, http.MethodGet, "/api/v1/user/notifications", nil, &got, http.StatusOK)
-			if v := value(); v == nil || !*v {
-				t.Fatalf("a new account's %s switch = %v, want on by default", field, v)
+			if v := value(); v == nil || *v != defaults[field] {
+				t.Fatalf("a new account's %s switch = %v, want %t by default", field, v, defaults[field])
 			}
 
 			// Off, explicitly.
@@ -333,8 +386,8 @@ func TestOptionalSwitchesSurviveAnOlderClientsWrite(t *testing.T) {
 				t.Fatalf("after switching %s off: %v", field, v)
 			}
 			for _, other := range optional {
-				if v := got.Email[other]; other != field && (v == nil || !*v) {
-					t.Fatalf("switching %s off switched %s off: %v", field, other, v)
+				if v := got.Email[other]; other != field && (v == nil || *v != defaults[other]) {
+					t.Fatalf("switching %s off changed %s: %v, want its default %t", field, other, v, defaults[other])
 				}
 			}
 

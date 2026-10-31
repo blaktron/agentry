@@ -46,6 +46,10 @@ const (
 	EventMemberAdded          = "member.added"
 	EventMemberRemoved        = "member.removed"
 	EventPolicyUpdated        = "policy.updated"
+	// EventRunEnded: a hosted run of one of the organization's QuickAgents
+	// ended, in any state. The core emits none itself; the build that runs
+	// QuickAgents In Agentry delivers it through the extension seam.
+	EventRunEnded = "run.ended"
 )
 
 // AllEvents lists the subscribable event types (validation, docs).
@@ -55,6 +59,7 @@ func AllEvents() []string {
 		EventVersionRejected, EventVersionNeedsReview, EventVersionYanked,
 		EventAgentQuarantined, EventAgentReinstated, EventAdvisoryPublished, EventAgentDependencyAlert,
 		EventScanCompleted, EventMemberAdded, EventMemberRemoved, EventPolicyUpdated,
+		EventRunEnded,
 	}
 }
 

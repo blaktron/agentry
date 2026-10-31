@@ -49,14 +49,24 @@ const (
 	// staff marked a bug report the person filed complete ("Reported bug
 	// fixed"). The core sends none itself, as with billing.
 	KindBugReport Kind = "bugReports"
+	// KindRunFailure is the closed build's mail for a hosted run that
+	// failed after it started or was refused by the queue: a run, a draft,
+	// a knowledge build or a scheduled fire. Off by default: the hosted
+	// service keeps the outcome, and mail about it is asked for.
+	KindRunFailure Kind = "runFailures"
+	// KindRunFinished is the closed build's mail for a hosted run that
+	// completed. Off by default, like KindRunFailure.
+	KindRunFinished Kind = "runFinished"
 )
 
-// Defaults is the settings row a user without one is treated as having.
+// Defaults is the settings row a user without one is treated as having:
+// every mail on, except the two run kinds, which are off until the person
+// turns them on.
 func Defaults(userID uuid.UUID) storegen.UserNotificationSetting {
 	return storegen.UserNotificationSetting{
 		UserID: userID, EmailDependencyAlerts: true, EmailQuarantine: true, EmailReviewDecisions: true,
 		EmailAdvisories: true, EmailOrgInvites: true, EmailBilling: true, EmailSchedules: true,
-		EmailBugReports: true, WebDependencyAlerts: true,
+		EmailBugReports: true, EmailRunFailures: false, EmailRunFinished: false, WebDependencyAlerts: true,
 	}
 }
 
@@ -80,6 +90,10 @@ func EmailAllowed(row storegen.UserNotificationSetting, kind Kind) bool {
 		return row.EmailSchedules
 	case KindBugReport:
 		return row.EmailBugReports
+	case KindRunFailure:
+		return row.EmailRunFailures
+	case KindRunFinished:
+		return row.EmailRunFinished
 	}
 	return true
 }
