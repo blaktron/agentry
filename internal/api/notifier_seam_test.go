@@ -416,3 +416,47 @@ func TestOptionalSwitchesSurviveAnOlderClientsWrite(t *testing.T) {
 		})
 	}
 }
+
+// A settings row written before the two run switches existed reads them as
+// off: the columns' own default, not a client's choice, decides for every
+// such row, and a client that omits the switches on its next write leaves
+// them off. Turning one on then governs that one alone.
+func TestRunSwitchesAreOffOnARowWrittenBeforeThem(t *testing.T) {
+	env := newTestEnv(t)
+	h := env.register("older-row")
+	env.verifyEmail(h)
+	sess := env.login(h)
+	if _, err := env.st.Pool().Exec(context.Background(), `INSERT INTO user_notification_settings
+		(user_id, email_dependency_alerts, email_quarantine, email_review_decisions, email_advisories, email_org_invites, email_billing, email_schedules, email_bug_reports, web_dependency_alerts)
+		VALUES ($1, true, true, true, true, true, true, true, true, true)`, env.userID(h)); err != nil {
+		t.Fatalf("seeding a settings row without the run switches: %v", err)
+	}
+	var got struct {
+		Email map[string]*bool `json:"email"`
+	}
+	off := func(step string) {
+		t.Helper()
+		for _, f := range []string{"runFailures", "runFinished"} {
+			if v := got.Email[f]; v == nil || *v {
+				t.Fatalf("%s: %s = %v, want off", step, f, v)
+			}
+		}
+		if v := got.Email["billing"]; v == nil || !*v {
+			t.Fatalf("%s: billing = %v, want the row's on", step, v)
+		}
+	}
+	env.doJSON(sess, http.MethodGet, "/api/v1/user/notifications", nil, &got, http.StatusOK)
+	off("a row from before the switches")
+	env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
+		"email": map[string]any{"dependencyAlerts": true, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true},
+		"web":   map[string]any{"dependencyAlerts": true},
+	}, &got, http.StatusOK)
+	off("after a write that omits them")
+	env.doJSON(sess, http.MethodPut, "/api/v1/user/notifications", map[string]any{
+		"email": map[string]any{"dependencyAlerts": true, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true, "runFinished": true},
+		"web":   map[string]any{"dependencyAlerts": true},
+	}, &got, http.StatusOK)
+	if f, d := got.Email["runFailures"], got.Email["runFinished"]; f == nil || *f || d == nil || !*d {
+		t.Fatalf("runFinished on: runFailures=%v runFinished=%v, want off and on", f, d)
+	}
+}

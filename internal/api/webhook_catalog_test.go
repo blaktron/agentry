@@ -130,3 +130,33 @@ func TestWebhookCatalogEventsAreEmitted(t *testing.T) {
 		t.Errorf("scan.completed data = %v, want version 1.0.0 and its id and the run id as uuids, outcome published, a sha256 report digest, a reason and findings", d)
 	}
 }
+
+// An organization's endpoint subscribes to a run's end by its catalogue
+// name, run.ended, and a name outside the catalogue is refused on the
+// events field.
+func TestWebhookSubscribesToRunEnded(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register("re-owner")
+	env.verifyEmail(owner)
+	sess := env.login(owner)
+	orgH := "reorg" + env.sfx
+	env.createOrg(sess, orgH)
+
+	var hook struct {
+		Id     string   `json:"id"`
+		Events []string `json:"events"`
+	}
+	env.doJSON(sess, http.MethodPost, "/api/v1/orgs/"+orgH+"/webhooks", map[string]any{
+		"url":    "https://example.invalid/runs",
+		"events": []string{"run.ended"},
+	}, &hook, http.StatusCreated)
+	if len(hook.Events) != 1 || hook.Events[0] != "run.ended" {
+		t.Fatalf("subscribed to %v, want [run.ended]", hook.Events)
+	}
+	for _, bad := range []string{"run_ended", "run.started", "runs.ended"} {
+		env.doJSON(sess, http.MethodPost, "/api/v1/orgs/"+orgH+"/webhooks", map[string]any{
+			"url":    "https://example.invalid/runs",
+			"events": []string{bad},
+		}, nil, http.StatusUnprocessableEntity)
+	}
+}

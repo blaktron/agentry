@@ -395,7 +395,8 @@
         {
           "path": "internal/api/webhook_catalog_test.go",
           "tests": [
-            "TestWebhookCatalogEventsAreEmitted"
+            "TestWebhookCatalogEventsAreEmitted",
+            "TestWebhookSubscribesToRunEnded"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1387,7 +1388,8 @@
           "tests": [
             "TestNotifierSeamSendsUnderTheCoresRule",
             "TestNotifierSeamNamesActiveAdminsOnly",
-            "TestOptionalSwitchesSurviveAnOlderClientsWrite"
+            "TestOptionalSwitchesSurviveAnOlderClientsWrite",
+            "TestRunSwitchesAreOffOnARowWrittenBeforeThem"
           ],
           "fuzz": [],
           "benchmarks": [],
