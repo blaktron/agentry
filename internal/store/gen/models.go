@@ -560,6 +560,8 @@ type UserNotificationSetting struct {
 	EmailBilling          bool      `json:"email_billing"`
 	EmailSchedules        bool      `json:"email_schedules"`
 	EmailBugReports       bool      `json:"email_bug_reports"`
+	EmailRunFailures      bool      `json:"email_run_failures"`
+	EmailRunFinished      bool      `json:"email_run_finished"`
 }
 
 type UserReportSetting struct {

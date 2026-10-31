@@ -2595,6 +2595,12 @@ type EmailNotificationSettings struct {
 	// ReviewDecisions A reviewer decided one of the person's submissions, or the gate held one for review.
 	ReviewDecisions bool `json:"reviewDecisions"`
 
+	// RunFailures A run of a QuickAgent In Agentry failed after it started or was refused by the queue: a run, a draft, a knowledge build or a scheduled fire (the hosted product's mail; a registry that runs no QuickAgents sends none). Off until the person turns it on. Not required on a write: a client that predates the switch leaves it as it was rather than changing it by omission.
+	RunFailures *bool `json:"runFailures,omitempty"`
+
+	// RunFinished A run of a QuickAgent In Agentry completed (the hosted product's mail; a registry that runs no QuickAgents sends none). Off until the person turns it on. Not required on a write: a client that predates the switch leaves it as it was rather than changing it by omission.
+	RunFinished *bool `json:"runFinished,omitempty"`
+
 	// Schedules A scheduled run in Agentry failed, or one of the person's schedules paused (the hosted product's schedule mail; never a success, and a registry without hosted schedules sends none). Not required on a write: a client that predates the switch leaves it as it was rather than turning it off by omission.
 	Schedules *bool `json:"schedules,omitempty"`
 }
@@ -3765,6 +3771,7 @@ type WebhookEndpointCreated struct {
 
 // WebhookInput defines model for WebhookInput.
 type WebhookInput struct {
+	// Events The events the endpoint subscribes to, by name, from the closed catalogue: agent.created, version.submitted, version.published, version.rejected, version.needs_review, version.yanked, agent.quarantined, agent.reinstated, advisory.published, agent.dependency_alert, scan.completed, member.added, member.removed, policy.updated and run.ended (a run of one of the organization's QuickAgents In Agentry ended; delivered only where the registry runs QuickAgents). A name outside the catalogue is refused with 422.
 	Events []string `json:"events"`
 
 	// Url An absolute https:// URL with a host, and a port from 1 to 65535 if it names one.

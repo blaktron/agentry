@@ -47,9 +47,11 @@ func TestEmailAllowedDefaultsAndKinds(t *testing.T) {
 		KindBilling:         func(r *storegen.UserNotificationSetting) { r.EmailBilling = false },
 		KindSchedule:        func(r *storegen.UserNotificationSetting) { r.EmailSchedules = false },
 		KindBugReport:       func(r *storegen.UserNotificationSetting) { r.EmailBugReports = false },
+		KindRunFailure:      func(r *storegen.UserNotificationSetting) { r.EmailRunFailures = false },
+		KindRunFinished:     func(r *storegen.UserNotificationSetting) { r.EmailRunFinished = false },
 	}
 	for off, switchOff := range switches {
-		row := Defaults(uuid.New())
+		row := everyKindOn(uuid.New())
 		switchOff(&row)
 		for k := range switches {
 			if got, want := EmailAllowed(row, k), k != off; got != want {
@@ -93,6 +95,51 @@ func TestScheduleSwitchIsItsOwn(t *testing.T) {
 	row.EmailBilling = false
 	if !EmailAllowed(row, KindSchedule) {
 		t.Fatal("billing off switched schedule mail off")
+	}
+}
+
+// everyKindOn is the defaults with the two run switches, which default to
+// off, turned on: the row for a test that asks what one switch governs.
+func everyKindOn(id uuid.UUID) storegen.UserNotificationSetting {
+	row := Defaults(id)
+	row.EmailRunFailures, row.EmailRunFinished = true, true
+	return row
+}
+
+// The two run switches are off until the person turns them on, where every
+// other kind is on by default; each governs its own kind and no other, and
+// no other switch governs it.
+func TestRunSwitchesAreOffByDefaultAndTheirOwn(t *testing.T) {
+	row := Defaults(uuid.New())
+	for _, k := range []Kind{KindRunFailure, KindRunFinished} {
+		if EmailAllowed(row, k) || EmailPermitted(true, row, k) {
+			t.Fatalf("%s mail is allowed by default; the run kinds are opt-in", k)
+		}
+	}
+	for _, k := range []Kind{KindBilling, KindSchedule, KindBugReport, KindQuarantine, Kind("something-new")} {
+		if !EmailAllowed(row, k) {
+			t.Fatalf("the run kinds' default switched %s off", k)
+		}
+	}
+	row.EmailRunFailures = true
+	if !EmailAllowed(row, KindRunFailure) || !EmailPermitted(true, row, KindRunFailure) {
+		t.Fatal("run failures switched on, and run-failure mail is still refused")
+	}
+	if EmailAllowed(row, KindRunFinished) {
+		t.Fatal("run failures on switched run-finished mail on")
+	}
+	if EmailPermitted(false, row, KindRunFailure) {
+		t.Fatal("an unverified address gets run-failure mail")
+	}
+	row = Defaults(uuid.New())
+	row.EmailRunFinished = true
+	if !EmailAllowed(row, KindRunFinished) || EmailAllowed(row, KindRunFailure) {
+		t.Fatal("run finished on governs something other than run-finished mail")
+	}
+	row = everyKindOn(uuid.New())
+	row.EmailBilling, row.EmailSchedules, row.EmailBugReports = false, false, false
+	if !EmailAllowed(row, KindRunFailure) || !EmailAllowed(row, KindRunFinished) {
+		t.Fatal("another switch off switched a run kind off")
 	}
 }
 
@@ -156,6 +203,7 @@ func settingsRow(set storegen.UserNotificationSetting) pgx.Row {
 			1: set.EmailDependencyAlerts, 2: set.EmailQuarantine, 3: set.EmailReviewDecisions,
 			4: set.EmailAdvisories, 5: set.EmailOrgInvites, 6: set.WebDependencyAlerts,
 			8: set.EmailBilling, 9: set.EmailSchedules, 10: set.EmailBugReports,
+			11: set.EmailRunFailures, 12: set.EmailRunFinished,
 		} {
 			*dest[i].(*bool) = v
 		}
