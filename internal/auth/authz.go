@@ -169,6 +169,14 @@ func (p *Principal) ScopeBound() bool {
 	return p != nil && (p.Via == "pat" || p.Via == "schedule" || p.Via == "extension")
 }
 
+// CreditsOnly reports whether the principal is a token minted with
+// ScopeCreditsSession, which carries no other scope: it may open, renew and
+// end a credits session on the routes an extension declares for them and
+// is refused everywhere else, the anonymous reads included.
+func (p *Principal) CreditsOnly() bool {
+	return p != nil && p.Via == "pat" && HasScope(p.Scopes, ScopeCreditsSession)
+}
+
 // SSOSatisfied reports whether the caller meets an org's enforced-SSO
 // requirement: a session must carry an sso tag for the org refreshed
 // within maxAge; a PAT must be bound to the org. Anonymous callers and

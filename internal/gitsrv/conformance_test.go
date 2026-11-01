@@ -1210,3 +1210,29 @@ func TestArchiveTagRefusesAnOptionShapedName(t *testing.T) {
 		}
 	}
 }
+
+// TestACreditsTokenReachesNoRepository: a token carrying only
+// credits:session is refused by git over HTTP, even on a public
+// repository anyone may clone without a credential.
+func TestACreditsTokenReachesNoRepository(t *testing.T) {
+	env := newGitEnv(t)
+	pub := env.seedAgent("credits-public", "public")
+	work := seedWorkdir(t, map[string]string{"agent.yaml": "schemaVersion: \"1\"\n", "README.md": "# c\n"})
+	mustGit(t, work, "remote", "add", "origin", env.cloneURL("credits-public", env.owner.patRW))
+	mustGit(t, work, "push", "origin", "main")
+	env.releaseHead(pub, work, "origin", "v0.1.0")
+	credits := env.seedPAT(env.owner.id, "credits-only", "credits:session")
+
+	res := env.infoRefsAs(t, env.owner.handle, "credits-public", "", "git-upload-pack")
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("anonymous read of a public repository: %d, want 200", res.StatusCode)
+	}
+	for _, service := range []string{"git-upload-pack", "git-receive-pack"} {
+		res := env.infoRefsAs(t, env.owner.handle, "credits-public", credits, service)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusForbidden {
+			t.Errorf("%s with a credits:session token: %d, want 403", service, res.StatusCode)
+		}
+	}
+}

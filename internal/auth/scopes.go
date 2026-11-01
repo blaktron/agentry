@@ -46,6 +46,15 @@ const (
 	// and delete it (voice:write).
 	ScopeVoiceRead  Scope = "voice:read"
 	ScopeVoiceWrite Scope = "voice:write"
+	// ScopeCreditsSession lets a token open, renew and end a credits
+	// session, which pays for a run's model with the account's credits,
+	// and do nothing else: it reads no account data and starts no run.
+	// It is what a machine that runs the person's work unattended holds
+	// in place of an account-wide sign-in. No core route consumes it; the
+	// credits extension requires it through pkg/extension, so a registry
+	// without that extension treats a token carrying only this as a token
+	// with no scope at all.
+	ScopeCreditsSession Scope = "credits:session"
 )
 
 // ScheduleScopes are the scopes a schedule's credential carries:
@@ -68,7 +77,7 @@ func AllScopes() []Scope {
 		ScopeRepoRead, ScopeRepoWrite, ScopeAgentPublish, ScopeAgentRead,
 		ScopeAgentManage, ScopeOrgAdmin, ScopeReviewAct, ScopeAuditRead, ScopeUserProfile,
 		ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead, ScopeKnowledgeWrite,
-		ScopeSecretWrite, ScopeVoiceRead, ScopeVoiceWrite,
+		ScopeSecretWrite, ScopeVoiceRead, ScopeVoiceWrite, ScopeCreditsSession,
 	}
 }
 

@@ -1205,6 +1205,7 @@
           "tests": [
             "TestExtensionOwnTokensResolveUnderTheirMountAlone",
             "TestExtensionOwnTokensUnknownOrFailing",
+            "TestCreditsSessionRoutesRefuseABadDeclaration",
             "TestExtensionOwnTokensRefuseABadDeclaration"
           ],
           "fuzz": [],
@@ -1514,6 +1515,7 @@
             "TestScanCompletedNamesTheVersionAndOutcome",
             "TestBoundExtensionWritesItsOwnAuditAction",
             "TestRunScopesReachAnExtensionRoute",
+            "TestCreditsSessionScopeReachesItsExtensionRouteAlone",
             "TestDepsBlobsIsTheDeploymentStore"
           ],
           "fuzz": [],
@@ -2073,6 +2075,7 @@
             "TestCheckScheduleCredential",
             "TestRunScopesAreValidFlatAndUnlockNoCoreAction",
             "TestSecretWriteIsValidFlatAndUnlocksNoCoreAction",
+            "TestCreditsSessionIsValidFlatAndUnlocksNoCoreAction",
             "TestNamespaceDerivedAgentRole",
             "TestAgentRoleLadder",
             "TestHoldPermits",
@@ -2265,7 +2268,8 @@
             "TestPreReceiveHookProtectsTheDefaultBranch",
             "TestPreReceiveHookWarnTier",
             "TestOrgStateGatesGit",
-            "TestArchiveTagRefusesAnOptionShapedName"
+            "TestArchiveTagRefusesAnOptionShapedName",
+            "TestACreditsTokenReachesNoRepository"
           ],
           "fuzz": [],
           "benchmarks": [],

@@ -586,6 +586,105 @@ func TestRunScopesReachAnExtensionRoute(t *testing.T) {
 	}
 }
 
+// TestCreditsSessionScopeReachesItsExtensionRouteAlone: a PAT minted with
+// credits:session alone reaches a handler only on the routes an extension
+// declared as its credits-session routes, where the handler still requires
+// the scope. Everywhere else the core refuses it before any handler runs:
+// the same extension's other routes, even one that takes any caller,
+// another extension's, the core's own routes and the anonymous reads. The
+// scope is a token of its own: it is minted with no other.
+func TestCreditsSessionScopeReachesItsExtensionRouteAlone(t *testing.T) {
+	requires := func(sc auth.Scope) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			p := api.PrincipalFrom(r.Context())
+			if p == nil || p.Anonymous || (p.ScopeBound() && !auth.HasScope(p.Scopes, sc)) {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}
+	anyone := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
+	env := newTestEnvWith(t, func(s *api.Server) {
+		s.RegisterExtension("probe", func(mux *http.ServeMux) {
+			mux.HandleFunc("POST /sessions", requires(auth.ScopeCreditsSession))
+			mux.HandleFunc("POST /sessions/{id}/renew", requires(auth.ScopeCreditsSession))
+			mux.HandleFunc("GET /sessions/{id}", anyone)
+			mux.HandleFunc("POST /runs", requires(auth.ScopeRunWrite))
+			mux.HandleFunc("GET /status", anyone)
+		})
+		s.SetExtensionCreditsSessions("probe", []string{"POST /sessions", "POST /sessions/{id}/renew"})
+		s.RegisterExtension("other", func(mux *http.ServeMux) {
+			mux.HandleFunc("POST /sessions", requires(auth.ScopeCreditsSession))
+		})
+	})
+	u := env.register("payer")
+	env.verifyEmail(u)
+	sess := env.login(u)
+	_, creditsTok := env.mintPAT(sess, "credits-only", "credits:session")
+	_, runTok := env.mintPAT(sess, "run-only", "run:read", "run:write")
+	credits := caller{name: "credits-pat", pat: creditsTok}
+	hit := func(c caller, method, path string) int {
+		res := env.do(c, method, path, nil)
+		_ = res.Body.Close()
+		return res.StatusCode
+	}
+	for _, path := range []string{"/api/v1/x/probe/sessions", "/api/v1/x/probe/sessions/" + uuid.NewString() + "/renew"} {
+		if got := hit(credits, http.MethodPost, path); got != http.StatusNoContent {
+			t.Errorf("a PAT with credits:session was refused by the credits-session route %s: %d", path, got)
+		}
+	}
+	if got := hit(caller{name: "run-pat", pat: runTok}, http.MethodPost, "/api/v1/x/probe/sessions"); got != http.StatusForbidden {
+		t.Fatalf("a PAT without credits:session passed the credits-session route: %d", got)
+	}
+	if got := hit(sess, http.MethodPost, "/api/v1/x/probe/sessions"); got != http.StatusNoContent {
+		t.Fatalf("a session was refused by the credits-session route: %d", got)
+	}
+	for _, c := range []struct{ method, path string }{
+		{http.MethodPost, "/api/v1/x/probe/runs"},
+		{http.MethodGet, "/api/v1/x/probe/status"},
+		{http.MethodGet, "/api/v1/x/probe/sessions/" + uuid.NewString()},
+		{http.MethodPost, "/api/v1/x/probe/sessions/" + uuid.NewString() + "/renew/more"},
+		{http.MethodPost, "/api/v1/x/other/sessions"},
+		{http.MethodGet, "/api/v1/user"},
+		{http.MethodGet, "/api/v1/user/tokens"},
+		{http.MethodPost, "/api/v1/user/tokens"},
+		{http.MethodGet, "/api/v1/knowledge/packs"},
+		{http.MethodGet, "/api/v1/voice"},
+		{http.MethodGet, "/api/v1/meta"},
+		{http.MethodGet, "/api/v1/agents/" + u + "/nothing"},
+	} {
+		if got := hit(credits, c.method, c.path); got != http.StatusForbidden {
+			t.Errorf("a token carrying only credits:session reached %s %s: %d", c.method, c.path, got)
+		}
+	}
+	if got := hit(anonymous, http.MethodGet, "/api/v1/x/probe/status"); got != http.StatusNoContent {
+		t.Fatalf("the probe's open route refused an anonymous caller: %d; the refusal above proves nothing", got)
+	}
+	// The token lists its scope as minted.
+	var tokens []struct {
+		Name   string   `json:"name"`
+		Scopes []string `json:"scopes"`
+	}
+	env.doJSON(sess, http.MethodGet, "/api/v1/user/tokens", nil, &tokens, http.StatusOK)
+	seen := false
+	for _, tk := range tokens {
+		if tk.Name == "credits-only" {
+			seen = strings.Join(tk.Scopes, " ") == "credits:session"
+		}
+	}
+	if !seen {
+		t.Fatalf("the minted token does not list credits:session: %+v", tokens)
+	}
+	// A token of its own: never minted beside another scope.
+	res := env.do(sess, http.MethodPost, "/api/v1/user/tokens", map[string]any{"name": "wider", "scopes": []string{"credits:session", "agent:read"}})
+	body, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(body), "token of its own") {
+		t.Fatalf("credits:session minted beside another scope: %d %s", res.StatusCode, body)
+	}
+}
+
 // TestDepsBlobsIsTheDeploymentStore: the store the core runs
 // on reaches an extension through Deps, and an object put under the
 // extension's own prefix reads back, exists, and goes away on delete.
