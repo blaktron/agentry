@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/blaktron/agentry/internal/manifestcaps"
+	"github.com/blaktron/agentry/pkg/gatecases"
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
@@ -404,7 +405,7 @@ func s9ManifestDiff(in *Input) []Finding {
 	}
 	prevCaps := declaredCaps(in.PrevManifestJSON)
 	for _, c := range sortedSet(declaredCaps(in.ManifestJSON)) {
-		if !prevCaps[c] {
+		if !prevCaps[c] && c != gatecases.CapSubagents {
 			findings = append(findings, Finding{
 				Scanner: "S9/capability-widened", Severity: SevMedium, Confidence: ConfHigh,
 				Title:    "Capability newly declared this release: " + c,
@@ -412,6 +413,47 @@ func s9ManifestDiff(in *Input) []Finding {
 				Taxonomy: []string{"ASI04"},
 			})
 		}
+	}
+	return append(findings, s9SubagentDiff(in)...)
+}
+
+// s9SubagentDiff reports each subagent a persistent release names that the
+// previous release did not, and each whose constraint changed: either is
+// another QuickAgent, or other versions of one, the agent may start. Both
+// are a capability widening, medium, as a newly declared capability is.
+func s9SubagentDiff(in *Input) []Finding {
+	prev, _ := manifestcaps.Subagents(in.PrevManifestJSON)
+	cur, ok := manifestcaps.Subagents(in.ManifestJSON)
+	if !ok {
+		return []Finding{{
+			Scanner: "S9/capability-widened", Severity: SevMedium, Confidence: ConfHigh,
+			Title:    "Capability newly declared this release: subagents that do not read",
+			Detail:   map[string]any{"capability": gatecases.CapSubagents},
+			Taxonomy: []string{"ASI04"},
+		}}
+	}
+	was := map[string]string{}
+	for _, a := range prev {
+		was[a.Ref] = a.Version
+	}
+	var findings []Finding
+	for _, a := range cur {
+		before, had := was[a.Ref]
+		var title string
+		switch {
+		case !had:
+			title = "Subagent newly declared this release: " + a.Ref + " " + a.Version
+		case before != a.Version:
+			title = "Subagent's versions changed this release: " + a.Ref + " " + before + " → " + a.Version
+		default:
+			continue
+		}
+		findings = append(findings, Finding{
+			Scanner: "S9/capability-widened", Severity: SevMedium, Confidence: ConfHigh,
+			Title:    title,
+			Detail:   map[string]any{"capability": gatecases.CapSubagents, "subagent": a.Ref, "version": a.Version},
+			Taxonomy: []string{"ASI04"},
+		})
 	}
 	return findings
 }

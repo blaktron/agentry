@@ -33,6 +33,49 @@ type Caps struct {
 	// shape cannot fail the whole decode and leave every other capability
 	// undeclared.
 	BrowserLine json.RawMessage `json:"browser"`
+	// PersistentBlock is capabilities.persistent, kept raw and read by
+	// Persistent() for the same reason.
+	PersistentBlock json.RawMessage `json:"persistent"`
+}
+
+// Persistent reads capabilities.persistent. declared is false when there
+// is none; ok is false when there is one that does not decode, which the
+// callers read the strict way: every key declared.
+func (c Caps) Persistent() (p *manifest.Persistent, declared, ok bool) {
+	if len(c.PersistentBlock) == 0 || string(c.PersistentBlock) == "null" {
+		return nil, false, true
+	}
+	if err := json.Unmarshal(c.PersistentBlock, &p); err != nil || p == nil {
+		return nil, true, false
+	}
+	return p, true, true
+}
+
+// Subagents reads a persistent release's subagents from the canonical
+// manifest JSON: dependencies.agents when its modes include persistent,
+// nil otherwise. ok is false when the manifest is persistent and its
+// dependencies do not decode, which the callers read as subagents
+// declared.
+func Subagents(manifestJSON []byte) (agents []manifest.AgentDependency, ok bool) {
+	var m struct {
+		Modes        []string        `json:"modes"`
+		Dependencies json.RawMessage `json:"dependencies"`
+	}
+	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+		return nil, true
+	}
+	persistent := false
+	for _, mode := range m.Modes {
+		persistent = persistent || mode == string(manifest.ModePersistent)
+	}
+	if !persistent || len(m.Dependencies) == 0 || string(m.Dependencies) == "null" {
+		return nil, true
+	}
+	var d manifest.Dependencies
+	if err := json.Unmarshal(m.Dependencies, &d); err != nil {
+		return nil, false
+	}
+	return d.Agents, true
 }
 
 // Read decodes the capabilities block. ok is false when the manifest is not

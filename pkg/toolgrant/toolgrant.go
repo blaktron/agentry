@@ -2,9 +2,10 @@
 // names with what its manifest grants. The runner builds a run's tool
 // surface from the capability contract: a tool whose capability is not
 // declared is absent, not present and refusing. An instruction that works
-// a website through browser_click, runs a program through run_command or
-// reaches a host through fetch, in a release that declares no browser, no
-// command or no egress, describes a run that cannot happen: the agent
+// a website through browser_click, runs a program through run_command,
+// reaches a host through fetch or registers a task through task_add, in a
+// release that declares no browser, no command, no egress or no clock,
+// describes a run that cannot happen: the agent
 // meets a tool list without the tools its instruction depends on.
 //
 // Check reads the instruction for tool names and reports each one whose
@@ -62,11 +63,37 @@ const (
 	// GrantMCPServer is capabilities.mcpServers: a declared server's
 	// tools.
 	GrantMCPServer Grant = "mcpServers"
+	// GrantClock is capabilities.persistent.clock: a persistent agent's
+	// task tools.
+	GrantClock Grant = "persistent.clock"
+	// GrantMemory is capabilities.persistent.memory: recall.
+	GrantMemory Grant = "persistent.memory"
+	// GrantSelfConfigure is capabilities.persistent.selfConfigure:
+	// self_configure.
+	GrantSelfConfigure Grant = "persistent.selfConfigure"
+	// GrantMeetings is capabilities.persistent.meetings: the meeting
+	// tools.
+	GrantMeetings Grant = "persistent.meetings"
+	// GrantHelper is capabilities.persistent.helper: the helper tools that
+	// show, install, run and schedule QuickAgents, open settings and read
+	// the docs.
+	GrantHelper Grant = "persistent.helper"
 )
 
 // Grants returns every grant, in a fixed order.
 func Grants() []Grant {
-	return []Grant{GrantBrowser, GrantExec, GrantEgress, GrantTargetHosts, GrantFSRead, GrantFSWrite, GrantMCPServer}
+	return []Grant{GrantBrowser, GrantExec, GrantEgress, GrantTargetHosts, GrantFSRead, GrantFSWrite, GrantMCPServer,
+		GrantClock, GrantMemory, GrantSelfConfigure, GrantMeetings, GrantHelper}
+}
+
+// persistentKey is the capabilities.persistent key a persistent grant is;
+// "" for any other grant.
+func (g Grant) persistentKey() string {
+	key, ok := strings.CutPrefix(string(g), "persistent.")
+	if !ok {
+		return ""
+	}
+	return key
 }
 
 // Path is the manifest path a release adds to hold the grant.
@@ -86,6 +113,9 @@ func (g Grant) Path() string {
 		return "capabilities.filesystem.write"
 	case GrantMCPServer:
 		return "capabilities.mcpServers"
+	}
+	if key := g.persistentKey(); key != "" {
+		return "capabilities.persistent." + key
 	}
 	return ""
 }
@@ -107,8 +137,29 @@ func (g Grant) what() string {
 		return "workspace write access"
 	case GrantMCPServer:
 		return "a declared MCP server"
+	case GrantClock:
+		return "a persistent agent's clock and tasks"
+	case GrantMemory:
+		return "a persistent agent's memory"
+	case GrantSelfConfigure:
+		return "a persistent agent that may change its own name and persona"
+	case GrantMeetings:
+		return "a persistent agent's meeting notes"
+	case GrantHelper:
+		return "a persistent agent's helper tools"
 	}
 	return string(g)
+}
+
+// The tools of a persistent agent's app link, each given only with the
+// capabilities.persistent key it belongs to.
+var persistentTools = map[Grant][]string{
+	GrantClock:         {"task_add", "task_list", "task_update", "task_remove"},
+	GrantMemory:        {"recall"},
+	GrantSelfConfigure: {"self_configure"},
+	GrantMeetings:      {"meeting_arm", "meeting_list", "meeting_cancel"},
+	GrantHelper: {"quickagent_show", "quickagent_install", "quickagent_run", "run_result", "installed_list",
+		"schedule_add", "schedule_list", "schedule_pause", "schedule_remove", "settings_open", "docs_read"},
 }
 
 // The browser server's tools a run with a browser has: the runner's
@@ -148,6 +199,11 @@ var table = func() map[string]Grant {
 	}
 	for _, n := range hostTools {
 		t[n] = GrantTargetHosts
+	}
+	for g, names := range persistentTools {
+		for _, n := range names {
+			t[n] = g
+		}
 	}
 	return t
 }()
@@ -292,6 +348,9 @@ func granted(c manifest.Capabilities, g Grant) bool {
 		return fsGranted(c.Filesystem.Read)
 	case GrantFSWrite:
 		return fsGranted(c.Filesystem.Write)
+	}
+	if key := g.persistentKey(); key != "" {
+		return c.Persistent.Declares(key)
 	}
 	return false
 }

@@ -21,7 +21,13 @@ const (
 	CapEnv         = "env"
 	CapTargetHosts = "targetHosts"
 	CapBrowser     = "browser"
+	// CapSubagents is a persistent release that declares subagents.
+	CapSubagents = "subagents"
 )
+
+// CapPersistent is the token of one key of capabilities.persistent, such as
+// persistent.coder.
+func CapPersistent(key string) string { return "persistent." + key }
 
 // DeclaredCapabilities is the set of capability tokens a manifest declares,
 // sorted, from its canonical JSON: the gate's Case.DeclaredCapabilities.
@@ -34,7 +40,11 @@ const (
 //     because the runner makes the session;
 //   - browser: a browser line, readable or not, a token of its own and never
 //     network, because the browser reaches sites through the runner's browse
-//     proxy.
+//     proxy;
+//   - persistent.<key>: each key capabilities.persistent declares, and every
+//     key when the block does not read;
+//   - subagents: a persistent release that declares subagents, or whose
+//     dependencies do not read.
 //
 // A manifest that is not JSON, or has no capabilities block, declares
 // nothing.
@@ -64,6 +74,16 @@ func DeclaredCapabilities(manifestJSON []byte) []string {
 	}
 	if _, declared, _ := c.Browser(); declared {
 		out = append(out, CapBrowser)
+	}
+	if p, declared, ok := c.Persistent(); declared {
+		for _, k := range manifest.PersistentCapabilities() {
+			if !ok || p.Declares(k.Key) {
+				out = append(out, CapPersistent(k.Key))
+			}
+		}
+	}
+	if agents, ok := manifestcaps.Subagents(manifestJSON); !ok || len(agents) > 0 {
+		out = append(out, CapSubagents)
 	}
 	sort.Strings(out)
 	return out

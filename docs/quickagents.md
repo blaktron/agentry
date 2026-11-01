@@ -164,7 +164,7 @@ release declares the set of run modes it supports:
 |---|---|---|
 | `autonomous` | starts from its files — after the up-front questions, if any, and MCP profile authentication — does the job, writes its output and receipts, and ends | this is `agentry run` today |
 | `interactive` | starts from the same plan and controls, but the run is a conversation: in the CLI a chat in the terminal (`agentry run --mode interactive`), in the desktop the run panel's chat. The agent can ask for information as the work reveals the need; you can answer and drop files into the read-only inputs folder (`/add PATH`), then `/finish` for the final result. You **cannot** give it more access than the manifest declares — the capability contract, the gateway and the egress allowlist are exactly those of an autonomous run of the same release, and a permission request from inside the sandbox is granted only for a tool the plan already serves, refused otherwise | `agentry run --mode interactive`; a release with one mode runs in it, one with autonomous and interactive is asked on a terminal and runs autonomous otherwise |
-| `persistent` | a conversation the runner keeps between sessions: the agent's conversation and its own files outlive each start and stop. It takes the same `interactive` hints and `intake` questions as an interactive release, under the same capability contract | run only for the runner's own built-in agents: a persistent release from the registry or a local folder is refused before it starts ([Run modes](runner.md#run-modes)) |
+| `persistent` | a conversation the runner keeps between sessions: the agent's conversation and its own files outlive each start and stop. It takes the same `interactive` hints and `intake` questions as an interactive release, under the same capability contract, and may declare what it needs as a persistent agent, a persona and subagents ([below](#a-persistent-agent-capabilitiespersistent-persona-and-subagents)) | run only for the runner's own built-in agents: a persistent release from the registry or a local folder is refused before it starts ([Run modes](runner.md#run-modes)) |
 
 The instruction is one file:
 
@@ -935,10 +935,94 @@ the account and the release
 ([Hosted runs](hosted-runs.md#a-runs-connections)). A CLI or desktop older
 than its core pin refuses such a manifest by its unknown field.
 
+### A persistent agent: `capabilities.persistent`, `persona` and subagents
+
+A release whose `modes` include `persistent` may declare three things that
+belong to that mode alone. Each is a v2 field, and each is refused beside
+any other set of modes.
+
+```yaml
+modes: [persistent]
+capabilities:
+  persistent:
+    clock: true
+    memory: true
+    skills: true
+    secrets: [GITHUB_TOKEN]
+    helper: true
+persona:
+  name: Ada
+  file: PERSONA.md      # the default
+  editable: true        # the default
+dependencies:
+  agents:
+    - ref: acme/pdf-summary
+      version: ^1.4.0
+      why: Summarises the PDFs you drop in the share
+```
+
+**`capabilities.persistent`** (rule V16) says what the agent may do beyond
+an ordinary run. Every key is off unless declared, and the set is closed:
+an unknown key is refused, so a runner grants only what the release names
+and an older one refuses a key it does not know.
+
+| Key | What it gives the agent |
+|---|---|
+| `clock` | the time on each turn, its own tasks (`task_add`, `task_list`, `task_update`, `task_remove`) and the heartbeat that fires them |
+| `memory` | a memory on its own volume, seeded from the archive's `memory/` folder, with compaction and `recall` |
+| `skills` | the archive's `skills/` folder, one `skills/<name>/SKILL.md` per skill, and the skills the person adds |
+| `secrets` | stored secrets the person keeps for it in their keychain, by environment variable name: at most 32, each once, none also a secret the release asks for at each run |
+| `selfConfigure` | `self_configure`: changing its own name and persona |
+| `calendars` | reading the calendar feeds the person adds |
+| `meetings` | the meeting tools: notes in the meetings the person arms |
+| `mail` | the person's mail at `google`, `microsoft` or `fastmail` once they sign in; `google` needs the `google-workspace` image server and `microsoft` the `microsoft-365` one |
+| `imageServers` | servers the runner runs from its own pinned images, `google-workspace` and `microsoft-365`, once the person signs in |
+| `coder` | the coding toolchain: any program in the runner's coding image, open web access for its commands, a public browser, a development host, ports and git host accounts |
+| `web` | the web tools: searching the web and reading pages |
+| `helper` | Agentry's helper tools: show, install, run and schedule QuickAgents, read their results, list what is installed, open settings and read the docs; each install, schedule change and first run of a new version still asks the person |
+| `review` | AI Review with the person's own key |
+
+The block is part of the capability contract. Consent lists each key, a
+newly declared key or one more name in a list asks again, the gate names
+each key as a capability (`persistent.clock`, `persistent.coder`, …) that a
+publication policy's `requireHumanReview.whenCapabilities` and
+`blockedCapabilities` can name, and S9 reports a newly declared one. An
+instruction that calls for a tool its key gives (`task_add` without
+`clock`, `quickagent_run` without `helper`) is held for a person at
+publish, as an ungranted browser or command is.
+
+In a persistent release, `memory/` is a memory seed only with `memory` and
+`skills/` is read only with `skills`; without its key, each folder is left
+unread and validation warns.
+
+**`persona`** (rule V17) names the agent and ships the text it takes on.
+`name` is one plain line of at most 64 bytes, and `file` (`PERSONA.md`
+when left out) is a file of its own, not the instruction, matched by
+`publish.include`, UTF-8 text of at most 32 KiB. The persona sits inside
+the instruction and cannot widen it. The scanners read it as they read the
+instruction, and a tool it calls for needs its grant just the same. The
+person may rename the agent and replace the persona's text; `editable:
+false` keeps the text and still allows a new name.
+
+**Subagents** (rule V18). In a persistent release, `dependencies.agents`
+are its subagents: published autonomous QuickAgents it may start as runs
+of their own, each in its own sandbox under its own contract. Each entry
+needs `ref`, a semver `version` constraint and a `why` of at most 200
+characters on one line, shown when the person agrees. A release may name at
+most 16, each once, and never itself. The subagents are part of the
+contract: one more, or a changed constraint, asks again, and S9 reports
+each.
+
+The CLI runs a persistent release only for its own built-in agents today,
+and refuses one from the registry or a local folder before it starts
+([Run modes](runner.md#run-modes)).
+
 ### `dependencies`
 
-`dependencies.agents: [{ref: ns/name, version: "^1.2"}]` is informational:
-recorded and displayed, not auto-installed.
+In a persistent release, `dependencies.agents` are its subagents (above).
+In any other release, `dependencies.agents: [{ref: ns/name, version:
+"^1.2"}]` is informational: recorded and displayed, not auto-installed. A
+`why` may be given there too, under the same one-line rule.
 
 ### `publish`
 

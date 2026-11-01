@@ -327,3 +327,45 @@ func TestTheAnswerIsBounded(t *testing.T) {
 		t.Fatalf("a name past the bound: %v", tools(got))
 	}
 }
+
+// A persistent agent's app-link tools are each given by one key of
+// capabilities.persistent: an instruction that calls for one without its
+// key names the key's line, and declaring the key clears it.
+func TestThePersistentToolsNeedTheirKeys(t *testing.T) {
+	for g, n := range map[toolgrant.Grant]int{
+		toolgrant.GrantClock: 4, toolgrant.GrantMemory: 1, toolgrant.GrantSelfConfigure: 1,
+		toolgrant.GrantMeetings: 3, toolgrant.GrantHelper: 11,
+	} {
+		tools := toolgrant.ToolsOf(g)
+		if len(tools) != n {
+			t.Errorf("%s gives %v, want %d tools", g, tools, n)
+		}
+		key := strings.TrimPrefix(g.Path(), "capabilities.persistent.")
+		if g.Path() == key {
+			t.Fatalf("%s's path is %q", g, g.Path())
+		}
+		for _, tool := range tools {
+			text := "Use the `" + tool + "` tool when the person asks.\n"
+			got := toolgrant.Check(manifest.Capabilities{}, text)
+			if len(got) != 1 || got[0].Grant != g || got[0].Path != g.Path() {
+				t.Errorf("%s without %s: %+v", tool, key, got)
+			}
+			p := &manifest.Persistent{}
+			switch key {
+			case "clock":
+				p.Clock = true
+			case "memory":
+				p.Memory = true
+			case "selfConfigure":
+				p.SelfConfigure = true
+			case "meetings":
+				p.Meetings = true
+			case "helper":
+				p.Helper = true
+			}
+			if got := toolgrant.Check(manifest.Capabilities{Persistent: p}, text); len(got) != 0 {
+				t.Errorf("%s with %s declared: %+v", tool, key, got)
+			}
+		}
+	}
+}

@@ -136,7 +136,88 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 		d.Narrowed = append(d.Narrowed, "no longer ships knowledge: "+k)
 	}
 
+	d.appendPersistentDiff(old.Persistent, next.Persistent)
+	d.appendSubagentDiff(old.Subagents, next.Subagents)
+
 	return d
+}
+
+// appendPersistentDiff compares capabilities.persistent: a key newly
+// declared widens, and so does one more name in a list key (a stored
+// secret, a mail provider, an image server); the reverse narrows.
+func (d *CapabilityDiff) appendPersistentDiff(old, next *Persistent) {
+	for _, c := range persistentCapabilities {
+		was, is := old.Declares(c.Key), next.Declares(c.Key)
+		switch {
+		case is && !was:
+			d.Widened = append(d.Widened, "adds a persistent capability: "+c.Key+" ("+c.Words+")")
+		case was && !is:
+			d.Narrowed = append(d.Narrowed, "drops a persistent capability: "+c.Key)
+		}
+	}
+	lists := []struct {
+		what      string
+		old, next []string
+	}{
+		{"stored secret", persistentList(old, "secrets"), persistentList(next, "secrets")},
+		{"mail provider", persistentList(old, "mail"), persistentList(next, "mail")},
+		{"image server", persistentList(old, "imageServers"), persistentList(next, "imageServers")},
+	}
+	for _, l := range lists {
+		if len(l.old) == 0 || len(l.next) == 0 {
+			continue // the key itself was added or dropped, said above
+		}
+		added, removed := diffSets(l.old, l.next)
+		for _, n := range added {
+			d.Widened = append(d.Widened, "adds a "+l.what+": "+n)
+		}
+		for _, n := range removed {
+			d.Narrowed = append(d.Narrowed, "drops a "+l.what+": "+n)
+		}
+	}
+}
+
+func persistentList(p *Persistent, key string) []string {
+	if p == nil {
+		return nil
+	}
+	switch key {
+	case "secrets":
+		return p.Secrets
+	case "mail":
+		return p.Mail
+	case "imageServers":
+		return p.ImageServers
+	}
+	return nil
+}
+
+// appendSubagentDiff compares the subagents: one more is another
+// QuickAgent the agent may start, so it widens, and so does a changed
+// constraint, which may admit versions the person never agreed to (a
+// tightened one is counted too, since a constraint's range cannot be
+// compared in general). A dropped subagent narrows.
+func (d *CapabilityDiff) appendSubagentDiff(old, next []AgentDependency) {
+	oldBy := make(map[string]string, len(old))
+	for _, a := range old {
+		oldBy[a.Ref] = a.Version
+	}
+	nextBy := make(map[string]string, len(next))
+	for _, a := range next {
+		nextBy[a.Ref] = a.Version
+	}
+	added, removed := diffSets(slices.Sorted(maps.Keys(oldBy)), slices.Sorted(maps.Keys(nextBy)))
+	for _, ref := range added {
+		d.Widened = append(d.Widened, "adds a subagent: "+ref+" "+nextBy[ref])
+	}
+	for _, ref := range removed {
+		d.Narrowed = append(d.Narrowed, "drops a subagent: "+ref)
+	}
+	for _, ref := range slices.Sorted(maps.Keys(nextBy)) {
+		if was, ok := oldBy[ref]; ok && was != nextBy[ref] {
+			d.Widened = append(d.Widened, "changes the versions it may run of subagent "+ref+": "+was+" → "+nextBy[ref])
+		}
+	}
 }
 
 // appendBrowserDiff records the browser line's change: a new line, a
