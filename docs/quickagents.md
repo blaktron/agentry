@@ -1003,9 +1003,12 @@ unread and validation warns.
 when left out) is a file of its own, not the instruction, matched by
 `publish.include`, UTF-8 text of at most 32 KiB. The scanners read it as
 they read the instruction, and a tool it calls for needs its grant just the
-same. The
-person may rename the agent and replace the persona's text; `editable:
-false` keeps the text and still allows a new name.
+same. AI Review asks the persona two questions of its own, on top of the six
+it asks of every file: whether it has the agent present itself as a human, a
+named real person or a real organisation's staff, and whether it carries
+instructions about tools or permissions. Either holds the version for a
+person. The person may rename the agent and replace the persona's text;
+`editable: false` keeps the text and still allows a new name.
 
 **Subagents** (rule V18). In a persistent release, `dependencies.agents`
 are its subagents: QuickAgents it may start as runs of their own. Each entry

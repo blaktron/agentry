@@ -558,15 +558,15 @@ func rescanSeverity(f Finding) Severity {
 
 // reratedToHigh reports a finding that is high only on probable evidence: S6's
 // undeclared environment read, and AI Review's injection, undeclared-capability
-// and user-deception axes at score 2, in a release's own scan or a shipped
-// pack's.
+// and user-deception axes and its persona questions at score 2, in a release's
+// own scan or a shipped pack's.
 func reratedToHigh(f Finding) bool {
 	if f.Scanner == scannerUndeclaredEnv {
 		return true
 	}
 	cat := JudgeCategory(f.Scanner[strings.LastIndex(f.Scanner, "/")+1:])
 	judged := strings.HasPrefix(f.Scanner, "S5/") || strings.HasPrefix(f.Scanner, KnowledgeStageID+"/S5/")
-	if !judged || !highFromProbable(cat) {
+	if !judged || (!highFromProbable(cat) && !isPersonaCategory(cat)) {
 		return false
 	}
 	switch s := f.Detail["score"].(type) {

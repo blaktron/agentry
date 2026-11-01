@@ -3733,6 +3733,18 @@
           ]
         },
         {
+          "path": "internal/scan/judge_persona_test.go",
+          "tests": [
+            "TestS5AsksAPersonaThePersonaQuestions",
+            "TestS5FailsClosedOnAPersonaItCannotReview",
+            "TestAPersonaFindingHoldsAndARescanWeighsItLikeTheProbableOnes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/judge_test.go",
           "tests": [
             "TestStaticJudgeCategories",
@@ -4799,6 +4811,21 @@
           "fixtureEntryPoint": false,
           "dependencyHints": [
             "real-time wait"
+          ]
+        },
+        {
+          "path": "pkg/judge/persona_bench_test.go",
+          "tests": [
+            "TestThePersonaBenchCorpusIsIndexed",
+            "TestPersonaBench",
+            "TestThePersonaHashPinsItsWording"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
           ]
         },
         {
