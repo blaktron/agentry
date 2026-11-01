@@ -1579,7 +1579,6 @@
             "imageServers": [
               "google-workspace"
             ],
-            "coder": true,
             "web": true,
             "helper": true,
             "review": true
@@ -1599,7 +1598,6 @@
         "declaredCapabilities": [
           "persistent.calendars",
           "persistent.clock",
-          "persistent.coder",
           "persistent.helper",
           "persistent.imageServers",
           "persistent.mail",
@@ -1611,8 +1609,7 @@
           "persistent.skills",
           "persistent.web",
           "subagents"
-        ],
-        "unrestrictedNetwork": true
+        ]
       }
     },
     {

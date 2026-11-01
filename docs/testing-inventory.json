@@ -5164,6 +5164,7 @@
             "TestAPersistentReleaseParsesAndValidates",
             "TestEveryPersistentKeyHasWords",
             "TestV16RefusesWhatTheBlockCannotMean",
+            "TestV16PassesCoderAloneAndTheOtherThreeTogether",
             "TestV16ReadsTheFoldersOnlyWithTheirKeys",
             "TestV17RefusesWhatThePersonaCannotBe",
             "TestV18MakesAPersistentReleasesDependenciesSubagents",

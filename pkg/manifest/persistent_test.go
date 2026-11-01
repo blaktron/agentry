@@ -35,7 +35,6 @@ capabilities:
     meetings: true
     mail: [google, fastmail]
     imageServers: [google-workspace]
-    coder: true
     web: true
     helper: true
     review: true
@@ -95,7 +94,7 @@ func persistentContext(files map[string]string) Context {
 func TestAPersistentReleaseParsesAndValidates(t *testing.T) {
 	m := persistentManifest(t)
 	p := m.Capabilities.Persistent
-	want := []string{"clock", "memory", "skills", "secrets", "selfConfigure", "calendars", "meetings", "mail", "imageServers", "coder", "web", "helper", "review"}
+	want := []string{"clock", "memory", "skills", "secrets", "selfConfigure", "calendars", "meetings", "mail", "imageServers", "web", "helper", "review"}
 	if got := p.Keys(); !slices.Equal(got, want) {
 		t.Fatalf("Keys() = %v; want %v", got, want)
 	}
@@ -150,6 +149,12 @@ func TestV16RefusesWhatTheBlockCannotMean(t *testing.T) {
 		{"an unknown image server", func(m *Manifest) { m.Capabilities.Persistent.ImageServers = []string{"gog"} }, "capabilities.persistent.imageServers[0]"},
 		{"google mail without its server", func(m *Manifest) { m.Capabilities.Persistent.ImageServers = nil }, "capabilities.persistent.mail[0]"},
 		{"microsoft mail without its server", func(m *Manifest) { m.Capabilities.Persistent.Mail = []string{"microsoft"} }, "capabilities.persistent.mail[0]"},
+		{"coder beside web, review and calendars", func(m *Manifest) { m.Capabilities.Persistent.Coder = true }, "capabilities.persistent"},
+		{"coder beside web", func(m *Manifest) { *m.Capabilities.Persistent = Persistent{Coder: true, Web: true} }, "capabilities.persistent"},
+		{"coder beside review", func(m *Manifest) { *m.Capabilities.Persistent = Persistent{Coder: true, Review: true} }, "capabilities.persistent"},
+		{"coder beside calendars", func(m *Manifest) {
+			*m.Capabilities.Persistent = Persistent{Coder: true, Calendars: true}
+		}, "capabilities.persistent"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -163,6 +168,22 @@ func TestV16RefusesWhatTheBlockCannotMean(t *testing.T) {
 	m.SchemaVersion = "1"
 	m.Modes, m.Kind = nil, v1KindPromptAgent
 	wantIssue(t, Validate(m), "V1", SeverityError, "capabilities.persistent")
+}
+
+// web, review and calendars sit together; coder sits beside every other key.
+func TestV16PassesCoderAloneAndTheOtherThreeTogether(t *testing.T) {
+	for _, p := range []Persistent{
+		{Web: true, Review: true, Calendars: true},
+		{Coder: true, Clock: true, Memory: true, Skills: true, Secrets: []string{"GITHUB_TOKEN"}, SelfConfigure: true, Meetings: true, Helper: true},
+	} {
+		m := persistentManifest(t)
+		*m.Capabilities.Persistent = p
+		for _, err := range Validate(m) {
+			if is, _ := AsIssue(err); is == nil || is.Rule == "V16" && is.Severity == SeverityError {
+				t.Errorf("%v: %v", p.Keys(), err)
+			}
+		}
+	}
 }
 
 func TestV16ReadsTheFoldersOnlyWithTheirKeys(t *testing.T) {
@@ -321,7 +342,7 @@ func TestASubagentsConstraintAllowsVersions(t *testing.T) {
 func TestThePersistentBlockAndSubagentsAreInTheContract(t *testing.T) {
 	m := persistentManifest(t)
 	c := m.Contract()
-	if c.Persistent == nil || !c.Persistent.Coder || len(c.Subagents) != 1 || c.Subagents[0].Version != "^1.4.0" {
+	if c.Persistent == nil || !c.Persistent.Helper || len(c.Subagents) != 1 || c.Subagents[0].Version != "^1.4.0" {
 		t.Fatalf("Contract() = %+v", c)
 	}
 	raw, err := CanonicalJSON(m)
@@ -349,7 +370,7 @@ func TestDiffCapabilitiesPersistent(t *testing.T) {
 	old := persistentManifest(t).Contract()
 
 	next := persistentManifest(t)
-	next.Capabilities.Persistent.Coder = false
+	next.Capabilities.Persistent.Helper = false
 	next.Capabilities.Persistent.Mail = []string{"google", "fastmail", "microsoft"}
 	next.Capabilities.Persistent.ImageServers = []string{"google-workspace", "microsoft-365"}
 	next.Capabilities.Persistent.Secrets = nil
@@ -363,14 +384,14 @@ func TestDiffCapabilitiesPersistent(t *testing.T) {
 			t.Errorf("Widened %q missing from %v", want, d.Widened)
 		}
 	}
-	for _, want := range []string{"drops a persistent capability: coder", "drops a persistent capability: secrets"} {
+	for _, want := range []string{"drops a persistent capability: helper", "drops a persistent capability: secrets"} {
 		if !slices.Contains(d.Narrowed, want) {
 			t.Errorf("Narrowed %q missing from %v", want, d.Narrowed)
 		}
 	}
 
 	back := DiffCapabilities(next.Contract(), old)
-	if !slices.Contains(back.Widened, "adds a persistent capability: coder ("+persistentCapabilities[9].Words+")") ||
+	if !slices.Contains(back.Widened, "adds a persistent capability: helper ("+persistentCapabilities[11].Words+")") ||
 		!slices.Contains(back.Narrowed, "drops a subagent: acme/translate") {
 		t.Fatalf("the reverse diff = %+v", back)
 	}
