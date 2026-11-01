@@ -51,6 +51,9 @@ type Service struct {
 	// eventSink receives post-commit state transitions for webhook fan-out
 	// (webhooks). Set by the api layer; nil = no fan-out.
 	eventSink EventSink
+	// unpublished is told of each version that leaves published (a
+	// quarantine, a block or a yank), after its transaction commits.
+	unpublished func(ctx context.Context, res TransitionResult)
 	// orgEventSink is the same fan-out for organization-scoped events
 	// (membership.go). Set by the api layer; nil = no fan-out.
 	orgEventSink OrgEventSink
@@ -123,6 +126,13 @@ type EventSink func(ctx context.Context, agentID uuid.UUID, event string, payloa
 
 // SetEventSink wires the post-commit transition fan-out (webhooks).
 func (s *Service) SetEventSink(sink EventSink) { s.eventSink = sink }
+
+// SetUnpublishedHook wires what is told, after the transaction commits, of
+// each version that leaves published: the advisory to the holders of the
+// persistent releases that use it as a subagent.
+func (s *Service) SetUnpublishedHook(f func(ctx context.Context, res TransitionResult)) {
+	s.unpublished = f
+}
 
 // NewService assembles the registry service. blobs may be nil for callers
 // that never submit versions (the git role's read paths).

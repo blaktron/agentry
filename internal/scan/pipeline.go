@@ -153,12 +153,18 @@ func NewPipeline(d PipelineDeps) *Pipeline {
 	if notifier == nil {
 		notifier = notify.LogNotifier{Log: log}
 	}
-	return &Pipeline{
+	p := &Pipeline{
 		st: d.Store, reg: d.Registry, blobs: d.Blobs, orch: d.Orchestrator,
 		signer: d.Signer, aud: d.Audit, notifier: notifier, log: log,
 		registryURL: d.RegistryURL, rulesetID: d.RulesetID, rulesetVer: d.RulesetVer,
 		rescanBatch: 100, jobs: d.Jobs,
 	}
+	// A version that leaves published reaches the holders of the
+	// persistent releases that use it as a subagent.
+	if d.Registry != nil {
+		d.Registry.SetUnpublishedHook(p.adviseSubagentHolders)
+	}
+	return p
 }
 
 // VersionSubmitted implements registry.Pipeline: run the scan for a version
