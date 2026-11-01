@@ -141,4 +141,23 @@ func TestRotationAdvertisesTheRetiredKeyAndCountersigns(t *testing.T) {
 	if len(fresh.Signatures) != 1 || fresh.Signatures[0].KeyID != keysB[0].KeyID {
 		t.Errorf("a release published after the rotation has signatures %+v, want one by %s", fresh.Signatures, keysB[0].KeyID)
 	}
+
+	// An operator who also lists the outgoing key in the configuration, as
+	// a rotation runbook does, publishes it once: with the window they gave
+	// it and the registry's own record that it was retired.
+	envC := newTestEnvCfg(t, func(c *config.Config) {
+		c.Signing.AdditionalKeys = []config.VerificationKey{{KeyID: activeA.KeyID, PublicKeyPEM: pubA, NotAfter: "2027-01-01T00:00:00Z"}}
+	})
+	var listedA []publishedKey
+	for _, k := range envC.allSigningKeys(t) {
+		if k.KeyID == activeA.KeyID {
+			listedA = append(listedA, k)
+		}
+	}
+	if len(listedA) != 1 {
+		t.Fatalf("key A is published %d times, want once: %+v", len(listedA), listedA)
+	}
+	if listedA[0].Status != "retired" || listedA[0].RetiredAt == "" || listedA[0].NotAfter != "2027-01-01T00:00:00Z" || listedA[0].PublicKey != pubA {
+		t.Errorf("key A as configured and retired: %+v, want status retired with a date, the configured window and its PEM", listedA[0])
+	}
 }

@@ -164,7 +164,7 @@ release declares the set of run modes it supports:
 |---|---|---|
 | `autonomous` | starts from its files — after the up-front questions, if any, and MCP profile authentication — does the job, writes its output and receipts, and ends | this is `agentry run` today |
 | `interactive` | starts from the same plan and controls, but the run is a conversation: in the CLI a chat in the terminal (`agentry run --mode interactive`), in the desktop the run panel's chat. The agent can ask for information as the work reveals the need; you can answer and drop files into the read-only inputs folder (`/add PATH`), then `/finish` for the final result. You **cannot** give it more access than the manifest declares — the capability contract, the gateway and the egress allowlist are exactly those of an autonomous run of the same release, and a permission request from inside the sandbox is granted only for a tool the plan already serves, refused otherwise | `agentry run --mode interactive`; a release with one mode runs in it, one with autonomous and interactive is asked on a terminal and runs autonomous otherwise |
-| `persistent` | a conversation the runner keeps between sessions: the agent's conversation and its own files outlive each start and stop. It takes the same `interactive` hints and `intake` questions as an interactive release, under the same capability contract, and may declare what it needs as a persistent agent, a persona and subagents ([below](#a-persistent-agent-capabilitiespersistent-persona-and-subagents)) | run only for the runner's own built-in agents: a persistent release from the registry or a local folder is refused before it starts ([Run modes](runner.md#run-modes)) |
+| `persistent` | a conversation the runner keeps between sessions: the agent's conversation and its own files outlive each start and stop. It takes the same `interactive` hints and `intake` questions as an interactive release, under the same capability contract, and may declare what it needs as a persistent agent, a persona and subagents ([below](#a-persistent-agent-capabilitiespersistent-persona-and-subagents)) | installed with `agentry agent install` and run on the person's computer, from CLI v0.6.1015 ([Run modes](runner.md#run-modes)) |
 
 The instruction is one file:
 
@@ -989,7 +989,10 @@ publication policy's `requireHumanReview.whenCapabilities` and
 `blockedCapabilities` can name, and S9 reports a newly declared one.
 `coder` is held as unrestricted network, as `"*"` egress and a browser on
 any public site are, so the publication policy's `wildcardEgress` decides
-it. An
+it. `coder` is never declared beside `web`, `review` or
+`calendars`: its programs run in the tools container that would hold the
+person's search and review keys and calendar feed addresses. Those three
+sit together, and `coder` sits beside every other key. An
 instruction that calls for a tool its key gives (`task_add` without
 `clock`, `quickagent_run` without `helper`) is held for a person at
 publish, as an ungranted browser or command is.
@@ -1040,9 +1043,9 @@ quarantined or blocked, medium when its publisher withdrew it. The
 release's holders read it where they read every advisory, and its own
 verdict does not change.
 
-The CLI runs a persistent release only for its own built-in agents today,
-and refuses one from the registry or a local folder before it starts
-([Run modes](runner.md#run-modes)).
+The CLI installs and runs a persistent release from the registry, or from
+a local folder without its subagents, from v0.6.1015
+(`agentry agent install`; [Run modes](runner.md#run-modes)).
 
 ### `dependencies`
 
