@@ -102,6 +102,13 @@ func (s *Server) scanReportFrom(r *http.Request, run storegen.ScanRun, versionSt
 	if rs, err := q.GetRulesetByID(r.Context(), run.RulesetReleaseID); err == nil {
 		rep.RulesetVersion = &rs.Semver
 	}
+	subagents, err := subagentsOf(r.Context(), q, run.ID)
+	if err != nil {
+		return ScanReport{}, err
+	}
+	if len(subagents) > 0 {
+		rep.Subagents = &subagents
+	}
 	shipped, err := shippedKnowledgeOf(r.Context(), q, run.ID)
 	if err != nil {
 		return ScanReport{}, err
@@ -128,6 +135,27 @@ func shippedKnowledgeOf(ctx context.Context, q *storegen.Queries, runID uuid.UUI
 		var rec []ShippedKnowledgeScan
 		if err := scan.DecodeKnowledgeRecord(st.Detail, &rec); err != nil {
 			return nil, fmt.Errorf("scan report: the knowledge stage's record: %w", err)
+		}
+		return rec, nil
+	}
+	return nil, nil
+}
+
+// subagentsOf is a run's record of a persistent release's subagents, as S7
+// recorded it: none for a release that declares none, or a run whose S7 has
+// not finished.
+func subagentsOf(ctx context.Context, q *storegen.Queries, runID uuid.UUID) ([]SubagentScan, error) {
+	stages, err := q.ListStageResults(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	for _, st := range stages {
+		if st.Scanner != "S7" {
+			continue
+		}
+		var rec []SubagentScan
+		if err := scan.DecodeSubagentRecord(st.Detail, &rec); err != nil {
+			return nil, fmt.Errorf("scan report: S7's record of the subagents: %w", err)
 		}
 		return rec, nil
 	}

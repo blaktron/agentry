@@ -546,9 +546,11 @@ func (p *Pipeline) sweepBatch() int32 {
 // capability no earlier run had read. S6's ungranted tools count at medium
 // too: they say a run of the version lacks a tool its instruction calls
 // for, which holds a submission for a person but is no reason to pull a
-// version people already run.
+// version people already run. So does a subagent that no longer resolves:
+// its quarantine or withdrawal is the subagent's, and the parent's own
+// verdict stays what its own contents earned.
 func rescanSeverity(f Finding) Severity {
-	if f.Severity == SevHigh && (reratedToHigh(f) || f.Scanner == scannerUngrantedTool) {
+	if f.Severity == SevHigh && (reratedToHigh(f) || f.Scanner == scannerUngrantedTool || f.Scanner == scannerSubagentUnresolved) {
 		return SevMedium
 	}
 	return f.Severity

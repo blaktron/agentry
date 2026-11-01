@@ -3481,6 +3481,31 @@
           ]
         },
         {
+          "path": "internal/scan/subagents_db_test.go",
+          "tests": [
+            "TestPipelineResolvesAPersistentReleasesSubagents",
+            "TestAPrivateSubagentResolvesInItsOwnOrganization"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/subagents_test.go",
+          "tests": [
+            "TestASubagentsReachIsWhatItsVersionDeclares",
+            "TestAnUnresolvedSubagentHoldsTheVersionAndNeverPullsIt",
+            "TestSubagentsThatDoNotReadDoNotResolve"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/testdb_test.go",
           "tests": [
             "TestScanTestsRunInTheirOwnDatabase"
