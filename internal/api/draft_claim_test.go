@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -20,8 +21,8 @@ func TestAnUploadKeepsItsClaimedDraftAsAClaim(t *testing.T) {
 	env.verifyEmail(author)
 	pat, files := submitFixture(env, author, "claimed")
 
-	if status, body := env.uploadVersionCLIWithFields(author, "claimed", pat, files, map[string]string{"draftRun": "not-a-draft"}); status != http.StatusUnprocessableEntity {
-		t.Fatalf("a malformed draftRun: got %d %s", status, body)
+	if status, body := env.uploadVersionCLIWithFields(author, "claimed", pat, files, map[string]string{"draftRun": "not-a-draft"}); status != http.StatusUnprocessableEntity || !strings.Contains(body, "draftRun is not a draft's id") {
+		t.Fatalf("a malformed draftRun: got %d %s, want 422 saying it is not a draft's id", status, body)
 	}
 	if n := countVersions(env, author, "claimed"); n != 0 {
 		t.Fatalf("a refused upload stored %d versions", n)

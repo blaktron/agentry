@@ -8,7 +8,9 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -61,7 +63,7 @@ func TestHandedOffPublishIsScannedByTheWorkerNotTheReceivingRole(t *testing.T) {
 	}
 	if err := env.st.Pool().QueryRow(ctx, `
 		SELECT count(*) FROM river_job
-		WHERE kind = 'scan.version' AND queue = 'sandbox' AND args->>'versionId' = $1`, versionID).Scan(&jobs); err != nil {
+		WHERE kind = 'scan.version' AND queue = 'sandbox' AND args->>'trigger' = 'publish' AND args->>'versionId' = $1`, versionID).Scan(&jobs); err != nil {
 		t.Fatal(err)
 	}
 	if jobs != 1 {
@@ -112,4 +114,41 @@ func TestHandedOffPublishIsScannedByTheWorkerNotTheReceivingRole(t *testing.T) {
 		t.Fatalf("after a redelivered publish scan: runs=%d review items=%d attestations=%d status=%s, want 1/0/1/published",
 			runs, items, atts, status())
 	}
+
+	// A queue that cannot take the job leaves the recorded version in
+	// scanning, says so to the submitter, and queues nothing: the scan
+	// watchdog owns it from there.
+	env.srvObj.Reg().SetPipeline(scan.QueuePipeline{Q: downQueue{}})
+	code, body := env.uploadVersionCLI(authorH, "handoff", pat, skillFiles(authorH, "handoff", "1.0.1", nil))
+	if code != http.StatusServiceUnavailable || !strings.Contains(body, "scan-not-scheduled") {
+		t.Fatalf("publish while the queue is down: %d %s, want 503 scan-not-scheduled", code, body)
+	}
+	var stuck string
+	if err := env.st.Pool().QueryRow(ctx, `
+		SELECT v.status FROM agent_versions v
+		JOIN agents a ON a.id = v.agent_id JOIN handles h ON h.id = a.namespace_id
+		WHERE a.name = 'handoff' AND h.handle = $1 AND v.version = '1.0.1'`, authorH).Scan(&stuck); err != nil {
+		t.Fatalf("version row: %v", err)
+	}
+	if stuck != "scanning" {
+		t.Fatalf("the version the queue could not take is %q, want scanning", stuck)
+	}
+	if err := env.st.Pool().QueryRow(ctx, `
+		SELECT count(*) FROM river_job
+		WHERE kind = 'scan.version' AND args->>'versionId' IN (
+		  SELECT v.id::text FROM agent_versions v
+		  JOIN agents a ON a.id = v.agent_id JOIN handles h ON h.id = a.namespace_id
+		  WHERE a.name = 'handoff' AND h.handle = $1 AND v.version = '1.0.1')`, authorH).Scan(&jobs); err != nil {
+		t.Fatal(err)
+	}
+	if jobs != 0 {
+		t.Fatalf("%d scan.version jobs were queued for a version the queue refused", jobs)
+	}
+}
+
+// downQueue is a queue that takes no job.
+type downQueue struct{ queue.Client }
+
+func (downQueue) Enqueue(context.Context, string, string, any, ...queue.EnqueueOption) (uuid.UUID, error) {
+	return uuid.Nil, errors.New("the queue is unavailable")
 }

@@ -150,4 +150,59 @@ publish:
 	if code, body := verdict(staff, "dismissed_false_positive"); code != http.StatusNoContent {
 		t.Fatalf("staff false_positive: got %d %s, want 204", code, body)
 	}
+
+	// The ceiling is medium, for the org's own reviewers too: a finding
+	// that rates medium may be accepted, one that rates higher may not.
+	high := ""
+	for _, f := range bundle.Findings {
+		if f.Severity == "high" || f.Severity == "critical" {
+			high = f.Id
+			break
+		}
+	}
+	if high == "" {
+		t.Fatalf("fixture produced no finding above medium: %+v", bundle.Findings)
+	}
+	setSeverity := func(id, severity string) {
+		t.Helper()
+		if _, err := env.st.Pool().Exec(context.Background(), `UPDATE findings SET severity = $2 WHERE id = $1`, id, severity); err != nil {
+			t.Fatal(err)
+		}
+	}
+	accept := func(id string) (int, string) {
+		res := env.do(owner, http.MethodPost, "/api/v1/findings/"+id+"/verdict",
+			map[string]any{"verdict": "dismissed_accepted_risk", "reason": "accepted-risk ceiling test"})
+		b, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		return res.StatusCode, string(b)
+	}
+	for _, severity := range []string{"critical", "high"} {
+		setSeverity(high, severity)
+		if code, body := accept(high); code != http.StatusForbidden || !strings.Contains(body, "medium and below") {
+			t.Fatalf("org admin accepted_risk on a %s finding: got %d %s, want 403 naming the ceiling", severity, code, body)
+		}
+	}
+	setSeverity(high, "medium")
+	if code, body := accept(high); code != http.StatusNoContent {
+		t.Fatalf("org admin accepted_risk on a medium finding: got %d %s, want 204", code, body)
+	}
+
+	// A personal namespace has no organization to defer to: platform staff
+	// accept risk on its findings, up to the same ceiling.
+	_, personalItem, personalStaff := setupReviewItem(t, env, "arp")
+	personal := env.itemFindings(t, personalStaff, personalItem)[0]
+	acceptAs := func(id string) int {
+		res := env.do(personalStaff, http.MethodPost, "/api/v1/findings/"+id+"/verdict",
+			map[string]any{"verdict": "dismissed_accepted_risk", "reason": "accepted-risk personal test"})
+		_ = res.Body.Close()
+		return res.StatusCode
+	}
+	setSeverity(personal, "high")
+	if code := acceptAs(personal); code != http.StatusForbidden {
+		t.Fatalf("staff accepted_risk on a personal agent's high finding: got %d, want 403", code)
+	}
+	setSeverity(personal, "medium")
+	if code := acceptAs(personal); code != http.StatusNoContent {
+		t.Fatalf("staff accepted_risk on a personal agent's medium finding: got %d, want 204", code)
+	}
 }

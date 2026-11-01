@@ -43,6 +43,14 @@ func (env *testEnv) uploadVersionCLIWithFields(ns, name, pat string, files map[s
 
 func (env *testEnv) uploadVersionCLIFull(ns, name, pat string, files map[string]string, headers map[string]string, claimedDigest string, fields map[string]string) (int, string) {
 	env.t.Helper()
+	status, body, _ := env.uploadVersionCLIResult(ns, name, pat, files, headers, claimedDigest, fields)
+	return status, body
+}
+
+// uploadVersionCLIResult is uploadVersionCLIFull with the response's headers
+// as well (the replay marker of an Idempotency-Key retry).
+func (env *testEnv) uploadVersionCLIResult(ns, name, pat string, files map[string]string, headers map[string]string, claimedDigest string, fields map[string]string) (int, string, http.Header) {
+	env.t.Helper()
 	ws := env.t.TempDir()
 	for path, content := range files {
 		full := filepath.Join(ws, path)
@@ -97,7 +105,7 @@ func (env *testEnv) uploadVersionCLIFull(ns, name, pat string, files map[string]
 	}
 	defer func() { _ = res.Body.Close() }()
 	rb, _ := io.ReadAll(res.Body)
-	return res.StatusCode, string(rb)
+	return res.StatusCode, string(rb), res.Header
 }
 
 func sleep10ms() { time.Sleep(10 * time.Millisecond) }

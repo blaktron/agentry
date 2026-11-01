@@ -22,4 +22,20 @@ func TestMCPSweepWiringReachesThePipeline(t *testing.T) {
 	if srv.MCPSweepReady() {
 		t.Fatal("\"none\" must leave the sweep without a database")
 	}
+
+	// Every spelling of "no database", in any case, leaves it without one;
+	// an unset address means the public database, not none.
+	ready := func(osvURL string) bool {
+		t.Helper()
+		newTestEnvCfg(t, func(c *config.Config) { c.Scan.OSVURL = osvURL }, func(s *api.Server) { srv = s })
+		return srv.MCPSweepReady()
+	}
+	for _, off := range []string{"off", "false", "disabled", "NONE", " Off "} {
+		if ready(off) {
+			t.Errorf("%q must leave the sweep without a database", off)
+		}
+	}
+	if !ready("") {
+		t.Error("an unset address must leave the sweep with the public database")
+	}
 }

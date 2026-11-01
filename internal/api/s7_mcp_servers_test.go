@@ -41,8 +41,10 @@ func mcpManifest(ns, name, version, pkg, pkgVersion string) string {
 // version, the registry remembers it, and the version ↔ server join is
 // recorded for the daily sweep.
 func TestS7DeclaredMCPServerVulnerability(t *testing.T) {
+	scored := 7.0
 	osv := &fakeOSV{vulns: map[string][]scan.OSVVulnerability{
 		"npm/minimist@1.2.5": {{ID: "GHSA-xvch-5gv4-984h", Aliases: []string{"CVE-2021-44906"}, Summary: "Prototype Pollution in minimist", Severity: "high", FixedIn: []string{"1.2.6"}}},
+		"npm/scored@2.0.0":   {{ID: "GHSA-gate-0000-0001", Summary: "high, but scored below the gate's line", Severity: "high", CVSSScore: &scored}},
 		"npm/left-pad@1.3.0": {{ID: "GHSA-crit-0000-0001", Summary: "made up, critical", Severity: "critical"}},
 	}}
 	env := newTestEnvCfg(t, func(c *config.Config) {}, func(s *api.Server) { s.SetMCPScanning(osv) })
@@ -105,6 +107,25 @@ func TestS7DeclaredMCPServerVulnerability(t *testing.T) {
 	if status != "vulnerable" || maxSev != "high" {
 		t.Fatalf("registry row: %s/%s", status, maxSev)
 	}
+	// The route serves that row, and a version no manifest has declared is
+	// a plain not found.
+	var scanned struct {
+		Status      string `json:"status"`
+		MaxSeverity string `json:"maxSeverity"`
+		Advisories  []struct {
+			Id           string `json:"id"`
+			Severity     string `json:"severity"`
+			GateSeverity string `json:"gateSeverity"`
+		} `json:"advisories"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/mcp-servers/scan?ecosystem=npm&package=minimist&version=1.2.5", nil, &scanned, http.StatusOK)
+	if scanned.Status != "vulnerable" || scanned.MaxSeverity != "high" || len(scanned.Advisories) != 1 ||
+		scanned.Advisories[0].Id != "GHSA-xvch-5gv4-984h" || scanned.Advisories[0].Severity != "high" || scanned.Advisories[0].GateSeverity != "high" {
+		t.Fatalf("the scan route serves %+v", scanned)
+	}
+	if code, slug, _ := problemOf(t, env.do(anonymous, http.MethodGet, "/api/v1/mcp-servers/scan?ecosystem=npm&package=minimist&version=9.9.9", nil)); code != http.StatusNotFound || slug != "not-found" {
+		t.Fatalf("the scan of a version no manifest declared: %d %s, want 404 not-found", code, slug)
+	}
 	var joined int
 	_ = env.st.Pool().QueryRow(context.Background(),
 		`SELECT count(*) FROM agent_version_mcp_servers m JOIN agent_versions v ON v.id = m.version_id WHERE v.version='1.0.0' AND m.package='minimist' AND m.version='1.2.5'`).Scan(&joined)
@@ -129,6 +150,41 @@ func TestS7DeclaredMCPServerVulnerability(t *testing.T) {
 	waitStatusLong(env, author, "uses-minimist", "1.1.0", "rejected")
 	if osv.calls != 2 {
 		t.Fatalf("osv calls after a new server = %d, want 2", osv.calls)
+	}
+
+	// The finding carries the rating the gate gives the advisory: a high
+	// one scored below 8.5 is medium there, and the advisory's own word
+	// and score stay in the finding's detail.
+	if status, body := env.uploadVersionCLI(author, "uses-minimist", pat, files("1.2.0", "scored", "2.0.0")); status != http.StatusAccepted {
+		t.Fatalf("submit 1.2.0: %d %s", status, body)
+	}
+	var gated struct {
+		Status string `json:"status"`
+	}
+	for i := 0; i < 2000; i++ {
+		env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+author+"/uses-minimist/versions/1.2.0", nil, &gated, http.StatusOK)
+		if gated.Status != "submitted" && gated.Status != "scanning" {
+			break
+		}
+		sleep10ms()
+	}
+	rep.Findings = nil
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+author+"/uses-minimist/versions/1.2.0/report", nil, &rep, http.StatusOK)
+	var seen bool
+	for _, f := range rep.Findings {
+		if f.Scanner != "S7/mcp-vuln-ghsa-gate-0000-0001" {
+			continue
+		}
+		seen = true
+		if f.Severity != "medium" || f.Detail["advisorySeverity"] != "high" || f.Detail["cvssScore"] != 7.0 {
+			t.Fatalf("the scored advisory's finding: severity %q, detail %+v, want medium with the advisory's own high and 7", f.Severity, f.Detail)
+		}
+	}
+	if !seen {
+		t.Fatalf("no finding for the scored advisory: %+v", rep.Findings)
+	}
+	if osv.calls != 3 {
+		t.Fatalf("osv calls after a third server = %d, want 3", osv.calls)
 	}
 }
 

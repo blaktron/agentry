@@ -1767,6 +1767,20 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/api/publish_gate_wiring_test.go",
+          "tests": [
+            "TestThePublicPublishGateFollowsTheConfiguration"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/api/rescan_report_test.go",
           "tests": [
             "TestRescanInFlightKeepsThePublishedVerdict"

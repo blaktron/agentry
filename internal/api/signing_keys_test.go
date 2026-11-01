@@ -194,6 +194,8 @@ func TestSigningKeysSkipAnUnreadableAdditionalKey(t *testing.T) {
 	env := newTestEnvCfg(t, func(c *config.Config) {
 		c.Signing.AdditionalKeys = []config.VerificationKey{
 			{KeyID: "missing", PublicKeyFile: filepath.Join(t.TempDir(), "nope.pem")},
+			// A key that names neither a PEM nor a file has nothing to publish.
+			{KeyID: "empty"},
 		}
 	})
 	keys := env.signingKeys(t)
@@ -202,5 +204,10 @@ func TestSigningKeysSkipAnUnreadableAdditionalKey(t *testing.T) {
 	}
 	if keys[0].KeyID == "missing" {
 		t.Error("the unreadable key was published anyway")
+	}
+	for _, k := range keys {
+		if k.KeyID == "empty" {
+			t.Error("a key with no PEM was published anyway")
+		}
 	}
 }
