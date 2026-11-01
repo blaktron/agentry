@@ -115,13 +115,15 @@ func ShippedPacksOf(manifestJSON []byte) []string {
 }
 
 // Contract is the capability contract a person consents to: the
-// declared capabilities, and the names of the packs the release ships,
-// so that a later release shipping one more asks again. It is what the
+// declared capabilities, the names of the packs the release ships and a
+// persistent release's subagents, so that a later release shipping one
+// more pack or naming one more subagent asks again. It is what the
 // registry records for a version and an install, and what a client
 // compares with DiffCapabilities.
 func (m *Manifest) Contract() Capabilities {
 	c := m.Capabilities
 	c.Knowledge = m.ShippedPacks()
+	c.Subagents = m.Subagents()
 	return c
 }
 

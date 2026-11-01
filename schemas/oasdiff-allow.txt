@@ -1,0 +1,7 @@
+POST /model-input/check added the new `persistent.clock` enum value to the `ungranted/items/grant` response property for the response status `200`
+POST /model-input/check added the new `persistent.memory` enum value to the `ungranted/items/grant` response property for the response status `200`
+POST /model-input/check added the new `persistent.selfConfigure` enum value to the `ungranted/items/grant` response property for the response status `200`
+POST /model-input/check added the new `persistent.meetings` enum value to the `ungranted/items/grant` response property for the response status `200`
+POST /model-input/check added the new `persistent.helper` enum value to the `ungranted/items/grant` response property for the response status `200`
+POST /model-input/check added the new `persistent.web` enum value to the `ungranted/items/grant` response property for the response status `200`
+POST /model-input/check added the new `persistent.review` enum value to the `ungranted/items/grant` response property for the response status `200`

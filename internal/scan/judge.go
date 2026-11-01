@@ -692,7 +692,25 @@ func (S5Judge) Run(sc stageContext, in *Input) StageResult {
 	if err != nil {
 		return StageResult{Scanner: "S5", Err: err} // fail closed
 	}
-	return StageResult{Scanner: "S5", Findings: verdictFindings(verdict), PromptHash: verdictPromptHash(sc.judge, verdict), JudgeUsage: verdict.Usage}
+	res := StageResult{Scanner: "S5", Findings: verdictFindings(verdict), PromptHash: verdictPromptHash(sc.judge, verdict), JudgeUsage: verdict.Usage}
+	// A shipped persona is asked the persona questions too, and the run
+	// records a hash over both sets.
+	persona := personaOf(in.ManifestJSON, in.Files)
+	if persona == nil {
+		return res
+	}
+	pj, ok := sc.judge.(PersonaJudge)
+	if !ok {
+		return StageResult{Scanner: "S5", Err: errNoPersonaJudge}
+	}
+	pv, err := pj.JudgePersona(sc.Context(), in.ManifestJSON, JudgeFile{Path: persona.Path, Content: string(persona.Content)})
+	if err != nil {
+		return StageResult{Scanner: "S5", Err: err} // fail closed
+	}
+	res.Findings = append(res.Findings, personaFindings(pv, persona.Path)...)
+	res.PromptHash = RubricHash(res.PromptHash, "persona="+pv.PromptHash)
+	pv.Usage.add(&res.JudgeUsage)
+	return res
 }
 
 // verdictPromptHash is the rubric version a verdict was reached under.

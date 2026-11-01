@@ -467,13 +467,20 @@ func (e DraftSetCheckFlagged) Valid() bool {
 
 // Defines values for DraftUngrantedToolGrant.
 const (
-	Browser         DraftUngrantedToolGrant = "browser"
-	Egress          DraftUngrantedToolGrant = "egress"
-	Exec            DraftUngrantedToolGrant = "exec"
-	FilesystemRead  DraftUngrantedToolGrant = "filesystem.read"
-	FilesystemWrite DraftUngrantedToolGrant = "filesystem.write"
-	McpServers      DraftUngrantedToolGrant = "mcpServers"
-	TargetHosts     DraftUngrantedToolGrant = "targetHosts"
+	Browser                 DraftUngrantedToolGrant = "browser"
+	Egress                  DraftUngrantedToolGrant = "egress"
+	Exec                    DraftUngrantedToolGrant = "exec"
+	FilesystemRead          DraftUngrantedToolGrant = "filesystem.read"
+	FilesystemWrite         DraftUngrantedToolGrant = "filesystem.write"
+	McpServers              DraftUngrantedToolGrant = "mcpServers"
+	PersistentClock         DraftUngrantedToolGrant = "persistent.clock"
+	PersistentHelper        DraftUngrantedToolGrant = "persistent.helper"
+	PersistentMeetings      DraftUngrantedToolGrant = "persistent.meetings"
+	PersistentMemory        DraftUngrantedToolGrant = "persistent.memory"
+	PersistentReview        DraftUngrantedToolGrant = "persistent.review"
+	PersistentSelfConfigure DraftUngrantedToolGrant = "persistent.selfConfigure"
+	PersistentWeb           DraftUngrantedToolGrant = "persistent.web"
+	TargetHosts             DraftUngrantedToolGrant = "targetHosts"
 )
 
 // Valid indicates whether the value is a known member of the DraftUngrantedToolGrant enum.
@@ -490,6 +497,20 @@ func (e DraftUngrantedToolGrant) Valid() bool {
 	case FilesystemWrite:
 		return true
 	case McpServers:
+		return true
+	case PersistentClock:
+		return true
+	case PersistentHelper:
+		return true
+	case PersistentMeetings:
+		return true
+	case PersistentMemory:
+		return true
+	case PersistentReview:
+		return true
+	case PersistentSelfConfigure:
+		return true
+	case PersistentWeb:
 		return true
 	case TargetHosts:
 		return true
@@ -1398,6 +1419,24 @@ func (e ShippedPackOriginKind) Valid() bool {
 	case ShippedPackOriginKindOrg:
 		return true
 	case ShippedPackOriginKindOwn:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubagentReachBrowser.
+const (
+	SubagentReachBrowserPublic SubagentReachBrowser = "public"
+	SubagentReachBrowserSite   SubagentReachBrowser = "site"
+)
+
+// Valid indicates whether the value is a known member of the SubagentReachBrowser enum.
+func (e SubagentReachBrowser) Valid() bool {
+	switch e {
+	case SubagentReachBrowserPublic:
+		return true
+	case SubagentReachBrowserSite:
 		return true
 	default:
 		return false
@@ -3376,6 +3415,9 @@ type ScanReport struct {
 	// ScanStatus The scan run's status; `skipped` for a version admitted without a scan, which has no run.
 	ScanStatus *string `json:"scanStatus,omitempty"`
 
+	// Subagents A persistent release's subagents (the manifest's `dependencies.agents`) as the scan resolved them against the registry, in the order the release declares them: the newest stable, published version each constraint admits that runs on its own and is not itself persistent, with what that version declares, or the reason none does. A subagent must be public, or, for a private release, private in the release's own organization; a private release the release may not use reads as one that is not in the registry. One that does not resolve is also a finding, `S7/subagent-unresolved`, which holds the version for a person. Absent for a release that declares none.
+	Subagents *[]SubagentScan `json:"subagents,omitempty"`
+
 	// Verdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
 	Verdict *ReportVerdict `json:"verdict,omitempty"`
 
@@ -3519,6 +3561,51 @@ type SshKey struct {
 	KeyType    string     `json:"keyType"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
 	Title      string     `json:"title"`
+}
+
+// SubagentReach What a subagent's resolved version declares.
+type SubagentReach struct {
+	// Browser Its browser's scope; absent for none.
+	Browser *SubagentReachBrowser `json:"browser,omitempty"`
+
+	// Egress The hosts it may reach, its own and its servers' (`*` for any).
+	Egress *[]string `json:"egress,omitempty"`
+
+	// Exec The commands it may run.
+	Exec *[]string `json:"exec,omitempty"`
+
+	// Secrets The secrets it asks for, its own and its servers'.
+	Secrets *[]string `json:"secrets,omitempty"`
+
+	// Servers Its declared MCP servers, by source id.
+	Servers *[]string `json:"servers,omitempty"`
+
+	// TargetHosts How many target hosts it asks for.
+	TargetHosts *int `json:"targetHosts,omitempty"`
+}
+
+// SubagentReachBrowser Its browser's scope; absent for none.
+type SubagentReachBrowser string
+
+// SubagentScan defines model for SubagentScan.
+type SubagentScan struct {
+	// Constraint The semver constraint the release declares.
+	Constraint string `json:"constraint"`
+
+	// Problem Why it does not resolve; absent when it does.
+	Problem *string `json:"problem,omitempty"`
+
+	// Reach What a subagent's resolved version declares.
+	Reach *SubagentReach `json:"reach,omitempty"`
+
+	// Ref The subagent's `namespace/name`.
+	Ref string `json:"ref"`
+
+	// Version The version it resolved to; absent when none did.
+	Version *string `json:"version,omitempty"`
+
+	// Why The release's reason for it, shown when a person agrees.
+	Why *string `json:"why,omitempty"`
 }
 
 // TagPage defines model for TagPage.

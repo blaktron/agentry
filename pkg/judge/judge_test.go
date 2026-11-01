@@ -609,7 +609,7 @@ func TestScoreFromProbability(t *testing.T) {
 // ids are distinct, a caller that changes its slice changes nobody else's,
 // and no text is a template anything could be rendered into.
 func TestTheQuestionSetsAreConstants(t *testing.T) {
-	for name, set := range map[string]func() []Question{"rubric": RubricQuestions, "model input": ModelInputQuestions, "draft": DraftQuestions} {
+	for name, set := range map[string]func() []Question{"rubric": RubricQuestions, "model input": ModelInputQuestions, "draft": DraftQuestions, "persona": PersonaQuestions} {
 		a, b := set(), set()
 		a[0].Text = "changed by a caller"
 		if b[0].Text == "changed by a caller" || set()[0].Text == "changed by a caller" {

@@ -125,6 +125,10 @@ type Resume struct {
 	Findings []Finding
 	// Knowledge is a skipped SK's record of what it read.
 	Knowledge []ShippedPackScan
+	// Subagents is a skipped S7's record of the subagents, which the report
+	// then carries in place of a new resolution, so the report and the
+	// findings S7 wrote say the same.
+	Subagents []Subagent
 }
 
 func (r Resume) skips(id string) bool {
@@ -153,6 +157,10 @@ type Report struct {
 	// (SK); absent for a release that ships none, so such a report's
 	// digest is what it always was.
 	Knowledge []ShippedPackScan `json:"knowledge,omitempty"`
+	// Subagents are a persistent release's subagents as the scan resolved
+	// them, each with its version and reach or the reason it does not
+	// resolve; absent for a release that declares none.
+	Subagents []Subagent `json:"subagents,omitempty"`
 }
 
 // RunResult bundles the report with its digest and the effective judge model.
@@ -193,6 +201,9 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 
 	sc := stageContext{ctx: ctx, bundle: o.bundle, judge: o.judge, log: o.log, osv: o.osv, mcpCache: o.mcpCache, registries: o.registries}
 	in := &p.Input
+	if p.Resume.skips("S7") {
+		in.Subagents = p.Resume.Subagents
+	}
 
 	// Stages already answered (a previous attempt, or the cache) come in
 	// first so the report, S9's escalation input and the gate all see the
@@ -329,6 +340,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		JudgeModel:    judgeModelOf(o.judge),
 		Decision:      decision,
 		Knowledge:     knowledge,
+		Subagents:     in.Subagents,
 	}
 	digest, digestErr := reportDigest(report)
 	out := RunResult{

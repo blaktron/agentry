@@ -546,9 +546,11 @@ func (p *Pipeline) sweepBatch() int32 {
 // capability no earlier run had read. S6's ungranted tools count at medium
 // too: they say a run of the version lacks a tool its instruction calls
 // for, which holds a submission for a person but is no reason to pull a
-// version people already run.
+// version people already run. So does a subagent that no longer resolves:
+// its quarantine or withdrawal is the subagent's, and the parent's own
+// verdict stays what its own contents earned.
 func rescanSeverity(f Finding) Severity {
-	if f.Severity == SevHigh && (reratedToHigh(f) || f.Scanner == scannerUngrantedTool) {
+	if f.Severity == SevHigh && (reratedToHigh(f) || f.Scanner == scannerUngrantedTool || f.Scanner == scannerSubagentUnresolved) {
 		return SevMedium
 	}
 	return f.Severity
@@ -556,15 +558,15 @@ func rescanSeverity(f Finding) Severity {
 
 // reratedToHigh reports a finding that is high only on probable evidence: S6's
 // undeclared environment read, and AI Review's injection, undeclared-capability
-// and user-deception axes at score 2, in a release's own scan or a shipped
-// pack's.
+// and user-deception axes and its persona questions at score 2, in a release's
+// own scan or a shipped pack's.
 func reratedToHigh(f Finding) bool {
 	if f.Scanner == scannerUndeclaredEnv {
 		return true
 	}
 	cat := JudgeCategory(f.Scanner[strings.LastIndex(f.Scanner, "/")+1:])
 	judged := strings.HasPrefix(f.Scanner, "S5/") || strings.HasPrefix(f.Scanner, KnowledgeStageID+"/S5/")
-	if !judged || !highFromProbable(cat) {
+	if !judged || (!highFromProbable(cat) && !isPersonaCategory(cat)) {
 		return false
 	}
 	switch s := f.Detail["score"].(type) {

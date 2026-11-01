@@ -3274,6 +3274,18 @@
           ]
         },
         {
+          "path": "internal/scan/persistent_test.go",
+          "tests": [
+            "TestAPersistentReleaseDeclaresAGateTokenPerKey",
+            "TestS6ReadsTheInstructionAndThePersonaAgainstThePersistentBlock",
+            "TestS9CountsANewPersistentKeyAndANewOrChangedSubagent"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/pipeline_more_test.go",
           "tests": [
             "TestPrivateAgentsAreScannedToo",
@@ -3467,6 +3479,43 @@
           "dependencyHints": [
             "source/file contract"
           ]
+        },
+        {
+          "path": "internal/scan/subagent_advisories_db_test.go",
+          "tests": [
+            "TestASubagentLeavingPublishedAdvisesItsParentsHolders"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/subagents_db_test.go",
+          "tests": [
+            "TestPipelineResolvesAPersistentReleasesSubagents",
+            "TestAPrivateSubagentResolvesInItsOwnOrganization"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
+          "path": "internal/scan/subagents_test.go",
+          "tests": [
+            "TestASubagentsReachIsWhatItsVersionDeclares",
+            "TestAnUnresolvedSubagentHoldsTheVersionAndNeverPullsIt",
+            "TestSubagentsThatDoNotReadDoNotResolve"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         },
         {
           "path": "internal/scan/testdb_test.go",
@@ -3694,6 +3743,18 @@
             "HTTP transport",
             "source/file contract"
           ]
+        },
+        {
+          "path": "internal/scan/judge_persona_test.go",
+          "tests": [
+            "TestS5AsksAPersonaThePersonaQuestions",
+            "TestS5FailsClosedOnAPersonaItCannotReview",
+            "TestAPersonaFindingHoldsAndARescanWeighsItLikeTheProbableOnes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
         },
         {
           "path": "internal/scan/judge_test.go",
@@ -4765,6 +4826,21 @@
           ]
         },
         {
+          "path": "pkg/judge/persona_bench_test.go",
+          "tests": [
+            "TestThePersonaBenchCorpusIsIndexed",
+            "TestPersonaBench",
+            "TestThePersonaHashPinsItsWording"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract",
+            "explicit skip"
+          ]
+        },
+        {
           "path": "pkg/judge/questions_test.go",
           "tests": [
             "TestRubricSeverity"
@@ -5047,6 +5123,27 @@
             "TestSecretIntakeAgreesWithItsSecret",
             "TestAnInstalledReleaseKeepsRunning",
             "TestV2SchemaOptionalSecretsShape"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/persistent_test.go",
+          "tests": [
+            "TestAPersistentReleaseParsesAndValidates",
+            "TestEveryPersistentKeyHasWords",
+            "TestV16RefusesWhatTheBlockCannotMean",
+            "TestV16ReadsTheFoldersOnlyWithTheirKeys",
+            "TestV17RefusesWhatThePersonaCannotBe",
+            "TestV18MakesAPersistentReleasesDependenciesSubagents",
+            "TestASubagentsConstraintAllowsVersions",
+            "TestThePersistentBlockAndSubagentsAreInTheContract",
+            "TestDiffCapabilitiesPersistent",
+            "TestV2SchemaPersistentShape"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5398,7 +5495,9 @@
             "TestADeclaredServerIsMatchedByItsName",
             "TestTheTableNamesEachRunnerToolOnce",
             "TestALargeInstructionIsReadInLinearTime",
-            "TestTheAnswerIsBounded"
+            "TestTheAnswerIsBounded",
+            "TestThePersistentToolsNeedTheirKeys",
+            "TestCoderHoldsTheToolchainsGrants"
           ],
           "fuzz": [],
           "benchmarks": [],

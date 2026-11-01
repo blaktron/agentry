@@ -95,3 +95,13 @@ ON CONFLICT (agent_id, version_id, day) DO UPDATE SET installs = download_stats.
 
 -- name: SumDownloads :one
 SELECT coalesce(sum(installs), 0)::bigint FROM download_stats WHERE agent_id = $1;
+
+-- name: ListSubagentDependents :many
+-- The published versions of persistent releases whose manifest names the
+-- given namespace/name among its subagents (dependencies.agents), for the
+-- advisory their holders get when that release leaves published.
+SELECT v.id, v.agent_id, v.version, v.manifest FROM agent_versions v
+WHERE v.status = 'published'
+  AND v.manifest->'modes' ? 'persistent'
+  AND v.manifest->'dependencies'->'agents' @> jsonb_build_array(jsonb_build_object('ref', sqlc.arg(ref)::text))
+ORDER BY v.agent_id, v.created_at;

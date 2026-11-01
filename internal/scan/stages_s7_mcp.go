@@ -246,7 +246,8 @@ func remoteServerFindings(remote []manifest.MCPServer) []Finding {
 
 // Run implements Stage.
 func (s S7MCPServers) Run(sc stageContext, in *Input) StageResult {
-	res := StageResult{Scanner: "S7", NoCache: true}
+	res := StageResult{Scanner: "S7", NoCache: true, Subagents: in.Subagents}
+	res.Findings = subagentFindings(in.Subagents)
 	servers, noData, reasons, remote := mcpServerEntries(in.ManifestJSON)
 	res.Findings = append(res.Findings, remoteServerFindings(remote)...)
 	if len(servers) == 0 && len(noData) == 0 {

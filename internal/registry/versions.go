@@ -344,6 +344,9 @@ func (s *Service) TransitionInTx(ctx context.Context, q *storegen.Queries, versi
 // EmitTransition fans a committed transition out to the event sink.
 // Best-effort: the sink logs its own errors and never affects the transition.
 func (s *Service) EmitTransition(ctx context.Context, res TransitionResult) {
+	if s.unpublished != nil && res.From == StatusPublished && res.To != StatusPublished {
+		s.unpublished(ctx, res)
+	}
 	if s.eventSink == nil || res.Event == "" {
 		return
 	}

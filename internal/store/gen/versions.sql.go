@@ -285,6 +285,49 @@ func (q *Queries) ListResolvableVersions(ctx context.Context, agentID uuid.UUID)
 	return items, nil
 }
 
+const listSubagentDependents = `-- name: ListSubagentDependents :many
+SELECT v.id, v.agent_id, v.version, v.manifest FROM agent_versions v
+WHERE v.status = 'published'
+  AND v.manifest->'modes' ? 'persistent'
+  AND v.manifest->'dependencies'->'agents' @> jsonb_build_array(jsonb_build_object('ref', $1::text))
+ORDER BY v.agent_id, v.created_at
+`
+
+type ListSubagentDependentsRow struct {
+	ID       uuid.UUID `json:"id"`
+	AgentID  uuid.UUID `json:"agent_id"`
+	Version  string    `json:"version"`
+	Manifest []byte    `json:"manifest"`
+}
+
+// The published versions of persistent releases whose manifest names the
+// given namespace/name among its subagents (dependencies.agents), for the
+// advisory their holders get when that release leaves published.
+func (q *Queries) ListSubagentDependents(ctx context.Context, ref string) ([]ListSubagentDependentsRow, error) {
+	rows, err := q.db.Query(ctx, listSubagentDependents, ref)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSubagentDependentsRow
+	for rows.Next() {
+		var i ListSubagentDependentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.Version,
+			&i.Manifest,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVersions = `-- name: ListVersions :many
 SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline, knowledge_shipping FROM agent_versions WHERE agent_id = $1 ORDER BY created_at DESC
 `

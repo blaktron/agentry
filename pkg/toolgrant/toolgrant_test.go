@@ -327,3 +327,71 @@ func TestTheAnswerIsBounded(t *testing.T) {
 		t.Fatalf("a name past the bound: %v", tools(got))
 	}
 }
+
+// A persistent agent's own tools are each given by one key of
+// capabilities.persistent: in a persistent release, an instruction that
+// calls for one without its key names the key's line, and declaring the
+// key clears it. In any other release the names are not read as tools.
+func TestThePersistentToolsNeedTheirKeys(t *testing.T) {
+	release := func(p *manifest.Persistent, modes ...manifest.Mode) *manifest.Manifest {
+		return &manifest.Manifest{SchemaVersion: "2", Modes: modes, Capabilities: manifest.Capabilities{Persistent: p}}
+	}
+	for g, n := range map[toolgrant.Grant]int{
+		toolgrant.GrantClock: 4, toolgrant.GrantMemory: 1, toolgrant.GrantSelfConfigure: 1,
+		toolgrant.GrantMeetings: 3, toolgrant.GrantHelper: 12, toolgrant.GrantWeb: 2, toolgrant.GrantReview: 1,
+	} {
+		tools := toolgrant.ToolsOf(g)
+		if len(tools) != n {
+			t.Errorf("%s gives %v, want %d tools", g, tools, n)
+		}
+		key, ok := strings.CutPrefix(g.Path(), "capabilities.persistent.")
+		if !ok {
+			t.Fatalf("%s's path is %q", g, g.Path())
+		}
+		for _, tool := range tools {
+			text := "Use the `" + tool + "` tool when the person asks.\n"
+			got := toolgrant.CheckRelease(release(nil, manifest.ModePersistent), text)
+			if len(got) != 1 || got[0].Grant != g || got[0].Path != g.Path() {
+				t.Errorf("%s without %s: %+v", tool, key, got)
+			}
+			if got := toolgrant.CheckRelease(release(nil, manifest.ModeAutonomous), text); len(got) != 0 {
+				t.Errorf("%s in an autonomous release is read as a tool: %+v", tool, got)
+			}
+			p := &manifest.Persistent{}
+			switch key {
+			case "clock":
+				p.Clock = true
+			case "memory":
+				p.Memory = true
+			case "selfConfigure":
+				p.SelfConfigure = true
+			case "meetings":
+				p.Meetings = true
+			case "helper":
+				p.Helper = true
+			case "web":
+				p.Web = true
+			case "review":
+				p.Review = true
+			}
+			if got := toolgrant.CheckRelease(release(p, manifest.ModePersistent), text); len(got) != 0 {
+				t.Errorf("%s with %s declared: %+v", tool, key, got)
+			}
+		}
+	}
+}
+
+// The coding toolchain is its own grant of commands, the web, a browser
+// and a host: a persistent release that declares coder is not held for
+// calling them without their lines.
+func TestCoderHoldsTheToolchainsGrants(t *testing.T) {
+	text := "Run the build with `run_command`, read the docs with `fetch`, check the page with browser_snapshot and deploy with host_run.\n"
+	m := &manifest.Manifest{SchemaVersion: "2", Modes: []manifest.Mode{manifest.ModePersistent}}
+	if got := toolgrant.CheckRelease(m, text); len(got) != 4 {
+		t.Fatalf("without coder: %+v", got)
+	}
+	m.Capabilities.Persistent = &manifest.Persistent{Coder: true}
+	if got := toolgrant.CheckRelease(m, text); len(got) != 0 {
+		t.Fatalf("with coder: %+v", got)
+	}
+}
