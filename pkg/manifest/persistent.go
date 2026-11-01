@@ -235,6 +235,18 @@ func validatePersistent(s *issues, m *Manifest) {
 		seen[name] = true
 	}
 
+	if p.Coder {
+		var beside []string
+		for _, k := range coderAloneBeside {
+			if p.Declares(k) {
+				beside = append(beside, k)
+			}
+		}
+		if len(beside) > 0 {
+			s.errf("V16", "capabilities.persistent", "coder is never declared beside %s: the coding toolchain runs any program the agent asks for, on open egress, in the container that would hold the keys and feed addresses those keys put there", strings.Join(beside, " or "))
+		}
+	}
+
 	closedNames(s, "capabilities.persistent.mail", "mail provider", p.Mail, MailProviderNames)
 	closedNames(s, "capabilities.persistent.imageServers", "image server", p.ImageServers, ImageServerNames)
 	for i, provider := range p.Mail {
@@ -243,6 +255,12 @@ func validatePersistent(s *issues, m *Manifest) {
 		}
 	}
 }
+
+// coderAloneBeside are the keys whose grants put the person's keys or feed
+// addresses in the agent's tools container (the web tools' search and scan
+// keys, the review key, the calendar feeds' addresses). They sit beside one
+// another, and never beside coder, whose programs run in that container.
+var coderAloneBeside = []string{"web", "review", "calendars"}
 
 // closedNames checks that every entry of names is one of known, once.
 func closedNames(s *issues, at, what string, names, known []string) {
