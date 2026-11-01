@@ -8,6 +8,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/queue"
 )
 
@@ -51,9 +54,48 @@ func TestBlockedAgentDownloadReturns410(t *testing.T) {
 
 	dl := "/api/v1/agents/" + author + "/banned/versions/1.0.0/download"
 	res := env.do(anonymous, http.MethodGet, dl, nil)
+	archive, _ := io.ReadAll(res.Body)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("baseline download: got %d want 200", res.StatusCode)
+	}
+	// What is served is the archive whose digest the version and the
+	// resolution name, and the response says so to caches.
+	var published struct {
+		ArchiveDigest string `json:"archiveDigest"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+author+"/banned/versions/1.0.0", nil, &published, http.StatusOK)
+	sum := sha256.Sum256(archive)
+	if got := "sha256:" + hex.EncodeToString(sum[:]); got != published.ArchiveDigest {
+		t.Fatalf("the served archive hashes to %s, the version names %s", got, published.ArchiveDigest)
+	}
+	if res.Header.Get("ETag") != `"`+published.ArchiveDigest+`"` || res.Header.Get("Content-Type") != "application/zstd" ||
+		res.Header.Get("Cache-Control") != "public, max-age=31536000, immutable" {
+		t.Fatalf("download headers: ETag %q Content-Type %q Cache-Control %q", res.Header.Get("ETag"), res.Header.Get("Content-Type"), res.Header.Get("Cache-Control"))
+	}
+	var resolved struct {
+		Digest     string `json:"digest"`
+		ArchiveUrl string `json:"archiveUrl"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/resolve?ref="+author+"/banned", nil, &resolved, http.StatusOK)
+	if resolved.Digest != published.ArchiveDigest || !strings.HasSuffix(resolved.ArchiveUrl, dl) {
+		t.Fatalf("resolve names digest %q at %q, want %s at …%s", resolved.Digest, resolved.ArchiveUrl, published.ArchiveDigest, dl)
+	}
+
+	// The agent's own block is enough to stop the download, before any of its
+	// versions has been walked to blocked.
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE agents SET quarantine_state = 'blocked' WHERE id = (SELECT a.id FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = 'banned')`, author); err != nil {
+		t.Fatal(err)
+	}
+	res = env.do(anonymous, http.MethodGet, dl, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusGone {
+		t.Fatalf("download of an agent blocked before its versions were: got %d want 410", res.StatusCode)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE agents SET quarantine_state = 'none' WHERE id = (SELECT a.id FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = 'banned')`, author); err != nil {
+		t.Fatal(err)
 	}
 
 	// Trust & safety blocks it.
@@ -74,12 +116,23 @@ func TestBlockedAgentDownloadReturns410(t *testing.T) {
 	if res.StatusCode != http.StatusGone {
 		t.Fatalf("blocked download: got %d want 410", res.StatusCode)
 	}
+	// A blocked agent takes no new version either, and records none.
+	upStatus, upBody := env.uploadVersionCLI(author, "banned", pat, skillFiles(author, "banned", "1.0.1", nil))
+	if upStatus != http.StatusForbidden || !strings.Contains(upBody, "blocked") {
+		t.Fatalf("submission to a blocked agent: got %d %s, want 403 naming the block", upStatus, upBody)
+	}
+	if n := countVersions(env, author, "banned"); n != 1 {
+		t.Fatalf("a blocked agent holds %d versions, want the 1 it had", n)
+	}
 	// Resolution must refuse it too — a blocked package that still resolves is
 	// a blocked package that still installs.
 	res = env.do(anonymous, http.MethodGet, "/api/v1/resolve?ref="+author+"/banned", nil)
 	_ = res.Body.Close()
 	if res.StatusCode == http.StatusOK {
 		t.Fatal("resolve still returns a blocked agent")
+	}
+	if res.StatusCode != http.StatusGone {
+		t.Fatalf("resolve of a blocked agent: got %d want 410", res.StatusCode)
 	}
 
 	// Reinstate asks for a fresh scan (only platform staff set/unset) and
@@ -149,8 +202,9 @@ func TestUploadRejectsOversizedBodyAndRatioBomb(t *testing.T) {
 	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read", "repo:read")
 
 	t.Run("oversized body", func(t *testing.T) {
-		// 16 MB of incompressible noise, past the 12 MB body cap. It must be
-		// refused by the reader, not spooled and then rejected.
+		// 16 MiB of incompressible noise: with the multipart frame around it,
+		// past the 16 MiB body cap. It must be refused by the reader, not
+		// spooled and then rejected.
 		big := make([]byte, 16<<20)
 		for i := range big {
 			big[i] = byte(i * 31)
@@ -165,6 +219,75 @@ func TestUploadRejectsOversizedBodyAndRatioBomb(t *testing.T) {
 		}
 	})
 
+	t.Run("body cap, to the byte", func(t *testing.T) {
+		// The body is bounded at maxUploadBytes (16 MiB): a body of exactly
+		// that size is read in full and fails on its content, one byte more
+		// is refused for its size before anything is read.
+		const cap = 16 << 20
+		atCap, overCap := noiseUpload(t, cap), noiseUpload(t, cap+1)
+		status, body := env.postRaw(author, "uploads", pat, atCap.contentType, atCap.body)
+		if status != http.StatusUnprocessableEntity || !strings.Contains(body, "The extractor rejected this archive") {
+			t.Fatalf("a body of %d bytes: got %d %.200s, want the extractor's 422", len(atCap.body), status, body)
+		}
+		status, body = env.postRaw(author, "uploads", pat, overCap.contentType, overCap.body)
+		if status != http.StatusRequestEntityTooLarge || !strings.Contains(body, "upload-too-large") {
+			t.Fatalf("a body of %d bytes: got %d %.200s, want 413 upload-too-large", len(overCap.body), status, body)
+		}
+	})
+
+	t.Run("refusals before anything is stored", func(t *testing.T) {
+		pathV := "/api/v1/agents/" + author + "/uploads/versions"
+		for _, tc := range []struct {
+			name        string
+			contentType string
+			body        string
+			code        int
+			slug        string
+		}{
+			{"no archive part", "multipart/form-data; boundary=b", "--b\r\nContent-Disposition: form-data; name=\"digest\"\r\n\r\nsha256:00\r\n--b--\r\n", http.StatusUnprocessableEntity, "validation"},
+			{"a tag submission without a tag", "application/json", "{}", http.StatusUnprocessableEntity, "validation"},
+			{"a body that is neither", "text/plain", "hello", http.StatusBadRequest, "bad-request"},
+		} {
+			req, _ := http.NewRequest(http.MethodPost, env.srv.URL+pathV, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", tc.contentType)
+			req.Header.Set("Authorization", "Bearer "+pat)
+			res, err := env.srv.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			code, slug, _ := problemOf(t, res)
+			if code != tc.code || slug != tc.slug {
+				t.Errorf("%s: got %d %s, want %d %s", tc.name, code, slug, tc.code, tc.slug)
+			}
+		}
+		// An account with no confirmed address publishes nothing. Its address is
+		// a placeholder, so nothing locks it read-only: the publish itself
+		// refuses it.
+		synth := env.register("upl-syn")
+		env.verifyEmail(synth)
+		synthSess := env.login(synth)
+		env.doJSON(synthSess, http.MethodPost, "/api/v1/agents",
+			map[string]any{"namespace": synth, "name": "unconfirmed", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+		_, synthPAT := env.mintPAT(synthSess, "pub", "agent:publish", "agent:read")
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`UPDATE users SET email = $2, email_verified_at = NULL WHERE id = (SELECT id FROM handles WHERE handle = $1)`,
+			synth, synth+"@oidc"+auth.SyntheticAddressSuffix); err != nil {
+			t.Fatal(err)
+		}
+		if status, body := env.uploadVersionCLI(synth, "unconfirmed", synthPAT, skillFiles(synth, "unconfirmed", "1.0.0", nil)); status != http.StatusForbidden || !strings.Contains(body, "Verify this account") {
+			t.Errorf("a submission from an account with no confirmed address: got %d %.200s, want 403 asking it to verify", status, body)
+		}
+		// The registry packs the files itself: a client digest that
+		// disagrees is refused, naming the cause.
+		status, body := env.uploadVersionCLIWithDigest(author, "uploads", pat, skillFiles(author, "uploads", "1.0.0", nil), "sha256:"+strings.Repeat("0", 64))
+		if status != http.StatusUnprocessableEntity || !strings.Contains(body, "packed this archive differently") {
+			t.Errorf("a claimed digest that disagrees: got %d %.200s, want 422 saying the client packed it differently", status, body)
+		}
+		if n := countVersions(env, author, "uploads"); n != 0 {
+			t.Errorf("refused uploads stored %d versions", n)
+		}
+	})
+
 	t.Run("compression ratio bomb", func(t *testing.T) {
 		bomb := ratioBomb(t)
 		status, body := env.postArchive(author, "uploads", pat, bomb)
@@ -175,6 +298,56 @@ func TestUploadRejectsOversizedBodyAndRatioBomb(t *testing.T) {
 			t.Fatalf("ratio bomb: got %d %s", status, body)
 		}
 	})
+}
+
+// noiseUploadBody is a multipart upload body and its content type.
+type noiseUploadBody struct {
+	contentType string
+	body        []byte
+}
+
+// noiseUpload builds a multipart upload whose whole body is total bytes: an
+// archive part of noise that is not an archive, padded to the size.
+func noiseUpload(t *testing.T, total int) noiseUploadBody {
+	t.Helper()
+	build := func(n int) noiseUploadBody {
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		part, err := mw.CreateFormFile("archive", "a.tar.zst")
+		if err != nil {
+			t.Fatal(err)
+		}
+		noise := make([]byte, n)
+		for i := range noise {
+			noise[i] = byte(i * 31)
+		}
+		_, _ = part.Write(noise)
+		_ = mw.Close()
+		return noiseUploadBody{contentType: mw.FormDataContentType(), body: body.Bytes()}
+	}
+	// The frame around the archive part has a fixed size for a fixed
+	// boundary length, so one empty build measures it.
+	frame := len(build(0).body)
+	out := build(total - frame)
+	if len(out.body) != total {
+		t.Fatalf("built a body of %d bytes, want %d", len(out.body), total)
+	}
+	return out
+}
+
+// postRaw posts a prepared upload body to the version door.
+func (env *testEnv) postRaw(ns, name, pat, contentType string, body []byte) (int, string) {
+	env.t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, env.srv.URL+"/api/v1/agents/"+ns+"/"+name+"/versions", bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+pat)
+	res, err := env.srv.Client().Do(req)
+	if err != nil {
+		env.t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	rb, _ := io.ReadAll(res.Body)
+	return res.StatusCode, string(rb)
 }
 
 // ratioBomb builds a tar.zst whose declared entry expands far past the
@@ -245,6 +418,7 @@ func TestReportCarriesScanDateAndDismissalRationale(t *testing.T) {
 	reportPath := "/api/v1/agents/" + author + "/reported/versions/1.0.0/report"
 	var rep struct {
 		FinishedAt *string `json:"finishedAt"`
+		Verdict    *string `json:"verdict"`
 		Findings   []struct {
 			Id            string  `json:"id"`
 			Verdict       string  `json:"verdict"`
@@ -257,6 +431,11 @@ func TestReportCarriesScanDateAndDismissalRationale(t *testing.T) {
 	}
 	if len(rep.Findings) == 0 {
 		t.Fatal("no findings on a version that gated to review")
+	}
+	// A run that found things is a scan that finished: the report calls it
+	// scanned and lets its findings say the rest.
+	if rep.Verdict == nil || *rep.Verdict != "scanned" {
+		t.Fatalf("report verdict = %v, want scanned", rep.Verdict)
 	}
 
 	// A reviewer dismisses one finding with a rationale.

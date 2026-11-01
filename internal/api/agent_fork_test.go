@@ -10,6 +10,7 @@ package api_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/entitlements"
 	"github.com/blaktron/agentry/internal/gitsrv"
@@ -33,11 +35,16 @@ import (
 type forkCapture struct {
 	mu   sync.Mutex
 	args []registry.CopyForkArgs
+	// fail, when set, is what the hand-off answers in place of queueing.
+	fail error
 }
 
 func (f *forkCapture) CopyFork(_ context.Context, a registry.CopyForkArgs) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.fail != nil {
+		return f.fail
+	}
 	f.args = append(f.args, a)
 	return nil
 }
@@ -82,19 +89,33 @@ func newForkEnv(t *testing.T, opts ...func(*api.Server)) *forkEnv {
 // (synchronous, in tests) pipeline taking the first version.
 func (env *forkEnv) runCopies() {
 	env.t.Helper()
-	ctx := context.Background()
 	for _, a := range env.copies.take() {
-		p, ok, err := env.srvObj.PrincipalForUser(ctx, a.UserID)
-		if err != nil {
-			env.t.Fatal(err)
-		}
-		if !ok {
-			p = nil
-		}
-		if err := env.srvObj.Reg().CopyFork(ctx, a, p, nil); err != nil {
-			env.t.Fatalf("copy fork %s: %v", a.AgentID, err)
-		}
+		env.runCopy(a, nil)
 	}
+}
+
+// runCopy runs one copy the way the job's handler does, handing the fork's
+// first version to pipeline (the registry's own when nil).
+func (env *forkEnv) runCopy(a registry.CopyForkArgs, pipeline registry.Pipeline) {
+	env.t.Helper()
+	ctx := context.Background()
+	p, ok, err := env.srvObj.PrincipalForUser(ctx, a.UserID)
+	if err != nil {
+		env.t.Fatal(err)
+	}
+	if !ok {
+		p = nil
+	}
+	if err := env.srvObj.Reg().CopyFork(ctx, a, p, pipeline); err != nil {
+		env.t.Fatalf("copy fork %s: %v", a.AgentID, err)
+	}
+}
+
+// failingPipeline is a pipeline whose hand-off of a recorded version fails.
+type failingPipeline struct{}
+
+func (failingPipeline) VersionSubmitted(context.Context, uuid.UUID) error {
+	return errors.New("the queue is down")
 }
 
 type forkAgentOut struct {
@@ -214,7 +235,11 @@ func TestForkIsAPrivateCopyWhoseFirstVersionGoesThroughThePipeline(t *testing.T)
 		t.Fatalf("the fork has versions before its copy ran: %v", versions)
 	}
 
-	env.runCopies()
+	queued := env.copies.take()
+	if len(queued) != 1 || queued[0].AgentID != f.ID {
+		t.Fatalf("the request queued %+v, want one copy of the fork", queued)
+	}
+	env.runCopy(queued[0], nil)
 	env.wantPublished(bob, "summarize")
 	var ready forkAgentOut
 	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/summarize", nil, &ready, http.StatusOK)
@@ -240,6 +265,43 @@ func TestForkIsAPrivateCopyWhoseFirstVersionGoesThroughThePipeline(t *testing.T)
 	if main, tag := gitIn(t, dir, "rev-parse", "main"), gitIn(t, dir, "rev-parse", "v1.0.0^{commit}"); main != tag {
 		t.Fatalf("main %s and v1.0.0 %s differ", main, tag)
 	}
+	// It is the forker's commit, and says what it renamed.
+	if who := gitIn(t, dir, "log", "-1", "--format=%an <%ae>", "v1.0.0"); who != bob+" <"+bob+"@users.noreply.agentry>" {
+		t.Fatalf("the fork's commit is by %q", who)
+	}
+	if body := gitIn(t, dir, "log", "-1", "--format=%b", "v1.0.0"); body != "Renamed to "+bob+"/summarize." {
+		t.Fatalf("the fork's commit body reads %q", body)
+	}
+	// It remembers who forked.
+	var forkedBy string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT h.handle FROM agents a JOIN handles h ON h.id = a.forked_by WHERE a.id = $1`, f.ID).Scan(&forkedBy); err != nil || forkedBy != bob {
+		t.Fatalf("the fork was made by %q (%v), want %s", forkedBy, err, bob)
+	}
+	// The record of the fork names where it went and what it came from.
+	var path, from string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT detail->>'path', detail->>'forkedFrom' FROM audit_events WHERE action = 'agent.fork' AND target_id = $1`, f.ID).Scan(&path, &from); err != nil {
+		t.Fatal(err)
+	}
+	if path != bob+"/summarize" || from != alice+"/summarize@1.0.0" {
+		t.Fatalf("the fork's audit event reads %q from %q", path, from)
+	}
+	// A copy that runs again once the version is recorded makes nothing
+	// new: the fork is ready, with the commit it had.
+	head := gitIn(t, dir, "rev-parse", "main")
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE agents SET fork_state = 'copying' WHERE id = $1`, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	env.runCopy(queued[0], nil)
+	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/summarize", nil, &ready, http.StatusOK)
+	if ready.ForkState == nil || *ready.ForkState != "ready" {
+		t.Fatalf("after the copy ran again: forkState %v detail %v, want ready", ready.ForkState, ready.ForkDetail)
+	}
+	if again := gitIn(t, dir, "rev-parse", "main"); again != head {
+		t.Fatalf("a repeated copy rewrote the fork's repository: main %s, was %s", again, head)
+	}
+	env.wantPublished(bob, "summarize")
 
 	// Private stays invisible: a stranger gets a missing
 	// name's 404, and the fork is in no public listing.
@@ -285,6 +347,16 @@ func TestForkIsAPrivateCopyWhoseFirstVersionGoesThroughThePipeline(t *testing.T)
 	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/summarize", nil, &ready, http.StatusOK)
 	if ready.ForkedFrom == nil || ready.ForkedFrom.Available {
 		t.Fatalf("after the origin's retire, forkedFrom = %+v, want it not available", ready.ForkedFrom)
+	}
+
+	// The second fork's copy had not run when the origin's version was
+	// withdrawn: it fails in words and takes nothing from the origin.
+	env.doJSON(aliceS, http.MethodPost, "/api/v1/agents/"+alice+"/summarize/versions/1.0.0/yank", map[string]any{"reason": "withdrawn"}, nil, http.StatusNoContent)
+	env.runCopies()
+	var second forkAgentOut
+	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/summarize-2", nil, &second, http.StatusOK)
+	if second.ForkState == nil || *second.ForkState != "failed" || second.ForkDetail == nil || !strings.Contains(*second.ForkDetail, "withdrawn before it was copied") {
+		t.Fatalf("a copy of a withdrawn version: state %v detail %v, want failed saying so", second.ForkState, second.ForkDetail)
 	}
 }
 
@@ -339,6 +411,22 @@ func TestForkRefusesWhatCannotBeForkedAndWhereItCannotGo(t *testing.T) {
 	}, nil, http.StatusCreated)
 	forkPath := func(ns, name string) string { return "/api/v1/agents/" + ns + "/" + name + "/fork" }
 	to := func(ns string) map[string]any { return map[string]any{"namespace": ns} }
+	// An organization the caller does not belong to, one that is
+	// suspended, and an account whose address no one has confirmed.
+	outAdmin := env.register("fkr-oadm")
+	env.verifyEmail(outAdmin)
+	outOrg := "fkr-out" + env.sfx
+	env.createOrg(env.login(outAdmin), outOrg)
+	suspAdmin := env.register("fkr-sadm")
+	env.verifyEmail(suspAdmin)
+	suspS := env.login(suspAdmin)
+	suspOrg := "fkr-susp" + env.sfx
+	env.createOrg(suspS, suspOrg)
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE orgs SET state = 'suspended' WHERE id = (SELECT id FROM handles WHERE handle = $1)`, suspOrg); err != nil {
+		t.Fatal(err)
+	}
+	synth := env.registerEmailUnverified("fkr-syn", "fkr-syn"+env.sfx+"@oidc"+auth.SyntheticAddressSuffix)
+	synthS := env.login(synth)
 
 	for _, c := range []struct {
 		who  caller
@@ -355,6 +443,9 @@ func TestForkRefusesWhatCannotBeForkedAndWhereItCannotGo(t *testing.T) {
 		{bobS, forkPath(alice, "pub"), to(alice), http.StatusForbidden, "", "into someone else's namespace"},
 		{bobS, forkPath(alice, "pub"), to("fkr-nobody" + env.sfx), http.StatusNotFound, "", "into a namespace that does not exist"},
 		{bobS, forkPath(alice, "pub"), map[string]any{"namespace": bob, "name": "Not A Name"}, http.StatusUnprocessableEntity, "", "under a name that is not one"},
+		{bobS, forkPath(alice, "pub"), to(outOrg), http.StatusForbidden, "", "into an organization the caller does not belong to"},
+		{suspS, forkPath(alice, "pub"), to(suspOrg), http.StatusNotFound, "not-found", "into a suspended organization, by its own administrator"},
+		{synthS, forkPath(alice, "pub"), to(synth), http.StatusUnprocessableEntity, "validation", "by an account with no confirmed address"},
 	} {
 		code, slug := env.problemSlug(c.who, http.MethodPost, c.path, c.body)
 		if code != c.code || (c.slug != "" && slug != c.slug) {
@@ -405,6 +496,10 @@ func TestAQuarantinedOriginLeavesItsForksAlone(t *testing.T) {
 	if f.QuarantineState != "none" {
 		t.Fatalf("the fork's quarantineState is %s after its origin's block", f.QuarantineState)
 	}
+	// It reads its origin as no longer there to link to.
+	if f.ForkedFrom == nil || f.ForkedFrom.Available {
+		t.Fatalf("after its origin's block, forkedFrom = %+v, want it not available", f.ForkedFrom)
+	}
 	env.wantPublished(bob, "flagged")
 	// The act's record says how many forks it left as they are.
 	var forks string
@@ -433,7 +528,7 @@ func TestAMemberForksIntoTheOrganizationWithinItsCap(t *testing.T) {
 	env.verifyEmail(admin)
 	adminS := env.login(admin)
 	org := "fko-org" + env.sfx
-	env.createOrg(adminS, org)
+	orgID := env.createOrg(adminS, org)
 	member := env.register("fko-mem")
 	env.joinOrg(adminS, org, member)
 	memberS := env.login(member)
@@ -441,6 +536,15 @@ func TestAMemberForksIntoTheOrganizationWithinItsCap(t *testing.T) {
 	f := env.fork(memberS, alice, "helper", map[string]any{"namespace": org})
 	if f.Namespace != org || f.Visibility != "private" {
 		t.Fatalf("fork into the organization: %s %s", f.Namespace, f.Visibility)
+	}
+	// The record of the fork belongs to the organization it went into.
+	var auditOrg *string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT org_id::text FROM audit_events WHERE action = 'agent.fork' AND target_id = $1`, f.ID).Scan(&auditOrg); err != nil {
+		t.Fatal(err)
+	}
+	if auditOrg == nil || *auditOrg != orgID {
+		t.Fatalf("the fork's audit event belongs to organization %v, want %s", auditOrg, orgID)
 	}
 	env.runCopies()
 	env.wantPublished(org, "helper")
@@ -467,6 +571,30 @@ func TestAMemberForksIntoTheOrganizationWithinItsCap(t *testing.T) {
 	env.doJSON(adminS, http.MethodDelete, "/api/v1/agents/"+org+"/helper?confirm=helper", nil, nil, http.StatusNoContent)
 	if code, slug := env.problemSlug(adminS, http.MethodPost, "/api/v1/agents/"+alice+"/helper/fork", map[string]any{"namespace": org}); code != http.StatusConflict || slug != "name-held" {
 		t.Fatalf("a fork onto a held name: %d %s, want 409 name-held", code, slug)
+	}
+
+	// The origin counts the forks that stand: the deleted one is not among
+	// them.
+	var origin forkAgentOut
+	env.doJSON(env.login(alice), http.MethodGet, "/api/v1/agents/"+alice+"/helper", nil, &origin, http.StatusOK)
+	if origin.ForkCount == nil || *origin.ForkCount != 1 {
+		t.Fatalf("the origin counts %v forks, want 1 (helper-2: the first, deleted, is not counted)", origin.ForkCount)
+	}
+
+	// A copy whose forker's account no longer stands when it runs fails in
+	// words too: nobody is left to submit the first version.
+	gone := env.register("fko-gone")
+	env.joinOrg(adminS, org, gone)
+	goneS := env.login(gone)
+	late := env.fork(goneS, alice, "helper", map[string]any{"namespace": org, "name": "helper-late"})
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE users SET state = 'suspended' WHERE id = (SELECT id FROM handles WHERE handle = $1)`, gone); err != nil {
+		t.Fatal(err)
+	}
+	env.runCopies()
+	env.doJSON(adminS, http.MethodGet, "/api/v1/agents/"+org+"/helper-late", nil, &failed, http.StatusOK)
+	if failed.ID != late.ID || failed.ForkState == nil || *failed.ForkState != "failed" || failed.ForkDetail == nil || !strings.Contains(*failed.ForkDetail, "no longer stands") {
+		t.Fatalf("a copy whose forker no longer stands: state %v detail %v", failed.ForkState, failed.ForkDetail)
 	}
 }
 
@@ -577,6 +705,30 @@ func TestAForkOfATaggedOriginContinuesItsHistory(t *testing.T) {
 			t.Errorf("the fork holds %s (%s)", what, id)
 		}
 	}
+	// An origin the platform quarantines after the fork was asked for
+	// gives no history either: its release was reviewed before the pause,
+	// and the fork's owner reads every object it takes.
+	dana := env.register("fkt-dana")
+	env.verifyEmail(dana)
+	env.fork(env.login(dana), alice, "tagged", map[string]any{"namespace": dana})
+	var originID uuid.UUID
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT a.id FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = 'tagged'`, alice).Scan(&originID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE agents SET quarantine_state = 'quarantined' WHERE id = $1`, originID); err != nil {
+		t.Fatal(err)
+	}
+	env.runCopies()
+	env.wantPublished(dana, "tagged")
+	paused := env.repos.Path(env.repoOf(dana, "tagged"))
+	if commits := gitIn(t, paused, "rev-list", "--count", "main"); commits != "1" {
+		t.Fatalf("a fork copied from a quarantined origin has %s commits, want its own one alone", commits)
+	}
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE agents SET quarantine_state = 'none' WHERE id = $1`, originID); err != nil {
+		t.Fatal(err)
+	}
+
 	if notes := gitIn(t, dir, "show", "main:NOTES.md"); notes != "not in the release, still in the repository" {
 		t.Fatalf("NOTES.md = %q", notes)
 	}
@@ -629,9 +781,26 @@ func TestAForkWhoseCopyNeverRunsIsMarkedFailed(t *testing.T) {
 		[]uuid.UUID{stuck.ID, done.ID}); err != nil {
 		t.Fatal(err)
 	}
+	// A fork asked for just now is still within its allowance, and one
+	// whose copy could not even be queued has failed on the spot.
+	fresh := env.fork(bobS, alice, "slow", map[string]any{"namespace": bob, "name": "slow-3"})
+	env.copies.take()
+	env.copies.fail = errors.New("the queue is down")
+	unqueued := env.fork(bobS, alice, "slow", map[string]any{"namespace": bob, "name": "slow-4"})
+	env.copies.fail = nil
+	if unqueued.ForkState == nil || *unqueued.ForkState != "failed" || unqueued.ForkDetail == nil || !strings.Contains(*unqueued.ForkDetail, "could not start copying") {
+		t.Fatalf("a fork whose copy could not be queued: state %v detail %v, want failed saying so", unqueued.ForkState, unqueued.ForkDetail)
+	}
+	if left := env.copies.take(); len(left) != 0 {
+		t.Fatalf("a copy that could not be queued was queued: %+v", left)
+	}
 	n, err := env.srvObj.Reg().ReconcileStuckForks(ctx)
 	if err != nil || n != 1 {
 		t.Fatalf("ReconcileStuckForks = %d, %v; want 1", n, err)
+	}
+	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/slow-3", nil, &fresh, http.StatusOK)
+	if fresh.ForkState == nil || *fresh.ForkState != "copying" {
+		t.Fatalf("the fork asked for just now: state %v, want copying", fresh.ForkState)
 	}
 	var a forkAgentOut
 	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/slow", nil, &a, http.StatusOK)
@@ -642,8 +811,38 @@ func TestAForkWhoseCopyNeverRunsIsMarkedFailed(t *testing.T) {
 	if a.ForkState == nil || *a.ForkState != "ready" {
 		t.Fatalf("the finished fork: state %v", a.ForkState)
 	}
-	// A failed fork with no version is the publisher's to delete outright.
+	// A copy whose first version is recorded but whose scan could not be
+	// scheduled is ready: the version is there, and the scan watchdog's.
+	late := env.fork(bobS, alice, "slow", map[string]any{"namespace": bob, "name": "slow-5"})
+	for _, a := range env.copies.take() {
+		env.runCopy(a, failingPipeline{})
+	}
+	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/slow-5", nil, &a, http.StatusOK)
+	if a.ID != late.ID || a.ForkState == nil || *a.ForkState != "ready" {
+		t.Fatalf("a copy whose scan was not scheduled: state %v, want ready", a.ForkState)
+	}
+	if st := env.versionStatus(bob, "slow-5", "1.0.0"); st != "scanning" {
+		t.Fatalf("the version of a copy whose scan was not scheduled is %s, want scanning", st)
+	}
+
+	// A failed fork with no version is the publisher's to delete outright:
+	// the agent, its repository and its name go, and the act is recorded as
+	// an ordinary deletion.
+	repo := env.repoOf(bob, "slow")
 	env.doJSON(bobS, http.MethodDelete, "/api/v1/agents/"+bob+"/slow", nil, nil, http.StatusNoContent)
+	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/slow", nil, nil, http.StatusNotFound)
+	var repos, deletions, tombstones int
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM repos WHERE id = $1`, repo).Scan(&repos); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*), count(*) FILTER (WHERE detail->>'tombstone' = 'true') FROM audit_events WHERE action = 'agent.delete' AND target_id = $1`,
+		stuck.ID).Scan(&deletions, &tombstones); err != nil {
+		t.Fatal(err)
+	}
+	if repos != 0 || deletions != 1 || tombstones != 0 {
+		t.Fatalf("after deleting the failed fork: %d repository rows, %d deletion events, %d tombstones; want 0, 1, 0", repos, deletions, tombstones)
+	}
 }
 
 // TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization: a
@@ -658,10 +857,10 @@ func TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization(t *testi
 	env.publishedAgent(env.login(alice), alice, "kit")
 	ctx := context.Background()
 	for _, c := range []struct {
-		org, setup, want string
+		org, setup, undo, want string
 	}{
-		{"fkg-skip", `UPDATE agents SET pipeline_skip = true WHERE id = $1`, "taken off the pipeline"},
-		{"fkg-susp", `UPDATE orgs SET state = 'suspended' WHERE id = (SELECT namespace_id FROM agents WHERE id = $1)`, "is not taking new versions"},
+		{"fkg-skip", `UPDATE agents SET pipeline_skip = true WHERE id = $1`, `UPDATE agents SET pipeline_skip = false WHERE id = $1`, "taken off the pipeline"},
+		{"fkg-susp", `UPDATE orgs SET state = 'suspended' WHERE id = (SELECT namespace_id FROM agents WHERE id = $1)`, `UPDATE orgs SET state = 'active' WHERE id = (SELECT namespace_id FROM agents WHERE id = $1)`, "is not taking new versions"},
 	} {
 		admin := env.register(c.org + "-adm")
 		env.verifyEmail(admin)
@@ -672,7 +871,10 @@ func TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization(t *testi
 		if _, err := env.st.Pool().Exec(ctx, c.setup, f.ID); err != nil {
 			t.Fatal(err)
 		}
-		env.runCopies()
+		queued := env.copies.take()
+		for _, a := range queued {
+			env.runCopy(a, nil)
+		}
 		var state, detail string
 		if err := env.st.Pool().QueryRow(ctx, `SELECT fork_state, fork_detail FROM agents WHERE id = $1`, f.ID).Scan(&state, &detail); err != nil {
 			t.Fatal(err)
@@ -683,6 +885,21 @@ func TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization(t *testi
 		var versions int
 		if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM agent_versions WHERE agent_id = $1`, f.ID).Scan(&versions); err != nil || versions != 0 {
 			t.Errorf("%s: %d versions (%v), want none", c.org, versions, err)
+		}
+
+		// A failed fork is done: the copy delivered again, with what
+		// stopped it gone, makes nothing of it.
+		if _, err := env.st.Pool().Exec(ctx, c.undo, f.ID); err != nil {
+			t.Fatal(err)
+		}
+		for _, a := range queued {
+			env.runCopy(a, nil)
+		}
+		if err := env.st.Pool().QueryRow(ctx, `SELECT fork_state FROM agents WHERE id = $1`, f.ID).Scan(&state); err != nil || state != "failed" {
+			t.Errorf("%s: a repeated copy left the fork %q (%v), want it still failed", c.org, state, err)
+		}
+		if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM agent_versions WHERE agent_id = $1`, f.ID).Scan(&versions); err != nil || versions != 0 {
+			t.Errorf("%s: a repeated copy left %d versions (%v), want none", c.org, versions, err)
 		}
 	}
 }

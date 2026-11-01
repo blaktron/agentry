@@ -1,7 +1,9 @@
 package api_test
 
 import (
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/blaktron/agentry/internal/api"
@@ -57,5 +59,14 @@ func TestVersionCapabilitiesCarryMCPServerEnv(t *testing.T) {
 	if srv.NPM != "github-mcp-server-js" || len(srv.Tools) != 1 || len(srv.Env) != 2 ||
 		srv.Env["GITHUB_PERMISSION"] != "read-only" || srv.Env["LOGS_DIR"] != "/tmp/logs" {
 		t.Fatalf("served server entry: %+v", srv)
+	}
+
+	// The map is served with its keys in the canonical order, whatever
+	// order the manifest declared them in.
+	res := env.do(anonymous, http.MethodGet, "/api/v1/agents/"+author+"/issue-digest/versions/1.0.0", nil)
+	raw, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if !strings.Contains(string(raw), `"env":{"GITHUB_PERMISSION":"read-only","LOGS_DIR":"/tmp/logs"}`) {
+		t.Fatalf("the served env map is not in canonical order: %s", raw)
 	}
 }

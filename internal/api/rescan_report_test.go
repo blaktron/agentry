@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"testing"
 )
@@ -34,11 +35,12 @@ func TestRescanInFlightKeepsThePublishedVerdict(t *testing.T) {
 		StartedAt string `json:"startedAt"`
 	}
 	type report struct {
-		ScanRunId      string    `json:"scanRunId"`
-		ScanStatus     string    `json:"scanStatus"`
-		Verdict        *string   `json:"verdict"`
-		FinishedAt     *string   `json:"finishedAt"`
-		RescanInFlight *inFlight `json:"rescanInFlight"`
+		ScanRunId      string         `json:"scanRunId"`
+		ScanStatus     string         `json:"scanStatus"`
+		Verdict        *string        `json:"verdict"`
+		FinishedAt     *string        `json:"finishedAt"`
+		FindingCounts  map[string]int `json:"findingCounts"`
+		RescanInFlight *inFlight      `json:"rescanInFlight"`
 	}
 	reportPath := "/api/v1/agents/" + ref + "/versions/1.0.0/report"
 	read := func() report {
@@ -51,6 +53,25 @@ func TestRescanInFlightKeepsThePublishedVerdict(t *testing.T) {
 	published := read()
 	if deref(published.Verdict) != "scanned" || published.RescanInFlight != nil {
 		t.Fatalf("before any rescan: %+v", published)
+	}
+
+	// The findings of the run are counted by severity, on the report and on
+	// the install row alike.
+	for severity, n := range map[string]int{"info": 1, "low": 2} {
+		for i := 0; i < n; i++ {
+			if _, err := env.st.Pool().Exec(context.Background(),
+				`INSERT INTO findings (id, scan_run_id, scanner, severity, confidence, title) VALUES (gen_random_uuid(), $1, 'S0/counted', $2, 'high', 'counted')`,
+				published.ScanRunId, severity); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	wantCounts := map[string]int{"info": 1, "low": 2}
+	if counted := read().FindingCounts; !maps.Equal(counted, wantCounts) {
+		t.Fatalf("the report counts %v, want %v", counted, wantCounts)
+	}
+	if list := env.listInstalls(t, person); len(list) != 1 || !maps.Equal(list[0].FindingCounts, wantCounts) {
+		t.Fatalf("the install row counts %+v, want %v", list, wantCounts)
 	}
 
 	// A sweep starts a rescan of the published version.

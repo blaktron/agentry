@@ -115,6 +115,21 @@ func TestVersionSeamAnswersAsTheVersionRouteDoes(t *testing.T) {
 	if code, _ := ask(anonymous, "priv", "1.0.0"); code != 404 {
 		t.Errorf("anonymous on a private agent's version: %d, want 404", code)
 	}
+	// A grant on a private agent opens its versions to the grantee as soon
+	// as it is made and closes them as soon as it is removed.
+	grantee := env.seedCaller("vs-grantee")
+	grant := "/api/v1/agents/" + owner.name + "/priv/grants/user/" + grantee.name
+	if code, _ := ask(grantee, "priv", "1.0.0"); code != 404 {
+		t.Errorf("a grantee before the grant: %d, want 404", code)
+	}
+	env.doJSON(owner, http.MethodPut, grant, map[string]any{"role": "read"}, nil, http.StatusNoContent)
+	if code, a := ask(grantee, "priv", "1.0.0"); code != 200 || a.Status != "published" || len(a.Advisories) != 1 {
+		t.Errorf("a grantee with a read grant: %d %+v", code, a)
+	}
+	env.doJSON(owner, http.MethodDelete, grant, nil, nil, http.StatusNoContent)
+	if code, _ := ask(grantee, "priv", "1.0.0"); code != 404 {
+		t.Errorf("a grantee after the grant was removed: %d, want 404", code)
+	}
 	// The agent's own quarantine is read beside the version's status.
 	if _, err := env.st.Pool().Exec(ctx,
 		`UPDATE agents SET quarantine_state = 'quarantined' WHERE name = 'pub' AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`, owner.name); err != nil {

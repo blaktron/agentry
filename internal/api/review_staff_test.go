@@ -41,10 +41,41 @@ func TestStaffDecideTheirOwnPlatformItem(t *testing.T) {
 	author, itemID, _ := setupReviewItem(t, env, "own")
 	env.makePlatformStaff(t, author)
 	authorSess := env.login(author)
+	finding := env.itemFindings(t, authorSess, itemID)[0]
+
+	// A decision gives its reason: a blank one is refused and decides nothing.
+	if code, slug, _ := problemOf(t, env.do(authorSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
+		map[string]any{"decision": "approve", "rationale": "   "})); code != http.StatusUnprocessableEntity || slug != "validation" {
+		t.Fatalf("a decision with a blank rationale: %d %s, want 422 validation", code, slug)
+	}
+	var pending struct {
+		Item struct {
+			State string `json:"state"`
+		} `json:"item"`
+	}
+	env.doJSON(authorSess, http.MethodGet, "/api/v1/review-items/"+itemID, nil, &pending, http.StatusOK)
+	if pending.Item.State != "pending" {
+		t.Fatalf("after a refused decision the item is %q, want pending", pending.Item.State)
+	}
 
 	env.doJSON(authorSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
 		map[string]any{"decision": "approve", "rationale": "the built-in package, reviewed by its publisher"}, nil, http.StatusNoContent)
 	env.waitStatus(author, "risky", "1.0.0", "published")
+	// Once decided, the item is closed to a second decision and to verdicts
+	// on its findings.
+	if code, slug, _ := problemOf(t, env.do(authorSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
+		map[string]any{"decision": "reject", "rationale": "second thoughts"})); code != http.StatusConflict || slug != "conflict" {
+		t.Fatalf("a second decision: %d %s, want 409 conflict", code, slug)
+	}
+	// A decided item is closed before what is sent is looked at.
+	if code, slug, _ := problemOf(t, env.do(authorSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
+		map[string]any{"decision": "reject", "rationale": " "})); code != http.StatusConflict || slug != "conflict" {
+		t.Fatalf("a second decision with no rationale: %d %s, want 409 conflict", code, slug)
+	}
+	if code, slug, _ := problemOf(t, env.do(authorSess, http.MethodPost, "/api/v1/findings/"+finding+"/verdict",
+		map[string]any{"verdict": "dismissed_false_positive", "reason": "too late"})); code != http.StatusConflict || slug != "conflict" {
+		t.Fatalf("a verdict on a finding no longer under review: %d %s, want 409 conflict", code, slug)
+	}
 	if d := env.decisionAudit(t, itemID); d["self_decision"] != true || d["decision"] != "approved" {
 		t.Fatalf("the audit detail of a staff self-decision: %v", d)
 	}
@@ -57,6 +88,27 @@ func TestStaffDecideTheirOwnPlatformItem(t *testing.T) {
 	if d := env.decisionAudit(t, otherItem); d["self_decision"] != nil {
 		t.Fatalf("a decision on another's version is marked: %v", d)
 	}
+
+	// A version held in quarantine is already public: rejecting it yanks
+	// it, and approving it republishes.
+	held := func(prefix string) (string, string, caller) {
+		t.Helper()
+		who, item, reviewer := setupReviewItem(t, env, prefix)
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`UPDATE agent_versions av SET status = 'quarantined' FROM agents a JOIN handles h ON h.id = a.namespace_id
+			 WHERE av.agent_id = a.id AND h.handle = $1 AND a.name = 'risky'`, who); err != nil {
+			t.Fatal(err)
+		}
+		return who, item, reviewer
+	}
+	who, heldItem, reviewer := held("qrj")
+	env.doJSON(reviewer, http.MethodPost, "/api/v1/review-items/"+heldItem+"/decision",
+		map[string]any{"decision": "reject", "rationale": "the quarantine stands"}, nil, http.StatusNoContent)
+	env.waitStatus(who, "risky", "1.0.0", "yanked")
+	who, heldItem, reviewer = held("qap")
+	env.doJSON(reviewer, http.MethodPost, "/api/v1/review-items/"+heldItem+"/decision",
+		map[string]any{"decision": "approve", "rationale": "the quarantine is lifted"}, nil, http.StatusNoContent)
+	env.waitStatus(who, "risky", "1.0.0", "published")
 }
 
 // setupOrgReviewItem files a version of an organization's QuickAgent on its
@@ -115,9 +167,11 @@ func setupOrgReviewItem(t *testing.T, env *testEnv, prefix string, risky bool) (
 		}
 		env.doJSON(staff, http.MethodGet, "/api/v1/review-queue?queue=org&org="+org+"&limit=100", nil, &items, http.StatusOK)
 		for _, it := range items {
-			if it.Namespace == org && it.Queue == "org" {
-				itemID = it.Id
+			// Naming an organization lists that organization's queue alone.
+			if it.Namespace != org || it.Queue != "org" {
+				t.Fatalf("the queue of %s lists %s's item on the %s queue", org, it.Namespace, it.Queue)
 			}
+			itemID = it.Id
 		}
 		if itemID == "" {
 			sleep10ms()
@@ -140,6 +194,28 @@ func TestStaffReviewAnyOrganizationsQueue(t *testing.T) {
 	env.verifyEmail(memberH)
 	env.seedMembership(org, memberH, "member", "active")
 	member := env.login(memberH)
+
+	// Another organization's item is on its own queue alone: naming an
+	// organization lists that one's, and naming none lists both.
+	_, _, _, _, otherItem := setupOrgReviewItem(t, env, "sorg2", false)
+	idsOf := func(path string) map[string]bool {
+		t.Helper()
+		var items []struct {
+			Id string `json:"id"`
+		}
+		env.doJSON(staff, http.MethodGet, path, nil, &items, http.StatusOK)
+		out := map[string]bool{}
+		for _, it := range items {
+			out[it.Id] = true
+		}
+		return out
+	}
+	if named := idsOf("/api/v1/review-queue?queue=org&org=" + org + "&limit=100"); !named[itemID] || named[otherItem] {
+		t.Fatalf("the queue of %s lists its own item %v and another organization's %v, want the first alone", org, named[itemID], named[otherItem])
+	}
+	if every := idsOf("/api/v1/review-queue?queue=org&limit=100"); !every[itemID] || !every[otherItem] {
+		t.Fatalf("staff's every-organization queue lists the two items %v and %v, want both", every[itemID], every[otherItem])
+	}
 
 	// Staff list every organization's queue by naming none.
 	var all []struct {
@@ -304,6 +380,9 @@ func TestAnAuthorSetsNoVerdictOnTheirOwnFindings(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode == http.StatusNoContent {
 		t.Fatal("a non-staff author set a verdict on their own platform-queue finding")
+	}
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("a non-staff author's verdict on their own platform-queue finding: %d, want 403", res.StatusCode)
 	}
 	env.makePlatformStaff(t, author)
 	authorSess := env.login(author)

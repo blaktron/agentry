@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -103,6 +104,42 @@ func TestPipelineSkipIsRefusedWhereItMustBe(t *testing.T) {
 	if code, _ := patch(admin, orgH, "quiet", map[string]any{"visibility": "public"}); code != http.StatusOK {
 		t.Fatalf("public after clearing, with nothing published unscanned: %d, want 200", code)
 	}
+	// Clearing a flag that is not set is no more refused than clearing one
+	// that is, whatever the tier says.
+	env.doJSON(admin, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": orgH, "name": "never-flagged", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+	if code, _ := patch(admin, orgH, "never-flagged", map[string]any{"pipelineSkip": false}); code != http.StatusOK {
+		t.Fatalf("clearing a flag that is not set, tier without the switch: %d, want 200", code)
+	}
+
+	// A version admitted unscanned that still stands keeps the agent from
+	// going public in every state it can return to published from, and not
+	// once it is yanked or was never published.
+	insertSkipped := func(name, status string) {
+		t.Helper()
+		env.doJSON(admin, http.MethodPost, "/api/v1/agents",
+			map[string]any{"namespace": orgH, "name": name, "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`INSERT INTO agent_versions (id, agent_id, version, manifest, capabilities, channel, submitted_by, source, status, scan_status)
+			 SELECT gen_random_uuid(), a.id, '1.0.0', '{}', '{}', 'stable', (SELECT id FROM handles WHERE handle = $4), 'cli-upload', $3, 'skipped'
+			 FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = $2`, orgH, name, status, adminH); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		status string
+		stands bool
+	}{{"published", true}, {"quarantined", true}, {"blocked", true}, {"yanked", false}, {"rejected", false}} {
+		name := "st-" + tc.status
+		insertSkipped(name, tc.status)
+		code, slug, _ := problemOf(t, env.do(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/"+name, map[string]any{"visibility": "public"}))
+		if tc.stands && (code != http.StatusConflict || slug != "agent-unscanned") {
+			t.Fatalf("public with an unscanned version %s: %d %s, want 409 agent-unscanned", tc.status, code, slug)
+		}
+		if !tc.stands && code != http.StatusOK {
+			t.Fatalf("public with an unscanned version %s: %d %s, want 200", tc.status, code, slug)
+		}
+	}
 }
 
 func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
@@ -187,6 +224,28 @@ func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
 
 	// A scan asked for by name does nothing to it, and the sweeps' reads
 	// leave it out.
+	sweepsLeaveOut := func(id string) {
+		t.Helper()
+		q := env.st.Queries()
+		rescan, err := q.ListPublishedVersionsForRescan(context.Background(), storegen.ListPublishedVersionsForRescanParams{Limit: 1000})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rescan {
+			if r.ID.String() == id {
+				t.Fatalf("the rescan sweep lists %s", id)
+			}
+		}
+		using, err := q.ListPublishedVersionsUsingMCPServer(context.Background(), storegen.ListPublishedVersionsUsingMCPServerParams{Ecosystem: "npm", Package: "left-pad", Version: "1.0.0"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range using {
+			if r.ID.String() == id {
+				t.Fatalf("the MCP sweep lists %s", id)
+			}
+		}
+	}
 	pl := env.srvObj.Pipeline()
 	if err := pl.Scan(context.Background(), uuid.MustParse(v.Id), "rescan"); err != nil {
 		t.Fatalf("a scan asked for on an unscanned version: %v", err)
@@ -239,10 +298,36 @@ func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
 		t.Fatalf("resolve = %+v, want scanStatus skipped and no attestation", resolved)
 	}
 
+	// A person who installs it is asked, by name, for what the release
+	// lacks: the scan it never had and the attestation it cannot carry.
+	personH := env.register("uv-person")
+	env.verifyEmail(personH)
+	env.joinOrg(admin, orgH, personH)
+	person := env.login(personH)
+	ref := orgH + "/internal"
+	code, _, prob := env.putInstall(t, person, ref, map[string]any{"version": "1.0.0", "acceptCapabilities": true})
+	if code != http.StatusConflict || !strings.HasSuffix(prob.Type, "/install-consent-required") || len(prob.Missing) != 2 ||
+		!slices.Contains(prob.Missing, "unscanned") || !slices.Contains(prob.Missing, "unsigned") {
+		t.Fatalf("install without the two acceptances: %d %+v, want 409 install-consent-required missing unscanned and unsigned", code, prob)
+	}
+	if code, _, prob := env.putInstall(t, person, ref, map[string]any{"version": "1.0.0", "acceptCapabilities": true, "acceptUnsigned": true}); code != http.StatusConflict || len(prob.Missing) != 1 || prob.Missing[0] != "unscanned" {
+		t.Fatalf("install without the acceptance of the missing scan: %d %+v, want 409 missing unscanned", code, prob)
+	}
+	if code, _, prob := env.putInstall(t, person, ref, map[string]any{"version": "1.0.0", "acceptCapabilities": true, "acceptUnscanned": true, "acceptUnsigned": true}); code != http.StatusOK {
+		t.Fatalf("install with the two acceptances: %d %+v, want 200", code, prob)
+	}
+	if list := env.listInstalls(t, person); len(list) != 1 || deref(list[0].Verdict) != "unscanned" || list[0].FindingCounts != nil ||
+		list[0].AcceptedUnscanned == nil || !*list[0].AcceptedUnscanned || list[0].AcceptedUnsigned == nil || !*list[0].AcceptedUnsigned ||
+		list[0].Signed == nil || *list[0].Signed {
+		t.Fatalf("the install row of an unscanned release: %+v, want verdict unscanned, both acceptances recorded, no findings, not signed", list)
+	}
+
 	// Public is refused while a version admitted unscanned stands, even
 	// after the flag is cleared — and quarantined counts as standing: the
 	// version is still there, and only a yank ends it.
 	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/internal", map[string]any{"pipelineSkip": false}, nil, http.StatusOK)
+	// The sweeps leave it out on its own account, with the flag gone too.
+	sweepsLeaveOut(v.Id)
 	res := env.do(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/internal", map[string]any{"visibility": "public"})
 	var p struct {
 		Type      string `json:"type"`
@@ -298,6 +383,51 @@ func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
 	// choose again.
 	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/internal", map[string]any{"visibility": "public"}, nil, http.StatusOK)
 
+	// The flag is read again at every submission: with the tier's switch
+	// gone, or the tier unreadable, a flagged agent's version goes through
+	// the pipeline like any other.
+	var probe struct {
+		Id         string  `json:"id"`
+		Status     string  `json:"status"`
+		ScanStatus *string `json:"scanStatus"`
+	}
+	env.doJSON(admin, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": orgH, "name": "tierless", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/tierless", map[string]any{"pipelineSkip": true}, nil, http.StatusOK)
+	for _, tc := range []struct {
+		version string
+		tier    entitlements.Resolver
+	}{{"1.0.0", tierResolverFor(unscannedOn(false))}, {"1.0.1", brokenTierResolver()}} {
+		env.setEntitlements(tc.tier)
+		if status, body := env.uploadVersionCLI(orgH, "tierless", pat, skillFiles(orgH, "tierless", tc.version, nil)); status != http.StatusAccepted {
+			t.Fatalf("upload %s with the tier off: %d %s", tc.version, status, body)
+		}
+		env.doJSON(admin, http.MethodGet, "/api/v1/agents/"+orgH+"/tierless/versions/"+tc.version, nil, &probe, http.StatusOK)
+		if probe.ScanStatus == nil || *probe.ScanStatus != "pipeline" {
+			t.Fatalf("version %s with the tier's switch gone: scanStatus %v, want pipeline", tc.version, probe.ScanStatus)
+		}
+	}
+	env.setEntitlements(tierResolverFor(unscannedOn(true)))
+
+	// The sweeps leave out an agent off the pipeline altogether, a
+	// version that went through the pipeline before the flag was set
+	// included.
+	env.doJSON(admin, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": orgH, "name": "scanned-then-flagged", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+	if status, body := env.uploadVersionCLI(orgH, "scanned-then-flagged", pat, skillFiles(orgH, "scanned-then-flagged", "1.0.0", nil)); status != http.StatusAccepted {
+		t.Fatalf("upload before the flag: %d %s", status, body)
+	}
+	env.doJSON(admin, http.MethodGet, "/api/v1/agents/"+orgH+"/scanned-then-flagged/versions/1.0.0", nil, &probe, http.StatusOK)
+	if probe.Status != "published" || probe.ScanStatus == nil || *probe.ScanStatus != "pipeline" {
+		t.Fatalf("version before the flag: %+v, want published through the pipeline", probe)
+	}
+	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/scanned-then-flagged", map[string]any{"pipelineSkip": true}, nil, http.StatusOK)
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO agent_version_mcp_servers (version_id, ecosystem, package, version) VALUES ($1, 'npm', 'left-pad', '1.0.0')`, probe.Id); err != nil {
+		t.Fatal(err)
+	}
+	sweepsLeaveOut(probe.Id)
+
 	// The gate-skipping edge is closed to a version not marked skipped:
 	// the state machine refuses it under the row lock.
 	reg := env.srvObj.Reg()
@@ -329,6 +459,34 @@ func TestAnUnscannedSubmissionIsPublishedWithoutTheGate(t *testing.T) {
 	if !errors.Is(err, registry.ErrUnscannedOnPublic) {
 		t.Fatalf("quarantined → published of a skipped version on a public agent: %v, want ErrUnscannedOnPublic", err)
 	}
+
+	// Nor on a private agent whose flag was cleared after the version
+	// was submitted, nor on one that is not an organization's.
+	stage := func(ns, name, status string) uuid.UUID {
+		t.Helper()
+		var id uuid.UUID
+		if err := env.st.Pool().QueryRow(context.Background(),
+			`INSERT INTO agent_versions (id, agent_id, version, manifest, capabilities, channel, submitted_by, source, status, scan_status)
+			 SELECT gen_random_uuid(), a.id, '1.0.0', '{}', '{}', 'stable', (SELECT id FROM handles WHERE handle = $4), 'cli-upload', $3, 'skipped'
+			 FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = $2 RETURNING id`, ns, name, status, adminH).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	env.doJSON(admin, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": orgH, "name": "flag-cleared", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+	cleared := stage(orgH, "flag-cleared", "submitted")
+	err = reg.Transition(context.Background(), cleared, registry.StatusPublished, "by hand", audit.Event{ActorKind: audit.ActorSystem, OrgID: uuid.MustParse(orgID)})
+	if !errors.Is(err, registry.ErrUnscannedOnPublic) {
+		t.Fatalf("submitted → published of a skipped version after the flag was cleared: %v, want ErrUnscannedOnPublic", err)
+	}
+	env.doJSON(admin, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": adminH, "name": "personal-held", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+	personal := stage(adminH, "personal-held", "quarantined")
+	err = reg.Transition(context.Background(), personal, registry.StatusPublished, "reinstate", audit.Event{ActorKind: audit.ActorSystem})
+	if !errors.Is(err, registry.ErrUnscannedOnPublic) {
+		t.Fatalf("quarantined → published of a skipped version on a personal agent: %v, want ErrUnscannedOnPublic", err)
+	}
 }
 
 // The flag and public never meet in a row: the handler refuses each
@@ -346,6 +504,8 @@ func TestTheFlagAndPublicNeverMeetInARow(t *testing.T) {
 	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/racy", map[string]any{"pipelineSkip": true}, nil, http.StatusOK)
 	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE agents SET visibility = 'public' WHERE name = 'racy' AND pipeline_skip`); err == nil {
 		t.Fatal("the table let the flag and public meet in a row")
+	} else if !strings.Contains(err.Error(), "agents_pipeline_skip_private") {
+		t.Fatalf("the table refused the flag and public in a row with %v, want its agents_pipeline_skip_private check", err)
 	}
 	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE agents SET pipeline_skip = true WHERE name = 'racy' AND visibility = 'public'`); err != nil {
 		t.Fatalf("an update that matched no row: %v", err)

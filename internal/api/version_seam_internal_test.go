@@ -1,6 +1,7 @@
 package api
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ func TestAdvisoriesNamingAVersionAndTheirFix(t *testing.T) {
 		return a
 	}
 	versions := []storegen.AgentVersion{
+		ver("0.9.0", "published", "stable"), // before the version asked about, outside every range below
 		ver("1.0.0", "published", "stable"),
 		ver("1.1.0", "yanked", "stable"),
 		ver("1.2.0", "needs_review", "stable"),
@@ -44,19 +46,30 @@ func TestAdvisoriesNamingAVersionAndTheirFix(t *testing.T) {
 		adv("every version", true),  // unreadable: named, no fix
 		adv("<1.4.0", false),        // not published: never counted
 	}
-	got := advisoriesNaming(ver("1.0.0", "published", "stable"), versions, advisories)
 	want := []struct {
 		affected, fixedIn string
 		unreadable        bool
 	}{{"<1.4.0", "1.4.0", false}, {">=1.0.0 <2.0.0", "2.0.0", false}, {"<1.5.0", "2.0.0", false}, {"<9.0.0", "", false}, {"every version", "", true}}
-	if len(got) != len(want) {
-		t.Fatalf("got %d advisories, want %d: %+v", len(got), len(want), got)
-	}
-	for i, w := range want {
-		g := got[i]
-		if g.AffectedVersions != w.affected || g.FixedIn != w.fixedIn || g.RangeUnreadable != w.unreadable {
-			t.Errorf("advisory %d: got %q fixed in %q unreadable %v, want %q fixed in %q unreadable %v",
-				i, g.AffectedVersions, g.FixedIn, g.RangeUnreadable, w.affected, w.fixedIn, w.unreadable)
+	// The same answer whichever way the versions are listed: the store
+	// lists them newest first, and the fix is the lowest, not the first
+	// found.
+	newestFirst := slices.Clone(versions)
+	slices.Reverse(newestFirst)
+	for name, list := range map[string][]storegen.AgentVersion{"oldest first": versions, "newest first": newestFirst} {
+		got := advisoriesNaming(ver("1.0.0", "published", "stable"), list, advisories)
+		if len(got) != len(want) {
+			t.Fatalf("%s: got %d advisories, want %d: %+v", name, len(got), len(want), got)
+		}
+		for i, w := range want {
+			g := got[i]
+			if g.AffectedVersions != w.affected || g.FixedIn != w.fixedIn || g.RangeUnreadable != w.unreadable {
+				t.Errorf("%s, advisory %d: got %q fixed in %q unreadable %v, want %q fixed in %q unreadable %v",
+					name, i, g.AffectedVersions, g.FixedIn, g.RangeUnreadable, w.affected, w.fixedIn, w.unreadable)
+			}
+			// What the advisory says of itself travels with it.
+			if g.Severity != "high" || g.Summary != w.affected || !g.PublishedAt.Equal(now) {
+				t.Errorf("%s, advisory %d: severity %q summary %q published %v, want high, %q, %v", name, i, g.Severity, g.Summary, g.PublishedAt, w.affected, now)
+			}
 		}
 	}
 
