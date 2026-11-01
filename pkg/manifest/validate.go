@@ -280,6 +280,9 @@ func Validate(m *Manifest) []error {
 	validateSources(&s, m)
 	validateTargetHosts(&s, m)
 	validateBrowser(&s, m)
+	validatePersistent(&s, m)
+	validatePersona(&s, m)
+	validateSubagents(&s, m)
 	validateInteractive(&s, m)
 	validateGuide(&s, m)
 	validateKnowledge(&s, m)
@@ -686,12 +689,21 @@ func guideLine(s *issues, p, what, v string, maxChars int, required bool) {
 // shows something other than what the release says. It reports the part
 // once.
 func plainLine(s *issues, p, what, v string) {
+	if msg := notPlain(what, v); msg != "" {
+		s.errf("V10", p, "%s", msg)
+	}
+}
+
+// notPlain is plainLine's test for a part another rule owns: the message
+// naming the part as what and the first rune that keeps v from being one
+// plain line, or "" when v is one.
+func notPlain(what, v string) string {
 	for _, r := range v {
 		if r < 0x20 || r == 0x7f || hiddenRune(r) {
-			s.errf("V10", p, "%s must be plain single-line text (no control or format characters; found U+%04X)", what, r)
-			return
+			return fmt.Sprintf("%s must be plain single-line text (no control or format characters; found U+%04X)", what, r)
 		}
 	}
+	return ""
 }
 
 func validateCapabilities(s *issues, c Capabilities) {
@@ -1141,6 +1153,8 @@ func ValidateInContext(m *Manifest, ctx Context) []error {
 	validateEntrypointInclusion(&s, m, ctx.Files, resolved)
 	validatePublicPublish(&s, m, ctx)
 	validateShippedPacks(&s, m, ctx, resolved)
+	validatePersistentFolders(&s, m, resolved)
+	validatePersonaInContext(&s, m, ctx, resolved)
 	validateQuotas(&s, m, ctx, resolved)
 	validateFrontmatter(&s, m, ctx)
 	validateSecretIntakeAgreement(&s, m)

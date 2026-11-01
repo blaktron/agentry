@@ -2,9 +2,10 @@
 // names with what its manifest grants. The runner builds a run's tool
 // surface from the capability contract: a tool whose capability is not
 // declared is absent, not present and refusing. An instruction that works
-// a website through browser_click, runs a program through run_command or
-// reaches a host through fetch, in a release that declares no browser, no
-// command or no egress, describes a run that cannot happen: the agent
+// a website through browser_click, runs a program through run_command,
+// reaches a host through fetch or registers a task through task_add, in a
+// release that declares no browser, no command, no egress or no clock,
+// describes a run that cannot happen: the agent
 // meets a tool list without the tools its instruction depends on.
 //
 // Check reads the instruction for tool names and reports each one whose
@@ -30,6 +31,7 @@
 package toolgrant
 
 import (
+	"maps"
 	"regexp"
 	"slices"
 	"sort"
@@ -62,11 +64,41 @@ const (
 	// GrantMCPServer is capabilities.mcpServers: a declared server's
 	// tools.
 	GrantMCPServer Grant = "mcpServers"
+	// GrantClock is capabilities.persistent.clock: a persistent agent's
+	// task tools.
+	GrantClock Grant = "persistent.clock"
+	// GrantMemory is capabilities.persistent.memory: recall.
+	GrantMemory Grant = "persistent.memory"
+	// GrantSelfConfigure is capabilities.persistent.selfConfigure:
+	// self_configure.
+	GrantSelfConfigure Grant = "persistent.selfConfigure"
+	// GrantMeetings is capabilities.persistent.meetings: the meeting
+	// tools.
+	GrantMeetings Grant = "persistent.meetings"
+	// GrantHelper is capabilities.persistent.helper: the helper tools that
+	// search the registry, show, install, run and schedule QuickAgents,
+	// open settings and read the docs.
+	GrantHelper Grant = "persistent.helper"
+	// GrantWeb is capabilities.persistent.web: web_search and web_read.
+	GrantWeb Grant = "persistent.web"
+	// GrantReview is capabilities.persistent.review: ai_review.
+	GrantReview Grant = "persistent.review"
 )
 
 // Grants returns every grant, in a fixed order.
 func Grants() []Grant {
-	return []Grant{GrantBrowser, GrantExec, GrantEgress, GrantTargetHosts, GrantFSRead, GrantFSWrite, GrantMCPServer}
+	return []Grant{GrantBrowser, GrantExec, GrantEgress, GrantTargetHosts, GrantFSRead, GrantFSWrite, GrantMCPServer,
+		GrantClock, GrantMemory, GrantSelfConfigure, GrantMeetings, GrantHelper, GrantWeb, GrantReview}
+}
+
+// persistentKey is the capabilities.persistent key a persistent grant is;
+// "" for any other grant.
+func (g Grant) persistentKey() string {
+	key, ok := strings.CutPrefix(string(g), "persistent.")
+	if !ok {
+		return ""
+	}
+	return key
 }
 
 // Path is the manifest path a release adds to hold the grant.
@@ -86,6 +118,9 @@ func (g Grant) Path() string {
 		return "capabilities.filesystem.write"
 	case GrantMCPServer:
 		return "capabilities.mcpServers"
+	}
+	if key := g.persistentKey(); key != "" {
+		return "capabilities.persistent." + key
 	}
 	return ""
 }
@@ -107,9 +142,67 @@ func (g Grant) what() string {
 		return "workspace write access"
 	case GrantMCPServer:
 		return "a declared MCP server"
+	case GrantClock:
+		return "a persistent agent's clock and tasks"
+	case GrantMemory:
+		return "a persistent agent's memory"
+	case GrantSelfConfigure:
+		return "a persistent agent that may change its own name and persona"
+	case GrantMeetings:
+		return "a persistent agent's meeting notes"
+	case GrantHelper:
+		return "a persistent agent's helper tools"
+	case GrantWeb:
+		return "a persistent agent's web tools"
+	case GrantReview:
+		return "a persistent agent's AI Review"
 	}
 	return string(g)
 }
+
+// The tools a persistent agent is given beyond an ordinary run's, each
+// only with the capabilities.persistent key it belongs to. They are read
+// as tools only in a persistent release: another release names them as
+// words, and web_search, web_read, registry_search and ai_review there are
+// the built-ins' own (notContract).
+var persistentTools = map[Grant][]string{
+	GrantClock:         {"task_add", "task_list", "task_update", "task_remove"},
+	GrantMemory:        {"recall"},
+	GrantSelfConfigure: {"self_configure"},
+	GrantMeetings:      {"meeting_arm", "meeting_list", "meeting_cancel"},
+	GrantHelper: {"registry_search", "quickagent_show", "quickagent_install", "quickagent_run", "run_result", "installed_list",
+		"schedule_add", "schedule_list", "schedule_pause", "schedule_remove", "settings_open", "docs_read"},
+	GrantWeb:    {"web_search", "web_read"},
+	GrantReview: {"ai_review"},
+}
+
+// coderGrants are the grants capabilities.persistent.coder holds without
+// their own lines: the coding toolchain runs any program, reaches the web
+// from its commands, drives a public browser and works on a development
+// host.
+var coderGrants = []Grant{GrantExec, GrantEgress, GrantBrowser, GrantTargetHosts}
+
+// reading is the tool vocabulary one release is read with.
+type reading struct {
+	table       map[string]Grant
+	notContract []string
+}
+
+// ordinary is how a release that is not persistent is read.
+var ordinary = reading{table: table, notContract: notContract}
+
+// persistentReading is how a persistent release is read: every runner
+// tool, and its own tools as tools rather than the built-ins'.
+var persistentReading = func() reading {
+	t := maps.Clone(table)
+	for g, names := range persistentTools {
+		for _, n := range names {
+			t[n] = g
+		}
+	}
+	nc := slices.DeleteFunc(slices.Clone(notContract), func(n string) bool { _, ok := t[n]; return ok })
+	return reading{table: t, notContract: nc}
+}()
 
 // The browser server's tools a run with a browser has: the runner's
 // allowlist of the server's core, testing and pdf tools.
@@ -176,7 +269,7 @@ func Table() map[string]Grant {
 // type secrets is given every one of its tools but browser_evaluate.)
 func ToolsOf(g Grant) []string {
 	var out []string
-	for k, v := range table {
+	for k, v := range persistentReading.table {
 		if v == g {
 			out = append(out, k)
 		}
@@ -228,12 +321,26 @@ const (
 
 // Check returns each tool the instruction calls for that the
 // capabilities do not grant, in the order the instruction first names
-// them, at most MaxMissing. A tool named only where the instruction turns
-// it away is not reported.
+// them, at most MaxMissing, reading it as a release that is not
+// persistent. A tool named only where the instruction turns it away is
+// not reported.
 func Check(c manifest.Capabilities, instruction string) []Missing {
+	return ordinary.check(c, instruction)
+}
+
+// CheckRelease is Check for the release m, read with a persistent agent's
+// tools when its modes include persistent.
+func CheckRelease(m *manifest.Manifest, instruction string) []Missing {
+	if m.IsPersistent() {
+		return persistentReading.check(m.Capabilities, instruction)
+	}
+	return ordinary.check(m.Capabilities, instruction)
+}
+
+func (rd reading) check(c manifest.Capabilities, instruction string) []Missing {
 	var out []Missing
 	seen := map[string]bool{}
-	for _, m := range mentions(strings.ReplaceAll(instruction, "\r\n", "\n")) {
+	for _, m := range rd.mentions(strings.ReplaceAll(instruction, "\r\n", "\n")) {
 		if m.negated || seen[m.key] {
 			continue
 		}
@@ -251,7 +358,7 @@ func Check(c manifest.Capabilities, instruction string) []Missing {
 			case !granted(c, g):
 				miss = Missing{Tool: m.key, Grant: g, Path: g.Path(),
 					Reason: "The instruction calls " + m.key + ", which only a run with " + g.what() + " has, and the manifest does not declare " + g.Path() + "."}
-			case m.key == browserEvaluate && len(c.Browser.Secrets) > 0:
+			case m.key == browserEvaluate && c.Browser != nil && len(c.Browser.Secrets) > 0:
 				miss = Missing{Tool: m.key, Grant: g, Path: "capabilities.browser.secrets",
 					Reason: "The instruction calls browser_evaluate, which a browser that may type secrets (capabilities.browser.secrets) is not given."}
 			default:
@@ -271,6 +378,9 @@ func Check(c manifest.Capabilities, instruction string) []Missing {
 // them when it builds a run's tools. A server's tools are judged by
 // serverDeclared, never here.
 func granted(c manifest.Capabilities, g Grant) bool {
+	if c.Persistent.Declares("coder") && slices.Contains(coderGrants, g) {
+		return true
+	}
 	switch g {
 	case GrantBrowser:
 		return c.Browser != nil
@@ -292,6 +402,9 @@ func granted(c manifest.Capabilities, g Grant) bool {
 		return fsGranted(c.Filesystem.Read)
 	case GrantFSWrite:
 		return fsGranted(c.Filesystem.Write)
+	}
+	if key := g.persistentKey(); key != "" {
+		return c.Persistent.Declares(key)
 	}
 	return false
 }
@@ -368,7 +481,7 @@ var token = regexp.MustCompile(`[a-z0-9][a-z0-9_-]*\*?`)
 // families are the prefixes an instruction may name a whole family by.
 var families = map[string]Grant{"browser_*": GrantBrowser, "host_*": GrantTargetHosts}
 
-func mentions(text string) []mention {
+func (rd reading) mentions(text string) []mention {
 	var out []mention
 	line, counted := 1, 0
 	for _, loc := range token.FindAllStringIndex(text, -1) {
@@ -379,7 +492,7 @@ func mentions(text string) []mention {
 		if e < len(text) && (text[e] == '.' || text[e] == '/') && e+1 < len(text) && isWordByte(text[e+1]) {
 			continue // a file name or a path: browser_snapshot.png
 		}
-		m, ok := classify(text, s, e)
+		m, ok := rd.classify(text, s, e)
 		if !ok {
 			continue
 		}
@@ -435,7 +548,7 @@ func isWordByte(b byte) bool {
 
 // classify reads one token. ok is false for a token that names no tool
 // this package knows.
-func classify(text string, s, e int) (mention, bool) {
+func (rd reading) classify(text string, s, e int) (mention, bool) {
 	if e-s > MaxNameBytes {
 		return mention{}, false
 	}
@@ -452,15 +565,15 @@ func classify(text string, s, e int) (mention, bool) {
 		if server == "" || tool == "" || strings.HasPrefix(tool, "_") {
 			return mention{}, false
 		}
-		if g, ok := table[tool]; ok {
+		if g, ok := rd.table[tool]; ok {
 			return mention{key: tool, grant: g}, true
 		}
-		if reservedServers[server] || slices.Contains(notContract, tool) {
+		if reservedServers[server] || slices.Contains(rd.notContract, tool) {
 			return mention{}, false
 		}
 		return mention{key: server + "__" + tool, server: server}, true
 	}
-	g, ok := table[t]
+	g, ok := rd.table[t]
 	if !ok {
 		return mention{}, false
 	}
@@ -545,7 +658,7 @@ func turnedAway(clause string) bool {
 	var fields []string
 	for _, f := range all {
 		lf := strings.ToLower(f)
-		if _, tool := table[lf]; tool || lf == "or" || lf == "and" || lf == "nor" {
+		if _, tool := persistentReading.table[lf]; tool || lf == "or" || lf == "and" || lf == "nor" {
 			continue
 		}
 		fields = append(fields, f)

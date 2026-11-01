@@ -3274,6 +3274,18 @@
           ]
         },
         {
+          "path": "internal/scan/persistent_test.go",
+          "tests": [
+            "TestAPersistentReleaseDeclaresAGateTokenPerKey",
+            "TestS6ReadsTheInstructionAndThePersonaAgainstThePersistentBlock",
+            "TestS9CountsANewPersistentKeyAndANewOrChangedSubagent"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/scan/pipeline_more_test.go",
           "tests": [
             "TestPrivateAgentsAreScannedToo",
@@ -5056,6 +5068,27 @@
           ]
         },
         {
+          "path": "pkg/manifest/persistent_test.go",
+          "tests": [
+            "TestAPersistentReleaseParsesAndValidates",
+            "TestEveryPersistentKeyHasWords",
+            "TestV16RefusesWhatTheBlockCannotMean",
+            "TestV16ReadsTheFoldersOnlyWithTheirKeys",
+            "TestV17RefusesWhatThePersonaCannotBe",
+            "TestV18MakesAPersistentReleasesDependenciesSubagents",
+            "TestASubagentsConstraintAllowsVersions",
+            "TestThePersistentBlockAndSubagentsAreInTheContract",
+            "TestDiffCapabilitiesPersistent",
+            "TestV2SchemaPersistentShape"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "pkg/manifest/rename_test.go",
           "tests": [
             "TestRenameSetsTheNamespaceAndNameAndKeepsTheRest",
@@ -5398,7 +5431,9 @@
             "TestADeclaredServerIsMatchedByItsName",
             "TestTheTableNamesEachRunnerToolOnce",
             "TestALargeInstructionIsReadInLinearTime",
-            "TestTheAnswerIsBounded"
+            "TestTheAnswerIsBounded",
+            "TestThePersistentToolsNeedTheirKeys",
+            "TestCoderHoldsTheToolchainsGrants"
           ],
           "fuzz": [],
           "benchmarks": [],

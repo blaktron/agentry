@@ -1547,6 +1547,135 @@
         ],
         "unrestrictedNetwork": false
       }
+    },
+    {
+      "name": "a persistent agent's capabilities are a token each, its subagents one more, and its coding toolchain unrestricted network",
+      "manifest": {
+        "modes": [
+          "persistent"
+        ],
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "persistent": {
+            "clock": true,
+            "memory": true,
+            "skills": true,
+            "secrets": [
+              "NOTES_TOKEN"
+            ],
+            "selfConfigure": true,
+            "calendars": true,
+            "meetings": true,
+            "mail": [
+              "google"
+            ],
+            "imageServers": [
+              "google-workspace"
+            ],
+            "coder": true,
+            "web": true,
+            "helper": true,
+            "review": true
+          }
+        },
+        "dependencies": {
+          "agents": [
+            {
+              "ref": "acme/pdf-summary",
+              "version": "^1.4.0",
+              "why": "Summarises the PDFs in the share"
+            }
+          ]
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "persistent.calendars",
+          "persistent.clock",
+          "persistent.coder",
+          "persistent.helper",
+          "persistent.imageServers",
+          "persistent.mail",
+          "persistent.meetings",
+          "persistent.memory",
+          "persistent.review",
+          "persistent.secrets",
+          "persistent.selfConfigure",
+          "persistent.skills",
+          "persistent.web",
+          "subagents"
+        ],
+        "unrestrictedNetwork": true
+      }
+    },
+    {
+      "name": "a persistent block that does not read declares every key, and an autonomous release's dependencies are no subagents",
+      "manifest": {
+        "modes": [
+          "autonomous"
+        ],
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "exec": "none",
+          "persistent": "everything"
+        },
+        "dependencies": {
+          "agents": [
+            {
+              "ref": "acme/pdf-summary"
+            }
+          ]
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "persistent.calendars",
+          "persistent.clock",
+          "persistent.coder",
+          "persistent.helper",
+          "persistent.imageServers",
+          "persistent.mail",
+          "persistent.meetings",
+          "persistent.memory",
+          "persistent.review",
+          "persistent.secrets",
+          "persistent.selfConfigure",
+          "persistent.skills",
+          "persistent.web"
+        ],
+        "unrestrictedNetwork": true
+      }
+    },
+    {
+      "name": "a persistent agent without the coding toolchain names where it goes, and modes that do not read declare subagents",
+      "manifest": {
+        "modes": "persistent",
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "exec": "none",
+          "persistent": {
+            "memory": true
+          }
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "persistent.memory",
+          "subagents"
+        ],
+        "unrestrictedNetwork": false
+      }
     }
   ]
 }

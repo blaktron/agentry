@@ -6464,7 +6464,7 @@ components:
             family, or `<server>__<tool>` for a declared server's tool.
         grant:
           type: string
-          enum: [browser, exec, egress, targetHosts, filesystem.read, filesystem.write, mcpServers]
+          enum: [browser, exec, egress, targetHosts, filesystem.read, filesystem.write, mcpServers, persistent.clock, persistent.memory, persistent.selfConfigure, persistent.meetings, persistent.helper, persistent.web, persistent.review]
           description: The line of the capability contract the tool needs.
         path:
           type: string

@@ -264,6 +264,46 @@
             }
           }
         },
+        "persistent": {
+          "type": "object",
+          "description": "What a persistent agent may do beyond an ordinary run (V16), valid only with persistent in modes. Every key is off unless declared, and the set is closed: a runner grants only what is named. Part of the capability contract: consent lists each key, and a newly declared one asks again.",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "clock": { "type": "boolean", "description": "The time on each turn, the agent's own tasks and the heartbeat that fires them." },
+            "memory": { "type": "boolean", "description": "A memory on its own volume, seeded from the archive's memory/ folder, with compaction and recall." },
+            "skills": { "type": "boolean", "description": "The archive's skills/ folder (skills/<name>/SKILL.md each) and the skills the person adds." },
+            "secrets": {
+              "type": "array",
+              "description": "Stored secrets the person may keep for the agent in their keychain, by environment variable name; none may also be a secret the release asks for at each run.",
+              "uniqueItems": true,
+              "minItems": 1,
+              "maxItems": 32,
+              "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+            },
+            "selfConfigure": { "type": "boolean", "description": "The agent may change its own name and persona." },
+            "calendars": { "type": "boolean", "description": "Reading the calendar feeds the person adds." },
+            "meetings": { "type": "boolean", "description": "Taking notes in the meetings the person arms." },
+            "mail": {
+              "type": "array",
+              "description": "The mail providers the agent may reach once the person signs in. google needs the google-workspace image server and microsoft the microsoft-365 one.",
+              "uniqueItems": true,
+              "minItems": 1,
+              "items": { "type": "string", "enum": ["google", "microsoft", "fastmail"] }
+            },
+            "imageServers": {
+              "type": "array",
+              "description": "Servers the runner runs from its own pinned images that the agent may use once the person signs in.",
+              "uniqueItems": true,
+              "minItems": 1,
+              "items": { "type": "string", "enum": ["google-workspace", "microsoft-365"] }
+            },
+            "coder": { "type": "boolean", "description": "The coding toolchain: any program in the runner's coding image, open web access for its commands, a public browser, a development host, ports and git host accounts." },
+            "web": { "type": "boolean", "description": "The web tools: searching the web and reading pages." },
+            "helper": { "type": "boolean", "description": "Agentry's helper tools: search the registry, show, install, run and schedule QuickAgents, read their results, open settings and read the docs; each install and new version is the person's to agree to." },
+            "review": { "type": "boolean", "description": "AI Review with the person's own key." }
+          }
+        },
         "dataAccess": {
           "type": "array",
           "items": {
@@ -279,13 +319,37 @@
         }
       }
     },
+    "persona": {
+      "type": "object",
+      "description": "The name and the text a persistent agent takes on (V17), valid only with persistent in modes. The text is a file in the archive, read by the scanners as the instruction is.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The agent's name, shown to the person: one plain line of at most 64 bytes.",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "file": {
+          "type": "string",
+          "description": "The persona's text in the archive, at most 32 KiB; absent means PERSONA.md.",
+          "default": "PERSONA.md"
+        },
+        "editable": {
+          "type": "boolean",
+          "description": "Whether the person may replace the persona's text; a locked persona can still be renamed.",
+          "default": true
+        }
+      }
+    },
     "dependencies": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "agents": {
           "type": "array",
-          "description": "Informational (no auto-install).",
+          "description": "In a persistent release, its subagents (V18): QuickAgents it may start as runs of their own, each with a semver constraint and a why; at most 16. Informational in any other release.",
           "items": { "$ref": "#/$defs/agentDependency" }
         }
       }
@@ -499,8 +563,15 @@
         },
         "version": {
           "type": "string",
-          "description": "Semver constraint (e.g. \"^1.2\"); absent means any. Constraint syntax is validated by pkg/manifest.",
+          "description": "Semver constraint (e.g. \"^1.2\"); absent means any, except for a subagent, which needs one. Constraint syntax is validated by pkg/manifest.",
           "minLength": 1
+        },
+        "why": {
+          "type": "string",
+          "description": "What the agent uses it for, in one plain line of at most 200 characters, shown when the person agrees; required for a subagent.",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
         }
       }
     }

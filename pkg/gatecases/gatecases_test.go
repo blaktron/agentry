@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 func TestTheEmbeddedTableLoads(t *testing.T) {
@@ -99,7 +101,11 @@ func TestTheDerivationsCoverEveryToken(t *testing.T) {
 		}
 		unrestricted[d.Want.UnrestrictedNetwork] = true
 	}
-	for _, c := range []string{CapNetwork, CapFSRead, CapFSWrite, CapExec, CapEnv, CapTargetHosts, CapBrowser} {
+	want := []string{CapNetwork, CapFSRead, CapFSWrite, CapExec, CapEnv, CapTargetHosts, CapBrowser, CapSubagents}
+	for _, k := range manifest.PersistentCapabilities() {
+		want = append(want, CapPersistent(k.Key))
+	}
+	for _, c := range want {
 		if !seen[c] {
 			t.Errorf("no derivation case declares %q", c)
 		}

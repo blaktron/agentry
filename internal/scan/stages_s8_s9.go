@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/blaktron/agentry/internal/manifestcaps"
+	"github.com/blaktron/agentry/pkg/gatecases"
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
@@ -404,14 +405,91 @@ func s9ManifestDiff(in *Input) []Finding {
 	}
 	prevCaps := declaredCaps(in.PrevManifestJSON)
 	for _, c := range sortedSet(declaredCaps(in.ManifestJSON)) {
-		if !prevCaps[c] {
-			findings = append(findings, Finding{
-				Scanner: "S9/capability-widened", Severity: SevMedium, Confidence: ConfHigh,
-				Title:    "Capability newly declared this release: " + c,
-				Detail:   map[string]any{"capability": c},
-				Taxonomy: []string{"ASI04"},
-			})
+		// A subagent is reported by name below, not as the bare token.
+		if !prevCaps[c] && c != gatecases.CapSubagents {
+			findings = append(findings, capabilityWidened("Capability newly declared this release: "+c, map[string]any{"capability": c}))
 		}
+	}
+	findings = append(findings, s9PersistentListDiff(prevCapsBlock, curCapsBlock)...)
+	return append(findings, s9SubagentDiff(in)...)
+}
+
+// capabilityWidened is S9's finding for a capability a release declares
+// that the previous one did not, medium.
+func capabilityWidened(title string, detail map[string]any) Finding {
+	return Finding{
+		Scanner: "S9/capability-widened", Severity: SevMedium, Confidence: ConfHigh,
+		Title: title, Detail: detail, Taxonomy: []string{"ASI04"},
+	}
+}
+
+// s9PersistentListDiff reports each name a list key of
+// capabilities.persistent gained when the previous release declared the
+// key already (a key newly declared is its token's finding): one more
+// stored secret, mail provider or image server is reach the person has
+// not seen.
+func s9PersistentListDiff(prev, cur manifestcaps.Caps) []Finding {
+	was, _, prevOK := prev.Persistent()
+	is, _, curOK := cur.Persistent()
+	if !prevOK || !curOK || was == nil || is == nil {
+		return nil
+	}
+	var findings []Finding
+	for _, l := range []struct {
+		key       string
+		was, next []string
+	}{
+		{"secrets", was.Secrets, is.Secrets},
+		{"mail", was.Mail, is.Mail},
+		{"imageServers", was.ImageServers, is.ImageServers},
+	} {
+		if len(l.was) == 0 {
+			continue
+		}
+		for _, n := range l.next {
+			if !slices.Contains(l.was, n) {
+				c := gatecases.CapPersistent(l.key)
+				findings = append(findings, capabilityWidened("Capability widened this release: "+c+" adds "+n, map[string]any{"capability": c, "name": n}))
+			}
+		}
+	}
+	return findings
+}
+
+// s9SubagentDiff reports each subagent a persistent release names that the
+// previous release did not, and each whose constraint changed: either is
+// another QuickAgent, or other versions of one, the agent may start. Both
+// are a capability widening, as a newly declared capability is.
+// Dependencies that do not read are reported once, when the previous
+// release's did.
+func s9SubagentDiff(in *Input) []Finding {
+	prev, prevOK := manifestcaps.Subagents(in.PrevManifestJSON)
+	cur, ok := manifestcaps.Subagents(in.ManifestJSON)
+	if !ok {
+		if !prevOK {
+			return nil
+		}
+		return []Finding{capabilityWidened("Capability newly declared this release: subagents that do not read",
+			map[string]any{"capability": gatecases.CapSubagents})}
+	}
+	was := map[string]string{}
+	for _, a := range prev {
+		was[a.Ref] = a.Version
+	}
+	var findings []Finding
+	for _, a := range cur {
+		before, had := was[a.Ref]
+		var title string
+		switch {
+		case !had:
+			title = "Subagent newly declared this release: " + a.Ref + " " + a.Version
+		case before != a.Version:
+			title = "Subagent's versions changed this release: " + a.Ref + " " + before + " → " + a.Version
+		default:
+			continue
+		}
+		findings = append(findings, capabilityWidened(title,
+			map[string]any{"capability": gatecases.CapSubagents, "subagent": a.Ref, "version": a.Version}))
 	}
 	return findings
 }

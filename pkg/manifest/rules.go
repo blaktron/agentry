@@ -28,6 +28,9 @@ var rules = []Rule{
 	{ID: "V13", Title: "input sources: intake questions of a source kind"},
 	{ID: "V14", Title: "target hosts: host questions and capabilities.targetHosts"},
 	{ID: "V15", Title: "the browser: capabilities.browser's sites, hosts, scope and secrets"},
+	{ID: "V16", Title: "a persistent agent's capabilities: capabilities.persistent and its folders"},
+	{ID: "V17", Title: "a persistent agent's persona"},
+	{ID: "V18", Title: "a persistent agent's subagents: dependencies.agents"},
 }
 
 // Rules returns the rules Validate and ValidateInContext can report, in

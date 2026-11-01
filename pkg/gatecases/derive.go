@@ -21,7 +21,13 @@ const (
 	CapEnv         = "env"
 	CapTargetHosts = "targetHosts"
 	CapBrowser     = "browser"
+	// CapSubagents is a persistent release that declares subagents.
+	CapSubagents = "subagents"
 )
+
+// CapPersistent is the token of one key of capabilities.persistent, such as
+// persistent.coder.
+func CapPersistent(key string) string { return "persistent." + key }
 
 // DeclaredCapabilities is the set of capability tokens a manifest declares,
 // sorted, from its canonical JSON: the gate's Case.DeclaredCapabilities.
@@ -34,7 +40,11 @@ const (
 //     because the runner makes the session;
 //   - browser: a browser line, readable or not, a token of its own and never
 //     network, because the browser reaches sites through the runner's browse
-//     proxy.
+//     proxy;
+//   - persistent.<key>: each key capabilities.persistent declares, and every
+//     key when the block does not read;
+//   - subagents: a persistent release that declares subagents, or whose
+//     dependencies do not read.
 //
 // A manifest that is not JSON, or has no capabilities block, declares
 // nothing.
@@ -65,13 +75,26 @@ func DeclaredCapabilities(manifestJSON []byte) []string {
 	if _, declared, _ := c.Browser(); declared {
 		out = append(out, CapBrowser)
 	}
+	if p, declared, ok := c.Persistent(); declared {
+		for _, k := range manifest.PersistentCapabilities() {
+			if !ok || p.Declares(k.Key) {
+				out = append(out, CapPersistent(k.Key))
+			}
+		}
+	}
+	if agents, ok := manifestcaps.Subagents(manifestJSON); !ok || len(agents) > 0 {
+		out = append(out, CapSubagents)
+	}
 	sort.Strings(out)
 	return out
 }
 
 // UnrestrictedNetwork reports whether a manifest asks for the network
 // without naming where: "*" egress, or a browser whose scope is any public
-// site, or a browser line that does not read, which is taken the strict way.
+// site, or a browser line that does not read, which is taken the strict way,
+// or a persistent agent's coding toolchain (capabilities.persistent.coder,
+// or a block that does not read), whose commands reach the open web and
+// whose browser any public site.
 // It is the gate's Case.WildcardEgress, which the policy's wildcardEgress
 // decides.
 func UnrestrictedNetwork(manifestJSON []byte) bool {
@@ -80,6 +103,9 @@ func UnrestrictedNetwork(manifestJSON []byte) bool {
 		if strings.ToLower(h) == "*" {
 			return true
 		}
+	}
+	if p, declared, ok := c.Persistent(); declared && (!ok || p.Coder) {
+		return true
 	}
 	b, declared, ok := c.Browser()
 	return declared && (!ok || b.IsPublic())
@@ -115,6 +141,12 @@ func Declaration(manifestJSON []byte) rules.Declared {
 	if b, declared, ok := c.Browser(); declared && ok {
 		d.BrowserAny = b.IsPublic()
 		d.BrowserHosts = c.BrowserHosts()
+	}
+	// A persistent agent's coding toolchain reaches the open web from its
+	// commands and drives a public browser. A block that does not read
+	// declares none of it here, the side this rating fails toward.
+	if p, declared, ok := c.Persistent(); declared && ok && p.Coder {
+		d.EgressAny, d.BrowserAny = true, true
 	}
 	d.Secrets = append([]string(nil), c.Secrets...)
 	for _, srv := range c.MCPServers {

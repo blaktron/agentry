@@ -467,13 +467,20 @@ func (e DraftSetCheckFlagged) Valid() bool {
 
 // Defines values for DraftUngrantedToolGrant.
 const (
-	Browser         DraftUngrantedToolGrant = "browser"
-	Egress          DraftUngrantedToolGrant = "egress"
-	Exec            DraftUngrantedToolGrant = "exec"
-	FilesystemRead  DraftUngrantedToolGrant = "filesystem.read"
-	FilesystemWrite DraftUngrantedToolGrant = "filesystem.write"
-	McpServers      DraftUngrantedToolGrant = "mcpServers"
-	TargetHosts     DraftUngrantedToolGrant = "targetHosts"
+	Browser                 DraftUngrantedToolGrant = "browser"
+	Egress                  DraftUngrantedToolGrant = "egress"
+	Exec                    DraftUngrantedToolGrant = "exec"
+	FilesystemRead          DraftUngrantedToolGrant = "filesystem.read"
+	FilesystemWrite         DraftUngrantedToolGrant = "filesystem.write"
+	McpServers              DraftUngrantedToolGrant = "mcpServers"
+	PersistentClock         DraftUngrantedToolGrant = "persistent.clock"
+	PersistentHelper        DraftUngrantedToolGrant = "persistent.helper"
+	PersistentMeetings      DraftUngrantedToolGrant = "persistent.meetings"
+	PersistentMemory        DraftUngrantedToolGrant = "persistent.memory"
+	PersistentReview        DraftUngrantedToolGrant = "persistent.review"
+	PersistentSelfConfigure DraftUngrantedToolGrant = "persistent.selfConfigure"
+	PersistentWeb           DraftUngrantedToolGrant = "persistent.web"
+	TargetHosts             DraftUngrantedToolGrant = "targetHosts"
 )
 
 // Valid indicates whether the value is a known member of the DraftUngrantedToolGrant enum.
@@ -490,6 +497,20 @@ func (e DraftUngrantedToolGrant) Valid() bool {
 	case FilesystemWrite:
 		return true
 	case McpServers:
+		return true
+	case PersistentClock:
+		return true
+	case PersistentHelper:
+		return true
+	case PersistentMeetings:
+		return true
+	case PersistentMemory:
+		return true
+	case PersistentReview:
+		return true
+	case PersistentSelfConfigure:
+		return true
+	case PersistentWeb:
 		return true
 	case TargetHosts:
 		return true

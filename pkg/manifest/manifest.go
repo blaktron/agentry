@@ -1,5 +1,5 @@
 // Package manifest implements the agent.yaml package manifest: strict
-// parsing (closed schema, rule V1), the validation rules V1–V15, the
+// parsing (closed schema, rule V1), the validation rules V1–V18, the
 // closed capability vocabulary, and the canonical JSON form stored as
 // agent_versions.manifest.
 //
@@ -53,10 +53,10 @@ const (
 	// ModeInteractive starts from the same plan and controls, but the run is
 	// a conversation with the user in the CLI TUI or the desktop.
 	ModeInteractive Mode = "interactive"
-	// ModePersistent is a conversation the runner keeps between sessions:
-	// the agent's conversation and files outlive each start and stop. The
-	// runner runs it only for its own built-in agents; a release from any
-	// other source that declares it is refused at run time.
+	// ModePersistent is an agent the runner keeps between sessions: the
+	// agent's conversation and files outlive each start and stop. A
+	// persistent release may declare capabilities.persistent, a persona
+	// and subagents (persistent.go).
 	ModePersistent Mode = "persistent"
 )
 
@@ -197,8 +197,11 @@ type Manifest struct {
 	// Capabilities is the security contract (closed vocabulary, V5).
 	// The zero value declares a pure-text agent.
 	Capabilities Capabilities `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
-	// Dependencies lists informational agent dependencies (v1: no
-	// auto-install).
+	// Persona is the name and the text a persistent agent takes on (v2,
+	// V17), valid only with the persistent mode.
+	Persona *Persona `yaml:"persona,omitempty" json:"persona,omitempty"`
+	// Dependencies lists agent dependencies: a persistent release's
+	// subagents (V18), informational for any other release.
 	Dependencies Dependencies `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
 	// Publish controls the release archive allowlist and channel (V4).
 	Publish Publish `yaml:"publish" json:"publish"`
@@ -431,6 +434,10 @@ type Capabilities struct {
 	// need, its scope, and the declared secrets it may type. Absent, a
 	// run has no browser (browser.go).
 	Browser *Browser `yaml:"browser,omitempty" json:"browser,omitempty"`
+	// Persistent declares what a persistent agent may do beyond an
+	// ordinary run (v2, V16), valid only with the persistent mode; nil
+	// declares nothing (persistent.go).
+	Persistent *Persistent `yaml:"persistent,omitempty" json:"persistent,omitempty"`
 	// DataAccess lists semantic data categories the agent touches.
 	DataAccess []DataAccess `yaml:"dataAccess,omitempty" json:"dataAccess,omitempty"`
 	// MCPServers lists the MCP servers this agent requires at run time.
@@ -445,6 +452,11 @@ type Capabilities struct {
 	// written under capabilities in agent.yaml: the knowledge block is
 	// where a release declares its packs.
 	Knowledge []string `yaml:"-" json:"knowledge,omitempty"`
+	// Subagents are a persistent release's subagents, as the contract a
+	// person consents to records them (Manifest.Contract). They are never
+	// written under capabilities in agent.yaml: dependencies.agents is
+	// where a release declares them.
+	Subagents []AgentDependency `yaml:"-" json:"subagents,omitempty"`
 }
 
 // IsOptionalSecret reports whether the release marks the declared
@@ -859,13 +871,18 @@ type Dependencies struct {
 	Agents []AgentDependency `yaml:"agents,omitempty" json:"agents,omitempty"`
 }
 
-// AgentDependency references another agent by namespace/name plus an
-// optional semver constraint.
+// AgentDependency references another agent by namespace/name plus a
+// semver constraint. In a persistent release it is a subagent, and both
+// the constraint and Why are required (V18).
 type AgentDependency struct {
 	// Ref is "namespace/name".
 	Ref string `yaml:"ref" json:"ref"`
-	// Version is a semver constraint (e.g. "^1.2"); empty means any.
+	// Version is a semver constraint (e.g. "^1.2"); empty means any,
+	// except for a subagent.
 	Version string `yaml:"version,omitempty" json:"version,omitempty"`
+	// Why says what the agent uses it for, in one plain line of at most
+	// MaxSubagentWhyChars, shown when the person agrees.
+	Why string `yaml:"why,omitempty" json:"why,omitempty"`
 }
 
 // Publish controls what enters the release archive and on which channel.
