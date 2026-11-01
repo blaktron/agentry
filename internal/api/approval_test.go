@@ -100,6 +100,21 @@ func TestReviewApprovalFlow(t *testing.T) {
 		t.Fatalf("author self-approve must 403, got %d", res.StatusCode)
 	}
 
+	// A decision other than approve or reject is refused, never read as
+	// approval: the item stays pending and the version stays in review.
+	for _, d := range []string{"", "approved", "Approve", "publish"} {
+		res := env.do(staffSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
+			map[string]any{"decision": d, "rationale": "looks fine"})
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("decision %q: got %d, want 422", d, res.StatusCode)
+		}
+	}
+	env.doJSON(staffSess, http.MethodGet, "/api/v1/review-items/"+itemID, nil, &bundle, http.StatusOK)
+	if bundle.Item.VersionStatus != "needs_review" {
+		t.Fatalf("after refused decisions, versionStatus = %q, want needs_review", bundle.Item.VersionStatus)
+	}
+
 	// A different staff reviewer rejects it (content is genuinely malicious).
 	env.doJSON(staffSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
 		map[string]any{"decision": "reject", "rationale": "confirmed injection payload"}, nil, http.StatusNoContent)

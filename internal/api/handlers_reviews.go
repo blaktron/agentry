@@ -455,6 +455,13 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 	if !readJSON(w, r, &req) {
 		return
 	}
+	// Only the two named decisions are accepted. Anything else is refused
+	// rather than read as approval, so a misspelled or empty decision can
+	// never publish a version.
+	if !req.Decision.Valid() {
+		problemValidation(w, r, "The decision is approve or reject.")
+		return
+	}
 	rationale := strings.TrimSpace(req.Rationale)
 	if rationale == "" {
 		problemValidation(w, r, "Give a rationale for the decision.")
@@ -482,7 +489,7 @@ func (s *Server) DecideReviewItem(w http.ResponseWriter, r *http.Request, id ope
 	quarantined := registry.Status(v.Status) == registry.StatusQuarantined
 	target := registry.StatusPublished
 	newState := "approved"
-	if req.Decision == "reject" {
+	if req.Decision == Reject {
 		newState = "rejected"
 		target = registry.StatusRejected
 		if quarantined {
