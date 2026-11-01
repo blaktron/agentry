@@ -1033,6 +1033,13 @@ is a finding, `S7/subagent-unresolved`, that holds the version for a
 person. A rescan resolves the subagents again; one that stops resolving is
 reported, and never pulls a version already published.
 
+When a version of a subagent leaves published, each persistent release whose
+published versions name it with a constraint that admits that version gets
+an advisory of its own, naming those versions: high when the subagent was
+quarantined or blocked, medium when its publisher withdrew it. The
+release's holders read it where they read every advisory, and its own
+verdict does not change.
+
 The CLI runs a persistent release only for its own built-in agents today,
 and refuses one from the registry or a local folder before it starts
 ([Run modes](runner.md#run-modes)).

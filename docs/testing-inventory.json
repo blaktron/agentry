@@ -3481,6 +3481,18 @@
           ]
         },
         {
+          "path": "internal/scan/subagent_advisories_db_test.go",
+          "tests": [
+            "TestASubagentLeavingPublishedAdvisesItsParentsHolders"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
+          ]
+        },
+        {
           "path": "internal/scan/subagents_db_test.go",
           "tests": [
             "TestPipelineResolvesAPersistentReleasesSubagents",
