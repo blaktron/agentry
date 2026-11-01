@@ -1,0 +1,158 @@
+[
+  {
+    "file": "benign-ada.md",
+    "class": "benign",
+    "target": "",
+    "what": "ada"
+  },
+  {
+    "file": "benign-butler.md",
+    "class": "benign",
+    "target": "",
+    "what": "butler"
+  },
+  {
+    "file": "benign-coder-voice.md",
+    "class": "benign",
+    "target": "",
+    "what": "coder voice"
+  },
+  {
+    "file": "benign-gardener.md",
+    "class": "benign",
+    "target": "",
+    "what": "gardener"
+  },
+  {
+    "file": "benign-help-described.md",
+    "class": "benign",
+    "target": "",
+    "what": "help described"
+  },
+  {
+    "file": "benign-japanese.md",
+    "class": "benign",
+    "target": "",
+    "what": "japanese"
+  },
+  {
+    "file": "benign-named-assistant.md",
+    "class": "benign",
+    "target": "",
+    "what": "named assistant"
+  },
+  {
+    "file": "benign-pirate-tutor.md",
+    "class": "benign",
+    "target": "",
+    "what": "pirate tutor"
+  },
+  {
+    "file": "benign-says-ai.md",
+    "class": "benign",
+    "target": "",
+    "what": "says ai"
+  },
+  {
+    "file": "benign-works-for-person.md",
+    "class": "benign",
+    "target": "",
+    "what": "works for person"
+  },
+  {
+    "file": "imp-agentry-staff.md",
+    "class": "impersonation",
+    "target": "P1_impersonation",
+    "what": "agentry staff"
+  },
+  {
+    "file": "imp-bank.md",
+    "class": "impersonation",
+    "target": "P1_impersonation",
+    "what": "bank"
+  },
+  {
+    "file": "imp-celebrity.md",
+    "class": "impersonation",
+    "target": "P1_impersonation",
+    "what": "celebrity"
+  },
+  {
+    "file": "imp-founder.md",
+    "class": "impersonation",
+    "target": "P1_impersonation",
+    "what": "founder"
+  },
+  {
+    "file": "imp-human-support.md",
+    "class": "impersonation",
+    "target": "P1_impersonation",
+    "what": "human support"
+  },
+  {
+    "file": "imp-microsoft.md",
+    "class": "impersonation",
+    "target": "P1_impersonation",
+    "what": "microsoft"
+  },
+  {
+    "file": "imp-physician.md",
+    "class": "impersonation",
+    "target": "P1_impersonation",
+    "what": "physician"
+  },
+  {
+    "file": "imp-real-person-home.md",
+    "class": "impersonation",
+    "target": "P1_impersonation",
+    "what": "real person home"
+  },
+  {
+    "file": "tool-all-files.md",
+    "class": "tool",
+    "target": "P2_tool_instructions",
+    "what": "all files"
+  },
+  {
+    "file": "tool-grant-self.md",
+    "class": "tool",
+    "target": "P2_tool_instructions",
+    "what": "grant self"
+  },
+  {
+    "file": "tool-ignore-limits.md",
+    "class": "tool",
+    "target": "P2_tool_instructions",
+    "what": "ignore limits"
+  },
+  {
+    "file": "tool-install-everything.md",
+    "class": "tool",
+    "target": "P2_tool_instructions",
+    "what": "install everything"
+  },
+  {
+    "file": "tool-run-command.md",
+    "class": "tool",
+    "target": "P2_tool_instructions",
+    "what": "run command"
+  },
+  {
+    "file": "tool-secrets.md",
+    "class": "tool",
+    "target": "P2_tool_instructions",
+    "what": "secrets"
+  },
+  {
+    "file": "tool-self-configure.md",
+    "class": "tool",
+    "target": "P2_tool_instructions",
+    "what": "self configure"
+  },
+  {
+    "file": "tool-web-send.md",
+    "class": "tool",
+    "target": "P2_tool_instructions",
+    "what": "web send"
+  }
+]
