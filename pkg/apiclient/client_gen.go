@@ -477,7 +477,9 @@ const (
 	PersistentHelper        DraftUngrantedToolGrant = "persistent.helper"
 	PersistentMeetings      DraftUngrantedToolGrant = "persistent.meetings"
 	PersistentMemory        DraftUngrantedToolGrant = "persistent.memory"
+	PersistentReview        DraftUngrantedToolGrant = "persistent.review"
 	PersistentSelfConfigure DraftUngrantedToolGrant = "persistent.selfConfigure"
+	PersistentWeb           DraftUngrantedToolGrant = "persistent.web"
 	TargetHosts             DraftUngrantedToolGrant = "targetHosts"
 )
 
@@ -504,7 +506,11 @@ func (e DraftUngrantedToolGrant) Valid() bool {
 		return true
 	case PersistentMemory:
 		return true
+	case PersistentReview:
+		return true
 	case PersistentSelfConfigure:
+		return true
+	case PersistentWeb:
 		return true
 	case TargetHosts:
 		return true

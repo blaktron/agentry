@@ -95,12 +95,12 @@ func TestS6ReadsTheInstructionAndThePersonaAgainstThePersistentBlock(t *testing.
 }
 
 func TestS9CountsANewPersistentKeyAndANewOrChangedSubagent(t *testing.T) {
-	prev := persistentInput(t, "", "", "")
 	next := persistentInput(t, strings.NewReplacer(
-		"    clock: true\n", "    clock: true\n    coder: true\n",
+		"    clock: true\n", "    clock: true\n    coder: true\n    secrets: [B_TOKEN, A_TOKEN]\n",
 		"      why: Summarises the PDFs in the share\n", "      why: Summarises the PDFs in the share\n    - ref: acme/translate\n      version: ~1.1.0\n      why: Translates\n",
 		"version: ^1.4.0", "version: ^2.0.0",
 	).Replace(persistentScanYAML), "", "")
+	prev := persistentInput(t, strings.Replace(persistentScanYAML, "    clock: true\n", "    clock: true\n    secrets: [A_TOKEN]\n", 1), "", "")
 	next.PrevManifestJSON = prev.ManifestJSON
 
 	var titles []string
@@ -112,6 +112,7 @@ func TestS9CountsANewPersistentKeyAndANewOrChangedSubagent(t *testing.T) {
 	}
 	want := []string{
 		"Capability newly declared this release: persistent.coder",
+		"Capability widened this release: persistent.secrets adds B_TOKEN",
 		"Subagent's versions changed this release: acme/pdf-summary ^1.4.0 → ^2.0.0",
 		"Subagent newly declared this release: acme/translate ~1.1.0",
 	}
@@ -120,7 +121,7 @@ func TestS9CountsANewPersistentKeyAndANewOrChangedSubagent(t *testing.T) {
 	}
 
 	same := persistentInput(t, "", "", "")
-	same.PrevManifestJSON = prev.ManifestJSON
+	same.PrevManifestJSON = persistentInput(t, "", "", "").ManifestJSON
 	if got := s9ManifestDiff(same); len(got) != 0 {
 		t.Fatalf("the same release widens: %+v", got)
 	}

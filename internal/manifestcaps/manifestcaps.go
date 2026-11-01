@@ -6,6 +6,7 @@ package manifestcaps
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/blaktron/agentry/pkg/manifest"
@@ -53,26 +54,27 @@ func (c Caps) Persistent() (p *manifest.Persistent, declared, ok bool) {
 
 // Subagents reads a persistent release's subagents from the canonical
 // manifest JSON: dependencies.agents when its modes include persistent,
-// nil otherwise. ok is false when the manifest is persistent and its
-// dependencies do not decode, which the callers read as subagents
-// declared.
+// nil otherwise. Bytes that are not a JSON object declare none, as they
+// declare no capability. ok is false when the object's modes or, in a
+// persistent release, its dependencies do not decode, which the callers
+// read as subagents declared.
 func Subagents(manifestJSON []byte) (agents []manifest.AgentDependency, ok bool) {
-	var m struct {
-		Modes        []string        `json:"modes"`
-		Dependencies json.RawMessage `json:"dependencies"`
-	}
+	var m map[string]json.RawMessage
 	if err := json.Unmarshal(manifestJSON, &m); err != nil {
 		return nil, true
 	}
-	persistent := false
-	for _, mode := range m.Modes {
-		persistent = persistent || mode == string(manifest.ModePersistent)
+	var modes []manifest.Mode
+	if raw, has := m["modes"]; has {
+		if err := json.Unmarshal(raw, &modes); err != nil {
+			return nil, false
+		}
 	}
-	if !persistent || len(m.Dependencies) == 0 || string(m.Dependencies) == "null" {
+	raw := m["dependencies"]
+	if !slices.Contains(modes, manifest.ModePersistent) || len(raw) == 0 || string(raw) == "null" {
 		return nil, true
 	}
 	var d manifest.Dependencies
-	if err := json.Unmarshal(m.Dependencies, &d); err != nil {
+	if err := json.Unmarshal(raw, &d); err != nil {
 		return nil, false
 	}
 	return d.Agents, true

@@ -321,7 +321,7 @@
     },
     "persona": {
       "type": "object",
-      "description": "The name and the text a persistent agent takes on (V17), valid only with persistent in modes. The text is a file in the archive, read by the scanners as the instruction is; it sits inside the instruction and cannot widen it.",
+      "description": "The name and the text a persistent agent takes on (V17), valid only with persistent in modes. The text is a file in the archive, read by the scanners as the instruction is.",
       "additionalProperties": false,
       "required": ["name"],
       "properties": {
@@ -349,7 +349,7 @@
       "properties": {
         "agents": {
           "type": "array",
-          "description": "In a persistent release, its subagents (V18): published autonomous QuickAgents it may start as runs of their own, each with a semver constraint and a why, resolved by the registry at submit; at most 16. Informational in any other release.",
+          "description": "In a persistent release, its subagents (V18): QuickAgents it may start as runs of their own, each with a semver constraint and a why; at most 16. Informational in any other release.",
           "items": { "$ref": "#/$defs/agentDependency" }
         }
       }

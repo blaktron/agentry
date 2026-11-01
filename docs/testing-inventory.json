@@ -5432,7 +5432,8 @@
             "TestTheTableNamesEachRunnerToolOnce",
             "TestALargeInstructionIsReadInLinearTime",
             "TestTheAnswerIsBounded",
-            "TestThePersistentToolsNeedTheirKeys"
+            "TestThePersistentToolsNeedTheirKeys",
+            "TestCoderHoldsTheToolchainsGrants"
           ],
           "fuzz": [],
           "benchmarks": [],

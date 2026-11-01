@@ -202,7 +202,7 @@ func Read(p Package) (Reading, error) {
 	}
 	return Reading{
 		ManifestJSON: canonical, Ships: manifest.ShippedPacksOf(canonical), Instruction: instruction, Files: files,
-		Ungranted: toolgrant.Check(m.Capabilities, instruction),
+		Ungranted: toolgrant.CheckRelease(m, instruction),
 	}, nil
 }
 

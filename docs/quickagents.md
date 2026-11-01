@@ -986,7 +986,10 @@ The block is part of the capability contract. Consent lists each key, a
 newly declared key or one more name in a list asks again, the gate names
 each key as a capability (`persistent.clock`, `persistent.coder`, …) that a
 publication policy's `requireHumanReview.whenCapabilities` and
-`blockedCapabilities` can name, and S9 reports a newly declared one. An
+`blockedCapabilities` can name, and S9 reports a newly declared one.
+`coder` is held as unrestricted network, as `"*"` egress and a browser on
+any public site are, so the publication policy's `wildcardEgress` decides
+it. An
 instruction that calls for a tool its key gives (`task_add` without
 `clock`, `quickagent_run` without `helper`) is held for a person at
 publish, as an ungranted browser or command is.
@@ -998,15 +1001,14 @@ unread and validation warns.
 **`persona`** (rule V17) names the agent and ships the text it takes on.
 `name` is one plain line of at most 64 bytes, and `file` (`PERSONA.md`
 when left out) is a file of its own, not the instruction, matched by
-`publish.include`, UTF-8 text of at most 32 KiB. The persona sits inside
-the instruction and cannot widen it. The scanners read it as they read the
-instruction, and a tool it calls for needs its grant just the same. The
+`publish.include`, UTF-8 text of at most 32 KiB. The scanners read it as
+they read the instruction, and a tool it calls for needs its grant just the
+same. The
 person may rename the agent and replace the persona's text; `editable:
 false` keeps the text and still allows a new name.
 
 **Subagents** (rule V18). In a persistent release, `dependencies.agents`
-are its subagents: published autonomous QuickAgents it may start as runs
-of their own, each in its own sandbox under its own contract. Each entry
+are its subagents: QuickAgents it may start as runs of their own. Each entry
 needs `ref`, a semver `version` constraint and a `why` of at most 200
 characters on one line, shown when the person agrees. A release may name at
 most 16, each once, and never itself. The subagents are part of the

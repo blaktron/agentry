@@ -2,6 +2,7 @@ package scan
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/blaktron/agentry/pkg/manifest"
@@ -23,17 +24,17 @@ func s6UngrantedTools(in *Input) []Finding {
 	if err := json.Unmarshal(in.ManifestJSON, &m); err != nil {
 		return nil
 	}
-	out := ungrantedIn(m.Capabilities, instructionFile(&m, in.Files), "instruction")
-	return append(out, ungrantedIn(m.Capabilities, textFile(m.PersonaFile(), in.Files), "persona")...)
+	out := ungrantedIn(&m, instructionFile(&m, in.Files), "instruction")
+	return append(out, ungrantedIn(&m, textFile(m.PersonaFile(), in.Files), "persona")...)
 }
 
 // ungrantedIn is s6UngrantedTools for one file, which the findings call
 // what; none for a nil file.
-func ungrantedIn(c manifest.Capabilities, file *FileEntry, what string) []Finding {
+func ungrantedIn(m *manifest.Manifest, file *FileEntry, what string) []Finding {
 	if file == nil {
 		return nil
 	}
-	missing := toolgrant.Check(c, string(file.Content))
+	missing := toolgrant.CheckRelease(m, string(file.Content))
 	// One finding per manifest line to change, in the order the
 	// file first calls for each.
 	var order []string
@@ -83,10 +84,8 @@ func textFile(p string, files []FileEntry) *FileEntry {
 // instruction (the first candidate present, for a v1 prompt-agent), or nil.
 func instructionFile(m *manifest.Manifest, files []FileEntry) *FileEntry {
 	for _, c := range m.InstructionCandidates() {
-		for i := range files {
-			if files[i].Path == c {
-				return textFile(c, files)
-			}
+		if i := slices.IndexFunc(files, func(f FileEntry) bool { return f.Path == c }); i >= 0 {
+			return textFile(c, files[i:i+1])
 		}
 	}
 	return nil
