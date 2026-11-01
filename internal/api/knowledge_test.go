@@ -746,6 +746,9 @@ func TestKnowledgeAllocationHoldsUnderRace(t *testing.T) {
 		ups = append(ups, upload{id, sealed})
 	}
 	codes := make([]int, len(ups))
+	// What an unexpected answer said, so a failure names its cause (a
+	// store that could not write, say) rather than a bare status.
+	bodies := make([]string, len(ups))
 	var wg sync.WaitGroup
 	for i, u := range ups {
 		wg.Add(1)
@@ -755,19 +758,22 @@ func TestKnowledgeAllocationHoldsUnderRace(t *testing.T) {
 			req.Header.Set("Authorization", "Bearer "+o.pat.pat)
 			res, err := env.srv.Client().Do(req)
 			if err != nil {
+				bodies[i] = err.Error()
 				return
 			}
+			b, _ := io.ReadAll(io.LimitReader(res.Body, 2048))
 			_ = res.Body.Close()
 			codes[i] = res.StatusCode
+			bodies[i] = string(b)
 		}()
 	}
 	wg.Wait()
 	accepted := 0
-	for _, c := range codes {
+	for i, c := range codes {
 		if c == http.StatusAccepted {
 			accepted++
 		} else if c != http.StatusRequestEntityTooLarge {
-			t.Fatalf("an upload answered %d", c)
+			t.Fatalf("an upload answered %d: %s", c, bodies[i])
 		}
 	}
 	if accepted != 1 {
