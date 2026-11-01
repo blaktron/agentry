@@ -3415,7 +3415,7 @@ type ScanReport struct {
 	// ScanStatus The scan run's status; `skipped` for a version admitted without a scan, which has no run.
 	ScanStatus *string `json:"scanStatus,omitempty"`
 
-	// Subagents A persistent release's subagents (the manifest's `dependencies.agents`) as the scan resolved them against the registry, in the order the release declares them: the newest stable, published version each constraint admits that runs on its own and is not itself persistent, with what that version declares, or the reason none does. A subagent must be public, or private in the release's own organization. One that does not resolve is also a finding, `S7/subagent-unresolved`, which holds the version for a person. Absent for a release that declares none.
+	// Subagents A persistent release's subagents (the manifest's `dependencies.agents`) as the scan resolved them against the registry, in the order the release declares them: the newest stable, published version each constraint admits that runs on its own and is not itself persistent, with what that version declares, or the reason none does. A subagent must be public, or, for a private release, private in the release's own organization; a private release the release may not use reads as one that is not in the registry. One that does not resolve is also a finding, `S7/subagent-unresolved`, which holds the version for a person. Absent for a release that declares none.
 	Subagents *[]SubagentScan `json:"subagents,omitempty"`
 
 	// Verdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.

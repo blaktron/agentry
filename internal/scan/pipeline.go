@@ -285,6 +285,7 @@ func (p *Pipeline) resumeFromRun(ctx context.Context, runID uuid.UUID) (Resume, 
 	}
 	skip := map[string]bool{}
 	var knowledge []ShippedPackScan
+	var subagents []Subagent
 	for _, s := range stages {
 		// Only clean stages are skippable; an errored stage must run again.
 		if s.Status != "ok" {
@@ -298,6 +299,12 @@ func (p *Pipeline) resumeFromRun(ctx context.Context, runID uuid.UUID) (Resume, 
 				continue
 			}
 			knowledge = rec
+		}
+		if s.Scanner == "S7" {
+			// A clean S7 whose record will not read runs again.
+			if DecodeSubagentRecord(s.Detail, &subagents) != nil {
+				continue
+			}
 		}
 		skip[s.Scanner] = true
 	}
@@ -314,7 +321,7 @@ func (p *Pipeline) resumeFromRun(ctx context.Context, runID uuid.UUID) (Resume, 
 			prior = append(prior, findingFromRow(row))
 		}
 	}
-	return Resume{Skip: skip, Findings: prior, Knowledge: knowledge}, nil
+	return Resume{Skip: skip, Findings: prior, Knowledge: knowledge, Subagents: subagents}, nil
 }
 
 // runOrchestrator materializes the archive and runs the scanner DAG,

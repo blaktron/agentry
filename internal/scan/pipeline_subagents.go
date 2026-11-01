@@ -49,9 +49,14 @@ func resolveSubagent(ctx context.Context, q *storegen.Queries, parent storegen.G
 	a, err := q.GetAgentByPath(ctx, storegen.GetAgentByPathParams{Handle: ns, Name: name})
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return "it is not in the registry", nil
+		return notFound, nil
 	case err != nil:
 		return "", err
+	}
+	// Reachability first, so that whether another publisher's private
+	// release exists, or what state it is in, never shows in a report.
+	if !reachable(parent, a) {
+		return notFound, nil
 	}
 	switch {
 	case a.QuarantineState == "blocked":
@@ -60,8 +65,6 @@ func resolveSubagent(ctx context.Context, q *storegen.Queries, parent storegen.G
 		return "it is quarantined", nil
 	case a.RetiredAt != nil:
 		return "it is retired", nil
-	case a.Visibility != "public" && !sameOrganization(parent, a):
-		return "it is private and not in this release's organization, so the people who install this release could not run it", nil
 	}
 	constraint, err := semver.NewConstraint(d.Version)
 	if err != nil {
@@ -111,8 +114,18 @@ func resolveSubagent(ctx context.Context, q *storegen.Queries, parent storegen.G
 	return "no version " + d.Version + " admits can be a subagent: " + newestProblem, nil
 }
 
-// sameOrganization reports whether the subagent a is in the organization
-// that publishes parent.
-func sameOrganization(parent storegen.GetAgentByIDRow, a storegen.GetAgentByPathRow) bool {
-	return parent.NamespaceKind == "org" && a.NamespaceID == parent.NamespaceID
+// notFound is the one answer for a subagent that is not in the registry and
+// for one this release may not use, so a submission cannot learn whether
+// another publisher's private release exists.
+const notFound = "it is not in the registry, or it is private where the people who install this release cannot run it"
+
+// reachable reports whether the parent may use a as a subagent: a public
+// release, or a private release of the parent's own organization when the
+// parent is private too. A public parent's report is anyone's to read, and
+// would show a private subagent's reach to everyone.
+func reachable(parent storegen.GetAgentByIDRow, a storegen.GetAgentByPathRow) bool {
+	if a.Visibility == "public" {
+		return true
+	}
+	return parent.Visibility != "public" && parent.NamespaceKind == "org" && a.NamespaceID == parent.NamespaceID
 }

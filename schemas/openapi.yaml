@@ -7040,8 +7040,10 @@ components:
             registry, in the order the release declares them: the newest
             stable, published version each constraint admits that runs on
             its own and is not itself persistent, with what that version
-            declares, or the reason none does. A subagent must be public, or
-            private in the release's own organization. One that does not
+            declares, or the reason none does. A subagent must be public, or,
+            for a private release, private in the release's own
+            organization; a private release the release may not use reads as
+            one that is not in the registry. One that does not
             resolve is also a finding, `S7/subagent-unresolved`, which holds
             the version for a person. Absent for a release that declares
             none.

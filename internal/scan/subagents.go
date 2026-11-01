@@ -13,8 +13,9 @@ import (
 // of their own. The pipeline resolves each one against the registry before
 // the stages run (Pipeline.resolveSubagents), and S7, the stage that reads
 // what a release depends on, reports each one that does not resolve: a
-// subagent that is not in the registry, is quarantined, blocked or retired,
-// is private outside the release's organization, has no published version
+// subagent that is not in the registry or that the release may not use (a
+// private release outside the release's organization, or any private release
+// for a public one), is quarantined, blocked or retired, has no published version
 // its constraint admits, or whose matching version does not run on its own
 // (autonomous) or is itself persistent. Such a version is held for a person.
 // The report lists every subagent with the version it resolved to and that

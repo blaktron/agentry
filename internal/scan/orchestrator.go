@@ -125,6 +125,10 @@ type Resume struct {
 	Findings []Finding
 	// Knowledge is a skipped SK's record of what it read.
 	Knowledge []ShippedPackScan
+	// Subagents is a skipped S7's record of the subagents, which the report
+	// then carries in place of a new resolution, so the report and the
+	// findings S7 wrote say the same.
+	Subagents []Subagent
 }
 
 func (r Resume) skips(id string) bool {
@@ -197,6 +201,9 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 
 	sc := stageContext{ctx: ctx, bundle: o.bundle, judge: o.judge, log: o.log, osv: o.osv, mcpCache: o.mcpCache, registries: o.registries}
 	in := &p.Input
+	if p.Resume.skips("S7") {
+		in.Subagents = p.Resume.Subagents
+	}
 
 	// Stages already answered (a previous attempt, or the cache) come in
 	// first so the report, S9's escalation input and the gate all see the

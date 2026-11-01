@@ -138,7 +138,7 @@ func TestPipelineResolvesAPersistentReleasesSubagents(t *testing.T) {
 		!slices.Equal(sum.Reach.Exec, []string{"pdftotext"}) || sum.Why == "" {
 		t.Fatalf("the resolved subagent = %+v (reach %+v)", sum, sum.Reach)
 	}
-	for i, want := range map[int]string{1: "itself a persistent agent", 2: "not in the registry", 3: "private and not in this release's organization", 4: "no published version matches ^1.0.0"} {
+	for i, want := range map[int]string{1: "itself a persistent agent", 2: "not in the registry", 3: "not in the registry, or it is private", 4: "no published version matches ^1.0.0"} {
 		if rec[i].Version != "" || rec[i].Reach != nil || !strings.Contains(rec[i].Problem, want) {
 			t.Errorf("subagent %d = %+v; want a problem saying %q", i, rec[i], want)
 		}
@@ -199,7 +199,40 @@ func TestAPrivateSubagentResolvesInItsOwnOrganization(t *testing.T) {
 		t.Fatalf("the same organization's release: %s, record %+v", same.Status, rec)
 	}
 	elsewhere := submit(e2, other, "helper", []string{"persistent"}, releaseFiles(other.handle, "helper", "1.0.0", "persistent", caps, deps))
-	if rec := subagentRecord(t, e, elsewhere); elsewhere.Status == "published" || len(rec) != 1 || !strings.Contains(rec[0].Problem, "private") {
+	rec := subagentRecord(t, e, elsewhere)
+	if elsewhere.Status == "published" || len(rec) != 1 || rec[0].Version != "" || rec[0].Reach != nil {
 		t.Fatalf("another organization's release: %s, record %+v", elsewhere.Status, rec)
 	}
+	// The same words as for a release that is not there at all: another
+	// organization cannot learn that this private release exists.
+	ghost := strings.Replace(deps, org.handle+"/inner", org.handle+"/ghost", 1)
+	gone := submit(e2, other, "helper-ghost", []string{"persistent"}, releaseFiles(other.handle, "helper-ghost", "1.0.0", "persistent", caps, ghost))
+	if g := subagentRecord(t, e, gone); len(g) != 1 || g[0].Problem != rec[0].Problem {
+		t.Fatalf("an absent subagent reads %+v; a private one elsewhere %+v", g, rec)
+	}
+
+	// A public release of the same organization cannot use it either: its
+	// report is anyone's to read and would show the private release's reach.
+	public := e.submitOrgModes(org, "helper-public", "public", []string{"persistent"}, releaseFiles(org.handle, "helper-public", "1.0.0", "persistent", caps, deps))
+	if rec := subagentRecord(t, e, public); public.Status == "published" || len(rec) != 1 || rec[0].Reach != nil {
+		t.Fatalf("a public release of the same organization: %s, record %+v", public.Status, rec)
+	}
+}
+
+// submitOrgModes creates an agent in the organization with the given
+// visibility and modes and submits its files.
+func (e *pipeEnv) submitOrgModes(o testOrg, name, visibility string, modes []string, files map[string]string) storegen.AgentVersion {
+	e.t.Helper()
+	ctx := context.Background()
+	a, err := e.reg.CreateAgent(ctx, e.orgPrincipal(o), registry.CreateAgentInput{Namespace: o.handle, Name: name, Modes: modes, Visibility: visibility},
+		audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	v, err := e.reg.SubmitVersion(ctx, e.orgPrincipal(o), a, registry.SubmitInput{Source: "cli-upload", Workspace: writeWorkspace(e.t, files)},
+		audit.Event{Actor: e.owner, ActorKind: audit.ActorUser})
+	if err != nil {
+		e.t.Fatalf("submit %s: %v", name, err)
+	}
+	return versionStatus(e.t, e, v.ID)
 }
