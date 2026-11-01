@@ -53,6 +53,10 @@ type principalOpts struct {
 	// own routes (SetExtensionTokens); nil everywhere else, so such a token
 	// is unrecognized on any other path.
 	tokens *extensionTokens
+	// credits is the mount's credits-session routes
+	// (SetExtensionCreditsSessions); nil everywhere else, so a
+	// credits-only token is refused on any other path.
+	credits *creditsRoutes
 }
 
 func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) http.Handler {
@@ -136,6 +140,15 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 				s.rateLimited(r, "authed")
 				problemTooMany(w, r, "This account has used up its rate limit. Wait for the Retry-After interval.")
 			}
+			return
+		}
+
+		// A credits-only token opens a credits session and nothing else:
+		// refused on every path but the routes an extension declared for
+		// its credits sessions, whatever a route would admit otherwise
+		// (anonymous reads, routes that take any signed-in caller).
+		if p.CreditsOnly() && !opts.credits.match(r) {
+			problemForbidden(w, r, "This token can only open a credits session. Use a token with the scope this request needs.")
 			return
 		}
 

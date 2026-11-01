@@ -432,6 +432,19 @@ type Unthrottles interface {
 	UnthrottledRoutes() []string
 }
 
+// ServesCreditsSessions is the optional interface for an extension that
+// opens, renews and ends credits sessions, the sessions a run pays for its
+// model with from the account's credits. The routes are "METHOD /path"
+// relative to the mount, with "{name}" wildcards allowed as whole
+// segments ("POST /sessions/{id}/renew"). They are the only paths in the
+// registry where a token carrying ScopeCreditsSession reaches a handler:
+// the core refuses such a token everywhere else, its own routes, this
+// extension's other routes and every other extension's included. The
+// handler still requires the scope with ScopeAllows.
+type ServesCreditsSessions interface {
+	CreditsSessionRoutes() []string
+}
+
 // TakesOwnTokens is an extension that mints bearer tokens of its own for
 // its own routes: a credential narrower than a token of the account's,
 // for a caller that can present nothing but `Authorization: Bearer`, such
@@ -462,8 +475,8 @@ type Principal = auth.Principal
 
 // Scope is a PAT scope as the core spells it; those an extension may
 // require are the hosted-run scopes, the knowledge scopes, for a route
-// that writes into a person's knowledge through the Knowledge seam, and
-// the vault's secret:write. A session carries no scopes and the
+// that writes into a person's knowledge through the Knowledge seam, the
+// vault's secret:write and credits:session, for a credits session. A session carries no scopes and the
 // account's full authority; a PAT carries what it was minted with,
 // flat: no scope implies another.
 type Scope = auth.Scope
@@ -477,6 +490,12 @@ const (
 	// ScopeSecretWrite lets a token set and delete the caller's
 	// hosted-run secrets; the vault extension requires it.
 	ScopeSecretWrite = auth.ScopeSecretWrite
+	// ScopeCreditsSession lets a token open, renew and end a credits
+	// session and nothing else. An extension that serves credits
+	// sessions accepts it there; every other route, the core's and every
+	// extension's, must refuse a token carrying only it, which
+	// ScopeAllows does for any other scope.
+	ScopeCreditsSession = auth.ScopeCreditsSession
 )
 
 // ScopeAllows is how the core reads a scope for a route: an anonymous
