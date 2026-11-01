@@ -5,8 +5,9 @@ import (
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
-// unrestrictedNetwork is the gate's WildcardEgress: "*" egress, or a
-// browser on any public site. pkg/gatecases publishes the derivation, so a
+// unrestrictedNetwork is the gate's WildcardEgress: "*" egress, a browser
+// on any public site, or a persistent agent's coding toolchain.
+// pkg/gatecases publishes the derivation, so a
 // client restating the gate reads these two inputs exactly as this scanner
 // does.
 func unrestrictedNetwork(manifestJSON []byte) bool {

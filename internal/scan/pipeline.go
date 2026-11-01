@@ -416,6 +416,13 @@ func (p *Pipeline) runOrchestrator(
 		clusterAccounts, clusterVersions = int(cl.Accounts), int(cl.Versions)
 	}
 
+	// A persistent release's subagents, resolved against the registry as it
+	// stands now: a rescan resolves them again.
+	subagents, err := resolveSubagents(ctx, q, agent, v.Manifest)
+	if err != nil {
+		return RunResult{}, err
+	}
+
 	digest := ""
 	if v.ArchiveDigest != nil {
 		digest = *v.ArchiveDigest
@@ -452,6 +459,7 @@ func (p *Pipeline) runOrchestrator(
 			Source:           v.Source,
 			DraftRevision:    revision,
 			History:          p.historyReader(agent.RepoID, v.CommitSha),
+			Subagents:        subagents,
 		},
 		Policy: pol, Public: agent.Visibility == "public", AgentName: agent.Name,
 		PopularAgentNames: popular,
@@ -557,6 +565,10 @@ func (p *Pipeline) persistStage(ctx context.Context, runID uuid.UUID, res StageR
 		// SK's record of what it read: the report's shipped-pack section,
 		// kept so a resumed run reports it as a fresh one would.
 		detail[knowledgeRecordKey] = res.Knowledge
+	}
+	if len(res.Subagents) > 0 {
+		// S7's record of the subagents: the report's subagent section.
+		detail[subagentRecordKey] = res.Subagents
 	}
 	if res.Err != nil {
 		status = "error"

@@ -153,6 +153,10 @@ type Report struct {
 	// (SK); absent for a release that ships none, so such a report's
 	// digest is what it always was.
 	Knowledge []ShippedPackScan `json:"knowledge,omitempty"`
+	// Subagents are a persistent release's subagents as the scan resolved
+	// them, each with its version and reach or the reason it does not
+	// resolve; absent for a release that declares none.
+	Subagents []Subagent `json:"subagents,omitempty"`
 }
 
 // RunResult bundles the report with its digest and the effective judge model.
@@ -329,6 +333,7 @@ func (o *Orchestrator) Run(ctx context.Context, p RunParams) RunResult {
 		JudgeModel:    judgeModelOf(o.judge),
 		Decision:      decision,
 		Knowledge:     knowledge,
+		Subagents:     in.Subagents,
 	}
 	digest, digestErr := reportDigest(report)
 	out := RunResult{

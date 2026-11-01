@@ -242,8 +242,9 @@ findings, flags and policies, each with the outcome the gate reaches) are
 published as data in `pkg/gatecases`, which the gate's own test runs case by
 case, so a client can test what it says about the gate against the same table.
 Two of the gate's inputs come from the manifest: the capabilities it declares,
-and whether it asks for the network without naming where (`"*"` egress, or a
-browser on any public site). `pkg/gatecases` publishes both derivations as
+and whether it asks for the network without naming where (`"*"` egress, a
+browser on any public site, or a persistent agent's coding toolchain,
+`capabilities.persistent.coder`). `pkg/gatecases` publishes both derivations as
 code, `DeclaredCapabilities` and `UnrestrictedNetwork`, which the scanner
 itself calls, and as derivation cases in the same table. The claims on this
 page are checkable against the code that makes them.

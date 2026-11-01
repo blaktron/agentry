@@ -109,6 +109,10 @@ type StageResult struct {
 	JudgeUsage *JudgeUsage
 	// Knowledge is set by SK: what the scan of each shipped pack read.
 	Knowledge []ShippedPackScan
+	// Subagents is S7's record of a persistent release's subagents as the
+	// pipeline resolved them (Input.Subagents), kept on its stage row for
+	// the report.
+	Subagents []Subagent
 }
 
 // Input is the unpacked archive plus context a stage may need.
@@ -156,6 +160,10 @@ type Input struct {
 	// patch (see gitsrv.HistoryPatch); nil when the scanning role has no
 	// repository access. Only meaningful for Source == "git-tag".
 	History func(ctx context.Context) (io.ReadCloser, error)
+	// Subagents are a persistent release's subagents as the pipeline
+	// resolved them against the registry before the stages ran
+	// (resolveSubagents); S7 reports each that does not resolve.
+	Subagents []Subagent
 }
 
 // FileEntry is one inventoried file (S1 output).

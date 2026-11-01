@@ -1015,6 +1015,19 @@ most 16, each once, and never itself. The subagents are part of the
 contract: one more, or a changed constraint, asks again, and S9 reports
 each.
 
+At publish, the registry resolves each subagent to the newest stable,
+published version its constraint admits that runs on its own (its modes
+include `autonomous`) and is not itself persistent. A subagent must be
+public, or private in the release's own organization, so that whoever can
+install the release can run it. The version's report lists every subagent
+with the version it resolved to and what that version declares: the hosts
+it may reach, its servers, its commands, its secrets, its browser and its
+target hosts. A subagent that is not in the registry, is quarantined,
+blocked or retired, is private elsewhere, or has no version that qualifies
+is a finding, `S7/subagent-unresolved`, that holds the version for a
+person. A rescan resolves the subagents again; one that stops resolving is
+reported, and never pulls a version already published.
+
 The CLI runs a persistent release only for its own built-in agents today,
 and refuses one from the registry or a local folder before it starts
 ([Run modes](runner.md#run-modes)).
