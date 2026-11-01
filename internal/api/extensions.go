@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -57,6 +58,9 @@ type extensionMount struct {
 	routes      func(*http.ServeMux)
 	unthrottled map[string]bool
 	tokens      *extensionTokens
+	// credits is the extension's credits-session routes, "METHOD /path"
+	// relative to the mount (SetExtensionCreditsSessions).
+	credits []string
 }
 
 // ExtensionTokenResolver says whose an extension's own bearer token is: the
@@ -81,6 +85,11 @@ var reExtensionTokenPrefix = regexp.MustCompile(`^agy[a-z]{1,4}_$`)
 var coreTokenPrefixes = []string{auth.PATPrefix, auth.SessionPrefix, auth.InvitePrefix, auth.VerificationPrefix, auth.TrustedDevicePrefix}
 
 var reUnthrottledRoute = regexp.MustCompile(`^(GET|POST|PUT|PATCH|DELETE) /[A-Za-z0-9_./-]*$`)
+
+// reCreditsRoute is the shape of a credits-session route: a method and a
+// path relative to the mount, whose segments may be a ServeMux wildcard
+// ("{id}") and nothing broader.
+var reCreditsRoute = regexp.MustCompile(`^(GET|POST|PUT|PATCH|DELETE) (/([A-Za-z0-9_.-]+|\{[a-z][A-Za-z0-9]*\}))+$`)
 
 // RegisterExtension mounts routes under /api/v1/x/<name>/ when the handler
 // is built (NewHandler); the mux the callback receives is rooted there, so
@@ -218,6 +227,59 @@ func (s *Server) SetExtensionUnthrottled(name string, routes []string) {
 		return
 	}
 	panic("api: extension not registered: " + name)
+}
+
+// SetExtensionCreditsSessions names the routes of the extension registered
+// as name that open, renew and end a credits session: the only paths on
+// which a token carrying auth.ScopeCreditsSession is let through to a
+// handler. Routes are "METHOD /path" relative to the mount, with "{name}"
+// wildcards allowed as whole segments. The handler still requires the
+// scope itself. A malformed route, an empty list, a second call or an
+// unknown extension panics at start-up, where it is found.
+func (s *Server) SetExtensionCreditsSessions(name string, routes []string) {
+	if len(routes) == 0 {
+		panic("api: extension " + name + ": no credits-session routes")
+	}
+	for _, rt := range routes {
+		if !reCreditsRoute.MatchString(rt) {
+			panic("api: extension " + name + ": credits-session route must be \"METHOD /path\", got " + rt)
+		}
+	}
+	for i := range s.extensions {
+		if s.extensions[i].name != name {
+			continue
+		}
+		if s.extensions[i].credits != nil {
+			panic("api: extension " + name + ": credits-session routes set twice")
+		}
+		s.extensions[i].credits = slices.Clone(routes)
+		return
+	}
+	panic("api: extension not registered: " + name)
+}
+
+// creditsRoutes matches a request against an extension's credits-session
+// routes, prefixed with its mount; nil matches nothing.
+type creditsRoutes struct{ mux *http.ServeMux }
+
+func newCreditsRoutes(prefix string, routes []string) *creditsRoutes {
+	if len(routes) == 0 {
+		return nil
+	}
+	mux := http.NewServeMux()
+	for _, rt := range routes {
+		method, path, _ := strings.Cut(rt, " ")
+		mux.Handle(method+" "+prefix+path, http.NotFoundHandler())
+	}
+	return &creditsRoutes{mux: mux}
+}
+
+func (c *creditsRoutes) match(r *http.Request) bool {
+	if c == nil {
+		return false
+	}
+	_, pattern := c.mux.Handler(r)
+	return pattern != ""
 }
 
 // SetExtensionTokens lets the extension registered as name accept bearer
@@ -556,7 +618,9 @@ func (s *Server) mountExtensions(mux httpmux.Mux) {
 		// Not Mount: the names are the extensions', so no entry in
 		// authz_routes.go can list them. The prefix rule declares this mount
 		// point and the extension's own matrix declares what sits behind it.
-		mux.Handle(prefix+"/", s.principalMiddlewareOpts(http.StripPrefix(prefix, sub), principalOpts{unthrottled: unthrottled, tokens: m.tokens}))
+		mux.Handle(prefix+"/", s.principalMiddlewareOpts(http.StripPrefix(prefix, sub), principalOpts{
+			unthrottled: unthrottled, tokens: m.tokens, credits: newCreditsRoutes(prefix, m.credits),
+		}))
 	}
 }
 

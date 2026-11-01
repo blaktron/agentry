@@ -626,6 +626,53 @@ func TestSecretWriteIsValidFlatAndUnlocksNoCoreAction(t *testing.T) {
 	}
 }
 
+// The credits-session scope: valid, enumerated, flat, mapped to no core
+// action, kept out of the sign-in grant and a schedule's credential, and
+// a token carrying only it is refused every action of the chokepoint.
+func TestCreditsSessionIsValidFlatAndUnlocksNoCoreAction(t *testing.T) {
+	if !ValidScope(ScopeCreditsSession) || !slices.Contains(AllScopes(), ScopeCreditsSession) {
+		t.Fatal("credits:session is not a valid, enumerated scope")
+	}
+	for _, other := range AllScopes() {
+		if other == ScopeCreditsSession {
+			continue
+		}
+		if HasScope([]string{string(ScopeCreditsSession)}, other) || HasScope([]string{string(other)}, ScopeCreditsSession) {
+			t.Errorf("credits:session and %s imply one another; the list is flat", other)
+		}
+	}
+	for act, sc := range scopeFor {
+		if sc == ScopeCreditsSession {
+			t.Errorf("core action %v is unlocked by credits:session", act)
+		}
+	}
+	if slices.Contains(SignInGrantScopes(), string(ScopeCreditsSession)) || slices.Contains(ScheduleScopes(), string(ScopeCreditsSession)) {
+		t.Fatal("the sign-in grant or a schedule's credential carries credits:session")
+	}
+	p := &Principal{UserID: uuid.New(), Via: "pat", Scopes: []string{string(ScopeCreditsSession)}}
+	org := uuid.New()
+	p.OrgRoles = map[uuid.UUID]OrgRole{org: RoleAdmin}
+	for act := range minRole {
+		if err := Check(p, Resource{OrgID: org}, act); !errors.Is(err, ErrForbidden) {
+			t.Errorf("a credits:session token passed %v in its own organization: %v", act, err)
+		}
+	}
+	for act := range scopeFor {
+		if act == ActOrgRead || act == ActPublicRead {
+			continue // anyone may, with or without a credential
+		}
+		if err := Check(p, Resource{OrgID: org}, act); !errors.Is(err, ErrForbidden) {
+			t.Errorf("a credits:session token passed %v: %v", act, err)
+		}
+	}
+	for act := range agentScopeFor {
+		owner := AgentResource{Public: false, EffectiveRole: AgentRoleAdmin}
+		if err := CheckAgent(p, owner, act); !errors.Is(err, ErrForbidden) {
+			t.Errorf("a credits:session token passed %v on a private agent it administers: %v", act, err)
+		}
+	}
+}
+
 // TestNamespaceDerivedAgentRole pins what a membership confers on an org's
 // agents before any grant: an admin administers them, an active member
 // may release them, and everyone else holds nothing until a grant says
@@ -844,7 +891,7 @@ func TestScopeListIsClosed(t *testing.T) {
 	want := []string{
 		"repo:read", "repo:write", "agent:publish", "agent:read", "agent:manage", "org:admin", "review:act",
 		"audit:read", "user:profile", "run:read", "run:write", "knowledge:read", "knowledge:write",
-		"secret:write", "voice:read", "voice:write",
+		"secret:write", "voice:read", "voice:write", "credits:session",
 	}
 	var got []string
 	for _, sc := range AllScopes() {

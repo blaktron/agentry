@@ -116,6 +116,38 @@ func TestExtensionOwnTokensUnknownOrFailing(t *testing.T) {
 	}
 }
 
+// TestCreditsSessionRoutesRefuseABadDeclaration: a route of the wrong
+// shape, a wildcard broader than one segment, an empty list, a second
+// declaration or an unregistered extension panics at start-up.
+func TestCreditsSessionRoutesRefuseABadDeclaration(t *testing.T) {
+	cases := map[string]func(s *api.Server){
+		"no method":       func(s *api.Server) { s.SetExtensionCreditsSessions("meter", []string{"/sessions"}) },
+		"a prefix":        func(s *api.Server) { s.SetExtensionCreditsSessions("meter", []string{"POST /sessions/"}) },
+		"a rest wildcard": func(s *api.Server) { s.SetExtensionCreditsSessions("meter", []string{"POST /{rest...}"}) },
+		"the whole mount": func(s *api.Server) { s.SetExtensionCreditsSessions("meter", []string{"GET /"}) },
+		"empty":           func(s *api.Server) { s.SetExtensionCreditsSessions("meter", nil) },
+		"unregistered":    func(s *api.Server) { s.SetExtensionCreditsSessions("nobody", []string{"POST /sessions"}) },
+		"set twice": func(s *api.Server) {
+			s.SetExtensionCreditsSessions("meter", []string{"POST /sessions"})
+			s.SetExtensionCreditsSessions("meter", []string{"DELETE /sessions/{id}"})
+		},
+	}
+	for name, declare := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.DevMode = true
+			srv := api.New(cfg, nil, nil)
+			srv.RegisterExtension("meter", func(*http.ServeMux) {})
+			defer func() {
+				if recover() == nil {
+					t.Error("the declaration was accepted")
+				}
+			}()
+			declare(srv)
+		})
+	}
+}
+
 // TestExtensionOwnTokensRefuseABadDeclaration: a prefix of the wrong shape,
 // one of the core's, one claimed twice, a nil resolver or an unregistered
 // extension panics at start-up.

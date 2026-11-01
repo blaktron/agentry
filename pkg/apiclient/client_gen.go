@@ -1332,6 +1332,7 @@ const (
 	AgentPublish   Scope = "agent:publish"
 	AgentRead      Scope = "agent:read"
 	AuditRead      Scope = "audit:read"
+	CreditsSession Scope = "credits:session"
 	KnowledgeRead  Scope = "knowledge:read"
 	KnowledgeWrite Scope = "knowledge:write"
 	OrgAdmin       Scope = "org:admin"
@@ -1356,6 +1357,8 @@ func (e Scope) Valid() bool {
 	case AgentRead:
 		return true
 	case AuditRead:
+		return true
+	case CreditsSession:
 		return true
 	case KnowledgeRead:
 		return true
@@ -3439,6 +3442,11 @@ type ScanReport struct {
 // never lists or reads one; it is consumed only by a registry that
 // mounts the vault extension. `voice:read` reads the account's Writing
 // Voice and `voice:write` puts, restores, sets and deletes it.
+// `credits:session` opens, renews and ends a credits session, which
+// pays for a run's model with the account's credits, and does nothing
+// else: it is minted with no other scope, and every other route
+// refuses a token carrying it. It is consumed only by a registry that
+// mounts the credits extension.
 type Scope string
 
 // ScopeGranted A scope as it appears on a token the registry reports back (the

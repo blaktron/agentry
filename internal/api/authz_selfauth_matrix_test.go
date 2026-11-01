@@ -79,6 +79,8 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 	_, patUnscopedTok := env.mintPAT(staffSess, "sam-unscoped", "user:profile", "agent:read")
 	_, patKnowledgeTok := env.mintPAT(staffSess, "sam-knowledge", "knowledge:read")
 	patKnowledge := caller{name: "staff-pat-knowledge", pat: patKnowledgeTok}
+	_, patCreditsTok := env.mintPAT(staffSess, "sam-credits", "credits:session")
+	patCredits := caller{name: "staff-pat-credits", pat: patCreditsTok}
 	patScoped := caller{name: "patScoped", pat: patScopedTok}
 	patUnscoped := caller{name: "patUnscoped", pat: patUnscopedTok}
 
@@ -257,6 +259,16 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 			map[string]any{"state": "resolved"}, staffSess, pass},
 	}
 
+	// A staff token carrying only credits:session opens a credits session
+	// and nothing else: every route a staff session passes refuses it.
+	withCredits := map[string]bool{}
+	for _, c := range cases {
+		if c.want == pass && (c.caller == staffSess || c.caller == plain) && !withCredits[c.op] {
+			withCredits[c.op] = true
+			cases = append(cases, sCase{c.op, c.method, c.path, c.body, patCredits, deny3})
+		}
+	}
+
 	covered := map[string]bool{}
 	// getInvitation / acceptInvitation: session-only, and the token plus
 	// the session's verified address is the whole rule. Anonymous is 401;
@@ -268,6 +280,8 @@ func TestSelfAuthorizedMatrix(t *testing.T) {
 	cases = append(cases,
 		sCase{"getInvitation", "GET", "/api/v1/invitations/" + invited.Token, nil, anonymous, deny1},
 		sCase{"getInvitation", "GET", "/api/v1/invitations/" + invited.Token, nil, patScoped, deny3},
+		sCase{"getInvitation", "GET", "/api/v1/invitations/" + invited.Token, nil, patCredits, deny3},
+		sCase{"acceptInvitation", "POST", "/api/v1/invitations/" + invited.Token, nil, patCredits, deny3},
 		sCase{"getInvitation", "GET", "/api/v1/invitations/" + invited.Token, nil, staffSess, pass},
 		sCase{"getInvitation", "GET", "/api/v1/invitations/" + invited.Token, nil, plain, pass},
 		sCase{"acceptInvitation", "POST", "/api/v1/invitations/" + invited.Token, nil, anonymous, deny1},

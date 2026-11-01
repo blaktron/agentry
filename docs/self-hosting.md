@@ -1608,7 +1608,10 @@ the anonymous rate class skips (`Unthrottles`: a payment provider's signed
 webhook), accept bearer tokens it mints itself for its own routes
 (`TakesOwnTokens`: an `agy…_` prefix of its own, valid only under its own
 mount, where the caller carries no scopes and no roles, and "not recognized"
-everywhere else), receive the database pool, the logger, an audit writer and a meter
+everywhere else), name the routes that open, renew and end its credits
+sessions (`ServesCreditsSessions`: the only routes where a token carrying
+`credits:session` reaches a handler; the core refuses such a token on every
+other path, its own routes, the anonymous reads and git over HTTP included), receive the database pool, the logger, an audit writer and a meter
 for its own metrics at start-up (`Binds`), delete the rows it keeps about a person inside the
 account erasure's and the data clear's own transaction (`ErasesAccounts`),
 keep a keyed hash of an erased account's address, never the address, for as long

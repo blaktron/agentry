@@ -664,6 +664,18 @@ func TestScopeAllows(t *testing.T) {
 	if ScopeAllows(pat, ScopeSecretWrite) || !ScopeAllows(&Principal{Via: "pat", Scopes: []string{"secret:write"}}, ScopeSecretWrite) {
 		t.Fatal("secret:write is not read as the core reads it")
 	}
+	// credits:session reaches a credits session alone: a token carrying
+	// only it passes that scope and no other an extension may require,
+	// and no other token passes it.
+	credits := &Principal{Via: "pat", Scopes: []string{"credits:session"}}
+	if !ScopeAllows(credits, ScopeCreditsSession) || ScopeAllows(pat, ScopeCreditsSession) {
+		t.Fatal("credits:session is not read as the core reads it")
+	}
+	for _, s := range []Scope{ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead, ScopeKnowledgeWrite, ScopeSecretWrite} {
+		if ScopeAllows(credits, s) {
+			t.Errorf("a credits:session token passed %s", s)
+		}
+	}
 	if ScopeAllows(&Principal{Via: "user"}, ScopeRunRead) {
 		t.Fatal("a principal from Principals.ForUser passed; it is no caller")
 	}

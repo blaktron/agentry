@@ -1100,6 +1100,9 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if u, ok := e.(Unthrottles); ok {
 			srv.SetExtensionUnthrottled(e.Name(), u.UnthrottledRoutes())
 		}
+		if c, ok := e.(ServesCreditsSessions); ok {
+			srv.SetExtensionCreditsSessions(e.Name(), c.CreditsSessionRoutes())
+		}
 		if t, ok := e.(TakesOwnTokens); ok {
 			own := t.OwnTokens()
 			srv.SetExtensionTokens(e.Name(), own.Prefix, api.ExtensionTokenResolver(own.Resolve))

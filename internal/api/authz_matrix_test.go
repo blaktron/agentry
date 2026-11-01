@@ -179,7 +179,11 @@ type matrixSeed struct {
 	// route decides it as the chokepoint predicts, so what the grant
 	// reaches is proven route by route.
 	patSignIn caller
-	orgID     uuid.UUID
+	// patCredits is the admin's token carrying credits:session alone,
+	// which opens a credits session and nothing else: every route
+	// refuses it, even one an anonymous caller passes.
+	patCredits caller
+	orgID      uuid.UUID
 }
 
 func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
@@ -232,14 +236,16 @@ func seedMatrix(t *testing.T, env *testEnv) *matrixSeed {
 		"org:admin", "audit:read", "user:profile", "agent:read")
 	_, patNone := env.mintPAT(sessions["admin"], "matrix-wrong", "repo:read")
 	_, patGrant := env.mintPAT(sessions["admin"], "matrix-sign-in", auth.SignInGrantScopes()...)
+	_, patCredits := env.mintPAT(sessions["admin"], "matrix-credits", string(auth.ScopeCreditsSession))
 
 	return &matrixSeed{
 		env: env, orgH: orgH, pawnH: pawnH, sessions: sessions, orgID: org.Id,
 		patOK: func(string) caller {
 			return caller{name: "pat-ok", pat: patAll}
 		},
-		patWrong:  caller{name: "pat-wrong", pat: patNone},
-		patSignIn: caller{name: "pat-sign-in", pat: patGrant},
+		patWrong:   caller{name: "pat-wrong", pat: patNone},
+		patSignIn:  caller{name: "pat-sign-in", pat: patGrant},
+		patCredits: caller{name: "pat-credits", pat: patCredits},
 	}
 }
 
@@ -824,6 +830,7 @@ func TestAuthzMatrix(t *testing.T) {
 			mcase{seed.patOK(""), patP("org:admin", "audit:read", "user:profile", "agent:read")},
 			mcase{seed.patWrong, patP("repo:read")},
 			mcase{seed.patSignIn, patP(auth.SignInGrantScopes()...)},
+			mcase{seed.patCredits, patP(string(auth.ScopeCreditsSession))},
 		)
 
 		for _, mc := range cases {
@@ -864,7 +871,9 @@ func TestAuthzMatrix(t *testing.T) {
 				res := env.do(mc.caller, fac.method, path, body)
 				defer func() { _ = res.Body.Close() }()
 
-				allowed := expectAllowed(decl, mc.principal, seed.orgID)
+				// A credits-only token is refused on every core route, the
+				// anonymous reads included.
+				allowed := expectAllowed(decl, mc.principal, seed.orgID) && mc.caller != seed.patCredits
 				gotDenied := res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden
 				if decl.HiddenFromOutsiders && !mc.principal.Anonymous && mc.principal.Role(seed.orgID) == auth.RoleNone {
 					// An outsider is refused as a 404, and only as a 404.

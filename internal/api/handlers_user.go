@@ -182,6 +182,9 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 		}
 		scopes = append(scopes, string(sc))
 	}
+	if len(scopes) > 1 && auth.HasScope(scopes, auth.ScopeCreditsSession) {
+		fields = append(fields, FieldError{Field: "scopes", Message: string(auth.ScopeCreditsSession) + " is a token of its own: mint it with no other scope."})
+	}
 	p := principalFrom(r.Context())
 
 	// Org binding: a token bound to an org may be minted only from an

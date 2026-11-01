@@ -183,6 +183,10 @@ func (h *Handler) resolve(w http.ResponseWriter, r *http.Request, act auth.Actio
 			h.unauthorized(w)
 			return registry.Agent{}, nil, auth.AgentRoleNone, refView{}, false
 		}
+		if p.CreditsOnly() {
+			http.Error(w, "This token can only open a credits session.", http.StatusForbidden)
+			return registry.Agent{}, nil, auth.AgentRoleNone, refView{}, false
+		}
 		principal = p
 	}
 
