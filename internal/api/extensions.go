@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -701,4 +703,108 @@ func (s *Server) DeliverWebhook(ctx context.Context, orgID, endpointID uuid.UUID
 		return false, err
 	}
 	return true, nil
+}
+
+// VersionState is what AgentVersion answers of one version of an agent: the
+// agent as AgentReadable answers it, the version's lifecycle status, and the
+// advisories whose range names it.
+type VersionState struct {
+	Agent      registry.Agent
+	Version    string
+	Status     registry.Status
+	Advisories []VersionAdvisory
+}
+
+// VersionAdvisory is one advisory that names a version. FixedIn is the
+// lowest published version above it that the advisory's range leaves out,
+// on the version's own channel, or empty when none is published yet.
+// RangeUnreadable is true when the range does not parse as a semver
+// constraint: such an advisory is counted as naming every version, since
+// the core cannot say it does not, and it names no fix.
+type VersionAdvisory struct {
+	ID               uuid.UUID
+	Severity         string
+	Summary          string
+	AffectedVersions string
+	PublishedAt      time.Time
+	FixedIn          string
+	RangeUnreadable  bool
+}
+
+// AgentVersion is the core's read of one version for
+// pkg/extension.Deps.Versions: whether p may read the agent at ns/name
+// exactly as AgentReadable decides it, and then the version as the core's
+// own version route shows it to a reader, whatever its status, with the
+// published advisories whose range names it. An agent p may not read, an
+// agent that does not exist and a version that does not exist are the same
+// false with no error, as AgentReadable's are.
+func (s *Server) AgentVersion(ctx context.Context, p *auth.Principal, ns, name, version string) (VersionState, bool, error) {
+	a, ok, err := s.AgentReadable(ctx, p, ns, name)
+	if err != nil || !ok {
+		return VersionState{}, false, err
+	}
+	v, err := s.q().GetVersion(ctx, storegen.GetVersionParams{AgentID: a.ID, Version: version})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return VersionState{}, false, nil
+	}
+	if err != nil {
+		return VersionState{}, false, err
+	}
+	advisories, err := s.q().ListAdvisoriesForAgent(ctx, a.ID)
+	if err != nil {
+		return VersionState{}, false, err
+	}
+	state := VersionState{Agent: a, Version: v.Version, Status: registry.Status(v.Status)}
+	if len(advisories) == 0 {
+		return state, true, nil
+	}
+	versions, err := s.q().ListVersions(ctx, a.ID)
+	if err != nil {
+		return VersionState{}, false, err
+	}
+	state.Advisories = advisoriesNaming(v, versions, advisories)
+	return state, true, nil
+}
+
+// advisoriesNaming keeps the published advisories whose range names v, each
+// with the first published version past v that the range leaves out.
+func advisoriesNaming(v storegen.AgentVersion, versions []storegen.AgentVersion, advisories []storegen.Advisory) []VersionAdvisory {
+	at, err := semver.StrictNewVersion(v.Version)
+	if err != nil {
+		return nil
+	}
+	var out []VersionAdvisory
+	for _, adv := range advisories {
+		if adv.PublishedAt == nil {
+			continue
+		}
+		item := VersionAdvisory{ID: adv.ID, Severity: adv.Severity, Summary: adv.Summary, AffectedVersions: adv.AffectedVersions, PublishedAt: *adv.PublishedAt}
+		c, err := semver.NewConstraint(adv.AffectedVersions)
+		if err != nil {
+			item.RangeUnreadable = true
+			out = append(out, item)
+			continue
+		}
+		if !c.Check(at) {
+			continue
+		}
+		var fix *semver.Version
+		for _, other := range versions {
+			if registry.Status(other.Status) != registry.StatusPublished || other.Channel != v.Channel {
+				continue
+			}
+			ov, err := semver.StrictNewVersion(other.Version)
+			if err != nil || !ov.GreaterThan(at) || c.Check(ov) {
+				continue
+			}
+			if fix == nil || ov.LessThan(fix) {
+				fix = ov
+			}
+		}
+		if fix != nil {
+			item.FixedIn = fix.String()
+		}
+		out = append(out, item)
+	}
+	return out
 }
