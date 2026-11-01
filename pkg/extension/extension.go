@@ -598,6 +598,10 @@ type Deps struct {
 	// Agents is the core's read of an agent as an extension may ask it.
 	// nil when the server runs without a database.
 	Agents Agents
+	// Versions is the core's read of one version of an agent: its status
+	// and the advisories that name it. nil when the server runs without a
+	// database.
+	Versions Versions
 	// Principals loads the principal the core would hold for a user,
 	// for asking Agents about someone the extension holds by id rather
 	// than by a live request. nil when the server runs without a
@@ -817,6 +821,59 @@ type Agents interface {
 	// Absent, unreadable, not publishable and held by the gate are one
 	// false with no error, as Maintainable's are.
 	Publishable(ctx context.Context, p *Principal, namespace, name string) (AgentRef, bool, error)
+}
+
+// Versions answers what the core knows of one version of an agent a
+// principal may read: whether it is published, yanked, quarantined or
+// still on its way through the pipeline, whether the agent itself is
+// quarantined or blocked, and the advisories whose range names that
+// version, each with the first published version that fixes it. An
+// extension that pins a version (a schedule runs one version until its
+// owner changes it) asks it to tell the owner that the pinned version can
+// no longer run, or that a newer one fixes an advisory against it,
+// without preparing a run to read the refusal.
+type Versions interface {
+	// Version reports what the core knows of version of the agent at
+	// namespace/name, answered to p as the core's own version route
+	// answers a reader. An agent p may not read, an agent that does not
+	// exist and a version that does not exist are the same false with no
+	// error, as Agents.Readable's are.
+	Version(ctx context.Context, p *Principal, namespace, name, version string) (VersionRef, bool, error)
+}
+
+// VersionRef is what Versions says of one version.
+type VersionRef struct {
+	// Agent is the agent as Agents.Readable says it.
+	Agent AgentRef
+	// Version is the version as the core stores it, without a leading v.
+	Version string
+	// Status is the version's lifecycle state: submitted, scanning,
+	// needs_review, published, rejected, yanked, quarantined or blocked.
+	// Only published runs; a yanked version stays pinnable with a warning.
+	Status string
+	// AgentQuarantine is the agent's own state beside its versions':
+	// empty, quarantined or blocked. A blocked agent resolves to nothing.
+	AgentQuarantine string
+	// Advisories are the published advisories whose range names this
+	// version, newest first.
+	Advisories []VersionAdvisory
+}
+
+// VersionAdvisory is one advisory that names a version.
+type VersionAdvisory struct {
+	ID       uuid.UUID
+	Severity string
+	Summary  string
+	// AffectedVersions is the range as the advisory states it.
+	AffectedVersions string
+	PublishedAt      time.Time
+	// FixedIn is the lowest published version above this one, on its
+	// channel, that the range leaves out; empty while none is published.
+	FixedIn string
+	// RangeUnreadable is true when the range is not a semver constraint
+	// the core can read. Such an advisory is counted as naming every
+	// version and names no fix.
+	RangeUnreadable bool
 }
 
 // Principals answers who a user is now, as the core would resolve them,

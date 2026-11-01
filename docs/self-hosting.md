@@ -1617,6 +1617,19 @@ as it needs to recognize the same mailbox signing up again
 address the same way), run a job on a period, and register audit actions under
 its own name.
 
+An extension that acts on a QuickAgent asks the core rather than reading its
+tables. `Deps.Agents` answers whether a person or a token may read, maintain
+or publish to an agent, as the core's own routes decide it. `Deps.Versions`
+answers what the core knows of one version of an agent the caller may read:
+its status (published, yanked, quarantined, or still being scanned or
+reviewed), the agent's own quarantine or block, and the published advisories
+whose affected range names that version, each with the first published
+version on its channel that the range leaves out. An extension that runs a
+pinned version, such as a schedule, uses it to tell the owner that the
+version can no longer run, or that a newer one fixes an advisory against it.
+An agent the caller may not read and a version that does not exist are the
+same "no" in both.
+
 An extension can also be the deployment's directory, the service that holds
 people's sign-in accounts. It supplies the directory the registry erases
 accounts in and asks whether an account is still there (`ManagesDirectory`);

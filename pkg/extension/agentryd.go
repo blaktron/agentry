@@ -399,6 +399,35 @@ func agentsOf(srv *api.Server, pool *pgxpool.Pool) Agents {
 
 type serverAgents struct{ srv *api.Server }
 
+// versionsOf adapts the server's version read to Versions: nil without a
+// database, as agentsOf is.
+func versionsOf(srv *api.Server, pool *pgxpool.Pool) Versions {
+	if pool == nil {
+		return nil
+	}
+	return serverVersions{srv}
+}
+
+type serverVersions struct{ srv *api.Server }
+
+func (v serverVersions) Version(ctx context.Context, p *Principal, namespace, name, version string) (VersionRef, bool, error) {
+	st, ok, err := v.srv.AgentVersion(ctx, p, namespace, name, version)
+	if err != nil || !ok {
+		return VersionRef{}, false, err
+	}
+	ref := VersionRef{Agent: agentRefOf(st.Agent), Version: st.Version, Status: string(st.Status)}
+	if q := st.Agent.QuarantineState; q != "none" {
+		ref.AgentQuarantine = q
+	}
+	for _, a := range st.Advisories {
+		ref.Advisories = append(ref.Advisories, VersionAdvisory{
+			ID: a.ID, Severity: a.Severity, Summary: a.Summary, AffectedVersions: a.AffectedVersions,
+			PublishedAt: a.PublishedAt, FixedIn: a.FixedIn, RangeUnreadable: a.RangeUnreadable,
+		})
+	}
+	return ref, true, nil
+}
+
 // agentRefOf is what the seams say of a resolved agent, its origin
 // included when it is a fork.
 func agentRefOf(ag registry.Agent) AgentRef {
@@ -1060,7 +1089,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if b, ok := e.(Binds); ok {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
-				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), OrgGate: orgGateOf(srv, pool), Agents: agentsOf(srv, pool), Principals: principalsOf(srv, pool),
+				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), OrgGate: orgGateOf(srv, pool), Agents: agentsOf(srv, pool), Versions: versionsOf(srv, pool), Principals: principalsOf(srv, pool),
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
