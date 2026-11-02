@@ -59,6 +59,11 @@ func TestAStoredAdmissionIsRecordedWithWhatItPaidFor(t *testing.T) {
 		if k := admittedStore(t, env, adm.tickets[1]); k != "" {
 			t.Errorf("the refused upload's ticket was recorded as %q", k)
 		}
+		// The stored upload's ticket is kept; only the refused one is handed
+		// back.
+		if _, voided := adm.counts(); voided != 1 || adm.voided[0] != adm.tickets[1] {
+			t.Errorf("voided %v of %v, want only the refused upload's ticket", adm.voided, adm.tickets)
+		}
 	})
 
 	t.Run("voice", func(t *testing.T) {
@@ -79,6 +84,17 @@ func TestAStoredAdmissionIsRecordedWithWhatItPaidFor(t *testing.T) {
 			if k := admittedStore(t, env, ticket); k != "voice" {
 				t.Errorf("ticket %d: %q, want voice", i, k)
 			}
+		}
+		// A review nobody admitted records nothing: no ticket, no row.
+		env.srvObj.SetVoiceAdmitter(nil)
+		putVoice(t, env, o, voiceText(3))
+		drainVoiceReviews(t, env)
+		var rows int
+		if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM admitted_stores WHERE ticket = ''`).Scan(&rows); err != nil {
+			t.Fatal(err)
+		}
+		if rows != 0 {
+			t.Errorf("a review with no admission recorded %d row(s) for the empty ticket", rows)
 		}
 	})
 }

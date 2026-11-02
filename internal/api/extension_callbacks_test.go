@@ -2,8 +2,11 @@ package api_test
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -42,6 +45,13 @@ func callbackServer(t *testing.T, cb api.ExtensionCallbacks, cfgFn func(*config.
 
 func postCallback(t *testing.T, hs *httptest.Server, header map[string]string) (int, string) {
 	t.Helper()
+	code, _, body := postCallbackFull(t, hs, header)
+	return code, body
+}
+
+// postCallbackFull is postCallback with the response headers.
+func postCallbackFull(t *testing.T, hs *httptest.Server, header map[string]string) (int, http.Header, string) {
+	t.Helper()
 	req, _ := http.NewRequest(http.MethodPost, hs.URL+"/internal/x/directory/check", strings.NewReader(`{}`))
 	for k, v := range header {
 		req.Header.Set(k, v)
@@ -52,7 +62,7 @@ func postCallback(t *testing.T, hs *httptest.Server, header map[string]string) (
 	}
 	defer func() { _ = res.Body.Close() }()
 	body, _ := io.ReadAll(res.Body)
-	return res.StatusCode, string(body)
+	return res.StatusCode, res.Header, string(body)
 }
 
 // TestExtensionCallbacksAreGatedByTheCore: an extension's callback mount is
@@ -99,15 +109,78 @@ func TestExtensionCallbacksDrawFromTheDeclaredClass(t *testing.T) {
 
 	anon := callbackServer(t, api.ExtensionCallbacks{Secret: callbackSecret, Class: "anon", Why: "per address"}, small)
 	refused := false
+	served := 0
 	for range 10 {
-		if code, _ := postCallback(t, anon, bearer); code == http.StatusTooManyRequests {
+		code, hdr, _ := postCallbackFull(t, anon, bearer)
+		if code == http.StatusTooManyRequests {
 			refused = true
+			if retry, err := strconv.Atoi(hdr.Get("Retry-After")); err != nil || retry < 1 {
+				t.Errorf("a refused callback's Retry-After = %q, want a whole number of seconds >= 1", hdr.Get("Retry-After"))
+			}
+			if hdr.Get("RateLimit-Limit") != "2" || hdr.Get("RateLimit-Remaining") != "0" {
+				t.Errorf("a refused callback's budget headers: limit %q remaining %q, want 2 and 0", hdr.Get("RateLimit-Limit"), hdr.Get("RateLimit-Remaining"))
+			}
 			break
+		}
+		served++
+		if want := strconv.Itoa(2 - served); hdr.Get("RateLimit-Limit") != "2" || hdr.Get("RateLimit-Remaining") != want {
+			t.Errorf("callback %d's budget headers: limit %q remaining %q, want 2 and %s", served, hdr.Get("RateLimit-Limit"), hdr.Get("RateLimit-Remaining"), want)
 		}
 	}
 	if !refused {
 		t.Error("a mount in the anonymous class was never refused past its bucket")
 	}
+	if served != 2 {
+		t.Errorf("%d callbacks served before the refusal, want the bucket's 2", served)
+	}
+
+	// The class is spent before the secret is read, so guesses at the secret
+	// draw from it too: two wrong secrets, then the bucket is empty for
+	// the right one.
+	guessed := callbackServer(t, api.ExtensionCallbacks{Secret: callbackSecret, Class: "anon", Why: "per address"}, small)
+	wrong := map[string]string{"Authorization": "Bearer " + callbackSecret + "x"}
+	for i := range 2 {
+		if code, _ := postCallback(t, guessed, wrong); code != http.StatusUnauthorized {
+			t.Fatalf("wrong secret %d: %d, want 401", i+1, code)
+		}
+	}
+	if code, _ := postCallback(t, guessed, wrong); code != http.StatusTooManyRequests {
+		t.Errorf("a third wrong secret: %d, want 429 (guesses spend the class)", code)
+	}
+	if code, _ := postCallback(t, guessed, bearer); code != http.StatusTooManyRequests {
+		t.Errorf("the right secret after the guesses: %d, want 429", code)
+	}
+
+	// The bucket is the caller's address's: a second address has its own.
+	t.Run("a second address has its own bucket", func(t *testing.T) {
+		shared := callbackServer(t, api.ExtensionCallbacks{Secret: callbackSecret, Class: "anon", Why: "per address"}, small)
+		for i := range 2 {
+			if code, _ := postCallback(t, shared, bearer); code != http.StatusOK {
+				t.Fatalf("request %d from the first address: %d, want 200", i+1, code)
+			}
+		}
+		if code, _ := postCallback(t, shared, bearer); code != http.StatusTooManyRequests {
+			t.Fatalf("a third request from the first address: %d, want 429", code)
+		}
+		dialer := &net.Dialer{LocalAddr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 2)}}
+		client := &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext}}
+		t.Cleanup(client.CloseIdleConnections)
+		req, _ := http.NewRequest(http.MethodPost, shared.URL+"/internal/x/directory/check", strings.NewReader(`{}`))
+		req.Header.Set("Authorization", "Bearer "+callbackSecret)
+		res, err := client.Do(req)
+		if err != nil {
+			// Linux routes all of 127.0.0.0/8 to loopback, so there this
+			// is a failure; elsewhere the second address may not exist.
+			if runtime.GOOS == "linux" {
+				t.Fatalf("send from a second loopback address: %v", err)
+			}
+			t.Skipf("cannot send from a second loopback address: %v", err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("a request from a second address: %d, want 200 from its own bucket", res.StatusCode)
+		}
+	})
 
 	none := callbackServer(t, api.ExtensionCallbacks{Secret: callbackSecret, Class: api.RateNone, Why: "one caller for everyone"}, small)
 	for i := range 10 {
@@ -140,6 +213,51 @@ func TestExtensionCallbacksRefuseAWeakDeclaration(t *testing.T) {
 			}()
 			srv.RegisterExtensionCallbacks("directory", cb)
 		})
+	}
+
+	// The reason must say something, the secret has a floor of 32
+	// characters, the name has a shape, and a name serves one mount.
+	valid := api.ExtensionCallbacks{Class: api.RateNone, Why: "x", Routes: routes}
+	panics := func(f func(srv *api.Server)) (panicked bool) {
+		cfg := config.Default()
+		cfg.DevMode = true
+		srv := api.New(cfg, nil, nil)
+		defer func() { panicked = recover() != nil }()
+		f(srv)
+		return false
+	}
+	register := func(name string, cb api.ExtensionCallbacks) func(*api.Server) {
+		return func(srv *api.Server) { srv.RegisterExtensionCallbacks(name, cb) }
+	}
+	withReason := func(why string) api.ExtensionCallbacks { c := valid; c.Why = why; return c }
+	withSecret := func(n int) api.ExtensionCallbacks { c := valid; c.Secret = strings.Repeat("s", n); return c }
+	for name, f := range map[string]func(*api.Server){
+		"a blank reason":        register("directory", withReason("  \t ")),
+		"a 31-character secret": register("directory", withSecret(31)),
+		"an uppercase name":     register("Directory", valid),
+		"a name with a slash":   register("a/b", valid),
+		"an empty name":         register("", valid),
+		"a name registered a second time": func(srv *api.Server) {
+			srv.RegisterExtensionCallbacks("directory", valid)
+			srv.RegisterExtensionCallbacks("directory", valid)
+		},
+	} {
+		if !panics(f) {
+			t.Errorf("%s: the declaration was accepted", name)
+		}
+	}
+	for name, f := range map[string]func(*api.Server){
+		"a 32-character secret":            register("directory", withSecret(32)),
+		"no secret (the mount off)":        register("directory", valid),
+		"a name with a digit and a hyphen": register("dir-2", valid),
+		"two names": func(srv *api.Server) {
+			srv.RegisterExtensionCallbacks("directory", valid)
+			srv.RegisterExtensionCallbacks("other", valid)
+		},
+	} {
+		if panics(f) {
+			t.Errorf("%s: a sound declaration was refused", name)
+		}
 	}
 }
 

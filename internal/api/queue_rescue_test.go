@@ -26,6 +26,24 @@ func rescueAtLastAttempt(t *testing.T, env *testEnv, where string, args ...any) 
 	}
 }
 
+// failedAtLastAttempt makes the matching job what a handler leaves when it
+// fails on its last attempt: discarded at max_attempts with the handler's
+// own error, not the rescuer's.
+func failedAtLastAttempt(t *testing.T, env *testEnv, where string, args ...any) {
+	t.Helper()
+	tag, err := env.st.Pool().Exec(context.Background(), `
+		UPDATE river_job SET state = 'discarded', attempt = max_attempts, finalized_at = now(),
+		  errors = coalesce(errors, '{}') || jsonb_build_object('at', now(), 'attempt', max_attempts,
+		    'error', 'the handler failed on its own', 'trace', '')
+		WHERE `+where, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tag.RowsAffected() != 1 {
+		t.Fatalf("failed %d jobs, want 1", tag.RowsAffected())
+	}
+}
+
 // A knowledge scan whose last attempt died with its worker still fails the
 // pack: the rescued job is given its last attempt, whose failure fails the
 // pack rather than leave it scanning, and it is given it once.
@@ -68,6 +86,21 @@ func TestARescuedLastScanFailsThePack(t *testing.T) {
 	if finals != 1 {
 		t.Fatalf("final attempts queued: %d, want 1", finals)
 	}
+	// The last attempt is one attempt, on the queue the scan runs on.
+	var attempts int
+	var queueName string
+	if err := env.st.Pool().QueryRow(ctx, `SELECT max_attempts, queue FROM river_job WHERE kind = $1 AND args->>'pack' = $2 AND metadata ? 'final'`,
+		knowledge.JobScan, p.ID.String()).Scan(&attempts, &queueName); err != nil {
+		t.Fatal(err)
+	}
+	var origQueue string
+	if err := env.st.Pool().QueryRow(ctx, `SELECT queue FROM river_job WHERE kind = $1 AND args->>'pack' = $2 AND NOT (metadata ? 'final')`,
+		knowledge.JobScan, p.ID.String()).Scan(&origQueue); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 || queueName != origQueue {
+		t.Fatalf("the final attempt has %d attempts on queue %q, want 1 on %q", attempts, queueName, origQueue)
+	}
 }
 
 // A last attempt that is itself rescued is not given another: the job ends
@@ -85,9 +118,27 @@ func TestARescuedFinalAttemptIsNotQueuedAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	rescueAtLastAttempt(t, env, `kind = $1 AND args->>'pack' = $2`, knowledge.JobScan, p.ID.String())
+	// A job that failed on its own at its last attempt was not rescued and
+	// is left as it is.
+	failed, err := svc.CreateSealed(ctx, owner, "failed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.Replace(ctx, owner, failed.ID, "", knowledgeFiles()); err != nil {
+		t.Fatal(err)
+	}
+	failedAtLastAttempt(t, env, `kind = $1 AND args->>'pack' = $2`, knowledge.JobScan, failed.ID.String())
 	rc := queue.NewRiverClient(env.st, nil)
 	if n, err := rc.SettleRescued(ctx); err != nil || n != 1 {
 		t.Fatalf("SettleRescued = %d, %v", n, err)
+	}
+	var failedJobs int
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = $1 AND args->>'pack' = $2`,
+		knowledge.JobScan, failed.ID.String()).Scan(&failedJobs); err != nil {
+		t.Fatal(err)
+	}
+	if failedJobs != 1 {
+		t.Fatalf("scan jobs for the pack whose handler failed on its own: %d, want only the one it had", failedJobs)
 	}
 	rescueAtLastAttempt(t, env, `kind = $1 AND args->>'pack' = $2 AND metadata ? 'final'`, knowledge.JobScan, p.ID.String())
 	if _, err := rc.SettleRescued(ctx); err != nil {

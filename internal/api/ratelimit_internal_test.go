@@ -63,10 +63,53 @@ func TestRateLimitHeadersCountDownAndRefuse(t *testing.T) {
 	if refused.Reset <= 0 {
 		t.Fatal("Reset must say when the next token arrives")
 	}
+	// At one token a second the next one is at most a second away, and the
+	// answer is never under a second.
+	if refused.Reset != time.Second {
+		t.Fatalf("Reset = %v at one token a second, want 1s", refused.Reset)
+	}
 
 	// A different key has its own budget: limits are per principal, not global.
 	if other := rl.Allow("authed", "u2", lim, burst); !other.OK {
 		t.Fatal("a second principal must not inherit the first one's exhausted bucket")
+	}
+	// So has the same key in another class.
+	if other := rl.Allow("anon", "u1", lim, burst); !other.OK {
+		t.Fatal("a class must not inherit another class's exhausted bucket for the same key")
+	}
+
+	// The time to the next token follows the rate: a token every ten
+	// seconds is nearly ten seconds away, and a rate of nothing never
+	// refills, which is reported as an hour.
+	slow := rate.Limit(0.1)
+	for range burst {
+		rl.Allow("slow", "u1", slow, burst)
+	}
+	if wait := rl.Allow("slow", "u1", slow, burst); wait.OK || wait.Reset <= 9*time.Second || wait.Reset > 10*time.Second {
+		t.Fatalf("a refusal at a token every ten seconds: ok %v, reset %v, want a wait between 9s and 10s", wait.OK, wait.Reset)
+	}
+	for range burst {
+		rl.Allow("never", "u1", rate.Limit(0), burst)
+	}
+	if wait := rl.Allow("never", "u1", rate.Limit(0), burst); wait.OK || wait.Reset != time.Hour {
+		t.Fatalf("a refusal at a rate of nothing: ok %v, reset %v, want an hour", wait.OK, wait.Reset)
+	}
+	// No burst is no budget.
+	if none := rl.Allow("authed", "u3", lim, 0); none.OK || none.Limit != 0 || none.Remaining != 0 {
+		t.Fatalf("a zero burst: %+v, want a refusal with no budget", none)
+	}
+	// The budgets the classes are configured with.
+	for name, c := range map[string]struct {
+		got  rate.Limit
+		want rate.Limit
+	}{
+		"120 a minute is 2 a second": {ratelimit.PerMinute(120), 2},
+		"7200 an hour is 2 a second": {ratelimit.PerHour(7200), 2},
+		"5 a second is 5 a second":   {ratelimit.PerSecond(5), 5},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s: %v", name, c.got)
+		}
 	}
 }
 
@@ -103,6 +146,7 @@ func TestClientIPHonorsTrustedProxyDepth(t *testing.T) {
 		{"hop count one too high: the peer, not the client's entry", "9.9.9.9", 2, "10.0.0.9"},
 		{"no header at all falls back to the peer", "", 2, "10.0.0.9"},
 		{"non-IP entries are dropped", "junk, 203.0.113.7, 198.51.100.2", 2, "203.0.113.7"},
+		{"a non-IP entry at the tail is dropped, not used", "203.0.113.7, junk", 1, "203.0.113.7"},
 		{"ip:port form is tolerated", "203.0.113.7:9999, 198.51.100.2", 2, "203.0.113.7"},
 		// The compose edge behind a Cloudflare Tunnel: nginx
 		// resolves the visitor from CF-Connecting-IP and REPLACES the
@@ -112,11 +156,21 @@ func TestClientIPHonorsTrustedProxyDepth(t *testing.T) {
 		// regression the edge config must not reintroduce.
 		{"tunnel: edge replaces the header", "203.0.113.7", 1, "203.0.113.7"},
 		{"tunnel: an appended header hides the visitor", "203.0.113.7, 172.18.0.5", 1, "172.18.0.5"},
+		// One address has one spelling, so it has one bucket.
+		{"an IPv6 entry is normalized", "2001:DB8:0:0:0:0:0:7, 198.51.100.2", 2, "2001:db8::7"},
+		{"a bracketed IPv6 entry", "[2001:db8::7], 198.51.100.2", 2, "2001:db8::7"},
+		{"a bracketed IPv6 entry with a port", "[2001:db8::7]:8443, 198.51.100.2", 2, "2001:db8::7"},
 	}
 	for _, c := range cases {
 		if got := clientIPWithProxies(req(c.xff), proxyTrust{hops: c.trusted}); got != c.want {
 			t.Errorf("%s: clientIP = %q, want %q", c.name, got, c.want)
 		}
+	}
+	// A peer address with no port is still the peer.
+	bare := httptest.NewRequest("GET", "/", nil)
+	bare.RemoteAddr = "10.0.0.9"
+	if got := clientIPWithProxies(bare, proxyTrust{}); got != "10.0.0.9" {
+		t.Errorf("a peer address with no port: clientIP = %q, want it as given", got)
 	}
 }
 
@@ -144,6 +198,7 @@ func TestClientIPTrustsForwardedForOnlyFromListedPeers(t *testing.T) {
 		{"IPv4-mapped peer matches its IPv4 range", "[::ffff:172.18.0.11]:443", "203.0.113.7", 1, []string{"172.16.0.0/12"}, "203.0.113.7"},
 		{"a list without a hop count trusts nothing", "172.18.0.11:4431", "203.0.113.7", 0, []string{"172.16.0.0/12"}, "172.18.0.11"},
 		{"no list: the hop count alone, as before", "198.51.100.20:4431", "203.0.113.7", 1, nil, "203.0.113.7"},
+		{"a peer that is not an address is not listed", "pipe:4431", "203.0.113.7", 1, []string{"172.16.0.0/12"}, "pipe"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -211,6 +266,17 @@ func TestWriteRateLimitHeaders(t *testing.T) {
 	if n, err := strconv.Atoi(w.Header().Get("Retry-After")); err != nil || n < 1 {
 		t.Fatalf("Retry-After = %q, want an integer >= 1", w.Header().Get("Retry-After"))
 	}
+	if got := w.Header().Get("RateLimit-Reset"); got != "1" {
+		t.Fatalf("RateLimit-Reset = %q for a sub-second reset, want 1", got)
+	}
+
+	// Seconds are rounded to the nearest, so a wait of a second and a half
+	// is told as two rather than as one that would be refused again.
+	w = httptest.NewRecorder()
+	writeRateLimitHeaders(w, limitResult{OK: false, Limit: 10, Reset: 1500 * time.Millisecond})
+	if got := w.Header().Get("Retry-After"); got != "2" {
+		t.Fatalf("Retry-After = %q for 1.5s, want 2", got)
+	}
 }
 
 func TestClampLimit(t *testing.T) {
@@ -225,6 +291,9 @@ func TestClampLimit(t *testing.T) {
 		{"negative uses the default (used to reach LIMIT and 500)", ptr(-5), 25},
 		{"in range passes through", ptr(50), 50},
 		{"over the maximum is clamped, not rejected", ptr(10000), 100},
+		{"the maximum itself passes", ptr(100), 100},
+		{"one over the maximum is clamped", ptr(101), 100},
+		{"one is a limit", ptr(1), 1},
 	}
 	for _, c := range cases {
 		if got := clampLimit(c.in, 25, 100); got != c.want {
@@ -247,6 +316,12 @@ func TestClampOffset(t *testing.T) {
 	if got := clampOffset(ptr(maxListOffset + 1)); got != maxListOffset {
 		t.Errorf("deep offset = %d, want it capped at %d", got, maxListOffset)
 	}
+	if got := clampOffset(ptr(maxListOffset)); got != maxListOffset {
+		t.Errorf("offset at the cap = %d, want %d", got, maxListOffset)
+	}
+	if got := clampOffset(ptr(0)); got != 0 {
+		t.Errorf("offset 0 = %d, want 0", got)
+	}
 }
 
 func TestCursorRoundTrip(t *testing.T) {
@@ -266,5 +341,28 @@ func TestCursorRoundTrip(t *testing.T) {
 	}
 	if _, _, ok := decodeCursor(encodeCursorRaw("nonsense|also-nonsense")); ok {
 		t.Fatal("a cursor with unparseable parts must not decode")
+	}
+	// Each part is checked by itself: a good time with a bad id, and a bad
+	// time with a good id.
+	if _, _, ok := decodeCursor(encodeCursorRaw(now.Format(time.RFC3339Nano) + "|not-an-id")); ok {
+		t.Fatal("a cursor with a bad id must not decode")
+	}
+	if _, _, ok := decodeCursor(encodeCursorRaw("yesterday|" + id.String())); ok {
+		t.Fatal("a cursor with a bad time must not decode")
+	}
+	if _, _, ok := decodeCursor(encodeCursorRaw(now.Format(time.RFC3339Nano))); ok {
+		t.Fatal("a cursor with a time and no id must not decode")
+	}
+	if _, _, ok := decodeCursor(""); ok {
+		t.Fatal("an empty cursor must not decode")
+	}
+	// The position keeps its nanoseconds, in UTC, whatever zone it came in.
+	exact := time.Date(2026, 11, 1, 10, 20, 30, 123456789, time.FixedZone("east", 5*3600))
+	gotT, gotID, ok = decodeCursor(encodeCursor(exact, id))
+	if !ok || !gotT.Equal(exact) || gotT.Nanosecond() != 123456789 || gotID != id {
+		t.Fatalf("a position with nanoseconds came back as %v %v (%v)", gotT, gotID, ok)
+	}
+	if want := exact.UTC().Format(time.RFC3339Nano) + "|" + id.String(); encodeCursor(exact, id) != encodeCursorRaw(want) {
+		t.Fatalf("cursor %q is not the base64url of %q", encodeCursor(exact, id), want)
 	}
 }

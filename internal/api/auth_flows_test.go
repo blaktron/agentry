@@ -6,8 +6,11 @@ package api_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/blaktron/agentry/internal/api"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
 )
 
@@ -35,13 +38,36 @@ func TestAuthLifecycle(t *testing.T) {
 		t.Fatalf("missing CSRF must 403, got %d", res.StatusCode)
 	}
 
-	// Logout revokes the session immediately.
-	env.doJSON(sess, http.MethodPost, "/api/v1/auth/logout", nil, nil, http.StatusNoContent)
+	// Logout revokes the session immediately and expires the cookie.
+	res = env.do(sess, http.MethodPost, "/api/v1/auth/logout", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("logout: got %d, want 204", res.StatusCode)
+	}
+	if !sessionCookieCleared(res) {
+		t.Fatal("logout left the browser holding its session cookie")
+	}
 	res = env.do(sess, http.MethodGet, "/api/v1/user", nil)
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("revoked session must 401, got %d", res.StatusCode)
 	}
+	if n := env.actorAuditRows(t, sess.name, "user.logout"); n != 1 {
+		t.Fatalf("user.logout rows by the account that signed out: %d, want 1", n)
+	}
+}
+
+// actorAuditRows counts the audit rows of an action written with the
+// account as actor. The binary's tests share one audit log, so a count of
+// the action alone says nothing of this test's own acts.
+func (env *testEnv) actorAuditRows(t *testing.T, handle, action string) int {
+	t.Helper()
+	var n int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events a JOIN handles h ON h.id = a.actor_id WHERE h.handle = $1 AND a.action = $2`, handle, action).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 // TestTheServerKeepsNoCredentialsOfItsOwn: there is no route that takes a
@@ -106,13 +132,17 @@ func TestPATLifecycle(t *testing.T) {
 
 	// Listing shows metadata but never the secret.
 	var list []struct {
-		Id     string   `json:"id"`
-		Prefix string   `json:"prefix"`
-		Scopes []string `json:"scopes"`
+		Id         string   `json:"id"`
+		Prefix     string   `json:"prefix"`
+		Scopes     []string `json:"scopes"`
+		LastUsedAt *string  `json:"lastUsedAt"`
 	}
 	env.doJSON(sess, http.MethodGet, "/api/v1/user/tokens", nil, &list, http.StatusOK)
 	if len(list) != 1 || list[0].Id != id || list[0].Prefix != token[:12] {
 		t.Fatalf("token list: %+v", list)
+	}
+	if list[0].LastUsedAt == nil {
+		t.Fatal("a token that has just been used lists no last use")
 	}
 
 	// A PAT cannot mint PATs (session-only).
@@ -131,6 +161,54 @@ func TestPATLifecycle(t *testing.T) {
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("scope violation must 403, got %d", res.StatusCode)
 	}
+
+	// A token cannot sign its holder out of the browsers either.
+	res = env.do(patCaller, http.MethodPost, "/api/v1/auth/logout", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("PAT logout must 403, got %d", res.StatusCode)
+	}
+
+	// What a token may be minted with: a name of 1 to 120 characters, at
+	// least one known scope, and a lifetime within the year.
+	day := 24 * time.Hour
+	mint := func(body map[string]any) (int, []api.FieldError) {
+		return fieldRefusalOf(t, env.do(sess, http.MethodPost, "/api/v1/user/tokens", body))
+	}
+	for _, c := range []struct {
+		name string
+		body map[string]any
+		want api.FieldError
+	}{
+		{"a blank name", map[string]any{"name": "  ", "scopes": []string{"user:profile"}}, api.FieldError{Field: "name", Message: "Must be 1-120 characters."}},
+		{"a 121-character name", map[string]any{"name": strings.Repeat("n", 121), "scopes": []string{"user:profile"}}, api.FieldError{Field: "name", Message: "Must be 1-120 characters."}},
+		{"no scope", map[string]any{"name": "t", "scopes": []string{}}, api.FieldError{Field: "scopes", Message: "Name at least one scope."}},
+		{"an unknown scope", map[string]any{"name": "t", "scopes": []string{"nonsense:all"}}, api.FieldError{Field: "scopes", Message: "Unknown scope nonsense:all."}},
+		{"a lifetime past the year", map[string]any{"name": "t", "scopes": []string{"user:profile"}, "expiresAt": time.Now().Add(366 * day)}, api.FieldError{Field: "expiresAt", Message: "Must be within the maximum token lifetime."}},
+		{"an expiry in the past", map[string]any{"name": "t", "scopes": []string{"user:profile"}, "expiresAt": time.Now().Add(-time.Minute)}, api.FieldError{Field: "expiresAt", Message: "Must be in the future."}},
+	} {
+		if code, fields := mint(c.body); code != http.StatusUnprocessableEntity || len(fields) != 1 || fields[0] != c.want {
+			t.Errorf("%s: %d %+v, want 422 %+v", c.name, code, fields, c.want)
+		}
+	}
+	var minted struct {
+		ExpiresAt time.Time `json:"expiresAt"`
+		Name      string    `json:"name"`
+	}
+	want := time.Now().Add(364 * day)
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/tokens", map[string]any{"name": strings.Repeat("n", 120), "scopes": []string{"user:profile"}, "expiresAt": want}, &minted, http.StatusCreated)
+	if len(minted.Name) != 120 || minted.ExpiresAt.Sub(want).Abs() > time.Second {
+		t.Fatalf("a 120-character name and a lifetime within the year: %d characters, expires %v, want %v", len(minted.Name), minted.ExpiresAt, want)
+	}
+
+	// Only the owner revokes a token.
+	stranger := env.login(env.register("patty-stranger"))
+	res = env.do(stranger, http.MethodDelete, "/api/v1/user/tokens/"+id, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("revoking another account's token: got %d, want 404", res.StatusCode)
+	}
+	env.doJSON(patCaller, http.MethodGet, "/api/v1/user", nil, nil, http.StatusOK)
 
 	// Revoke → immediate rejection.
 	env.doJSON(sess, http.MethodDelete, "/api/v1/user/tokens/"+id, nil, nil, http.StatusNoContent)
@@ -191,6 +269,24 @@ func TestAuditCoverage(t *testing.T) {
 		if n == 0 {
 			t.Errorf("no audit rows for %s", action)
 		}
+	}
+	// And for this account's own acts, which the binary's other tests cannot
+	// stand in for: one row each, the token's naming its name and scopes.
+	for action, want := range map[string]int{"user.social_login": 1, "user.update": 1, "user.logout": 1, "pat.create": 1, "pat.revoke": 1} {
+		if n := env.actorAuditRows(t, h, action); n != want {
+			t.Errorf("audit rows of %s written by %s: %d, want %d", action, h, n, want)
+		}
+	}
+	var named int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events a JOIN handles hd ON hd.id = a.actor_id
+		  WHERE hd.handle = $1 AND a.action = 'pat.create' AND a.target_id = $2::uuid AND a.detail->>'name' = 'audit-tok' AND a.detail->'scopes' = '["user:profile"]'::jsonb`, h, tokID).Scan(&named); err != nil || named != 1 {
+		t.Errorf("pat.create rows naming the token and its scopes: %d (%v), want 1", named, err)
+	}
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events a JOIN handles hd ON hd.id = a.actor_id
+		  WHERE hd.handle = $1 AND a.action = 'pat.revoke' AND a.target_id = $2::uuid`, h, tokID).Scan(&named); err != nil || named != 1 {
+		t.Errorf("pat.revoke rows naming the token: %d (%v), want 1", named, err)
 	}
 
 	// Append-only: UPDATE/DELETE must be blocked by trigger.
