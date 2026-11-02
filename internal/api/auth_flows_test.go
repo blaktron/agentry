@@ -182,6 +182,7 @@ func TestPATLifecycle(t *testing.T) {
 	}{
 		{"a blank name", map[string]any{"name": "  ", "scopes": []string{"user:profile"}}, api.FieldError{Field: "name", Message: "Must be 1-120 characters."}},
 		{"a 121-character name", map[string]any{"name": strings.Repeat("n", 121), "scopes": []string{"user:profile"}}, api.FieldError{Field: "name", Message: "Must be 1-120 characters."}},
+		{"a 121-character name of two-byte letters", map[string]any{"name": strings.Repeat("\u00e9", 121), "scopes": []string{"user:profile"}}, api.FieldError{Field: "name", Message: "Must be 1-120 characters."}},
 		{"no scope", map[string]any{"name": "t", "scopes": []string{}}, api.FieldError{Field: "scopes", Message: "Name at least one scope."}},
 		{"an unknown scope", map[string]any{"name": "t", "scopes": []string{"nonsense:all"}}, api.FieldError{Field: "scopes", Message: "Unknown scope nonsense:all."}},
 		{"a lifetime past the year", map[string]any{"name": "t", "scopes": []string{"user:profile"}, "expiresAt": time.Now().Add(366 * day)}, api.FieldError{Field: "expiresAt", Message: "Must be within the maximum token lifetime."}},
@@ -199,6 +200,20 @@ func TestPATLifecycle(t *testing.T) {
 	env.doJSON(sess, http.MethodPost, "/api/v1/user/tokens", map[string]any{"name": strings.Repeat("n", 120), "scopes": []string{"user:profile"}, "expiresAt": want}, &minted, http.StatusCreated)
 	if len(minted.Name) != 120 || minted.ExpiresAt.Sub(want).Abs() > time.Second {
 		t.Fatalf("a 120-character name and a lifetime within the year: %d characters, expires %v, want %v", len(minted.Name), minted.ExpiresAt, want)
+	}
+	// The bound counts characters, not bytes.
+	wide := strings.Repeat("\u00e9", 120)
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/tokens", map[string]any{"name": wide, "scopes": []string{"user:profile"}}, &minted, http.StatusCreated)
+	if minted.Name != wide {
+		t.Fatalf("a 120-character name of two-byte letters came back as %q", minted.Name)
+	}
+	// So does the display name's.
+	env.doJSON(sess, http.MethodPatch, "/api/v1/user", map[string]any{"displayName": wide}, nil, http.StatusOK)
+	if r := env.do(sess, http.MethodPatch, "/api/v1/user", map[string]any{"displayName": wide + "\u00e9"}); r.StatusCode != http.StatusUnprocessableEntity {
+		_ = r.Body.Close()
+		t.Fatalf("a 121-character display name of two-byte letters: %d, want 422", r.StatusCode)
+	} else {
+		_ = r.Body.Close()
 	}
 
 	// Only the owner revokes a token.

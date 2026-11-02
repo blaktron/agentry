@@ -217,6 +217,11 @@ func (s *Server) eraseAccountNow(r *http.Request, userID uuid.UUID, email string
 	// failure — a yanked version is safe, a half-erased account is not.
 	// Transferred agents are deliberately skipped: their whole point is that
 	// the content survives with a new maintainer.
+	// A version list that cannot be read stops the erasure before anything
+	// is erased: going on would leave that agent's versions published while
+	// the record said they were yanked. The yanks already made stand, and a
+	// retry yanks the rest.
+	var yanked int64
 	if disposition == "yank" {
 		for _, a := range agents {
 			if a.LatestPublishedVersionID == nil {
@@ -224,7 +229,8 @@ func (s *Server) eraseAccountNow(r *http.Request, userID uuid.UUID, email string
 			}
 			versions, err := q.ListVersions(r.Context(), a.ID)
 			if err != nil {
-				continue
+				s.log.ErrorContext(r.Context(), "gdpr yank: list versions", "agent", a.ID, "err", err)
+				return "", fmt.Errorf("gdpr: list the versions of agent %s to yank: %w", a.ID, err)
 			}
 			for _, v := range versions {
 				if v.Status != string(registry.StatusPublished) {
@@ -235,7 +241,9 @@ func (s *Server) eraseAccountNow(r *http.Request, userID uuid.UUID, email string
 				if err := s.reg.Transition(r.Context(), v.ID, registry.StatusYanked,
 					"author account deleted", e); err != nil {
 					s.log.WarnContext(r.Context(), "gdpr yank", "version", v.ID, "err", err)
+					continue
 				}
+				yanked++
 			}
 		}
 	}
@@ -261,6 +269,7 @@ func (s *Server) eraseAccountNow(r *http.Request, userID uuid.UUID, email string
 		e.Detail = map[string]any{
 			"publishedContent":  disposition,
 			"publishedVersions": publishedCount,
+			"versionsYanked":    yanked,
 			"desktopCodes":      erased.desktopCodes,
 			"knowledgeObjects":  len(erased.knowledgeKeys),
 		}

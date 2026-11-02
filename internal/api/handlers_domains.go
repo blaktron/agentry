@@ -184,7 +184,9 @@ func (s *Server) VerifyDomainClaim(w http.ResponseWriter, r *http.Request, org O
 }
 
 func normalizeDomain(d string) string {
-	return strings.ToLower(strings.TrimSpace(strings.TrimSuffix(d, ".")))
+	// Spaces first: a trailing dot followed by a space is still the
+	// root label, and leaving it would store a second spelling of the domain.
+	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(d), "."))
 }
 
 // validDomain is a light structural check (a real registrable-domain check is

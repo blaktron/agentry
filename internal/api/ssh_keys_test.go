@@ -181,6 +181,16 @@ func TestSSHKeysLifecycle(t *testing.T) {
 	if titled.Title != long {
 		t.Fatalf("a 120-character title came back as %q", titled.Title)
 	}
+	// The bound counts characters, not bytes: 120 two-byte letters are
+	// taken, 121 are not.
+	wide := strings.Repeat("\u00e9", 120)
+	env.doJSON(sess, http.MethodPost, "/api/v1/user/ssh-keys", map[string]any{"title": wide, "publicKey": testPublicKeyLine(t)}, &titled, http.StatusCreated)
+	if titled.Title != wide {
+		t.Fatalf("a 120-character title of two-byte letters came back as %q", titled.Title)
+	}
+	if code, fields := fieldRefusalOf(t, env.do(sess, http.MethodPost, "/api/v1/user/ssh-keys", map[string]any{"title": wide + "\u00e9", "publicKey": testPublicKeyLine(t)})); code != http.StatusUnprocessableEntity || len(fields) != 1 || fields[0] != (api.FieldError{Field: "title", Message: "Must be 1-120 characters."}) {
+		t.Fatalf("a 121-character title of two-byte letters: %d %v, want 422 on title", code, fields)
+	}
 }
 
 // noSSHKeys is a person's subscription without SSH keys (tierResolver lays

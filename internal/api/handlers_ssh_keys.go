@@ -11,6 +11,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -66,7 +67,7 @@ func (s *Server) AddSshKey(w http.ResponseWriter, r *http.Request) {
 	}
 	var fields []FieldError
 	title := strings.TrimSpace(req.Title)
-	if title == "" || len(title) > 120 {
+	if title == "" || utf8.RuneCountInString(title) > 120 {
 		fields = append(fields, FieldError{Field: "title", Message: "Must be 1-120 characters."})
 	}
 	keyType, canonical, fp, err := auth.ParseSSHPublicKey(req.PublicKey)
