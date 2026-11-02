@@ -385,13 +385,15 @@ WHERE a.visibility = 'public'
   AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'));
 
 -- name: SearchFacetModes :many
--- One row per run mode with the number of public, unblocked agents that
--- support it; an agent supporting both counts under each.
+-- One row per run mode with the number of public, unblocked agents with a
+-- published version that support it; an agent supporting both counts under
+-- each. Like the results, an agent with nothing installable is not counted.
 SELECT m.mode::text AS mode, count(*)::bigint AS n
 FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 LEFT JOIN orgs o ON o.id = a.namespace_id, unnest(a.modes) AS m(mode)
 WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND a.latest_published_version_id IS NOT NULL
   AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
   AND (sqlc.arg(query)::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', sqlc.arg(query)::text))
 GROUP BY m.mode ORDER BY m.mode;
