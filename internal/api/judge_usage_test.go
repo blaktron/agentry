@@ -46,10 +46,6 @@ func TestReportShowsJudgeUsageToStaffOnly(t *testing.T) {
 	if !promptNull || !completionNull {
 		t.Fatal("the static judge must leave the token columns NULL, not zero")
 	}
-	if _, err := env.st.Pool().Exec(context.Background(),
-		`UPDATE scan_runs SET judge_prompt_tokens = 812, judge_completion_tokens = 97 WHERE version_id = (`+runFor+`)`, author); err != nil {
-		t.Fatal(err)
-	}
 
 	reportPath := "/api/v1/agents/" + author + "/measured/versions/1.0.0/report"
 	var rep struct {
@@ -57,6 +53,37 @@ func TestReportShowsJudgeUsageToStaffOnly(t *testing.T) {
 			PromptTokens     int `json:"promptTokens"`
 			CompletionTokens int `json:"completionTokens"`
 		} `json:"judgeUsage"`
+	}
+	staff := env.register("usage-staff")
+	env.verifyEmail(staff)
+	env.makePlatformStaff(t, staff)
+	staffSess := env.login(staff)
+
+	// A usage that is unknown, or known in part, is not shown: not as zero.
+	env.doJSON(staffSess, http.MethodGet, reportPath, nil, &rep, http.StatusOK)
+	if rep.JudgeUsage != nil {
+		t.Fatalf("staff must not see usage the run does not hold, got %+v", *rep.JudgeUsage)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE scan_runs SET judge_prompt_tokens = 812 WHERE version_id = (`+runFor+`)`, author); err != nil {
+		t.Fatal(err)
+	}
+	rep.JudgeUsage = nil
+	env.doJSON(staffSess, http.MethodGet, reportPath, nil, &rep, http.StatusOK)
+	if rep.JudgeUsage != nil {
+		t.Fatalf("staff must not see usage the run holds in part, got %+v", *rep.JudgeUsage)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE scan_runs SET judge_prompt_tokens = NULL, judge_completion_tokens = 97 WHERE version_id = (`+runFor+`)`, author); err != nil {
+		t.Fatal(err)
+	}
+	env.doJSON(staffSess, http.MethodGet, reportPath, nil, &rep, http.StatusOK)
+	if rep.JudgeUsage != nil {
+		t.Fatalf("staff must not see usage the run holds in part, got %+v", *rep.JudgeUsage)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE scan_runs SET judge_prompt_tokens = 812, judge_completion_tokens = 97 WHERE version_id = (`+runFor+`)`, author); err != nil {
+		t.Fatal(err)
 	}
 	env.doJSON(anonymous, http.MethodGet, reportPath, nil, &rep, http.StatusOK)
 	if rep.JudgeUsage != nil {
@@ -67,10 +94,7 @@ func TestReportShowsJudgeUsageToStaffOnly(t *testing.T) {
 		t.Fatalf("the author is not staff and must not see judge usage, got %+v", *rep.JudgeUsage)
 	}
 
-	staff := env.register("usage-staff")
-	env.verifyEmail(staff)
-	env.makePlatformStaff(t, staff)
-	env.doJSON(env.login(staff), http.MethodGet, reportPath, nil, &rep, http.StatusOK)
+	env.doJSON(staffSess, http.MethodGet, reportPath, nil, &rep, http.StatusOK)
 	if rep.JudgeUsage == nil || rep.JudgeUsage.PromptTokens != 812 || rep.JudgeUsage.CompletionTokens != 97 {
 		t.Fatalf("staff must see the recorded usage, got %+v", rep.JudgeUsage)
 	}

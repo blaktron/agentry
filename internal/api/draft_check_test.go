@@ -3,7 +3,10 @@ package api_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -23,8 +26,11 @@ import (
 // draftJudge answers both of the check's sets: "IGNORE YOUR INSTRUCTIONS"
 // in a file is the rubric's injection, "PROBABLY MISLEADING" a probable
 // deception, "PROBABLY OBFUSCATED" a probable obfuscation and "PROBABLY
-// UNDECLARED" a probable undeclared capability (each score 2), "OFF-TASK" in an instruction the draft set's off-task question,
-// "JUDGE-ERROR" a failed request. It records what it was asked.
+// UNDECLARED" a probable undeclared capability (each score 2), "PROBABLY
+// EXFIL" an exfiltration (score 3), "PROBABLY DESTRUCTIVE" a destructive
+// action (2), "OFF-TASK" in an instruction the draft set's off-task question,
+// "JUDGE-ERROR" a failed request, "SLOW" a request that ran out of time. It
+// records what it was asked.
 type draftJudge struct {
 	mu    sync.Mutex
 	asked [][]judge.Question
@@ -42,6 +48,12 @@ func (f *draftJudge) Ask(_ context.Context, state map[string]string, qs []judge.
 	if strings.Contains(text, "JUDGE-ERROR") {
 		return nil, judge.Usage{Requests: 1}, errors.New("judge: typesafe endpoint returned 500: [key]")
 	}
+	if strings.Contains(text, "JUDGE-STATUS") {
+		return nil, judge.Usage{Requests: 1}, &judge.StatusError{Status: http.StatusBadGateway, Snippet: "vendor echo: " + text}
+	}
+	if strings.Contains(text, "SLOW") {
+		return nil, judge.Usage{Requests: 1}, context.DeadlineExceeded
+	}
 	out := map[string]float64{}
 	for _, q := range qs {
 		out[q.ID] = 0.04
@@ -55,6 +67,10 @@ func (f *draftJudge) Ask(_ context.Context, state map[string]string, qs []judge.
 		case q.ID == judge.RubricIDObfuscation && strings.Contains(state["content"], "PROBABLY OBFUSCATED"):
 			out[q.ID] = 0.81
 		case q.ID == judge.RubricIDUndeclaredCapability && strings.Contains(state["content"], "PROBABLY UNDECLARED"):
+			out[q.ID] = 0.81
+		case q.ID == judge.RubricIDExfiltration && strings.Contains(state["content"], "PROBABLY EXFIL"):
+			out[q.ID] = 0.95
+		case q.ID == judge.RubricIDDestructive && strings.Contains(state["content"], "PROBABLY DESTRUCTIVE"):
 			out[q.ID] = 0.81
 		}
 	}
@@ -137,11 +153,18 @@ func TestTheDraftCheckFlagsOnlyWhatTheGateHolds(t *testing.T) {
 	env := newTestEnvWith(t, func(s *api.Server) { s.SetDraftChecker(draftcheck.New(&draftJudge{})) })
 	staff := staffCaller(t, env, "dc-bar")
 	desc := "Give me a three-line weather brief for a city I name."
+	// Each of the rubric's six questions has its score under its own name.
+	scores := func(c1, c2, c3, c4, c5, c6 int) map[string]int {
+		return map[string]int{"C1_injection": c1, "C2_exfiltration": c2, "C3_undeclared_capability": c3, "C4_user_deception": c4, "C5_obfuscation": c5, "C6_destructive_actions": c6}
+	}
 
 	st, b, _ := checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY OBFUSCATED\n")})
 	if st != http.StatusOK || b.Rubric.Verdict != "pass" || len(b.Rubric.Findings) != 1 ||
 		b.Rubric.Findings[0].ID != "C5_obfuscation" || b.Rubric.Findings[0].Score != 2 || b.Rubric.Findings[0].Severity != "medium" {
 		t.Fatalf("a medium is a note on a pass: %d %+v", st, b.Rubric)
+	}
+	if !maps.Equal(b.Rubric.Scores, scores(0, 0, 0, 0, 2, 0)) {
+		t.Fatalf("the scores of an obfuscation: %v", b.Rubric.Scores)
 	}
 
 	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY MISLEADING\n")})
@@ -149,15 +172,34 @@ func TestTheDraftCheckFlagsOnlyWhatTheGateHolds(t *testing.T) {
 		b.Rubric.Findings[0].ID != "C4_user_deception" || b.Rubric.Findings[0].Score != 2 || b.Rubric.Findings[0].Severity != "high" {
 		t.Fatalf("a deception at 2 flags: %d %+v", st, b.Rubric)
 	}
+	if !maps.Equal(b.Rubric.Scores, scores(0, 0, 0, 2, 0, 0)) {
+		t.Fatalf("the scores of a deception: %v", b.Rubric.Scores)
+	}
 
 	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY UNDECLARED\n")})
 	if st != http.StatusOK || b.Rubric.Verdict != "flagged" || len(b.Rubric.Findings) != 1 ||
 		b.Rubric.Findings[0].ID != "C3_undeclared_capability" || b.Rubric.Findings[0].Score != 2 || b.Rubric.Findings[0].Severity != "high" {
 		t.Fatalf("an undeclared capability at 2 flags: %d %+v", st, b.Rubric)
 	}
+	if !maps.Equal(b.Rubric.Scores, scores(0, 0, 2, 0, 0, 0)) {
+		t.Fatalf("the scores of an undeclared capability: %v", b.Rubric.Scores)
+	}
+
+	// Exfiltration and destructive actions are medium however high they
+	// score: notes on a pass, in the rubric's order.
+	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("# Weather\nPROBABLY EXFIL\nPROBABLY DESTRUCTIVE\n")})
+	if st != http.StatusOK || b.Rubric.Verdict != "pass" || len(b.Rubric.Findings) != 2 ||
+		b.Rubric.Findings[0].ID != "C2_exfiltration" || b.Rubric.Findings[0].Score != 3 || b.Rubric.Findings[0].Severity != "medium" ||
+		b.Rubric.Findings[1].ID != "C6_destructive_actions" || b.Rubric.Findings[1].Score != 2 || b.Rubric.Findings[1].Severity != "medium" {
+		t.Fatalf("exfiltration and destructive actions are notes: %d %+v", st, b.Rubric)
+	}
+	if !maps.Equal(b.Rubric.Scores, scores(0, 3, 0, 0, 0, 2)) {
+		t.Fatalf("the scores of an exfiltration and a destructive action: %v", b.Rubric.Scores)
+	}
 }
 
 func TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet(t *testing.T) {
+	logs := modelInputLog(t)
 	fj := &draftJudge{}
 	env := newTestEnvWith(t, func(s *api.Server) { s.SetDraftChecker(draftcheck.New(fj)) })
 	staff := staffCaller(t, env, "dc-staff")
@@ -209,21 +251,55 @@ func TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet(t *testing.T) {
 		b.Rubric.Findings[0].Score != 3 || b.Rubric.Findings[0].Path != "AGENT.md" || b.Rubric.Findings[0].Severity != "high" {
 		t.Fatalf("rubric flag: %d %+v", st, b.Rubric)
 	}
-	if b.Draft.Verdict != "flagged" || strings.Join(b.Draft.Flagged, ",") != "off_task" || b.Draft.Scores["off_task"] != 2 {
+	if b.Draft.Verdict != "flagged" || strings.Join(b.Draft.Flagged, ",") != "off_task" || b.Draft.Scores["off_task"] != 2 || b.Draft.Score != 2 {
 		t.Fatalf("draft flag: %+v", b.Draft)
+	}
+	if !maps.Equal(b.Rubric.Scores, map[string]int{"C1_injection": 3, "C2_exfiltration": 0, "C3_undeclared_capability": 0, "C4_user_deception": 0, "C5_obfuscation": 0, "C6_destructive_actions": 0}) {
+		t.Fatalf("the scores of an injection: %v", b.Rubric.Scores)
 	}
 
 	// A judge that fails is a half not scanned, never a pass.
 	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("JUDGE-ERROR\n")})
 	if st != http.StatusOK || b.Rubric.Verdict != "not_scanned" || b.Rubric.Failure != "judge-error" || b.Rubric.Scores != nil ||
-		b.Draft.Verdict != "not_scanned" || b.Draft.Failure != "judge-error" {
+		b.Draft.Verdict != "not_scanned" || b.Draft.Failure != "judge-error" || len(b.Draft.Scores) != 0 || b.Draft.Score != 0 || len(b.Draft.Flagged) != 0 {
 		t.Fatalf("not scanned: %d %+v", st, b)
+	}
+	// A judge that ran out of time says so, in the words that travel.
+	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("SLOW\n")})
+	if st != http.StatusOK || b.Rubric.Verdict != "not_scanned" || b.Rubric.Failure != "timeout" || b.Draft.Verdict != "not_scanned" || b.Draft.Failure != "timeout" {
+		t.Fatalf("not scanned for want of time: %d %+v", st, b)
+	}
+	// A vendor's answer that echoes the draft is logged by its status alone,
+	// for the half it failed.
+	if st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles("JUDGE-STATUS\n")}); st != http.StatusOK ||
+		b.Rubric.Failure != "judge-error" || b.Draft.Failure != "judge-error" {
+		t.Fatalf("a vendor's error status: %d %+v", st, b)
+	}
+	var halves []string
+	for _, l := range logLines(t, logs, "model input: check not scanned") {
+		if l["status"] == float64(http.StatusBadGateway) {
+			halves = append(halves, fmt.Sprint(l["half"]))
+		}
+	}
+	slices.Sort(halves)
+	if strings.Join(halves, ",") != "draft,rubric" || strings.Contains(logs.String(), "vendor echo") || strings.Contains(logs.String(), "JUDGE-STATUS") {
+		t.Fatalf("the halves logged by status: %v, log: %s", halves, logs.String())
+	}
+	// A draft set that is past its bounds is not scanned and not cut; the
+	// rubric still reads the package.
+	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": strings.Repeat("d", 24<<10), "files": draftFiles(strings.Repeat("w", 26<<10))})
+	if st != http.StatusOK || b.Rubric.Verdict != "pass" || b.Draft.Verdict != "not_scanned" || b.Draft.Failure != "too-large" {
+		t.Fatalf("a draft past the draft set's bounds: %d %+v", st, b)
 	}
 
 	// What the check will not read is refused before anything is asked.
 	fj.mu.Lock()
 	before := len(fj.asked)
 	fj.mu.Unlock()
+	many := draftFiles("x")
+	for i := len(many); i <= draftcheck.MaxFiles; i++ {
+		many = append(many, map[string]string{"path": fmt.Sprintf("notes/%02d.md", i), "content": "n"})
+	}
 	for _, c := range []struct {
 		name  string
 		files []map[string]string
@@ -232,13 +308,24 @@ func TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet(t *testing.T) {
 	}{
 		{"no agent.yaml", []map[string]string{{"path": "AGENT.md", "content": "x"}}, http.StatusUnprocessableEntity, "/draft-unreadable"},
 		{"no instruction file", []map[string]string{{"path": "agent.yaml", "content": draftYAML}}, http.StatusUnprocessableEntity, "/draft-unreadable"},
+		{"an agent.yaml that does not parse", []map[string]string{{"path": "agent.yaml", "content": "name: [unclosed"}, {"path": "AGENT.md", "content": "x"}}, http.StatusUnprocessableEntity, "/draft-unreadable"},
 		{"a path out of the package", append(draftFiles("x"), map[string]string{"path": "../x", "content": "y"}), http.StatusUnprocessableEntity, "/validation"},
+		{"a path of two dots", append(draftFiles("x"), map[string]string{"path": "..", "content": "y"}), http.StatusUnprocessableEntity, "/validation"},
+		{"an absolute path", append(draftFiles("x"), map[string]string{"path": "/etc/y", "content": "y"}), http.StatusUnprocessableEntity, "/validation"},
+		{"an empty path", append(draftFiles("x"), map[string]string{"path": "", "content": "y"}), http.StatusUnprocessableEntity, "/validation"},
+		{"a path that is not clean", append(draftFiles("x"), map[string]string{"path": "./y.md", "content": "y"}), http.StatusUnprocessableEntity, "/validation"},
+		{"a path with a double slash", append(draftFiles("x"), map[string]string{"path": "a//y.md", "content": "y"}), http.StatusUnprocessableEntity, "/validation"},
 		{"a path named twice", append(draftFiles("x"), map[string]string{"path": "AGENT.md", "content": "y"}), http.StatusUnprocessableEntity, "/validation"},
 		{"past the bytes", draftFiles(strings.Repeat("x", draftcheck.MaxBytes)), http.StatusRequestEntityTooLarge, "/draft-too-large"},
+		{"one byte past the bytes", draftFiles(strings.Repeat("x", draftcheck.MaxBytes-len(draftYAML)+1)), http.StatusRequestEntityTooLarge, "/draft-too-large"},
+		{"past the files", many, http.StatusRequestEntityTooLarge, "/draft-too-large"},
 	} {
 		st, _, p := checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": c.files})
 		if st != c.want || !strings.HasSuffix(p.Type, c.slug) {
 			t.Fatalf("%s: %d %+v", c.name, st, p)
+		}
+		if c.want == http.StatusRequestEntityTooLarge && (p.MaxFiles != draftcheck.MaxFiles || p.MaxBytes != draftcheck.MaxBytes) {
+			t.Fatalf("%s: the refusal names the bounds %d files and %d bytes: %+v", c.name, p.MaxFiles, p.MaxBytes, p)
 		}
 	}
 	fj.mu.Lock()
@@ -246,6 +333,54 @@ func TestTheDraftCheckReadsThePackageAsS5AndAsksTheDraftSet(t *testing.T) {
 	fj.mu.Unlock()
 	if after != before {
 		t.Fatalf("a refused check asked the judge %d times", after-before)
+	}
+
+	// A file that is not UTF-8 text cannot ride in a JSON body, so the
+	// reading itself refuses it.
+	if _, err := draftcheck.Read(draftcheck.Package{Files: []draftcheck.File{{Path: "agent.yaml", Content: draftYAML}, {Path: "AGENT.md", Content: "bad \xff text"}}}); err == nil ||
+		errors.Is(err, draftcheck.ErrNotADraft) || errors.Is(err, draftcheck.ErrTooLarge) {
+		t.Fatalf("a file that is not UTF-8 text: %v", err)
+	}
+
+	// A refusal says what is wrong, in the reading's own words.
+	for _, c := range []struct {
+		name  string
+		files []draftcheck.File
+		want  string
+	}{
+		{"no agent.yaml", []draftcheck.File{{Path: "AGENT.md", Content: "x"}}, "it has no agent.yaml"},
+		{"an agent.yaml that does not parse", []draftcheck.File{{Path: "agent.yaml", Content: "name: [unclosed"}, {Path: "AGENT.md", Content: "x"}}, "its agent.yaml does not parse"},
+		{"no instruction file", []draftcheck.File{{Path: "agent.yaml", Content: draftYAML}}, "its instruction file is not in the package"},
+	} {
+		if _, err := draftcheck.Read(draftcheck.Package{Files: c.files}); !errors.Is(err, draftcheck.ErrNotADraft) || !strings.Contains(err.Error(), c.want) {
+			t.Fatalf("%s: %v, want %q", c.name, err, c.want)
+		}
+	}
+
+	// The most the check reads is read: thirty-two files, and the last byte
+	// of the text.
+	fj.mu.Lock()
+	first := len(fj.state)
+	fj.mu.Unlock()
+	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": many[:draftcheck.MaxFiles]})
+	if st != http.StatusOK || b.Rubric.Verdict != "pass" {
+		t.Fatalf("%d files: %d %+v", draftcheck.MaxFiles, st, b.Rubric)
+	}
+	// ...which are read in the order of their paths, after the manifest.
+	fj.mu.Lock()
+	var paths []string
+	for _, s := range fj.state[first:] {
+		if s["path"] != "" {
+			paths = append(paths, s["path"])
+		}
+	}
+	fj.mu.Unlock()
+	if len(paths) != draftcheck.MaxFiles+1 || paths[0] != "agent.yaml" || !slices.IsSorted(paths[1:]) {
+		t.Fatalf("the files were read in the order %v", paths)
+	}
+	st, b, _ = checkDraft(t, env, staff, nil, map[string]any{"description": desc, "files": draftFiles(strings.Repeat("x", draftcheck.MaxBytes-len(draftYAML)))})
+	if st != http.StatusOK || b.Rubric.Verdict != "pass" {
+		t.Fatalf("%d bytes: %d %+v", draftcheck.MaxBytes, st, b.Rubric)
 	}
 }
 
@@ -333,7 +468,6 @@ func TestTheDraftCheckAnswersStaffAndAdmittedJobsOnly(t *testing.T) {
 		}
 	}
 	callers.mu.Lock()
-	defer callers.mu.Unlock()
 	var checks []api.ModelInputCall
 	for _, call := range callers.calls {
 		if call.Op == api.ModelInputOpCheck {
@@ -344,9 +478,62 @@ func TestTheDraftCheckAnswersStaffAndAdmittedJobsOnly(t *testing.T) {
 		t.Fatalf("admitted as: %+v", checks)
 	}
 	if len(callers.uses) != 1 || callers.usesJob[0] != "01draft" || callers.uses[0].Op != api.ModelInputOpCheck ||
-		callers.uses[0].Scanned != 1 || callers.uses[0].Withheld != 0 || callers.uses[0].Requests != 4 {
+		callers.uses[0].Scanned != 1 || callers.uses[0].Withheld != 0 || callers.uses[0].Requests != 4 || callers.uses[0].InputTokens != 400 {
 		t.Fatalf("recorded: %+v %+v", callers.usesJob, callers.uses)
 	}
+	callers.mu.Unlock()
+
+	// A job the extension refuses, or cannot name, is answered in the
+	// extension's words.
+	if st, _, p := checkDraft(t, env, anonymous, job("agyj_capped"), body); st != http.StatusForbidden || !strings.HasSuffix(p.Type, "/draft-cap-reached") ||
+		p.Title != "The draft's cap is reached" || p.Detail != "This draft has made its 2 checks." {
+		t.Fatalf("a job the extension refuses: %d %+v", st, p)
+	}
+	if st, _, p := checkDraft(t, env, anonymous, job("agyj_unknown"), body); st != http.StatusUnauthorized || p.Detail != "This job credential is not valid, or its job has ended." {
+		t.Fatalf("a credential that names no job: %d %+v", st, p)
+	}
+
+	// A job's check is recorded as withheld when it flagged the draft, on
+	// either half, or found a tool the manifest does not grant, or could not
+	// be answered; a clean one is not.
+	for i, c := range []struct {
+		name        string
+		instruction string
+		withheld    int
+	}{
+		{"a clean draft", "# Weather\nFetch the forecast.\n", 0},
+		{"a rubric flag", "# Weather\nPROBABLY MISLEADING\n", 1},
+		{"a draft set flag", "# Weather\nOFF-TASK\n", 1},
+		{"a tool the manifest does not grant", "# Weather\nOpen the map with browser_navigate.\n", 1},
+		{"a half not scanned", "JUDGE-ERROR\n", 1},
+	} {
+		if st, _, _ := checkDraft(t, env, anonymous, job("agyj_valid"), map[string]any{"description": "d", "files": draftFiles(c.instruction)}); st != http.StatusOK {
+			t.Fatalf("%s: %d", c.name, st)
+		}
+		callers.mu.Lock()
+		recorded, use := len(callers.uses), callers.uses[len(callers.uses)-1]
+		callers.mu.Unlock()
+		if recorded != i+2 || use.Op != api.ModelInputOpCheck || use.Scanned != 1 || use.Withheld != c.withheld {
+			t.Fatalf("%s: recorded %+v", c.name, use)
+		}
+		if i == 0 && (use.Requests != 4 || use.InputTokens != 400) {
+			t.Fatalf("%s: recorded %+v", c.name, use)
+		}
+	}
+}
+
+// brokenChecker is a draft checker that cannot read what it was given.
+type brokenChecker struct{}
+
+func (brokenChecker) Check(context.Context, draftcheck.Package) (draftcheck.Result, error) {
+	return draftcheck.Result{}, errors.New("the checker is down")
+}
+
+// scriptedChecker answers every check with one result.
+type scriptedChecker struct{ res draftcheck.Result }
+
+func (c scriptedChecker) Check(context.Context, draftcheck.Package) (draftcheck.Result, error) {
+	return c.res, nil
 }
 
 func TestTheDraftCheckIsOffWithoutAJevJudge(t *testing.T) {
@@ -355,6 +542,40 @@ func TestTheDraftCheckIsOffWithoutAJevJudge(t *testing.T) {
 	st, _, p := checkDraft(t, env, staff, nil, map[string]any{"description": "d", "files": draftFiles("# x\n")})
 	if st != http.StatusServiceUnavailable || !strings.HasSuffix(p.Type, "/model-input-unavailable") {
 		t.Fatalf("no checker: %d %+v", st, p)
+	}
+	if !strings.HasPrefix(p.Detail, "This registry's judge is not TypeSafe's Jev") {
+		t.Fatalf("the words of a route that is off: %q", p.Detail)
+	}
+
+	// Only three words of failure travel: a half not scanned for another
+	// reason is a judge error.
+	scripted := newTestEnvWith(t, func(s *api.Server) {
+		s.SetDraftChecker(scriptedChecker{draftcheck.Result{
+			Rubric: draftcheck.Rubric{Verdict: judge.VerdictNotScanned, Failure: "something-else"},
+			Draft:  judge.DraftResult{Verdict: judge.VerdictNotScanned, Failure: judge.FailureInvalid},
+		}})
+	})
+	st, sb, _ := checkDraft(t, scripted, staffCaller(t, scripted, "dc-scripted"), nil, map[string]any{"description": "d", "files": draftFiles("# x\n")})
+	if st != http.StatusOK || sb.Rubric.Failure != "judge-error" || sb.Draft.Failure != "judge-error" {
+		t.Fatalf("failures outside the three words: %d %+v", st, sb)
+	}
+
+	// A checker that fails on a draft it was asked about answers 503 in its
+	// own words, and a job is not charged for it.
+	callers := &fakeCallers{jobs: map[string]string{"agyj_broken": "01broken"}}
+	broken := newTestEnvWith(t, func(s *api.Server) {
+		s.SetDraftChecker(brokenChecker{})
+		s.SetModelInputCallers(callers)
+	})
+	body := map[string]any{"description": "d", "files": draftFiles("# x\n")}
+	st, _, p = checkDraft(t, broken, staffCaller(t, broken, "dc-broken"), nil, body)
+	if st != http.StatusServiceUnavailable || !strings.HasSuffix(p.Type, "/model-input-unavailable") ||
+		p.Detail != "The registry could not read this draft. Nothing was asked; retry shortly." {
+		t.Fatalf("a checker that fails: %d %+v", st, p)
+	}
+	st, _, p = checkDraft(t, broken, anonymous, map[string]string{"X-Agentry-Job-Token": "agyj_broken"}, body)
+	if st != http.StatusServiceUnavailable || len(callers.uses) != 0 {
+		t.Fatalf("a job's check that fails: %d %+v, %d recorded", st, p, len(callers.uses))
 	}
 }
 
@@ -386,6 +607,15 @@ func TestTheDraftCheckListsTheToolsTheManifestDoesNotGrant(t *testing.T) {
 	readBody(t, res, &raw)
 	if u, ok := raw["ungranted"].([]any); res.StatusCode != http.StatusOK || !ok || len(u) != 0 {
 		t.Fatalf("a granted draft: %d %v", res.StatusCode, raw["ungranted"])
+	}
+	// So are the lists of what a half found.
+	rubric, _ := raw["rubric"].(map[string]any)
+	draft, _ := raw["draft"].(map[string]any)
+	if f, ok := rubric["findings"].([]any); !ok || len(f) != 0 {
+		t.Fatalf("a rubric with no findings: %v", rubric["findings"])
+	}
+	if f, ok := draft["flagged"].([]any); !ok || len(f) != 0 {
+		t.Fatalf("a draft set with nothing flagged: %v", draft["flagged"])
 	}
 }
 

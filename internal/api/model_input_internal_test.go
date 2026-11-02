@@ -27,8 +27,11 @@ func TestPacedAskerFailsAsATimeoutOrACancellation(t *testing.T) {
 	inner := &askedOnce{}
 	lim := rate.NewLimiter(rate.Every(time.Hour), 1)
 	p := &pacedAsker{asker: inner, lim: lim}
-	if _, _, err := p.Ask(context.Background(), nil, nil); err != nil || inner.n != 1 {
-		t.Fatalf("the first request is within the burst: %v, %d", err, inner.n)
+	if got := p.Model(); got != judge.DefaultModel {
+		t.Fatalf("the paced asker names model %q, not its judge's", got)
+	}
+	if _, usage, err := p.Ask(context.Background(), nil, nil); err != nil || inner.n != 1 || usage.Requests != 1 {
+		t.Fatalf("the first request is within the burst: %v, %d, usage %+v", err, inner.n, usage)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
