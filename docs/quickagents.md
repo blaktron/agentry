@@ -1019,7 +1019,10 @@ needs `ref`, a semver `version` constraint and a `why` of at most 200
 characters on one line, shown when the person agrees. A release may name at
 most 16, each once, and never itself. The subagents are part of the
 contract: one more, or a changed constraint, asks again, and S9 reports
-each.
+each. The agent starts them with `subagent_list`, `subagent_run` and
+`subagent_result`, which it is given only when it declares a subagent: an
+instruction that calls for one in a release that declares none is held for
+a person at publish, as an ungranted command is.
 
 At publish, the registry resolves each subagent to the newest stable,
 published version its constraint admits that runs on its own (its modes
