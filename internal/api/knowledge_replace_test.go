@@ -26,7 +26,8 @@ import (
 // an owner's download opens it; an unchanged tree stores nothing; a stale
 // replace, another owner and a scanning pack are refused.
 func TestKnowledgeReplaceThroughTheSeam(t *testing.T) {
-	env := newTestEnv(t)
+	blobs := t.TempDir()
+	env := newTestEnvCfg(t, func(c *config.Config) { c.Storage.LocalDir = blobs })
 	ctx := context.Background()
 	svc := env.srvObj.Knowledge()
 	o := newKnowledgeOwner(env, "kn-seam")
@@ -67,6 +68,11 @@ func TestKnowledgeReplaceThroughTheSeam(t *testing.T) {
 	}
 	if queued != 1 {
 		t.Fatalf("scans queued = %d, want 1", queued)
+	}
+	// The scan is queued on the sandbox queue, which reads what an account
+	// uploaded, and is tried three times before the pack is failed.
+	if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = $1 AND args->>'pack' = $2 AND queue = 'sandbox' AND max_attempts = 3`, knowledge.JobScan, p.ID.String()).Scan(&queued); err != nil || queued != 1 {
+		t.Fatalf("scans queued on the sandbox queue with three attempts = %d (%v), want 1", queued, err)
 	}
 
 	// While it is scanned it is not read; after, its tree is the files, and
@@ -131,6 +137,9 @@ func TestKnowledgeReplaceThroughTheSeam(t *testing.T) {
 	}
 	if objects != 1 {
 		t.Fatalf("objects = %d, want the one current tree", objects)
+	}
+	if n := blobFiles(t, blobs); n != 1 {
+		t.Fatalf("%d sealed blobs are stored, want the one current tree's", n)
 	}
 	drainKnowledgeScans(t, env)
 	_, sealed2 := downloadSealed(t, env, o, p.ID.String())

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -207,21 +208,33 @@ func TestKnowledgePackThroughTheAPI(t *testing.T) {
 		t.Fatalf("list = %+v", list)
 	}
 	var usage struct {
-		Bytes int64 `json:"bytes"`
-		Max   int64 `json:"max"`
-		Packs int   `json:"packs"`
+		Bytes  int64 `json:"bytes"`
+		Max    int64 `json:"max"`
+		Packs  int   `json:"packs"`
+		Used   int64 `json:"used"`
+		Pooled bool  `json:"pooled"`
 	}
 	env.doJSON(alice.pat, http.MethodGet, "/api/v1/knowledge/usage", nil, &usage, http.StatusOK)
-	if usage.Bytes != p.Bytes || usage.Max != 0 || usage.Packs != 1 {
+	if usage.Bytes != p.Bytes || usage.Max != 0 || usage.Packs != 1 || usage.Used != p.Bytes || usage.Pooled {
 		t.Fatalf("usage = %+v", usage)
+	}
+	// A sealed tree is kept under its owner's prefix, in the pack's own
+	// folder, and only one is kept.
+	var objectKey string
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT object_key FROM knowledge_packs WHERE id = $1`, p.ID).Scan(&objectKey); err != nil {
+		t.Fatal(err)
+	}
+	if prefix := "knowledge/user/" + env.selfID(alice.sess) + "/" + p.ID + "/"; !strings.HasPrefix(objectKey, prefix) || !strings.HasSuffix(objectKey, ".sealed") {
+		t.Fatalf("the sealed tree is stored as %q, want a .sealed object under %q", objectKey, prefix)
 	}
 
 	st, hdr, body := env.raw(alice.pat, http.MethodGet, "/api/v1/knowledge/packs/"+p.ID+"/tree", nil)
-	if st != http.StatusOK || !bytes.Equal(body, sealed) || hdr.Get("X-Agentry-Knowledge-Digest") != p.Digest || hdr.Get("Cache-Control") != "no-store" {
+	if st != http.StatusOK || !bytes.Equal(body, sealed) || hdr.Get("X-Agentry-Knowledge-Digest") != p.Digest || hdr.Get("Cache-Control") != "no-store" || hdr.Get("Content-Type") != "application/octet-stream" {
 		t.Fatalf("download: %d, %d bytes (sealed %d), digest %q", st, len(body), len(sealed), hdr.Get("X-Agentry-Knowledge-Digest"))
 	}
 	st, hdr, body = env.raw(alice.pat, http.MethodGet, "/api/v1/knowledge/packs/"+p.ID+"/export", nil)
-	if st != http.StatusOK || !bytes.Equal(body, tree) || hdr.Get("Content-Type") != "application/x-tar" || hdr.Get("Cache-Control") != "no-store" {
+	if st != http.StatusOK || !bytes.Equal(body, tree) || hdr.Get("Content-Type") != "application/x-tar" || hdr.Get("Cache-Control") != "no-store" ||
+		hdr.Get("X-Agentry-Knowledge-Digest") != p.Digest || hdr.Get("Content-Disposition") != `attachment; filename="field-notes.tar"` {
 		t.Fatalf("export: %d %q %q, %d bytes (tree %d)", st, hdr.Get("Content-Type"), hdr.Get("Cache-Control"), len(body), len(tree))
 	}
 	if sum := sha256.Sum256(body); "sha256:"+hex.EncodeToString(sum[:]) != p.Digest {
@@ -235,11 +248,39 @@ func TestKnowledgePackThroughTheAPI(t *testing.T) {
 	if !bytes.Equal(dk.Key, dataKey) {
 		t.Fatal("unwrap did not give the owner their data key back")
 	}
+	// The data key is never cached on its way to the owner.
+	wrappedJSON, err := json.Marshal(p.WrappedKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st, hdr, _ := env.raw(alice.pat, http.MethodPost, "/api/v1/knowledge/keys/unwrap", wrappedJSON); st != http.StatusOK || hdr.Get("Cache-Control") != "no-store" {
+		t.Fatalf("unwrap: %d, Cache-Control %q, want no-store", st, hdr.Get("Cache-Control"))
+	}
 
 	// One name per owner.
-	env.doJSON(alice.pat, http.MethodPost, "/api/v1/knowledge/packs", map[string]any{"name": "field-notes", "wrappedKey": p.WrappedKey}, nil, http.StatusConflict)
+	st, _, body = env.raw(alice.pat, http.MethodPost, "/api/v1/knowledge/packs", mustJSON(t, map[string]any{"name": "field-notes", "wrappedKey": p.WrappedKey}))
+	if st != http.StatusConflict || problemTypeOf(body) != "knowledge-name-taken" {
+		t.Fatalf("a second pack of the name: %d %s", st, body)
+	}
+	// A name that is not a pack's is a validation failure on the name.
+	for _, bad := range []string{"", "Field-Notes", "-notes", "notes/../x", strings.Repeat("n", 65)} {
+		st, _, body = env.raw(alice.pat, http.MethodPost, "/api/v1/knowledge/packs", mustJSON(t, map[string]any{"name": bad, "wrappedKey": p.WrappedKey}))
+		if st != http.StatusUnprocessableEntity || !strings.Contains(string(body), `"name"`) {
+			t.Fatalf("pack name %q: %d %s, want a validation failure on name", bad, st, body)
+		}
+	}
+	// A data key is 32 bytes: nothing else is wrapped.
+	for _, n := range []int{0, 31, 33} {
+		st, _, body = env.raw(alice.pat, http.MethodPost, "/api/v1/knowledge/keys/wrap", mustJSON(t, map[string]any{"key": make([]byte, n)}))
+		if st != http.StatusUnprocessableEntity || !strings.Contains(string(body), `"key"`) {
+			t.Fatalf("wrap of a %d-byte key: %d %s, want a validation failure on key", n, st, body)
+		}
+	}
 
 	env.doJSON(alice.pat, http.MethodDelete, "/api/v1/knowledge/packs/"+p.ID, nil, nil, http.StatusNoContent)
+	if ok, err := env.srvObj.Blobs().Exists(context.Background(), objectKey); err != nil || ok {
+		t.Fatalf("the sealed tree is still stored after the delete: %v %v", ok, err)
+	}
 	env.doJSON(alice.pat, http.MethodGet, "/api/v1/knowledge/packs/"+p.ID, nil, nil, http.StatusNotFound)
 	env.doJSON(alice.pat, http.MethodGet, "/api/v1/knowledge/packs", nil, &list, http.StatusOK)
 	if len(list) != 0 {
@@ -353,6 +394,10 @@ func TestDataKeyGoesToTheOwnerAlone(t *testing.T) {
 			if res.StatusCode != http.StatusNotFound || !strings.Contains(string(b), "knowledge-key-not-found") || bytes.Contains(b, []byte(base64.StdEncoding.EncodeToString(dataKey))) {
 				t.Fatalf("unwrap of another's key as %s: %d %s", other.handle, res.StatusCode, b)
 			}
+			// Nor is a pack made under a key that does not open for them.
+			if st, _, body := env.raw(c, http.MethodPost, "/api/v1/knowledge/packs", mustJSON(t, map[string]any{"name": "taken-key", "wrappedKey": p.WrappedKey})); st != http.StatusNotFound || problemTypeOf(body) != "knowledge-key-not-found" {
+				t.Fatalf("a pack made under another's wrapped key as %s: %d %s, want 404 knowledge-key-not-found", other.handle, st, body)
+			}
 		}
 	}
 	var dk struct {
@@ -361,6 +406,29 @@ func TestDataKeyGoesToTheOwnerAlone(t *testing.T) {
 	env.doJSON(alice.sess, http.MethodPost, "/api/v1/knowledge/keys/unwrap", p.WrappedKey, &dk, http.StatusOK)
 	if !bytes.Equal(dk.Key, dataKey) {
 		t.Fatal("the owner's session did not unwrap their key")
+	}
+	var stolen []knowledgePackBody
+	env.doJSON(alice.pat, http.MethodGet, "/api/v1/knowledge/packs", nil, &stolen, http.StatusOK)
+	if len(stolen) != 1 || stolen[0].ID != p.ID {
+		t.Fatalf("the owner's packs after the refused creates: %+v", stolen)
+	}
+	// Even the owner's own wrapped key opens only whole: another wrapper,
+	// another key's id, an empty blob, one too short to hold its nonce and
+	// one altered by a bit are all keys that do not open.
+	flipped := bytes.Clone(p.WrappedKey.Key)
+	flipped[len(flipped)-1] ^= 1
+	for name, bad := range map[string]knowledgeKey{
+		"another wrapper":       {Kind: "probe", Recipient: p.WrappedKey.Recipient, Key: p.WrappedKey.Key},
+		"another recipient":     {Kind: p.WrappedKey.Kind, Recipient: "deployment:0000000000000000", Key: p.WrappedKey.Key},
+		"an empty blob":         {Kind: p.WrappedKey.Kind, Recipient: p.WrappedKey.Recipient, Key: []byte{}},
+		"a blob too short":      {Kind: p.WrappedKey.Kind, Recipient: p.WrappedKey.Recipient, Key: p.WrappedKey.Key[:3]},
+		"an altered blob":       {Kind: p.WrappedKey.Kind, Recipient: p.WrappedKey.Recipient, Key: flipped},
+		"a blob cut at its end": {Kind: p.WrappedKey.Kind, Recipient: p.WrappedKey.Recipient, Key: p.WrappedKey.Key[:len(p.WrappedKey.Key)-1]},
+	} {
+		st, _, body := env.raw(alice.pat, http.MethodPost, "/api/v1/knowledge/keys/unwrap", mustJSON(t, bad))
+		if st != http.StatusNotFound || problemTypeOf(body) != "knowledge-key-not-found" || bytes.Contains(body, []byte(base64.StdEncoding.EncodeToString(dataKey))) {
+			t.Fatalf("unwrap of %s: %d %s, want 404 knowledge-key-not-found", name, st, body)
+		}
 	}
 
 	// Staff read names and sizes, and nothing of the content.
@@ -372,10 +440,30 @@ func TestDataKeyGoesToTheOwnerAlone(t *testing.T) {
 	if err := json.Unmarshal(body, &sizes); err != nil || len(sizes) != 1 || sizes[0]["name"] != "private-notes" || sizes[0]["bytes"] != float64(p.Bytes) {
 		t.Fatalf("staff sizes = %s", body)
 	}
+	if sizes[0]["id"] != p.ID || sizes[0]["state"] != string(knowledge.StateReady) {
+		t.Fatalf("staff sizes = %s, want pack %s ready", body, p.ID)
+	}
 	for _, field := range []string{"digest", "wrappedKey", "scan", "key", "files", "pages"} {
 		if _, ok := sizes[0][field]; ok {
 			t.Fatalf("staff see %q: %s", field, body)
 		}
+	}
+	// An unknown handle is no owner; an organization's handle is one.
+	if st, _, body := env.raw(staffO.sess, http.MethodGet, "/api/v1/platform/knowledge?owner=kn-nobody"+env.sfx, nil); st != http.StatusNotFound {
+		t.Fatalf("staff sizes of an unknown owner: %d %s, want 404", st, body)
+	}
+	shared := newSharedOrg(t, env, "kns")
+	sharedPack, _, _, _ := putSharedPack(t, env, shared, "shared-notes", knowledgeFiles())
+	st, _, body = env.raw(staffO.sess, http.MethodGet, "/api/v1/platform/knowledge?owner="+shared.handle, nil)
+	var orgSizes []map[string]any
+	if err := json.Unmarshal(body, &orgSizes); st != http.StatusOK || err != nil || len(orgSizes) != 1 || orgSizes[0]["id"] != sharedPack.ID || orgSizes[0]["name"] != "shared-notes" || orgSizes[0]["state"] != string(knowledge.StateScanning) {
+		t.Fatalf("staff sizes of an organization: %d %s", st, body)
+	}
+	// Presenting another's wrapped key made no key for the one presenting
+	// it: the refusals above left no salt behind.
+	var salts int
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM knowledge_owner_keys WHERE owner_kind = 'user' AND owner_id = $1`, env.selfID(bob.sess)).Scan(&salts); err != nil || salts != 0 {
+		t.Fatalf("refused unwraps left %d keys for the one who presented another's (%v)", salts, err)
 	}
 	if st, _, body := env.raw(bob.sess, http.MethodGet, "/api/v1/platform/knowledge?owner="+alice.handle, nil); st != http.StatusForbidden {
 		t.Fatalf("a non-staff account read sizes: %d %s", st, body)
@@ -506,6 +594,35 @@ func TestKnowledgeAtRestIsSealed(t *testing.T) {
 	}
 	look("the server's log", logs.Bytes())
 
+	// The data key is wrapped under the configured sealing key and no other:
+	// a wrapper built on that key alone, over the registry's own salts,
+	// opens the key the registry wrapped, and one built on another key does
+	// not.
+	owner := ownerOf(t, env, o)
+	wrapped := knowledge.WrappedKey{Kind: wk.Kind, Recipient: wk.Recipient, Blob: wk.Key}
+	indep, err := knowledge.NewDeploymentWrapper(sealingRaw, knowledge.NewStoreSalts(env.st))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened, err := indep.Unwrap(context.Background(), owner, wrapped); err != nil || !bytes.Equal(opened, dataKey) || wk.Recipient != indep.Recipient() {
+		t.Fatalf("the sealing key does not open the pack's wrapped key: %v (recipient %q, want %q)", err, wk.Recipient, indep.Recipient())
+	}
+	otherKey := bytes.Clone(sealingRaw)
+	otherKey[0] ^= 1
+	elsewhere, err := knowledge.NewDeploymentWrapper(otherKey, knowledge.NewStoreSalts(env.st))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := elsewhere.Unwrap(context.Background(), owner, wrapped); !errors.Is(err, knowledge.ErrNotOwner) {
+		t.Fatalf("another sealing key opened the pack's wrapped key: %v", err)
+	}
+	// Named as its own recipient, so that only the key it is derived from
+	// stands between it and the wrapped key.
+	wrapped.Recipient = elsewhere.Recipient()
+	if _, err := elsewhere.Unwrap(context.Background(), owner, wrapped); !errors.Is(err, knowledge.ErrNotOwner) {
+		t.Fatalf("a wrapper on another sealing key opened the pack's wrapped key: %v", err)
+	}
+
 	ctx := context.Background()
 	rows, err := env.st.Pool().Query(ctx, `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`)
 	if err != nil {
@@ -528,6 +645,22 @@ func TestKnowledgeAtRestIsSealed(t *testing.T) {
 		}
 		look("table "+tbl, []byte(dump))
 	}
+}
+
+// blobFiles is how many sealed blobs the local blob store under dir holds.
+func blobFiles(t *testing.T, dir string) int {
+	t.Helper()
+	n := 0
+	err := filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			n++
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 // seededKnowledge is a pack put straight through the store, for an owner
@@ -610,6 +743,7 @@ func newPack(t *testing.T, env *testEnv, o knowledgeOwner, name string) (string,
 	return created.ID, dataKey
 }
 
+// mustJSON is v as a request body.
 func problemTypeOf(b []byte) string {
 	var p struct {
 		Type string `json:"type"`
@@ -631,10 +765,27 @@ func TestKnowledgeUploadRefusals(t *testing.T) {
 	if st, typ := put(make([]byte, knowledge.MaxUpload()+1)); st != http.StatusRequestEntityTooLarge || typ != "upload-too-large" {
 		t.Fatalf("an oversized body: %d %s", st, typ)
 	}
+	// The body limit is exact: a body of the largest sealed pack is read, and
+	// refused as not being one.
+	if st, typ := put(make([]byte, knowledge.MaxUpload())); st != http.StatusUnprocessableEntity || typ != "knowledge-tree-invalid" {
+		t.Fatalf("a body of exactly the limit: %d %s, want it read and refused as invalid", st, typ)
+	}
 	// A tree past 10 MB of files fits the body and is refused on reading.
 	big, _, _ := sealedPack(t, sizedPack(knowledge.MaxBytes+1, 'x'), key)
 	if st, typ := put(big); st != http.StatusRequestEntityTooLarge || typ != "knowledge-too-large" {
 		t.Fatalf("a tree past 10 MB: %d %s", st, typ)
+	}
+	// A tree of more files than a pack holds is refused the same way.
+	manyFiles := func(n int) []scan.PackFile {
+		files := []scan.PackFile{{Path: "wiki/index.md", Content: []byte("# Index\n")}}
+		for i := 1; i < n; i++ {
+			files = append(files, scan.PackFile{Path: fmt.Sprintf("sources/f%04d.txt", i), Content: []byte("x")})
+		}
+		return files
+	}
+	tooMany, _, _ := sealedPack(t, manyFiles(knowledge.MaxFiles+1), key)
+	if st, typ := put(tooMany); st != http.StatusRequestEntityTooLarge || typ != "knowledge-too-large" {
+		t.Fatalf("a tree of %d files: %d %s", knowledge.MaxFiles+1, st, typ)
 	}
 	// A header that names another digest.
 	var tb bytes.Buffer
@@ -651,7 +802,10 @@ func TestKnowledgeUploadRefusals(t *testing.T) {
 	// Sealed under another key, and not a sealed tree at all.
 	other, _ := packseal.NewKey()
 	foreign, _, _ := sealedPack(t, knowledgeFiles(), other)
-	for name, body := range map[string][]byte{"another key": foreign, "not sealed": tb.Bytes()} {
+	intact, _, _ := sealedPack(t, knowledgeFiles(), key)
+	tampered := bytes.Clone(intact)
+	tampered[len(tampered)-1] ^= 1
+	for name, body := range map[string][]byte{"another key": foreign, "not sealed": tb.Bytes(), "a sealed tree altered at its end": tampered, "a sealed tree cut short": intact[:len(intact)-40]} {
 		if st, typ := put(body); st != http.StatusUnprocessableEntity || typ != "knowledge-tree-invalid" {
 			t.Fatalf("%s: %d %s", name, st, typ)
 		}
@@ -659,6 +813,17 @@ func TestKnowledgeUploadRefusals(t *testing.T) {
 	var objects int
 	if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM knowledge_objects WHERE pack_id = $1`, id).Scan(&objects); err != nil || objects != 0 {
 		t.Fatalf("a refused upload stored %d objects (%v)", objects, err)
+	}
+
+	// The caps are inclusive: a tree of exactly the largest size, and one of
+	// exactly the most files, are taken.
+	atCap, _, _ := sealedPack(t, sizedPack(knowledge.MaxBytes, 'x'), key)
+	if st, typ := put(atCap); st != http.StatusAccepted {
+		t.Fatalf("a tree of exactly %d bytes: %d %s", knowledge.MaxBytes, st, typ)
+	}
+	atFiles, _, _ := sealedPack(t, manyFiles(knowledge.MaxFiles), key)
+	if st, typ := put(atFiles); st != http.StatusAccepted {
+		t.Fatalf("a tree of exactly %d files: %d %s", knowledge.MaxFiles, st, typ)
 	}
 
 	// While its tree is scanned the pack is unusable, then usable.
@@ -676,6 +841,22 @@ func TestKnowledgeUploadRefusals(t *testing.T) {
 		if st, _, _ := env.raw(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+id+path, nil); st != http.StatusOK {
 			t.Fatalf("%s after the scan: %d", path, st)
 		}
+	}
+	// A new tree is scanned afresh: until its scan ends the pack is scanning
+	// and reports nothing of the tree before.
+	var ready knowledgePackBody
+	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+id, nil, &ready, http.StatusOK)
+	if ready.State != knowledge.StateReady || ready.Scan == nil {
+		t.Fatalf("before the new tree the pack is %q with a report %v", ready.State, ready.Scan != nil)
+	}
+	next, _, _ := sealedPack(t, sizedPack(64, 'n'), key)
+	if st, typ := put(next); st != http.StatusAccepted {
+		t.Fatalf("a new tree over a scanned one: %d %s", st, typ)
+	}
+	var rescanning knowledgePackBody
+	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+id, nil, &rescanning, http.StatusOK)
+	if rescanning.State != knowledge.StateScanning || rescanning.Scan != nil {
+		t.Fatalf("after a new tree the pack is %q with a report %v, want scanning with none", rescanning.State, rescanning.Scan != nil)
 	}
 }
 
@@ -702,11 +883,32 @@ func TestKnowledgeAllocation(t *testing.T) {
 	if st != http.StatusRequestEntityTooLarge || problemTypeOf(body) != "knowledge-allocation" || refusal.Bytes != 450 || refusal.Max != 400 {
 		t.Fatalf("450 of 400: %d %s", st, body)
 	}
+	// The cap is inclusive: a pack that brings the total to exactly 400 is
+	// taken, then removed again.
+	c, cKey := newPack(t, env, o, "third")
+	if st, b := put(c, cKey, sizedPack(200, 'e')); st != http.StatusAccepted {
+		t.Fatalf("400 of 400: %d %s", st, b)
+	}
+	env.doJSON(o.pat, http.MethodDelete, "/api/v1/knowledge/packs/"+c, nil, nil, http.StatusNoContent)
+	// A pack is counted once when it grows: 200 of its own becomes 401 and is
+	// refused at 401, then becomes 400 and is taken.
+	if st, b := put(a, aKey, sizedPack(401, 'f')); st != http.StatusRequestEntityTooLarge || !strings.Contains(string(b), `"bytes":401`) {
+		t.Fatalf("a pack grown to 401 of 400: %d %s", st, b)
+	}
+	if st, b := put(a, aKey, sizedPack(400, 'g')); st != http.StatusAccepted {
+		t.Fatalf("a pack grown to 400 of 400: %d %s", st, b)
+	}
 	// A cap never deletes, and a tree no larger than the one it replaces is
 	// taken whatever the cap: the operator lowers it under what is kept.
 	env.srvObj.SetEntitlements(capResolver(100))
 	if st, b := put(a, aKey, sizedPack(150, 'c')); st != http.StatusAccepted {
 		t.Fatalf("a smaller tree over a lowered cap: %d %s", st, b)
+	}
+	if st, b := put(a, aKey, sizedPack(150, 'd')); st != http.StatusAccepted {
+		t.Fatalf("a tree of the same size over a lowered cap: %d %s", st, b)
+	}
+	if st, b := put(a, aKey, sizedPack(151, 'h')); st != http.StatusRequestEntityTooLarge {
+		t.Fatalf("a tree one byte larger over a lowered cap: %d %s", st, b)
 	}
 	var usage struct {
 		Bytes int64 `json:"bytes"`
@@ -826,6 +1028,58 @@ func TestTheLastScanAttemptSettlesThePack(t *testing.T) {
 	}
 }
 
+// incompleteScanner reads nothing: its review failed on a chunk.
+type incompleteScanner struct{}
+
+func (incompleteScanner) ScanPack(context.Context, []scan.PackFile) scan.PackReport {
+	return scan.PackReport{Review: scan.PackReview{Failed: 1, Error: "the judge failed on sources chunk 1 of 1"}}
+}
+
+// TestAScanThatDidNotFinishIsTriedAgain: a scan whose review failed on a
+// chunk ends in error, to be tried again, and leaves the pack scanning;
+// its last attempt records what it read and the pack is ready.
+func TestAScanThatDidNotFinishIsTriedAgain(t *testing.T) {
+	env := newTestEnv(t)
+	q := &handlerQueue{h: map[string]queue.Handler{}}
+	svc := knowledge.NewService(knowledge.Deps{
+		Store: env.st, Blobs: env.srvObj.Blobs(), Wrapper: env.srvObj.Knowledge().Wrapper(),
+		Scanner: incompleteScanner{}, Jobs: q,
+	})
+	svc.RegisterHandlers(q)
+	ctx := context.Background()
+	owner := ownerOf(t, env, newKnowledgeOwner(env, "kn-unfinished"))
+	p, err := svc.CreateSealed(ctx, owner, "unfinished")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.Replace(ctx, owner, p.ID, "", knowledgeFiles()); err != nil {
+		t.Fatal(err)
+	}
+	var object string
+	if err := env.st.Pool().QueryRow(ctx, `SELECT object_key FROM knowledge_packs WHERE id = $1`, p.ID).Scan(&object); err != nil {
+		t.Fatal(err)
+	}
+	args, _ := json.Marshal(knowledge.ScanArgs{Pack: p.ID, Object: object})
+	run := func(attempt int) error {
+		return q.h[knowledge.JobScan](ctx, queue.Job{Kind: knowledge.JobScan, Args: args, Attempt: attempt})
+	}
+	for attempt := 1; attempt < 3; attempt++ {
+		if err := run(attempt); err == nil {
+			t.Fatalf("attempt %d of a scan that did not finish reported success", attempt)
+		}
+		if info, err := svc.Info(ctx, owner, p.ID); err != nil || info.State != knowledge.StateScanning {
+			t.Fatalf("after attempt %d the pack is %+v (%v), want still scanning", attempt, info, err)
+		}
+	}
+	if err := run(3); err != nil {
+		t.Fatalf("the last attempt: %v", err)
+	}
+	pack, err := svc.Get(ctx, owner, p.ID)
+	if err != nil || knowledge.State(pack.State) != knowledge.StateReady || len(pack.ScanReport) == 0 {
+		t.Fatalf("after the last attempt the pack is %q with report %s (%v), want ready with what the scan read", pack.State, pack.ScanReport, err)
+	}
+}
+
 // TestTheLastScanAttemptSettlesThePackWhenItsTimeRunsOut: the queue cancels
 // an attempt's context at its job timeout. When that was the last
 // attempt, the pack is still failed rather than left scanning for good:
@@ -853,6 +1107,14 @@ func TestTheLastScanAttemptSettlesThePackWhenItsTimeRunsOut(t *testing.T) {
 	}
 }
 
+// unknownFeatures is a resolver that cannot say what an owner's
+// allocation is.
+type unknownFeatures struct{ entitlements.Resolver }
+
+func (unknownFeatures) Features(context.Context, entitlements.Subject) (entitlements.Features, error) {
+	return entitlements.Features{}, errors.New("the ledger is down")
+}
+
 // poolResolver is an extension's resolver that pools owners' knowledge
 // under one key and one cap, as a paid organization pools its members'.
 type poolResolver struct {
@@ -863,6 +1125,8 @@ type poolResolver struct {
 	// omit leaves the asker out of its pool, and fail answers an error:
 	// two mistakes an extension can make.
 	omit, fail bool
+	// off is a pool whose allocation is not enabled.
+	off bool
 }
 
 func (p poolResolver) KnowledgePool(_ context.Context, owner knowledge.Owner) (knowledge.Pool, error) {
@@ -876,7 +1140,7 @@ func (p poolResolver) KnowledgePool(_ context.Context, owner knowledge.Owner) (k
 	if p.omit {
 		owners = slices.DeleteFunc(slices.Clone(owners), func(o knowledge.Owner) bool { return o == owner })
 	}
-	return knowledge.Pool{Key: p.key, Owners: owners, Cap: entitlements.Cap{Enabled: true, Max: p.max}}, nil
+	return knowledge.Pool{Key: p.key, Owners: owners, Cap: entitlements.Cap{Enabled: !p.off, Max: p.max}}, nil
 }
 
 func ownerOf(t *testing.T, env *testEnv, o knowledgeOwner) knowledge.Owner {
@@ -997,6 +1261,13 @@ func TestKnowledgePoolIsCountedAndLocked(t *testing.T) {
 	// An extension's mistakes are not permission: a pool that leaves out
 	// its owner, a pool with no key, and an error.
 	c := newKnowledgeOwner(env, "kn-pool-c")
+	// Someone outside every pool draws on a pool of their own, which the
+	// meter does not call shared.
+	var solo meter
+	env.doJSON(c.pat, http.MethodGet, "/api/v1/knowledge/usage", nil, &solo, http.StatusOK)
+	if solo.Pooled || solo.Used != 0 || solo.Packs != 0 {
+		t.Fatalf("an owner outside the pool reads %+v", solo)
+	}
 	id, key := newPack(t, env, c, "refused")
 	sealed, _, _ := sealedPack(t, sizedPack(10, 'o'), key)
 	for name, r := range map[string]poolResolver{
@@ -1012,5 +1283,21 @@ func TestKnowledgePoolIsCountedAndLocked(t *testing.T) {
 	var objects int
 	if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM knowledge_objects WHERE pack_id = $1`, id).Scan(&objects); err != nil || objects != 0 {
 		t.Fatalf("a refused upload stored %d objects (%v)", objects, err)
+	}
+	// A pool whose allocation is off takes nothing, and says so as the
+	// allocation's refusal.
+	env.srvObj.SetEntitlements(poolResolver{Resolver: pool.Resolver, key: pool.key, owners: []knowledge.Owner{ownerOf(t, env, c)}, off: true})
+	st, _, body = env.raw(c.pat, http.MethodPut, "/api/v1/knowledge/packs/"+id+"/tree", sealed)
+	if st != http.StatusRequestEntityTooLarge || problemTypeOf(body) != "knowledge-allocation" {
+		t.Fatalf("an upload into a pool whose allocation is off: %d %s, want 413 knowledge-allocation", st, body)
+	}
+	// So is a resolver that cannot say what the allocation is: unknown is not
+	// permission.
+	env.srvObj.SetEntitlements(unknownFeatures{pool.Resolver})
+	if st, _, body := env.raw(c.pat, http.MethodPut, "/api/v1/knowledge/packs/"+id+"/tree", sealed); st != http.StatusInternalServerError {
+		t.Fatalf("an upload when the allocation is unknown: %d %s, want 500", st, body)
+	}
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM knowledge_objects WHERE pack_id = $1`, id).Scan(&objects); err != nil || objects != 0 {
+		t.Fatalf("refused uploads stored %d objects (%v)", objects, err)
 	}
 }

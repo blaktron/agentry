@@ -1,7 +1,9 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"sync"
@@ -11,6 +13,8 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/knowledge"
+	"github.com/blaktron/agentry/internal/queue"
 	"github.com/blaktron/agentry/internal/registry"
 )
 
@@ -25,9 +29,22 @@ type stubKnowledgeAdmitter struct {
 	tickets  []string
 	voided   []string
 	onAdmit  func()
+	// hangup, when set, makes an admission announce itself on entered and
+	// wait until the request it answers has been given up.
+	hangup  bool
+	entered chan struct{}
+	// voidErr receives the state of the context each void was made with.
+	voidErr chan error
 }
 
-func (a *stubKnowledgeAdmitter) AdmitKnowledge(_ context.Context, adm api.KnowledgeAdmission) (registry.Ticket, *registry.Refusal, error) {
+func (a *stubKnowledgeAdmitter) AdmitKnowledge(ctx context.Context, adm api.KnowledgeAdmission) (registry.Ticket, *registry.Refusal, error) {
+	a.mu.Lock()
+	hangup, entered := a.hangup, a.entered
+	a.mu.Unlock()
+	if hangup {
+		entered <- struct{}{}
+		<-ctx.Done()
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.asked++
@@ -46,10 +63,14 @@ func (a *stubKnowledgeAdmitter) AdmitKnowledge(_ context.Context, adm api.Knowle
 	return registry.Ticket{ID: id}, nil, nil
 }
 
-func (a *stubKnowledgeAdmitter) VoidKnowledge(_ context.Context, t registry.Ticket) error {
+func (a *stubKnowledgeAdmitter) VoidKnowledge(ctx context.Context, t registry.Ticket) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.voided = append(a.voided, t.ID)
+	voidErr := a.voidErr
+	a.mu.Unlock()
+	if voidErr != nil {
+		voidErr <- ctx.Err()
+	}
 	return nil
 }
 
@@ -114,11 +135,19 @@ func TestAKnowledgeUploadIsAdmittedBeforeAnythingIsStored(t *testing.T) {
 		t.Fatalf("admitted %d, voided %d; want one admission kept", admitted, voided)
 	}
 	a := adm.admitted[0]
-	if a.User == uuid.Nil || a.OwnerKind != "user" || a.OwnerID != a.User || a.Pack.String() != id || a.Bytes <= 0 || a.Files != len(knowledgeFiles()) {
-		t.Fatalf("admission = %+v", a)
+	var fileBytes int64
+	for _, f := range knowledgeFiles() {
+		fileBytes += int64(len(f.Content))
+	}
+	if a.User == uuid.Nil || a.OwnerKind != "user" || a.OwnerID != a.User || a.Pack.String() != id || a.Bytes != fileBytes || a.Files != len(knowledgeFiles()) {
+		t.Fatalf("admission = %+v, want the tree's %d bytes in %d files", a, fileBytes, len(knowledgeFiles()))
 	}
 	if n := knowledgeObjects(t, env, id); n != 1 {
 		t.Fatalf("the admitted upload stored %d objects", n)
+	}
+	// The ticket of what was stored is recorded with it.
+	if n := admittedStores(t, env, adm.tickets[0]); n != 1 {
+		t.Fatalf("the stored upload's ticket is recorded %d times, want once", n)
 	}
 
 	// The same tree again, while it is scanned and after: nothing is
@@ -142,6 +171,49 @@ func TestAKnowledgeUploadIsAdmittedBeforeAnythingIsStored(t *testing.T) {
 	if admitted, _ := adm.counts(); admitted != 2 {
 		t.Fatalf("a new tree: %d admissions, want 2", admitted)
 	}
+
+	// A tree whose scan failed is scanned again when it is uploaded again,
+	// without being asked about: the failure was the registry's.
+	var object string
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT object_key FROM knowledge_packs WHERE id = $1`, id).Scan(&object); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.srvObj.Blobs().Delete(context.Background(), object); err != nil {
+		t.Fatal(err)
+	}
+	jobs := &handlerQueue{h: map[string]queue.Handler{}}
+	env.srvObj.Knowledge().RegisterHandlers(jobs)
+	args, _ := json.Marshal(knowledge.ScanArgs{Pack: uuid.MustParse(id), Object: object})
+	_ = jobs.h[knowledge.JobScan](context.Background(), queue.Job{Kind: knowledge.JobScan, Args: args, Attempt: 3})
+	var failed knowledgePackBody
+	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+id, nil, &failed, http.StatusOK)
+	if failed.State != knowledge.StateFailed {
+		t.Fatalf("the pack whose tree could not be read is %q, want failed", failed.State)
+	}
+	st, _, body := env.raw(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+id+"/tree", other)
+	var again knowledgePackBody
+	if err := json.Unmarshal(body, &again); err != nil || st != http.StatusAccepted || again.State != knowledge.StateScanning {
+		t.Fatalf("the failed tree uploaded again: %d %s, want accepted and scanning", st, body)
+	}
+	if admitted, _ := adm.counts(); admitted != 2 {
+		t.Fatalf("a failed tree uploaded again was admitted again: %d admissions", admitted)
+	}
+	drainKnowledgeScans(t, env)
+	env.doJSON(o.pat, http.MethodGet, "/api/v1/knowledge/packs/"+id, nil, &again, http.StatusOK)
+	if again.State != knowledge.StateReady {
+		t.Fatalf("the failed tree uploaded again ends %q, want ready", again.State)
+	}
+}
+
+// admittedStores is how often the ticket is recorded as the ticket of a
+// stored upload.
+func admittedStores(t *testing.T, env *testEnv, ticket string) int {
+	t.Helper()
+	var n int
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM admitted_stores WHERE ticket = $1 AND kind = 'knowledge'`, ticket).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 // TestAnUploadTheAllocationRefusesIsVoided: an upload admitted and then
@@ -149,7 +221,11 @@ func TestAKnowledgeUploadIsAdmittedBeforeAnythingIsStored(t *testing.T) {
 // by another upload between the admission and the lock) is voided, so
 // nothing is charged for it.
 func TestAnUploadTheAllocationRefusesIsVoided(t *testing.T) {
-	env := newTestEnvCfg(t, func(c *config.Config) { c.Limits.KnowledgeBytesPerAccount = 400 })
+	blobs := t.TempDir()
+	env := newTestEnvCfg(t, func(c *config.Config) {
+		c.Limits.KnowledgeBytesPerAccount = 400
+		c.Storage.LocalDir = blobs
+	})
 	adm := &stubKnowledgeAdmitter{}
 	env.srvObj.SetKnowledgeAdmitter(adm)
 	o := newKnowledgeOwner(env, "kn-avoid")
@@ -167,9 +243,13 @@ func TestAnUploadTheAllocationRefusesIsVoided(t *testing.T) {
 			t.Error(err)
 		}
 	}
+	heldBefore := blobFiles(t, blobs)
 	st, _, body := env.raw(o.pat, http.MethodPut, "/api/v1/knowledge/packs/"+b+"/tree", sealedB)
 	if st != http.StatusRequestEntityTooLarge || problemTypeOf(body) != "knowledge-allocation" {
 		t.Fatalf("a race lost to the allocation: %d %s", st, body)
+	}
+	if n := blobFiles(t, blobs); n != heldBefore {
+		t.Fatalf("the refused upload left %d sealed blobs, want the %d held before", n, heldBefore)
 	}
 	admitted, voided := adm.counts()
 	if admitted != 2 || voided != 1 || adm.voided[0] != adm.tickets[1] {
@@ -177,6 +257,39 @@ func TestAnUploadTheAllocationRefusesIsVoided(t *testing.T) {
 	}
 	if n := knowledgeObjects(t, env, b); n != 0 {
 		t.Fatalf("the refused upload stored %d objects", n)
+	}
+	// A client that gives up while its upload is being admitted does not
+	// leave the ticket charged: the void is made whether or not the request
+	// is still there.
+	gone, giveUp := context.WithCancel(context.Background())
+	defer giveUp()
+	adm.mu.Lock()
+	adm.hangup, adm.entered, adm.voidErr = true, make(chan struct{}), make(chan error, 1)
+	entered, voidErr := adm.entered, adm.voidErr
+	adm.mu.Unlock()
+	cKey, cID := bKey, b
+	small, _, _ := sealedPack(t, sizedPack(64, 'z'), cKey)
+	req, err := http.NewRequestWithContext(gone, http.MethodPut, env.srv.URL+"/api/v1/knowledge/packs/"+cID+"/tree", bytes.NewReader(small))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.authenticate(req, o.pat)
+	sent := make(chan struct{})
+	go func() {
+		defer close(sent)
+		if res, err := env.srv.Client().Do(req); err == nil {
+			_ = res.Body.Close()
+		}
+	}()
+	<-entered
+	giveUp()
+	<-sent
+	if err := <-voidErr; err != nil {
+		t.Fatalf("the ticket of an upload given up was voided on a context that was already cancelled: %v", err)
+	}
+	// Only what was stored is recorded as stored.
+	if first, second := admittedStores(t, env, adm.tickets[0]), admittedStores(t, env, adm.tickets[1]); first != 1 || second != 0 {
+		t.Fatalf("recorded as stored: the first upload's ticket %d times, the refused one's %d; want 1 and 0", first, second)
 	}
 }
 

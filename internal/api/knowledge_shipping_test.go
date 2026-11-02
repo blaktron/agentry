@@ -68,6 +68,7 @@ func orgOrigin(org, packID string) map[string]any {
 // shippingProblem is a refused upload's problem body.
 type shippingProblem struct {
 	Type   string   `json:"type"`
+	Title  string   `json:"title"`
 	Detail string   `json:"detail"`
 	Packs  []string `json:"packs"`
 }
@@ -93,6 +94,13 @@ func wantShippingRefusal(t *testing.T, code int, body, slug string, packs ...str
 	}
 	if code != http.StatusUnprocessableEntity || p.slug() != slug {
 		t.Fatalf("got %d %s, want 422 %s: %s", code, p.slug(), slug, body)
+	}
+	wantTitle := "Shipped knowledge is not confirmed"
+	if slug == "knowledge-shipping-invalid" {
+		wantTitle = "The shipped knowledge confirmation is not true"
+	}
+	if p.Title != wantTitle {
+		t.Fatalf("title %q, want %q: %s", p.Title, wantTitle, body)
 	}
 	if strings.Join(p.Packs, ",") != strings.Join(packs, ",") {
 		t.Fatalf("problem names packs %v, want %v: %s", p.Packs, packs, body)
@@ -173,9 +181,15 @@ func TestShippingUploadNeedsTheAcknowledgement(t *testing.T) {
 		t.Fatalf("a refused upload left %d versions", n)
 	}
 
-	// Every shipped pack needs an entry: with two shipped and one
-	// confirmed, the other is named.
+	// Every shipped pack needs an entry: with two shipped and none
+	// confirmed, both are named, in the detail as well.
 	two := shippingFiles(t, pub.handle, "reviewer", "1.0.0", "aws-docs", "gcp-docs")
+	code, body = env.uploadShipping(pub.handle, "reviewer", pub.pat, two, "")
+	wantShippingRefusal(t, code, body, "knowledge-shipping-unacknowledged", "aws-docs", "gcp-docs")
+	if !strings.Contains(body, `the packs \"aws-docs\" and \"gcp-docs\"`) {
+		t.Fatalf("detail does not word the two packs as a pair: %s", body)
+	}
+	// With two shipped and one confirmed, the other is named.
 	code, body = env.uploadShipping(pub.handle, "reviewer", pub.pat, two, shippingBody(packEntry("aws-docs", nil)))
 	wantShippingRefusal(t, code, body, "knowledge-shipping-unacknowledged", "gcp-docs")
 
@@ -187,7 +201,7 @@ func TestShippingUploadNeedsTheAcknowledgement(t *testing.T) {
 
 	// A confirmation that is not the object the API describes is a
 	// validation failure.
-	for _, bad := range []string{`{"packs": [{"name": "aws-docs", "extra": 1}]}`, `[1]`, `{"packs": [`} {
+	for _, bad := range []string{`{"packs": [{"name": "aws-docs", "extra": 1}]}`, `[1]`, `{"packs": [`, `{"packs": [{"name": "aws-docs"}]} {"packs": []}`} {
 		if code, body := env.uploadShipping(pub.handle, "reviewer", pub.pat, files, bad); code != http.StatusUnprocessableEntity || !strings.Contains(strings.ToLower(body), "knowledgeshipping") {
 			t.Errorf("confirmation %q: %d %s", bad, code, body)
 		}
@@ -262,6 +276,13 @@ func TestAReleaseShippingNothingIsUnaffected(t *testing.T) {
 	// Making it public needs nothing.
 	env.doJSON(pub.sess, http.MethodPatch, "/api/v1/agents/"+pub.handle+"/plain", map[string]any{"visibility": "private"}, nil, http.StatusOK)
 	env.doJSON(pub.sess, http.MethodPatch, "/api/v1/agents/"+pub.handle+"/plain", map[string]any{"visibility": "public"}, nil, http.StatusOK)
+	// ...and records no acknowledgement of shipped knowledge, since none was
+	// asked.
+	var acknowledged int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events WHERE action = 'agent.update' AND detail ? 'acknowledgedShippedKnowledge' AND actor_id = (SELECT id FROM handles WHERE handle = $1)`, pub.handle).Scan(&acknowledged); err != nil || acknowledged != 0 {
+		t.Fatalf("making an agent that ships nothing public recorded %d acknowledgements (%v)", acknowledged, err)
+	}
 }
 
 // storedPackOfShippedTree is a ready pack of the owner's holding the tree
@@ -321,6 +342,15 @@ func TestShippedPackOriginIsHeldToTheFacts(t *testing.T) {
 				rec := env.shippedRecordOf(owner.sess, owner.handle, agent, "1.0.0")
 				if rec == nil || len(rec.Packs) != 1 || (c.origin != nil) != (rec.Packs[0].Origin != nil) {
 					t.Fatalf("record = %+v", rec)
+				}
+				if o := rec.Packs[0].Origin; o != nil && (o.Kind != "own" || o.Org != "" || o.PackID != mine.ID) {
+					t.Fatalf("the recorded origin = %+v, want the own pack %s", o, mine.ID)
+				}
+				// A person's own pack leaves nothing in an organization's log.
+				var audited int
+				if err := env.st.Pool().QueryRow(context.Background(),
+					`SELECT count(*) FROM audit_events WHERE action = 'org.knowledge_ship' AND detail->>'agent' = $1`, owner.handle+"/"+agent).Scan(&audited); err != nil || audited != 0 {
+					t.Fatalf("a person's own pack left %d organization audit events (%v)", audited, err)
 				}
 				return
 			}
@@ -414,8 +444,15 @@ func TestAnOrganizationsPackShipsOnlyFromItsAdminIntoItsNamespace(t *testing.T) 
 	if err := json.Unmarshal(raw, &detail); err != nil {
 		t.Fatal(err)
 	}
-	if detail["name"] != "aws-docs" || detail["agent"] != o.handle+"/handbook" || detail["version"] != "1.0.0" || detail["submitter"] == "" || detail["submitter"] == nil {
-		t.Fatalf("audit detail = %v", detail)
+	var versionID string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT v.id::text FROM agent_versions v JOIN agents ag ON ag.id = v.agent_id JOIN handles h ON h.id = ag.namespace_id
+		 WHERE h.handle = $1 AND ag.name = 'handbook' AND v.version = '1.0.0'`, o.handle).Scan(&versionID); err != nil {
+		t.Fatal(err)
+	}
+	if detail["name"] != "aws-docs" || detail["shippedAs"] != "aws-docs" || detail["agent"] != o.handle+"/handbook" || detail["version"] != "1.0.0" ||
+		detail["versionId"] != versionID || detail["submitter"] != env.selfID(o.admin.sess) {
+		t.Fatalf("audit detail = %v, want version %s submitted by %s", detail, versionID, env.selfID(o.admin.sess))
 	}
 	if strings.Contains(string(raw), "virtual machine") {
 		t.Fatalf("the audit detail carries content: %s", raw)
@@ -447,7 +484,7 @@ func TestOneAuditLinePerOrganizationPack(t *testing.T) {
 		{Path: "wiki/topics/gcp.md", Content: []byte("---\ntitle: GCP\n---\nA VM on GCP. [src: doc:gcp.txt]\n")},
 		{Path: "sources/gcp.txt", Content: []byte("A GCP VM.\n")},
 	}
-	b, _, _, _ := putSharedPack(t, env, o, "gcp-docs", other)
+	b, _, _, _ := putSharedPack(t, env, o, "gcp-notes", other)
 	drainKnowledgeScans(t, env)
 	env.doJSON(o.admin.sess, http.MethodPost, "/api/v1/agents",
 		map[string]any{"namespace": o.handle, "name": "handbook", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
@@ -466,6 +503,10 @@ func TestOneAuditLinePerOrganizationPack(t *testing.T) {
 		if got := orgAuditActions(t, env, o.handle, id); strings.Count(strings.Join(got, ","), "org.knowledge_ship") != 1 {
 			t.Errorf("pack %s audit = %v, want one org.knowledge_ship", id, got)
 		}
+	}
+	// The line names the store's pack and the name the release ships it as.
+	if d := orgAuditDetail(t, env, o.handle, b.ID, "org.knowledge_ship"); d["name"] != "gcp-notes" || d["shippedAs"] != "gcp-docs" {
+		t.Errorf("audit detail of the second pack = %v, want the store's name gcp-notes shipped as gcp-docs", d)
 	}
 }
 
@@ -544,6 +585,10 @@ func TestMakingAnAgentPublicNeedsTheAcknowledgement(t *testing.T) {
 		t.Fatalf("acknowledged updates audited: %d, %v", n, err)
 	}
 
+	// Already public, it is not asked again for the same visibility.
+	if code, body := env.makePublic(pub.sess, pub.handle, nil); code != http.StatusOK {
+		t.Fatalf("making a public agent public again: %d %s", code, body)
+	}
 	// Private again, and public again: the packs are still shipped, so it asks again.
 	env.doJSON(pub.sess, http.MethodPatch, "/api/v1/agents/"+pub.handle+"/reviewer", map[string]any{"visibility": "private"}, nil, http.StatusOK)
 	if code, _ := env.makePublic(pub.sess, pub.handle, nil); code != http.StatusConflict {
@@ -564,6 +609,51 @@ func TestAYankedVersionDoesNotHoldMakePublic(t *testing.T) {
 	env.doJSON(pub.sess, http.MethodPost, "/api/v1/agents/"+pub.handle+"/reviewer/versions/1.0.0/yank", map[string]any{"reason": "no longer shipped"}, nil, http.StatusNoContent)
 	if code, body := env.makePublic(pub.sess, pub.handle, nil); code != http.StatusOK {
 		t.Fatalf("after the only shipping version is yanked: %d %s", code, body)
+	}
+}
+
+// TestARejectedVersionDoesNotHoldMakePublic: a version the scan rejected is
+// never served, so the packs it ships are not what making the agent public
+// would expose.
+func TestARejectedVersionDoesNotHoldMakePublic(t *testing.T) {
+	env := newTestEnv(t)
+	pub := newShippingPublisher(env, "ksj-pub", "reviewer", "private")
+	env.publishVersions(t, pub.sess, pub.handle, "reviewer", []versionFiles{
+		{"1.0.0", shippingFiles(t, pub.handle, "reviewer", "1.0.0", "aws-docs")},
+	})
+	ctx := context.Background()
+	// insertVersion adds a version whose contract lists the packs, as
+	// written.
+	insertVersion := func(version, packs string) {
+		t.Helper()
+		if _, err := env.st.Pool().Exec(ctx,
+			`INSERT INTO agent_versions (id, agent_id, version, manifest, capabilities, channel, submitted_by, source)
+			 SELECT gen_random_uuid(), a.id, $2, '{}', ('{"knowledge":' || $3 || '}')::jsonb, 'stable', u.id, 'cli-upload'
+			 FROM agents a JOIN handles h ON h.id = a.namespace_id JOIN handles u ON u.handle = $1
+			 WHERE h.handle = $1 AND a.name = 'reviewer'`, pub.handle, version, packs); err != nil {
+			t.Fatal(err)
+		}
+	}
+	insertVersion("8.8.8", `["gcp-docs", "aws-docs"]`)
+
+	// The packs of a version are named in order, whatever order its contract
+	// lists them in.
+	code, body := env.makePublic(pub.sess, pub.handle, nil)
+	var refused shippedUnacknowledged
+	_ = json.Unmarshal([]byte(body), &refused)
+	if code != http.StatusConflict || len(refused.Versions) != 2 || refused.Versions[1].Version != "8.8.8" || strings.Join(refused.Versions[1].Packs, ",") != "aws-docs,gcp-docs" {
+		t.Fatalf("a published version ships a pack: %d %s", code, body)
+	}
+	if _, err := env.st.Pool().Exec(ctx,
+		`UPDATE agent_versions SET status = 'rejected'
+		 WHERE agent_id = (SELECT a.id FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = 'reviewer')`, pub.handle); err != nil {
+		t.Fatal(err)
+	}
+	// A version whose contract lists no pack ships nothing, however the list
+	// is written.
+	insertVersion("8.8.9", `[]`)
+	if code, body := env.makePublic(pub.sess, pub.handle, nil); code != http.StatusOK {
+		t.Fatalf("after every shipping version is rejected: %d %s", code, body)
 	}
 }
 
