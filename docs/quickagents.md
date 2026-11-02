@@ -66,6 +66,13 @@ never stored; only the environment variable *name* that will hold it.
 | `copilot` | asked | none: your Copilot plan, signed in with GitHub | the Copilot API host of your plan |
 | `custom` | asked | asked | derived from `--base-url` |
 
+For a model server of your own (`custom`, or `openai` with `--base-url`),
+setup also asks the server for the model's context window, or takes
+`--context-window <tokens>` (CLI v0.7.9 or later). Without it a long run on
+a model the harness does not know cannot compact its conversation, and
+fails with "Failed to get model definition" once the server refuses it as
+too long ([the context window](runner.md#agentry-setup)).
+
 Instead of a key, a local run can be paid by your own ChatGPT, Claude or
 Copilot plan, or by an account you connect at OpenRouter, Poe or Hugging
 Face, signed in through your browser. These are
