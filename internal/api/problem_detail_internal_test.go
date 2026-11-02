@@ -35,6 +35,11 @@ func TestSentence(t *testing.T) {
 			"The gate rejected this version."},
 		{"digits and code spans survive", "manifest V1: kind: unknown kind \"tool\"",
 			"Manifest V1: kind: unknown kind \"tool\"."},
+		{"a non-ASCII initial is capitalised whole", "\u00fcber the limit", "\u00dcber the limit."},
+		{"the sentinel's words inside a message stay", "kind: " + registry.ErrDenied.Error() + ": nope",
+			"Kind: " + registry.ErrDenied.Error() + ": nope."},
+		{"a sentinel prefix with no colon after it is stripped", registry.ErrDenied.Error() + " visibility must be public",
+			"Visibility must be public."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

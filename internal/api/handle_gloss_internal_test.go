@@ -19,7 +19,11 @@ func TestHandleGlossMatchesReHandle(t *testing.T) {
 		{"one character", "a"},
 		{"one digit", "0"},
 		{"hyphen inside", "acme-corp"},
+		{"digit last", "acme2"},
+		{"digits and hyphens", "9-9"},
+		{"two characters", "ab"},
 		{"the stated maximum", strings.Repeat("a", 39)},
+		{"the stated maximum ending in a digit", strings.Repeat("a", 38) + "9"},
 	}
 	for _, c := range accept {
 		if !reHandle.MatchString(c.value) {
@@ -35,7 +39,14 @@ func TestHandleGlossMatchesReHandle(t *testing.T) {
 		{"leading hyphen", "-acme"},
 		{"trailing hyphen", "acme-"},
 		{"uppercase", "Acme"},
+		{"uppercase inside", "aCme"},
 		{"underscore", "acme_corp"},
+		{"dot", "acme.corp"},
+		{"space", "acme corp"},
+		{"slash", "acme/corp"},
+		{"non-ASCII letter", "acm\u00e9"},
+		{"a hyphen run at the end", "acme--"},
+		{"a newline at the end", "acme\n"},
 	}
 	for _, c := range reject {
 		if reHandle.MatchString(c.value) {

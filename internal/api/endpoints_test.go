@@ -7,11 +7,18 @@ package api_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/blaktron/agentry/internal/config"
+	"github.com/google/uuid"
 )
 
 // ---- stars + stats ----
@@ -56,11 +63,62 @@ func TestStarsAndStats(t *testing.T) {
 		t.Fatal("the caller's own star must be reported")
 	}
 
+	// Stars are per account: a second account's star adds one and its
+	// removal takes back that one alone, and a star of another agent is that
+	// agent's own.
+	otherH := env.register("star-oth")
+	env.verifyEmail(otherH)
+	otherSess := env.login(otherH)
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "starred2", "modes": []string{"autonomous"}, "visibility": "public",
+	}, nil, http.StatusCreated)
+	env.doJSON(otherSess, http.MethodPut, starPath, nil, nil, http.StatusNoContent)
+	env.doJSON(sess, http.MethodPut, "/api/v1/user/stars/"+owner+"/starred2", nil, nil, http.StatusNoContent)
+	env.doJSON(anonymous, http.MethodGet, statsPath, nil, &stats, http.StatusOK)
+	if stats.Stars != 2 {
+		t.Fatalf("stars = %d after two accounts starred, want 2", stats.Stars)
+	}
+	var stats2 struct {
+		Stars int64 `json:"stars"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+owner+"/starred2/stats", nil, &stats2, http.StatusOK)
+	if stats2.Stars != 1 {
+		t.Fatalf("the other agent's stars = %d, want 1", stats2.Stars)
+	}
+	env.doJSON(otherSess, http.MethodDelete, starPath, nil, nil, http.StatusNoContent)
+	env.doJSON(sess, http.MethodGet, statsPath, nil, &stats, http.StatusOK)
+	if stats.Stars != 1 || stats.Starred == nil || !*stats.Starred {
+		t.Fatalf("after the other account unstarred: %+v, want the first account's star alone", stats)
+	}
+	env.doJSON(otherSess, http.MethodGet, statsPath, nil, &stats, http.StatusOK)
+	if stats.Stars != 1 || stats.Starred == nil || *stats.Starred {
+		t.Fatalf("the account that unstarred is told %+v, want one star and none of its own", stats)
+	}
+
 	env.doJSON(sess, http.MethodDelete, starPath, nil, nil, http.StatusNoContent)
 	env.doJSON(sess, http.MethodDelete, starPath, nil, nil, http.StatusNoContent)
 	env.doJSON(anonymous, http.MethodGet, statsPath, nil, &stats, http.StatusOK)
 	if stats.Stars != 0 {
 		t.Fatalf("stars = %d after unstarring, want 0", stats.Stars)
+	}
+	env.doJSON(sess, http.MethodGet, statsPath, nil, &stats, http.StatusOK)
+	if stats.Starred == nil || *stats.Starred {
+		t.Fatalf("starred = %v after unstarring, want false", stats.Starred)
+	}
+
+	// Each change is audited once: a removal that removed nothing is not an
+	// event.
+	var stars, unstars int
+	for _, a := range env.activityActions(t, sess) {
+		switch a {
+		case "agent.star":
+			stars++
+		case "agent.unstar":
+			unstars++
+		}
+	}
+	if stars == 0 || unstars != 1 {
+		t.Fatalf("activity holds %d star and %d unstar events, want some and exactly one", stars, unstars)
 	}
 
 	// Anonymous callers cannot star.
@@ -68,6 +126,11 @@ func TestStarsAndStats(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("anonymous star: got %d want 401", res.StatusCode)
+	}
+	res = env.do(anonymous, http.MethodDelete, starPath, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous unstar: got %d want 401", res.StatusCode)
 	}
 }
 
@@ -88,12 +151,18 @@ func TestStatsAndStarsHidePrivateAgents(t *testing.T) {
 	for _, tc := range []struct{ method, path string }{
 		{http.MethodGet, "/api/v1/agents/" + owner + "/hidden/stats"},
 		{http.MethodPut, "/api/v1/user/stars/" + owner + "/hidden"},
+		{http.MethodDelete, "/api/v1/user/stars/" + owner + "/hidden"},
 	} {
 		res := env.do(outSess, tc.method, tc.path, nil)
 		_ = res.Body.Close()
 		if res.StatusCode != http.StatusNotFound {
 			t.Fatalf("%s %s as an outsider: got %d want 404", tc.method, tc.path, res.StatusCode)
 		}
+	}
+	res := env.do(anonymous, http.MethodGet, "/api/v1/agents/"+owner+"/hidden/stats", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("stats of a private agent as anonymous: got %d want 404", res.StatusCode)
 	}
 }
 
@@ -163,6 +232,7 @@ func TestAgentActivityPublicVersusFull(t *testing.T) {
 			Action      string          `json:"action"`
 			ActorHandle *string         `json:"actorHandle"`
 			Detail      *map[string]any `json:"detail"`
+			Version     *string         `json:"version"`
 		} `json:"events"`
 	}
 
@@ -195,6 +265,37 @@ func TestAgentActivityPublicVersusFull(t *testing.T) {
 		}
 		if e.ActorHandle != nil || e.Detail != nil {
 			t.Fatalf("public activity leaked actor/detail: %+v", e)
+		}
+	}
+
+	// What a consumer needs to judge the package stays public: a release's
+	// publication. The steps before it (submission, scanning, review) are
+	// how the pipeline ran, and only the owning team sees them.
+	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
+	if status, body := env.uploadVersionCLI(owner, "watched", pat, skillFiles(owner, "watched", "1.0.0", nil)); status != http.StatusAccepted {
+		t.Fatalf("publish: %d %s", status, body)
+	}
+	env.waitStatus(owner, "watched", "1.0.0", "published")
+	env.doJSON(sess, http.MethodGet, path, nil, &full, http.StatusOK)
+	env.doJSON(anonymous, http.MethodGet, path, nil, &public, http.StatusOK)
+	count := func(p activityPage, action string) int {
+		n := 0
+		for _, e := range p.Events {
+			if e.Action == action {
+				n++
+			}
+		}
+		return n
+	}
+	if got := count(public, "version.transition"); got != 1 {
+		t.Fatalf("public activity holds %d version.transition events, want the one publication: %+v", got, public.Events)
+	}
+	if fullN, publicN := count(full, "version.transition"), count(public, "version.transition"); fullN <= publicN {
+		t.Fatalf("the owner sees %d version.transition events and the public %d; the pipeline's own steps are the owner's alone", fullN, publicN)
+	}
+	for _, e := range public.Events {
+		if e.Version == nil || *e.Version != "1.0.0" {
+			t.Fatalf("a public event names no version: %+v", e)
 		}
 	}
 }
@@ -245,6 +346,124 @@ func TestTagListing(t *testing.T) {
 	if len(page.Results) != 0 {
 		t.Fatalf("unused tag returned %d results", len(page.Results))
 	}
+
+	// The tag is read in lower case whatever case is asked for.
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/tags/"+strings.ToUpper(tag), nil, &page, http.StatusOK)
+	if page.Tag != tag || len(page.Results) != 1 || page.Results[0].Name != "tagged" {
+		t.Fatalf("tag in upper case: %q %+v, want %q and the agent", page.Tag, page.Results, tag)
+	}
+
+	// Only what anyone could install is listed: a private agent and a blocked
+	// one carry the tag and are not listed; a second public agent is, newest
+	// first, and a hit says what the search says of it.
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "tagpriv", "modes": []string{"autonomous"}, "visibility": "private",
+	}, nil, http.StatusCreated)
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "tagblock", "modes": []string{"autonomous"}, "visibility": "public",
+	}, nil, http.StatusCreated)
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "tagged2", "modes": []string{"autonomous"}, "visibility": "public",
+	}, nil, http.StatusCreated)
+	for _, name := range []string{"tagpriv", "tagblock", "tagged2"} {
+		env.publishVersions(t, sess, owner, name, []versionFiles{
+			{"1.0.0", skillFiles(owner, name, "1.0.0", []string{tag})},
+		})
+	}
+	staffH := env.register("tag-staff")
+	env.verifyEmail(staffH)
+	env.makePlatformStaff(t, staffH)
+	env.doJSON(env.login(staffH), http.MethodPost, "/api/v1/platform/agents/"+owner+"/tagblock/block",
+		map[string]any{"reason": "fixture"}, nil, http.StatusNoContent)
+	type tagPage struct {
+		Tag     string `json:"tag"`
+		Results []struct {
+			Name            string   `json:"name"`
+			Modes           []string `json:"modes"`
+			QuarantineState *string  `json:"quarantineState"`
+			Installs30d     *int     `json:"installs30d"`
+		} `json:"results"`
+	}
+	tagListed := func(hits []struct {
+		Name            string   `json:"name"`
+		Modes           []string `json:"modes"`
+		QuarantineState *string  `json:"quarantineState"`
+		Installs30d     *int     `json:"installs30d"`
+	}, name string) bool {
+		for _, h := range hits {
+			if h.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+	var listed tagPage
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/tags/"+tag, nil, &listed, http.StatusOK)
+	var listedNames []string
+	for _, hit := range listed.Results {
+		listedNames = append(listedNames, hit.Name)
+	}
+	// A blocked agent that kept its release, and an agent of an organization
+	// that is suspended, are not listed either; space around the tag is not
+	// part of it.
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "tagflag", "modes": []string{"autonomous"}, "visibility": "public",
+	}, nil, http.StatusCreated)
+	env.publishVersions(t, sess, owner, "tagflag", []versionFiles{
+		{"1.0.0", skillFiles(owner, "tagflag", "1.0.0", []string{tag})},
+	})
+	tagOrg := "tagorg" + env.sfx
+	tagOrgID := env.createOrg(sess, tagOrg)
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": tagOrg, "name": "tagorgagent", "modes": []string{"autonomous"}, "visibility": "public",
+	}, nil, http.StatusCreated)
+	env.publishVersions(t, sess, tagOrg, "tagorgagent", []versionFiles{
+		{"1.0.0", skillFiles(tagOrg, "tagorgagent", "1.0.0", []string{tag})},
+	})
+	for _, name := range []string{"tagorgagent", "tagged2"} {
+		var p tagPage
+		env.doJSON(anonymous, http.MethodGet, "/api/v1/tags/%20"+tag+"%20", nil, &p, http.StatusOK)
+		if p.Tag != tag || !tagListed(p.Results, name) {
+			t.Fatalf("a tag with space around it: %q %v, want %q listing %s", p.Tag, p.Results, tag, name)
+		}
+	}
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE agents SET quarantine_state = 'blocked' WHERE name = 'tagflag' AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`, owner); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE orgs SET state = 'suspended' WHERE id = $1::uuid`, tagOrgID); err != nil {
+		t.Fatal(err)
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/tags/"+tag, nil, &listed, http.StatusOK)
+	listedNames = listedNames[:0]
+	for _, hit := range listed.Results {
+		listedNames = append(listedNames, hit.Name)
+	}
+	if !reflect.DeepEqual(listedNames, []string{"tagged2", "tagged"}) {
+		t.Fatalf("tag listing = %v, want the two public agents, newest first", listedNames)
+	}
+	if h := listed.Results[0]; !reflect.DeepEqual(h.Modes, []string{"autonomous"}) || h.QuarantineState == nil || *h.QuarantineState != "none" || h.Installs30d == nil || *h.Installs30d != 0 {
+		t.Fatalf("tag hit = %+v", h)
+	}
+
+	// Paging follows the cursor: a full page carries the next link, the last
+	// page none.
+	res := env.do(anonymous, http.MethodGet, "/api/v1/tags/"+tag+"?limit=1", nil)
+	var first, second tagPage
+	decodeInto(t, res, &first)
+	if len(first.Results) != 1 || first.Results[0].Name != "tagged2" || !strings.Contains(res.Header.Get("Link"), `rel="next"`) {
+		t.Fatalf("first page = %+v, Link %q", first.Results, res.Header.Get("Link"))
+	}
+	res = env.do(anonymous, http.MethodGet, "/api/v1/tags/"+tag+"?limit=1&cursor="+cursorFromLink(t, res.Header.Get("Link")), nil)
+	decodeInto(t, res, &second)
+	if len(second.Results) != 1 || second.Results[0].Name != "tagged" {
+		t.Fatalf("second page = %+v", second.Results)
+	}
+	res = env.do(anonymous, http.MethodGet, "/api/v1/tags/"+tag+"?limit=5", nil)
+	decodeInto(t, res, &second)
+	if len(second.Results) != 2 || res.Header.Get("Link") != "" {
+		t.Fatalf("a short page = %+v, Link %q", second.Results, res.Header.Get("Link"))
+	}
 }
 
 // ---- webhooks and ruleset releases ----
@@ -274,14 +493,59 @@ func TestWebhookPingAndEndpointCap(t *testing.T) {
 	if delivery.EventType != "ping" {
 		t.Fatalf("ping delivery event = %q, want ping", delivery.EventType)
 	}
+	// The ping is audited with the delivery it made.
+	var pingAudited int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events WHERE action = 'webhook.ping' AND target_id = $1::uuid AND detail->>'deliveryId' = $2`,
+		created.Id, delivery.Id).Scan(&pingAudited); err != nil {
+		t.Fatal(err)
+	}
+	if pingAudited != 1 {
+		t.Fatalf("the ping was audited %d times, want once, naming its delivery", pingAudited)
+	}
+	var requestedBy string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT payload->'data'->>'requestedBy' FROM webhook_deliveries WHERE id = $1::uuid`, delivery.Id).Scan(&requestedBy); err != nil {
+		t.Fatal(err)
+	}
+	if requestedBy != owner {
+		t.Fatalf("the ping payload names requester %q, want %s", requestedBy, owner)
+	}
+	// An endpoint is reached through its own organization only.
+	strangerH := env.register("wh-str")
+	env.verifyEmail(strangerH)
+	stranger := env.login(strangerH)
+	otherOrg := "whother" + env.sfx
+	env.createOrg(stranger, otherOrg)
+	for _, path := range []string{"/ping", "/deliveries"} {
+		method := http.MethodPost
+		if path == "/deliveries" {
+			method = http.MethodGet
+		}
+		res := env.do(stranger, method, "/api/v1/orgs/"+otherOrg+"/webhooks/"+created.Id+path, nil)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusNotFound {
+			t.Fatalf("%s of another organization's endpoint: got %d want 404", path, res.StatusCode)
+		}
+	}
 	var deliveries []struct {
 		Id        string `json:"id"`
 		EventType string `json:"eventType"`
+		Attempt   int    `json:"attempt"`
 	}
 	env.doJSON(sess, http.MethodGet,
 		"/api/v1/orgs/"+orgH+"/webhooks/"+created.Id+"/deliveries", nil, &deliveries, http.StatusOK)
 	if len(deliveries) != 1 || deliveries[0].Id != delivery.Id {
 		t.Fatalf("ping delivery not in the ledger: %+v", deliveries)
+	}
+	// The ledger says how many times a delivery was attempted.
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE webhook_deliveries SET attempt = 3 WHERE id = $1::uuid`, delivery.Id); err != nil {
+		t.Fatal(err)
+	}
+	env.doJSON(sess, http.MethodGet,
+		"/api/v1/orgs/"+orgH+"/webhooks/"+created.Id+"/deliveries", nil, &deliveries, http.StatusOK)
+	if len(deliveries) != 1 || deliveries[0].Attempt != 3 {
+		t.Fatalf("delivery attempts in the ledger: %+v", deliveries)
 	}
 
 	// 20 endpoints per org. One exists; add 19 more, then expect a
@@ -297,6 +561,10 @@ func TestWebhookPingAndEndpointCap(t *testing.T) {
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusConflict {
 		t.Fatalf("21st webhook: got %d want 409", res.StatusCode)
+	}
+	refusal, _ := io.ReadAll(res.Body)
+	if !strings.Contains(string(refusal), "maximum of 20 webhook endpoints") {
+		t.Fatalf("the refusal does not name the maximum: %s", refusal)
 	}
 }
 
@@ -317,6 +585,11 @@ func TestRulesetReleaseAndPlatformAudit(t *testing.T) {
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("non-staff platform audit: got %d want 403", res.StatusCode)
 	}
+	res = env.do(anonymous, http.MethodPost, "/api/v1/platform/ruleset-releases", map[string]any{})
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous ruleset release: got %d want 401", res.StatusCode)
+	}
 
 	staffH := env.register("rs-staff")
 	env.verifyEmail(staffH)
@@ -325,9 +598,10 @@ func TestRulesetReleaseAndPlatformAudit(t *testing.T) {
 
 	// An empty body registers the deployment's own embedded bundle.
 	var rel struct {
-		Id           string `json:"id"`
-		Semver       string `json:"semver"`
-		BundleDigest string `json:"bundleDigest"`
+		Id           string  `json:"id"`
+		Semver       string  `json:"semver"`
+		BundleDigest string  `json:"bundleDigest"`
+		Notes        *string `json:"notes"`
 	}
 	env.doJSON(staff, http.MethodPost, "/api/v1/platform/ruleset-releases",
 		map[string]any{}, &rel, http.StatusOK) // seeded at server start, so it already exists
@@ -345,6 +619,72 @@ func TestRulesetReleaseAndPlatformAudit(t *testing.T) {
 	env.doJSON(staff, http.MethodPost, "/api/v1/platform/ruleset-releases", body, &again, http.StatusOK)
 	if fresh.Id != again.Id {
 		t.Fatalf("re-registering a semver made a second row: %s vs %s", fresh.Id, again.Id)
+	}
+
+	// A new semver queues the catalogue's re-check, one job of each kind,
+	// and registering it again queues nothing more. The registration is
+	// audited with what it registered.
+	ctx := context.Background()
+	var queued, audited int
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM river_job WHERE kind IN ('scan.rescan_sweep', 'scan.redo_review_queue') AND args->>'rulesetSemver' = $1`,
+		fresh.Semver).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 2 {
+		t.Fatalf("%d re-check jobs queued for the new semver, want a rescan sweep and a review queue redo", queued)
+	}
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM audit_events WHERE action = 'ruleset.release' AND detail->>'semver' = $1 AND detail->>'bundleDigest' = $2`,
+		fresh.Semver, body["bundleDigest"]).Scan(&audited); err != nil {
+		t.Fatal(err)
+	}
+	if audited != 1 {
+		t.Fatalf("the registration was audited %d times, want once", audited)
+	}
+
+	// A semver is MAJOR.MINOR.PATCH, with an optional pre-release or build
+	// suffix; anything else is refused.
+	for _, bad := range []string{"1.2", "v1.2.3", "1.2.3.4", "x1.2.3", "1.2.3 4", "1.2.3_rc"} {
+		res := env.do(staff, http.MethodPost, "/api/v1/platform/ruleset-releases",
+			map[string]any{"semver": bad, "bundleDigest": body["bundleDigest"]})
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("semver %q: got %d want 422", bad, res.StatusCode)
+		}
+	}
+	for _, suffix := range []string{"-rc.1", "+build.5"} {
+		env.doJSON(staff, http.MethodPost, "/api/v1/platform/ruleset-releases",
+			map[string]any{"semver": "9.8." + env.sfxDigits() + suffix, "bundleDigest": body["bundleDigest"]}, nil, http.StatusCreated)
+	}
+	// Space around a semver is not part of it.
+	var padded struct {
+		Semver       string `json:"semver"`
+		BundleDigest string `json:"bundleDigest"`
+	}
+	env.doJSON(staff, http.MethodPost, "/api/v1/platform/ruleset-releases",
+		map[string]any{"semver": "  9.6." + env.sfxDigits() + "  ", "bundleDigest": "  " + body["bundleDigest"].(string) + "  "}, &padded, http.StatusCreated)
+	if padded.Semver != "9.6."+env.sfxDigits() || padded.BundleDigest != body["bundleDigest"] {
+		t.Fatalf("a padded semver and digest were registered as %q and %q", padded.Semver, padded.BundleDigest)
+	}
+
+	// Naming only a semver registers the deployment's own bundle under it;
+	// naming only a digest names the deployment's own semver, which is
+	// registered already and answers its row.
+	var partial struct {
+		Semver       string  `json:"semver"`
+		BundleDigest string  `json:"bundleDigest"`
+		Notes        *string `json:"notes"`
+	}
+	env.doJSON(staff, http.MethodPost, "/api/v1/platform/ruleset-releases",
+		map[string]any{"semver": "9.7." + env.sfxDigits()}, &partial, http.StatusCreated)
+	if partial.BundleDigest != rel.BundleDigest || partial.Notes == nil || rel.Notes == nil || *partial.Notes != *rel.Notes || *partial.Notes == "" {
+		t.Fatalf("a semver alone: %+v, want the deployment's own digest %s and notes", partial, rel.BundleDigest)
+	}
+	env.doJSON(staff, http.MethodPost, "/api/v1/platform/ruleset-releases",
+		map[string]any{"bundleDigest": "sha256:" + strings.Repeat("cd", 32)}, &partial, http.StatusOK)
+	if partial.Semver != rel.Semver || partial.BundleDigest != rel.BundleDigest {
+		t.Fatalf("a digest alone: %+v, want the deployment's own row %+v", partial, rel)
 	}
 
 	// The platform audit view spans orgs and records the staff read itself.
@@ -371,9 +711,99 @@ func TestRulesetReleaseAndPlatformAudit(t *testing.T) {
 	if reads == 0 {
 		t.Fatal("staff access to the audit log must be audited itself")
 	}
+	res = env.do(anonymous, http.MethodGet, "/api/v1/platform/audit", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous platform audit: got %d want 401", res.StatusCode)
+	}
+
+	// The view filters by action and by organization, newest first and by
+	// cursor, and each read records the filters it was given.
+	type auditPage struct {
+		Events []struct {
+			Action      string  `json:"action"`
+			ActorHandle *string `json:"actorHandle"`
+		} `json:"events"`
+		NextCursor *string `json:"nextCursor"`
+	}
+	orgH := "auditorg" + env.sfx
+	env.createOrg(plain, orgH)
+	env.doJSON(plain, http.MethodPatch, "/api/v1/orgs/"+orgH, map[string]any{"displayName": "Renamed"}, nil, http.StatusOK)
+	var byAction, byOrg, both auditPage
+	env.doJSON(staff, http.MethodGet, "/api/v1/platform/audit?action=ruleset.release&limit=200", nil, &byAction, http.StatusOK)
+	if len(byAction.Events) == 0 {
+		t.Fatal("no ruleset.release events under the action filter")
+	}
+	for _, e := range byAction.Events {
+		if e.Action != "ruleset.release" {
+			t.Fatalf("the action filter let %s through", e.Action)
+		}
+	}
+	if a := byAction.Events[0].ActorHandle; a == nil || *a != staffH {
+		t.Fatalf("the newest ruleset.release event names actor %v, want %s", a, staffH)
+	}
+	env.doJSON(staff, http.MethodGet, "/api/v1/platform/audit?org="+orgH+"&limit=200", nil, &byOrg, http.StatusOK)
+	if len(byOrg.Events) == 0 {
+		t.Fatal("no events under the organization filter")
+	}
+	for _, e := range byOrg.Events {
+		if e.Action == "ruleset.release" {
+			t.Fatalf("the organization filter let a platform event through: %s", e.Action)
+		}
+	}
+	env.doJSON(staff, http.MethodGet, "/api/v1/platform/audit?org="+orgH+"&action=ruleset.release", nil, &both, http.StatusOK)
+	if len(both.Events) != 0 {
+		t.Fatalf("an organization with no ruleset events has %d of them", len(both.Events))
+	}
+	readsBefore := platformReads(t, env)
+	res = env.do(staff, http.MethodGet, "/api/v1/platform/audit?org=no-such-org-"+env.sfx, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("audit of an unknown organization: got %d want 404", res.StatusCode)
+	}
+	if got := platformReads(t, env); got != readsBefore {
+		t.Fatalf("a refused read was audited: %d platform reads before, %d after", readsBefore, got)
+	}
+	var full, one, two auditPage
+	resFull := env.do(staff, http.MethodGet, "/api/v1/platform/audit?org="+orgH+"&limit=100", nil)
+	decodeInto(t, resFull, &full)
+	if full.NextCursor != nil || resFull.Header.Get("Link") != "" || len(full.Events) < 2 {
+		t.Fatalf("a page holding everything: %d events, next %v, Link %q", len(full.Events), full.NextCursor, resFull.Header.Get("Link"))
+	}
+	resOne := env.do(staff, http.MethodGet, "/api/v1/platform/audit?org="+orgH+"&limit=1", nil)
+	decodeInto(t, resOne, &one)
+	if len(one.Events) != 1 || one.NextCursor == nil || !strings.Contains(resOne.Header.Get("Link"), `rel="next"`) || one.Events[0].Action != full.Events[0].Action {
+		t.Fatalf("first page of one: %+v next %v Link %q", one.Events, one.NextCursor, resOne.Header.Get("Link"))
+	}
+	resTwo := env.do(staff, http.MethodGet, "/api/v1/platform/audit?org="+orgH+"&limit=1&cursor="+*one.NextCursor, nil)
+	decodeInto(t, resTwo, &two)
+	if len(two.Events) != 1 || two.Events[0].Action != full.Events[1].Action {
+		t.Fatalf("second page of one: %+v, want the feed's second event %s", two.Events, full.Events[1].Action)
+	}
+	var recorded int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events WHERE action = 'audit.platform_read'
+		   AND detail->>'action' = 'ruleset.release' AND detail->>'org' = $1 AND detail->>'limit' = '50'`, orgH).Scan(&recorded); err != nil {
+		t.Fatal(err)
+	}
+	if recorded != 1 {
+		t.Fatalf("the read with both filters was recorded %d times, want once, with the filters and the page size", recorded)
+	}
 }
 
 // ---- list conventions ----
+
+// platformReads counts the staff reads of the platform audit log recorded so
+// far.
+func platformReads(t *testing.T, env *testEnv) int {
+	t.Helper()
+	var n int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events WHERE action = 'audit.platform_read'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
 
 func TestListParamsAreClampedNotRejected(t *testing.T) {
 	env := newTestEnv(t)
@@ -426,9 +856,23 @@ func TestSearchFacets(t *testing.T) {
 	q := "facetsearch" + env.sfx
 	type results struct {
 		Results []struct {
-			Name string `json:"name"`
+			Name            string   `json:"name"`
+			Summary         string   `json:"summary"`
+			Modes           []string `json:"modes"`
+			QuarantineState *string  `json:"quarantineState"`
+			Builtin         bool     `json:"builtin"`
+			Installs30d     *int     `json:"installs30d"`
 		} `json:"results"`
 		Facets map[string]map[string]int `json:"facets"`
+		Total  *int                      `json:"total"`
+	}
+	has := func(r results, name string) bool {
+		for _, h := range r.Results {
+			if h.Name == name {
+				return true
+			}
+		}
+		return false
 	}
 
 	// license= reads the latest published manifest (Apache-2.0 in skillFiles).
@@ -440,12 +884,43 @@ func TestSearchFacets(t *testing.T) {
 	if hit.Facets["license"]["Apache-2.0"] == 0 {
 		t.Fatalf("license facet counts missing: %+v", hit.Facets)
 	}
+	if hit.Facets["license"]["Apache-2.0"] != 1 || hit.Facets["mode"]["autonomous"] != 1 {
+		t.Fatalf("facet counts for the query: %+v, want one agent under license Apache-2.0 and mode autonomous", hit.Facets)
+	}
+	// A hit says what the agent is.
+	if h := hit.Results[0]; h.Summary != q || !reflect.DeepEqual(h.Modes, []string{"autonomous"}) || h.QuarantineState == nil || *h.QuarantineState != "none" ||
+		h.Builtin || h.Installs30d == nil || *h.Installs30d != 0 {
+		t.Fatalf("search hit = %+v", h)
+	}
+	// The license is compared without regard to case or the space around it.
+	for _, lic := range []string{"apache-2.0", "%20Apache-2.0%20"} {
+		var folded results
+		env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&license="+lic, nil, &folded, http.StatusOK)
+		if len(folded.Results) != 1 {
+			t.Fatalf("license=%s matched %d agents, want 1", lic, len(folded.Results))
+		}
+	}
+	// The run mode filters: the agent supports autonomous and not interactive.
+	var byMode results
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&mode=autonomous", nil, &byMode, http.StatusOK)
+	if len(byMode.Results) != 1 {
+		t.Fatalf("mode=autonomous matched %d agents, want 1", len(byMode.Results))
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&mode=interactive", nil, &byMode, http.StatusOK)
+	if len(byMode.Results) != 0 {
+		t.Fatalf("mode=interactive matched %d agents, want 0", len(byMode.Results))
+	}
 
 	// A license nobody declared matches nothing.
 	var miss results
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&license=WTFPL", nil, &miss, http.StatusOK)
 	if len(miss.Results) != 0 {
 		t.Fatalf("license=WTFPL matched %d agents", len(miss.Results))
+	}
+	// The facets describe the query, not the filter: the licence that
+	// matched nothing still shows what the query would find.
+	if miss.Facets["license"]["Apache-2.0"] != 1 {
+		t.Fatalf("facets under a filter that matched nothing: %+v", miss.Facets)
 	}
 
 	// verified= keeps only org namespaces with a verified domain; this agent
@@ -470,6 +945,15 @@ func TestSearchFacets(t *testing.T) {
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&capability=network", nil, &caps, http.StatusOK)
 	if len(caps.Results) != 0 {
 		t.Fatalf("capability=network matched an agent that declares none: %+v", caps.Results)
+	}
+
+	// A capability stored as null, or as an object whose members are all
+	// null, is not one the agent asks for.
+	for _, c := range []string{"exec", "filesystem"} {
+		env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&capability="+c, nil, &caps, http.StatusOK)
+		if len(caps.Results) != 0 {
+			t.Fatalf("capability=%s matched an agent that declares none: %+v", c, caps.Results)
+		}
 	}
 
 	// capability=targetHosts matches only a release that declares a target
@@ -534,6 +1018,87 @@ capabilities:
 	if len(caps.Results) != 0 {
 		t.Fatalf("capability=network matched a browser release: %+v", caps.Results)
 	}
+
+	// capability=network matches the release that declares network egress, and
+	// only that one, however the capability is spaced.
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "facetnet", "modes": []string{"autonomous"}, "visibility": "public",
+		"summary": q,
+	}, nil, http.StatusCreated)
+	status, body = env.uploadVersionCLI(owner, "facetnet", pat, installCapsFiles(owner, "facetnet", "1.0.0", []string{"api.example"}, nil))
+	if status != http.StatusAccepted {
+		t.Fatalf("publish a network release: %d %s", status, body)
+	}
+	env.waitStatus(owner, "facetnet", "1.0.0", "published")
+	for _, c := range []string{"network", "%20network%20"} {
+		var nets results
+		env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&capability="+c, nil, &nets, http.StatusOK)
+		if len(nets.Results) != 1 || nets.Results[0].Name != "facetnet" {
+			t.Fatalf("capability=%s = %+v; want facetnet alone", c, nets.Results)
+		}
+	}
+
+	// A built-in agent says so.
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE agents SET builtin = true WHERE name = 'facetnet' AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`, owner); err != nil {
+		t.Fatal(err)
+	}
+	var builtin results
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&capability=network", nil, &builtin, http.StatusOK)
+	if len(builtin.Results) != 1 || !builtin.Results[0].Builtin {
+		t.Fatalf("a built-in agent in search: %+v", builtin.Results)
+	}
+
+	// verified= keeps an organization's agent once the organization has a
+	// verified domain; an organization that is suspended or erased is absent
+	// from search, and one in its decommission hold is read.
+	orgH := "facetorg" + env.sfx
+	orgID := env.createOrg(sess, orgH)
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": orgH, "name": "facetorgagent", "modes": []string{"autonomous"}, "visibility": "public",
+		"summary": q,
+	}, nil, http.StatusCreated)
+	status, body = env.uploadVersionCLI(orgH, "facetorgagent", pat, skillFiles(orgH, "facetorgagent", "1.0.0", nil))
+	if status != http.StatusAccepted {
+		t.Fatalf("publish an organization's release: %d %s", status, body)
+	}
+	env.waitStatus(orgH, "facetorgagent", "1.0.0", "published")
+	var orgs results
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&verified=true", nil, &orgs, http.StatusOK)
+	if len(orgs.Results) != 0 || orgs.Total == nil || *orgs.Total != 0 {
+		t.Fatalf("verified=true matched an organization with no verified domain: %+v total %v", orgs.Results, orgs.Total)
+	}
+	// A domain claimed and not yet proved is no verification.
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO domain_claims (id, org_id, domain, verification_token) VALUES (gen_random_uuid(), $1::uuid, $2, 'pending')`,
+		orgID, "pending"+env.sfx+".example.test"); err != nil {
+		t.Fatal(err)
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&verified=true", nil, &orgs, http.StatusOK)
+	if len(orgs.Results) != 0 || orgs.Total == nil || *orgs.Total != 0 {
+		t.Fatalf("verified=true matched an organization whose only claim is unproved: %+v total %v", orgs.Results, orgs.Total)
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q, nil, &orgs, http.StatusOK)
+	if !has(orgs, "facetorgagent") {
+		t.Fatalf("an active organization's agent is missing from search: %+v", orgs.Results)
+	}
+	env.verifyOrgDomain(orgH, "facet"+env.sfx+".example.test")
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&verified=true", nil, &orgs, http.StatusOK)
+	if len(orgs.Results) != 1 || orgs.Results[0].Name != "facetorgagent" || orgs.Total == nil || *orgs.Total != 1 {
+		t.Fatalf("verified=true = %+v total %v; want the verified organization's agent alone", orgs.Results, orgs.Total)
+	}
+	for state, listed := range map[string]bool{"decommissioning": true, "suspended": false} {
+		if _, err := env.st.Pool().Exec(context.Background(), `UPDATE orgs SET state = $2 WHERE id = $1::uuid`, orgID, state); err != nil {
+			t.Fatal(err)
+		}
+		env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q, nil, &orgs, http.StatusOK)
+		if has(orgs, "facetorgagent") != listed {
+			t.Fatalf("an organization that is %s: its agent listed = %v, want %v", state, has(orgs, "facetorgagent"), listed)
+		}
+		if orgs.Total == nil || *orgs.Total != len(orgs.Results) {
+			t.Fatalf("an organization that is %s: total %v does not count the %d listed hits", state, orgs.Total, len(orgs.Results))
+		}
+	}
 }
 
 func TestRateLimitHeadersOnEveryResponse(t *testing.T) {
@@ -547,6 +1112,36 @@ func TestRateLimitHeadersOnEveryResponse(t *testing.T) {
 	}
 	if res.Header.Get("Retry-After") != "" {
 		t.Fatal("Retry-After must appear only when a request is refused")
+	}
+	// The numbers: the anonymous class's whole budget less this request, and
+	// at least a second until the next token.
+	if got := res.Header.Get("RateLimit-Limit"); got != "100000" {
+		t.Fatalf("RateLimit-Limit = %q, want the anonymous budget 100000", got)
+	}
+	if got := res.Header.Get("RateLimit-Remaining"); got != "99999" {
+		t.Fatalf("RateLimit-Remaining = %q, want 99999 after one request", got)
+	}
+	if got := res.Header.Get("RateLimit-Reset"); got != "1" {
+		t.Fatalf("RateLimit-Reset = %q, want 1", got)
+	}
+
+	// A request past the budget is refused with 429, the headers say so, and
+	// Retry-After names the wait.
+	tight := newTestEnvCfg(t, func(c *config.Config) { c.Limits.AnonymousPerMin = 1 })
+	ok := tight.do(anonymous, http.MethodGet, "/api/v1/meta", nil)
+	_ = ok.Body.Close()
+	if ok.StatusCode != http.StatusOK || ok.Header.Get("RateLimit-Limit") != "1" || ok.Header.Get("RateLimit-Remaining") != "0" || ok.Header.Get("Retry-After") != "" {
+		t.Fatalf("the request within the budget: %d %v", ok.StatusCode, ok.Header)
+	}
+	refused := tight.do(anonymous, http.MethodGet, "/api/v1/meta", nil)
+	_ = refused.Body.Close()
+	if refused.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("the request past the budget: got %d want 429", refused.StatusCode)
+	}
+	wait, err := strconv.Atoi(refused.Header.Get("Retry-After"))
+	if err != nil || wait < 1 || wait > 60 || refused.Header.Get("RateLimit-Reset") != refused.Header.Get("Retry-After") ||
+		refused.Header.Get("RateLimit-Limit") != "1" || refused.Header.Get("RateLimit-Remaining") != "0" {
+		t.Fatalf("headers of a refusal: %v", refused.Header)
 	}
 }
 
@@ -585,6 +1180,10 @@ func TestIdempotencyKeyReplaysAndConflicts(t *testing.T) {
 	if second.Header.Get("Idempotency-Replayed") != "true" {
 		t.Fatal("a replayed response must say so")
 	}
+	if second.Header.Get("Cache-Control") != "no-store" || !strings.HasPrefix(second.Header.Get("Content-Type"), "application/json") {
+		t.Fatalf("a replay is typed as json and never cached: Cache-Control %q, Content-Type %q",
+			second.Header.Get("Cache-Control"), second.Header.Get("Content-Type"))
+	}
 	var replayed struct {
 		Id string `json:"id"`
 	}
@@ -600,9 +1199,10 @@ func TestIdempotencyKeyReplaysAndConflicts(t *testing.T) {
 	third := env.doWithHeaders(sess, http.MethodPost, "/api/v1/orgs",
 		map[string]any{"handle": "idemtwo" + env.sfx, "displayName": "Other"},
 		map[string]string{"Idempotency-Key": key})
+	thirdBody, _ := io.ReadAll(third.Body)
 	_ = third.Body.Close()
-	if third.StatusCode != http.StatusConflict {
-		t.Fatalf("key reuse with a different body: got %d want 409", third.StatusCode)
+	if third.StatusCode != http.StatusConflict || !strings.Contains(string(thirdBody), "already carried a different request body") {
+		t.Fatalf("key reuse with a different body: got %d %s, want 409 naming the different body", third.StatusCode, thirdBody)
 	}
 
 	// A failed request must not lock the key out. A second account makes
@@ -615,6 +1215,7 @@ func TestIdempotencyKeyReplaysAndConflicts(t *testing.T) {
 	bad := env.doWithHeaders(other, http.MethodPost, "/api/v1/orgs",
 		map[string]any{"handle": "NOT VALID", "displayName": "x"},
 		map[string]string{"Idempotency-Key": badKey})
+	badBody, _ := io.ReadAll(bad.Body)
 	_ = bad.Body.Close()
 	if bad.StatusCode == http.StatusCreated {
 		t.Fatal("an invalid handle must not create an org")
@@ -625,6 +1226,79 @@ func TestIdempotencyKeyReplaysAndConflicts(t *testing.T) {
 	_ = retry.Body.Close()
 	if retry.StatusCode != http.StatusCreated {
 		t.Fatalf("retry after a failed attempt: got %d want 201", retry.StatusCode)
+	}
+
+	// The refusal states the whole handle rule, as the handle grammar has it.
+	if want := "An org handle is 1-39 lowercase letters, digits and hyphens, starting and ending with a letter or digit."; bad.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(badBody), want) {
+		t.Fatalf("an invalid handle: got %d %s, want 422 stating the rule %q", bad.StatusCode, badBody, want)
+	}
+
+	// A key is the caller's own: another account sending the same key and a
+	// different body is a first request, not a conflict.
+	fourthH := env.register("idem-four")
+	env.verifyEmail(fourthH)
+	fourth := env.login(fourthH)
+	own := env.doWithHeaders(fourth, http.MethodPost, "/api/v1/orgs",
+		map[string]any{"handle": "idemfour" + env.sfx, "displayName": "Fourth"},
+		map[string]string{"Idempotency-Key": key})
+	_ = own.Body.Close()
+	if own.StatusCode != http.StatusCreated || own.Header.Get("Idempotency-Replayed") != "" {
+		t.Fatalf("another account's use of the same key: got %d replayed=%q, want a fresh 201", own.StatusCode, own.Header.Get("Idempotency-Replayed"))
+	}
+
+	// A key is at most 255 characters: 255 is a request, 256 is refused
+	// before anything is done.
+	fifthH := env.register("idem-five")
+	env.verifyEmail(fifthH)
+	fifth := env.login(fifthH)
+	tooLong := env.doWithHeaders(fifth, http.MethodPost, "/api/v1/orgs",
+		map[string]any{"handle": "idemfive" + env.sfx, "displayName": "Fifth"},
+		map[string]string{"Idempotency-Key": strings.Repeat("k", 256)})
+	_ = tooLong.Body.Close()
+	if tooLong.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("a 256-character key: got %d want 422", tooLong.StatusCode)
+	}
+	longest := env.doWithHeaders(fifth, http.MethodPost, "/api/v1/orgs",
+		map[string]any{"handle": "idemfive" + env.sfx, "displayName": "Fifth"},
+		map[string]string{"Idempotency-Key": strings.Repeat("k", 255)})
+	_ = longest.Body.Close()
+	if longest.StatusCode != http.StatusCreated {
+		t.Fatalf("a 255-character key: got %d want 201", longest.StatusCode)
+	}
+
+	// A caller with no credential has nothing to key on: the route answers as
+	// it would without the header.
+	anon := env.doWithHeaders(anonymous, http.MethodPost, "/api/v1/orgs",
+		map[string]any{"handle": "idemanon" + env.sfx, "displayName": "Anon"},
+		map[string]string{"Idempotency-Key": "idem-anon-" + env.sfx})
+	_ = anon.Body.Close()
+	if anon.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous request with a key: got %d want 401", anon.StatusCode)
+	}
+
+	// A retry that finds the first attempt still running is refused rather
+	// than raced: the claim exists and holds no response yet.
+	sixthH := env.register("idem-six")
+	env.verifyEmail(sixthH)
+	sixth := env.login(sixthH)
+	pending := map[string]any{"handle": "idemsix" + env.sfx, "displayName": "Sixth"}
+	raw, err := json.Marshal(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(raw)
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO idempotency_keys (key, user_id, endpoint, request_hash, expires_at)
+		 SELECT $2, id, 'POST /orgs', $3, now() + interval '1 hour' FROM handles WHERE handle = $1`,
+		sixthH, "idem-flight-"+env.sfx, hex.EncodeToString(sum[:])); err != nil {
+		t.Fatal(err)
+	}
+	flight := env.doWithHeaders(sixth, http.MethodPost, "/api/v1/orgs", pending,
+		map[string]string{"Idempotency-Key": "idem-flight-" + env.sfx})
+	flightBody, _ := io.ReadAll(flight.Body)
+	_ = flight.Body.Close()
+	if flight.StatusCode != http.StatusConflict || !strings.Contains(string(flightBody), "still in flight") {
+		t.Fatalf("a retry while the first attempt runs: got %d %s, want 409 naming the request in flight", flight.StatusCode, flightBody)
 	}
 }
 
@@ -669,6 +1343,9 @@ func TestCursorPagingEmitsLinkHeader(t *testing.T) {
 	decodeInto(t, res2, &secondPage)
 	if len(secondPage) != 1 {
 		t.Fatalf("page 2 has %d rows, want the remaining 1", len(secondPage))
+	}
+	if res2.Header.Get("Link") != "" {
+		t.Fatalf("the last page carries a next link: %q", res2.Header.Get("Link"))
 	}
 	for _, a := range firstPage {
 		if a.Id == secondPage[0].Id {
@@ -718,6 +1395,34 @@ func TestReviewSurfaceRequiresReviewActScope(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("session review queue: got %d want 200", res.StatusCode)
 	}
+
+	// The whole review surface is behind the scope: the items, their files
+	// and decisions, and the findings' verdicts. A token that carries it gets
+	// past the scope (and answers 404 for an item that does not exist); one
+	// that does not is refused first, naming the scope.
+	missing := uuid.NewString()
+	for _, c := range []struct {
+		method, path string
+		body         any
+	}{
+		{http.MethodGet, "/api/v1/review-items/" + missing, nil},
+		{http.MethodGet, "/api/v1/review-items/" + missing + "/files", nil},
+		{http.MethodGet, "/api/v1/review-items/" + missing + "/file?path=SKILL.md", nil},
+		{http.MethodPost, "/api/v1/review-items/" + missing + "/decision", map[string]any{"decision": "approve", "rationale": "x"}},
+		{http.MethodPost, "/api/v1/findings/" + missing + "/verdict", map[string]any{"verdict": "dismissed_false_positive", "reason": "x"}},
+	} {
+		res = env.do(caller{name: "pat-wrong", pat: wrongPAT}, c.method, c.path, c.body)
+		refusal, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusForbidden || !strings.Contains(string(refusal), "review:act") {
+			t.Fatalf("%s %s with a token lacking review:act: got %d %s, want 403 naming the scope", c.method, c.path, res.StatusCode, refusal)
+		}
+		res = env.do(caller{name: "pat-right", pat: rightPAT}, c.method, c.path, c.body)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusNotFound {
+			t.Fatalf("%s %s with review:act: got %d, want 404 for an item that does not exist", c.method, c.path, res.StatusCode)
+		}
+	}
 }
 
 // GET /platform/ruleset-releases lists the release history for staff and
@@ -745,5 +1450,17 @@ func TestRulesetReleaseList(t *testing.T) {
 	env.doJSON(staff, http.MethodGet, "/api/v1/platform/ruleset-releases", nil, &list, http.StatusOK)
 	if len(list) == 0 || list[0].Semver != "9.9.1" || list[0].Notes != "console test" {
 		t.Fatalf("list: %+v", list)
+	}
+	res = env.do(anonymous, http.MethodGet, "/api/v1/platform/ruleset-releases", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous list: got %d want 401", res.StatusCode)
+	}
+	// Notes are kept without the space around them, and the newest release is first.
+	env.doJSON(staff, http.MethodPost, "/api/v1/platform/ruleset-releases",
+		map[string]any{"semver": "9.9.2", "bundleDigest": "sha256:" + strings.Repeat("ab", 32), "notes": "  padded notes  "}, nil, http.StatusCreated)
+	env.doJSON(staff, http.MethodGet, "/api/v1/platform/ruleset-releases", nil, &list, http.StatusOK)
+	if len(list) < 2 || list[0].Semver != "9.9.2" || list[0].Notes != "padded notes" || list[1].Semver != "9.9.1" {
+		t.Fatalf("list after a second release: %+v", list)
 	}
 }

@@ -1360,7 +1360,8 @@
           "path": "internal/api/meta_features_test.go",
           "tests": [
             "TestMetaAdvertisesNoNativeCredentials",
-            "TestMetaReportsPublicPublish2FA"
+            "TestMetaReportsPublicPublish2FA",
+            "TestMetaReportsWhichFeaturesTheDeploymentHas"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1495,6 +1496,7 @@
             "TestReviewQueueAuthz",
             "TestOrgReviewQueueRequiresReviewer",
             "TestOrgPolicyTightenOnly",
+            "TestOrgPolicyTightensAStoredBaseline",
             "TestPlatformActionRequiresStaff"
           ],
           "fuzz": [],

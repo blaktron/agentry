@@ -61,6 +61,32 @@ func TestRedTeamJobStoresReportStaffReads(t *testing.T) {
 	if evs, ok := r.Report["evasions"].([]any); !ok || len(evs) != r.Evaded {
 		t.Fatalf("evasions %v vs evaded %d", r.Report["evasions"], r.Evaded)
 	}
+	// Every fixture is rewritten by several mutators, so there are more cases
+	// than fixtures.
+	if r.Cases <= r.Fixtures {
+		t.Fatalf("report counts %d cases for %d fixtures", r.Cases, r.Fixtures)
+	}
+
+	// The list maps a stored report as it is: newest first, every count and
+	// the digest as stored, a page of ten when no limit is asked for and the
+	// limit when one is.
+	if _, err := env.st.Pool().Exec(ctx,
+		`INSERT INTO redteam_reports (id, ruleset_semver, bundle_digest, fixtures, cases, evaded, report, created_at)
+		 VALUES (gen_random_uuid(), '0.0.1-listed', 'sha256:listed', 3, 9, 2, '{"evasions": [1, 2]}'::jsonb, now() + interval '1 minute')`); err != nil {
+		t.Fatal(err)
+	}
+	env.doJSON(staffSess, http.MethodGet, "/api/v1/platform/redteam/reports", nil, &reports, http.StatusOK)
+	if len(reports) != 2 {
+		t.Fatalf("a list with no limit holds %d reports, want both", len(reports))
+	}
+	if l := reports[0]; l.RulesetSemver != "0.0.1-listed" || l.BundleDigest != "sha256:listed" || l.Fixtures != 3 || l.Cases != 9 || l.Evaded != 2 {
+		t.Fatalf("newest report = %+v, want the stored counts, ruleset and digest", l)
+	}
+	env.doJSON(staffSess, http.MethodGet, "/api/v1/platform/redteam/reports?limit=1", nil, &reports, http.StatusOK)
+	if len(reports) != 1 || reports[0].RulesetSemver != "0.0.1-listed" {
+		t.Fatalf("limit=1 holds %d reports, want the newest alone", len(reports))
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/platform/redteam/reports", nil, nil, http.StatusUnauthorized)
 
 	plain := env.register("rt-plain")
 	env.verifyEmail(plain)
@@ -128,6 +154,27 @@ func TestRedTeamKeepsOneRunWaiting(t *testing.T) {
 	if n := redTeamWaiting(t, env.st); n != 1 {
 		t.Fatalf("after a run with no successor: %d waiting, want 1", n)
 	}
+
+	// With the job switched off (no interval) a worker start seeds nothing
+	// and a run leaves no successor.
+	exec(`DELETE FROM river_job WHERE kind = 'redteam.run'`)
+	var offSrv *api.Server
+	newTestEnvCfg(t, func(c *config.Config) {
+		c.RedTeam.Interval = 0
+		c.RedTeam.CorpusDir = "../../testdata/attack-corpus"
+	}, func(s *api.Server) { offSrv = s })
+	q := queue.NewRiverClient(env.st, nil)
+	q.SetTestOnly(true)
+	offSrv.RegisterQueueHandlers(q)
+	if n := redTeamWaiting(t, env.st); n != 0 {
+		t.Fatalf("a worker start with the job switched off seeded %d runs", n)
+	}
+	if err := offSrv.RunRedTeamNow(ctx); err != nil {
+		t.Fatalf("run with the job switched off: %v", err)
+	}
+	if n := redTeamWaiting(t, env.st); n != 0 {
+		t.Fatalf("a run with the job switched off left %d successors", n)
+	}
 }
 
 // TestRedTeamRunForAnotherRulesetIsHandedBack: a run queued for a new
@@ -170,6 +217,13 @@ func TestRedTeamRunForAnotherRulesetIsHandedBack(t *testing.T) {
 	}
 	if !strings.Contains(lastErr, "queued for another ruleset") {
 		t.Fatalf("the run for another ruleset was not handed back: last error %q", lastErr)
+	}
+	var handedState string
+	if err := pool.QueryRow(ctx, `SELECT state FROM river_job WHERE kind = 'redteam.run' AND args->>'ruleset' = '0.0.0-another-build'`).Scan(&handedState); err != nil {
+		t.Fatal(err)
+	}
+	if handedState == "completed" || handedState == "cancelled" {
+		t.Fatalf("a run handed back is %s; it must stay for a worker that carries its ruleset", handedState)
 	}
 	if n := reports(); n != 0 {
 		t.Fatalf("%d reports stored for a run queued for another ruleset, want 0", n)
@@ -221,9 +275,36 @@ func TestANewRulesetQueuesARedTeamRun(t *testing.T) {
 	if at.Before(before.Add(time.Minute)) || at.After(time.Now().Add(3*time.Minute)) {
 		t.Fatalf("the run is scheduled at %s, want about two minutes after the registration at %s", at, before)
 	}
+	// Two minutes, not one or three: the registration happened between
+	// before and now.
+	if at.Before(before.Add(2*time.Minute)) || at.After(time.Now().Add(2*time.Minute)) {
+		t.Fatalf("the run is scheduled at %s, want two minutes after a registration between %s and now", at, before)
+	}
+	// A run queued for a ruleset that a worker of another build may hold is
+	// retried for about an hour: twelve attempts.
+	var attempts int
+	if err := st.Pool().QueryRow(ctx, `SELECT max_attempts FROM river_job WHERE kind = 'redteam.run' AND args->>'ruleset' = $1`, bundle.Version()).Scan(&attempts); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 12 {
+		t.Fatalf("the run for the new ruleset may be attempted %d times, want 12", attempts)
+	}
 	_ = api.New(cfg, st, nil)
 	if n, _ := queued(); n != 1 {
 		t.Fatalf("a restart on the same ruleset queued another run: %d", n)
+	}
+
+	// With the job switched off, a new ruleset queues nothing.
+	off := isolatedStore(t)
+	disabled := cfg
+	disabled.RedTeam.Interval = 0
+	_ = api.New(disabled, off, nil)
+	var none int
+	if err := off.Pool().QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = 'redteam.run'`).Scan(&none); err != nil {
+		t.Fatal(err)
+	}
+	if none != 0 {
+		t.Fatalf("%d red-team runs queued with the job switched off", none)
 	}
 }
 
