@@ -180,13 +180,14 @@ through the session protocol below.
 A **persistent** release (`modes: [persistent]`) is a conversation the
 runner keeps between sessions rather than one that ends: the agent's
 conversation and its own files outlive each start and stop. The runner
-runs this mode only for its own built-in agents, so a persistent release
-from the registry or a local folder is refused before anything starts: a
-CLI that knows the mode says "a persistent release runs only as a
-built-in in this version", and an earlier one refuses the manifest as
-declaring an unknown mode. A CLI that knows the mode runs a release that
-declares `persistent` beside another mode in that other mode, as
-`--mode` chooses.
+runs this mode as a persistent agent, started with `agentry agent start`
+([`agentry agent`](#agentry-agent)): for the agents built into Agentry,
+and, from CLI v0.6.1015, for a persistent release installed from the
+registry or from a folder with `agentry agent install`. `agentry run`
+refuses a persistent release that has no other mode and says to install it
+as an agent, and a CLI before v0.6.1015 refuses the manifest as declaring
+an unknown mode. A release that declares `persistent` beside another mode
+runs in that other mode under `agentry run`, as `--mode` chooses.
 
 #### Driving a session from a program
 
@@ -450,18 +451,24 @@ echo or from stdin; `client list` and `client remove <issuer>` manage them.
 
 ### `agentry agent`
 
-Starts, talks to and stops the **persistent agents**: built-in agents the
-runner keeps between conversations. Using them is explained in
+Installs, starts, talks to and stops the **persistent agents**: agents the
+runner keeps between conversations. Three are built into Agentry; a
+persistent release from the registry or from a folder on this computer
+installs beside them. Using them is explained in
 [Persistent agents](https://docs.secureagentry.net/agentry/persistent-agents/);
 the files, sockets and grants behind the commands are under
-[Persistent agents](#persistent-agents) below. An agent is named by its
-built-in's name: `main` (Agentry Helper, which runs only in Agentry Desktop),
-`assistant` and `coder`.
+[Persistent agents](#persistent-agents) below. Every `agentry agent` command
+takes a built-in's short name (`main`, Agentry Helper, which runs only in
+Agentry Desktop; `assistant`; `coder`) or a published agent's reference,
+`ns/name`. The name alone also works for a published agent when no other agent
+has it. Installing a published agent needs CLI v0.6.1015 or later.
 
 | Command | Does | `--json` |
 |---|---|---|
+| `install <ns/name[@version]>`, `install --local DIR` | installs a persistent release as an agent, or updates it ([below](#installing-updating-and-uninstalling-an-agent)) | yes |
+| `uninstall <ref> [--remove-data --confirm REF]` | removes an installed agent, keeping its conversation and files unless `--remove-data` | yes |
 | `list` | the agents with `running`, `stopped`, `disabled` or `desktop only`, who runs a running one, since when, and its segment | yes |
-| `show <name> [--transcript N]` | state, segment, usage, share folder, [roster](#the-roster), volumes and folder; `--transcript N` adds the last N transcript lines | yes |
+| `show <name> [--transcript N]` | state, segment, usage, share folder, [roster](#the-roster), volumes and folder; for a published agent also its version, source, persona, packs and subagents; `--transcript N` adds the last N transcript lines | yes |
 | `enable <name>`, `disable <name>` | allows or stops allowing a start; `disable` needs the agent stopped and keeps its conversation and files | no |
 | `start <name> [--yes] [--policy FILE]` | agrees to what is given for the first time (`--yes`, else asked at a terminal), then starts the agent in the background and prints `supervisor.log` until its socket answers (at most 20 minutes) | yes: the status |
 | `stop <name>` | ends the segment and prints its envelope file | yes: `status`, `resultFile`, `error` |
@@ -472,7 +479,8 @@ built-in's name: `main` (Agentry Helper, which runs only in Agentry Desktop),
 | `reset <name> [--confirm NAME]` | puts a stopped agent back to its defaults; asks for the agent's name, or takes `--confirm` with no terminal | no |
 
 `start` needs the agent enabled, the container engine available and the
-operator policy resolved (`--policy` names another file, as for `run`).
+operator policy resolved (`--policy` names another file, as for `run`). An
+installed agent is enabled and left stopped by `install`.
 `--json` on `list` prints one object per agent (`agent`, `displayName`,
 `state`, and `holder` and `status` while it runs); on `show` it adds `config`,
 `usage`, `volumes`, `stateDir`, `share`, `roster` and `transcript`.
@@ -500,8 +508,9 @@ At least one flag. Several change together.
 | `--remove-server server:ID` | removes a server and its switch and agreement |
 | `--knowledge PACK`, `--no-knowledge PACK` | adds or removes a [knowledge pack](#knowledge-packs) kept on this computer |
 | `--allow-vulnerable-mcp` | adds a package server whose version the registry rates high or critical |
-| `--port NAME=NUMBER`, `--no-port NAME` | `coder` only: publishes or closes a [port](#published-ports) |
-| `--dev-host user@host[:port]` | `coder` only: saves the [dev server](#the-dev-server), readied at the terminal |
+| `--subagent ns/name`, `--no-subagent ns/name` | adds or takes away a [subagent](#subagents) of a published agent; the QuickAgent must be installed on this computer and run autonomously, and it runs at the version installed when it is added |
+| `--port NAME=NUMBER`, `--no-port NAME` | agents that declare `coder`: publishes or closes a [port](#published-ports) |
+| `--dev-host user@host[:port]` | agents that declare `coder`: saves the [dev server](#the-dev-server), readied at the terminal |
 | `--dev-key FILE` | with `--dev-host`: sign in with this private key (its path is kept in the keychain) |
 | `--dev-passphrase ENV`, `--dev-password ENV` | with `--dev-host`: the name of an environment variable that holds the value; a flag never takes the secret, and with none the CLI asks at a terminal |
 | `--no-dev-host` | removes the dev server and its agreement, and leaves its sign-in in the keychain |
@@ -516,8 +525,8 @@ terminal first.
 
 | Exit | Meaning |
 |---|---|
-| `2` usage | an unknown agent; any command but `list` and `show` on `main`; `start` on a disabled agent or one another process runs (the message names the holder); `stop`, `chat` or `attach` on an agent that is not running; `disable` or `reset` on a running one; `reset` with a name that does not match, or with no terminal and no `--confirm`; `configure` with no flag or with `--dev-host` beside `--no-dev-host`; a change the roster refuses (an unknown entry, a share folder on the refused list, a repeated port) |
-| `11` policy | the change or start needs agreement and none was given: `--json` without `--yes`, no terminal without `--yes`, or the answer was no; a dev server outside the policy's host lists; a package server version the registry rates high or critical |
+| `2` usage | an unknown agent; any command but `list` and `show` on `main`; `install` of a release that is not persistent, of a built-in's reference, or of an agent that is running; `uninstall` of a running agent or a built-in; `--remove-data` with a reference that does not match, or with no terminal and no `--confirm`; `--allow-unsigned` without `--local`; `start` on a disabled agent or one another process runs (the message names the holder); `stop`, `chat` or `attach` on an agent that is not running; `disable` or `reset` on a running one; `reset` with a name that does not match, or with no terminal and no `--confirm`; `configure` with no flag or with `--dev-host` beside `--no-dev-host`; a change the roster refuses (an unknown entry, a share folder on the refused list, a repeated port) |
+| `11` policy | a policy with `allowPersistentReleases: false` and an `install` of anything but a built-in; a release that declares filesystem access or a target host, which a persistent agent is never given; the change or start needs agreement and none was given: `--json` without `--yes`, no terminal without `--yes`, or the answer was no; a dev server outside the policy's host lists; a package server version the registry rates high or critical |
 | `1` | the container engine is not available; the supervisor did not start |
 | `15` | the agent did not answer within 20 minutes of `start` |
 
@@ -792,18 +801,137 @@ The CLI checks every draft in four steps:
 
 ## Persistent agents
 
-A persistent agent is a built-in agent whose release declares the run mode
-`persistent` ([Run modes](#run-modes)). Its conversation and its files outlive
-each start and stop; each start-to-stop is a **segment**, an interactive
-session with its own receipts and no idle, time, turn or cost cap. It always
-runs its harness in a container, on the model the operator policy names. The
-commands are under [`agentry agent`](#agentry-agent); the user's view is
+A persistent agent is an agent whose release declares the run mode
+`persistent` ([Run modes](#run-modes)): one of the three built into Agentry
+or a published release installed with `agentry agent install`. Its
+conversation and its files outlive each start and stop; each start-to-stop is
+a **segment**, an interactive session with its own receipts and no idle, time,
+turn or cost cap. It always runs its harness in a container, on the model the
+operator policy names. The commands are under [`agentry agent`](#agentry-agent);
+the user's view is
 [Persistent agents](https://docs.secureagentry.net/agentry/persistent-agents/).
+
+Every agent is held to the same plan. What it may do comes from its release's
+`capabilities.persistent` block alone, the built-ins' releases declaring theirs
+like any other ([What an agent may do](#what-an-agent-may-do)), and it runs
+under the runner policy and the consent the person gave.
+
+### Installing, updating and uninstalling an agent
+
+`agentry agent install <ns/name[@version]>` installs a persistent release from
+the registry, verified as `agentry install` verifies a release: its digest and
+its signature. Before anything is downloaded or asked, the CLI refuses a
+release that does not declare `persistent`, a built-in's reference (those are
+enabled, not installed), a release that declares filesystem access or a target
+host (a persistent agent's files are its share folder and its data volume, and
+a target host is named in a run's intake), and a release that names a server or
+a mail provider this CLI does not carry. It then shows the release's
+capability contract, which the person agrees to, with what is specific to a
+persistent agent: the persona it takes on, whether the person may rename it and
+replace its personality, the knowledge packs it ships and each subagent with
+the version it is pinned to. `--yes` agrees without asking. The agent is
+enabled and left stopped; `agentry agent start <ref>` starts it.
+
+`agentry agent install --local DIR --allow-unsigned` installs a folder on this
+computer. The folder is unsigned, so `--allow-unsigned` is required, and a
+folder installed this way runs none of the subagents it declares.
+
+**Updating.** Installing a reference again moves the agent to the newest version,
+or to `@version`, asking again when the new version declares more than the one
+agreed to. The agent must be stopped, and its conversation, its files and its
+share folder carry across. A plain `agentry install` of an installed agent's
+reference is refused and names this command.
+
+**Uninstalling.** `agentry agent uninstall <ref>` stops listing and starting the
+agent and removes its release, its installed servers and the agreement to it.
+Its conversation, its files and everything chosen for it stay, and installing
+it again takes them up. With `--remove-data` its volumes and its folder under
+the runner home go too: the command asks for the agent's reference, or takes
+`--confirm <ref>` where there is no terminal. The files in the share folder
+belong to the person and always stay. The agent must be stopped. A built-in is
+disabled, never uninstalled.
+
+**The policy.** The runner policy's `allowPersistentReleases: false` refuses
+`install` with [exit 11](#exit-codes-stage-and-reason) and refuses to start
+any published agent already installed, and leaves the built-ins running
+([The operator policy](#the-operator-policy-agentryrunnerpolicyyaml)).
+
+### What an agent may do
+
+An agent has only what its release's `capabilities.persistent` block declares.
+Every key is off unless declared, and the set is closed: a runner grants only
+the keys it knows, and an unknown key is refused. The keys and the rules that
+govern them are in the
+[manifest reference](quickagents.md#a-persistent-agent-capabilitiespersistent-persona-and-subagents).
+What the runner builds from them:
+
+| Key | The runner gives the agent |
+|---|---|
+| `clock` | the time at each turn, the task tools (`task_add`, `task_list`, `task_update`, `task_remove`) and the heartbeat that fires its tasks |
+| `memory` | `recall`, a search of its own earlier conversations, and a memory volume seeded from the release's `memory/` folder |
+| `skills` | the release's `skills/` folder and the skills the person adds |
+| `selfConfigure` | `self_configure`, which changes its name and personality and nothing else |
+| `helper` | the helper tools of [the app link](#the-app-link) |
+| `meetings` | the meeting tools of the app link |
+| `coder` | [the Coding agent's grant](#the-coding-agents-grant): programs, open egress, a browser, ports and a dev server |
+| `web`, `review`, `calendars`, `mail`, `imageServers`, `secrets` | the web tools, AI Review with the person's own key, the calendar feeds the person adds, the person's mail once they sign in, the runner's pinned image servers and the secrets the person keeps for it in their keychain |
+
+A key that is not declared gives the agent no tool for it, and the app link
+lists only the tools of the keys declared. An instruction that calls for a tool
+its key would give is held for a person when the release is published.
+
+**The persona.** A release with a `persona` names the agent and ships the text
+it takes on, in a file of its own. The person sees the name and whether the
+text is editable when installing. They may rename the agent, and replace the
+personality unless the release sets `editable: false`; both reach the agent,
+quoted, at its next turn ([The roster](#the-roster)).
+
+### Subagents
+
+A published agent whose release declares `dependencies.agents` has those
+QuickAgents as subagents. The tools are `subagent_list`, `subagent_run` and
+`subagent_result`; the agent is given them only when its roster names a
+subagent, and the app link lists nothing else for it.
+
+- **Pinned at install.** The CLI resolves each constraint to the newest
+  published version that runs on its own (its modes include `autonomous`) and
+  is not persistent. The agent keeps that version until it is updated. A
+  subagent that resolves to none is listed as unresolved and never runs.
+  Before each run the registry the agent came from is asked whether the
+  version may still run, so one quarantined or withdrawn since is refused.
+- **A run of its own.** `subagent_run` starts an ordinary autonomous run on
+  this computer, in a sandbox of its own, under that QuickAgent's contract and
+  the runner policy. It is never persistent, has no app link and starts no
+  subagents. The call returns a run id; `subagent_result` waits for the answer
+  (60 seconds by default, 10 minutes at most) and the agent can ask again.
+- **What it receives.** Only the task text (at most 32 KiB), the answers to the
+  subagent's intake questions and copies of the files the agent names from its
+  share and its own files, at most 256 MiB. It never receives the agent's
+  memory, secrets, skills or conversation.
+- **What returns.** The answer reaches the agent as another agent's words,
+  framed and cut at 64 KiB, so it cannot pass for the person or the runner.
+  The files the run made (at most 50 and 256 MiB) are copied into the agent's
+  data volume under `subagents/<run id>/`. Each run is a line of the segment's
+  `receipts/subagents.ndjson`, and its own receipts stay in its own folder.
+- **Added by the person.** `agentry agent configure <ref> --subagent ns/name`
+  adds a QuickAgent installed on this computer that runs autonomously, at the
+  version installed then; `--no-subagent` takes it away. A release's own
+  subagents are removed by switching their entry off.
+- **Switches.** Each subagent is a roster entry (`subagent:<ns>/<name>`), on
+  from the start, with a second entry (`subagent:<ns>/<name>:ask`), off by
+  default, that asks the person before each run. The question names the task
+  and the files, and goes to the window attached to the agent (`chat` takes
+  `/yes` and `/no`). With none attached nothing is run. A subagent installed
+  from a local folder is never run.
+
+Subagents need CLI v0.7.1 or later.
 
 ### The agent folder
 
 `<runner home>/persistent/<name>/` (the runner home is `~/.agentry/runner`
-unless relocated):
+unless relocated). `<name>` is a built-in's name, and `ns.name` for a published
+agent, so two publishers' agents of one name never share a folder, a volume or
+a socket:
 
 | Path | Holds |
 |---|---|
@@ -814,6 +942,7 @@ unless relocated):
 | `owner.lock`, `owner.json` | the owner lock and who holds it |
 | `share-verdicts.json` | the share's malware verdicts, kept between segments |
 | `profile/servers/` | the installed copies of the MCP servers the person added |
+| `release.yaml` | a published agent's install record: its reference, version, digest, source (`registry` or `local`), the registry it came from and its subagents as pinned |
 | `segments/<run>/` | one segment: its `receipts/` and its result envelope, which `agentry agent stop` names |
 
 `config.yaml` keeps `enabled`, `runOnStart`, `displayName`, `personality`,
@@ -829,7 +958,8 @@ at a higher `version` than it knows, rather than drop what it does not.
 | `4` | a port | `ports` |
 
 The sockets are in `<runner home>/s/`, beside the runs': `agent-<name>.sock`
-and `agent-<name>-app.sock`, mode 0600 in a 0700 folder.
+and `agent-<name>-app.sock`, mode 0600 in a 0700 folder. A published agent's
+share folder defaults to `~/agentry/<ns.name>-share`.
 
 ### Segments
 
@@ -895,7 +1025,7 @@ The harness's store is the volume `agentry-persistent-<name>-session`. Both
 volumes carry `agentry.persistent=<name>` and no run label, so neither a
 segment's teardown nor the sweep of a dead run removes them.
 
-**The checks.** For Agentry Helper and the Assistant, before each turn the
+**The checks.** For Agentry Helper, the Assistant and every published agent, before each turn the
 runner copies what is new or changed in the share (at most 2,000 files and
 512 MiB a check), runs the decode step's ClamAV check over the copies
 ([ClamAV, on every file](#clamav-on-every-file)) and records a verdict per
@@ -918,17 +1048,19 @@ A default share is made at the first start; a chosen one must exist.
 
 What an agent has is its roster: one value that the agreement, `show`, the
 desktop and the envelope all render. Entries, in order: folders, the Coding
-agent's grant, packs, servers.
+agent's grant, packs, servers, subagents.
 
 | Id | Kind | Default | Granted by |
 |---|---|---|---|
 | `share` | `files` | on, switchable | built-in |
 | `data` | `files` | on, `fixed` | built-in |
-| `commands`, `egress`, `browser` | `tools` | on (`coder` only) | built-in |
+| `commands`, `egress`, `browser` | `tools` | on (agents that declare `coder`) | built-in |
 | `devhost` | `host` | on when saved | you |
 | `port:<name>` | `port` | on when added | you |
 | `knowledge:<pack>` | `knowledge` | on when added | you |
 | `server:<id>` | `server` | on when added | you |
+| `subagent:<ns>/<name>` | `subagent` | on | the release, or you |
+| `subagent:<ns>/<name>:ask` | `subagent` | off | you |
 
 An entry's state is `on`, `off`, `pending` (switched since the running segment
 started; the next turn applies it) or `needs-sign-in` (an OAuth server, which
@@ -983,8 +1115,11 @@ writes its envelope, closes both sockets and releases the lock.
 
 ### The app link
 
-The app link is how an agent reaches the application that runs it. The
-Assistant and Agentry Helper have one; the Coding agent has none. It is the
+The app link is how an agent reaches the application that runs it. An agent
+has one when it declares a key that gives it a tool (`selfConfigure`, `clock`,
+`memory`, `helper` or `meetings`) or has a subagent, and its tool list holds
+the tools of those keys and no others. The Assistant and Agentry Helper have
+one; the Coding agent has none. It is the
 runner image's `agentry-applink` MCP server, started by the gateway with no
 network, the person's ids and one mount. It reaches a socket of the
 supervisor's own, apart from the owner socket, that takes one tool call per
@@ -992,19 +1127,26 @@ connection and nothing that changes the roster, sends a turn or stops the
 agent. At most four calls are answered at once; each call and answer is a line
 of `receipts/applink.log`, cut at 4 KiB.
 
-| Agent | Tools | Answered by |
+| Key | Tools | Answered by |
 |---|---|---|
-| Assistant | `self_configure` (`name`, `personality`) | the supervisor: saves the name and personality and nothing else; an unknown argument refuses the call |
-| Assistant | `task_add`, `task_list`, `task_update`, `task_remove` | the supervisor: keeps the agent's own tasks, which its heartbeat fires |
-| Assistant and Agentry Helper | `registry_search`, `quickagent_show`, `quickagent_install`, `quickagent_run`, `run_result`, `installed_list`, `schedule_add`, `schedule_list`, `schedule_pause`, `schedule_remove`, `settings_open`, `docs_read` | Agentry Desktop, each through the application's own operation and consent |
+| `selfConfigure` | `self_configure` (`name`, `personality`) | the supervisor: saves the name and personality and nothing else; an unknown argument refuses the call |
+| `clock` | `task_add`, `task_list`, `task_update`, `task_remove` | the supervisor: keeps the agent's own tasks, which its heartbeat fires |
+| `memory` | `recall` | the supervisor: searches the agent's own earlier conversations |
+| `helper` | `registry_search`, `quickagent_show`, `quickagent_install`, `quickagent_run`, `run_result`, `installed_list`, `schedule_add`, `schedule_list`, `schedule_pause`, `schedule_remove`, `settings_open`, `docs_read` | the client that runs the agent, each through its own operation and consent |
+| a subagent on the roster | `subagent_list`, `subagent_run`, `subagent_result` | the supervisor ([Subagents](#subagents)) |
+
+The Assistant declares `selfConfigure`, `clock`, `memory` and `helper`; Agentry
+Helper declares `helper`.
 
 The Assistant lists every tool Agentry Helper does, so it can do whatever the
 Helper can (CLI v0.6.183 and Agentry Desktop 0.6.160 or later). Agentry
 Desktop answers those tools for each agent in its own name: a dialog names
 the Assistant by its title, then the name it goes by. A run takes files from
 that agent's own share folder, and a run the person agreed to for one agent
-is asked again for another. Run from the CLI alone, with no Agentry Desktop,
-these tools answer that only Agentry Desktop answers them.
+is asked again for another. When the CLI runs the agent (CLI v0.7.1 or later),
+the supervisor answers them with the CLI's own commands and asks the person
+first in the window attached to the agent (`chat` takes `/yes` and `/no`);
+with no window attached, nothing is done.
 
 **Where the engine's daemon runs in a virtual machine** (Docker Desktop,
 Colima, a podman machine), a socket on this computer cannot be bound into a
@@ -1020,10 +1162,12 @@ the relay's errors are in `receipts/applink-relay.log`.
 
 ### The Coding agent's grant
 
-The Coding agent builds and runs software. Its grant is four roster entries
-(and the ports below), on by default and agreed to at its first start, which
-the compiler accepts for this built-in alone, never beside the web tools, the
-review grant or a manifest's own egress, exec, target host or browser.
+The Coding agent builds and runs software, and any agent whose release declares
+`capabilities.persistent.coder` is given the same grant. It is four roster
+entries (and the ports below), on by default and agreed to at the first start,
+which the compiler accepts only through the `coder` key, never beside the web
+tools, the review grant or a manifest's own egress, exec, target host or
+browser.
 
 **Programs (`commands`).** `run_command` runs any program, with no allowlist, in
 the Coding agent's exec image: built on this machine from `images.coder`, the
@@ -1543,7 +1687,7 @@ its digest, so a run record says which file a run obeyed.
 | `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
-| `allowPersistentReleases` | reserved for running persistent releases from other sources; a policy that sets it is refused in this version ([Run modes](#run-modes)), and `agentry setup` never writes it |
+| `allowPersistentReleases` | `false` refuses `agentry agent install` and the start of every persistent agent but the three built into Agentry ([Installing, updating and uninstalling an agent](#installing-updating-and-uninstalling-an-agent)); unset or `true` allows them. `agentry setup` never writes it |
 | `secretSource.mode` (`env` \| `envFile`) + `secretSource.envFile` | fallback secret resolution behind profiles |
 | `budgets.timeoutSeconds` / `budgets.maxTurns` / `budgets.maxCostUsd` | default hard stops (cost `0` = unlimited) |
 | `sessions.idleTimeoutSeconds` / `sessions.maxWallSeconds` / `sessions.maxUserTurns` | interactive-session caps (shipped 900 s idle, 7200 s wall, 200 user turns); a manifest can only tighten the idle timeout |
