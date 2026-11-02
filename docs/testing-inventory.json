@@ -782,7 +782,8 @@
           "path": "internal/api/members_seam_test.go",
           "tests": [
             "TestTheMembersSeamProvisionsAPendingMemberOnly",
-            "TestTheMembersSeamDeprovisionTakesEverythingAway"
+            "TestTheMembersSeamDeprovisionTakesEverythingAway",
+            "TestTheMembersSeamDeprovisionEndsStaffStanding"
           ],
           "fuzz": [],
           "benchmarks": [],

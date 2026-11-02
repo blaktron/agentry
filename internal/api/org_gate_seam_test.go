@@ -81,11 +81,43 @@ func TestOrgGateSeamAnswersAsTheCoreDoes(t *testing.T) {
 		t.Fatalf("an active organization: %d writable=%v, want 200 writable", code, writable)
 	}
 
+	// seam asks the core's two answers directly, as an extension holds them,
+	// for the cases the probe route answers 404 before it asks the second.
+	seam := func(id string) (readable, writable bool) {
+		t.Helper()
+		parsed := uuid.MustParse(id)
+		readable, err := env.srvObj.OrgReadable(ctx, parsed)
+		if err != nil {
+			t.Fatalf("OrgReadable(%s): %v", id, err)
+		}
+		writable, err = env.srvObj.OrgWritable(ctx, parsed)
+		if err != nil {
+			t.Fatalf("OrgWritable(%s): %v", id, err)
+		}
+		return readable, writable
+	}
+	if readable, writable := seam(orgID); !readable || !writable {
+		t.Fatalf("an active organization: readable=%v writable=%v, want both", readable, writable)
+	}
+	// A state that cannot be read is a fault, never permission: neither
+	// answer is yes, and each carries the error.
+	lost, cancel := context.WithCancel(ctx)
+	cancel()
+	if readable, err := env.srvObj.OrgReadable(lost, uuid.MustParse(orgID)); readable || err == nil {
+		t.Fatalf("OrgReadable with the state unreadable = %v, %v; want false and an error", readable, err)
+	}
+	if writable, err := env.srvObj.OrgWritable(lost, uuid.MustParse(orgID)); writable || err == nil {
+		t.Fatalf("OrgWritable with the state unreadable = %v, %v; want false and an error", writable, err)
+	}
+
 	// Suspended by staff through the door: absent, as the core's routes
 	// answer it.
 	env.doJSON(staffSess, http.MethodPost, "/api/v1/orgs/"+org+"/suspend", map[string]any{"reason": "the gate seam's test"}, nil, http.StatusOK)
 	if code, _ := ask(orgID); code != http.StatusNotFound {
 		t.Fatalf("a suspended organization: %d, want 404", code)
+	}
+	if readable, writable := seam(orgID); readable || writable {
+		t.Fatalf("a suspended organization: readable=%v writable=%v, want neither", readable, writable)
 	}
 	if res := env.do(admin, http.MethodGet, "/api/v1/orgs/"+org, nil); res.StatusCode != http.StatusNotFound {
 		t.Fatalf("the core's own read of a suspended organization: %d, want 404 (the seam must agree)", res.StatusCode)
@@ -103,13 +135,22 @@ func TestOrgGateSeamAnswersAsTheCoreDoes(t *testing.T) {
 	if code, writable := ask(orgID); code != http.StatusOK || writable {
 		t.Fatalf("an organization in its hold: %d writable=%v, want 200 and not writable", code, writable)
 	}
+	if readable, writable := seam(orgID); !readable || writable {
+		t.Fatalf("an organization in its hold: readable=%v writable=%v, want readable and not writable", readable, writable)
+	}
 
 	// Erased, or never there: absent, never an error.
 	state("decommissioned")
 	if code, _ := ask(orgID); code != http.StatusNotFound {
 		t.Fatalf("an erased organization: %d, want 404", code)
 	}
+	if readable, writable := seam(orgID); readable || writable {
+		t.Fatalf("an erased organization: readable=%v writable=%v, want neither", readable, writable)
+	}
 	if code, _ := ask(uuid.NewString()); code != http.StatusNotFound {
 		t.Fatalf("an organization that does not exist: %d, want 404", code)
+	}
+	if readable, writable := seam(uuid.NewString()); readable || writable {
+		t.Fatalf("an organization that does not exist: readable=%v writable=%v, want neither", readable, writable)
 	}
 }
