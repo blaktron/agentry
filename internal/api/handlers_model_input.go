@@ -367,12 +367,14 @@ func (s *Server) ScanModelInput(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("One scan takes at most %d bytes of text. Send a longer text in parts.", modelInputMaxBytes), map[string]any{"max": modelInputMaxBytes})
 		return
 	}
-	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpScan, Source: src, Bytes: len(req.Text)}); !ok {
-		return
-	}
+	// A route that cannot run refuses before the job is admitted, so the
+	// call costs the job nothing.
 	scanner, _, callers := s.modelInputWiring()
 	if scanner == nil {
 		s.problemModelInputOff(w, r)
+		return
+	}
+	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpScan, Source: src, Bytes: len(req.Text)}); !ok {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), modelInputTimeout)
@@ -407,9 +409,6 @@ func (s *Server) SearchModelInput(w http.ResponseWriter, r *http.Request) {
 	if req.Count != nil {
 		count = websearch.ClampCount(*req.Count)
 	}
-	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpSearch, Count: count}); !ok {
-		return
-	}
 	scanner, provider, callers := s.modelInputWiring()
 	if provider == nil {
 		writeProblem(w, r, http.StatusServiceUnavailable, "web-search-unavailable", "Web search off",
@@ -420,6 +419,11 @@ func (s *Server) SearchModelInput(w http.ResponseWriter, r *http.Request) {
 		// A result that cannot be scanned cannot be returned, so the search
 		// is not spent.
 		s.problemModelInputOff(w, r)
+		return
+	}
+	// Admitted only once the route can run, so a refusal above costs the
+	// job nothing.
+	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpSearch, Count: count}); !ok {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), modelInputTimeout)
@@ -525,13 +529,15 @@ func (s *Server) CheckDraft(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpCheck, Bytes: total}); !ok {
-		return
-	}
 	_, _, callers := s.modelInputWiring()
 	checker := s.draftChecker()
 	if checker == nil {
 		s.problemModelInputOff(w, r)
+		return
+	}
+	// Admitted only once the route can run, so a refusal above costs the
+	// job nothing.
+	if caller, ok = s.admitModelInput(w, r, caller, ModelInputCall{Op: ModelInputOpCheck, Bytes: total}); !ok {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), modelInputTimeout)
