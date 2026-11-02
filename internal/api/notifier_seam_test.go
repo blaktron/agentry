@@ -244,6 +244,7 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 	}
 	env.doJSON(env.login(verifiedH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
 		"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true},
+		"web":   map[string]any{"dependencyAlerts": false},
 	}, nil, http.StatusOK)
 	code, out, _ = send(t, verifiedID, "dependency_alert", "acme/thing declares a vulnerable server", "x")
 	if code != http.StatusOK || out.Sent || mails.count() != 2 {
