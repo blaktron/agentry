@@ -740,6 +740,10 @@ paths:
       operationId: updateUserNotificationSettings
       tags: [users]
       summary: Replace the caller's notification settings.
+      description: >-
+        Every required switch is sent, on or off. A write that leaves one
+        out answers 422 naming it and changes nothing. An optional switch
+        that is left out keeps its stored value.
       requestBody:
         required: true
         content:

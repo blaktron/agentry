@@ -5818,12 +5818,16 @@ type ClientInterface interface {
 
 	// UpdateUserNotificationSettingsWithBody Replace the caller's notification settings.
 	//
+	// Every required switch is sent, on or off. A write that leaves one out answers 422 naming it and changes nothing. An optional switch that is left out keeps its stored value.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettingsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateUserNotificationSettings Replace the caller's notification settings.
+	//
+	// Every required switch is sent, on or off. A write that leaves one out answers 422 naming it and changes nothing. An optional switch that is left out keeps its stored value.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -9044,6 +9048,8 @@ func (c *Client) GetUserNotificationSettings(ctx context.Context, reqEditors ...
 
 // UpdateUserNotificationSettingsWithBody Replace the caller's notification settings.
 //
+// Every required switch is sent, on or off. A write that leaves one out answers 422 naming it and changes nothing. An optional switch that is left out keeps its stored value.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
@@ -9060,6 +9066,8 @@ func (c *Client) UpdateUserNotificationSettingsWithBody(ctx context.Context, con
 }
 
 // UpdateUserNotificationSettings Replace the caller's notification settings.
+//
+// Every required switch is sent, on or off. A write that leaves one out answers 422 naming it and changes nothing. An optional switch that is left out keeps its stored value.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -18204,12 +18212,16 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateUserNotificationSettingsWithBodyWithResponse Replace the caller's notification settings.
 	//
+	// Every required switch is sent, on or off. A write that leaves one out answers 422 naming it and changes nothing. An optional switch that is left out keeps its stored value.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettingsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error)
 
 	// UpdateUserNotificationSettingsWithResponse Replace the caller's notification settings.
+	//
+	// Every required switch is sent, on or off. A write that leaves one out answers 422 naming it and changes nothing. An optional switch that is left out keeps its stored value.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -28505,6 +28517,8 @@ func (c *ClientWithResponses) GetUserNotificationSettingsWithResponse(ctx contex
 
 // UpdateUserNotificationSettingsWithBodyWithResponse Replace the caller's notification settings.
 //
+// Every required switch is sent, on or off. A write that leaves one out answers 422 naming it and changes nothing. An optional switch that is left out keeps its stored value.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
@@ -28517,6 +28531,8 @@ func (c *ClientWithResponses) UpdateUserNotificationSettingsWithBodyWithResponse
 }
 
 // UpdateUserNotificationSettingsWithResponse Replace the caller's notification settings.
+//
+// Every required switch is sent, on or off. A write that leaves one out answers 422 naming it and changes nothing. An optional switch that is left out keeps its stored value.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

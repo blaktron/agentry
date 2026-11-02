@@ -1,7 +1,11 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -40,7 +44,8 @@ func (s *Server) GetUserNotificationSettings(w http.ResponseWriter, r *http.Requ
 // value would move a switch the client never showed, off for the first
 // three and never on for the run kinds. The keep is the
 // statement's own (COALESCE in the upsert), so two clients writing at
-// once cannot resurrect a value neither sent.
+// once cannot resurrect a value neither sent. A write that leaves out a
+// required switch is refused with 422 and changes nothing.
 func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActUserSelfUpdate, uuid.Nil) {
 		return
@@ -48,8 +53,24 @@ func (s *Server) UpdateUserNotificationSettings(w http.ResponseWriter, r *http.R
 	if !s.requireDB(w, r) {
 		return
 	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		problemBadRequest(w, r, "Could not read the request body: "+err.Error())
+		return
+	}
 	var req NotificationSettings
-	if !readJSON(w, r, &req) {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		problemBadRequest(w, r, "Could not decode the request body: "+err.Error())
+		return
+	}
+	if missing := missingNotificationSwitches(body); len(missing) > 0 {
+		fields := make([]FieldError, 0, len(missing))
+		for _, f := range missing {
+			fields = append(fields, FieldError{Field: f, Message: "Required: send it on or off."})
+		}
+		problemValidation(w, r, "Send every required switch: "+strings.Join(missing, ", ")+".", fields...)
 		return
 	}
 	p := principalFrom(r.Context())
@@ -85,4 +106,33 @@ func notificationSettingsToAPI(row storegen.UserNotificationSetting) Notificatio
 		},
 		Web: WebNotificationSettings{DependencyAlerts: row.WebDependencyAlerts},
 	}
+}
+
+// requiredNotificationSwitches are the switches a write must carry. They
+// decode as plain booleans, so an omitted one would read as off: a
+// client that sent only the switch it changed would turn quarantine and
+// advisory mail off without saying so. The optional switches are not
+// listed; an omitted one keeps the row's value.
+var requiredNotificationSwitches = []struct{ object, key string }{
+	{"email", "dependencyAlerts"},
+	{"email", "quarantine"},
+	{"email", "reviewDecisions"},
+	{"email", "advisories"},
+	{"email", "orgInvites"},
+	{"web", "dependencyAlerts"},
+}
+
+// missingNotificationSwitches names, as object.key, each required switch
+// the body does not carry. A body that decoded into NotificationSettings
+// is an object, so a failure to read it here means nothing is present.
+func missingNotificationSwitches(body []byte) []string {
+	var present map[string]map[string]json.RawMessage
+	_ = json.Unmarshal(body, &present)
+	var missing []string
+	for _, sw := range requiredNotificationSwitches {
+		if _, ok := present[sw.object][sw.key]; !ok {
+			missing = append(missing, sw.object+"."+sw.key)
+		}
+	}
+	return missing
 }

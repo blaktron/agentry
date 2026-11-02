@@ -1,7 +1,10 @@
 package api_test
 
 import (
+	"encoding/json"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -43,6 +46,42 @@ func TestNotificationSettingsRoundTrip(t *testing.T) {
 	if got.Email["quarantine"] || got.Web["dependencyAlerts"] {
 		t.Fatalf("settings did not persist: %+v", got)
 	}
+	// A write that leaves a required switch out is refused and changes
+	// nothing: read as off, the omission would turn security mail off
+	// without the person choosing it. The problem names what is missing.
+	for _, c := range []struct {
+		name    string
+		body    map[string]any
+		missing []string
+	}{
+		{"an empty body", map[string]any{}, []string{"email.dependencyAlerts", "email.quarantine", "email.reviewDecisions", "email.advisories", "email.orgInvites", "web.dependencyAlerts"}},
+		{"only the web switch", map[string]any{"web": map[string]bool{"dependencyAlerts": true}}, []string{"email.dependencyAlerts", "email.quarantine", "email.reviewDecisions", "email.advisories", "email.orgInvites"}},
+		{"one email switch", map[string]any{"email": map[string]bool{"dependencyAlerts": true}, "web": map[string]bool{"dependencyAlerts": true}}, []string{"email.quarantine", "email.reviewDecisions", "email.advisories", "email.orgInvites"}},
+		{"no web switch", map[string]any{"email": want["email"]}, []string{"web.dependencyAlerts"}},
+	} {
+		res := env.do(sess, http.MethodPut, "/api/v1/user/notifications", c.body)
+		var prob struct {
+			Type   string `json:"type"`
+			Detail string `json:"detail"`
+			Fields []struct {
+				Field string `json:"field"`
+			} `json:"errors"`
+		}
+		_ = json.NewDecoder(res.Body).Decode(&prob)
+		_ = res.Body.Close()
+		var fields []string
+		for _, f := range prob.Fields {
+			fields = append(fields, f.Field)
+		}
+		if res.StatusCode != http.StatusUnprocessableEntity || !strings.HasSuffix(prob.Type, "/validation") || !slices.Equal(fields, c.missing) {
+			t.Fatalf("%s: %d %s fields %v (%s), want 422 validation naming %v", c.name, res.StatusCode, prob.Type, fields, prob.Detail, c.missing)
+		}
+		env.doJSON(sess, http.MethodGet, "/api/v1/user/notifications", nil, &got, http.StatusOK)
+		if got.Email["quarantine"] || got.Email["reviewDecisions"] || got.Email["orgInvites"] || !got.Email["dependencyAlerts"] || !got.Email["advisories"] || got.Web["dependencyAlerts"] {
+			t.Fatalf("%s: a refused write changed the settings: %+v", c.name, got)
+		}
+	}
+
 	// The other user is untouched, and nobody reads without a session.
 	env.doJSON(otherSess, http.MethodGet, "/api/v1/user/notifications", nil, &got, http.StatusOK)
 	if !got.Email["quarantine"] || !got.Web["dependencyAlerts"] {
