@@ -276,6 +276,7 @@ func TestWebhookDeliveryViaQueue(t *testing.T) {
 		defer srv.Close()
 		owner, handle, orgID := env.orgOwner("whz")
 		disp, q := hookDispatcher(t, env, srv, 1000, nil)
+		endpoints := map[string]string{}
 		for _, c := range []struct {
 			path, event string
 			status      int32
@@ -288,25 +289,43 @@ func TestWebhookDeliveryViaQueue(t *testing.T) {
 			if err := disp.Emit(context.Background(), uuid.MustParse(orgID), c.event, map[string]any{"n": 1}); err != nil {
 				t.Fatal(err)
 			}
+			endpoints[c.path] = ep.Id
 			before := time.Now()
 			q.Drain(context.Background(), "core")
 			after := time.Now()
 			rows := env.ledger(t, ep.Id)
 			want := fmt.Sprintf("non-2xx status %d", c.status)
-			if len(rows) != 1 || rows[0].Attempt != 1 || rows[0].Status == nil || *rows[0].Status != c.status || rows[0].Error == nil || *rows[0].Error != want ||
-				rows[0].DeliveredAt != nil || rows[0].NextRetryAt == nil ||
-				rows[0].NextRetryAt.Before(before.Add(2*time.Second-5*time.Millisecond)) || rows[0].NextRetryAt.After(after.Add(2*time.Second+5*time.Millisecond)) {
-				t.Fatalf("%s: ledger = %+v, want one attempt answered %d, %q, not delivered, retry in two seconds", c.path, rows, c.status, want)
+			// The row records the latest attempt. A drain that runs past the
+			// first retry's due time works that retry too, so the attempt is
+			// read from the row, and its next retry must be 2^attempt seconds
+			// after an attempt made during this drain (the first retry is two
+			// seconds out).
+			if len(rows) != 1 || rows[0].Attempt < 1 || rows[0].Status == nil || *rows[0].Status != c.status || rows[0].Error == nil || *rows[0].Error != want ||
+				rows[0].DeliveredAt != nil || rows[0].NextRetryAt == nil {
+				t.Fatalf("%s: ledger = %+v, want one delivery answered %d, %q, not delivered, with a retry", c.path, rows, c.status, want)
+			}
+			wait := time.Duration(1<<uint(rows[0].Attempt)) * time.Second
+			if at := rows[0].NextRetryAt.Add(-wait); at.Before(before.Add(-5*time.Millisecond)) || at.After(after.Add(5*time.Millisecond)) {
+				t.Fatalf("%s: attempt %d's next retry %v is not %v after an attempt made between %v and %v", c.path, rows[0].Attempt, rows[0].NextRetryAt, wait, before, after)
 			}
 			// The queue holds the job for its retry, with the failure kept.
 			if state, errs := env.jobOf(t, rows[0].ID); state == "completed" || state == "discarded" || !strings.Contains(errs, fmt.Sprintf("status %d", c.status)) {
 				t.Errorf("%s: the queue's job = %s with errors %q, want one waiting for its retry that kept the status", c.path, state, errs)
 			}
 		}
+		// Each attempt is one request to the endpoint, and a redirect is never
+		// followed. The ledger is read again here: the second drain can work
+		// the first endpoint's retry.
 		hmu.Lock()
 		defer hmu.Unlock()
-		if hits["/broken"] != 1 || hits["/moved"] != 1 || hits["/landing"] != 0 {
-			t.Errorf("requests = %v, want one each to /broken and /moved and none to a redirect's target", hits)
+		for path, id := range endpoints {
+			rows := env.ledger(t, id)
+			if len(rows) != 1 || hits[path] != rows[0].Attempt {
+				t.Errorf("%s: %d requests for ledger %+v, want one request per recorded attempt", path, hits[path], rows)
+			}
+		}
+		if hits["/landing"] != 0 {
+			t.Errorf("requests = %v, want none to a redirect's target", hits)
 		}
 	})
 
