@@ -112,7 +112,23 @@ func TestCreateAgentModes(t *testing.T) {
 	})
 
 	t.Run("mode facet counts public agents per mode", func(t *testing.T) {
+		// Nothing of these agents is published yet, so the facet counts none
+		// of them: like the results, it counts only what can be installed.
 		counts := facet()
+		for mode := range map[string]bool{"autonomous": true, "interactive": true, "persistent": true} {
+			if got := counts[mode] - before[mode]; got != 0 {
+				t.Fatalf("with nothing published, the facet count of %s grew by %d, want 0", mode, got)
+			}
+		}
+		// The facet reads only whether an agent has a published version, so
+		// the public agents are pointed at one published version row rather
+		// than each run through the gate with a manifest of its own modes.
+		v := e.publish("modes-facet-version", "private", benignFiles(ns, "modes-facet-version", "1.0.0"))
+		if _, err := e.st.Pool().Exec(ctx, `UPDATE agents SET latest_published_version_id = $1
+			WHERE namespace_id = (SELECT id FROM handles WHERE handle = $2) AND name IN ('modes-derived', 'modes-both', 'modes-persistent')`, v.ID, ns); err != nil {
+			t.Fatal(err)
+		}
+		counts = facet()
 		// Two public agents above support autonomous; one supports
 		// interactive; one supports persistent. The private agent that
 		// supports all three is not counted.

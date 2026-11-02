@@ -187,7 +187,9 @@ VALUES ($1, $2, $3, $4, $5, $6, now())
 RETURNING *;
 
 -- name: ListAdvisoriesForAgent :many
-SELECT * FROM advisories WHERE agent_id = $1 ORDER BY published_at DESC;
+-- Published advisories only, as the feed and the permalink serve: a row with
+-- no publication time is not yet anyone's to read.
+SELECT * FROM advisories WHERE agent_id = $1 AND published_at IS NOT NULL ORDER BY published_at DESC;
 
 -- name: HoldsRelease :one
 -- Whether the caller holds a release of the agent, whatever its visibility,

@@ -120,6 +120,11 @@ publish:
 		return res.StatusCode, string(b)
 	}
 
+	// A verdict outside the contract is refused before any rule is read.
+	if code, body := verdict(staff, "dismissed"); code != http.StatusUnprocessableEntity || !strings.Contains(body, `"field":"verdict"`) {
+		t.Fatalf("an unknown verdict: got %d %s, want 422 naming verdict", code, body)
+	}
+
 	// Platform staff who hold no role in the org: refused, with the reason
 	// naming the org's reviewers rather than a generic forbidden.
 	if code, body := verdict(staff, "dismissed_accepted_risk"); code != http.StatusForbidden || !strings.Contains(body, "security reviewers") {

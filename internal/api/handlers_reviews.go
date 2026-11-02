@@ -602,6 +602,10 @@ func (s *Server) SetFindingVerdict(w http.ResponseWriter, r *http.Request, id op
 	if !readJSON(w, r, &req) {
 		return
 	}
+	if !req.Verdict.Valid() {
+		problemEnum(w, r, "verdict", "confirmed", "dismissed_false_positive", "dismissed_accepted_risk")
+		return
+	}
 	v, err := s.q().GetVersionByID(r.Context(), run.VersionID)
 	if err != nil {
 		problemInternal(w, r)

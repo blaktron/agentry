@@ -120,6 +120,15 @@ func problemValidation(w http.ResponseWriter, r *http.Request, detail string, fi
 	writeProblem(w, r, http.StatusUnprocessableEntity, "validation", "Validation error", detail, fields...)
 }
 
+// problemEnum refuses a value outside a field's enum, naming the field and
+// the values it takes. A value the contract does not define is the
+// caller's error, never a 500 and never a filter silently ignored.
+func problemEnum(w http.ResponseWriter, r *http.Request, field string, allowed ...string) {
+	values := strings.Join(allowed, ", ")
+	problemValidation(w, r, "The "+field+" field takes one of: "+values+".",
+		FieldError{Field: field, Message: "Must be one of: " + values + "."})
+}
+
 func problemBadRequest(w http.ResponseWriter, r *http.Request, detail string) {
 	writeProblem(w, r, http.StatusBadRequest, "bad-request", "Bad request", detail)
 }
