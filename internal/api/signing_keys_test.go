@@ -54,6 +54,13 @@ func (env *testEnv) allSigningKeys(t *testing.T) []publishedKey {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("signing-keys.json: status %d", res.StatusCode)
 	}
+	// The key set is public and may be cached for five minutes.
+	if got := res.Header.Get("Cache-Control"); got != "public, max-age=300" {
+		t.Fatalf("signing-keys.json: Cache-Control %q, want public, max-age=300", got)
+	}
+	if got := res.Header.Get("Content-Type"); got != "application/json" {
+		t.Fatalf("signing-keys.json: Content-Type %q, want application/json", got)
+	}
 	var out struct {
 		Keys []publishedKey `json:"keys"`
 	}

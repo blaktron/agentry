@@ -167,9 +167,10 @@ func (ik *idempotency) abandon(r *http.Request) {
 }
 
 // idempotencyMaxBody bounds what a guarded request may carry. The largest
-// guarded body is a cli-upload archive (10 MB post-filter, and the
-// handler's own 12 MiB cap), so this sits above that: a smaller cap would
-// turn every real upload with an Idempotency-Key into a 400.
+// guarded body is a cli-upload archive (10 MB post-filter), and the upload
+// handler's own cap, maxUploadBytes, is also 16 MiB. The two must stay
+// equal or this one larger: a smaller cap here would turn a real upload
+// with an Idempotency-Key into a 400 that the handler itself would accept.
 const idempotencyMaxBody = 16 << 20
 
 // hashRequestBody buffers and hashes the body, leaving r.Body re-readable.
