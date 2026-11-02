@@ -46,6 +46,24 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
    endpoint's host … does not resolve: check the endpoint's address in
    the model settings". A Tailscale name has no `.local` form, so use the
    short name or the full tailnet name.
+   **The model's context window** (CLI v0.7.9 or later): for a model
+   server of your own (`custom`, or `openai` with `--base-url`), setup asks
+   the server how large the chosen model's context window is, reading vLLM's
+   `/v1/models` (`max_model_len`), LM Studio's `/api/v0/models/<id>` (the
+   loaded window, else the largest), llama.cpp's `/props` (`n_ctx`), and
+   Ollama's `/api/ps` (the running model's window) or the `num_ctx` of
+   `/api/show`. A terminal setup offers what it found as the answer's
+   default; under `--yes` it is taken as it is; `--context-window <tokens>`
+   sets it outright. It is written as `model.contextWindow`. The harness
+   compacts a run's conversation as it nears that window; without it, a
+   model the harness cannot look up is never compacted, and a long run
+   fails with `Error: Failed to get model definition` once the server
+   refuses the conversation as too long. Give the window the server runs
+   the model with, not the model's largest: Ollama and llama.cpp load a
+   model with a smaller window than it was trained for unless you set one
+   (`num_ctx`, `--ctx-size`), and setup never reads the trained window.
+   When setup cannot find it, it says so; `agentry doctor` repeats the
+   warning (`model:context`) until the window is set.
    A provider can also be paid by **your own plan or account** instead of a
    key: `--api-key-kind chatgpt-plan` (provider `openai`),
    `--api-key-kind claude-signin` (`anthropic`), `--provider copilot` with
@@ -86,6 +104,9 @@ checks a host-run harness needs: that its executable resolves (on `PATH`
 or at `harness.<name>.path`), which release is installed and whether that
 is the one the adapter was written against, and whether the endpoint
 `harness.<name>.baseUrl` names is one `model.proxyAllow` permits.
+For a model server of your own with no `model.contextWindow`, the
+`model:context` line warns that a long run cannot compact (CLI v0.7.9 or
+later; [`agentry setup`](#agentry-setup)).
 
 ### `agentry run <ns/name[@range]>`
 
@@ -1699,6 +1720,7 @@ its digest, so a run record says which file a run obeyed.
 | `images.goBuilder` | the Go image the runner image is compiled in on first use (the default is pinned by digest). Its Go must be at least the CLI's own, to the patch: the build context names that version, and an older builder stops the build with "images.goBuilder … is older than the Go the runner needs" |
 | `images.runner` | override the locally built runner image tag (pin this when the CLI and desktop app share a machine) |
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
+| `model.contextWindow` | the model's context window in tokens, 1,024 to 2^30 (CLI v0.7.9 or later): the harness compacts the conversation as it nears it, and a model the harness cannot look up without it fails once the endpoint refuses the conversation as too long. Unset, the harness looks the model up itself. `agentry setup` fills it for a model server of your own ([above](#agentry-setup)); where set, it wins over the harness's own figure |
 | `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
@@ -5260,7 +5282,7 @@ key variable's **name** only.
 | `uninstall ns/name [--plan] --json` | `ref`, `plan`, `installs[]`, `profiles[]`, `keptProfiles[]` (under `--keep-mcp`), `consentRecord` — with `--plan`, what would be removed and nothing removed |
 | `list [--check] --json` | `path` (the state file), `records[]` (each `installed.yaml` record plus `present`: its directory exists; with `--check`, `latest`, `updateAvailable` and `checkError` per record) |
 | `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
-| `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `images` ready\|skipped |
+| `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `contextWindow` (when the policy names one; CLI v0.7.9 or later), `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
 | `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made and each send to a [destination](#destinations-sending-a-runs-result-somewhere): `destination`, `kind`, `host` and `onMyNetwork` for a send, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
