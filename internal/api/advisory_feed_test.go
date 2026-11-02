@@ -125,6 +125,16 @@ func TestAdvisoryFeedAndPermalink(t *testing.T) {
 		t.Fatalf("private advisory permalink: got %d want 404", res.StatusCode)
 	}
 
+	// An advisory with no publication time is not served by the per-agent
+	// list either, as the feed and the permalink do not serve it.
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`INSERT INTO advisories (id, agent_id, affected_versions, severity, summary, published_at)
+		 SELECT $1, a.id, '*', 'critical', 'not yet published', NULL
+		 FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $2 AND a.name = 'pub-a'`,
+		uuid.New(), user); err != nil {
+		t.Fatal(err)
+	}
+
 	// Per-agent mode unchanged (and it still serves the private agent to
 	// its owner's session, as before).
 	var mine []adv

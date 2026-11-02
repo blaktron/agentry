@@ -1072,9 +1072,11 @@ func (q *Queries) ListAdvisoriesFeed(ctx context.Context, arg ListAdvisoriesFeed
 }
 
 const listAdvisoriesForAgent = `-- name: ListAdvisoriesForAgent :many
-SELECT id, agent_id, affected_versions, severity, summary, detail, published_at FROM advisories WHERE agent_id = $1 ORDER BY published_at DESC
+SELECT id, agent_id, affected_versions, severity, summary, detail, published_at FROM advisories WHERE agent_id = $1 AND published_at IS NOT NULL ORDER BY published_at DESC
 `
 
+// Published advisories only, as the feed and the permalink serve: a row with
+// no publication time is not yet anyone's to read.
 func (q *Queries) ListAdvisoriesForAgent(ctx context.Context, agentID uuid.UUID) ([]Advisory, error) {
 	rows, err := q.db.Query(ctx, listAdvisoriesForAgent, agentID)
 	if err != nil {

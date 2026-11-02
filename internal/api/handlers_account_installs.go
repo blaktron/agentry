@@ -397,9 +397,9 @@ func problemInstallConsentRequired(w http.ResponseWriter, r *http.Request, missi
 				what = append(what, "its declared capabilities")
 			}
 		case consentUnsigned:
-			what = append(what, "that it carries no attestation")
+			what = append(what, "its lack of an attestation")
 		case consentUnscanned:
-			what = append(what, "that it was admitted without a scan")
+			what = append(what, "its admission without a scan")
 		}
 	}
 	ext := map[string]any{"missing": missing}
@@ -407,5 +407,16 @@ func problemInstallConsentRequired(w http.ResponseWriter, r *http.Request, missi
 		ext["widened"] = widened
 	}
 	writeProblemWith(w, r, http.StatusConflict, "install-consent-required", "Consent required",
-		"This release needs your acceptance of "+strings.Join(what, ", and ")+". Send the acceptance and retry.", ext)
+		"This release needs your acceptance of "+listInWords(what)+". Send the acceptance and retry.", ext)
+}
+
+// listInWords joins items as a sentence does: "a", "a and b", "a, b and c".
+func listInWords(items []string) string {
+	switch len(items) {
+	case 0:
+		return ""
+	case 1:
+		return items[0]
+	}
+	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
 }

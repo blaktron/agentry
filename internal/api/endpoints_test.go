@@ -954,6 +954,18 @@ func TestSearchFacets(t *testing.T) {
 		return false
 	}
 
+	// A public agent with nothing published is not a result, and is not
+	// counted by a facet either: the mode count matches the total.
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "faceted-empty", "modes": []string{"autonomous"}, "visibility": "public",
+		"summary": q,
+	}, nil, http.StatusCreated)
+	var all results
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q, nil, &all, http.StatusOK)
+	if has(all, "faceted-empty") || all.Total == nil || *all.Total != 1 || all.Facets["mode"]["autonomous"] != 1 {
+		t.Fatalf("an agent with nothing published: results %+v, total %v, mode facet %+v; want one result counted once", all.Results, all.Total, all.Facets["mode"])
+	}
+
 	// license= reads the latest published manifest (Apache-2.0 in skillFiles).
 	var hit results
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&license=Apache-2.0", nil, &hit, http.StatusOK)

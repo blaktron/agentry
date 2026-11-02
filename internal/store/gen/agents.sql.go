@@ -1321,6 +1321,7 @@ FROM agents a
 JOIN handles h ON h.id = a.namespace_id
 LEFT JOIN orgs o ON o.id = a.namespace_id, unnest(a.modes) AS m(mode)
 WHERE a.visibility = 'public' AND a.quarantine_state <> 'blocked'
+  AND a.latest_published_version_id IS NOT NULL
   AND (h.kind <> 'org' OR o.state IN ('active','decommissioning'))
   AND ($1::text = '' OR a.search_tsv @@ websearch_to_tsquery('english', $1::text))
 GROUP BY m.mode ORDER BY m.mode
@@ -1331,8 +1332,9 @@ type SearchFacetModesRow struct {
 	N    int64  `json:"n"`
 }
 
-// One row per run mode with the number of public, unblocked agents that
-// support it; an agent supporting both counts under each.
+// One row per run mode with the number of public, unblocked agents with a
+// published version that support it; an agent supporting both counts under
+// each. Like the results, an agent with nothing installable is not counted.
 func (q *Queries) SearchFacetModes(ctx context.Context, query string) ([]SearchFacetModesRow, error) {
 	rows, err := q.db.Query(ctx, searchFacetModes, query)
 	if err != nil {

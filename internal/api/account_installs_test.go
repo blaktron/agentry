@@ -458,8 +458,8 @@ func TestAccountInstallUnsignedAndUnscannedConsents(t *testing.T) {
 	if code != http.StatusConflict || !reflect.DeepEqual(prob.Missing, []string{"unsigned"}) {
 		t.Fatalf("an unsigned release without acceptUnsigned: %d %+v", code, prob)
 	}
-	if !strings.Contains(prob.Detail, "that it carries no attestation") || strings.Contains(prob.Detail, "without a scan") {
-		t.Fatalf("the unsigned refusal says %q", prob.Detail)
+	if want := "This release needs your acceptance of its lack of an attestation. Send the acceptance and retry."; prob.Detail != want {
+		t.Fatalf("the unsigned refusal says %q, want %q", prob.Detail, want)
 	}
 	code, rec, _ := env.putInstall(t, admin, orgH+"/elder", map[string]any{"version": "1.0.0", "acceptCapabilities": true, "acceptUnsigned": true})
 	if code != http.StatusOK || rec.Signed == nil || *rec.Signed || rec.AcceptedUnsigned == nil || !*rec.AcceptedUnsigned || deref(rec.Verdict) != "scanned" {
@@ -487,15 +487,15 @@ func TestAccountInstallUnsignedAndUnscannedConsents(t *testing.T) {
 	if code != http.StatusConflict || !reflect.DeepEqual(prob.Missing, []string{"unscanned"}) {
 		t.Fatalf("an unscanned release with acceptUnsigned only: %d %+v", code, prob)
 	}
-	if !strings.Contains(prob.Detail, "that it was admitted without a scan") || strings.Contains(prob.Detail, "attestation") {
-		t.Fatalf("the unscanned refusal says %q", prob.Detail)
+	if want := "This release needs your acceptance of its admission without a scan. Send the acceptance and retry."; prob.Detail != want {
+		t.Fatalf("the unscanned refusal says %q, want %q", prob.Detail, want)
 	}
 	code, _, prob = env.putInstall(t, admin, orgH+"/quiet", map[string]any{"version": "1.0.0", "acceptCapabilities": true})
 	if code != http.StatusConflict || !reflect.DeepEqual(prob.Missing, []string{"unsigned", "unscanned"}) {
 		t.Fatalf("an unscanned release with neither: %d %+v", code, prob)
 	}
-	if !strings.Contains(prob.Detail, "that it carries no attestation, and that it was admitted without a scan") {
-		t.Fatalf("the refusal for both says %q", prob.Detail)
+	if want := "This release needs your acceptance of its lack of an attestation and its admission without a scan. Send the acceptance and retry."; prob.Detail != want {
+		t.Fatalf("the refusal for both says %q, want %q", prob.Detail, want)
 	}
 	code, rec, _ = env.putInstall(t, admin, orgH+"/quiet", map[string]any{"version": "1.0.0", "acceptCapabilities": true, "acceptUnsigned": true, "acceptUnscanned": true})
 	if code != http.StatusOK || deref(rec.Verdict) != "unscanned" || rec.FindingCounts != nil || rec.Signed == nil || *rec.Signed ||
