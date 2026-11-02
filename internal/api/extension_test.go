@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/blaktron/agentry/internal/api"
 )
 
@@ -17,7 +19,11 @@ import (
 func TestExtensionRoutesMetaAndHooks(t *testing.T) {
 	var mu sync.Mutex
 	var seen []string
+	var created []api.Event
 	env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) {
+		// A hook that panics must not stop the hooks after it or the request
+		// that fired it.
+		s.AddEventHook(func(context.Context, api.Event) { panic("a hook that fails") })
 		s.RegisterExtension("probe", func(mux *http.ServeMux) {
 			mux.HandleFunc("GET /whoami", func(w http.ResponseWriter, r *http.Request) {
 				p := api.PrincipalFrom(r.Context())
@@ -33,6 +39,9 @@ func TestExtensionRoutesMetaAndHooks(t *testing.T) {
 		s.AddEventHook(func(_ context.Context, ev api.Event) {
 			mu.Lock()
 			seen = append(seen, ev.Kind)
+			if ev.Kind == "org.created" {
+				created = append(created, ev)
+			}
 			mu.Unlock()
 		})
 	})
@@ -69,7 +78,10 @@ func TestExtensionRoutesMetaAndHooks(t *testing.T) {
 
 	// Hooks: the sign-up above and an org creation.
 	org := "ext-co" + env.sfx
-	env.doJSON(sess, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": org, "displayName": "Ext"}, nil, http.StatusCreated)
+	var made struct {
+		Id uuid.UUID `json:"id"`
+	}
+	env.doJSON(sess, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": org, "displayName": "Ext"}, &made, http.StatusCreated)
 	mu.Lock()
 	kinds := strings.Join(seen, ",")
 	mu.Unlock()
@@ -77,5 +89,16 @@ func TestExtensionRoutesMetaAndHooks(t *testing.T) {
 		if !strings.Contains(kinds, want) {
 			t.Fatalf("hooks saw %q, want %s", kinds, want)
 		}
+	}
+	// The organization's creation names the organization, the person who made
+	// it and the handles, which the extension that opens its billing needs.
+	mu.Lock()
+	defer mu.Unlock()
+	if len(created) != 1 {
+		t.Fatalf("org.created events: %d, want 1", len(created))
+	}
+	ev := created[0]
+	if ev.OrgID != made.Id || ev.UserID.String() != env.selfID(sess) || ev.Payload["org"] != org || ev.Payload["creator"] != handle {
+		t.Fatalf("org.created = org %s user %s %v, want org %s, creator %s (%s) and the handle %s", ev.OrgID, ev.UserID, ev.Payload, made.Id, env.selfID(sess), handle, org)
 	}
 }

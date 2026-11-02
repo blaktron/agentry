@@ -7,6 +7,7 @@ package api_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -42,6 +43,27 @@ func TestAccountErasureFlow(t *testing.T) {
 	uid := env.selfID(sess)
 	kn := seedKnowledge(t, env, knowledge.User(uuid.MustParse(uid)))
 
+	// So does everything else it holds: a remembered browser, an unused
+	// desktop code, an activation link, a report design, a Writing Voice and
+	// a seat in an organization with another admin.
+	for _, q := range []string{
+		`INSERT INTO trusted_devices (id, user_id, token_sha256, expires_at) VALUES (gen_random_uuid(), $1, decode(md5(random()::text), 'hex'), now() + interval '30 days')`,
+		`INSERT INTO desktop_grants (id, user_id, code_sha256, state_sha256, scopes, name, expires_at)
+		 VALUES (gen_random_uuid(), $1, decode(md5(random()::text), 'hex'), '\x02', '{agent:read}', 'desktop', now() + interval '60 seconds')`,
+		`INSERT INTO email_verifications (token_sha256, user_id, expires_at) VALUES (decode(md5(random()::text), 'hex'), $1, now() + interval '1 day')`,
+		`INSERT INTO user_report_settings (user_id, design) VALUES ($1, '{}')`,
+		`INSERT INTO voices (user_id, wrapper_kind, wrapper_recipient, wrapped_key) VALUES ($1, 'test', 'test', '\x00')`,
+	} {
+		if _, err := env.st.Pool().Exec(context.Background(), q, uid); err != nil {
+			t.Fatal(err)
+		}
+	}
+	founder := env.register("gdpr-founder")
+	env.verifyEmail(founder)
+	seatOrg := "gdprseat" + env.sfx
+	env.createOrg(env.login(founder), seatOrg)
+	env.joinOrg(env.login(founder), seatOrg, user)
+
 	// A PAT cannot erase the account (session-only).
 	res := env.do(caller{name: "pat", pat: pat}, http.MethodPost, "/api/v1/user/delete", nil)
 	_ = res.Body.Close()
@@ -50,7 +72,14 @@ func TestAccountErasureFlow(t *testing.T) {
 	}
 
 	// Erase.
-	env.doJSON(sess, http.MethodPost, "/api/v1/user/delete?publishedContent=yank", nil, nil, http.StatusNoContent)
+	res = env.do(sess, http.MethodPost, "/api/v1/user/delete?publishedContent=yank", nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("erasure: got %d, want 204", res.StatusCode)
+	}
+	if !sessionCookieCleared(res) {
+		t.Fatal("the erasure left the browser holding its session cookie")
+	}
 
 	// The session is dead.
 	res = env.do(sess, http.MethodGet, "/api/v1/user", nil)
@@ -97,6 +126,35 @@ func TestAccountErasureFlow(t *testing.T) {
 	if !reserved {
 		t.Fatal("retired handle must be reserved against impersonation")
 	}
+	// This account's own row: the whole id in its retired handle (a prefix
+	// could collide with another erasure), the scrubbed address, the reason
+	// in its tombstone, and nothing else of it left.
+	var ownHandle, ownEmail, ownReason string
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT h.handle, u.email::text, u.deleted_tombstone->>'reason' FROM users u JOIN handles h ON h.id = u.id WHERE u.id = $1`, uid).Scan(&ownHandle, &ownEmail, &ownReason); err != nil {
+		t.Fatal(err)
+	}
+	if ownHandle != "del-"+strings.ReplaceAll(uid, "-", "") || ownEmail != "deleted+"+uid+"@invalid.invalid" || ownReason != "user-requested erasure" {
+		t.Fatalf("the erased account: handle %q, address %q, tombstone reason %q", ownHandle, ownEmail, ownReason)
+	}
+	for what, q := range map[string]string{
+		"remembered browsers":  `SELECT count(*) FROM trusted_devices WHERE user_id = $1`,
+		"unused desktop codes": `SELECT count(*) FROM desktop_grants WHERE user_id = $1 AND consumed_at IS NULL`,
+		"activation links":     `SELECT count(*) FROM email_verifications WHERE user_id = $1`,
+		"report designs":       `SELECT count(*) FROM user_report_settings WHERE user_id = $1`,
+		"Writing Voices":       `SELECT count(*) FROM voices WHERE user_id = $1`,
+		"seats":                `SELECT count(*) FROM memberships WHERE user_id = $1`,
+		"live sessions":        `SELECT count(*) FROM sessions WHERE user_id = $1 AND revoked_at IS NULL`,
+		"live tokens":          `SELECT count(*) FROM pats WHERE user_id = $1 AND revoked_at IS NULL`,
+	} {
+		var left int
+		if err := env.st.Pool().QueryRow(ctx, q, uid).Scan(&left); err != nil {
+			t.Fatal(err)
+		}
+		if left != 0 {
+			t.Errorf("%d %s left after the erasure", left, what)
+		}
+	}
 
 	// Published content was YANKED, not deleted: the row and
 	// its archive digest survive so installed copies still verify.
@@ -121,6 +179,15 @@ func TestAccountErasureFlow(t *testing.T) {
 	}
 	if n == 0 {
 		t.Fatal("no user.delete audit event")
+	}
+	// The row says what the erasure did.
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM audit_events WHERE action = 'user.delete' AND target_id = $1 AND detail->>'publishedContent' = 'yank'
+		  AND detail->>'publishedVersions' = '1' AND detail->>'desktopCodes' = '1' AND (detail->>'knowledgeObjects')::int >= 1`, uid).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("user.delete rows saying one published version yanked, one desktop code and the knowledge objects erased: %d, want 1", n)
 	}
 	// No extension erases anything here, so the detail names none.
 	if err := env.st.Pool().QueryRow(ctx,

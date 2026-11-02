@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/audit"
@@ -30,11 +32,14 @@ import (
 // recordingAdmitter refuses when refuse is set, fails when broken, and
 // otherwise hands out tickets; it remembers what it was asked and voided.
 type recordingAdmitter struct {
-	mu      sync.Mutex
-	refuse  *registry.Refusal
-	broken  bool
+	mu     sync.Mutex
+	refuse *registry.Refusal
+	broken bool
+	// blank hands out tickets with no id.
+	blank   bool
 	asked   []registry.Admission
 	tickets int
+	issued  []string
 	voided  []string
 }
 
@@ -49,7 +54,12 @@ func (a *recordingAdmitter) Admit(_ context.Context, req registry.Admission) (re
 		return registry.Ticket{}, a.refuse, nil
 	}
 	a.tickets++
-	return registry.Ticket{ID: "t-" + uuid.NewString()}, nil, nil
+	if a.blank {
+		return registry.Ticket{}, nil, nil
+	}
+	id := "t-" + uuid.NewString()
+	a.issued = append(a.issued, id)
+	return registry.Ticket{ID: id}, nil, nil
 }
 
 func (a *recordingAdmitter) Void(_ context.Context, t registry.Ticket) error {
@@ -127,11 +137,32 @@ func TestAdmissionRunsBeforeTheRow(t *testing.T) {
 	if !strings.HasSuffix(prob["type"].(string), "/credits-exhausted") || prob["balance"] != float64(4) || prob["resetsAt"] != "2026-10-01T00:00:00Z" {
 		t.Fatalf("refusal body lacks the slug or the fields: %s", body)
 	}
+	if prob["title"] != "Not enough credits for this submission" || prob["status"] != float64(http.StatusPaymentRequired) ||
+		prob["detail"] != "A submission costs 10 credits; the balance is 4 and resets on 2026-10-01." {
+		t.Fatalf("refusal body lacks the refusal's own title, status or detail: %s", body)
+	}
 	if n := countVersions(env, author, "gated"); n != 0 {
 		t.Fatalf("a refused submission stored %d version row(s)", n)
 	}
 	if len(adm.asked) != 1 || adm.asked[0].Kind != registry.AdmissionKindVersionSubmit || adm.asked[0].Source != "cli-upload" {
 		t.Fatalf("admission asked: %+v", adm.asked)
+	}
+	// It is asked about who submits what to whom: the person, the agent and
+	// the namespace it sits in, and the agent's visibility.
+	var authorID, agentID uuid.UUID
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT h.id, a.id FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = 'gated'`, author).Scan(&authorID, &agentID); err != nil {
+		t.Fatal(err)
+	}
+	if got := adm.asked[0]; got.Submitter != authorID || got.AgentID != agentID || got.Subject != entitlements.ForUser(authorID) || got.Visibility != "public" {
+		t.Fatalf("admission asked about %+v, want submitter %s, agent %s, subject %v, public", got, authorID, agentID, entitlements.ForUser(authorID))
+	}
+
+	// A refusal that says nothing of its own is a 403 admission-refused.
+	adm.refuse = &registry.Refusal{}
+	status, body = env.uploadVersionCLI(author, "gated", pat, files)
+	if status != http.StatusForbidden || problemTypeOf([]byte(body)) != "admission-refused" || !strings.Contains(body, `"title":"Submission refused"`) {
+		t.Fatalf("a refusal with no words of its own: got %d %s, want 403 admission-refused titled Submission refused", status, body)
 	}
 
 	// Unknown: fail closed, nothing stored.
@@ -155,6 +186,16 @@ func TestAdmissionRunsBeforeTheRow(t *testing.T) {
 	defer mu.Unlock()
 	if len(submitted) != 1 || submitted[0]["admissionTicket"] == nil || submitted[0]["versionId"] == nil {
 		t.Fatalf("version.submitted must carry the admission ticket and the version id: %+v", submitted)
+	}
+	var versionID string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT v.id::text FROM agent_versions v JOIN agents a ON a.id = v.agent_id JOIN handles h ON h.id = a.namespace_id
+		  WHERE h.handle = $1 AND a.name = 'gated' AND v.version = '1.0.0'`, author).Scan(&versionID); err != nil {
+		t.Fatal(err)
+	}
+	if len(adm.issued) != 1 || submitted[0]["admissionTicket"] != adm.issued[0] || submitted[0]["versionId"] != versionID {
+		t.Fatalf("version.submitted carries ticket %v and version %v, want the issued ticket %v and the stored version %s",
+			submitted[0]["admissionTicket"], submitted[0]["versionId"], adm.issued, versionID)
 	}
 	if len(adm.voided) != 0 {
 		t.Fatalf("nothing failed after admission, yet tickets were voided: %v", adm.voided)
@@ -193,16 +234,37 @@ func TestAdmissionVoidedWhenTheRowNeverLands(t *testing.T) {
 		t.Fatalf("the refusal does not say the client packed differently and must update: %s", body)
 	}
 	adm.mu.Lock()
+	if adm.tickets != 1 || len(adm.voided) != 1 || adm.voided[0] != adm.issued[0] {
+		t.Fatalf("ticket issued %d (%v), voided %v; want the issued ticket voided", adm.tickets, adm.issued, adm.voided)
+	}
+	// An admitter that issued no ticket id has nothing to void.
+	adm.blank = true
+	adm.mu.Unlock()
+	status, body = env.uploadVersionCLIWithDigest(author, "voided", pat, files, "sha256:"+strings.Repeat("1", 64))
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("mismatched digest with no ticket id: got %d %s", status, body)
+	}
+	adm.mu.Lock()
 	defer adm.mu.Unlock()
-	if adm.tickets != 1 || len(adm.voided) != 1 {
-		t.Fatalf("ticket issued %d, voided %v; want one of each", adm.tickets, adm.voided)
+	if adm.tickets != 2 || len(adm.voided) != 1 {
+		t.Fatalf("after a submission admitted with no ticket id: issued %d, voided %v; want nothing more voided", adm.tickets, adm.voided)
 	}
 }
 
 // TestCoreWithoutAdmitterIsUnchanged pins the other half of the seam: with
 // nothing registered a submission is exactly what it was.
 func TestCoreWithoutAdmitterIsUnchanged(t *testing.T) {
-	env := newTestEnv(t)
+	var mu sync.Mutex
+	var submitted []map[string]any
+	env := newTestEnvWith(t, func(s *api.Server) {
+		s.AddEventHook(func(_ context.Context, ev api.Event) {
+			if ev.Kind == "version.submitted" {
+				mu.Lock()
+				submitted = append(submitted, ev.Payload)
+				mu.Unlock()
+			}
+		})
+	})
 	author := env.register("plain-auth")
 	env.verifyEmail(author)
 	pat, files := submitFixture(env, author, "plain")
@@ -210,6 +272,17 @@ func TestCoreWithoutAdmitterIsUnchanged(t *testing.T) {
 		t.Fatalf("submit: %d %s", status, body)
 	}
 	env.waitStatus(author, "plain", "1.0.0", "published")
+	// Nothing of the seam shows on the event.
+	mu.Lock()
+	defer mu.Unlock()
+	if len(submitted) != 1 {
+		t.Fatalf("version.submitted events: %d, want 1", len(submitted))
+	}
+	for _, k := range []string{"admissionTicket", "versionId"} {
+		if _, ok := submitted[0][k]; ok {
+			t.Errorf("version.submitted carries %q with no admitter: %+v", k, submitted[0])
+		}
+	}
 }
 
 // TestUserRegisteredFiresForDirectoryAccounts: the JIT-created account of
@@ -242,6 +315,13 @@ func TestUserRegisteredFiresForDirectoryAccounts(t *testing.T) {
 	if n != 1 || ev.UserID.String() != userID || ev.Payload["via"] != "social" || ev.Payload["provider"] != "oidc" || ev.Payload["handle"] == "" {
 		t.Fatalf("user.registered for a JIT account: %d event(s) %+v", n, ev)
 	}
+	var handle string
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT handle FROM handles WHERE id = $1::uuid`, userID).Scan(&handle); err != nil {
+		t.Fatal(err)
+	}
+	if ev.Payload["handle"] != handle || ev.Payload["email"] != idp.email || ev.Payload["emailVerified"] != true || ev.OrgID != uuid.Nil {
+		t.Fatalf("user.registered payload %+v (org %s), want the account's handle %s, the provider's verified address %s and no organization", ev.Payload, ev.OrgID, handle, idp.email)
+	}
 	loginThroughFakeOIDC(t, env, idp)
 	mu.Lock()
 	defer mu.Unlock()
@@ -262,6 +342,16 @@ func (c cappedResolver) Features(_ context.Context, s entitlements.Subject) (ent
 		return entitlements.Features{PrivateAgents: entitlements.Cap{Enabled: true}}, nil
 	}
 	return entitlements.Features{PrivateAgents: entitlements.Cap{Enabled: true, Max: c.max}}, nil
+}
+
+// noPrivateAgents is the core resolver for a person whose plan has no
+// private agents.
+type noPrivateAgents struct{ entitlements.Resolver }
+
+func (r noPrivateAgents) Features(ctx context.Context, s entitlements.Subject) (entitlements.Features, error) {
+	f, err := r.Resolver.Features(ctx, s)
+	f.PrivateAgents = entitlements.Cap{}
+	return f, err
 }
 
 // TestPrivateAgentCapNeverDeletes: at the cap, one more private agent is a
@@ -306,6 +396,18 @@ func TestPrivateAgentCapNeverDeletes(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("the cap changed what is private: %d", n)
 	}
+	// An agent already private is not one more: asking again for what it
+	// already is passes at the cap.
+	env.doJSON(sess, http.MethodPatch, "/api/v1/agents/"+user+"/one", map[string]any{"visibility": "private"}, nil, http.StatusOK)
+
+	// A plan with no private agents at all refuses the first, and still lets
+	// public ones be made.
+	env.setEntitlements(noPrivateAgents{entitlements.NewConfigResolver(config.Default().Limits)})
+	body = create("zero", "private", http.StatusUnprocessableEntity)
+	if !strings.Contains(body, "private-agent-cap") {
+		t.Fatalf("a plan without private agents must answer with the cap's slug: %s", body)
+	}
+	create("open", "public", http.StatusCreated)
 
 	plain := newTestEnv(t)
 	u2 := plain.register("uncapped")
@@ -402,6 +504,9 @@ func TestExtensionRouteRateClassOptOut(t *testing.T) {
 	var srv *api.Server
 	env := newTestEnvCfg(t, func(cfg *config.Config) {
 		cfg.Limits.AnonymousPerMin = 3
+		// Three requests to spend and next to no refill, for the signed-in class.
+		cfg.Limits.AuthedBurstPerMin = 3
+		cfg.Limits.AuthedPerHour = 1
 	}, func(s *api.Server) {
 		srv = s
 		s.RegisterExtension("hook", func(mux *http.ServeMux) {
@@ -438,6 +543,25 @@ func TestExtensionRouteRateClassOptOut(t *testing.T) {
 	if got := hit("/webhooks/pay"); got != http.StatusNoContent {
 		t.Fatalf("unthrottled route refused after the sibling was throttled: %d", got)
 	}
+	// The opt-out is from the anonymous class alone: a signed-in caller's
+	// own budget still applies on the route.
+	u := env.register("optout")
+	sess := env.login(u)
+	var served int
+	for i := 0; i < 20; i++ {
+		res := env.do(sess, http.MethodPost, "/api/v1/x/hook/webhooks/pay", nil)
+		_ = res.Body.Close()
+		if res.StatusCode == http.StatusTooManyRequests {
+			break
+		}
+		if res.StatusCode != http.StatusNoContent {
+			t.Fatalf("signed-in call %d: %d", i+1, res.StatusCode)
+		}
+		served++
+	}
+	if served != 3 {
+		t.Fatalf("a signed-in caller was served %d calls on the unthrottled route before its own budget refused it, want its 3", served)
+	}
 }
 
 // TestScanCompletedNamesTheVersionAndOutcome: scan.completed carries the
@@ -468,6 +592,21 @@ func TestScanCompletedNamesTheVersionAndOutcome(t *testing.T) {
 	if len(completed) != 1 || completed[0]["outcome"] != "published" || completed[0]["versionId"] == nil {
 		t.Fatalf("scan.completed must name the outcome and the version: %+v", completed)
 	}
+	var versionID string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT v.id::text FROM agent_versions v JOIN agents a ON a.id = v.agent_id JOIN handles h ON h.id = a.namespace_id
+		  WHERE h.handle = $1 AND a.name = 'clean' AND v.version = '1.0.0'`, author).Scan(&versionID); err != nil {
+		t.Fatal(err)
+	}
+	if completed[0]["versionId"] != versionID || completed[0]["version"] != "1.0.0" {
+		t.Fatalf("scan.completed names version %v (%v), want 1.0.0 (%s)", completed[0]["version"], completed[0]["versionId"], versionID)
+	}
+	if run, _ := completed[0]["runId"].(string); uuid.Validate(run) != nil {
+		t.Fatalf("scan.completed names run %v, want the scan run's id", completed[0]["runId"])
+	}
+	if reason, _ := completed[0]["reason"].(string); reason == "" {
+		t.Fatalf("scan.completed gives no reason for its outcome: %+v", completed[0])
+	}
 }
 
 // TestBoundExtensionWritesItsOwnAuditAction: the deps an extension is
@@ -477,9 +616,11 @@ func TestScanCompletedNamesTheVersionAndOutcome(t *testing.T) {
 func TestBoundExtensionWritesItsOwnAuditAction(t *testing.T) {
 	audit.Register("probe.tier_set")
 	var write func(context.Context, audit.Event) error
+	var writeIn func(context.Context, pgx.Tx, audit.Event) error
+	var pool *pgxpool.Pool
 	env := newTestEnvWith(t, func(s *api.Server) {
 		s.RegisterExtension("probe", func(*http.ServeMux) {})
-		_, _, write, _ = s.ExtensionDeps()
+		pool, _, write, writeIn = s.ExtensionDeps()
 	})
 	u := env.register("bound-user")
 	env.verifyEmail(u)
@@ -516,6 +657,42 @@ func TestBoundExtensionWritesItsOwnAuditAction(t *testing.T) {
 	}
 	if !seen {
 		t.Fatalf("the extension's event is not on the activity feed: %+v", page.Events)
+	}
+
+	// Written inside the extension's own transaction, the event commits with
+	// it and goes with a rollback.
+	ctx := context.Background()
+	event := func(tier string) audit.Event {
+		return audit.Event{Actor: me.Id, ActorKind: audit.ActorUser, Action: "probe.tier_set", TargetKind: "user", TargetID: me.Id, Detail: map[string]any{"tier": tier}}
+	}
+	for tier, commit := range map[string]bool{"committed": true, "rolled back": false} {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := writeIn(ctx, tx, event(tier)); err != nil {
+			t.Fatalf("write in a transaction: %v", err)
+		}
+		if commit {
+			err = tx.Commit(ctx)
+		} else {
+			err = tx.Rollback(ctx)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for tier, want := range map[string]int{"committed": 1, "rolled back": 0} {
+		var n int
+		if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM audit_events WHERE action = 'probe.tier_set' AND target_id = $1 AND detail->>'tier' = $2`, me.Id, tier).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != want {
+			t.Errorf("audit rows with tier %q: %d, want %d", tier, n, want)
+		}
+	}
+	if err := writeIn(ctx, nil, audit.Event{Actor: me.Id, ActorKind: audit.ActorUser, Action: "probe.unregistered", TargetKind: "user", TargetID: me.Id}); err == nil {
+		t.Error("an unregistered action was written in a transaction")
 	}
 }
 
