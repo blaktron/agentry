@@ -157,15 +157,13 @@ func (s *Service) ActivateMember(ctx context.Context, req ActivateMemberRequest)
 		case err == nil:
 			viaSCIM, viaDomain = current.ViaScim, current.ViaDomain
 			if current.State == StateActive {
-				// Already a member: a role change, not an activation. It
-				// consumes no seat and is not a new membership.
-				if auth.OrgRole(current.Role) == req.Role {
-					return nil
-				}
-				_, err := q.UpsertMembership(ctx, storegen.UpsertMembershipParams{
-					OrgID: req.OrgID, UserID: req.UserID, Role: string(req.Role),
-				})
-				return err
+				// Already a member: nothing to activate, and nothing is
+				// changed. The role the door carries is not applied: an
+				// invitation or an approval can only be stale for an
+				// active member, and a role change belongs to the
+				// role-change route, which holds the last-admin guard and
+				// the elevation check.
+				return nil
 			}
 		case errors.Is(err, pgx.ErrNoRows):
 		default:

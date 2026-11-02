@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -92,6 +93,16 @@ func TestOneOrgPerDomain(t *testing.T) {
 		t.Fatalf("own domain spelled out: %+v", third)
 	}
 
+	// The spelling is forgiven: case, the space around it and a trailing dot
+	// all name the same domain.
+	frankH := env.registerEmail("dom-frank", "frank@frank"+env.sfx+".io")
+	env.verifyEmail(frankH)
+	var spelled orgOut
+	env.doJSON(env.login(frankH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "domorg6" + env.sfx, "displayName": "F", "domain": " Frank" + env.sfx + ".IO. "}, &spelled, http.StatusCreated)
+	if spelled.Domain == nil || *spelled.Domain != "frank"+env.sfx+".io" {
+		t.Fatalf("own domain spelled with case, space and a trailing dot: %+v", spelled)
+	}
+
 	// A public mail provider is nobody's.
 	daveH := env.registerEmail("dom-dave", "dave"+env.sfx+"@gmail.com")
 	env.verifyEmail(daveH)
@@ -99,6 +110,18 @@ func TestOneOrgPerDomain(t *testing.T) {
 	env.doJSON(env.login(daveH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "domorg4" + env.sfx, "displayName": "D"}, &fourth, http.StatusCreated)
 	if fourth.Domain != nil {
 		t.Fatalf("gmail.com recorded as a domain: %q", *fourth.Domain)
+	}
+
+	// A claim that has not been proved holds nothing: the domain it names
+	// stays open to the person whose address is there.
+	unprovedDomain := "unproved" + env.sfx + ".io"
+	env.doJSON(bob, http.MethodPost, "/api/v1/orgs/"+second.Handle+"/domain-claims", map[string]any{"domain": unprovedDomain}, nil, http.StatusCreated)
+	ginaH := env.registerEmail("dom-gina", "gina@"+unprovedDomain)
+	env.verifyEmail(ginaH)
+	var unproved orgOut
+	env.doJSON(env.login(ginaH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "domorg7" + env.sfx, "displayName": "G"}, &unproved, http.StatusCreated)
+	if unproved.Domain == nil || *unproved.Domain != unprovedDomain {
+		t.Fatalf("org at a domain with only an unproved claim: %+v, want the domain recorded", unproved)
 	}
 
 	// A domain an organization verified over DNS belongs to it as well:
@@ -135,14 +158,33 @@ func TestCreatingAnOrganizationIsTheThirdDoor(t *testing.T) {
 	env.verifyEmail(adminH)
 	admin := env.login(adminH)
 	orgA := "tdorga" + env.sfx
-	env.createOrg(admin, orgA)
+	orgAID := env.createOrg(admin, orgA)
 	personH := env.register("td-person")
 	env.joinOrg(admin, orgA, personH)
 	person := env.login(personH)
+	// A token bound to the organization, to see what leaving does to it.
+	env.insertPAT(env.userID(personH), orgAID, "org:read")
 
 	res := env.do(person, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "tdorgb" + env.sfx, "displayName": "B"})
 	if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "already-a-member" {
 		t.Fatalf("a member creating an org: %d %s, want 409 already-a-member", code, slug)
+	}
+	// Waiting for approval somewhere is not belonging there: a person who is
+	// only pending can found their own organization.
+	waitingH := env.register("td-waiting")
+	env.verifyEmail(waitingH)
+	env.seedMembership(orgA, waitingH, "member", "pending")
+	env.createOrg(env.login(waitingH), "tdorgw"+env.sfx)
+
+	// Leaving is for oneself: a member can remove nobody else, the admin or
+	// another member.
+	otherH := env.register("td-other")
+	env.joinOrg(admin, orgA, otherH)
+	for _, target := range []string{adminH, otherH} {
+		res = env.do(person, http.MethodDelete, "/api/v1/orgs/"+orgA+"/members/"+target, nil)
+		if code, _, _ := problemOf(t, res); code != http.StatusForbidden {
+			t.Fatalf("a member removing %s: %d, want 403", target, code)
+		}
 	}
 	// Platform staff are held to it too, first-party handle or not: the
 	// membership rule runs before the handle is even looked at.
@@ -160,6 +202,15 @@ func TestCreatingAnOrganizationIsTheThirdDoor(t *testing.T) {
 	}
 	// A member leaves on their own — no admin needed — and may then create.
 	env.doJSON(person, http.MethodDelete, "/api/v1/orgs/"+orgA+"/members/"+personH, nil, nil, http.StatusNoContent)
+	// Leaving takes the organization's tokens with it.
+	var liveBound int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM pats WHERE user_id = $1::uuid AND org_id = $2::uuid AND revoked_at IS NULL`, env.userID(personH), orgAID).Scan(&liveBound); err != nil {
+		t.Fatal(err)
+	}
+	if liveBound != 0 {
+		t.Fatalf("tokens bound to the organization after the member left: %d live, want 0", liveBound)
+	}
 	env.createOrg(person, "tdorgb"+env.sfx)
 	var me struct {
 		Orgs []struct {
@@ -219,11 +270,23 @@ func TestDomainOrgLookupAndRequestAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Neither a plain member nor an admin still waiting for approval is an
+	// administrator to write to.
+	plainH := env.register("dq-plain")
+	env.joinOrg(admin, orgH, plainH)
+	waitingAdminH := env.register("dq-waiting-admin")
+	env.verifyEmail(waitingAdminH)
+	env.seedMembership(orgH, waitingAdminH, "admin", "pending")
+
 	newH := env.registerEmailUnverified("dq-new", "new@"+domain)
 	newc := env.login(newH)
 	res := env.do(newc, http.MethodGet, "/api/v1/user/domain-org", nil)
 	if code, slug, _ := problemOf(t, res); code != http.StatusForbidden || slug != "email-unverified" {
 		t.Fatalf("lookup with an unverified address: %d %s, want 403 email-unverified", code, slug)
+	}
+	res = env.do(newc, http.MethodPost, "/api/v1/user/domain-org/request-access", nil)
+	if code, slug, _ := problemOf(t, res); code != http.StatusForbidden || slug != "account-unactivated" {
+		t.Fatalf("request with an unverified address: %d %s, want 403 account-unactivated", code, slug)
 	}
 	env.verifyEmail(newH)
 
@@ -287,8 +350,16 @@ func TestDomainOrgLookupAndRequestAccess(t *testing.T) {
 		t.Fatalf("an admin's own lookup: %+v, want member", dq)
 	}
 	res = env.do(admin, http.MethodPost, "/api/v1/user/domain-org/request-access", nil)
-	if code, _, _ := problemOf(t, res); code != http.StatusConflict {
-		t.Fatalf("a member asking: %d, want 409", code)
+	if code, _, detail := problemOf(t, res); code != http.StatusConflict || !strings.Contains(detail, "already a member") {
+		t.Fatalf("a member asking: %d %q, want 409 saying they are a member", code, detail)
+	}
+	// Someone already waiting for an admin is told so.
+	waitingH := env.registerEmail("dq-waiting", "waiting@"+domain)
+	env.verifyEmail(waitingH)
+	env.seedMembership(orgH, waitingH, "member", "pending")
+	res = env.do(env.login(waitingH), http.MethodPost, "/api/v1/user/domain-org/request-access", nil)
+	if code, _, detail := problemOf(t, res); code != http.StatusConflict || !strings.Contains(detail, "waiting") {
+		t.Fatalf("a person already waiting asking: %d %q, want 409 saying they are waiting", code, detail)
 	}
 	// A shared domain belongs to nobody.
 	gmailH := env.registerEmail("dq-gmail", "someone"+env.sfx+"@gmail.com")
@@ -302,6 +373,55 @@ func TestDomainOrgLookupAndRequestAccess(t *testing.T) {
 	res = env.do(gm, http.MethodPost, "/api/v1/user/domain-org/request-access", nil)
 	if code, _, _ := problemOf(t, res); code != http.StatusNotFound {
 		t.Fatalf("a gmail address asking: %d, want 404", code)
+	}
+
+	// The once-a-day rule looks back a day and no further: a request made 23
+	// hours ago still counts, one made 25 hours ago does not.
+	askedAgo := func(handle, age string) {
+		t.Helper()
+		if _, err := env.st.Pool().Exec(context.Background(),
+			`INSERT INTO audit_events (id, occurred_at, actor_id, actor_kind, org_id, action, target_kind, target_id)
+			 SELECT gen_random_uuid(), now() - $3::interval, u.id, 'user', o.id, 'org.access_request', 'org', o.id
+			   FROM handles u, handles o WHERE u.handle = $1 AND o.handle = $2`, handle, orgH, age); err != nil {
+			t.Fatal(err)
+		}
+	}
+	recentH := env.registerEmail("dq-recent", "recent@"+domain)
+	env.verifyEmail(recentH)
+	askedAgo(recentH, "23 hours")
+	res = env.do(env.login(recentH), http.MethodPost, "/api/v1/user/domain-org/request-access", nil)
+	if code, slug, _ := problemOf(t, res); code != http.StatusTooManyRequests || slug != "rate-limited" {
+		t.Fatalf("a request 23 hours after the last: %d %s, want 429 rate-limited", code, slug)
+	}
+	staleH := env.registerEmail("dq-stale", "stale@"+domain)
+	env.verifyEmail(staleH)
+	askedAgo(staleH, "25 hours")
+	env.doJSON(env.login(staleH), http.MethodPost, "/api/v1/user/domain-org/request-access", nil, nil, http.StatusAccepted)
+
+	// A suspended organization is absent to everyone, so nobody is pointed to
+	// it and nobody may ask it for access; platform staff suspend with a
+	// reason of at most 500 characters.
+	staffH := env.register("dq-staff")
+	env.verifyEmail(staffH)
+	env.makePlatformStaff(t, staffH)
+	staff := env.login(staffH)
+	lateH := env.registerEmail("dq-late", "late@"+domain)
+	env.verifyEmail(lateH)
+	late := env.login(lateH)
+	env.doJSON(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/suspend", map[string]any{"reason": strings.Repeat("r", 500)}, nil, http.StatusOK)
+	var hidden domainOrg
+	env.doJSON(late, http.MethodGet, "/api/v1/user/domain-org", nil, &hidden, http.StatusOK)
+	if hidden.Org != nil {
+		t.Fatalf("the domain's suspended organization is shown: %+v", hidden)
+	}
+	res = env.do(late, http.MethodPost, "/api/v1/user/domain-org/request-access", nil)
+	if code, _, _ := problemOf(t, res); code != http.StatusNotFound {
+		t.Fatalf("asking a suspended organization for access: %d, want 404", code)
+	}
+	env.doJSON(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/reinstate", nil, nil, http.StatusOK)
+	env.doJSON(late, http.MethodGet, "/api/v1/user/domain-org", nil, &dq, http.StatusOK)
+	if dq.Org == nil || dq.Org.Handle != orgH {
+		t.Fatalf("domain org after reinstating: %+v, want %s", dq, orgH)
 	}
 }
 
@@ -436,6 +556,12 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	if err := provision("before"); err != nil {
 		t.Fatalf("provisioning before suspension: %v", err)
 	}
+	// An invitation sent before the suspension, to be answered during it and
+	// after.
+	inviteeH := env.register("su-invitee")
+	env.verifyEmail(inviteeH)
+	invitation := inviteTo(t, env, admin, orgH, inviteeH+"@example.test")
+	invitee := env.login(inviteeH)
 
 	// Only staff suspend; the reason is required.
 	if got := status(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/suspend", map[string]any{"reason": "x"}); got != http.StatusForbidden {
@@ -443,6 +569,11 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	}
 	if got := status(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/suspend", map[string]any{"reason": ""}); got != http.StatusUnprocessableEntity {
 		t.Fatalf("suspending without a reason: %d, want 422", got)
+	}
+	for _, reason := range []string{"   ", strings.Repeat("r", 501)} {
+		if got := status(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/suspend", map[string]any{"reason": reason}); got != http.StatusUnprocessableEntity {
+			t.Fatalf("suspending with a reason of %d characters, spaces included: %d, want 422", len(reason), got)
+		}
 	}
 	var suspended orgOut
 	env.doJSON(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/suspend", map[string]any{"reason": "abuse report 42"}, &suspended, http.StatusOK)
@@ -483,6 +614,22 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	if err := provision("suspended"); !errors.Is(err, api.ErrOrgNotProvisionable) {
 		t.Fatalf("provisioning while suspended: %v, want ErrOrgNotProvisionable", err)
 	}
+	// Only staff lift a suspension: the organization's own admin and members
+	// are not staff. An invitation is not answered while the organization is
+	// out, and nothing is spent by the refusal. The last admin's account is
+	// held by the organization all the same.
+	for _, c := range []caller{admin, member} {
+		if got := status(c, http.MethodPost, "/api/v1/orgs/"+orgH+"/reinstate", nil); got != http.StatusForbidden {
+			t.Fatalf("%s reinstating a suspended organization: %d, want 403", c.name, got)
+		}
+	}
+	if got := status(invitee, http.MethodPost, "/api/v1/invitations/"+invitation, nil); got != http.StatusNotFound {
+		t.Fatalf("accepting an invitation to a suspended organization: %d, want 404", got)
+	}
+	res := env.do(admin, http.MethodPost, "/api/v1/user/delete", nil)
+	if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "last-admin" {
+		t.Fatalf("the last admin erasing their account while the organization is suspended: %d %s, want 409 last-admin", code, slug)
+	}
 	// Suspending twice is a conflict, not a second suspension.
 	if got := status(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/suspend", map[string]any{"reason": "again"}); got != http.StatusConflict {
 		t.Fatalf("suspending a suspended org: %d, want 409", got)
@@ -522,6 +669,9 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	if held.State != "decommissioning" || held.DecommissionAt == nil || held.DecommissionAt.Before(time.Now().Add(50*time.Minute)) {
 		t.Fatalf("after decommission: %+v, want decommissioning with the hold an hour out", held)
 	}
+	if held.DecommissionAt.After(time.Now().Add(70 * time.Minute)) {
+		t.Fatalf("after decommission: the hold ends at %s, want about an hour out", held.DecommissionAt)
+	}
 	if events.count("org.decommissioning") != 1 {
 		t.Fatalf("org.decommissioning fired %d times", events.count("org.decommissioning"))
 	}
@@ -532,6 +682,7 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	}{
 		{member, http.MethodGet, "/api/v1/orgs/" + orgH},
 		{member, http.MethodGet, "/api/v1/orgs/" + orgH + "/members"},
+		{member, http.MethodGet, "/api/v1/orgs/" + orgH + "/teams"},
 		{admin, http.MethodGet, "/api/v1/orgs/" + orgH + "/audit"},
 		{anonymous, http.MethodGet, "/api/v1/agents/" + orgH + "/su-agent"},
 		{member, http.MethodGet, "/api/v1/agents/" + orgH + "/su-private"},
@@ -565,11 +716,37 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	if err := provision("hold"); !errors.Is(err, api.ErrOrgNotProvisionable) {
 		t.Fatalf("provisioning during the hold: %v, want ErrOrgNotProvisionable", err)
 	}
+	// Nothing moves the organization meanwhile: staff cannot suspend what is
+	// in its hold, the sweep leaves it until the hold is over, and only staff
+	// cancel the hold. The invitation sent earlier is not answered, and the
+	// last admin's account stays.
+	if got := status(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/suspend", map[string]any{"reason": "during the hold"}); got != http.StatusConflict {
+		t.Fatalf("suspending an organization in its hold: %d, want 409", got)
+	}
+	if _, err := env.srvObj.RunOrgDecommissionSweep(context.Background()); err != nil {
+		t.Fatalf("sweep during the hold: %v", err)
+	}
+	if got := env.orgOf(member, orgH, http.StatusOK); got.State != "decommissioning" {
+		t.Fatalf("organization after a sweep during its hold: %+v, want still decommissioning", got)
+	}
+	for _, c := range []caller{admin, member} {
+		if got := status(c, http.MethodPost, "/api/v1/orgs/"+orgH+"/reinstate", nil); got != http.StatusForbidden {
+			t.Fatalf("%s cancelling the hold: %d, want 403", c.name, got)
+		}
+	}
+	res = env.do(invitee, http.MethodPost, "/api/v1/invitations/"+invitation, nil)
+	if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "org-decommissioning" {
+		t.Fatalf("accepting an invitation during the hold: %d %s, want 409 org-decommissioning", code, slug)
+	}
+	res = env.do(admin, http.MethodPost, "/api/v1/user/delete", nil)
+	if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "last-admin" {
+		t.Fatalf("the last admin erasing their account during the hold: %d %s, want 409 last-admin", code, slug)
+	}
 	// Nobody joins an organization on its way out: the invitation door is
 	// closed above, and the chokepoint refuses an approval too.
 	pendingH := env.register("su-pending")
 	env.seedMembership(orgH, pendingH, "member", "pending")
-	res := env.do(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+pendingH+"/approve", nil)
+	res = env.do(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+pendingH+"/approve", nil)
 	if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "org-decommissioning" {
 		t.Fatalf("approving during the hold: %d %s, want 409 org-decommissioning", code, slug)
 	}
@@ -586,6 +763,8 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 	if got := status(admin, http.MethodPatch, "/api/v1/orgs/"+orgH, map[string]any{"displayName": "renamed"}); got != http.StatusOK {
 		t.Fatalf("a change after the hold was cancelled: %d", got)
 	}
+	// The invitation that was refused twice was never spent: it answers now.
+	env.doJSON(invitee, http.MethodPost, "/api/v1/invitations/"+invitation, nil, nil, http.StatusOK)
 	if events.count("org.reinstated") != 2 {
 		t.Fatalf("org.reinstated fired %d times, want 2", events.count("org.reinstated"))
 	}
@@ -604,7 +783,8 @@ func TestSuspendedOrgIsRefusedEverywhere(t *testing.T) {
 func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	events := &recordedEvents{}
 	var srv *api.Server
-	env := newTestEnvCfg(t, func(c *config.Config) { c.Orgs.DecommissionHold = 0 },
+	gitDir := t.TempDir()
+	env := newTestEnvCfg(t, func(c *config.Config) { c.Orgs.DecommissionHold = 0; c.Git.DataDir = gitDir },
 		events.hook(), func(s *api.Server) {
 			srv = s
 			s.Reg().SetAdmitter(&recordingAdmitter{})
@@ -642,7 +822,48 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	// erased; this one is put straight through the store.
 	kn := seedKnowledge(t, env, knowledge.Org(uuid.MustParse(orgID)))
 
+	// Everything else the organization owned, one of each: an audit export
+	// with its object, a webhook, a policy, a verified domain, a remembered
+	// decline, a grant and a star on its agent, a token bound to it, and the
+	// agent's repository on disk.
+	memberID := env.userID(memberH)
+	exportKey := "exports/er-" + env.sfx + ".ndjson"
+	if err := srv.Blobs().Put(ctx, exportKey, strings.NewReader("{}\n")); err != nil {
+		t.Fatal(err)
+	}
+	env.verifyOrgDomain(orgH, "claimed"+env.sfx+".io")
+	boundToken := env.insertPAT(memberID, orgID, "org:admin")
+	for _, seed := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO webhook_endpoints (id, org_id, url, secret_enc, events) VALUES (gen_random_uuid(), $1, 'https://hooks.example.test/er', '\x00', '{}')`, []any{orgID}},
+		{`INSERT INTO policies (id, org_id, document) VALUES (gen_random_uuid(), $1, '{}')`, []any{orgID}},
+		{`INSERT INTO audit_exports (id, org_id, status, object_key) VALUES (gen_random_uuid(), $1, 'completed', $2)`, []any{orgID, exportKey}},
+		{`INSERT INTO fold_in_declines (org_id, user_id) VALUES ($1, $2::uuid)`, []any{orgID, memberID}},
+		{`INSERT INTO agent_user_grants (agent_id, user_id, role) SELECT a.id, $2::uuid, 'read' FROM agents a WHERE a.namespace_id = $1`, []any{orgID, memberID}},
+		{`INSERT INTO stars (user_id, agent_id) SELECT $2::uuid, a.id FROM agents a WHERE a.namespace_id = $1`, []any{orgID, memberID}},
+		{`UPDATE agents SET summary = 'a summary', readme_text = 'a readme' WHERE namespace_id = $1`, []any{orgID}},
+	} {
+		if _, err := env.st.Pool().Exec(ctx, seed.sql, seed.args...); err != nil {
+			t.Fatalf("seeding %q: %v", seed.sql, err)
+		}
+	}
+	var repoID string
+	if err := env.st.Pool().QueryRow(ctx, `SELECT repo_id::text FROM agents WHERE namespace_id = $1`, orgID).Scan(&repoID); err != nil {
+		t.Fatal(err)
+	}
+	repoDir := gitDir + "/" + repoID[:2] + "/" + repoID + ".git"
+	if err := os.MkdirAll(repoDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
 	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/decommission", map[string]any{"confirm": orgH}, nil, http.StatusOK)
+	// The single sign-on requirement is the organization's own policy and is
+	// scrubbed with the rest of the row.
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE orgs SET sso_required = true WHERE id = $1`, orgID); err != nil {
+		t.Fatal(err)
+	}
 	n, err := srv.RunOrgDecommissionSweep(ctx)
 	if err != nil || n != 1 {
 		t.Fatalf("sweep: erased %d, err %v; want 1", n, err)
@@ -676,8 +897,9 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	if reborn.Domain == nil || *reborn.Domain != domain || reborn.State != "active" {
 		t.Fatalf("the founder's fresh start: %+v, want the same handle at the same domain", reborn)
 	}
-	// And that one is erased too, so the rest of the test sees a clean slate.
-	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/decommission", map[string]any{"confirm": orgH}, nil, http.StatusOK)
+	// And that one is erased too, so the rest of the test sees a clean slate;
+	// the handle that confirms it may carry the space around it.
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/decommission", map[string]any{"confirm": " " + orgH + " "}, nil, http.StatusOK)
 	if n, err := srv.RunOrgDecommissionSweep(ctx); err != nil || n != 1 {
 		t.Fatalf("sweep of the reborn org: erased %d, err %v; want 1", n, err)
 	}
@@ -708,6 +930,49 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	}
 	if members != 0 || invitations != 0 || teams != 0 || audited != 1 {
 		t.Fatalf("after erasure: %d memberships, %d invitations, %d teams, %d org.erase rows", members, invitations, teams, audited)
+	}
+	var webhooks, claims, policies, exports, declines, grants, stars, liveTokens int
+	if err := env.st.Pool().QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM webhook_endpoints WHERE org_id = $1),
+		(SELECT count(*) FROM domain_claims WHERE org_id = $1),
+		(SELECT count(*) FROM policies WHERE org_id = $1),
+		(SELECT count(*) FROM audit_exports WHERE org_id = $1),
+		(SELECT count(*) FROM fold_in_declines WHERE org_id = $1),
+		(SELECT count(*) FROM agent_user_grants g JOIN agents a ON a.id = g.agent_id WHERE a.namespace_id = $1),
+		(SELECT count(*) FROM stars s JOIN agents a ON a.id = s.agent_id WHERE a.namespace_id = $1),
+		(SELECT count(*) FROM pats WHERE org_id = $1 AND revoked_at IS NULL)`, orgID).Scan(
+		&webhooks, &claims, &policies, &exports, &declines, &grants, &stars, &liveTokens); err != nil {
+		t.Fatal(err)
+	}
+	if webhooks+claims+policies+exports+declines+grants+stars+liveTokens != 0 {
+		t.Fatalf("after erasure: %d webhooks, %d domain claims, %d policies, %d audit exports, %d declines, %d grants, %d stars, %d live tokens; want none",
+			webhooks, claims, policies, exports, declines, grants, stars, liveTokens)
+	}
+	if ok, err := srv.Blobs().Exists(ctx, exportKey); err != nil || ok {
+		t.Fatalf("audit export object after erasure: %v %v, want gone", ok, err)
+	}
+	if _, err := os.Stat(repoDir); !os.IsNotExist(err) {
+		t.Fatalf("the agent's repository after erasure: %v, want gone", err)
+	}
+	var ssoRequired, bare bool
+	var summary, readme string
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT o.sso_required, a.summary, a.readme_text, a.latest_published_version_id IS NULL
+		   FROM orgs o JOIN agents a ON a.namespace_id = o.id WHERE o.id = $1`, orgID).Scan(&ssoRequired, &summary, &readme, &bare); err != nil {
+		t.Fatal(err)
+	}
+	if ssoRequired || summary != "" || readme != "" || !bare {
+		t.Fatalf("after erasure: sso required %v, agent summary %q, readme %q, no release pointer %v; want false, empty, empty, true", ssoRequired, summary, readme, bare)
+	}
+	_ = boundToken
+	// An erased organization does not come back: staff reinstating the
+	// retired handle are told it has been erased.
+	reinstaterH := env.register("er-staff")
+	env.verifyEmail(reinstaterH)
+	env.makePlatformStaff(t, reinstaterH)
+	res = env.do(env.login(reinstaterH), http.MethodPost, "/api/v1/orgs/del-"+strings.ReplaceAll(orgID, "-", "")+"/reinstate", nil)
+	if code, _, detail := problemOf(t, res); code != http.StatusConflict || !strings.Contains(detail, "erased") {
+		t.Fatalf("reinstating an erased organization: %d %q, want 409 saying it was erased", code, detail)
 	}
 	// Once per erasure: the organization, and its reborn namesake above.
 	if events.count("org.decommissioned") != 2 {
@@ -752,11 +1017,61 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	if got := env.orgOf(holder, waitOrg, http.StatusOK); got.State != "decommissioning" {
 		t.Fatalf("deferred org: %+v", got)
 	}
-	if _, err := env.st.Pool().Exec(ctx, `UPDATE agent_versions SET status = 'rejected' WHERE agent_id IN (SELECT id FROM agents WHERE namespace_id = $1)`, waitID); err != nil {
+	// A version being scanned is in flight as well.
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE agent_versions SET status = 'scanning' WHERE agent_id IN (SELECT id FROM agents WHERE namespace_id = $1)`, waitID); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := srv.RunOrgDecommissionSweep(ctx); err != nil || n != 0 {
+		t.Fatalf("sweep with a version being scanned: %d %v, want 0 and no error", n, err)
+	}
+	// Versions waiting on a review or held in quarantine do not hold the
+	// erasure back; they end rejected and yanked with it.
+	for _, extra := range []struct{ version, status string }{{"0.0.2", "needs_review"}, {"0.0.3", "quarantined"}} {
+		if _, err := env.st.Pool().Exec(ctx,
+			`INSERT INTO agent_versions (id, agent_id, version, manifest, submitted_by, source, status)
+			 SELECT gen_random_uuid(), a.id, $3, '{}', (SELECT id FROM handles WHERE handle = $2), 'cli-upload', $4
+			 FROM agents a WHERE a.namespace_id = $1`, waitID, holdH, extra.version, extra.status); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE agent_versions SET status = 'rejected' WHERE version = '0.0.1' AND agent_id IN (SELECT id FROM agents WHERE namespace_id = $1)`, waitID); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := srv.RunOrgDecommissionSweep(ctx); err != nil || n != 1 {
 		t.Fatalf("sweep once the pipeline is done: %d %v, want 1", n, err)
+	}
+	versionStates := func() string {
+		t.Helper()
+		rows, err := env.st.Pool().Query(ctx,
+			`SELECT av.version || ':' || av.status FROM agent_versions av JOIN agents a ON a.id = av.agent_id
+			  WHERE a.namespace_id = $1 ORDER BY av.version`, waitID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var states []string
+		for rows.Next() {
+			var s string
+			if err := rows.Scan(&s); err != nil {
+				t.Fatal(err)
+			}
+			states = append(states, s)
+		}
+		return strings.Join(states, ",")
+	}
+	if got := versionStates(); got != "0.0.1:rejected,0.0.2:rejected,0.0.3:yanked" {
+		t.Fatalf("versions after the erasure: %s, want 0.0.1:rejected,0.0.2:rejected,0.0.3:yanked", got)
+	}
+	// An erasure interrupted after its point of no return is finished by the
+	// next sweep: a release found live under the erased organization is yanked.
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE agent_versions SET status = 'published' WHERE version = '0.0.2' AND agent_id IN (SELECT id FROM agents WHERE namespace_id = $1)`, waitID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.RunOrgDecommissionSweep(ctx); err != nil {
+		t.Fatalf("sweep resuming an erasure: %v", err)
+	}
+	if got := versionStates(); got != "0.0.1:rejected,0.0.2:yanked,0.0.3:yanked" {
+		t.Fatalf("versions after the resumed erasure: %s, want 0.0.1:rejected,0.0.2:yanked,0.0.3:yanked", got)
 	}
 }
 
@@ -791,7 +1106,23 @@ func TestErasureTransferRespectsThePrivateAgentCap(t *testing.T) {
 		"namespace": userH, "name": "mine", "modes": []string{"autonomous"}, "visibility": "private",
 	}, nil, http.StatusCreated)
 
-	res := env.do(user, http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil)
+	// The transfer names its organization, and the person must administer
+	// it: a plain member of it, or of nowhere near it, is refused.
+	res := env.do(user, http.MethodPost, "/api/v1/user/delete?publishedContent=transfer", nil)
+	if code, _, _ := problemOf(t, res); code != http.StatusBadRequest {
+		t.Fatalf("transfer naming no organization: %d, want 400", code)
+	}
+	plainH := env.register("cap-plain")
+	env.joinOrg(admin, orgH, plainH)
+	strayH := env.register("cap-stray")
+	for _, h := range []string{plainH, strayH} {
+		res = env.do(env.login(h), http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil)
+		if code, _, detail := problemOf(t, res); code != http.StatusForbidden || !strings.Contains(detail, orgH) {
+			t.Fatalf("transfer into an organization %s does not administer: %d %q, want 403 naming it", h, code, detail)
+		}
+	}
+
+	res = env.do(user, http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+orgH, nil)
 	if code, slug, _ := problemOf(t, res); code != http.StatusUnprocessableEntity || slug != "private-agent-cap" {
 		t.Fatalf("transfer over the cap: %d %s, want 422 private-agent-cap", code, slug)
 	}
@@ -808,5 +1139,89 @@ func TestErasureTransferRespectsThePrivateAgentCap(t *testing.T) {
 	if err := env.st.Pool().QueryRow(context.Background(),
 		`SELECT h.handle::text FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE a.name = 'mine' AND h.handle = $1`, orgH).Scan(&ns); err != nil {
 		t.Fatalf("the public agent did not move: %v", err)
+	}
+
+	// A retired agent holds no place under the cap and a deleted one does not
+	// move: of three private agents, one retired and one deleted, only the
+	// live one counts, and one more private agent is exactly the cap of an
+	// organization that holds none.
+	ctx := context.Background()
+	admin3H := env.register("cap-admin3")
+	env.verifyEmail(admin3H)
+	admin3 := env.login(admin3H)
+	org3 := "caporgc" + env.sfx
+	env.createOrg(admin3, org3)
+	user3H := env.register("cap-user3")
+	env.joinOrg(admin3, org3, user3H)
+	env.doJSON(admin3, http.MethodPut, "/api/v1/orgs/"+org3+"/members/"+user3H, map[string]any{"role": "admin"}, nil, http.StatusOK)
+	user3 := env.login(user3H)
+	for _, name := range []string{"live", "old", "gone"} {
+		env.doJSON(user3, http.MethodPost, "/api/v1/agents", map[string]any{
+			"namespace": user3H, "name": name, "modes": []string{"autonomous"}, "visibility": "public",
+		}, nil, http.StatusCreated)
+	}
+	for _, q := range []string{
+		`UPDATE agents SET visibility = 'private' WHERE name = 'live' AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`,
+		`UPDATE agents SET visibility = 'private', retired_at = now(), retired_visibility = 'public' WHERE name = 'old' AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`,
+		`UPDATE agents SET visibility = 'private', deleted_at = now() WHERE name = 'gone' AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`,
+	} {
+		if _, err := env.st.Pool().Exec(ctx, q, user3H); err != nil {
+			t.Fatal(err)
+		}
+	}
+	env.doJSON(user3, http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+org3, nil, nil, http.StatusNoContent)
+	var moved []string
+	rows, err := env.st.Pool().Query(ctx,
+		`SELECT a.name FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 ORDER BY a.name`, org3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		moved = append(moved, name)
+	}
+	if strings.Join(moved, ",") != "live,old" {
+		t.Fatalf("agents in the organization after the transfer: %v, want live and old", moved)
+	}
+
+	// A name the organization already has stops the transfer, and the account
+	// is left as it was.
+	admin6H := env.register("cap-admin6")
+	env.verifyEmail(admin6H)
+	admin6 := env.login(admin6H)
+	org6 := "caporge" + env.sfx
+	env.createOrg(admin6, org6)
+	user6H := env.register("cap-user6")
+	env.joinOrg(admin6, org6, user6H)
+	env.doJSON(admin6, http.MethodPut, "/api/v1/orgs/"+org6+"/members/"+user6H, map[string]any{"role": "admin"}, nil, http.StatusOK)
+	user6 := env.login(user6H)
+	for _, ns := range []string{org6, user6H} {
+		env.doJSON(user6, http.MethodPost, "/api/v1/agents", map[string]any{
+			"namespace": ns, "name": "dup", "modes": []string{"autonomous"}, "visibility": "public",
+		}, nil, http.StatusCreated)
+	}
+	res = env.do(user6, http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+org6, nil)
+	if code, _, detail := problemOf(t, res); code != http.StatusConflict || !strings.Contains(detail, "same name") {
+		t.Fatalf("transfer of a name the organization has: %d %q, want 409 about the name", code, detail)
+	}
+	env.doJSON(user6, http.MethodGet, "/api/v1/user", nil, nil, http.StatusOK)
+
+	// Nothing moves into an organization in its hold.
+	admin4H := env.register("cap-admin4")
+	env.verifyEmail(admin4H)
+	admin4 := env.login(admin4H)
+	org4 := "caporgd" + env.sfx
+	env.createOrg(admin4, org4)
+	user4H := env.register("cap-user4")
+	env.joinOrg(admin4, org4, user4H)
+	env.doJSON(admin4, http.MethodPut, "/api/v1/orgs/"+org4+"/members/"+user4H, map[string]any{"role": "admin"}, nil, http.StatusOK)
+	env.doJSON(admin4, http.MethodPost, "/api/v1/orgs/"+org4+"/decommission", map[string]any{"confirm": org4}, nil, http.StatusOK)
+	res = env.do(env.login(user4H), http.MethodPost, "/api/v1/user/delete?publishedContent=transfer&transferOrg="+org4, nil)
+	if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "org-decommissioning" {
+		t.Fatalf("transfer into an organization in its hold: %d %s, want 409 org-decommissioning", code, slug)
 	}
 }

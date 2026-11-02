@@ -1554,7 +1554,7 @@ its digest, so a run record says which file a run obeyed.
 | `mcpServers.allowVulnerable` | let runs proceed when the registry's gate rates an advisory of a declared server version high or critical, or, from a registry that serves no rating, when the advisory's own severity is (default false: refused, exit 11) |
 | `exec.packages` | the exec catalog: command name → apk package (optionally `=version`) the exec image installs for a QuickAgent that declares that command; a declared command with no entry is refused at plan time (exit 11) |
 | `exec.apkMirror` | the Alpine mirror the exec image build installs from (default: the runner image's own repositories) — egress of the image build only, over ordinary docker networking; a run's network posture is unchanged |
-| `images.harnessImages.<adapter>` | the harness image of each adapter that runs in a container, `docker-agent` included: `{ ref: <name>@sha256:… }` for a published image, or, for an image your computer builds, the `ref` and the `artifact` hash it is built from ([model sign-ins](#model-sign-ins)); an adapter left out takes the CLI's default. `docker-agent` is a published image, so its entry carries no `artifact`. Older policy files name docker-agent's image as `images.harnessDockerAgent`, which is still read; naming it both ways with different images is refused |
+| `images.harnessImages.<adapter>` | the harness image of each adapter that runs in a container, `docker-agent` included: `{ ref: <name>@sha256:… }` for a published image, or, for an image your computer builds, the `ref` and the `artifact` hash it is built from ([model sign-ins](#model-sign-ins)); an adapter left out takes the CLI's default, which for `claude-image` and `codex-image` is the vendor's newest release when it passes its checks ([newest releases first](#newest-releases-first)). An entry of your own is never replaced by a newer release. `docker-agent` is a published image, so its entry carries no `artifact`. Older policy files name docker-agent's image as `images.harnessDockerAgent`, which is still read; naming it both ways with different images is refused |
 | `harness.<adapter>.signInTokenRoute` | `auth-command` (the default) or `restart`: how a ChatGPT plan's token reaches Codex ([below](#a-chatgpt-plan)) |
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
@@ -4200,7 +4200,10 @@ release binary after checking it against OpenAI's signature. The CLI pins the
 image by digest (`ghcr.io/blaktron/agentry-codex:0.166.0-2026.10.30.4@sha256:…`
 is its default for `images.harnessImages.codex-image`), and the CLI's CI
 verifies that digest against the signing workflow's identity on every pull
-request. An `images.harnessImages` entry of your own is yours to verify. `codex-image` may also run on an
+request. When OpenAI's newest release is newer than that one, setup builds
+it on your computer first ([newest releases first](#newest-releases-first)),
+and this image is the fallback. An `images.harnessImages` entry of your own
+is yours to verify. `codex-image` may also run on an
 OpenAI key, by choice. Your own installed Codex (`--adapter codex`) spends the
 plan too, reading the same token file with `cat` and mounting nothing; on
 Windows that adapter is refused, where the image is the
@@ -4277,6 +4280,35 @@ builds nothing. The native package is about 110 MB. The receipt's
 word: anyone with the docker daemon could tag another image that way. An
 image built under an older recipe of the Dockerfile is built again the next time
 it is needed. `--adapter claude` runs your installed Claude Code on the same kind.
+
+#### Newest releases first
+
+Setup (`agentry setup`, the Claude sign-in and Agentry Desktop's image
+preparation) asks the vendor for its newest Claude Code or Codex release, at
+most once a day. When that release is newer than the one this CLI pins and
+was tested on, setup builds it first:
+
+- **Claude Code**: the npm registry's `latest`. The wrapper's and the musl
+  native package's integrities must each carry the npm registry's signature
+  (`dist.signatures`) under the registry key the CLI carries. Each download
+  is then held to that integrity before docker is touched.
+- **Codex**: OpenAI's newest published release of `openai/codex`, built on
+  your computer. Before docker is touched, the CLI verifies the musl binary
+  against OpenAI's keyless Sigstore signature from `rust-release.yml` at the
+  release's tag and the commit that tag names, pushed by that tag. The image
+  has the same layout as `agentry-codex`.
+
+The build runs the binary once and requires the release's version. If any
+step fails (the vendor does not answer, a signature or an integrity does not
+match, the build or that check fails), setup says why and builds or pulls the
+tested release, as above. What it built is recorded in `harness-newest.json`
+beside the policy file. A run uses that image, and builds it again from the
+record if it is gone. The receipt's `harness.imagePin` note names the newest
+version and the tested one. The newest release has not been through the
+CLI's own conformance recordings; the adapter's flags, the gateway and the
+egress allowlist apply to it as to the tested one. To stay on the tested
+release, name it in `images.harnessImages.<adapter>`: a policy's own entry is
+never replaced.
 
 A Claude subscription run is Claude Code without `--bare` (bare mode reads no
 login), with `--setting-sources ""`, `ENABLE_CLAUDEAI_MCP_SERVERS=false`, the

@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/audit"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/testidp"
@@ -46,7 +47,7 @@ func newStaffFixture(t *testing.T) *staffFixture {
 func newStaffFixtureWith(t *testing.T, more func(cfg *config.Config, org string)) *staffFixture {
 	t.Helper()
 	tag := fmt.Sprintf("%06x", rand.Int63n(1<<24)) //nolint:gosec // test fixture names
-	f := &staffFixture{org: "staff" + tag, domain: "staff" + tag + ".test"}
+	f := &staffFixture{org: "staff" + tag, domain: "staffkit" + tag + ".test"}
 	f.env, f.idp = newOIDCTestEnv(t, func(cfg *config.Config) {
 		cfg.Auth.StaffOrg, cfg.Auth.StaffDomain = f.org, f.domain
 		if more != nil {
@@ -141,6 +142,31 @@ func wantProblem(t *testing.T, res *http.Response, status int, typ string) {
 	}
 }
 
+// staffSyncReasons lists, oldest first, the reasons the audit rows of an
+// account's staff changes give.
+func (f *staffFixture) staffSyncReasons(userID string) string {
+	f.env.t.Helper()
+	rows, err := f.env.st.Pool().Query(context.Background(),
+		`SELECT detail->>'reason' FROM audit_events WHERE action = 'user.staff_sync' AND target_id = $1::uuid
+		   AND detail->>'rule' = 'staff-org' ORDER BY occurred_at, id`, userID)
+	if err != nil {
+		f.env.t.Fatal(err)
+	}
+	defer rows.Close()
+	var reasons []string
+	for rows.Next() {
+		var r string
+		if err := rows.Scan(&r); err != nil {
+			f.env.t.Fatal(err)
+		}
+		reasons = append(reasons, r)
+	}
+	if err := rows.Err(); err != nil {
+		f.env.t.Fatal(err)
+	}
+	return strings.Join(reasons, ",")
+}
+
 // TestStaffIsMembershipOfTheStaffOrg: founding the staff organization,
 // joining it and leaving it grant and revoke staff in the same act, each
 // change audited with the rule.
@@ -161,6 +187,9 @@ func TestStaffIsMembershipOfTheStaffOrg(t *testing.T) {
 	if n := f.staffSyncs(alice, "true"); n != 1 {
 		t.Fatalf("the grant must be audited once with the rule, got %d", n)
 	}
+	if got := f.staffSyncReasons(f.env.userID(alice)); got != "membership" {
+		t.Fatalf("the grant's audit reasons = %q, want membership", got)
+	}
 
 	f.env.doJSON(f.founder, http.MethodDelete, "/api/v1/orgs/"+f.org+"/members/"+alice, nil, nil, http.StatusNoContent)
 	if f.staff(alice) {
@@ -168,6 +197,9 @@ func TestStaffIsMembershipOfTheStaffOrg(t *testing.T) {
 	}
 	if n := f.staffSyncs(alice, "false"); n != 1 {
 		t.Fatalf("the revocation must be audited once with the rule, got %d", n)
+	}
+	if got := f.staffSyncReasons(f.env.userID(alice)); got != "membership,membership" {
+		t.Fatalf("the audit reasons after the revocation = %q, want membership,membership", got)
 	}
 }
 
@@ -181,6 +213,9 @@ func TestStaffOrgAdmitsOnlyItsDomain(t *testing.T) {
 		"bob-" + f.env.sfx + "@ops." + f.domain,
 		"bob-" + f.env.sfx + "@" + f.domain + ".evil.test",
 		"bob-" + f.env.sfx + "@" + strings.Replace(f.domain, "s", "\u0455", 1), // Cyrillic dze
+		// Characters that fold to the domain's own letters under case folding.
+		"bob-" + f.env.sfx + "@" + strings.Replace(f.domain, "k", "\u212a", 1), // Kelvin sign
+		"bob-" + f.env.sfx + "@" + strings.Replace(f.domain, "i", "\u0130", 1), // dotted capital I
 	} {
 		wantProblem(t, f.invite(email), http.StatusConflict, "staff-org-domain")
 	}
@@ -195,6 +230,17 @@ func TestStaffOrgAdmitsOnlyItsDomain(t *testing.T) {
 		map[string]any{"role": "member"}), http.StatusConflict, "staff-org-domain")
 	if f.staff(carol) {
 		t.Fatal("a refused approval must leave the flag false")
+	}
+	// An address at the domain that nobody has verified is not at the domain
+	// either: seeded pending, the approval refuses it as well.
+	dora := f.env.registerEmailUnverified("dora", "dora-"+f.env.sfx+"@"+f.domain)
+	f.env.seedMembership(f.org, dora, "member", "pending")
+	doraRes := f.env.do(f.founder, http.MethodPost, "/api/v1/orgs/"+f.org+"/members/"+dora+"/approve", map[string]any{"role": "member"})
+	if code, slug, _ := problemOf(t, doraRes); code != http.StatusConflict || slug != "staff-org-domain" {
+		t.Fatalf("approving an unverified address at the domain: %d %s, want 409 staff-org-domain", code, slug)
+	}
+	if f.staff(dora) {
+		t.Fatal("a refused approval of an unverified address must leave the flag false")
 	}
 
 	// Another organization is untouched by the rule.
@@ -272,7 +318,9 @@ func TestStaffOrgProvisionsOnlyItsDomain(t *testing.T) {
 
 // TestStaffEndsWithErasure: an erased account is not staff.
 func TestStaffEndsWithErasure(t *testing.T) {
-	f := newStaffFixture(t)
+	// The hold is zero so the staff organization's own erasure, at the end,
+	// is due as soon as it begins.
+	f := newStaffFixtureWith(t, func(cfg *config.Config, _ string) { cfg.Orgs.DecommissionHold = 0 })
 	gina := f.person("gina")
 	f.join(gina, "gina-"+f.env.sfx+"@"+f.domain)
 	if !f.staff(gina) {
@@ -291,6 +339,30 @@ func TestStaffEndsWithErasure(t *testing.T) {
 	}
 	if n := f.env.countStaffSyncs(id, "false"); n != 1 {
 		t.Fatalf("the erasure's revocation must be audited once, got %d", n)
+	}
+	if got := f.staffSyncReasons(id); got != "membership,erasure" {
+		t.Fatalf("the audit reasons of the grant and the erasure = %q, want membership,erasure", got)
+	}
+
+	// Erasing the staff organization itself ends its members' staff with it.
+	ctx := context.Background()
+	if !f.staff(f.founded) {
+		t.Fatal("setup: the founder must be staff")
+	}
+	var orgID string
+	if err := f.env.st.Pool().QueryRow(ctx, `SELECT id::text FROM handles WHERE handle = $1`, f.org).Scan(&orgID); err != nil {
+		t.Fatal(err)
+	}
+	f.env.doJSON(f.founder, http.MethodPost, "/api/v1/orgs/"+f.org+"/decommission", map[string]any{"confirm": f.org}, nil, http.StatusOK)
+	if _, err := f.srv.RunOrgDecommissionSweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var orgState string
+	if err := f.env.st.Pool().QueryRow(ctx, `SELECT state FROM orgs WHERE id = $1::uuid`, orgID).Scan(&orgState); err != nil || orgState != "decommissioned" {
+		t.Fatalf("the staff organization after its sweep: %q %v, want decommissioned", orgState, err)
+	}
+	if f.staff(f.founded) {
+		t.Fatal("a member of the erased staff organization must not stay staff")
 	}
 }
 
@@ -317,6 +389,83 @@ func TestStaffFollowsSignInAndStartup(t *testing.T) {
 	if !f.staff(f.founded) {
 		t.Fatal("the start-up resync must keep a member of the staff organization staff")
 	}
+	if got := f.staffSyncReasons(f.env.userID(hank)); got != "sign-in" {
+		t.Fatalf("the sign-in's audit reasons = %q, want sign-in", got)
+	}
+	if got := f.staffSyncReasons(f.env.userID(ivy)); got != "startup" {
+		t.Fatalf("the resync's audit reasons = %q, want startup", got)
+	}
+
+	// A person waiting for approval is not a member yet: signing in grants
+	// nothing.
+	jess := f.person("jess")
+	f.env.seedMembership(f.org, jess, "member", "pending")
+	f.signIn(jess)
+	if f.staff(jess) {
+		t.Fatal("a pending member of the staff organization must not be staff")
+	}
+
+	// Founding an organization is a membership change too: a flag the rule
+	// does not grant does not survive it.
+	kim := f.person("kim")
+	f.env.makePlatformStaff(t, kim)
+	f.env.createOrg(f.env.login(kim), "kimorg"+f.env.sfx)
+	if f.staff(kim) {
+		t.Fatal("founding an organization must revoke a flag the rule does not grant")
+	}
+
+	// The resync also grants: an active member of the staff organization at
+	// its domain whose flag was never set becomes staff.
+	pia := f.person("pia")
+	f.env.seedMembership(f.org, pia, "member", "active")
+	if f.staff(pia) {
+		t.Fatal("setup: pia must not be staff before the resync")
+	}
+	if _, err := f.srv.Reg().ResyncStaff(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !f.staff(pia) {
+		t.Fatal("the start-up resync must grant a member of the staff organization at its domain")
+	}
+
+	// An address nobody has verified is not at the domain, so an active
+	// member of the staff organization holding one is not staff.
+	eve := f.env.registerEmailUnverified("eve", "eve-"+f.env.sfx+"@"+f.domain)
+	f.env.seedMembership(f.org, eve, "member", "active")
+	if _, err := f.srv.Reg().ResyncStaff(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if f.staff(eve) {
+		t.Fatal("a member of the staff organization with an unverified address must not be staff")
+	}
+
+	// Changing a member's role recomputes the flag as well: one the rule does
+	// not grant does not survive it.
+	kimOrg := f.env.login(kim)
+	omar := f.env.register("omar")
+	f.env.joinOrg(kimOrg, "kimorg"+f.env.sfx, omar)
+	f.env.makePlatformStaff(t, omar)
+	f.env.doJSON(kimOrg, http.MethodPut, "/api/v1/orgs/kimorg"+f.env.sfx+"/members/"+omar, map[string]any{"role": "admin"}, nil, http.StatusOK)
+	if f.staff(omar) {
+		t.Fatal("a role change must revoke a flag the rule does not grant")
+	}
+
+	// An account that is not active is not staff, whatever else is true of it.
+	lena := f.person("lena")
+	f.join(lena, "lena-"+f.env.sfx+"@"+f.domain)
+	if !f.staff(lena) {
+		t.Fatal("setup: lena must be staff")
+	}
+	if _, err := f.env.st.Pool().Exec(context.Background(),
+		`UPDATE users SET state = 'suspended' WHERE id = (SELECT id FROM handles WHERE handle = $1)`, lena); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.srv.Reg().SyncStaff(context.Background(), uuid.MustParse(f.env.userID(lena)), registry.StaffSyncState, audit.Event{}); err != nil {
+		t.Fatal(err)
+	}
+	if f.staff(lena) {
+		t.Fatal("a suspended account must not be staff")
+	}
 }
 
 // TestStaffUnconfiguredLeavesTheFlag: with no staff organization named,
@@ -334,6 +483,34 @@ func TestStaffUnconfiguredLeavesTheFlag(t *testing.T) {
 	}
 	if !staff {
 		t.Fatal("with no staff organization configured the flag must be left alone")
+	}
+
+	// Nothing the rule runs at touches it either: a sign-in's recomputation,
+	// the start-up resync, and a membership change (founding an organization).
+	// A staff organization named without its domain is no configuration
+	// either: the rule needs both.
+	half := newTestEnvCfg(t, func(cfg *config.Config) { cfg.Auth.StaffOrg = "half" + fmt.Sprintf("%06x", rand.Int63n(1<<24)) }) //nolint:gosec // test fixture names
+	hh := half.register("half-configured")
+	for _, e := range []struct {
+		env    *testEnv
+		handle string
+	}{{env, h}, {half, hh}} {
+		e.env.makePlatformStaff(t, e.handle)
+		e.env.verifyEmail(e.handle)
+		if err := e.env.srvObj.Reg().SyncStaff(context.Background(), uuid.MustParse(e.env.userID(e.handle)), registry.StaffSyncSignIn, audit.Event{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.env.srvObj.Reg().ResyncStaff(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		e.env.createOrg(e.env.login(e.handle), "unconfigured"+e.handle)
+		if err := e.env.st.Pool().QueryRow(context.Background(),
+			`SELECT platform_staff FROM users WHERE id = (SELECT id FROM handles WHERE handle = $1)`, e.handle).Scan(&staff); err != nil {
+			t.Fatal(err)
+		}
+		if !staff {
+			t.Fatalf("%s: a sync with no complete staff configuration must leave the flag alone", e.handle)
+		}
 	}
 }
 
@@ -356,7 +533,7 @@ func (env *testEnv) countStaffSyncs(userID, want string) int {
 func TestStaffOrgInvitationAtItsVerifiedDomainVerifiesInTheSameAct(t *testing.T) {
 	f := newStaffFixture(t)
 	f.env.verifyOrgDomain(f.org, f.domain)
-	jo := f.env.registerEmail("jo", "jo-"+f.env.sfx+"@"+f.domain) // not verified
+	jo := f.env.registerEmailUnverified("jo", "jo-"+f.env.sfx+"@"+f.domain)
 	var inv struct {
 		Token string `json:"token"`
 	}
