@@ -33,6 +33,9 @@ var desktopScopes = auth.SignInGrantScopes()
 
 var desktopStateRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 
+// runhostNameRE is a remote runhost's name as the clients spell it.
+var runhostNameRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
+
 // CreateDesktopGrant implements POST /user/tokens/desktop-grant (session-only).
 func (s *Server) CreateDesktopGrant(w http.ResponseWriter, r *http.Request) {
 	if !s.authorize(w, r, auth.ActUserTokensManage, uuid.Nil) {
@@ -49,6 +52,19 @@ func (s *Server) CreateDesktopGrant(w http.ResponseWriter, r *http.Request) {
 		problemValidation(w, r, "The registry rejected the desktop grant. Each field error says what to fix.", FieldError{Field: "state", Message: "Must match [A-Za-z0-9_-]{8,128} (letters, digits, hyphen and underscore)."})
 		return
 	}
+	// A runhost's grant mints a token that can only open a credits
+	// session, named for the runhost, so the server it is kept on can pay
+	// for its runs' models and do nothing else with the account.
+	scopes := desktopScopes
+	name := "Agentry Desktop (" + time.Now().UTC().Format("2006-01-02") + ")"
+	if req.Runhost != nil {
+		if !runhostNameRE.MatchString(*req.Runhost) {
+			problemValidation(w, r, "The registry rejected the desktop grant. Each field error says what to fix.", FieldError{Field: "runhost", Message: "Must be a runhost's name: 1-32 lowercase letters, digits and hyphens, starting and ending with a letter or digit."})
+			return
+		}
+		scopes = []string{string(auth.ScopeCreditsSession)}
+		name = "Runhost " + *req.Runhost + " (credits only)"
+	}
 	p := principalFrom(r.Context())
 	code, err := auth.NewToken("agd_")
 	if err != nil {
@@ -56,11 +72,10 @@ func (s *Server) CreateDesktopGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expires := time.Now().Add(desktopGrantTTL)
-	name := "Agentry Desktop (" + time.Now().UTC().Format("2006-01-02") + ")"
 	_, err = s.q().CreateDesktopGrant(r.Context(), storegen.CreateDesktopGrantParams{
 		ID: newUUID(), UserID: p.UserID,
 		CodeSha256: auth.HashToken(code), StateSha256: auth.HashToken(req.State),
-		Scopes: desktopScopes, Name: name, ExpiresAt: expires,
+		Scopes: scopes, Name: name, ExpiresAt: expires,
 	})
 	if err != nil {
 		s.log.ErrorContext(r.Context(), "create desktop grant", "err", err)

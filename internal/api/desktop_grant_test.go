@@ -292,3 +292,86 @@ func TestErasureConsumesDesktopGrants(t *testing.T) {
 		t.Errorf("user.delete audit detail = %s, want desktopCodes 1", detail)
 	}
 }
+
+// A runhost's grant mints a token with credits:session alone, named for the
+// runhost; a token may revoke itself, and only itself.
+func TestARunhostGrantMintsACreditsOnlyTokenThatRevokesItself(t *testing.T) {
+	env := newTestEnv(t)
+	h := env.register("rh-user")
+	env.verifyEmail(h)
+	sess := env.login(h)
+	const state = "runhost-nonce-0123456789"
+	exchange := func(code string) map[string]any {
+		t.Helper()
+		var pat map[string]any
+		env.doJSON(anonymous, http.MethodPost, "/api/v1/auth/desktop/exchange",
+			map[string]any{"code": code, "state": state}, &pat, http.StatusCreated)
+		return pat
+	}
+	grant := func(body map[string]any) string {
+		t.Helper()
+		var g struct {
+			Code string `json:"code"`
+		}
+		env.doJSON(sess, http.MethodPost, "/api/v1/user/tokens/desktop-grant", body, &g, http.StatusCreated)
+		return g.Code
+	}
+
+	for _, bad := range []string{"", "Lab", "-lab", "lab-", "a_b", "a/b", strings.Repeat("a", 33)} {
+		res := env.do(sess, http.MethodPost, "/api/v1/user/tokens/desktop-grant", map[string]any{"state": state, "runhost": bad})
+		b, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(b), `"runhost"`) {
+			t.Errorf("runhost %q: %d %s, want 422 naming the field", bad, res.StatusCode, b)
+		}
+	}
+
+	pat := exchange(grant(map[string]any{"state": state, "runhost": "lab-1"}))
+	if name, _ := pat["name"].(string); name != "Runhost lab-1 (credits only)" {
+		t.Fatalf("the runhost's token is named %q", name)
+	}
+	scopes, _ := pat["scopes"].([]any)
+	if len(scopes) != 1 || scopes[0] != string(auth.ScopeCreditsSession) {
+		t.Fatalf("the runhost's token carries %v, want credits:session alone", scopes)
+	}
+	credits := caller{name: "credits", pat: pat["token"].(string)}
+	creditsID := pat["id"].(string)
+
+	// A sign-in token, from a grant without runhost, is unchanged.
+	signIn := exchange(grant(map[string]any{"state": state}))
+	if scopes, _ := signIn["scopes"].([]any); len(scopes) < 2 || slices.Contains(scopes, any(string(auth.ScopeCreditsSession))) {
+		t.Fatalf("a sign-in grant's token carries %v", scopes)
+	}
+	signInTok := caller{name: "signin", pat: signIn["token"].(string)}
+	signInID := signIn["id"].(string)
+
+	status := func(c caller, method, path string) int {
+		t.Helper()
+		res := env.do(c, method, path, nil)
+		_ = res.Body.Close()
+		return res.StatusCode
+	}
+	// Neither token revokes another, and the credits-only token is still
+	// refused elsewhere.
+	if got := status(credits, http.MethodDelete, "/api/v1/user/tokens/"+signInID); got != http.StatusForbidden {
+		t.Fatalf("the credits token revoking the sign-in token: %d, want 403", got)
+	}
+	if got := status(signInTok, http.MethodDelete, "/api/v1/user/tokens/"+creditsID); got != http.StatusForbidden {
+		t.Fatalf("the sign-in token revoking the credits token: %d, want 403", got)
+	}
+	if got := status(credits, http.MethodGet, "/api/v1/user"); got != http.StatusForbidden {
+		t.Fatalf("the credits token reading the account: %d, want 403", got)
+	}
+	// Each revokes itself, and is gone afterwards.
+	for _, tc := range []struct {
+		c  caller
+		id string
+	}{{credits, creditsID}, {signInTok, signInID}} {
+		if got := status(tc.c, http.MethodDelete, "/api/v1/user/tokens/"+tc.id); got != http.StatusNoContent {
+			t.Fatalf("%s revoking itself: %d, want 204", tc.c.name, got)
+		}
+		if got := status(tc.c, http.MethodDelete, "/api/v1/user/tokens/"+tc.id); got != http.StatusUnauthorized {
+			t.Fatalf("%s after revoking itself: %d, want 401", tc.c.name, got)
+		}
+	}
+}

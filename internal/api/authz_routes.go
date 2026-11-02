@@ -273,9 +273,9 @@ var routeAuthz = map[string]RouteDecl{
 	"logout":                      {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	"removeOrgMember":             {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for admin targets
 	"removeTeamMember":            {Action: auth.ActOrgTeamsManage, OrgScoped: true},
-	"revokeToken":                 {Action: auth.ActUserTokensManage, SessionOnly: true},
-	"setOrgMember":                {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates to ActOrgMembersElevate for the admin role
-	"approveOrgMember":            {Action: auth.ActOrgMembersManage, OrgScoped: true}, // elevates when the approval grants admin
+	"revokeToken":                 {Action: auth.ActUserTokensManage, SessionOnly: true}, // but a PAT may revoke itself
+	"setOrgMember":                {Action: auth.ActOrgMembersManage, OrgScoped: true},   // elevates to ActOrgMembersElevate for the admin role
+	"approveOrgMember":            {Action: auth.ActOrgMembersManage, OrgScoped: true},   // elevates when the approval grants admin
 	"declineOrgMember":            {Action: auth.ActOrgMembersManage, OrgScoped: true},
 	"listInvitations":             {Action: auth.ActOrgInvitationsManage, OrgScoped: true},
 	"createInvitation":            {Action: auth.ActOrgInvitationsManage, OrgScoped: true},

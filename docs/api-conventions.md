@@ -442,7 +442,8 @@ signed-in session. `credits:session` is consumed only by a registry that
 mounts the credits extension, which admits it for opening, renewing and
 ending a credits session (`/api/v1/x/inference/sessions`); every other
 route, the core's and every extension's, refuses a token carrying only it,
-and the sign-in grant does not ask for it. The desktop app's sign-in grant
+but for revoking itself, and the sign-in grant does not ask for it. A
+remote runhost's grant asks for it alone (below). The desktop app's sign-in grant
 asks for a fixed set (`agent:read`, `agent:publish`, `agent:manage`,
 `repo:read`, `repo:write`, `user:profile`, `run:read`, `run:write`,
 `knowledge:read`, `knowledge:write`, `secret:write`, `voice:read`,
@@ -470,6 +471,16 @@ API).
 exchanges the resulting one-time code for its PAT at `POST
 /auth/desktop/exchange` from its own process — the code is single-use and
 valid for 60 seconds, and the token never rides a URL.
+
+**A remote runhost's credits token**: the CLI and the desktop app mint the
+token a remote runhost pays for its runs' models with through the same
+grant, with `runhost` set to the runhost's name. They open
+`/ui/authorize?port=…&state=…&runhost=<name>`, which tells the person what
+the token can do and where it is kept, and the grant mints `credits:session`
+alone, named `Runhost <name> (credits only)`. A personal access token may
+revoke itself with `DELETE /user/tokens/{tokenId}`, whatever its scopes, so
+a runhost ends its own token when it is removed; revoking any other token
+takes a signed-in session.
 
 ## Dependency alerts and scanned MCP servers
 

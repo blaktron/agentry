@@ -260,7 +260,9 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 
 // RevokeToken implements DELETE /user/tokens/{tokenId} (session-only).
 func (s *Server) RevokeToken(w http.ResponseWriter, r *http.Request, tokenID openapi_types.UUID) {
-	if !s.authorize(w, r, auth.ActUserTokensManage, uuid.Nil) {
+	// A token may always end itself: it gives up only its own access.
+	// Revoking any other token stays session-only.
+	if !revokesItself(principalFrom(r.Context()), tokenID) && !s.authorize(w, r, auth.ActUserTokensManage, uuid.Nil) {
 		return
 	}
 	if !s.requireDB(w, r) {
@@ -291,4 +293,10 @@ func (s *Server) RevokeToken(w http.ResponseWriter, r *http.Request, tokenID ope
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// revokesItself reports whether p is a personal access token revoking
+// itself.
+func revokesItself(p *auth.Principal, tokenID uuid.UUID) bool {
+	return p != nil && p.Via == "pat" && p.PATID != uuid.Nil && p.PATID == tokenID
 }
