@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -24,11 +25,13 @@ import (
 )
 
 // seatedResolver is the core resolver with a seat cap, as a tier's
-// resolver would answer. broken fails instead, for the fail-closed case.
+// resolver would answer. broken fails instead, for the fail-closed case;
+// none answers for a subscription that includes no seats at all.
 type seatedResolver struct {
 	entitlements.Resolver
 	max    int64
 	broken bool
+	none   bool
 }
 
 func (c seatedResolver) Features(ctx context.Context, s entitlements.Subject) (entitlements.Features, error) {
@@ -40,7 +43,7 @@ func (c seatedResolver) Features(ctx context.Context, s entitlements.Subject) (e
 		return f, err
 	}
 	if s.Kind == entitlements.NamespaceOrg {
-		f.Seats = entitlements.Cap{Enabled: true, Max: c.max}
+		f.Seats = entitlements.Cap{Enabled: !c.none, Max: c.max}
 	}
 	return f, nil
 }
@@ -83,10 +86,39 @@ func TestEveryMembershipDoorCountsSeats(t *testing.T) {
 	env.createOrg(admin, orgH)
 	// The creator holds the first of two seats.
 
+	// A person waiting for approval holds none, so the invitations below are
+	// not turned away on their account.
+	pendingH := env.register("st-pending")
+	env.verifyEmail(pendingH)
+	env.seedMembership(orgH, pendingH, "member", "pending")
+
+	// An invitation that has expired reserves nothing: it is an offer nobody
+	// can take any more, so it does not stand in the way of the next one.
+	lapsedH := env.register("st-lapsed")
+	env.verifyEmail(lapsedH)
+	inviteTo(t, env, admin, orgH, lapsedH+"@example.test")
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE org_invitations SET expires_at = now() - interval '1 hour' WHERE email = $1`, lapsedH+"@example.test"); err != nil {
+		t.Fatal(err)
+	}
+
 	// The second seat goes to an invitation, which reserves it when sent.
 	oneH := env.register("st-one")
 	env.verifyEmail(oneH)
 	token := inviteTo(t, env, admin, orgH, oneH+"@example.test")
+
+	// Sending the same address another invitation replaces the first: the old
+	// token stops working and its seat is given back, so the new one is not
+	// refused for the seat that the first one held.
+	superseded := token
+	token = inviteTo(t, env, admin, orgH, oneH+"@example.test")
+	if token == superseded {
+		t.Fatal("a second invitation to the same address reused the first token")
+	}
+	stale := env.do(env.login(oneH), http.MethodPost, "/api/v1/invitations/"+superseded, nil)
+	if code, _, _ := problemOf(t, stale); code != http.StatusNotFound {
+		t.Fatalf("accept with a superseded token: %d, want 404", code)
+	}
 
 	// The third is refused at the invitation, before anybody is told:
 	// used 1, invited 1, max 2.
@@ -103,9 +135,6 @@ func TestEveryMembershipDoorCountsSeats(t *testing.T) {
 
 	// An approval past the cap is refused too: a provisioned person is
 	// pending, which costs nothing, and the wall is at the approval.
-	pendingH := env.register("st-pending")
-	env.verifyEmail(pendingH)
-	env.seedMembership(orgH, pendingH, "member", "pending")
 	res = env.do(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+pendingH+"/approve", nil)
 	code, slug, detail := problemOf(t, res)
 	if code != http.StatusForbidden || slug != "seat-allowance" || !strings.Contains(detail, orgH) {
@@ -205,6 +234,20 @@ func TestSeatDoorsFailClosed(t *testing.T) {
 	if res.StatusCode < 500 {
 		t.Fatalf("approval with an unresolvable entitlement: %d, want a refusal", res.StatusCode)
 	}
+	// A subscription that includes no seats is no permission either, and the
+	// refusal says so instead of quoting an allowance.
+	env.srvObj.SetEntitlements(seatedResolver{
+		Resolver: entitlements.NewConfigResolver(config.Default().Limits), none: true,
+	})
+	res = env.do(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/invitations",
+		map[string]any{"email": "fc-nobody-" + env.sfx + "@example.test"})
+	if code, slug, detail := problemOf(t, res); code != http.StatusForbidden || slug != "feature-not-included" || !strings.Contains(detail, orgH) {
+		t.Fatalf("invitation with no seats in the subscription: %d %s %q, want 403 feature-not-included naming the org", code, slug, detail)
+	}
+	res = env.do(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+pendingH+"/approve", nil)
+	if code, slug, detail := problemOf(t, res); code != http.StatusForbidden || slug != "feature-not-included" || !strings.Contains(detail, orgH) {
+		t.Fatalf("approval with no seats in the subscription: %d %s %q, want 403 feature-not-included naming the org", code, slug, detail)
+	}
 	// Nothing was written: the pending member is still pending, and no
 	// invitation exists.
 	var state string
@@ -249,6 +292,18 @@ func TestSeatCapIsAbsentWithoutAnExtension(t *testing.T) {
 	if org.Seats.Used != 5 || org.Seats.Max != 0 {
 		t.Fatalf("seats with no extension = %+v, want 5 used and an unbounded max", org.Seats)
 	}
+	// How many people an organization licenses is its own business: neither
+	// the public profile nor a signed-in stranger's read carries the seats.
+	outsiderH := env.register("nc-outsider")
+	env.verifyEmail(outsiderH)
+	for _, c := range []caller{anonymous, env.login(outsiderH)} {
+		res := env.do(c, http.MethodGet, "/api/v1/orgs/"+orgH, nil)
+		body, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusOK || strings.Contains(string(body), `"seats"`) {
+			t.Fatalf("%s reading the organization: %d %s, want 200 without its seats", c.name, res.StatusCode, body)
+		}
+	}
 }
 
 // TestInvitationIsACredential: the token round trip. Hashed at rest, single
@@ -279,6 +334,57 @@ func TestInvitationIsACredential(t *testing.T) {
 	if stored != 0 {
 		t.Fatalf("the token itself is in the table (%d rows)", stored)
 	}
+	// What is stored is the SHA-256 of the token and nothing else about it:
+	// not the token's bytes, and not the audit row of the act that made it.
+	var hashed, inClear, audited int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT
+		   (SELECT count(*) FROM org_invitations WHERE token_sha256 = sha256(convert_to($1, 'UTF8'))),
+		   (SELECT count(*) FROM org_invitations WHERE token_sha256 = convert_to($1, 'UTF8')),
+		   (SELECT count(*) FROM audit_events WHERE target_kind = 'invitation' AND detail::text LIKE '%' || $1 || '%')`,
+		token).Scan(&hashed, &inClear, &audited); err != nil {
+		t.Fatal(err)
+	}
+	if hashed != 1 || inClear != 0 || audited != 0 {
+		t.Fatalf("token at rest: %d rows hold its SHA-256, %d hold its bytes, %d audit rows carry it; want 1, 0, 0", hashed, inClear, audited)
+	}
+	// It stands for seven days.
+	var expires time.Time
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT expires_at FROM org_invitations WHERE email = $1`, inviteeH+"@example.test").Scan(&expires); err != nil {
+		t.Fatal(err)
+	}
+	if left := time.Until(expires); left > 7*24*time.Hour || left < 7*24*time.Hour-time.Minute {
+		t.Fatalf("invitation expires in %s, want seven days", left)
+	}
+
+	// Only an address is invited, and the address is taken as typed minus the
+	// space around it.
+	for _, bad := range []string{"", "nobody", "nobody@", "@example.test", "no body@example.test", "a@@example.test", "a@example"} {
+		res := env.do(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/invitations", map[string]any{"email": bad})
+		if code, slug, _ := problemOf(t, res); code != http.StatusUnprocessableEntity || slug != "validation" {
+			t.Fatalf("invitation to %q: %d %s, want 422 validation", bad, code, slug)
+		}
+	}
+	paddedH := env.register("iv-padded")
+	var padded struct {
+		Email string `json:"email"`
+		Role  string `json:"role"`
+	}
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/invitations",
+		map[string]any{"email": "  " + paddedH + "@example.test  "}, &padded, http.StatusCreated)
+	if padded.Email != paddedH+"@example.test" || padded.Role != "member" {
+		t.Fatalf("invitation to a padded address with no role: %+v, want the trimmed address as a member", padded)
+	}
+
+	// The offer is answered from a session only: an anonymous caller is not
+	// signed in, whatever token they hold.
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		res := env.do(anonymous, method, "/api/v1/invitations/"+token, nil)
+		if code, _, _ := problemOf(t, res); code != http.StatusUnauthorized {
+			t.Fatalf("%s the invitation anonymously: %d, want 401", method, code)
+		}
+	}
 
 	// A PAT cannot answer it, however scoped: this is a person's act.
 	_, pat := env.mintPAT(admin, "iv-pat", "org:admin", "user:profile")
@@ -286,6 +392,13 @@ func TestInvitationIsACredential(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("accept with a PAT: %d, want 403", res.StatusCode)
+	}
+	// The invitee's own token is no better: the answer is a person's, and the
+	// offer stays open.
+	_, inviteePAT := env.mintPAT(env.login(inviteeH), "iv-invitee-pat", "user:profile", "org:admin")
+	res = env.do(caller{name: "pat", pat: inviteePAT}, http.MethodPost, "/api/v1/invitations/"+token, nil)
+	if code, _, detail := problemOf(t, res); code != http.StatusForbidden || !strings.Contains(detail, "session") {
+		t.Fatalf("accept with the invitee's own PAT: %d %q, want 403 asking for a session", code, detail)
 	}
 
 	// The wrong account may read the offer and may not take it.
@@ -323,6 +436,39 @@ func TestInvitationIsACredential(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("second accept with the same token: %d, want 404", res.StatusCode)
+	}
+
+	// An accepted invitation is a record, not an open offer: it cannot be
+	// revoked away.
+	var spentID string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT id::text FROM org_invitations WHERE email = $1 AND accepted_at IS NOT NULL`, inviteeH+"@example.test").Scan(&spentID); err != nil {
+		t.Fatal(err)
+	}
+	res = env.do(admin, http.MethodDelete, "/api/v1/orgs/"+orgH+"/invitations/"+spentID, nil)
+	if code, _, _ := problemOf(t, res); code != http.StatusNotFound {
+		t.Fatalf("revoking an accepted invitation: %d, want 404", code)
+	}
+
+	// An invitation sent to someone who then became a member by another door
+	// is not a second way in: accepting it says they are here already, and the
+	// offer stays open.
+	staleH := env.register("iv-stale")
+	env.verifyEmail(staleH)
+	env.seedMembership(orgH, staleH, "member", "pending")
+	staleToken := inviteTo(t, env, admin, orgH, staleH+"@example.test")
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+staleH+"/approve", nil, nil, http.StatusOK)
+	res = env.do(env.login(staleH), http.MethodPost, "/api/v1/invitations/"+staleToken, nil)
+	if code, _, detail := problemOf(t, res); code != http.StatusConflict || !strings.Contains(detail, orgH) {
+		t.Fatalf("accepting an invitation as a current member: %d %q, want 409 naming the org", code, detail)
+	}
+	var stillOpen int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM org_invitations WHERE email = $1 AND accepted_at IS NULL`, staleH+"@example.test").Scan(&stillOpen); err != nil {
+		t.Fatal(err)
+	}
+	if stillOpen != 1 {
+		t.Fatalf("open invitations for the current member after the refusal: %d, want 1", stillOpen)
 	}
 
 	// An expired invitation is not acceptable either.
@@ -363,6 +509,25 @@ func TestInvitationIsACredential(t *testing.T) {
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("accept of a revoked invitation: %d, want 404", res.StatusCode)
 	}
+	// Revoking what is not there is a 404 as well.
+	res = env.do(admin, http.MethodDelete, "/api/v1/orgs/"+orgH+"/invitations/"+id, nil)
+	if code, _, _ := problemOf(t, res); code != http.StatusNotFound {
+		t.Fatalf("revoking an invitation twice: %d, want 404", code)
+	}
+
+	// A person who accepted and later left can be invited again, and the
+	// earlier acceptance stays on record beside the new offer.
+	env.doJSON(invitee, http.MethodDelete, "/api/v1/orgs/"+orgH+"/members/"+inviteeH, nil, nil, http.StatusNoContent)
+	inviteTo(t, env, admin, orgH, inviteeH+"@example.test")
+	var acceptedRows, openRows int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FILTER (WHERE accepted_at IS NOT NULL), count(*) FILTER (WHERE accepted_at IS NULL)
+		   FROM org_invitations WHERE email = $1`, inviteeH+"@example.test").Scan(&acceptedRows, &openRows); err != nil {
+		t.Fatal(err)
+	}
+	if acceptedRows != 1 || openRows != 1 {
+		t.Fatalf("invitations to the returning person: %d accepted, %d open; want 1 and 1", acceptedRows, openRows)
+	}
 }
 
 // TestOneOrgPerPerson: an active member of one organization cannot be
@@ -388,6 +553,41 @@ func TestOneOrgPerPerson(t *testing.T) {
 		map[string]any{"email": personH + "@example.test"})
 	if code, slug, _ := problemOf(t, res); code != http.StatusConflict || slug != "already-a-member" {
 		t.Fatalf("inviting someone else's member: %d %s, want 409 already-a-member", code, slug)
+	}
+	// Someone already in the organization is not invited into it again, and
+	// the refusal is not the other-organization one.
+	res = env.do(firstAdmin, http.MethodPost, "/api/v1/orgs/"+firstOrg+"/invitations",
+		map[string]any{"email": personH + "@example.test"})
+	if code, slug, detail := problemOf(t, res); code != http.StatusConflict || slug != "conflict" || !strings.Contains(detail, firstOrg) {
+		t.Fatalf("inviting a current member: %d %s %q, want 409 conflict naming the org", code, slug, detail)
+	}
+	// Waiting in another organization is not belonging to it: a person who is
+	// only pending elsewhere can be invited.
+	waitingH := env.register("op-waiting")
+	env.verifyEmail(waitingH)
+	env.seedMembership(firstOrg, waitingH, "member", "pending")
+	env.doJSON(secondAdmin, http.MethodPost, "/api/v1/orgs/"+secondOrg+"/invitations",
+		map[string]any{"email": waitingH + "@example.test"}, nil, http.StatusCreated)
+	// An organization's invitations are its own: another organization's admin
+	// cannot revoke them by id.
+	var open []struct {
+		Id string `json:"id"`
+	}
+	env.doJSON(secondAdmin, http.MethodGet, "/api/v1/orgs/"+secondOrg+"/invitations", nil, &open, http.StatusOK)
+	if len(open) != 1 {
+		t.Fatalf("open invitations of the second organization: %+v, want the one just sent", open)
+	}
+	res = env.do(firstAdmin, http.MethodDelete, "/api/v1/orgs/"+firstOrg+"/invitations/"+open[0].Id, nil)
+	if code, _, _ := problemOf(t, res); code != http.StatusNotFound {
+		t.Fatalf("revoking another organization's invitation: %d, want 404", code)
+	}
+	var kept int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM org_invitations WHERE id = $1::uuid`, open[0].Id).Scan(&kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept != 1 {
+		t.Fatalf("the other organization's invitation after a foreign revoke: %d rows, want 1", kept)
 	}
 
 	// The approval door refuses the same person, so a pending row that
@@ -564,6 +764,27 @@ func TestProvisioningMakesPendingMembers(t *testing.T) {
 	if org.Seats.Used != 2 || org.Seats.Pending != 0 {
 		t.Fatalf("seats after the approval = %+v, want 2 used and none pending", org.Seats)
 	}
+	// Approving twice is a conflict, not a second admission; and declining
+	// belongs to the waiting only: an active member leaves by removal, which
+	// the last-admin guard covers.
+	res := env.do(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+provisioned+"/approve", nil)
+	if code, _, detail := problemOf(t, res); code != http.StatusConflict || !strings.Contains(detail, provisioned) {
+		t.Fatalf("approving an active member: %d %q, want 409 naming them", code, detail)
+	}
+	res = env.do(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+provisioned+"/decline", nil)
+	if code, _, detail := problemOf(t, res); code != http.StatusConflict || !strings.Contains(detail, provisioned) {
+		t.Fatalf("declining an active member: %d %q, want 409 naming them", code, detail)
+	}
+	env.doJSON(admin, http.MethodGet, "/api/v1/orgs/"+orgH+"/members", nil, &members, http.StatusOK)
+	stillActive := false
+	for _, m := range members {
+		if m.User.Handle == provisioned && m.State == "active" {
+			stillActive = true
+		}
+	}
+	if !stillActive {
+		t.Fatalf("the declined active member is gone or changed: %+v", members)
+	}
 
 	// Declining removes a pending person and takes no seat.
 	email2 := "eli-" + env.sfx + "@acme.example"
@@ -579,6 +800,53 @@ func TestProvisioningMakesPendingMembers(t *testing.T) {
 	env.doJSON(admin, http.MethodGet, "/api/v1/orgs/"+orgH, nil, &org, http.StatusOK)
 	if org.Seats.Used != 2 || org.Seats.Pending != 0 {
 		t.Fatalf("seats after the decline = %+v, want 2 used and none pending", org.Seats)
+	}
+	// The decline is remembered, so the domain does not fold the person in
+	// again; an admin's invitation supersedes it.
+	declines := func() int {
+		t.Helper()
+		var n int
+		if err := env.st.Pool().QueryRow(ctx,
+			`SELECT count(*) FROM fold_in_declines WHERE org_id = $1 AND user_id = (SELECT id FROM handles WHERE handle = $2)`,
+			orgID, handle2).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if n := declines(); n != 1 {
+		t.Fatalf("remembered declines after declining: %d, want 1", n)
+	}
+	token := inviteTo(t, env, admin, orgH, email2)
+	env.doJSON(env.login(handle2), http.MethodPost, "/api/v1/invitations/"+token, nil, nil, http.StatusOK)
+	if n := declines(); n != 0 {
+		t.Fatalf("remembered declines after the invitation was accepted: %d, want 0", n)
+	}
+
+	// An approval can set the role the person arrives with.
+	email3 := "fay-" + env.sfx + "@acme.example"
+	if _, err := env.srvObj.ProvisionMember(ctx, "probe", orgID, api.ProvisionedMember{Email: email3, UserName: email3}); err != nil {
+		t.Fatalf("provision: %v", err)
+	}
+	var handle3 string
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT h.handle FROM users u JOIN handles h ON h.id = u.id WHERE u.email = $1`, email3).Scan(&handle3); err != nil {
+		t.Fatal(err)
+	}
+	var approved struct {
+		Role  string `json:"role"`
+		State string `json:"state"`
+	}
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+handle3+"/approve", map[string]any{"role": "admin"}, &approved, http.StatusOK)
+	if approved.Role != "admin" || approved.State != "active" {
+		t.Fatalf("approval as admin answered %+v, want an active admin", approved)
+	}
+	var roleNow string
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT m.role FROM memberships m JOIN handles h ON h.id = m.user_id WHERE h.handle = $1`, handle3).Scan(&roleNow); err != nil {
+		t.Fatal(err)
+	}
+	if roleNow != "admin" {
+		t.Fatalf("role stored after an approval as admin: %q, want admin", roleNow)
 	}
 }
 
@@ -647,13 +915,14 @@ func (n *invitationNotifier) sentTo(email string) *notify.InviteOffer {
 // Every other address keeps the verified-address rule.
 func TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress(t *testing.T) {
 	mails := &invitationNotifier{Notifier: notify.LogNotifier{}}
+	events := &recordedEvents{}
 	env := newTestEnvCfg(t, func(c *config.Config) {
 		// A site in front, so the offer carries a link a person can open
 		// (webPaths.invitationURL answers "" without one: the server has no
 		// invitation page of its own).
 		c.BaseURL = "https://registry.example"
 		c.Web.URL = "https://site.example"
-	}, func(s *api.Server) { s.SetNotifier(mails) })
+	}, func(s *api.Server) { s.SetNotifier(mails) }, events.hook())
 	adminH := env.register("od-admin")
 	env.verifyEmail(adminH)
 	admin := env.login(adminH)
@@ -697,12 +966,16 @@ func TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress(t *testing.T)
 	// Accepting an invitation at the organization's domain confirms the
 	// accepting account's address: the organization holds the mail domain,
 	// so it holds the mailbox.
-	joinerH := env.registerEmail("od-joiner", "joiner@"+domain)
+	joinerH := env.registerEmailUnverified("od-joiner", "joiner@"+domain)
 	joinerToken := inviteTo(t, env, admin, orgH, "joiner@"+domain)
 	joiner := env.login(joinerH)
 	// Unverified, and accepted anyway.
-	env.doJSON(joiner, http.MethodPost, "/api/v1/invitations/"+joinerToken, nil, nil, http.StatusOK)
 	var verified bool
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT email_verified_at IS NOT NULL FROM users u JOIN handles h ON h.id = u.id WHERE h.handle = $1`, joinerH).Scan(&verified); err != nil || verified {
+		t.Fatalf("setup: the joining account's address is verified before it accepts: %v %v", verified, err)
+	}
+	env.doJSON(joiner, http.MethodPost, "/api/v1/invitations/"+joinerToken, nil, nil, http.StatusOK)
 	if err := env.st.Pool().QueryRow(context.Background(),
 		`SELECT email_verified_at IS NOT NULL FROM users u JOIN handles h ON h.id = u.id WHERE h.handle = $1`, joinerH).Scan(&verified); err != nil {
 		t.Fatal(err)
@@ -710,12 +983,30 @@ func TestInvitationToTheOrgsOwnDomainIsMailedAndConfirmsTheAddress(t *testing.T)
 	if !verified {
 		t.Fatal("accepting an invitation at the organization's own domain did not confirm the address")
 	}
+	// The directory reads that confirmation, so it is announced, once.
+	if got := events.count("user.email_verified"); got != 1 {
+		t.Fatalf("user.email_verified fired %d times, want 1", got)
+	}
+
+	// A domain the organization has only claimed, not proved, vouches for
+	// nothing: such an address is not mailed and does not accept unverified.
+	env.doJSON(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/domain-claims", map[string]any{"domain": "claimed-" + orgH + ".example"}, nil, http.StatusCreated)
+	claimedAddr := "claimed@claimed-" + orgH + ".example"
+	claimedH := env.registerEmailUnverified("od-claimed", claimedAddr)
+	claimedToken := inviteTo(t, env, admin, orgH, claimedAddr)
+	if mails.sentTo(claimedAddr) != nil {
+		t.Fatal("an invitation to an address at a domain that was only claimed was mailed")
+	}
+	res := env.do(env.login(claimedH), http.MethodPost, "/api/v1/invitations/"+claimedToken, nil)
+	if code, _, detail := problemOf(t, res); code != http.StatusForbidden || !strings.Contains(detail, "Verify") {
+		t.Fatalf("accept from an unverified address at a claimed domain: %d %q, want 403 asking for verification", code, detail)
+	}
 
 	// An invitation to an address NOT at the organization's domain still
 	// needs the account's own verified address.
 	elseH := env.registerEmailUnverified("od-else", "else@elsewhere.example")
 	elseToken := inviteTo(t, env, admin, orgH, "else@elsewhere.example")
-	res := env.do(env.login(elseH), http.MethodPost, "/api/v1/invitations/"+elseToken, nil)
+	res = env.do(env.login(elseH), http.MethodPost, "/api/v1/invitations/"+elseToken, nil)
 	if code, _, detail := problemOf(t, res); code != http.StatusForbidden || !strings.Contains(detail, "Verify") {
 		t.Fatalf("accept from an unverified address elsewhere: %d %q, want 403 asking for verification", code, detail)
 	}

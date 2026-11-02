@@ -60,6 +60,10 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 		}
 	}
 
+	// A pending admin holds nothing, so it is not a second admin.
+	pendingAdminH := env.register("la-pending")
+	env.seedMembership(orgH, pendingAdminH, "admin", "pending")
+
 	// Self-demote and remove: refused while nobody else is an admin.
 	for _, tc := range []struct {
 		name   string
@@ -131,6 +135,15 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 	if held != 0 {
 		t.Fatalf("an erased account still holds %d membership(s)", held)
 	}
+
+	// Only the last active admin is held by the guard: a person who is
+	// waiting for approval as an admin, and a plain member, erase their
+	// accounts freely beside the one admin who remains.
+	third := env.login(thirdH)
+	plainH := env.register("la-plain")
+	env.joinOrg(third, orgH, plainH)
+	env.doJSON(env.login(pendingAdminH), http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
+	env.doJSON(env.login(plainH), http.MethodPost, "/api/v1/user/delete", nil, nil, http.StatusNoContent)
 }
 
 // TestSecurityReviewerIsFirstPartyOnly: the role is refused in an ordinary
@@ -155,6 +168,26 @@ func TestSecurityReviewerIsFirstPartyOnly(t *testing.T) {
 	res = env.do(staff, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+memberH, map[string]any{"role": "owner"})
 	if code, slug, detail := problemOf(t, res); code != http.StatusUnprocessableEntity || slug != "validation" || !strings.Contains(detail, "admin or member") {
 		t.Fatalf("the retired owner role: %d %s %q, want 422 naming admin or member", code, slug, detail)
+	}
+	// The other two doors refuse the same roles: an invitation, and the
+	// approval of someone who is waiting.
+	waitingH := env.register("sr-waiting")
+	env.seedMembership(orgH, waitingH, "member", "pending")
+	for _, role := range []string{"security_reviewer", "owner"} {
+		res = env.do(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/invitations",
+			map[string]any{"email": "sr-" + role + "-" + env.sfx + "@example.test", "role": role})
+		if code, slug, _ := problemOf(t, res); code != http.StatusUnprocessableEntity || slug != "validation" {
+			t.Fatalf("inviting as %s: %d %s, want 422 validation", role, code, slug)
+		}
+		res = env.do(staff, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+waitingH+"/approve", map[string]any{"role": role})
+		if code, slug, _ := problemOf(t, res); code != http.StatusUnprocessableEntity || slug != "validation" {
+			t.Fatalf("approving as %s: %d %s, want 422 validation", role, code, slug)
+		}
+	}
+	// Nor is a first-party name for anyone but platform staff to found.
+	res = env.do(env.login(memberH), http.MethodPost, "/api/v1/orgs", map[string]any{"handle": "secureagentry", "displayName": "Imitation"})
+	if code, slug, detail := problemOf(t, res); code != http.StatusUnprocessableEntity || slug != "validation" || !strings.Contains(detail, "reserved") {
+		t.Fatalf("a first-party handle for a non-staff person: %d %s %q, want 422 reserved", code, slug, detail)
 	}
 
 	// The first-party org: created here by a second staff account — the
