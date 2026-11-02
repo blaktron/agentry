@@ -325,7 +325,8 @@ func MaskEmail(addr string) string {
 }
 
 // MaskTokens replaces every token-shaped substring with its display prefix
-// and a marker. Exported for the tests of things that must never log one.
+// and a marker. The server uses it to refuse an inbound value that a log
+// line would carry masked; tests use it for things that must never log one.
 func MaskTokens(s string) string {
 	if len(s) < 52 {
 		return s

@@ -44,7 +44,10 @@ var inboundRequestIDRE = regexp.MustCompile(`^[A-Za-z0-9-]{8,64}$`)
 // the server mints its own.
 func requestID(r *http.Request, honourInbound bool) string {
 	if honourInbound {
-		if v := r.Header.Get(requestIDHeader); v != "" && inboundRequestIDRE.MatchString(v) {
+		// An id the log sanitizer would mask is refused as well: the
+		// response and the audit row would carry it whole while every log
+		// line carried it masked, and the id could not be found in the log.
+		if v := r.Header.Get(requestIDHeader); v != "" && inboundRequestIDRE.MatchString(v) && logx.MaskTokens(v) == v {
 			return v
 		}
 	}
