@@ -836,6 +836,17 @@ enabled and left stopped; `agentry agent start <ref>` starts it.
 computer. The folder is unsigned, so `--allow-unsigned` is required, and a
 folder installed this way runs none of the subagents it declares.
 
+**Previewing.** `agentry agent install <ns/name[@version]> --plan` resolves,
+downloads and verifies the release as an install does, then shows what the
+person would agree to and writes nothing: the contract and what it widens
+against the installed version, the persona of that version and whether its
+text is locked, the knowledge packs it ships, and each subagent with the
+version it would be pinned to, what that version reaches and its digest, or
+why it resolves to none. It previews an update too, naming the installed
+version and its pins. A running agent is the plan's refusal, not an error.
+With `--json` it is the shape of `agentry install --plan --json` with an
+`agent` block. `--plan` needs CLI v0.7.8 or later.
+
 **Updating.** Installing a reference again moves the agent to the newest version,
 or to `@version`, asking again when the new version declares more than the one
 agreed to. The agent must be stopped, and its conversation, its files and its
@@ -913,6 +924,10 @@ subagent, and the app link lists nothing else for it.
   The files the run made (at most 50 and 256 MiB) are copied into the agent's
   data volume under `subagents/<run id>/`. Each run is a line of the segment's
   `receipts/subagents.ndjson`, and its own receipts stay in its own folder.
+  `agentry agent show <ref>` lists the newest runs, and `--json` up to 50 as
+  `subagentRuns`, newest first: the subagent's exact version, who granted it,
+  when the run started and ended, how it ended and the run's own id (CLI v0.7.8
+  or later).
 - **Added by the person.** `agentry agent configure <ref> --subagent ns/name`
   adds a QuickAgent installed on this computer that runs autonomously, at the
   version installed then; `--no-subagent` takes it away. A release's own
