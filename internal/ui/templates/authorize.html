@@ -1,7 +1,22 @@
 {{define "content"}}
 <h1>Authorize this device</h1>
 {{with .Data}}
-{{if .Valid}}
+{{if and .Valid .Runhost}}
+<section class="card">
+<p>A program on <strong>this computer</strong> — the {{$.Brand.Name}} command line or desktop app — is asking for a token for your remote runhost <strong>{{.Runhost}}</strong>, as <strong>{{$.User.Handle}}</strong>.</p>
+<p>The token lets that server pay for its runs' models with your account's credits. It can do nothing else: it cannot read or change your account, your QuickAgents or your secrets. It is kept on that server, encrypted, until you remove the runhost.</p>
+<p>Approving hands the program listening on <code>127.0.0.1:{{.Port}}</code> a one-time code, good for a minute. The program exchanges that code for the token from its own process and sends it to the server, so the token never appears in your browser.</p>
+<p class="muted">Scope: {{.Scopes}}. The token is listed among your account's personal access tokens as "Runhost {{.Runhost}} (credits only)", where you can revoke it. If you did not just add a model to this runhost, close this tab.</p>
+<form method="post" action="/ui/authorize">
+  <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+  <input type="hidden" name="port" value="{{.Port}}">
+  <input type="hidden" name="state" value="{{.State}}">
+  <input type="hidden" name="runhost" value="{{.Runhost}}">
+  <button type="submit">Authorize</button>
+  <a class="button secondary" href="/ui/">Cancel</a>
+</form>
+</section>
+{{else if .Valid}}
 <section class="card">
 <p>A program on <strong>this computer</strong> — the {{$.Brand.Name}} command line or desktop app — is asking for access as <strong>{{$.User.Handle}}</strong>.</p>
 <p>Approving hands the program listening on <code>127.0.0.1:{{.Port}}</code> a one-time code, good for a minute. The program exchanges that code for a personal access token from its own process, so the token never appears in your browser.</p>

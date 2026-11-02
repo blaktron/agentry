@@ -130,26 +130,45 @@ const (
 	portMax = 65535
 )
 
-var stateRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
+var (
+	stateRE   = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
+	runhostRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$`)
+)
 
 type authorizeData struct {
 	Port  int
 	State string
-	Valid bool
+	// Runhost, when set, names the remote runhost the token is for: it
+	// can only open credits sessions, and is kept on that server.
+	Runhost string
+	Valid   bool
 	// Scopes are what approving grants, from the grant's own list.
 	Scopes string
 }
 
-func parseAuthorizeParams(port, state string) authorizeData {
+func parseAuthorizeParams(port, state, runhost string) authorizeData {
 	n, err := strconv.Atoi(port)
-	d := authorizeData{Port: n, State: state, Scopes: strings.Join(auth.SignInGrantScopes(), ", ")}
-	d.Valid = err == nil && n >= portMin && n <= portMax && stateRE.MatchString(state)
+	d := authorizeData{Port: n, State: state, Runhost: runhost, Scopes: strings.Join(auth.SignInGrantScopes(), ", ")}
+	if runhost != "" {
+		d.Scopes = string(auth.ScopeCreditsSession)
+	}
+	d.Valid = err == nil && n >= portMin && n <= portMax && stateRE.MatchString(state) &&
+		(runhost == "" || runhostRE.MatchString(runhost))
 	return d
+}
+
+// again is this request's own authorize page, to come back to.
+func (d authorizeData) again() string {
+	v := url.Values{"port": {strconv.Itoa(d.Port)}, "state": {d.State}}
+	if d.Runhost != "" {
+		v.Set("runhost", d.Runhost)
+	}
+	return "/ui/authorize?" + v.Encode()
 }
 
 func (h *handler) authorizePage(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	d := parseAuthorizeParams(q.Get("port"), q.Get("state"))
+	d := parseAuthorizeParams(q.Get("port"), q.Get("state"), q.Get("runhost"))
 	u := h.currentUser(r)
 	if u == nil {
 		http.Redirect(w, r, h.loginURL(r.URL.RequestURI()), http.StatusSeeOther)
@@ -166,29 +185,33 @@ func (h *handler) authorizeApprove(w http.ResponseWriter, r *http.Request) {
 	if !h.acceptForm(w, r) {
 		return
 	}
-	d := parseAuthorizeParams(r.PostFormValue("port"), r.PostFormValue("state"))
+	d := parseAuthorizeParams(r.PostFormValue("port"), r.PostFormValue("state"), r.PostFormValue("runhost"))
 	if !d.Valid {
 		h.refuse(w, r, http.StatusBadRequest, "Invalid device request", "The port or state in this form is not valid. Start the sign-in again from the program.")
 		return
 	}
-	res, err := h.call(r).do(http.MethodPost, "/user/tokens/desktop-grant", map[string]string{"state": d.State})
+	body := map[string]string{"state": d.State}
+	if d.Runhost != "" {
+		body["runhost"] = d.Runhost
+	}
+	res, err := h.call(r).do(http.MethodPost, "/user/tokens/desktop-grant", body)
 	if err != nil || !res.OK() {
 		msg := notSent
 		if err == nil {
 			msg = res.detail()
 		}
 		if res.Status == http.StatusUnauthorized || res.Status == http.StatusForbidden {
-			http.Redirect(w, r, h.loginURL("/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State)), http.StatusSeeOther)
+			http.Redirect(w, r, h.loginURL(d.again()), http.StatusSeeOther)
 			return
 		}
-		h.back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", msg)
+		h.back(w, r, d.again(), "", msg)
 		return
 	}
 	var grant struct {
 		Code string `json:"code"`
 	}
 	if res.decode(&grant) != nil || grant.Code == "" {
-		h.back(w, r, "/ui/authorize?port="+strconv.Itoa(d.Port)+"&state="+url.QueryEscape(d.State), "", "No code was issued. This device is not authorized.")
+		h.back(w, r, d.again(), "", "No code was issued. This device is not authorized.")
 		return
 	}
 	cb := url.URL{Scheme: "http", Host: "127.0.0.1:" + strconv.Itoa(d.Port), Path: "/callback"}
