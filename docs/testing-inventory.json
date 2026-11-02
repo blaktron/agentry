@@ -5545,7 +5545,8 @@
             "TestALargeInstructionIsReadInLinearTime",
             "TestTheAnswerIsBounded",
             "TestThePersistentToolsNeedTheirKeys",
-            "TestCoderHoldsTheToolchainsGrants"
+            "TestCoderHoldsTheToolchainsGrants",
+            "TestTheSubagentToolsNeedASubagent"
           ],
           "fuzz": [],
           "benchmarks": [],
