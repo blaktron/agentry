@@ -772,8 +772,14 @@ func (s *Server) wellKnownSigningKeys(w http.ResponseWriter, r *http.Request) {
 	out := struct {
 		Keys []signingKey `json:"keys"`
 	}{Keys: s.signingKeySet(r.Context())}
+	// Cacheable for five minutes, not no-store as writeJSON would set: the
+	// set changes only at a rotation, whose validity windows overlap by far
+	// more than that, so a client that reads a cached copy still finds the
+	// key every current signature names.
+	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=300")
-	writeJSON(w, http.StatusOK, out)
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 // signingKey is one entry in signing-keys.json. notBefore/notAfter are what
