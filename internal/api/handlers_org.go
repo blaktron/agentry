@@ -761,15 +761,22 @@ func (s *Server) ApproveOrgMember(w http.ResponseWriter, r *http.Request, org Or
 		return
 	}
 
-	if _, err := s.reg.ActivateMember(r.Context(), registry.ActivateMemberRequest{
+	activated, err := s.reg.ActivateMember(r.Context(), registry.ActivateMemberRequest{
 		OrgID: orgRow.ID, UserID: target.ID, Role: role, Via: registry.ViaApproval,
 		Actor: auditEvent(r, audit.ActionOrgMemberSet),
-	}); err != nil {
+	})
+	if err != nil {
 		if s.seatRefusal(w, r, orgRow, err) {
 			return
 		}
 		s.log.ErrorContext(r.Context(), "approve member", "err", err)
 		problemInternal(w, r)
+		return
+	}
+	// Another door made the person active between the read above and the
+	// activation: nothing was approved, and their role is unchanged.
+	if !activated {
+		problemConflict(w, r, target.Handle+" is already a member of "+orgRow.Handle+".")
 		return
 	}
 	via, viaDomain, state := m.ViaScim, m.ViaDomain, MembershipState("active")
