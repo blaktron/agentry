@@ -322,6 +322,31 @@ func TestModelInputRoutesAreOffWithoutAJevJudge(t *testing.T) {
 	if res.StatusCode != http.StatusServiceUnavailable || !strings.HasSuffix(p.Type, "/web-search-unavailable") {
 		t.Fatalf("no provider: %d %+v", res.StatusCode, p)
 	}
+
+	// A job's call to a route that is off is refused before the job is
+	// asked to admit it, so it costs the job nothing.
+	callers := &fakeCallers{jobs: map[string]string{"agyj_off": "job-off"}}
+	envJob := newTestEnvWith(t, func(s *api.Server) { s.SetModelInputCallers(callers) })
+	job := map[string]string{"X-Agentry-Job-Token": "agyj_off"}
+	for _, c := range []struct {
+		path string
+		body map[string]any
+		slug string
+	}{
+		{"/api/v1/model-input/scan", map[string]any{"source": "page", "text": "text"}, "/model-input-unavailable"},
+		{"/api/v1/model-input/search", map[string]any{"query": "github mcp"}, "/web-search-unavailable"},
+		{"/api/v1/model-input/check", map[string]any{"description": "A weather agent.", "files": draftFiles("# Weather\nRead the forecast.\n")}, "/model-input-unavailable"},
+	} {
+		var jp problemBody
+		res := envJob.doWithHeaders(anonymous, http.MethodPost, c.path, c.body, job)
+		readBody(t, res, &jp)
+		if res.StatusCode != http.StatusServiceUnavailable || !strings.HasSuffix(jp.Type, c.slug) {
+			t.Fatalf("a job's %s with the route off: %d %+v, want 503 %s", c.path, res.StatusCode, jp, c.slug)
+		}
+	}
+	if len(callers.calls) != 0 {
+		t.Fatalf("the job was asked to admit %d calls to routes that are off: %+v", len(callers.calls), callers.calls)
+	}
 }
 
 type searchBody struct {
@@ -545,8 +570,8 @@ func TestModelInputSearchFailuresSpendNothing(t *testing.T) {
 	}
 	res = env2.doWithHeaders(anonymous, http.MethodPost, "/api/v1/model-input/search", map[string]any{"query": "q"}, map[string]string{"X-Agentry-Job-Token": "agyj_noscan"})
 	readBody(t, res, &p)
-	if res.StatusCode != http.StatusServiceUnavailable || len(unscanned.Queries()) != 0 || len(callers2.uses) != 0 {
-		t.Fatalf("a job's search with no scanner: %d, %d searches spent, %d recorded", res.StatusCode, len(unscanned.Queries()), len(callers2.uses))
+	if res.StatusCode != http.StatusServiceUnavailable || len(unscanned.Queries()) != 0 || len(callers2.uses) != 0 || len(callers2.calls) != 0 {
+		t.Fatalf("a job's search with no scanner: %d, %d searches spent, %d recorded, %d admissions asked", res.StatusCode, len(unscanned.Queries()), len(callers2.uses), len(callers2.calls))
 	}
 }
 

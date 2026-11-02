@@ -764,7 +764,7 @@ func TestTheVoiceRoutesRefuseWhatIsNotAVoice(t *testing.T) {
 	refused(http.MethodPut, "/api/v1/voice", edit(strings.Repeat("a", voice.MaxBytes+1)), http.StatusRequestEntityTooLarge, "voice-too-large", "A Writing Voice is at most 32 KiB.")
 	for text, reason := range map[string]string{"  \n": "A Writing Voice is empty.", "a\x00b": "A Writing Voice holds a NUL byte, which text does not."} {
 		refused(http.MethodPut, "/api/v1/voice", edit(text), http.StatusUnprocessableEntity, "voice-invalid", "")
-		if _, _, det := voiceProblemOf(t, env, o.pat, http.MethodPut, "/api/v1/voice", edit(text)); !strings.HasPrefix(det, reason) {
+		if _, _, det := voiceProblemOf(t, env, o.pat, http.MethodPut, "/api/v1/voice", edit(text)); det != reason {
 			t.Fatalf("the reason a text is not a voice: %q, want %q", det, reason)
 		}
 	}

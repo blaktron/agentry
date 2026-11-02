@@ -91,7 +91,7 @@ func (s *Server) voiceProblem(w http.ResponseWriter, r *http.Request, err error,
 		writeProblem(w, r, http.StatusRequestEntityTooLarge, "voice-too-large", "Voice too large",
 			fmt.Sprintf("A Writing Voice is at most %d KiB.", voice.MaxBytes>>10))
 	case errors.As(err, &invalid):
-		writeProblem(w, r, http.StatusUnprocessableEntity, "voice-invalid", "Not a Writing Voice", sentence(invalid.Reason)+".")
+		writeProblem(w, r, http.StatusUnprocessableEntity, "voice-invalid", "Not a Writing Voice", sentence(invalid.Reason))
 	case errors.Is(err, voice.ErrNoPrevious):
 		writeProblem(w, r, http.StatusConflict, "voice-no-previous", "No previous version",
 			"There is no previous version of this voice to restore.")
