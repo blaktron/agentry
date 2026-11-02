@@ -604,7 +604,9 @@ func guardLastAdmin(ctx context.Context, q *storegen.Queries, orgID, userID uuid
 	if err != nil {
 		return err
 	}
-	if auth.OrgRole(m.Role) != auth.RoleAdmin {
+	// Only an active admin can be the last one: a pending admin holds
+	// nothing, is not counted, and can be removed or changed freely.
+	if auth.OrgRole(m.Role) != auth.RoleAdmin || m.State != "active" {
 		return nil
 	}
 	n, err := q.CountOrgAdmins(ctx, orgID)

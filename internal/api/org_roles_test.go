@@ -79,6 +79,16 @@ func TestLastAdminCannotBeRemoved(t *testing.T) {
 		}
 	}
 
+	// Nor is it guarded as one: the sole active admin removes the pending
+	// admin, and the row is gone.
+	env.doJSON(admin, http.MethodDelete, "/api/v1/orgs/"+orgH+"/members/"+pendingAdminH, nil, nil, http.StatusNoContent)
+	var left int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM memberships m JOIN handles o ON o.id = m.org_id JOIN handles u ON u.id = m.user_id
+		 WHERE o.handle = $1 AND u.handle = $2`, orgH, pendingAdminH).Scan(&left); err != nil || left != 0 {
+		t.Fatalf("the pending admin's membership after removal: %d rows (%v), want none", left, err)
+	}
+
 	// Promote the other member; now the first admin may step down and leave.
 	env.doJSON(admin, http.MethodPut, "/api/v1/orgs/"+orgH+"/members/"+otherH,
 		map[string]any{"role": "admin"}, nil, http.StatusOK)
