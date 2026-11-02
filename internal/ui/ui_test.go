@@ -50,8 +50,16 @@ func fakeAPI(t *testing.T) http.Handler {
 				http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
 				return
 			}
+			// A runhost's grant answers its own code, so a test sees the
+			// name reached the API.
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			code := "agd_code"
+			if body["runhost"] != "" {
+				code = "agd_runhost_" + body["runhost"]
+			}
 			w.WriteHeader(http.StatusCreated)
-			_, _ = io.WriteString(w, `{"code":"agd_code","expiresAt":"2026-01-01T00:00:00Z"}`)
+			_, _ = io.WriteString(w, `{"code":"`+code+`","expiresAt":"2026-01-01T00:00:00Z"}`)
 		case "POST /api/v1/auth/logout":
 			if !authed {
 				http.Error(w, `{"detail":"sign in"}`, http.StatusUnauthorized)
@@ -169,6 +177,37 @@ func TestAuthorizeApproveHandsTheLoopbackACode(t *testing.T) {
 	w = post(h, "/ui/authorize", url.Values{"_csrf": {"csrf1"}, "port": {"22"}, "state": {"abcdefghij"}}, nil, sessCookie, csrfCookieV)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("bad port: %d", w.Code)
+	}
+}
+
+// A runhost's request asks for a credits-only token for that server, in its
+// own words, and the approval passes the runhost's name to the grant.
+func TestAuthorizeARunhostsCreditsToken(t *testing.T) {
+	w := get(newUI(t, Options{}), "/ui/authorize?port=40123&state=abcdefghij&runhost=lab", sessCookie, csrfCookieV)
+	body := w.Body.String()
+	for _, want := range []string{"remote runhost <strong>lab</strong>", "It can do nothing else", "Scope: credits:session.", `Runhost lab (credits only)`, `name="runhost" value="lab"`} {
+		if w.Code != http.StatusOK || !strings.Contains(body, want) {
+			t.Fatalf("runhost page lacks %q: %d\n%s", want, w.Code, body)
+		}
+	}
+	if strings.Contains(body, "secret:write") {
+		t.Fatalf("runhost page names the sign-in scopes:\n%s", body)
+	}
+	for _, bad := range []string{"Lab", "-lab", "lab-", "a/b", strings.Repeat("a", 33)} {
+		w := get(newUI(t, Options{}), "/ui/authorize?port=40123&state=abcdefghij&runhost="+url.QueryEscape(bad), sessCookie, csrfCookieV)
+		if w.Code != http.StatusBadRequest || strings.Contains(w.Body.String(), `name="state"`) {
+			t.Fatalf("runhost %q: %d", bad, w.Code)
+		}
+	}
+	form := url.Values{"_csrf": {"csrf1"}, "port": {"40123"}, "state": {"abcdefghij"}, "runhost": {"lab"}}
+	w = post(newUI(t, Options{}), "/ui/authorize", form, nil, sessCookie, csrfCookieV)
+	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "http://127.0.0.1:40123/callback?code=agd_runhost_lab&state=abcdefghij" {
+		t.Fatalf("approve: %d %s %s", w.Code, w.Header().Get("Location"), w.Body.String())
+	}
+	// Signed out, the sign-in comes back to the runhost's page.
+	w = get(newUI(t, Options{}), "/ui/authorize?port=40123&state=abcdefghij&runhost=lab")
+	if w.Code != http.StatusSeeOther || !strings.Contains(w.Header().Get("Location"), url.QueryEscape("runhost=lab")) {
+		t.Fatalf("signed out: %d %s", w.Code, w.Header().Get("Location"))
 	}
 }
 

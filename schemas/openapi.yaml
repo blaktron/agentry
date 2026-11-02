@@ -934,6 +934,9 @@ paths:
         exchanges the code at `POST /auth/desktop/exchange` from its own
         process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set
         (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+        With `runhost`, the grant is for a remote runhost instead: its token
+        carries `credits:session` alone and is named
+        `Runhost <name> (credits only)`.
       requestBody:
         required: true
         content:
@@ -955,6 +958,9 @@ paths:
       operationId: revokeToken
       tags: [users]
       summary: Revoke a PAT immediately.
+      description: >-
+        Session-only, except that a PAT may revoke itself, whatever its
+        scopes, `credits:session` included.
       parameters:
         - name: tokenId
           in: path
@@ -4846,6 +4852,13 @@ components:
           type: string
           pattern: "^[A-Za-z0-9_-]{8,128}$"
           description: The desktop app's nonce; the exchange must present the same value.
+        runhost:
+          type: string
+          pattern: "^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$"
+          description: >-
+            A remote runhost's name. The grant then mints a token that can
+            only open a credits session, for that runhost to pay for its
+            runs' models, in place of the sign-in set.
 
     DesktopGrant:
       type: object
@@ -4888,7 +4901,7 @@ components:
         `credits:session` opens, renews and ends a credits session, which
         pays for a run's model with the account's credits, and does nothing
         else: it is minted with no other scope, and every other route
-        refuses a token carrying it. It is consumed only by a registry that
+        refuses a token carrying it, but for revoking itself. It is consumed only by a registry that
         mounts the credits extension.
       enum:
         - repo:read

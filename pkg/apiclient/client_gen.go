@@ -2450,6 +2450,9 @@ type DesktopGrant struct {
 
 // DesktopGrantRequest defines model for DesktopGrantRequest.
 type DesktopGrantRequest struct {
+	// Runhost A remote runhost's name. The grant then mints a token that can only open a credits session, for that runhost to pay for its runs' models, in place of the sign-in set.
+	Runhost *string `json:"runhost,omitempty"`
+
 	// State The desktop app's nonce; the exchange must present the same value.
 	State string `json:"state"`
 }
@@ -3448,7 +3451,7 @@ type ScanReport struct {
 // `credits:session` opens, renews and ends a credits session, which
 // pays for a run's model with the account's credits, and does nothing
 // else: it is minted with no other scope, and every other route
-// refuses a token carrying it. It is consumed only by a registry that
+// refuses a token carrying it, but for revoking itself. It is consumed only by a registry that
 // mounts the credits extension.
 type Scope string
 
@@ -5958,7 +5961,7 @@ type ClientInterface interface {
 
 	// CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write). With `runhost`, the grant is for a remote runhost instead: its token carries `credits:session` alone and is named `Runhost <name> (credits only)`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5967,7 +5970,7 @@ type ClientInterface interface {
 
 	// CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write). With `runhost`, the grant is for a remote runhost instead: its token carries `credits:session` alone and is named `Runhost <name> (credits only)`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5975,6 +5978,8 @@ type ClientInterface interface {
 	CreateDesktopGrant(ctx context.Context, body CreateDesktopGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeToken Revoke a PAT immediately.
+	//
+	// Session-only, except that a PAT may revoke itself, whatever its scopes, `credits:session` included.
 	//
 	// Corresponds with DELETE /user/tokens/{tokenId} (the `RevokeToken` operationId).
 	RevokeToken(ctx context.Context, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -9378,7 +9383,7 @@ func (c *Client) CreateToken(ctx context.Context, body CreateTokenJSONRequestBod
 
 // CreateDesktopGrantWithBody Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write). With `runhost`, the grant is for a remote runhost instead: its token carries `credits:session` alone and is named `Runhost <name> (credits only)`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -9397,7 +9402,7 @@ func (c *Client) CreateDesktopGrantWithBody(ctx context.Context, contentType str
 
 // CreateDesktopGrant Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write). With `runhost`, the grant is for a remote runhost instead: its token carries `credits:session` alone and is named `Runhost <name> (credits only)`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -9415,6 +9420,8 @@ func (c *Client) CreateDesktopGrant(ctx context.Context, body CreateDesktopGrant
 }
 
 // RevokeToken Revoke a PAT immediately.
+//
+// Session-only, except that a PAT may revoke itself, whatever its scopes, `credits:session` included.
 //
 // Corresponds with DELETE /user/tokens/{tokenId} (the `RevokeToken` operationId).
 func (c *Client) RevokeToken(ctx context.Context, tokenId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -18372,7 +18379,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write). With `runhost`, the grant is for a remote runhost instead: its token carries `credits:session` alone and is named `Runhost <name> (credits only)`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18381,7 +18388,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
 	//
-	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+	// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write). With `runhost`, the grant is for a remote runhost instead: its token carries `credits:session` alone and is named `Runhost <name> (credits only)`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18389,6 +18396,8 @@ type ClientWithResponsesInterface interface {
 	CreateDesktopGrantWithResponse(ctx context.Context, body CreateDesktopGrantJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDesktopGrantResponse, error)
 
 	// RevokeTokenWithResponse Revoke a PAT immediately.
+	//
+	// Session-only, except that a PAT may revoke itself, whatever its scopes, `credits:session` included.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -28791,7 +28800,7 @@ func (c *ClientWithResponses) CreateTokenWithResponse(ctx context.Context, body 
 
 // CreateDesktopGrantWithBodyWithResponse Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write). With `runhost`, the grant is for a remote runhost instead: its token carries `credits:session` alone and is named `Runhost <name> (credits only)`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28806,7 +28815,7 @@ func (c *ClientWithResponses) CreateDesktopGrantWithBodyWithResponse(ctx context
 
 // CreateDesktopGrantWithResponse Record a one-time grant for the desktop app's browser sign-in.
 //
-// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write).
+// Session-only. The server's own `/ui/authorize` page calls this after the user consents; the response is a short-lived, single-use `code` bound to the app's `state` nonce. No token is minted here — the desktop app exchanges the code at `POST /auth/desktop/exchange` from its own process, so the PAT never travels in a URL. The grant's scopes are fixed to the desktop set (agent:read, agent:publish, repo:read, repo:write, user:profile, run:read, run:write). With `runhost`, the grant is for a remote runhost instead: its token carries `credits:session` alone and is named `Runhost <name> (credits only)`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28820,6 +28829,8 @@ func (c *ClientWithResponses) CreateDesktopGrantWithResponse(ctx context.Context
 }
 
 // RevokeTokenWithResponse Revoke a PAT immediately.
+//
+// Session-only, except that a PAT may revoke itself, whatever its scopes, `credits:session` included.
 //
 // Returns a wrapper object for the known response body format(s).
 //

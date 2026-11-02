@@ -62,7 +62,8 @@
           "path": "internal/api/desktop_grant_test.go",
           "tests": [
             "TestDesktopGrantExchange",
-            "TestErasureConsumesDesktopGrants"
+            "TestErasureConsumesDesktopGrants",
+            "TestARunhostGrantMintsACreditsOnlyTokenThatRevokesItself"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4297,6 +4298,7 @@
           "tests": [
             "TestAuthorizeNeedsASession",
             "TestAuthorizeApproveHandsTheLoopbackACode",
+            "TestAuthorizeARunhostsCreditsToken",
             "TestModeAuthorizeServesOnlyTheAuthorizePage",
             "TestRefusalsRenderInsideTheLayout",
             "TestLoginPageIsTheOneThatReadsAnErrorFromTheURL",

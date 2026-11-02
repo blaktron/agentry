@@ -146,8 +146,9 @@ func (s *Server) principalMiddlewareOpts(next http.Handler, opts principalOpts) 
 		// A credits-only token opens a credits session and nothing else:
 		// refused on every path but the routes an extension declared for
 		// its credits sessions, whatever a route would admit otherwise
-		// (anonymous reads, routes that take any signed-in caller).
-		if p.CreditsOnly() && !opts.credits.match(r) {
+		// (anonymous reads, routes that take any signed-in caller), and
+		// revoking itself.
+		if p.CreditsOnly() && !opts.credits.match(r) && !revokeOwnTokenPath(r, p) {
 			problemForbidden(w, r, "This token can only open a credits session. Use a token with the scope this request needs.")
 			return
 		}
@@ -324,4 +325,10 @@ func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.U
 		return true
 	}
 	return p.SSOSatisfied(orgID, s.cfg.Auth.SSOMaxAge)
+}
+
+// revokeOwnTokenPath reports whether r revokes the very token p presented.
+func revokeOwnTokenPath(r *http.Request, p *auth.Principal) bool {
+	return r.Method == http.MethodDelete && p.PATID != uuid.Nil &&
+		strings.TrimSuffix(r.URL.Path, "/") == "/api/v1/user/tokens/"+p.PATID.String()
 }
