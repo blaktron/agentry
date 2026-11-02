@@ -628,7 +628,8 @@ func (s *Server) mountExtensions(mux httpmux.Mux) {
 // a message an
 // extension composed goes to the person only under the core's rule —
 // notify.AllowsEmail, which is the verified-address rule and
-// the person's switch for the kind — and only as a kind the core knows.
+// the person's switch for the kind — only while the account is active,
+// and only as a kind the core knows.
 // It reports whether the message went; a suppression is false with no
 // error, and the extension is not told why, because the address is the
 // person's business and the switch is their choice. An unknown kind is
@@ -651,6 +652,13 @@ func (s *Server) SendToUser(ctx context.Context, userID uuid.UUID, kind, subject
 	u, err := s.q().GetUserByID(ctx, userID)
 	if err != nil {
 		return false, fmt.Errorf("api: recipient: %w", err)
+	}
+	// Only an active account is written to, the rule OrgAdminIDs keeps: a
+	// suspended or not yet activated person cannot act on what an
+	// extension sends, and is not told the registry's business. Like a
+	// switch that is off, this is a suppression, not an error.
+	if u.State != "active" {
+		return false, nil
 	}
 	if err := s.notifier.Rendered(ctx, notify.RenderedNotice{ToEmail: u.Email, Subject: subject, Text: text, Kind: k}); err != nil {
 		return false, err

@@ -149,6 +149,22 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 		t.Fatalf("the transport was handed the body %q, want %q as given", got.Text, want)
 	}
 
+	// A suspended account is written to by no kind, and is not told why.
+	suspendedH := env.register("ns-suspended")
+	env.verifyEmail(suspendedH)
+	suspendedID := env.userID(suspendedH)
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE users SET state = 'suspended' WHERE id = $1`, suspendedID); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"billing", "dependency_alert", "schedule", "bug_report", "run_failure", "run_finished"} {
+		if code, out, msg := send(t, suspendedID, kind, "A message", "x"); code != http.StatusOK || out.Sent {
+			t.Fatalf("%s to a suspended, verified account: %d sent=%t %q, want 200 not sent", kind, code, out.Sent, msg)
+		}
+	}
+	if mails.count() != 1 {
+		t.Fatalf("a suspended account was handed mail: %d messages, want 1", mails.count())
+	}
+
 	// A transport that fails is an error to the extension, never a message
 	// reported as sent.
 	mails.failWith(errors.New("smtp relay refused the message"))
