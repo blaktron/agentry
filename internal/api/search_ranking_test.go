@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ import (
 type searchHit struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
-	Installs  int64  `json:"installs"`
+	Installs  int64  `json:"installs30d"`
 }
 
 type searchResults struct {
@@ -121,7 +122,8 @@ func TestSearchRanksByPopularityWhenRelevanceIsEqual(t *testing.T) {
 	env.setInstalls(t, owner, "middling", 50)
 	env.setInstalls(t, owner, "popular", 5000)
 
-	got := names(env.search(t, owner, term))
+	hits := env.search(t, owner, term)
+	got := names(hits)
 	want := []string{"popular", "middling", "quiet"}
 	if len(got) != 3 {
 		t.Fatalf("search returned %v, want the three seeded agents", got)
@@ -129,6 +131,28 @@ func TestSearchRanksByPopularityWhenRelevanceIsEqual(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("ranking = %v, want %v (popularity must order equal-relevance hits)", got, want)
+		}
+	}
+	// Each hit reports its own trailing-30-day installs.
+	for i, installs := range []int64{5000, 50, 0} {
+		if hits[i].Installs != installs {
+			t.Fatalf("%s reports %d installs, want %d", hits[i].Name, hits[i].Installs, installs)
+		}
+	}
+
+	// Age counts too: the score decays with the agent's age, so an agent
+	// published years ago falls below fresher ones that are far less
+	// installed.
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE agents SET created_at = now() - interval '2920 days'
+		 WHERE name = 'popular' AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`, owner); err != nil {
+		t.Fatal(err)
+	}
+	got = names(env.search(t, owner, term))
+	want = []string{"middling", "quiet", "popular"}
+	for i := range want {
+		if len(got) != 3 || got[i] != want[i] {
+			t.Fatalf("ranking with an old agent = %v, want %v (recency decays the score)", got, want)
 		}
 	}
 }
@@ -232,6 +256,11 @@ func TestSearchMatchesNamespaceHandle(t *testing.T) {
 	env.publishSearchable(t, sess, owner, "by-handle",
 		"a summary that never mentions the namespace",
 		"# by-handle\n\nreadme without the namespace either.\n")
+	// An agent whose name is nothing like the handle is found by the handle
+	// alone.
+	env.publishSearchable(t, sess, owner, "plain",
+		"a summary that never mentions the namespace",
+		"# plain\n\nreadme without the namespace either.\n")
 
 	got := env.search(t, owner, owner) // query IS the handle
 	found := false
@@ -242,6 +271,31 @@ func TestSearchMatchesNamespaceHandle(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("searching the namespace handle %q missed its agent; got %v", owner, names(got))
+	}
+	if plain := names(got); !slices.Contains(plain, "plain") {
+		t.Fatalf("searching the namespace handle %q missed an agent that only its handle names; got %v", owner, plain)
+	}
+
+	// A handle match scores by how close the handle is to the query, so an
+	// agent found only through its handle outranks one that merely mentions
+	// the handle in its summary.
+	otherH := env.register("handle-c")
+	env.verifyEmail(otherH)
+	other := env.login(otherH)
+	env.publishSearchable(t, other, otherH, "mentions", owner, "# mentions\nBody.\n")
+	var all searchResults
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+owner+"&limit=100", nil, &all, http.StatusOK)
+	byHandle, mentions := -1, -1
+	for i, h := range all.Results {
+		if h.Namespace == owner && h.Name == "plain" {
+			byHandle = i
+		}
+		if h.Namespace == otherH && h.Name == "mentions" {
+			mentions = i
+		}
+	}
+	if byHandle < 0 || mentions < 0 || byHandle > mentions {
+		t.Fatalf("handle match at %d, summary mention at %d; the handle match must come first", byHandle, mentions)
 	}
 }
 
@@ -271,6 +325,22 @@ func TestSearchWeightsNameAboveReadme(t *testing.T) {
 	if got[0] != nameTerm {
 		t.Errorf("ranking = %v; a name match (weight A) must outrank a README match (weight C)", got)
 	}
+
+	// A name that is only close to the term, sharing no word with it, is
+	// still a match and scores by how close it is: above a README mention.
+	// It is the oldest, so only its score can put it first.
+	fuzzy := nameTerm + "x"
+	env.publishSearchable(t, sess, owner, fuzzy, "no shared words here", "# doc\nBody.\n")
+	env.setInstalls(t, owner, fuzzy, 10)
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE agents SET created_at = now() - interval '1 day'
+		 WHERE name = $2 AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`, owner, fuzzy); err != nil {
+		t.Fatal(err)
+	}
+	got = names(env.search(t, owner, term))
+	if want := []string{nameTerm, fuzzy, "inreadme"}; len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Errorf("ranking = %v, want %v (a close name outranks a README mention)", got, want)
+	}
 }
 
 // sort= overrides the score; it must still return the same result set.
@@ -295,6 +365,45 @@ func TestSearchExplicitSortsOverrideTheScore(t *testing.T) {
 	if got := names(env.search(t, owner, term, "sort=newest")); len(got) != 2 || got[0] != "beta" {
 		t.Errorf("sort=newest = %v, want beta first", got)
 	}
+
+	// With the most installed agent also the oldest, the score (which decays
+	// with age) puts the fresher, less installed one first, and the install
+	// sort still puts the most installed first.
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE agents SET created_at = now() - interval '1460 days'
+		 WHERE name = 'alpha' AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`, owner); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(env.search(t, owner, term)); len(got) != 2 || got[0] != "beta" {
+		t.Errorf("by score = %v, want beta first", got)
+	}
+	if got := names(env.search(t, owner, term, "sort=installs")); len(got) != 2 || got[0] != "alpha" {
+		t.Errorf("sort=installs = %v, want alpha first though the score puts it second", got)
+	}
+
+	// The install count a hit reports, and the statistics endpoint's lifetime
+	// and trailing-30-day figures, count 30 days back from today inclusive: a
+	// day 30 back counts, a day 31 back is in the lifetime figure alone.
+	for _, row := range []struct{ daysAgo, installs int }{{30, 7}, {31, 11}} {
+		if _, err := env.st.Pool().Exec(context.Background(), `
+			INSERT INTO download_stats (agent_id, version_id, day, installs)
+			SELECT a.id, a.latest_published_version_id, current_date - $3::int, $4
+			FROM agents a JOIN handles h ON h.id = a.namespace_id
+			WHERE h.handle = $1 AND a.name = $2`, owner, "alpha", row.daysAgo, row.installs); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if hits := env.search(t, owner, term, "sort=installs"); len(hits) != 2 || hits[0].Name != "alpha" || hits[0].Installs != 907 {
+		t.Errorf("sort=installs = %+v, want alpha first with 907 installs in the window", hits)
+	}
+	var stats struct {
+		InstallsTotal int64 `json:"installsTotal"`
+		Installs30d   int64 `json:"installs30d"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+owner+"/alpha/stats", nil, &stats, http.StatusOK)
+	if stats.InstallsTotal != 918 || stats.Installs30d != 907 {
+		t.Errorf("stats = %+v, want 918 in all and 907 in the last 30 days", stats)
+	}
 }
 
 // An empty query is a browse, not a search: relevance is 1 for every row, so
@@ -313,6 +422,18 @@ func TestEmptyQueryBrowsesWithoutCollapsing(t *testing.T) {
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q=&limit=100", nil, &out, http.StatusOK)
 	if len(out.Results) == 0 {
 		t.Fatal("an empty query returned nothing; browse must list the catalogue")
+	}
+
+	// Browsing orders by popularity: the more installed agent leads though a
+	// newer one was published after it.
+	env.publishSearchable(t, sess, owner, "browsepopular", "browse fixture", "# browsepopular\nBody.\n")
+	env.setInstalls(t, owner, "browsepopular", 5000)
+	env.publishSearchable(t, sess, owner, "browsefresh", "browse fixture", "# browsefresh\nBody.\n")
+	if got := names(env.search(t, owner, "")); len(got) != 3 || got[0] != "browsepopular" {
+		t.Fatalf("browse order = %v, want the most installed agent first", got)
+	}
+	if got := names(env.search(t, owner, "%20%20")); len(got) != 3 || got[0] != "browsepopular" {
+		t.Fatalf("a blank query browses: %v, want the same order", got)
 	}
 }
 
@@ -364,6 +485,21 @@ func TestSearchTotalCountsBeforePaging(t *testing.T) {
 	env.publishSearchable(t, sess, owner, "total-a", "first of three "+all, "# a\n")
 	env.publishSearchable(t, sess, owner, "total-b", "second of three "+all+" "+only, "# b\n")
 	env.publishSearchable(t, sess, owner, "total-c", "third of three "+all, "# c\n")
+	// Three more agents carry the same term and are none of them a result: a
+	// private one, a blocked one, and one with nothing published yet.
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "total-priv", "modes": []string{"autonomous"}, "visibility": "private",
+		"summary": "private " + all,
+	}, nil, http.StatusCreated)
+	env.publishVersions(t, sess, owner, "total-priv", []versionFiles{
+		{"1.0.0", skillFiles(owner, "total-priv", "1.0.0", nil)},
+	})
+	env.publishSearchable(t, sess, owner, "total-blk", "blocked "+all, "# blk\n")
+	staffH := env.register("total-staff")
+	env.verifyEmail(staffH)
+	env.makePlatformStaff(t, staffH)
+	env.doJSON(env.login(staffH), http.MethodPost, "/api/v1/platform/agents/"+owner+"/total-blk/block",
+		map[string]any{"reason": "fixture"}, nil, http.StatusNoContent)
 
 	page := func(query, extra string) (hits int, total int) {
 		t.Helper()
@@ -388,5 +524,46 @@ func TestSearchTotalCountsBeforePaging(t *testing.T) {
 	}
 	if h, n := page(all, "limit=100&verified=true"); h != 0 || n != 0 {
 		t.Fatalf("verified=true on a user namespace: %d hits, total %d; want 0 and 0", h, n)
+	}
+	// The facets count what the query finds in the public catalogue, and
+	// only that: the private and the blocked agent are not in them.
+	var faceted struct {
+		Facets map[string]map[string]int `json:"facets"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+all+"&limit=100", nil, &faceted, http.StatusOK)
+	if faceted.Facets["license"]["Apache-2.0"] != 3 || faceted.Facets["mode"]["autonomous"] != 3 {
+		t.Fatalf("facets = %+v, want three agents under license Apache-2.0 and mode autonomous", faceted.Facets)
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+only+"&limit=100", nil, &faceted, http.StatusOK)
+	if faceted.Facets["license"]["Apache-2.0"] != 1 || faceted.Facets["mode"]["autonomous"] != 1 {
+		t.Fatalf("facets for one match = %+v, want one agent", faceted.Facets)
+	}
+	// An agent with nothing published carries the term too and is no result.
+	// A release that stays published under a blocked agent is no result either.
+	env.publishSearchable(t, sess, owner, "total-flag", "flagged "+all, "# flag\n")
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE agents SET quarantine_state = 'blocked'
+		 WHERE name = 'total-flag' AND namespace_id = (SELECT id FROM handles WHERE handle = $1)`, owner); err != nil {
+		t.Fatal(err)
+	}
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "total-draft", "modes": []string{"autonomous"}, "visibility": "public",
+		"summary": "unpublished " + all,
+	}, nil, http.StatusCreated)
+	if h, n := page(all, "limit=100"); h != 3 || n != 3 {
+		t.Fatalf("a private, a blocked and an unpublished agent counted: %d hits, total %d; want 3 and 3", h, n)
+	}
+	// Every filter that narrows the hits narrows the total with them.
+	for _, c := range []struct {
+		extra string
+		want  int
+	}{
+		{"mode=autonomous", 3}, {"mode=interactive", 0},
+		{"license=apache-2.0", 3}, {"license=WTFPL", 0},
+		{"capability=network", 0}, {"capability=targetHosts", 0},
+	} {
+		if h, n := page(all, "limit=100&"+c.extra); h != c.want || n != c.want {
+			t.Fatalf("%s: %d hits, total %d; want %d and %d", c.extra, h, n, c.want, c.want)
+		}
 	}
 }

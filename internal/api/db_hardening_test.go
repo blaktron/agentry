@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // publishedVersionID publishes one version and returns its row id.
@@ -53,10 +54,14 @@ func TestVersionImmutabilityBlocksStatusRollback(t *testing.T) {
 	if _, err := env.st.Pool().Exec(ctx,
 		`UPDATE agent_versions SET manifest = '{"evil":true}'::jsonb WHERE id = $1`, versionID); err == nil {
 		t.Fatal("a published version's manifest was rewritten")
+	} else if !strings.Contains(err.Error(), "immutable") {
+		t.Fatalf("unexpected error for a manifest rewrite: %v", err)
 	}
 	if _, err := env.st.Pool().Exec(ctx,
 		`UPDATE agent_versions SET archive_digest = 'sha256:deadbeef' WHERE id = $1`, versionID); err == nil {
 		t.Fatal("a published version's archive digest was rewritten")
+	} else if !strings.Contains(err.Error(), "immutable") {
+		t.Fatalf("unexpected error for a digest rewrite: %v", err)
 	}
 
 	// State-machine fields still move: the row is immutable, not frozen.
@@ -69,6 +74,8 @@ func TestVersionImmutabilityBlocksStatusRollback(t *testing.T) {
 	// DELETE /agents leans on it).
 	if _, err := env.st.Pool().Exec(ctx, `DELETE FROM agent_versions WHERE id = $1`, versionID); err == nil {
 		t.Fatal("a version row was deleted")
+	} else if !strings.Contains(err.Error(), "never deleted") {
+		t.Fatalf("unexpected error for a version delete: %v", err)
 	}
 }
 
@@ -107,6 +114,8 @@ func TestAuditEventsRefuseTruncate(t *testing.T) {
 	}
 	if _, err := env.st.Pool().Exec(ctx, `TRUNCATE `+partition); err == nil {
 		t.Fatalf("TRUNCATE %s emptied a partition of the append-only log", partition)
+	} else if !strings.Contains(err.Error(), "append-only") {
+		t.Fatalf("unexpected error for TRUNCATE %s: %v", partition, err)
 	}
 
 	var after int64
@@ -121,9 +130,13 @@ func TestAuditEventsRefuseTruncate(t *testing.T) {
 	// append-only contract is covered in one place.
 	if _, err := env.st.Pool().Exec(ctx, `UPDATE audit_events SET action = 'tampered'`); err == nil {
 		t.Fatal("an audit event was updated")
+	} else if !strings.Contains(err.Error(), "append-only") {
+		t.Fatalf("unexpected error for an audit UPDATE: %v", err)
 	}
 	if _, err := env.st.Pool().Exec(ctx, `DELETE FROM audit_events`); err == nil {
 		t.Fatal("audit events were deleted")
+	} else if !strings.Contains(err.Error(), "append-only") {
+		t.Fatalf("unexpected error for an audit DELETE: %v", err)
 	}
 }
 
@@ -174,6 +187,49 @@ func TestAuditPruneDropsOnlyOldPartitions(t *testing.T) {
 		if !exists {
 			t.Fatalf("prune dropped %s, which is outside its remit", name)
 		}
+	}
+	// The window is judged in whole months: a month that ends on or before the
+	// cutoff's month is dropped, the cutoff's own month and every later one
+	// stay.
+	for _, month := range []string{"2021-03-10", "2021-04-10", "2021-05-10"} {
+		if _, err := env.st.Pool().Exec(ctx, `SELECT audit_ensure_partition($1::date)`, month); err != nil {
+			t.Fatal(err)
+		}
+	}
+	partitionExists := func(name string) bool {
+		t.Helper()
+		var found bool
+		if err := env.st.Pool().QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = $1)`, name).Scan(&found); err != nil {
+			t.Fatal(err)
+		}
+		return found
+	}
+	for _, step := range []struct {
+		cutoff  string
+		dropped int
+		gone    string
+		kept    string
+	}{
+		{"2021-04-15", 1, "audit_events_202103", "audit_events_202104"},
+		{"2021-05-01", 1, "audit_events_202104", "audit_events_202105"},
+	} {
+		if err := env.st.Pool().QueryRow(ctx, `SELECT audit_prune_partitions($1::date)`, step.cutoff).Scan(&dropped); err != nil {
+			t.Fatal(err)
+		}
+		if dropped != step.dropped || partitionExists(step.gone) || !partitionExists(step.kept) {
+			t.Fatalf("prune before %s dropped %d (want %d); %s present: %v, %s present: %v",
+				step.cutoff, dropped, step.dropped, step.gone, partitionExists(step.gone), step.kept, partitionExists(step.kept))
+		}
+	}
+	currentMonth := "audit_events_" + time.Now().UTC().Format("200601")
+	if _, err := env.st.Pool().Exec(ctx, `SELECT audit_ensure_partition(current_date)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.st.Pool().QueryRow(ctx, `SELECT audit_prune_partitions((now() - interval '400 days')::date)`).Scan(&dropped); err != nil {
+		t.Fatal(err)
+	}
+	if !partitionExists(currentMonth) {
+		t.Fatalf("prune dropped the current month's partition %s", currentMonth)
 	}
 	// Events from this month are still readable.
 	res := env.do(anonymous, http.MethodGet, "/api/v1/meta", nil)

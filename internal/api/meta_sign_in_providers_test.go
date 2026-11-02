@@ -116,6 +116,23 @@ func TestMetaListsEveryConfiguredSignInProvider(t *testing.T) {
 	if ids := specSignInProviders(t); !slices.Equal(ids, []string{"authentik", "oidc"}) {
 		t.Fatalf("the spec's provider ids are %v, want the one provider's two ids", ids)
 	}
+
+	// A provider with no id is the plain OpenID provider.
+	t.Run("no id", func(t *testing.T) {
+		idp := newFakeOIDC(t)
+		env := newTestEnvCfg(t, func(cfg *config.Config) {
+			cfg.Auth.OIDC = config.OIDCProvider{Issuer: idp.srv.URL, ClientID: idp.clientID, ClientSecret: "secret"}
+		}, func(s *api.Server) { s.SetOIDCHTTPClient(idp.srv.Client()) })
+		metaAgreesWithStart(t, env, []string{"oidc"})
+	})
+	// A provider is listed only when its issuer is named as well as its
+	// client id and secret: without one its start would answer 404.
+	t.Run("no issuer", func(t *testing.T) {
+		env := newTestEnvCfg(t, func(cfg *config.Config) {
+			cfg.Auth.OIDC = config.OIDCProvider{ID: "oidc", ClientID: "client", ClientSecret: "secret"}
+		})
+		metaAgreesWithStart(t, env, []string{})
+	})
 }
 
 // A registry with no provider says so with an empty list, not an absent

@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 )
@@ -28,6 +29,36 @@ func TestPublicLookupsAnswer404OnlyForAbsence(t *testing.T) {
 		_ = res.Body.Close()
 		if res.StatusCode != c.want {
 			t.Errorf("GET %s = %d, want %d", c.path, res.StatusCode, c.want)
+		}
+	}
+
+	// A handle whose holder is no longer active is absent too: an account
+	// that is suspended or deleted, an organization that is suspended or
+	// decommissioned. An organization in its decommission hold is still read.
+	ctx := context.Background()
+	for _, state := range []string{"suspended", "deleted"} {
+		gone := env.register("look" + state)
+		if _, err := env.st.Pool().Exec(ctx,
+			`UPDATE users SET state = $2 WHERE id = (SELECT id FROM handles WHERE handle = $1)`, gone, state); err != nil {
+			t.Fatal(err)
+		}
+		res := env.do(anonymous, http.MethodGet, "/api/v1/users/"+gone, nil)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusNotFound {
+			t.Errorf("GET /users/%s of a %s account = %d, want 404", gone, state, res.StatusCode)
+		}
+	}
+	for _, c := range []struct {
+		state string
+		want  int
+	}{{"decommissioning", http.StatusOK}, {"suspended", http.StatusNotFound}, {"decommissioned", http.StatusNotFound}} {
+		if _, err := env.st.Pool().Exec(ctx, `UPDATE orgs SET state = $2 WHERE id = (SELECT id FROM handles WHERE handle = $1)`, orgH, c.state); err != nil {
+			t.Fatal(err)
+		}
+		res := env.do(anonymous, http.MethodGet, "/api/v1/orgs/"+orgH, nil)
+		_ = res.Body.Close()
+		if res.StatusCode != c.want {
+			t.Errorf("GET /orgs/%s in state %s = %d, want %d", orgH, c.state, res.StatusCode, c.want)
 		}
 	}
 }

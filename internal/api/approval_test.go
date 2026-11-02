@@ -65,6 +65,10 @@ func TestReviewApprovalFlow(t *testing.T) {
 		Id            string `json:"id"`
 		Namespace     string `json:"namespace"`
 		VersionStatus string `json:"versionStatus"`
+		Queue         string `json:"queue"`
+		State         string `json:"state"`
+		Agent         string `json:"agent"`
+		Version       string `json:"version"`
 	}
 	env.doJSON(staffSess, http.MethodGet, "/api/v1/review-queue?queue=platform&limit=100", nil, &queue, http.StatusOK)
 	itemID := ""
@@ -75,6 +79,9 @@ func TestReviewApprovalFlow(t *testing.T) {
 			// client can say what a decision will do to it.
 			if it.VersionStatus != "needs_review" {
 				t.Fatalf("queue item versionStatus = %q, want needs_review", it.VersionStatus)
+			}
+			if it.Queue != "platform" || it.State != "pending" || it.Agent != "risky" || it.Version != "1.0.0" {
+				t.Fatalf("queue item = %+v, want the pending platform item of risky@1.0.0", it)
 			}
 		}
 	}
@@ -115,9 +122,45 @@ func TestReviewApprovalFlow(t *testing.T) {
 		t.Fatalf("after refused decisions, versionStatus = %q, want needs_review", bundle.Item.VersionStatus)
 	}
 
+	// A decision without a rationale is refused as well, blank or empty: the
+	// record of why is the point of a decision.
+	for _, rationale := range []string{"", "   "} {
+		res := env.do(staffSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
+			map[string]any{"decision": "approve", "rationale": rationale})
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("approve with rationale %q: got %d, want 422", rationale, res.StatusCode)
+		}
+	}
+	env.doJSON(staffSess, http.MethodGet, "/api/v1/review-items/"+itemID, nil, &bundle, http.StatusOK)
+	if bundle.Item.VersionStatus != "needs_review" {
+		t.Fatalf("after refused rationales, versionStatus = %q, want needs_review", bundle.Item.VersionStatus)
+	}
+
 	// A different staff reviewer rejects it (content is genuinely malicious).
 	env.doJSON(staffSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
 		map[string]any{"decision": "reject", "rationale": "confirmed injection payload"}, nil, http.StatusNoContent)
+	env.waitStatus(author, "risky", "1.0.0", "rejected")
+	// The decision is kept with who made it and why.
+	var decidedState, rationale string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT state, rationale FROM review_items WHERE id = $1::uuid`, itemID).Scan(&decidedState, &rationale); err != nil {
+		t.Fatal(err)
+	}
+	if decidedState != "rejected" || rationale != "confirmed injection payload" {
+		t.Fatalf("recorded decision = %s %q, want rejected with the rationale given", decidedState, rationale)
+	}
+
+	// An item is decided once: a second decision, either way, is a conflict and
+	// leaves the version as it was.
+	for _, decision := range []string{"approve", "reject"} {
+		res := env.do(staffSess, http.MethodPost, "/api/v1/review-items/"+itemID+"/decision",
+			map[string]any{"decision": decision, "rationale": "second thoughts"})
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusConflict {
+			t.Fatalf("%s on a decided item: got %d, want 409", decision, res.StatusCode)
+		}
+	}
 	env.waitStatus(author, "risky", "1.0.0", "rejected")
 }
 

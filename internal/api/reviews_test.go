@@ -101,9 +101,32 @@ func TestOrgPolicyTightenOnly(t *testing.T) {
 	org := "polorg" + env.sfx
 	env.doJSON(sess, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": org, "displayName": "P"}, nil, http.StatusCreated)
 
-	// Tightening is accepted.
+	// Tightening is accepted, and the answer is the policy as it now stands:
+	// the organization's knobs over the platform baseline's.
+	var merged struct {
+		MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity"`
+		RequireHumanReview     string `json:"requireHumanReview"`
+		WildcardEgress         string `json:"wildcardEgress"`
+	}
 	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+org+"/policy",
-		map[string]any{"maxAutoPublishSeverity": "info", "requireHumanReview": "always"}, nil, http.StatusOK)
+		map[string]any{"maxAutoPublishSeverity": "info", "requireHumanReview": "always"}, &merged, http.StatusOK)
+	if merged.MaxAutoPublishSeverity != "info" || merged.RequireHumanReview != "always" || merged.WildcardEgress != "review" {
+		t.Fatalf("merged policy = %+v, want info, always and the baseline's wildcardEgress", merged)
+	}
+	// The document sent is the one stored.
+	var stored map[string]any
+	env.doJSON(sess, http.MethodGet, "/api/v1/orgs/"+org+"/policy", nil, &stored, http.StatusOK)
+	if len(stored) != 2 || stored["maxAutoPublishSeverity"] != "info" || stored["requireHumanReview"] != "always" {
+		t.Fatalf("stored policy = %v", stored)
+	}
+	var audited int
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_events WHERE action = 'policy.update' AND org_id = (SELECT id FROM handles WHERE handle = $1)`, org).Scan(&audited); err != nil {
+		t.Fatal(err)
+	}
+	if audited != 1 {
+		t.Fatalf("the policy change was audited %d times, want once", audited)
+	}
 
 	// Loosening is rejected.
 	res := env.do(sess, http.MethodPut, "/api/v1/orgs/"+org+"/policy",
@@ -112,13 +135,93 @@ func TestOrgPolicyTightenOnly(t *testing.T) {
 	if res.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("loosening policy: got %d want 422", res.StatusCode)
 	}
-
-	// Platform baseline is world-readable.
-	res = env.do(anonymous, http.MethodGet, "/api/v1/platform/policy", nil)
-	_ = res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("platform policy read: got %d", res.StatusCode)
+	// A knob at exactly the baseline's own value is no loosening.
+	baselineLevel := map[string]any{"maxAutoPublishSeverity": baselineSeverity(t, env)}
+	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+org+"/policy", baselineLevel, nil, http.StatusOK)
+	// A document that does not parse, or names a severity there is not, is
+	// refused and leaves the stored policy as it was.
+	for _, bad := range []map[string]any{{"maxAutoPublishSeverity": "bogus"}, {"requireHumanReview": "sometimes"}} {
+		res = env.do(sess, http.MethodPut, "/api/v1/orgs/"+org+"/policy", bad)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("policy %v: got %d want 422", bad, res.StatusCode)
+		}
 	}
+	stored = nil
+	env.doJSON(sess, http.MethodGet, "/api/v1/orgs/"+org+"/policy", nil, &stored, http.StatusOK)
+	if len(stored) != 1 || stored["maxAutoPublishSeverity"] != baselineLevel["maxAutoPublishSeverity"] {
+		t.Fatalf("stored policy after refused documents = %v, want the last accepted one", stored)
+	}
+
+	// Platform baseline is world-readable, and says what an organization may
+	// only tighten.
+	var baseline struct {
+		MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity"`
+		RequireHumanReview     string `json:"requireHumanReview"`
+		WildcardEgress         string `json:"wildcardEgress"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/platform/policy", nil, &baseline, http.StatusOK)
+	if baseline.MaxAutoPublishSeverity == "" || baseline.RequireHumanReview != "never" || baseline.WildcardEgress != "review" {
+		t.Fatalf("platform policy = %+v", baseline)
+	}
+}
+
+// A baseline the platform stores is the one read back and the one an
+// organization may only tighten, whichever knob it loosens.
+func TestOrgPolicyTightensAStoredBaseline(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register("bpol-own")
+	env.verifyEmail(owner)
+	sess := env.login(owner)
+	org := "bpolorg" + env.sfx
+	env.doJSON(sess, http.MethodPost, "/api/v1/orgs", map[string]any{"handle": org, "displayName": "B"}, nil, http.StatusCreated)
+
+	ctx := context.Background()
+	if _, err := env.st.Pool().Exec(ctx, `DELETE FROM policies WHERE org_id IS NULL`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = env.st.Pool().Exec(context.Background(), `DELETE FROM policies WHERE org_id IS NULL`) })
+	if _, err := env.st.Pool().Exec(ctx,
+		`INSERT INTO policies (id, org_id, document, version)
+		 VALUES (gen_random_uuid(), NULL, '{"maxAutoPublishSeverity":"low","requireHumanReview":"always","wildcardEgress":"reject"}'::jsonb, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	var baseline map[string]any
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/platform/policy", nil, &baseline, http.StatusOK)
+	if baseline["maxAutoPublishSeverity"] != "low" || baseline["requireHumanReview"] != "always" || baseline["wildcardEgress"] != "reject" {
+		t.Fatalf("stored baseline served as %v", baseline)
+	}
+	for _, loosening := range []map[string]any{
+		{"maxAutoPublishSeverity": "medium"},
+		{"requireHumanReview": "never"},
+		{"wildcardEgress": "review"},
+	} {
+		res := env.do(sess, http.MethodPut, "/api/v1/orgs/"+org+"/policy", loosening)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("policy %v against the stored baseline: got %d want 422", loosening, res.StatusCode)
+		}
+	}
+	var merged struct {
+		MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity"`
+		RequireHumanReview     string `json:"requireHumanReview"`
+		WildcardEgress         string `json:"wildcardEgress"`
+	}
+	env.doJSON(sess, http.MethodPut, "/api/v1/orgs/"+org+"/policy",
+		map[string]any{"maxAutoPublishSeverity": "info", "wildcardEgress": "reject"}, &merged, http.StatusOK)
+	if merged.MaxAutoPublishSeverity != "info" || merged.RequireHumanReview != "always" || merged.WildcardEgress != "reject" {
+		t.Fatalf("merged policy = %+v, want info over the stored baseline's always and reject", merged)
+	}
+}
+
+// baselineSeverity is the platform baseline's own auto-publish severity.
+func baselineSeverity(t *testing.T, env *testEnv) string {
+	t.Helper()
+	var baseline struct {
+		MaxAutoPublishSeverity string `json:"maxAutoPublishSeverity"`
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/platform/policy", nil, &baseline, http.StatusOK)
+	return baseline.MaxAutoPublishSeverity
 }
 
 func TestPlatformActionRequiresStaff(t *testing.T) {
@@ -130,17 +233,36 @@ func TestPlatformActionRequiresStaff(t *testing.T) {
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
 		map[string]any{"namespace": owner, "name": "pa-agent", "modes": []string{"autonomous"}, "visibility": "public"}, nil, http.StatusCreated)
 
-	// Non-staff cannot quarantine.
+	_, pat := env.mintPAT(sess, "pub", "agent:publish", "agent:read")
+	if status, body := env.uploadVersionCLI(owner, "pa-agent", pat, skillFiles(owner, "pa-agent", "1.0.0", nil)); status != http.StatusAccepted {
+		t.Fatalf("publish: %d %s", status, body)
+	}
+	env.waitStatus(owner, "pa-agent", "1.0.0", "published")
+
+	// Non-staff cannot quarantine, and nobody signed out can either.
 	res := env.do(sess, http.MethodPost, "/api/v1/platform/agents/"+owner+"/pa-agent/quarantine",
 		map[string]any{"reason": "test"})
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("non-staff quarantine: got %d want 403", res.StatusCode)
 	}
-
-	// Staff can.
+	res = env.do(anonymous, http.MethodPost, "/api/v1/platform/agents/"+owner+"/pa-agent/quarantine",
+		map[string]any{"reason": "test"})
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous quarantine: got %d want 401", res.StatusCode)
+	}
+	// An agent that does not exist is a 404 to staff.
 	env.makePlatformStaff(t, owner)
 	staffSess := env.login(owner)
+	res = env.do(staffSess, http.MethodPost, "/api/v1/platform/agents/"+owner+"/no-such-agent/quarantine",
+		map[string]any{"reason": "test"})
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("quarantine of an unknown agent: got %d want 404", res.StatusCode)
+	}
+
+	// Staff can.
 	res = env.do(staffSess, http.MethodPost, "/api/v1/platform/agents/"+owner+"/pa-agent/quarantine",
 		map[string]any{"reason": "malware confirmed"})
 	_ = res.Body.Close()
@@ -154,5 +276,51 @@ func TestPlatformActionRequiresStaff(t *testing.T) {
 	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+owner+"/pa-agent", nil, &agent, http.StatusOK)
 	if agent.QuarantineState != "quarantined" {
 		t.Fatalf("quarantine state = %s", agent.QuarantineState)
+	}
+	// The act reaches the release a consumer would install, not the flag
+	// alone, and the reason is on the record.
+	versionStatus := func() string {
+		t.Helper()
+		var v struct {
+			Status string `json:"status"`
+		}
+		env.doJSON(staffSess, http.MethodGet, "/api/v1/agents/"+owner+"/pa-agent/versions/1.0.0", nil, &v, http.StatusOK)
+		return v.Status
+	}
+	if got := versionStatus(); got != "quarantined" {
+		t.Fatalf("version status after quarantine = %s, want quarantined", got)
+	}
+	var reason string
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT detail->>'reason' FROM audit_events WHERE action = 'agent.quarantine' AND target_id = (SELECT a.id FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = 'pa-agent')`,
+		owner).Scan(&reason); err != nil {
+		t.Fatal(err)
+	}
+	if reason != "malware confirmed" {
+		t.Fatalf("audited reason = %q", reason)
+	}
+
+	// Blocking disables the release; reinstating clears the flag and asks for
+	// a fresh scan of each release, which the answer counts.
+	env.doJSON(staffSess, http.MethodPost, "/api/v1/platform/agents/"+owner+"/pa-agent/block",
+		map[string]any{"reason": "confirmed"}, nil, http.StatusNoContent)
+	if got := versionStatus(); got != "blocked" {
+		t.Fatalf("version status after block = %s, want blocked", got)
+	}
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT quarantine_state FROM agents a JOIN handles h ON h.id = a.namespace_id WHERE h.handle = $1 AND a.name = 'pa-agent'`, owner).Scan(&reason); err != nil || reason != "blocked" {
+		t.Fatalf("agent flag after block = %q (%v), want blocked", reason, err)
+	}
+	var reinstated struct {
+		Queued int `json:"queued"`
+	}
+	env.doJSON(staffSess, http.MethodPost, "/api/v1/platform/agents/"+owner+"/pa-agent/reinstate",
+		map[string]any{"reason": "false alarm"}, &reinstated, http.StatusAccepted)
+	if reinstated.Queued != 1 {
+		t.Fatalf("reinstate queued %d scans, want 1", reinstated.Queued)
+	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/agents/"+owner+"/pa-agent", nil, &agent, http.StatusOK)
+	if agent.QuarantineState != "none" {
+		t.Fatalf("quarantine state after reinstate = %s, want none", agent.QuarantineState)
 	}
 }

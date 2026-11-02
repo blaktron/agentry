@@ -132,6 +132,7 @@ type accountInstall struct {
 type installProblem struct {
 	Type    string   `json:"type"`
 	Status  int      `json:"status"`
+	Detail  string   `json:"detail"`
 	Missing []string `json:"missing"`
 	Widened []string `json:"widened"`
 }
@@ -208,6 +209,9 @@ func TestAccountInstallNeedsTheReleasesAcceptances(t *testing.T) {
 	if code != http.StatusConflict || !strings.HasSuffix(prob.Type, "/install-consent-required") || !reflect.DeepEqual(prob.Missing, []string{"capabilities"}) {
 		t.Fatalf("PUT without acceptCapabilities: %d %+v, want 409 install-consent-required missing [capabilities]", code, prob)
 	}
+	if want := "This release needs your acceptance of its declared capabilities. Send the acceptance and retry."; prob.Detail != want {
+		t.Fatalf("consent problem detail = %q, want %q", prob.Detail, want)
+	}
 	if len(env.listInstalls(t, person)) != 0 {
 		t.Fatal("a refused PUT recorded something")
 	}
@@ -249,6 +253,8 @@ func TestAccountInstallNeedsTheReleasesAcceptances(t *testing.T) {
 	if got := env.listInstalls(t, env.login(outsiderH)); len(got) != 0 {
 		t.Fatalf("an outsider's list = %d records", len(got))
 	}
+	// The list is the account's own: no credential, no answer.
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/user/installs", nil, nil, http.StatusUnauthorized)
 
 	// Audited beside agent.star, so the person's activity shows it — and
 	// the QuickAgent's own feed does not, to its author either: whose
@@ -260,6 +266,35 @@ func TestAccountInstallNeedsTheReleasesAcceptances(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("activity = %v, want agent.install", actions)
+	}
+	var activity struct {
+		Events []struct {
+			Action string         `json:"action"`
+			Detail map[string]any `json:"detail"`
+		} `json:"events"`
+	}
+	env.doJSON(person, http.MethodGet, "/api/v1/user/activity", nil, &activity, http.StatusOK)
+	named := false
+	for _, e := range activity.Events {
+		named = named || (e.Action == "agent.install" && e.Detail["version"] == "1.0.0")
+	}
+	if !named {
+		t.Fatalf("no agent.install event names the version: %+v", activity.Events)
+	}
+	// The author's own activity names the release they submitted.
+	var authored struct {
+		Events []struct {
+			Action  string  `json:"action"`
+			Version *string `json:"version"`
+		} `json:"events"`
+	}
+	env.doJSON(author, http.MethodGet, "/api/v1/user/activity", nil, &authored, http.StatusOK)
+	submitted := false
+	for _, e := range authored.Events {
+		submitted = submitted || (e.Action == "version.submit" && e.Version != nil && *e.Version == "1.0.0")
+	}
+	if !submitted {
+		t.Fatalf("the author's activity has no version.submit naming 1.0.0: %+v", authored.Events)
 	}
 	var feed struct {
 		Events []struct {
@@ -303,10 +338,27 @@ func TestAccountInstallUpdateReasksOnlyWhenWidened(t *testing.T) {
 		t.Fatalf("latest = %s, want 2.0.0 (the newest published)", deref(first.LatestVersion))
 	}
 
+	// The version is named, exactly: an empty or blank one records nothing.
+	for _, blank := range []string{"", "   "} {
+		res := env.do(person, http.MethodPut, "/api/v1/user/installs/"+ref, map[string]any{"version": blank, "acceptCapabilities": true})
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("PUT with version %q: got %d, want 422", blank, res.StatusCode)
+		}
+	}
+	if got := env.listInstalls(t, person); len(got) != 1 || deref(got[0].InstalledVersion) != "1.0.0" {
+		t.Fatalf("a refused PUT moved the record: %+v", got)
+	}
+
 	// The same contract: no question asked.
 	code, rec, _ := env.putInstall(t, person, ref, map[string]any{"version": "1.1.0"})
 	if code != http.StatusOK || deref(rec.InstalledVersion) != "1.1.0" {
 		t.Fatalf("update to an unchanged contract without acceptCapabilities: %d %s", code, rec.raw)
+	}
+	// Space around the version is not part of it.
+	code, rec, _ = env.putInstall(t, person, ref, map[string]any{"version": " 1.1.0 "})
+	if code != http.StatusOK || deref(rec.InstalledVersion) != "1.1.0" {
+		t.Fatalf("a padded version: %d %s", code, rec.raw)
 	}
 
 	// A widened one: refused, naming what widened; the record stays.
@@ -317,6 +369,9 @@ func TestAccountInstallUpdateReasksOnlyWhenWidened(t *testing.T) {
 	if !reflect.DeepEqual(prob.Widened, []string{"adds network egress to other.example", "asks for a new secret: OTHER_TOKEN"}) {
 		t.Fatalf("widened = %v", prob.Widened)
 	}
+	if want := "This release needs your acceptance of its widened capabilities (adds network egress to other.example; asks for a new secret: OTHER_TOKEN). Send the acceptance and retry."; prob.Detail != want {
+		t.Fatalf("consent problem detail = %q, want %q", prob.Detail, want)
+	}
 	if got := env.listInstalls(t, person); len(got) != 1 || deref(got[0].InstalledVersion) != "1.1.0" {
 		t.Fatalf("a refused update moved the record: %+v", got)
 	}
@@ -324,6 +379,10 @@ func TestAccountInstallUpdateReasksOnlyWhenWidened(t *testing.T) {
 	code, rec, _ = env.putInstall(t, person, ref, map[string]any{"version": "2.0.0", "acceptCapabilities": true})
 	if code != http.StatusOK || deref(rec.InstalledVersion) != "2.0.0" || deref(rec.LatestVersion) != "2.0.0" {
 		t.Fatalf("accepted update: %d %s", code, rec.raw)
+	}
+	// A release the scan found things in is still a scanned one.
+	if deref(rec.Verdict) != "scanned" {
+		t.Fatalf("verdict of the accepted update = %s, want scanned", deref(rec.Verdict))
 	}
 	if deref(rec.InstalledAt) != deref(first.InstalledAt) || deref(rec.UpdatedAt) == deref(first.UpdatedAt) {
 		t.Fatalf("an update keeps installedAt and moves updatedAt: first %s / %s, now %s / %s",
@@ -335,6 +394,19 @@ func TestAccountInstallUpdateReasksOnlyWhenWidened(t *testing.T) {
 
 	// A version that is not a published release, and one that does not
 	// exist.
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE agent_versions SET status = 'yanked', yanked_at = now()
+		 WHERE version = '1.0.0' AND agent_id = (SELECT a.id FROM agents a JOIN handles h ON h.id = a.namespace_id
+		   WHERE h.handle = $1 AND a.name = 'grower')`, authorH); err != nil {
+		t.Fatal(err)
+	}
+	code, _, prob = env.putInstall(t, person, ref, map[string]any{"version": "1.0.0", "acceptCapabilities": true})
+	if code != http.StatusConflict || !strings.HasSuffix(prob.Type, "/version-not-published") {
+		t.Fatalf("a yanked version: %d %+v, want 409 version-not-published", code, prob)
+	}
+	if got := env.listInstalls(t, person); len(got) != 1 || deref(got[0].InstalledVersion) != "2.0.0" {
+		t.Fatalf("a refused update moved the record: %+v", got)
+	}
 	code, _, prob = env.putInstall(t, person, ref, map[string]any{"version": "3.0.0", "acceptCapabilities": true})
 	if code != http.StatusNotFound {
 		t.Fatalf("a version that does not exist: %d %+v", code, prob)
@@ -386,9 +458,21 @@ func TestAccountInstallUnsignedAndUnscannedConsents(t *testing.T) {
 	if code != http.StatusConflict || !reflect.DeepEqual(prob.Missing, []string{"unsigned"}) {
 		t.Fatalf("an unsigned release without acceptUnsigned: %d %+v", code, prob)
 	}
+	if !strings.Contains(prob.Detail, "that it carries no attestation") || strings.Contains(prob.Detail, "without a scan") {
+		t.Fatalf("the unsigned refusal says %q", prob.Detail)
+	}
 	code, rec, _ := env.putInstall(t, admin, orgH+"/elder", map[string]any{"version": "1.0.0", "acceptCapabilities": true, "acceptUnsigned": true})
 	if code != http.StatusOK || rec.Signed == nil || *rec.Signed || rec.AcceptedUnsigned == nil || !*rec.AcceptedUnsigned || deref(rec.Verdict) != "scanned" {
 		t.Fatalf("an unsigned release accepted: %d %s", code, rec.raw)
+	}
+	// The consents kept are the new release's: an update to a signed release
+	// no longer records the unsigned acceptance.
+	env.publishVersions(t, admin, orgH, "elder", []versionFiles{
+		{"1.1.0", skillFiles(orgH, "elder", "1.1.0", nil)},
+	})
+	code, rec, _ = env.putInstall(t, admin, orgH+"/elder", map[string]any{"version": "1.1.0", "acceptCapabilities": true})
+	if code != http.StatusOK || rec.Signed == nil || !*rec.Signed || rec.AcceptedUnsigned == nil || *rec.AcceptedUnsigned {
+		t.Fatalf("an update to a signed release: %d %s", code, rec.raw)
 	}
 
 	// A version admitted without a scan: no report, no attestation; both
@@ -403,14 +487,47 @@ func TestAccountInstallUnsignedAndUnscannedConsents(t *testing.T) {
 	if code != http.StatusConflict || !reflect.DeepEqual(prob.Missing, []string{"unscanned"}) {
 		t.Fatalf("an unscanned release with acceptUnsigned only: %d %+v", code, prob)
 	}
+	if !strings.Contains(prob.Detail, "that it was admitted without a scan") || strings.Contains(prob.Detail, "attestation") {
+		t.Fatalf("the unscanned refusal says %q", prob.Detail)
+	}
 	code, _, prob = env.putInstall(t, admin, orgH+"/quiet", map[string]any{"version": "1.0.0", "acceptCapabilities": true})
 	if code != http.StatusConflict || !reflect.DeepEqual(prob.Missing, []string{"unsigned", "unscanned"}) {
 		t.Fatalf("an unscanned release with neither: %d %+v", code, prob)
+	}
+	if !strings.Contains(prob.Detail, "that it carries no attestation, and that it was admitted without a scan") {
+		t.Fatalf("the refusal for both says %q", prob.Detail)
 	}
 	code, rec, _ = env.putInstall(t, admin, orgH+"/quiet", map[string]any{"version": "1.0.0", "acceptCapabilities": true, "acceptUnsigned": true, "acceptUnscanned": true})
 	if code != http.StatusOK || deref(rec.Verdict) != "unscanned" || rec.FindingCounts != nil || rec.Signed == nil || *rec.Signed ||
 		rec.AcceptedUnscanned == nil || !*rec.AcceptedUnscanned || rec.AcceptedUnsigned == nil || !*rec.AcceptedUnsigned {
 		t.Fatalf("an unscanned release accepted: %d %s", code, rec.raw)
+	}
+
+	// An update to a scanned release no longer records the unscanned
+	// acceptance, and the list puts the record changed last first.
+	env.doJSON(admin, http.MethodPatch, "/api/v1/agents/"+orgH+"/quiet", map[string]any{"pipelineSkip": false}, nil, http.StatusOK)
+	env.publishVersions(t, admin, orgH, "quiet", []versionFiles{
+		{"1.1.0", skillFiles(orgH, "quiet", "1.1.0", nil)},
+	})
+	code, rec, _ = env.putInstall(t, admin, orgH+"/quiet", map[string]any{"version": "1.1.0", "acceptCapabilities": true})
+	if code != http.StatusOK || deref(rec.Verdict) != "scanned" || rec.AcceptedUnscanned == nil || *rec.AcceptedUnscanned {
+		t.Fatalf("an update to a scanned release: %d %s", code, rec.raw)
+	}
+	refs := func() []string {
+		var out []string
+		for _, r := range env.listInstalls(t, admin) {
+			out = append(out, r.Ref)
+		}
+		return out
+	}
+	if got := refs(); !reflect.DeepEqual(got, []string{orgH + "/quiet", orgH + "/elder"}) {
+		t.Fatalf("list order = %v, want the record changed last first", got)
+	}
+	if code, _, _ := env.putInstall(t, admin, orgH+"/elder", map[string]any{"version": "1.1.0"}); code != http.StatusOK {
+		t.Fatalf("re-recording elder: %d", code)
+	}
+	if got := refs(); !reflect.DeepEqual(got, []string{orgH + "/elder", orgH + "/quiet"}) {
+		t.Fatalf("list order after a re-record = %v, want elder first", got)
 	}
 }
 
@@ -499,6 +616,14 @@ func TestAccountInstallInvisibleToNonReaders(t *testing.T) {
 	if list := env.listInstalls(t, stranger); len(list) != 1 || !list[0].Readable || deref(list[0].InstalledVersion) != "1.0.0" {
 		t.Fatalf("readable again: %+v", list)
 	}
+	// A snapshot that will not parse is left out of its row, not out of the list.
+	if _, err := env.st.Pool().Exec(context.Background(),
+		`UPDATE account_installs SET capabilities = '[]'::jsonb WHERE ref_namespace = $1 AND ref_name = 'secret'`, ownerH); err != nil {
+		t.Fatal(err)
+	}
+	if list := env.listInstalls(t, stranger); len(list) != 1 || !list[0].Readable || list[0].Capabilities != nil {
+		t.Fatalf("a snapshot that does not parse: %+v", list)
+	}
 
 	// A QuickAgent that moved since — an erasure's transfer into an
 	// organization, say — is listed under the ref stored at install time
@@ -527,6 +652,24 @@ func TestAccountInstallInvisibleToNonReaders(t *testing.T) {
 	}
 	if uninstalls != 1 {
 		t.Fatalf("agent.uninstall audited %d times, want once", uninstalls)
+	}
+
+	// An agent of an organization that is suspended is absent as well: its
+	// record is the bare ref and the list still answers.
+	orgH := "apiorg" + env.sfx
+	orgID := env.createOrg(owner, orgH)
+	env.publishedAgent(owner, orgH, "kept")
+	if code, _, prob := env.putInstall(t, stranger, orgH+"/kept", map[string]any{"version": "1.0.0", "acceptCapabilities": true}); code != http.StatusOK {
+		t.Fatalf("install of an organization's agent: %d %+v", code, prob)
+	}
+	if list := env.listInstalls(t, stranger); len(list) != 1 || !list[0].Readable || list[0].Ref != orgH+"/kept" {
+		t.Fatalf("before the suspension: %+v", list)
+	}
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE orgs SET state = 'suspended' WHERE id = $1::uuid`, orgID); err != nil {
+		t.Fatal(err)
+	}
+	if list := env.listInstalls(t, stranger); len(list) != 1 || list[0].Readable || list[0].Ref != orgH+"/kept" {
+		t.Fatalf("a suspended organization's record: %+v, want the bare ref, unreadable", list)
 	}
 }
 
