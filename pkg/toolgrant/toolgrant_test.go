@@ -395,3 +395,36 @@ func TestCoderHoldsTheToolchainsGrants(t *testing.T) {
 		t.Fatalf("with coder: %+v", got)
 	}
 }
+
+// The subagent tools are given to a persistent agent whose release
+// declares a subagent: in a persistent release that declares none, an
+// instruction that calls for one names dependencies.agents, and declaring a
+// subagent clears it. In any other release the names are words.
+func TestTheSubagentToolsNeedASubagent(t *testing.T) {
+	release := func(deps []manifest.AgentDependency, modes ...manifest.Mode) *manifest.Manifest {
+		m := &manifest.Manifest{SchemaVersion: "2", Namespace: "acme", Name: "helper", Modes: modes}
+		m.Dependencies.Agents = deps
+		return m
+	}
+	sub := []manifest.AgentDependency{{Ref: "acme/summarize", Version: "^1.0.0", Why: "it summarizes the PDFs the person shares"}}
+	tools := toolgrant.ToolsOf(toolgrant.GrantSubagents)
+	if !slices.Equal(tools, []string{"subagent_list", "subagent_result", "subagent_run"}) {
+		t.Fatalf("the subagent grant gives %v", tools)
+	}
+	if got := toolgrant.GrantSubagents.Path(); got != "dependencies.agents" {
+		t.Fatalf("the subagent grant's path is %q", got)
+	}
+	for _, tool := range tools {
+		text := "Use the `" + tool + "` tool when the person shares a PDF.\n"
+		got := toolgrant.CheckRelease(release(nil, manifest.ModePersistent), text)
+		if len(got) != 1 || got[0].Grant != toolgrant.GrantSubagents || got[0].Path != "dependencies.agents" {
+			t.Errorf("%s with no subagent: %+v", tool, got)
+		}
+		if got := toolgrant.CheckRelease(release(sub, manifest.ModePersistent), text); len(got) != 0 {
+			t.Errorf("%s with a subagent declared: %+v", tool, got)
+		}
+		if got := toolgrant.CheckRelease(release(nil, manifest.ModeAutonomous), text); len(got) != 0 {
+			t.Errorf("%s in an autonomous release is read as a tool: %+v", tool, got)
+		}
+	}
+}

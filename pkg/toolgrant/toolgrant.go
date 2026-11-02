@@ -83,12 +83,16 @@ const (
 	GrantWeb Grant = "persistent.web"
 	// GrantReview is capabilities.persistent.review: ai_review.
 	GrantReview Grant = "persistent.review"
+	// GrantSubagents is a persistent release's dependencies.agents naming
+	// at least one subagent: subagent_list, subagent_run and
+	// subagent_result.
+	GrantSubagents Grant = "subagents"
 )
 
 // Grants returns every grant, in a fixed order.
 func Grants() []Grant {
 	return []Grant{GrantBrowser, GrantExec, GrantEgress, GrantTargetHosts, GrantFSRead, GrantFSWrite, GrantMCPServer,
-		GrantClock, GrantMemory, GrantSelfConfigure, GrantMeetings, GrantHelper, GrantWeb, GrantReview}
+		GrantClock, GrantMemory, GrantSelfConfigure, GrantMeetings, GrantHelper, GrantWeb, GrantReview, GrantSubagents}
 }
 
 // persistentKey is the capabilities.persistent key a persistent grant is;
@@ -118,6 +122,8 @@ func (g Grant) Path() string {
 		return "capabilities.filesystem.write"
 	case GrantMCPServer:
 		return "capabilities.mcpServers"
+	case GrantSubagents:
+		return "dependencies.agents"
 	}
 	if key := g.persistentKey(); key != "" {
 		return "capabilities.persistent." + key
@@ -156,12 +162,15 @@ func (g Grant) what() string {
 		return "a persistent agent's web tools"
 	case GrantReview:
 		return "a persistent agent's AI Review"
+	case GrantSubagents:
+		return "a persistent agent that declares a subagent"
 	}
 	return string(g)
 }
 
 // The tools a persistent agent is given beyond an ordinary run's, each
-// only with the capabilities.persistent key it belongs to. They are read
+// only with the capabilities.persistent key it belongs to, and the
+// subagent tools only with a subagent in dependencies.agents. They are read
 // as tools only in a persistent release: another release names them as
 // words, and web_search, web_read, registry_search and ai_review there are
 // the built-ins' own (notContract).
@@ -172,8 +181,9 @@ var persistentTools = map[Grant][]string{
 	GrantMeetings:      {"meeting_arm", "meeting_list", "meeting_cancel"},
 	GrantHelper: {"registry_search", "quickagent_show", "quickagent_install", "quickagent_run", "run_result", "installed_list",
 		"schedule_add", "schedule_list", "schedule_pause", "schedule_remove", "settings_open", "docs_read"},
-	GrantWeb:    {"web_search", "web_read"},
-	GrantReview: {"ai_review"},
+	GrantWeb:       {"web_search", "web_read"},
+	GrantReview:    {"ai_review"},
+	GrantSubagents: {"subagent_list", "subagent_run", "subagent_result"},
 }
 
 // coderGrants are the grants capabilities.persistent.coder holds without
@@ -332,7 +342,11 @@ func Check(c manifest.Capabilities, instruction string) []Missing {
 // tools when its modes include persistent.
 func CheckRelease(m *manifest.Manifest, instruction string) []Missing {
 	if m.IsPersistent() {
-		return persistentReading.check(m.Capabilities, instruction)
+		c := m.Capabilities
+		if len(c.Subagents) == 0 {
+			c.Subagents = m.Subagents()
+		}
+		return persistentReading.check(c, instruction)
 	}
 	return ordinary.check(m.Capabilities, instruction)
 }
@@ -402,6 +416,8 @@ func granted(c manifest.Capabilities, g Grant) bool {
 		return fsGranted(c.Filesystem.Read)
 	case GrantFSWrite:
 		return fsGranted(c.Filesystem.Write)
+	case GrantSubagents:
+		return len(c.Subagents) > 0
 	}
 	if key := g.persistentKey(); key != "" {
 		return c.Persistent.Declares(key)
