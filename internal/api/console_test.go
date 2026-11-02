@@ -418,6 +418,12 @@ func TestAbuseTriageFlow(t *testing.T) {
 			t.Fatalf("%s triaging a report: got %d want %d", c.who.name, res.StatusCode, c.want)
 		}
 	}
+	// A state outside the triage enum is refused and leaves the report open.
+	if code, field := enumRefusal(t, env.do(staffSess, http.MethodPost, "/api/v1/platform/abuse-reports/"+id,
+		map[string]any{"state": "open", "resolution": "reopened"})); code != http.StatusUnprocessableEntity || field != "state" {
+		t.Fatalf("triage to open: %d naming %q, want 422 naming state", code, field)
+	}
+
 	// A report that does not exist is a 404.
 	res := env.do(staffSess, http.MethodPost, "/api/v1/platform/abuse-reports/"+uuid.NewString(),
 		map[string]any{"state": "dismissed", "resolution": "n/a"})

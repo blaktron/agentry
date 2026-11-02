@@ -29,6 +29,10 @@ func (s *Server) SearchAgents(w http.ResponseWriter, r *http.Request, params Sea
 	if !s.requireDB(w, r) {
 		return
 	}
+	if params.Sort != nil && *params.Sort != "" && !params.Sort.Valid() {
+		problemEnum(w, r, "sort", "relevance", "installs", "newest")
+		return
+	}
 	query := ""
 	if params.Q != nil {
 		query = strings.TrimSpace(*params.Q)

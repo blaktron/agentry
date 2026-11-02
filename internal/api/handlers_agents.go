@@ -200,6 +200,18 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 	if !s.requireDB(w, r) {
 		return
 	}
+	if params.State != nil && !params.State.Valid() {
+		problemEnum(w, r, "state", "active", "retired")
+		return
+	}
+	if params.Forks != nil && !params.Forks.Valid() {
+		problemEnum(w, r, "forks", "none", "only")
+		return
+	}
+	if params.Sort != nil && !params.Sort.Valid() {
+		problemEnum(w, r, "sort", "name", "newest", "installs", "submitted")
+		return
+	}
 	p := principalFrom(r.Context())
 	// Private agents appear only for callers the by-name route would let
 	// read them by namespace alone — the owning user, or an active member
@@ -346,6 +358,10 @@ func (s *Server) UpdateAgent(w http.ResponseWriter, r *http.Request, ns Namespac
 	}
 	var req UpdateAgentJSONBody
 	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Visibility != nil && !req.Visibility.Valid() {
+		problemEnum(w, r, "visibility", "private", "public")
 		return
 	}
 	// The body is the agent's settings, so the route is maintain's. Its
