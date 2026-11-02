@@ -9,6 +9,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/notify"
 )
 
@@ -26,13 +28,24 @@ type renderedNotifier struct {
 	notify.Notifier
 	mu   sync.Mutex
 	sent []notify.RenderedNotice
+	err  error // when set, the transport fails and records nothing
 }
 
 func (n *renderedNotifier) Rendered(_ context.Context, r notify.RenderedNotice) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	if n.err != nil {
+		return n.err
+	}
 	n.sent = append(n.sent, r)
 	return nil
+}
+
+// failWith makes the transport fail with err until it is called with nil.
+func (n *renderedNotifier) failWith(err error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.err = err
 }
 
 func (n *renderedNotifier) count() int {
@@ -132,6 +145,59 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 	if got.ToEmail != verifiedH+"@example.test" {
 		t.Fatalf("sent to %q, want the person's own address", got.ToEmail)
 	}
+	if want := "The card on file was declined.\nUpdate it on the console."; got.Text != want {
+		t.Fatalf("the transport was handed the body %q, want %q as given", got.Text, want)
+	}
+
+	// A suspended account is written to by no kind, and is not told why.
+	suspendedH := env.register("ns-suspended")
+	env.verifyEmail(suspendedH)
+	suspendedID := env.userID(suspendedH)
+	if _, err := env.st.Pool().Exec(context.Background(), `UPDATE users SET state = 'suspended' WHERE id = $1`, suspendedID); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"billing", "dependency_alert", "schedule", "bug_report", "run_failure", "run_finished"} {
+		if code, out, msg := send(t, suspendedID, kind, "A message", "x"); code != http.StatusOK || out.Sent {
+			t.Fatalf("%s to a suspended, verified account: %d sent=%t %q, want 200 not sent", kind, code, out.Sent, msg)
+		}
+	}
+	if mails.count() != 1 {
+		t.Fatalf("a suspended account was handed mail: %d messages, want 1", mails.count())
+	}
+
+	// A transport that fails is an error to the extension, never a message
+	// reported as sent.
+	mails.failWith(errors.New("smtp relay refused the message"))
+	code, out, msg := send(t, verifiedID, "billing", "Your payment failed", "The card on file was declined.")
+	mails.failWith(nil)
+	if code != http.StatusUnprocessableEntity || out.Sent || !strings.Contains(msg, "smtp relay refused the message") {
+		t.Fatalf("a failing transport: %d sent=%t %q, want a refusal naming the failure", code, out.Sent, msg)
+	}
+	if mails.count() != 1 {
+		t.Fatalf("a failed delivery was recorded: %d messages", mails.count())
+	}
+
+	// A message needs a subject and a body, each more than whitespace.
+	for _, blank := range []struct{ name, subject, text string }{
+		{"no subject", "", "x"},
+		{"a whitespace subject", " \t\n", "x"},
+		{"no body", "Your payment failed", ""},
+		{"a whitespace body", "Your payment failed", "  \n\t "},
+	} {
+		code, _, msg = send(t, verifiedID, "billing", blank.subject, blank.text)
+		if code != http.StatusUnprocessableEntity || !strings.Contains(msg, "a message needs a subject and a body") {
+			t.Fatalf("%s: %d %q, want a refusal naming the subject and body", blank.name, code, msg)
+		}
+	}
+	if mails.count() != 1 {
+		t.Fatal("a blank message reached the transport")
+	}
+
+	// Somebody the registry does not know is nobody: not sent, not an error.
+	code, out, _ = send(t, uuid.NewString(), "billing", "Your payment failed", "x")
+	if code != http.StatusOK || out.Sent || mails.count() != 1 {
+		t.Fatalf("an unknown person: %d sent=%t, %d messages, want accepted and not sent", code, out.Sent, mails.count())
+	}
 
 	// An unverified address gets nothing, and the extension is
 	// told only that nothing went — not why.
@@ -161,13 +227,21 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 	// A kind the core did not give the extension is refused outright: a
 	// billing notice cannot dress itself as a quarantine, and the
 	// person's quarantine switch — still on — does not let it through.
-	code, _, msg := send(t, verifiedID, "quarantine", "Pulled", "x")
+	code, _, msg = send(t, verifiedID, "quarantine", "Pulled", "x")
 	if code != http.StatusUnprocessableEntity || !strings.Contains(msg, "not a kind an extension may send as") {
 		t.Fatalf("an extension sending as the core's own kind: %d %q, want a refusal naming the kind", code, msg)
 	}
 	code, _, _ = send(t, verifiedID, "", "Untitled", "x")
 	if code != http.StatusUnprocessableEntity {
 		t.Fatalf("an empty kind: %d, want a refusal", code)
+	}
+	// Nor can a message be sent as any of the core's own kinds, by the name
+	// of its switch or by a variant of an allowed name.
+	for _, kind := range []string{"dependencyAlerts", "reviewDecisions", "advisories", "orgInvites", "Billing", " billing", "billing ", "account"} {
+		code, _, msg = send(t, verifiedID, kind, "Pulled", "x")
+		if code != http.StatusUnprocessableEntity || !strings.Contains(msg, "not a kind an extension may send as") {
+			t.Fatalf("kind %q: %d %q, want a refusal naming the kind", kind, code, msg)
+		}
 	}
 	if mails.count() != 1 {
 		t.Fatal("a refused kind reached the transport")
@@ -185,7 +259,8 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 		t.Fatal("an unverified address was sent a routed alert")
 	}
 	env.doJSON(env.login(verifiedH), http.MethodPut, "/api/v1/user/notifications", map[string]any{
-		"email": map[string]any{"dependencyAlerts": false},
+		"email": map[string]any{"dependencyAlerts": false, "quarantine": true, "reviewDecisions": true, "advisories": true, "orgInvites": true},
+		"web":   map[string]any{"dependencyAlerts": false},
 	}, nil, http.StatusOK)
 	code, out, _ = send(t, verifiedID, "dependency_alert", "acme/thing declares a vulnerable server", "x")
 	if code != http.StatusOK || out.Sent || mails.count() != 2 {
@@ -295,6 +370,18 @@ func TestNotifierSeamSendsUnderTheCoresRule(t *testing.T) {
 	if f, d := settings.Email["runFailures"], settings.Email["runFinished"]; f == nil || !*f || d == nil || *d {
 		t.Fatalf("runFailures on: runFailures=%v runFinished=%v, want on and off", f, d)
 	}
+
+	// A server with no database has nobody to read: an error, not a panic
+	// and not an empty answer.
+	cfg := config.Default()
+	cfg.DevMode = true
+	bare := api.New(cfg, nil, nil)
+	if sent, err := bare.SendToUser(context.Background(), uuid.New(), "billing", "Your payment failed", "x"); sent || err == nil || !strings.Contains(err.Error(), "no database") {
+		t.Fatalf("SendToUser with no database: sent=%t err=%v, want an error naming the database", sent, err)
+	}
+	if ids, err := bare.OrgAdminIDs(context.Background(), uuid.New()); ids != nil || err == nil || !strings.Contains(err.Error(), "no database") {
+		t.Fatalf("OrgAdminIDs with no database: %v err=%v, want an error naming the database", ids, err)
+	}
 }
 
 func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
@@ -342,6 +429,22 @@ func TestNotifierSeamNamesActiveAdminsOnly(t *testing.T) {
 	want := map[string]bool{env.userID(founderH): true, env.userID(secondAdminH): true}
 	if len(ids) != 2 || !want[ids[0]] || !want[ids[1]] {
 		t.Fatalf("admins = %v, want the founder and the second admin only (no member, no pending admin, no suspended admin)", ids)
+	}
+
+	// Another organization's administrators are not this one's, and this
+	// one's are not theirs.
+	rivalH := env.register("na-rival")
+	env.verifyEmail(rivalH)
+	rivalOrgH := "narival" + env.sfx
+	rivalOrgID := env.createOrg(env.login(rivalH), rivalOrgH)
+	var rivals []string
+	env.doJSON(admin, http.MethodGet, "/api/v1/x/probe/admins/"+rivalOrgID, nil, &rivals, http.StatusOK)
+	if len(rivals) != 1 || rivals[0] != env.userID(rivalH) {
+		t.Fatalf("the other organization's admins = %v, want only its founder", rivals)
+	}
+	env.doJSON(admin, http.MethodGet, "/api/v1/x/probe/admins/"+orgID, nil, &ids, http.StatusOK)
+	if len(ids) != 2 || !want[ids[0]] || !want[ids[1]] {
+		t.Fatalf("admins = %v after a second organization was created, want the founder and the second admin only", ids)
 	}
 
 	// An organization that does not exist is nobody, not an error: the

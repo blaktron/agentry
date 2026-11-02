@@ -83,6 +83,26 @@ func TestImageProxyKeyIsNeverAConstant(t *testing.T) {
 	if sigs[0] == forged || sigs[1] == forged {
 		t.Fatal("a server signed with the public constant")
 	}
+
+	// With a sealing key the signature is derived from it and from the
+	// destination alone: 32 characters, the same on every start, and a
+	// signature under the public constant is still refused.
+	env := newTestEnvCfg(t, func(c *config.Config) {
+		c.BaseURL = "https://registry.test"
+		c.DevMode = true
+		c.Auth.SealingKey = imageProxySealingKey
+	})
+	user := env.register("imgkey-c")
+	env.verifyEmail(user)
+	src := publishReadmeImage(t, env, user, "keyed", dest)
+	if want := "https://registry.test" + signedImagePath(imageProxySealingKey, dest); src != want {
+		t.Fatalf("a server with a sealing key signed %q, want %q", src, want)
+	}
+	res := env.do(anonymous, http.MethodGet, "/api/v1/img/"+forged+"/"+ref, nil)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("a signature under the public constant was accepted by a keyed server: %d", res.StatusCode)
+	}
 }
 
 // A plain-http image is left a placeholder: the proxy fetches https only, so
@@ -94,5 +114,35 @@ func TestImageProxyRefusesPlainHTTP(t *testing.T) {
 	src := publishReadmeImage(t, env, user, "pics", "http://images.example/logo.png")
 	if strings.Contains(src, "/api/v1/img/") {
 		t.Fatalf("an http image was signed for the proxy: %q", src)
+	}
+
+	// Only an https image with a host, short enough to be signed, on a server
+	// that knows its own origin, is proxied.
+	const base = "https://images.example/logo.png?pad="
+	for i, c := range []struct {
+		name, image, baseURL string
+		proxied              bool
+	}{
+		{"https image", "https://images.example/logo.png", "https://registry.test", true},
+		{"https image behind a trailing slash on the origin", "https://images.example/logo.png", "https://registry.test/", true},
+		{"https url of exactly 1536 bytes", base + strings.Repeat("a", 1536-len(base)), "https://registry.test", true},
+		{"https url of 1537 bytes", base + strings.Repeat("a", 1537-len(base)), "https://registry.test", false},
+		{"https url with no host", "https:///logo.png", "https://registry.test", false},
+		{"ftp image", "ftp://images.example/logo.png", "https://registry.test", false},
+		{"https image on a server with no origin", "https://images.example/logo.png", "", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			env := newTestEnvCfg(t, func(cfg *config.Config) { cfg.BaseURL = c.baseURL })
+			user := env.register("imgrule" + string(rune('a'+i)))
+			env.verifyEmail(user)
+			src := publishReadmeImage(t, env, user, "pics", c.image)
+			if c.proxied {
+				if !strings.HasPrefix(src, "https://registry.test/api/v1/img/") || strings.Contains(src, "registry.test//") {
+					t.Fatalf("src = %q, want a proxied url on https://registry.test/api/v1/img/", src)
+				}
+			} else if strings.Contains(src, "/api/v1/img/") {
+				t.Fatalf("src = %q, want no proxy url", src)
+			}
+		})
 	}
 }

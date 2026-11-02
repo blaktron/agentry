@@ -21,6 +21,10 @@ func TestNormalizeAddressFoldsOneMailboxsForms(t *testing.T) {
 		"trailing@":                     "trailing@",
 		"weird@sub.gmail.com":           "weird@sub.gmail.com",
 		"quoted+tag@gmail.com.example":  "quoted@gmail.com.example",
+		"odd.local@odd@gmail.com":       "oddlocal@odd@gmail.com",
+		"First.Last+a@GoogleMail.com":   "firstlast@gmail.com",
+		"first.last+tag@example.com":    "first.last@example.com",
+		"tag+x@":                        "tag+x@",
 	} {
 		if got := normalizeAddress(in); got != want {
 			t.Errorf("normalizeAddress(%q) = %q, want %q", in, got, want)
@@ -50,5 +54,12 @@ func TestErasedAddressKeyIsOneKeyPerMailbox(t *testing.T) {
 	other, _ := auth.NewSealer("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", false)
 	if a == (&Server{sealer: other}).ErasedAddressKey("firstlast@gmail.com") {
 		t.Error("another sealing key gives the same key")
+	}
+	// The key is frozen: an extension that remembered an erased address by
+	// it must find the same key again, so the sealing key and the purpose it
+	// is derived under give these exact bytes.
+	const want = "d04acd5801c66c869b53d33f48c10a6957a2d572108238eaf0aa738e2f73c635"
+	if got := (&Server{sealer: other}).ErasedAddressKey("First.Last+trial@Gmail.com"); got != want {
+		t.Errorf("ErasedAddressKey under a fixed sealing key = %q, want %q", got, want)
 	}
 }

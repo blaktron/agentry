@@ -7,11 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 )
 
@@ -19,6 +21,8 @@ const (
 	ownPrefix = "agym_"
 	ownToken  = ownPrefix + "knowntokenvalue"
 	ownBroken = ownPrefix + "breakstheresolver"
+	// ownNobody is a token the resolver knows and says belongs to no one.
+	ownNobody = ownPrefix + "knownbutnobodys"
 )
 
 var ownUser = uuid.MustParse("6a1f7f4e-6d3a-4c47-9d3e-1b2c3d4e5f60")
@@ -47,6 +51,8 @@ func ownTokenServer(t *testing.T) *httptest.Server {
 			return ownUser, true, nil
 		case ownBroken:
 			return uuid.Nil, false, errors.New("store down")
+		case ownNobody:
+			return uuid.Nil, true, nil
 		}
 		return uuid.Nil, false, nil
 	})
@@ -110,6 +116,9 @@ func TestExtensionOwnTokensUnknownOrFailing(t *testing.T) {
 	if code, _ := getWithBearer(t, hs, "/api/v1/x/meter/who", "agyq_someoneelses"); code != http.StatusUnauthorized {
 		t.Errorf("another prefix: %d, want 401", code)
 	}
+	if code, body := getWithBearer(t, hs, "/api/v1/x/meter/who", ownNobody); code != http.StatusUnauthorized {
+		t.Errorf("a token the resolver says is no one's: %d %v, want 401", code, body)
+	}
 	code, body := getWithBearer(t, hs, "/api/v1/x/meter/who", "")
 	if code != http.StatusOK || body["anonymous"] != true {
 		t.Errorf("no bearer: %d %v, want anonymous", code, body)
@@ -169,6 +178,17 @@ func TestExtensionOwnTokensRefuseABadDeclaration(t *testing.T) {
 			s.SetExtensionTokens("meter", "agym_", resolve)
 			s.SetExtensionTokens("meter", "agyn_", resolve)
 		},
+		"the core's invitation": func(s *api.Server) { s.SetExtensionTokens("meter", auth.InvitePrefix, resolve) },
+		"the core's activation": func(s *api.Server) { s.SetExtensionTokens("meter", auth.VerificationPrefix, resolve) },
+		"the core's remembered browser": func(s *api.Server) {
+			s.SetExtensionTokens("meter", auth.TrustedDevicePrefix, resolve)
+		},
+		"a capital letter":     func(s *api.Server) { s.SetExtensionTokens("meter", "agyM_", resolve) },
+		"a digit":              func(s *api.Server) { s.SetExtensionTokens("meter", "agy1_", resolve) },
+		"a leading character":  func(s *api.Server) { s.SetExtensionTokens("meter", "xagym_", resolve) },
+		"a trailing character": func(s *api.Server) { s.SetExtensionTokens("meter", "agym_x", resolve) },
+		"no letter after agy":  func(s *api.Server) { s.SetExtensionTokens("meter", "agy_", resolve) },
+		"an empty prefix":      func(s *api.Server) { s.SetExtensionTokens("meter", "", resolve) },
 	}
 	for name, declare := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -184,5 +204,84 @@ func TestExtensionOwnTokensRefuseABadDeclaration(t *testing.T) {
 			}()
 			declare(srv)
 		})
+	}
+
+	// And the shapes that are sound: one to four letters after "agy".
+	for _, prefix := range []string{"agyx_", "agyxy_", "agyxyz_", "agyxyzw_"} {
+		cfg := config.Default()
+		cfg.DevMode = true
+		srv := api.New(cfg, nil, nil)
+		srv.RegisterExtension("meter", func(*http.ServeMux) {})
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("prefix %q was refused: %v", prefix, r)
+				}
+			}()
+			srv.SetExtensionTokens("meter", prefix, resolve)
+		}()
+	}
+}
+
+// TestExtensionRegistrationRefusesABadDeclaration: an extension's name is a
+// lowercase letter and up to 31 lowercase letters, digits and hyphens, and
+// serves one mount; the routes it leaves out of the anonymous rate class are
+// exact "METHOD /path" patterns of an extension that is mounted. Anything else
+// panics at start-up, where it is found.
+func TestExtensionRegistrationRefusesABadDeclaration(t *testing.T) {
+	routes := func(*http.ServeMux) {}
+	panics := func(f func(*api.Server)) (panicked bool) {
+		cfg := config.Default()
+		cfg.DevMode = true
+		srv := api.New(cfg, nil, nil)
+		defer func() { panicked = recover() != nil }()
+		f(srv)
+		return false
+	}
+	register := func(name string) func(*api.Server) {
+		return func(s *api.Server) { s.RegisterExtension(name, routes) }
+	}
+	unthrottle := func(extension string, routes ...string) func(*api.Server) {
+		return func(s *api.Server) {
+			s.RegisterExtension("meter", func(*http.ServeMux) {})
+			s.SetExtensionUnthrottled(extension, routes)
+		}
+	}
+	refused := map[string]func(*api.Server){
+		"an uppercase name":        register("Meter"),
+		"an empty name":            register(""),
+		"a leading digit":          register("1meter"),
+		"a leading hyphen":         register("-meter"),
+		"an underscore":            register("me_ter"),
+		"a slash":                  register("me/ter"),
+		"a name of 33 characters":  register("m" + strings.Repeat("a", 32)),
+		"a name registered twice":  func(s *api.Server) { s.RegisterExtension("meter", routes); s.RegisterExtension("meter", routes) },
+		"a route with no method":   unthrottle("meter", "/webhooks/pay"),
+		"a method in lowercase":    unthrottle("meter", "post /webhooks/pay"),
+		"text before the method":   unthrottle("meter", "XPOST /webhooks/pay"),
+		"a method that is no verb": unthrottle("meter", "OPTIONS /webhooks/pay"),
+		"a route with no slash":    unthrottle("meter", "POST webhooks"),
+		"a wildcard":               unthrottle("meter", "POST /webhooks/{id}"),
+		"a query":                  unthrottle("meter", "POST /webhooks?x=1"),
+		"a space in the path":      unthrottle("meter", "POST /web hooks"),
+		"a route among good ones":  unthrottle("meter", "POST /webhooks/pay", "GET status"),
+		"an unregistered mount":    unthrottle("nobody", "POST /webhooks/pay"),
+	}
+	for name, f := range refused {
+		if !panics(f) {
+			t.Errorf("%s: the declaration was accepted", name)
+		}
+	}
+	accepted := map[string]func(*api.Server){
+		"a name of 32 characters": register("m" + strings.Repeat("a", 31)),
+		"digits and hyphens":      register("m-2-x"),
+		"two extensions":          func(s *api.Server) { s.RegisterExtension("meter", routes); s.RegisterExtension("other", routes) },
+		"exact routes":            unthrottle("meter", "POST /webhooks/pay", "DELETE /a/b-c_d.e", "GET /"),
+		"no routes":               unthrottle("meter"),
+	}
+	for name, f := range accepted {
+		if panics(f) {
+			t.Errorf("%s: a sound declaration was refused", name)
+		}
 	}
 }

@@ -1185,7 +1185,8 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
-            "HTTP transport"
+            "HTTP transport",
+            "explicit skip"
           ]
         },
         {
@@ -1206,7 +1207,8 @@
             "TestExtensionOwnTokensResolveUnderTheirMountAlone",
             "TestExtensionOwnTokensUnknownOrFailing",
             "TestCreditsSessionRoutesRefuseABadDeclaration",
-            "TestExtensionOwnTokensRefuseABadDeclaration"
+            "TestExtensionOwnTokensRefuseABadDeclaration",
+            "TestExtensionRegistrationRefusesABadDeclaration"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1272,7 +1274,8 @@
         {
           "path": "internal/api/image_proxy_test.go",
           "tests": [
-            "TestImageProxy"
+            "TestImageProxy",
+            "TestImageProxyRefusesPrivateDestinations"
           ],
           "fuzz": [],
           "benchmarks": [],

@@ -68,10 +68,11 @@ func TestWebhookDeliveriesAreRateLimitedPerOrg(t *testing.T) {
 	disp := webhook.NewDispatcher(webhook.Deps{
 		Store: env.st, Sealer: sealer, Queue: q,
 		Client: webhook.NewHTTPClient(webhook.Guard{AllowLoopback: true}, tlsTrusting(ts)),
-		// 1/s with the shipped burst of 1: the first delivery goes, the rest
-		// are deferred. Using the value of 5 would need a full second of
-		// wall clock to distinguish "throttled" from "slow".
-		DeliveriesPerSecond: 1,
+		// A tenth of a delivery a second with the shipped burst of 1: the
+		// first delivery goes, the rest are deferred, and no token comes
+		// back while the test runs. Using the value of 5 would need a
+		// full second of wall clock to distinguish "throttled" from "slow".
+		DeliveriesPerSecond: 0.1,
 	})
 	t.Cleanup(func() { _ = disp.Close() })
 	disp.RegisterHandlers(q)
@@ -93,6 +94,8 @@ func TestWebhookDeliveriesAreRateLimitedPerOrg(t *testing.T) {
 	} else if got >= emitted {
 		t.Errorf("%d of %d deliveries went out in one drain; the per-org "+
 			"rate limit is not throttling", got, emitted)
+	} else if got != 1 {
+		t.Errorf("%d deliveries went out in one drain, want the bucket's single token", got)
 	}
 
 	// Throttled deliveries must be DEFERRED, not dropped: the ledger still
@@ -105,6 +108,19 @@ func TestWebhookDeliveriesAreRateLimitedPerOrg(t *testing.T) {
 	if len(deliveries) != emitted {
 		t.Errorf("ledger has %d rows, want %d — a throttled delivery must be "+
 			"recorded and retried, never dropped", len(deliveries), emitted)
+	}
+	// The throttled ones are neither marked delivered nor finished on the
+	// queue: each waits for a retry.
+	var marked, waiting int
+	if err := env.st.Pool().QueryRow(ctx, `SELECT
+		count(*) FILTER (WHERE d.delivered_at IS NOT NULL),
+		count(j.id) FILTER (WHERE j.state NOT IN ('completed', 'discarded', 'cancelled'))
+		FROM webhook_deliveries d JOIN river_job j ON j.kind = 'webhook.deliver' AND j.args->>'delivery_id' = d.id::text
+		WHERE d.endpoint_id = $1`, env.firstWebhookID(t, sess, orgH)).Scan(&marked, &waiting); err != nil {
+		t.Fatal(err)
+	}
+	if marked != 1 || waiting != emitted-1 {
+		t.Errorf("%d deliveries marked delivered and %d jobs waiting for a retry, want 1 and %d", marked, waiting, emitted-1)
 	}
 }
 

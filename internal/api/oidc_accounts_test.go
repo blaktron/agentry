@@ -12,7 +12,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/auth"
@@ -120,7 +124,17 @@ func (env *testEnv) mintAccount(t *testing.T, idp *testidp.IdP, handle string) c
 // placeholder instead, and no activation link is made for an address nobody
 // could confirm.
 func TestAnAssertedPlaceholderAddressIsNoAddress(t *testing.T) {
-	env, idp := newOIDCTestEnv(t, nil)
+	var mu sync.Mutex
+	var registered []api.Event
+	env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) {
+		s.AddEventHook(func(_ context.Context, ev api.Event) {
+			if ev.Kind == "user.registered" {
+				mu.Lock()
+				registered = append(registered, ev)
+				mu.Unlock()
+			}
+		})
+	})
 	h := "phold" + env.sfx
 	asserted := "someone" + env.sfx + "@oidc" + auth.SyntheticAddressSuffix
 	in := env.signInOIDC(t, idp, config.OIDCProviderID, testidp.Person{
@@ -138,5 +152,53 @@ func TestAnAssertedPlaceholderAddressIsNoAddress(t *testing.T) {
 	}
 	if email == asserted || !auth.SyntheticAddress(email) || links != 0 {
 		t.Fatalf("account address %q with %d activation links, want the registry's own placeholder and none", email, links)
+	}
+
+	// The suffix is the registry's whatever its case, and a provider's claim
+	// that such an address is verified makes it no more of an address.
+	upper := "phup" + env.sfx
+	shouted := "SOMEONE" + env.sfx + "@OIDC" + strings.ToUpper(auth.SyntheticAddressSuffix)
+	in = env.signInOIDC(t, idp, config.OIDCProviderID, testidp.Person{
+		Subject: "sub-" + upper, Email: shouted, EmailVerified: true, Username: upper,
+	})
+	if in.status != http.StatusOK {
+		t.Fatalf("sign-in with a shouted placeholder: %d %s", in.status, in.body)
+	}
+	var verified bool
+	if err := env.st.Pool().QueryRow(context.Background(),
+		`SELECT u.email::text, u.email_verified_at IS NOT NULL, (SELECT count(*) FROM email_verifications v WHERE v.user_id = u.id) FROM users u WHERE u.id = $1::uuid`,
+		in.userID).Scan(&email, &verified, &links); err != nil {
+		t.Fatal(err)
+	}
+	if strings.EqualFold(email, shouted) || !auth.SyntheticAddress(email) || verified || links != 0 {
+		t.Fatalf("account address %q (verified %v) with %d activation links, want the registry's own placeholder, unverified, and no link", email, verified, links)
+	}
+
+	// The registration event says whether the address was vouched for: a
+	// provider that calls an address verified when it gave none vouched for
+	// nothing.
+	none := "phnone" + env.sfx
+	in = env.signInOIDC(t, idp, config.OIDCProviderID, testidp.Person{
+		Subject: "sub-" + none, Email: "", EmailVerified: true, Username: none,
+	})
+	if in.status != http.StatusOK {
+		t.Fatalf("sign-in with no address: %d %s", in.status, in.body)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(registered) != 3 {
+		t.Fatalf("user.registered events: %d, want one for each of the three accounts", len(registered))
+	}
+	for i, ev := range registered {
+		addr, _ := ev.Payload["email"].(string)
+		if ev.UserID == uuid.Nil {
+			t.Errorf("event %d names no user", i)
+		}
+		if ev.Payload["emailVerified"] != false {
+			t.Errorf("event %d says emailVerified %v for %q, want false: no address of the provider's was vouched for", i, ev.Payload["emailVerified"], addr)
+		}
+		if h, _ := ev.Payload["handle"].(string); h == "" {
+			t.Errorf("event %d names no handle", i)
+		}
 	}
 }
