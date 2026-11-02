@@ -584,7 +584,8 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": [
-            "database fixture"
+            "database fixture",
+            "HTTP transport"
           ]
         },
         {
@@ -619,7 +620,8 @@
           "path": "internal/api/knowledge_seam_test.go",
           "tests": [
             "TestKnowledgeKeyWrapperSeam",
-            "TestCoreKnowledgeWrapsUnderItsOwnKey"
+            "TestCoreKnowledgeWrapsUnderItsOwnKey",
+            "TestKnowledgeStoreIsOffWithoutAKeyWrapper"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -640,6 +642,7 @@
             "TestOneAuditLinePerOrganizationPack",
             "TestMakingAnAgentPublicNeedsTheAcknowledgement",
             "TestAYankedVersionDoesNotHoldMakePublic",
+            "TestARejectedVersionDoesNotHoldMakePublic",
             "TestMakePublicIsDecidedAgainUnderTheRowLock",
             "TestAForksFirstVersionRecordsThatItWasCopied",
             "TestAnotherAccountsPackAnswersAsAMissingOne",
@@ -680,6 +683,7 @@
             "TestKnowledgeAllocation",
             "TestKnowledgeAllocationHoldsUnderRace",
             "TestTheLastScanAttemptSettlesThePack",
+            "TestAScanThatDidNotFinishIsTriedAgain",
             "TestTheLastScanAttemptSettlesThePackWhenItsTimeRunsOut",
             "TestKnowledgePoolIsCountedAndLocked"
           ],
