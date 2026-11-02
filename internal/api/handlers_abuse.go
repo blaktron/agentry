@@ -105,6 +105,10 @@ func (s *Server) ListAbuseReports(w http.ResponseWriter, r *http.Request, params
 	if !s.requireDB(w, r) {
 		return
 	}
+	if params.State != nil && !params.State.Valid() {
+		problemEnum(w, r, "state", "open", "triaged", "actioned", "dismissed")
+		return
+	}
 	if !s.requireStaff(w, r) {
 		return
 	}
@@ -150,6 +154,10 @@ func (s *Server) TriageAbuseReport(w http.ResponseWriter, r *http.Request, id uu
 	}
 	var req TriageAbuseReportJSONRequestBody
 	if !readJSON(w, r, &req) {
+		return
+	}
+	if !req.State.Valid() {
+		problemEnum(w, r, "state", "triaged", "actioned", "dismissed")
 		return
 	}
 	resolution := strings.TrimSpace(req.Resolution)

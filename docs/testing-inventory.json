@@ -1133,6 +1133,7 @@
             "TestWebhookPingAndEndpointCap",
             "TestRulesetReleaseAndPlatformAudit",
             "TestListParamsAreClampedNotRejected",
+            "TestAValueOutsideAnEnumIsRefused",
             "TestSearchFacets",
             "TestRateLimitHeadersOnEveryResponse",
             "TestIdempotencyKeyReplaysAndConflicts",

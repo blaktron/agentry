@@ -837,6 +837,85 @@ func TestListParamsAreClampedNotRejected(t *testing.T) {
 	}
 }
 
+// enumRefusal reads a refusal of a value outside an enum: its status and
+// the field the problem names.
+func enumRefusal(t *testing.T, res *http.Response) (int, string) {
+	t.Helper()
+	defer func() { _ = res.Body.Close() }()
+	var p struct {
+		Type   string `json:"type"`
+		Errors []struct {
+			Field string `json:"field"`
+		} `json:"errors"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&p)
+	if !strings.HasSuffix(p.Type, "/validation") || len(p.Errors) != 1 {
+		return res.StatusCode, ""
+	}
+	return res.StatusCode, p.Errors[0].Field
+}
+
+// A value outside the enum the contract gives a parameter or field is the
+// caller's error: 422 naming the field, never a 500 and never a filter
+// silently ignored. A value inside it is still taken.
+func TestAValueOutsideAnEnumIsRefused(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register("enum-o")
+	env.verifyEmail(owner)
+	sess := env.login(owner)
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "enumed", "modes": []string{"autonomous"}, "visibility": "private",
+	}, nil, http.StatusCreated)
+	staffH := env.register("enum-st")
+	env.verifyEmail(staffH)
+	env.makePlatformStaff(t, staffH)
+	staff := env.login(staffH)
+
+	for _, c := range []struct {
+		who         caller
+		path, field string
+	}{
+		{anonymous, "/api/v1/agents?namespace=" + owner + "&state=gone", "state"},
+		{anonymous, "/api/v1/agents?namespace=" + owner + "&forks=some", "forks"},
+		{anonymous, "/api/v1/agents?namespace=" + owner + "&sort=popular", "sort"},
+		{anonymous, "/api/v1/search?q=&sort=popular", "sort"},
+		{staff, "/api/v1/platform/abuse-reports?state=closed", "state"},
+	} {
+		if code, field := enumRefusal(t, env.do(c.who, http.MethodGet, c.path, nil)); code != http.StatusUnprocessableEntity || field != c.field {
+			t.Fatalf("GET %s: %d naming %q, want 422 naming %q", c.path, code, field, c.field)
+		}
+	}
+	for _, c := range []struct {
+		who  caller
+		path string
+	}{
+		{anonymous, "/api/v1/agents?namespace=" + owner + "&state=retired"},
+		{anonymous, "/api/v1/agents?namespace=" + owner + "&forks=only"},
+		{anonymous, "/api/v1/agents?namespace=" + owner + "&sort=submitted"},
+		{anonymous, "/api/v1/search?q=&sort=newest"},
+		{anonymous, "/api/v1/search?q=&sort="},
+		{staff, "/api/v1/platform/abuse-reports?state=dismissed"},
+	} {
+		res := env.do(c.who, http.MethodGet, c.path, nil)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s: got %d want 200", c.path, res.StatusCode)
+		}
+	}
+
+	path := "/api/v1/agents/" + owner + "/enumed"
+	if code, field := enumRefusal(t, env.do(sess, http.MethodPatch, path, map[string]any{"visibility": "unlisted"})); code != http.StatusUnprocessableEntity || field != "visibility" {
+		t.Fatalf("PATCH visibility unlisted: %d naming %q, want 422 naming visibility", code, field)
+	}
+	var got struct {
+		Visibility string `json:"visibility"`
+	}
+	env.doJSON(sess, http.MethodGet, path, nil, &got, http.StatusOK)
+	if got.Visibility != "private" {
+		t.Fatalf("a refused visibility changed the agent to %q", got.Visibility)
+	}
+}
+
 func TestSearchFacets(t *testing.T) {
 	env := newTestEnv(t)
 	owner := env.register("facet-o")
