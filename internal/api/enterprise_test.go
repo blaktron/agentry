@@ -269,6 +269,12 @@ func TestDomainVerification(t *testing.T) {
 	if spelled.Domain != "mixed-case-"+env.sfx+".example" {
 		t.Fatalf("a claim for a domain written in capitals with a trailing dot is kept as %q", spelled.Domain)
 	}
+	// A space after the trailing dot does not keep the dot.
+	env.doJSON(sess, http.MethodPost, "/api/v1/orgs/"+orgH+"/domain-claims",
+		map[string]any{"domain": " Spaced-" + env.sfx + ".Example. "}, &spelled, http.StatusCreated)
+	if spelled.Domain != "spaced-"+env.sfx+".example" {
+		t.Fatalf("a claim with a trailing dot and a space is kept as %q", spelled.Domain)
+	}
 
 	domain := "acme-" + env.sfx + ".example"
 	var claim struct {

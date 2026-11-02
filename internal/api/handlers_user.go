@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -73,7 +74,7 @@ func (s *Server) UpdateCurrentUser(w http.ResponseWriter, r *http.Request) {
 	var name string
 	if req.DisplayName != nil {
 		name = strings.TrimSpace(*req.DisplayName)
-		if name == "" || len(name) > 120 {
+		if name == "" || utf8.RuneCountInString(name) > 120 {
 			problemValidation(w, r, "The displayName field must be 1-120 characters.")
 			return
 		}
@@ -168,7 +169,7 @@ func (s *Server) CreateToken(w http.ResponseWriter, r *http.Request) {
 
 	var fields []FieldError
 	name := strings.TrimSpace(req.Name)
-	if name == "" || len(name) > 120 {
+	if name == "" || utf8.RuneCountInString(name) > 120 {
 		fields = append(fields, FieldError{Field: "name", Message: "Must be 1-120 characters."})
 	}
 	if len(req.Scopes) == 0 {

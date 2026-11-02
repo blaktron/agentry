@@ -89,7 +89,7 @@ func TestErasureWithNothingPublishedNeedsNoChoice(t *testing.T) {
 	// With nothing published the default disposition is the one recorded.
 	var n int
 	if err := env.st.Pool().QueryRow(context.Background(),
-		`SELECT count(*) FROM audit_events WHERE action = 'user.delete' AND target_id = $1 AND detail->>'publishedContent' = 'yank' AND detail->>'publishedVersions' = '0'`,
+		`SELECT count(*) FROM audit_events WHERE action = 'user.delete' AND target_id = $1 AND detail->>'publishedContent' = 'yank' AND detail->>'publishedVersions' = '0' AND detail->>'versionsYanked' = '0'`,
 		uid).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("user.delete rows recording the default disposition: %d (%v), want 1", n, err)
 	}

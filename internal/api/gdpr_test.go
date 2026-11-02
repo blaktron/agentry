@@ -183,7 +183,7 @@ func TestAccountErasureFlow(t *testing.T) {
 	// The row says what the erasure did.
 	if err := env.st.Pool().QueryRow(ctx,
 		`SELECT count(*) FROM audit_events WHERE action = 'user.delete' AND target_id = $1 AND detail->>'publishedContent' = 'yank'
-		  AND detail->>'publishedVersions' = '1' AND detail->>'desktopCodes' = '1' AND (detail->>'knowledgeObjects')::int >= 1`, uid).Scan(&n); err != nil {
+		  AND detail->>'publishedVersions' = '1' AND detail->>'versionsYanked' = '1' AND detail->>'desktopCodes' = '1' AND (detail->>'knowledgeObjects')::int >= 1`, uid).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 1 {
