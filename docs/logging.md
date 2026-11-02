@@ -44,7 +44,8 @@ in front sets the header on every request it forwards**
 (`http.proxyRequestID: true` / `AGENTRY_PROXY_REQUEST_ID=true`, which
 itself needs `http.trustedProxies` ≥ 1, and with `http.trustedProxyCIDRs`
 set, a request whose peer is in one of its ranges) and the value matches
-`^[A-Za-z0-9-]{8,64}$`. The hop count alone is not enough: anyone can send
+`^[A-Za-z0-9-]{8,64}$` without a run of 52 or more characters from
+`[a-z2-7]` (any case), which every log line would mask as a token. The hop count alone is not enough: anyone can send
 the header, and a proxy that merely forwards it would let a caller stamp
 its own id onto the server's lines and audit rows. The compose stack's
 headless edge sets it (`proxy_set_header X-Request-Id $request_id`); a

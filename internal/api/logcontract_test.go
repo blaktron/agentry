@@ -225,6 +225,12 @@ func TestInboundRequestIDHonouredOnlyWhenTheHopSetsIt(t *testing.T) {
 		{"hop that sets it, space inside: minted", 1, true, "abcd efgh", false},
 		{"hop that sets it, junk before a valid run: minted", 1, true, "!!abcdefgh", false},
 		{"hop that sets it, junk after a valid run: minted", 1, true, "abcdefgh!!", false},
+		// The log masks a run of 52 or more [a-z2-7] characters as a token, so
+		// such an id could not be found in the log: it is replaced.
+		{"hop that sets it, 52 base32 characters: minted", 1, true, strings.Repeat("a", 52), false},
+		{"hop that sets it, 64 base32 characters in upper case: minted", 1, true, strings.Repeat("A2", 32), false},
+		{"hop that sets it, 51 base32 characters: honoured", 1, true, strings.Repeat("a", 51), true},
+		{"hop that sets it, 64 characters with a stop in the run: honoured", 1, true, strings.Repeat("a", 40) + "-" + strings.Repeat("a", 23), true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
