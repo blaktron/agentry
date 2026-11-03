@@ -44,8 +44,13 @@ func forkStore(t *testing.T) *gitsrv.RepoStore {
 // each of those commits and files, by name, to its id.
 func originWithHistory(t *testing.T, repos *gitsrv.RepoStore) (id uuid.UUID, first, second string, unreviewed map[string]string) {
 	t.Helper()
+	return originWithHistoryID(t, repos, uuid.New())
+}
+
+func originWithHistoryID(t *testing.T, repos *gitsrv.RepoStore, repoID uuid.UUID) (id uuid.UUID, first, second string, unreviewed map[string]string) {
+	t.Helper()
+	id = repoID
 	ctx := context.Background()
-	id = uuid.New()
 	if err := repos.InitBare(ctx, id, "main"); err != nil {
 		t.Fatal(err)
 	}
