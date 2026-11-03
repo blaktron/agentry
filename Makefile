@@ -44,6 +44,7 @@ lint:
 	if [ -n "$$fmt_out" ]; then echo "gofmt needed on:"; echo "$$fmt_out"; exit 1; fi
 	$(GO) vet ./...
 	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run ./...; \
+	elif [ -n "$$CI" ]; then echo "golangci-lint is required in CI and is not installed"; exit 1; \
 	else echo "golangci-lint not installed; skipped (CI runs it)"; fi
 
 ## vuln: govulncheck over the module
@@ -70,7 +71,11 @@ generate-check: generate
 sync-rules:
 	./scripts/dev/sync-rules.sh
 
-## sync-rules-check: fail if the embedded ruleset copy has drifted
+## sync-rules-check: fail if the embedded ruleset copy has drifted. The rule
+## bundle exists twice, canonical /rules and the embeddable copy under
+## pkg/ruleset/rules, because go:embed cannot reach outside a package
+## directory; without the check a rule could ship to the CLI and not the
+## server. `make check` runs it.
 sync-rules-check:
 	./scripts/dev/sync-rules.sh --check
 

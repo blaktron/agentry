@@ -31,7 +31,8 @@ which entry points run; a listed support file is not another executed test.
 | --- | --- |
 | Full Go suite, including corpus and fuzz seeds | `make test`; owning rule, store, API, pipeline and transport packages |
 | Empty-filter and security-name gates | `scripts/acceptance/lib-selftest.sh`, `invariant-test-names.sh`, `invariant-tests.txt` |
-| Compiled process and generated client | `scripts/acceptance/smoke.sh`; `TestSmoke` also runs in the Go suite |
+| Compiled process | `scripts/acceptance/smoke.sh`: the built binary boots and answers its health, readiness, metadata and login routes itself |
+| Generated Go client | `TestSmoke` in the Go suite (`make test`), against its own in-process server |
 | Actual headless UI flows | `scripts/acceptance/ui.sh`; page rendering is tested independently |
 | Published envelopes verified by independent code | `scripts/dev/attest-interop.sh` |
 | Edge request budgets | `scripts/acceptance/edge.sh` against the real `deploy/compose/edge/nginx.conf` |
