@@ -121,6 +121,12 @@ func (s *Service) Replace(ctx context.Context, owner Owner, id uuid.UUID, from s
 	}
 	packID, err := s.sealedPackID(ctx, p)
 	if err != nil {
+		// A replace that started from the same digest may have committed
+		// and removed the tree this one was reading. That is a change, not
+		// a store failure: the pack has moved on from the digest asked for.
+		if cur, gerr := s.Get(ctx, owner, id); gerr == nil && cur.Digest != from {
+			return infoOf(cur), false, ErrChanged
+		}
 		return infoOf(p), false, err
 	}
 	var sealed bytes.Buffer
