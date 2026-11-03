@@ -1029,6 +1029,36 @@ func (w failingWrapper) Unwrap(ctx context.Context, owner knowledge.Owner, wrapp
 }
 
 // A data clear and the account erasure take the voice with them.
+// A restore admitted for review that swaps at once instead, because the
+// question set moved back between the look and the restore, reviews
+// nothing: its admission is voided and has no ticket on record, and the
+// answer is the swap's 200, not a review's 202.
+func TestARestoreThatSwapsAfterItsAdmissionVoidsIt(t *testing.T) {
+	env, j := newVoiceEnv(t)
+	adm := &stubVoiceAdmitter{}
+	env.srvObj.SetVoiceAdmitter(adm)
+	o := newVoiceOwner(env, "voice-swap")
+	putVoice(t, env, o, voiceText(1))
+	drainVoiceReviews(t, env)
+	putVoice(t, env, o, voiceText(2))
+	drainVoiceReviews(t, env)
+	if len(adm.tickets) != 2 || len(adm.voided) != 0 {
+		t.Fatalf("two puts: tickets %v, voided %v", adm.tickets, adm.voided)
+	}
+
+	// The look sees a moved set, so the restore is admitted for review; the
+	// restore itself sees the set the previous version was reviewed under.
+	j.questionSets("sha256:voice-set-moved")
+	env.doJSON(o.pat, http.MethodPost, "/api/v1/voice/restore", nil, nil, http.StatusOK)
+	if len(adm.tickets) != 3 || len(adm.voided) != 1 || adm.voided[0] != adm.tickets[2] {
+		t.Fatalf("a restore that swapped after its admission: tickets %v, voided %v, want the third voided", adm.tickets, adm.voided)
+	}
+	var n int
+	if err := env.st.Pool().QueryRow(context.Background(), `SELECT count(*) FROM admitted_stores WHERE ticket = $1`, adm.tickets[2]).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("the voided restore's ticket is on record %d times (%v), want none", n, err)
+	}
+}
+
 func TestClearingDataOrErasingTheAccountTakesTheVoice(t *testing.T) {
 	env, _ := newVoiceEnv(t)
 	bystander := newVoiceOwner(env, "voice-clear-bystander")

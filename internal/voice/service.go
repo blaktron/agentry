@@ -413,16 +413,20 @@ var ErrRestoreNeedsReview = errors.New("voice: the previous version needs a revi
 // reviewed like any other, which the caller must have admitted
 // (review).
 func (s *Service) Restore(ctx context.Context, user uuid.UUID, review bool) (State, error) {
-	return s.RestoreAdmitted(ctx, user, review, "")
+	st, _, err := s.RestoreAdmitted(ctx, user, review, "")
+	return st, err
 }
 
 // RestoreAdmitted is Restore for a review an extension admitted: ticket,
 // when not empty, is recorded as stored (admitted_stores, kind "voice") in
 // the transaction that puts the previous version up for review. A restore
 // that swaps live and previous at once reviews nothing and records nothing.
-func (s *Service) RestoreAdmitted(ctx context.Context, user uuid.UUID, review bool, ticket string) (State, error) {
+// It reports whether the restore was put up for review: a caller that
+// admitted it for review and finds it was not (the question set moved back
+// between its look and the restore) voids the admission.
+func (s *Service) RestoreAdmitted(ctx context.Context, user uuid.UUID, review bool, ticket string) (State, bool, error) {
 	if err := s.ready(); err != nil {
-		return State{}, err
+		return State{}, false, err
 	}
 	var (
 		st     State
@@ -477,7 +481,7 @@ func (s *Service) RestoreAdmitted(ctx context.Context, user uuid.UUID, review bo
 	if err == nil {
 		s.queueAfter(ctx, queued)
 	}
-	return st, err
+	return st, queued != uuid.Nil, err
 }
 
 // DiscardPending drops a person's pending version, flagged or in review;
