@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/blaktron/agentry/internal/api"
+	"github.com/blaktron/agentry/internal/auth"
 	"github.com/blaktron/agentry/internal/config"
 	"github.com/blaktron/agentry/internal/testidp"
 )
@@ -85,7 +87,16 @@ func TestClearTrustedDevices(t *testing.T) {
 	if count.Count == nil || *count.Count != 0 {
 		t.Fatalf("a token read count = %s, want 0", intOrNil(count.Count))
 	}
-	env.doJSON(tokenCaller, http.MethodDelete, "/api/v1/user/trusted-devices", nil, nil, http.StatusForbidden)
+	patClear := env.do(tokenCaller, http.MethodDelete, "/api/v1/user/trusted-devices", nil)
+	patStatus, patSlug, patDetail := problemOf(t, patClear)
+	if patStatus != http.StatusForbidden {
+		t.Fatalf("a token's clear: status %d, want 403", patStatus)
+	}
+	// The refusal is the action's own (a remembered browser is a session's to
+	// clear), not the route's second look at the credential.
+	if strings.Contains(patDetail, "requires a session, not a token") {
+		t.Fatalf("a token's clear was refused by the route (%s: %s), not by the action's rule", patSlug, patDetail)
+	}
 
 	// A browser request without the CSRF header is refused, as every
 	// cookie-authenticated mutation is.
@@ -122,6 +133,28 @@ func TestClearTrustedDevices(t *testing.T) {
 	}
 	if ok, err := srv.UseRememberedBrowser(r, uuid.MustParse(other.userID), minted[otherSubject][0], nil); err != nil || !ok {
 		t.Fatalf("another account's browser after the clear: %v %v, want true", ok, err)
+	}
+	// A browser is remembered for its own account alone.
+	if ok, err := srv.UseRememberedBrowser(r, uuid.MustParse(first.userID), minted[otherSubject][0], nil); err != nil || ok {
+		t.Fatalf("another account's browser used for this account: %v %v, want false", ok, err)
+	}
+	// The clear revokes the rows, keeping them for an investigator; the
+	// expired record is not the clear's.
+	var revoked, expiredUntouched int
+	if err := env.st.Pool().QueryRow(ctx,
+		`SELECT count(*) FILTER (WHERE revoked_at IS NOT NULL), count(*) FILTER (WHERE revoked_at IS NULL AND expires_at < now()) FROM trusted_devices WHERE user_id = $1::uuid`,
+		first.userID).Scan(&revoked, &expiredUntouched); err != nil {
+		t.Fatal(err)
+	}
+	if revoked != 2 || expiredUntouched != 1 {
+		t.Fatalf("after the clear: %d revoked rows and %d untouched expired ones, want 2 and 1", revoked, expiredUntouched)
+	}
+	// A remembered browser past its lifetime is refused.
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE trusted_devices SET expires_at = now() - interval '1 hour' WHERE token_sha256 = $1`, auth.HashToken(minted[otherSubject][0])); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := srv.UseRememberedBrowser(r, uuid.MustParse(other.userID), minted[otherSubject][0], nil); err != nil || ok {
+		t.Fatalf("an expired browser: %v %v, want false", ok, err)
 	}
 
 	var audited int

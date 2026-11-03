@@ -49,7 +49,7 @@ Everyday commands:
 | `make test` | Go tests (DB tests need `AGENTRY_TEST_DATABASE_URL`) |
 | `make bump-pins` | move each digest in `deploy/compose/docker-compose.yaml` to what its tag serves now (needs the network) |
 | `make workflows-check` | no workflow job that a fork's pull request can start runs on a self-hosted runner without the fork guard (needs python3 with PyYAML) |
-| `./scripts/acceptance/smoke.sh` | the stack boots and the generated Go client reaches the API |
+| `./scripts/acceptance/smoke.sh` | the compiled binary boots and answers its health, readiness, metadata and login routes (the generated Go client's smoke is `TestSmoke`, in `make test`) |
 | `./scripts/acceptance/auth.sh` | the authorization matrix, the personal-access-token lifecycle and the audit rows, against a real Postgres |
 | `./scripts/acceptance/git.sh` | the git conformance matrix: oversize pushes, wrong credentials and tag permissions are refused |
 | `./scripts/acceptance/publish-install.sh` | publish and install round trips, byte-reproducible archives, yank semantics, and no path to `published` that skips the gate |
