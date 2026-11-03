@@ -254,14 +254,17 @@ func (s *Server) RestoreVoice(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	st, err := s.voice.RestoreAdmitted(r.Context(), user, review, ticket)
-	release(err == nil)
+	st, reviewed, err := s.voice.RestoreAdmitted(r.Context(), user, review, ticket)
+	// An admission stands only for a review that was queued: a restore
+	// admitted for review that swapped at once instead (the question set
+	// moved back between the look and the restore) voids it.
+	release(err == nil && reviewed)
 	if err != nil {
 		s.voiceProblem(w, r, err, "restore voice")
 		return
 	}
 	status := http.StatusOK
-	if review {
+	if reviewed {
 		status = http.StatusAccepted
 	}
 	s.writeVoice(w, r, status, st)

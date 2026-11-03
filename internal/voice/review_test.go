@@ -582,7 +582,7 @@ func TestTheServiceStoresAndReviewsAVoice(t *testing.T) {
 				"Put":                func() error { _, err := s.Put(ctx, user, []byte(plainVoice), SourceEdit); return err },
 				"PutAdmitted":        func() error { _, err := s.PutAdmitted(ctx, user, []byte(plainVoice), SourceEdit, "t"); return err },
 				"Restore":            func() error { _, err := s.Restore(ctx, user, true); return err },
-				"RestoreAdmitted":    func() error { _, err := s.RestoreAdmitted(ctx, user, true, "t"); return err },
+				"RestoreAdmitted":    func() error { _, _, err := s.RestoreAdmitted(ctx, user, true, "t"); return err },
 				"RestoreNeedsReview": func() error { _, err := s.RestoreNeedsReview(ctx, user); return err },
 				"DiscardPending":     func() error { _, err := s.DiscardPending(ctx, user); return err },
 				"SetAlwaysAttach":    func() error { _, err := s.SetAlwaysAttach(ctx, user, true); return err },
