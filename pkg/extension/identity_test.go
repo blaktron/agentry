@@ -259,6 +259,7 @@ func TestTheSeamsNamesAreTheCoresNames(t *testing.T) {
 		{"ErrNoSecondFactor", ErrNoSecondFactor, api.ErrNoSecondFactor},
 		{"ErrOrgNotProvisionable", ErrOrgNotProvisionable, api.ErrOrgNotProvisionable},
 		{"ErrAddressUnproven", ErrAddressUnproven, api.ErrAddressUnproven},
+		{"ErrAccountSuspended", ErrAccountSuspended, api.ErrAccountSuspended},
 		{"ErrActorNotStaff", ErrActorNotStaff, api.ErrActorNotStaff},
 		{"ErrActorSession", ErrActorSession, api.ErrActorSession},
 		{"ErrSelfAct", ErrSelfAct, api.ErrSelfAct},

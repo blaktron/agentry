@@ -28,16 +28,20 @@ type ProvisionedMember struct {
 // suspended or being decommissioned has its membership frozen. An account
 // that holds the address without having proved it may be someone else's
 // claim on it, and a membership the organization meant for the address's
-// owner must not land there.
+// owner must not land there. A suspended account is kept out of every
+// organization's business, so it is not given a membership an admin would
+// be asked to approve with no sign of the suspension.
 var (
 	ErrOrgNotProvisionable = errors.New("api: the organization is not active, so nobody is provisioned into it")
 	ErrAddressUnproven     = errors.New("api: the account at this address has not proved it, so it is not provisioned")
+	ErrAccountSuspended    = errors.New("api: the account at this address is suspended, so it is not provisioned")
 )
 
 // ProvisionMember makes the person a pending member of orgID on a
 // directory extension's word (pkg/extension.Deps.Members): the account at
 // their address when it has proved the address, or a new one with the
-// address taken as verified on the extension's word. A pending
+// address taken as verified on the extension's word. An account that is
+// not active (suspended) is refused, and nothing is written. A pending
 // membership holds no seat and confers nothing until an admin approves it,
 // and an existing membership, pending or active, is left as it is. The
 // staff organization admits only its own domain. The extension decides
@@ -65,6 +69,8 @@ func (s *Server) ProvisionMember(ctx context.Context, ext string, orgID uuid.UUI
 	}
 	if u, err := s.q().GetUserByEmail(ctx, email); err == nil && u.EmailVerifiedAt == nil {
 		return uuid.Nil, ErrAddressUnproven
+	} else if err == nil && u.State != "active" {
+		return uuid.Nil, ErrAccountSuspended
 	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, err
 	}
