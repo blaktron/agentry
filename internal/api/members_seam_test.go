@@ -195,6 +195,43 @@ func TestTheMembersSeamProvisionsAPendingMemberOnly(t *testing.T) {
 		t.Fatalf("the unproven account's membership is %q, want none", got)
 	}
 
+	// A suspended account is given no membership, and the one it was given
+	// before its suspension is not made active by an admin's approval: the
+	// approval does not find the account.
+	suspEmail := "suspended-" + env.sfx + "@mp.example"
+	suspH := env.registerEmail("mp-susp", suspEmail)
+	env.verifyEmail(suspH)
+	suspID := uuid.MustParse(env.userID(suspH))
+	if got, err := env.srvObj.ProvisionMember(ctx, "probe", orgID, api.ProvisionedMember{Email: suspEmail}); err != nil || got != suspID {
+		t.Fatalf("provisioning the account before its suspension = %s, %v; want its own account", got, err)
+	}
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE users SET state = 'suspended' WHERE id = $1`, suspID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := env.srvObj.ProvisionMember(ctx, "probe", orgID, api.ProvisionedMember{Email: suspEmail}); !errors.Is(err, api.ErrAccountSuspended) || got != uuid.Nil {
+		t.Fatalf("provisioning a suspended account = %s, %v; want ErrAccountSuspended", got, err)
+	}
+	res = env.do(admin, http.MethodPost, "/api/v1/orgs/"+orgH+"/members/"+suspH+"/approve", nil)
+	if code, slug, _ := problemOf(t, res); code != http.StatusNotFound || slug != "not-found" {
+		t.Fatalf("approving a suspended account's pending membership: %d %s, want 404 not-found", code, slug)
+	}
+	if got := env.membership(orgID, suspID); got != "pending" {
+		t.Fatalf("the suspended account's membership is %q after the refused approval, want pending", got)
+	}
+	freshEmail := "suspended-fresh-" + env.sfx + "@mp.example"
+	freshH := env.registerEmail("mp-susp2", freshEmail)
+	env.verifyEmail(freshH)
+	freshID := uuid.MustParse(env.userID(freshH))
+	if _, err := env.st.Pool().Exec(ctx, `UPDATE users SET state = 'suspended' WHERE id = $1`, freshID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.srvObj.ProvisionMember(ctx, "probe", orgID, api.ProvisionedMember{Email: freshEmail}); !errors.Is(err, api.ErrAccountSuspended) {
+		t.Fatalf("provisioning a suspended account with no membership: %v, want ErrAccountSuspended", err)
+	}
+	if got := env.membership(orgID, freshID); got != "" {
+		t.Fatalf("the suspended account's membership is %q, want none", got)
+	}
+
 	// An organization that is suspended, in its decommission hold or erased
 	// provisions nobody, and no account is made for the address.
 	for _, state := range []string{"suspended", "decommissioning", "decommissioned"} {
