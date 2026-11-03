@@ -1143,7 +1143,8 @@ type Members interface {
 	// active, is left as it is. ErrOrgNotProvisionable for an organization
 	// that is unknown, suspended or being decommissioned;
 	// ErrAddressUnproven when the account at the address has not proved
-	// it; ErrStaffOrgDomain for an address the staff organization does not
+	// it; ErrAccountSuspended when that account is suspended;
+	// ErrStaffOrgDomain for an address the staff organization does not
 	// admit.
 	Provision(ctx context.Context, orgID uuid.UUID, p ProvisionedMember) (userID uuid.UUID, err error)
 	// Deprovision takes userID's membership of orgID away and revokes
@@ -1164,6 +1165,7 @@ type ProvisionedMember = api.ProvisionedMember
 var (
 	ErrOrgNotProvisionable = api.ErrOrgNotProvisionable
 	ErrAddressUnproven     = api.ErrAddressUnproven
+	ErrAccountSuspended    = api.ErrAccountSuspended
 	ErrStaffOrgDomain      = registry.ErrStaffOrgDomain
 )
 
