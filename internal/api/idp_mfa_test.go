@@ -49,6 +49,9 @@ func TestSocialLoginRecordsIdPMFA(t *testing.T) {
 		{"no amr at all", nil, false},
 		{"password plus mfa", []string{"pwd", "mfa"}, true},
 		{"webauthn spelling", []string{"pwd", "webauthn"}, true},
+		{"one-time code spelling", []string{"otp"}, true},
+		{"capitals", []string{"PWD", "MFA"}, true},
+		{"a method that is no second factor", []string{"pwd", "kba"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			idp := newFakeOIDC(t)
@@ -66,14 +69,25 @@ func TestSocialLoginRecordsIdPMFA(t *testing.T) {
 				t.Fatalf("amr=%v: idp_mfa_at set = %v, want %v", tc.amr, stamped, tc.want)
 			}
 			// The login audit row shows what the directory sent, so an
-			// operator can check before enabling requireIdpMFA.
+			// operator can check before enabling requireIdpMFA: the list
+			// itself, an empty one when there was none.
 			var got []string
+			var kind, method, provider string
 			if err := env.st.Pool().QueryRow(context.Background(),
-				`SELECT COALESCE(detail->'amr', '[]'::jsonb) FROM audit_events WHERE action = 'user.login' AND actor_id = $1::uuid ORDER BY occurred_at DESC LIMIT 1`, userID).Scan(&got); err != nil {
+				`SELECT COALESCE(detail->'amr', '[]'::jsonb), COALESCE(jsonb_typeof(detail->'amr'), 'absent'), COALESCE(detail->>'method', ''), COALESCE(detail->>'provider', '')
+				 FROM audit_events WHERE action = 'user.login' AND actor_id = $1::uuid ORDER BY occurred_at DESC LIMIT 1`, userID).Scan(&got, &kind, &method, &provider); err != nil {
 				t.Fatal(err)
 			}
-			if len(got) != len(tc.amr) {
-				t.Fatalf("audit amr = %v, want %v", got, tc.amr)
+			if len(got) != len(tc.amr) || kind != "array" {
+				t.Fatalf("audit amr = %v (%s), want a list of %v", got, kind, tc.amr)
+			}
+			for i := range tc.amr {
+				if got[i] != tc.amr[i] {
+					t.Fatalf("audit amr = %v, want %v", got, tc.amr)
+				}
+			}
+			if method != "social" || provider != "oidc" {
+				t.Fatalf("the login audit row says method %q by provider %q, want social by oidc", method, provider)
 			}
 		})
 	}
@@ -96,6 +110,18 @@ func TestPublicPublishGateAcceptsIdPMFA(t *testing.T) {
 	// No factor the provider asserted: refused.
 	if status, body := env.uploadVersionCLI(user, "gated", pat, files); status != http.StatusForbidden {
 		t.Fatalf("without any second factor: %d %s (want 403)", status, body)
+	}
+	// The gate is for public namespaces: a private agent publishes without one.
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents",
+		map[string]any{"namespace": user, "name": "quiet", "modes": []string{"autonomous"}, "visibility": "private"}, nil, http.StatusCreated)
+	quiet := map[string]string{
+		"agent.yaml": skillYAML(user, "quiet", "1.0.0"),
+		"README.md":  "# quiet\n",
+		"SKILL.md":   "Summarize politely.\n",
+		"LICENSE":    "Apache-2.0\n",
+	}
+	if status, body := env.uploadVersionCLI(user, "quiet", pat, quiet); status != http.StatusAccepted {
+		t.Fatalf("a private agent without any second factor: %d %s (want 202)", status, body)
 	}
 	// The directory asserted one at sign-in: accepted.
 	if _, err := env.st.Pool().Exec(context.Background(),

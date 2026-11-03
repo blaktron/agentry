@@ -9,6 +9,7 @@ package api_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
+	"github.com/blaktron/agentry/internal/metrics"
 	"github.com/blaktron/agentry/internal/testidp"
 )
 
@@ -80,8 +82,13 @@ func TestTheCoreReadsNoDirectoryClaims(t *testing.T) {
 				mu.Unlock()
 				t.Fatalf("user.registered carries promoCode %v", code)
 			}
+			if pl := registered[0].Payload; pl["via"] != "social" || pl["provider"] != id || pl["emailVerified"] != true ||
+				pl["email"] != person.Email || pl["handle"] != in.handle || in.handle == "" {
+				mu.Unlock()
+				t.Fatalf("user.registered payload = %v, want via social, provider %s, a verified address %s and handle %q", pl, id, person.Email, in.handle)
+			}
 			if len(heard) != 1 || !heard[0].NewAccount || heard[0].Claims["agentry_promo_code"] != "spring-26" ||
-				heard[0].Claims["agentry_remember_device"] != true {
+				heard[0].Claims["agentry_remember_device"] != true || heard[0].Provider != id || heard[0].Subject != id+":"+person.Subject {
 				mu.Unlock()
 				t.Fatalf("the sign-in hook heard %+v", heard)
 			}
@@ -138,16 +145,33 @@ var _ api.DirectoryErasure = (*erasingDirectory)(nil)
 // directory's outcome; an outcome the response does not define, or a
 // directory that panics, is reported as failed.
 func TestADirectoryThatErasesItselfAnswersTheErasure(t *testing.T) {
-	for _, tc := range []struct{ outcome, header string }{
-		{api.DirectoryErasurePending, "pending"},
-		{api.DirectoryErasureDeleted, "deleted"},
-		{"maybe", "failed"},
-		{"", "failed"},
-		{"panic", "failed"},
+	for _, tc := range []struct {
+		outcome, header string
+		// raised: the core raises the erasure to the operator itself; a
+		// directory that answers one of the defined outcomes raises its own.
+		raised bool
+	}{
+		{api.DirectoryErasurePending, "pending", false},
+		{api.DirectoryErasureDeleted, "deleted", false},
+		{api.DirectoryErasureNotFound, "not-found", false},
+		{api.DirectoryErasureUnresolved, "unresolved", false},
+		{api.DirectoryErasureNotConfigured, "not-configured", false},
+		{api.DirectoryErasureFailed, "failed", false},
+		{"maybe", "failed", true},
+		{"", "failed", true},
+		{"panic", "failed", true},
 	} {
 		t.Run("outcome "+tc.outcome, func(t *testing.T) {
 			dir := &erasingDirectory{outcome: tc.outcome}
-			env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) { s.SetDirectory(dir) })
+			mx, err := metrics.New(context.Background(), metrics.Config{ServiceName: "agentryd", Role: "all", Env: "dev"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = mx.Shutdown(context.Background()) })
+			env, idp := newOIDCTestEnv(t, nil, func(s *api.Server) {
+				s.SetDirectory(dir)
+				s.SetMetrics(mx)
+			})
 			c := env.mintAccount(t, idp, "self-erase")
 			uid := env.selfID(c)
 			dir.mu.Lock()
@@ -176,6 +200,13 @@ func TestADirectoryThatErasesItselfAnswersTheErasure(t *testing.T) {
 			}
 			if audits != 0 || jobs != 0 {
 				t.Fatalf("the core audited %d attempts and queued %d retries of its own", audits, jobs)
+			}
+			b, err := mx.Gather(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if raised := strings.Contains(string(b), metrics.FailOpenDirectoryErasure); raised != tc.raised {
+				t.Fatalf("fail-open %s raised = %v, want %v", metrics.FailOpenDirectoryErasure, raised, tc.raised)
 			}
 		})
 	}
