@@ -65,7 +65,9 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
    model with a smaller window than it was trained for unless you set one
    (`num_ctx`, `--ctx-size`), and setup never reads the trained window.
    When setup cannot find it, it says so; `agentry doctor` repeats the
-   warning (`model:context`) until the window is set.
+   warning (`model:context`) until the window is set. The window also
+   sizes the pages a run reads (CLI v0.7.20 or later;
+   [pages](#one-tool-result-at-a-time-pages)).
    A provider can also be paid by **your own plan or account** instead of a
    key: `--api-key-kind chatgpt-plan` (provider `openai`),
    `--api-key-kind claude-signin` (`anthropic`), `--provider copilot` with
@@ -492,14 +494,14 @@ has it. Installing a published agent needs CLI v0.6.1015 or later.
 | `uninstall <ref> [--remove-data --confirm REF]` | removes an installed agent, keeping its conversation and files unless `--remove-data` | yes |
 | `list` | the agents with `running`, `stopped`, `disabled` or `desktop only`, who runs a running one, since when, and its segment | yes |
 | `show <name> [--transcript N]` | state, segment, usage, share folder, [roster](#the-roster), volumes and folder; for a published agent also its version, source, persona, packs and subagents; `--transcript N` adds the last N transcript lines | yes |
-| `enable <name>`, `disable <name>` | allows or stops allowing a start; `disable` needs the agent stopped and keeps its conversation and files | no |
+| `enable <name>`, `disable <name>` | allows or stops allowing a start; `disable` stops a running agent first, in whichever client runs it, and keeps its conversation and files (before CLI v0.7.19 it needed the agent stopped) | no |
 | `start <name> [--yes] [--policy FILE]` | agrees to what is given for the first time (`--yes`, else asked at a terminal), then starts the agent in the background and prints `supervisor.log` until its socket answers (at most 20 minutes) | yes: the status |
 | `stop <name>` | ends the segment and prints its envelope file | yes: `status`, `resultFile`, `error` |
 | `chat <name>` | the terminal chat, after the last 500 transcript lines; leaving it leaves the agent running | no |
 | `attach <name> --json` | `chat` for a program ([below](#attach-for-a-program)); refused without `--json` and on Windows | required |
 | `grant <name> <entry> on\|off [--yes]` | switches a roster entry; a running agent takes it at its next turn | yes: the roster |
 | `configure <name> …` | name, personality, share folder, servers, packs, ports, dev server; flags below | yes: the roster |
-| `reset <name> [--confirm NAME]` | puts a stopped agent back to its defaults; asks for the agent's name, or takes `--confirm` with no terminal | no |
+| `reset <name> [--confirm NAME]` | puts the agent back to its defaults, stopping a running one first; asks for the agent's name, or takes `--confirm` with no terminal | no |
 
 `start` needs the agent enabled, the container engine available and the
 operator policy resolved (`--policy` names another file, as for `run`). An
@@ -866,14 +868,17 @@ against the installed version, the persona of that version and whether its
 text is locked, the knowledge packs it ships, and each subagent with the
 version it would be pinned to, what that version reaches and its digest, or
 why it resolves to none. It previews an update too, naming the installed
-version and its pins. A running agent is the plan's refusal, not an error.
-With `--json` it is the shape of `agentry install --plan --json` with an
+version and its pins. With `--json` it is the shape of `agentry install --plan --json` with an
 `agent` block. `--plan` needs CLI v0.7.8 or later.
 
 **Updating.** Installing a reference again moves the agent to the newest version,
 or to `@version`, asking again when the new version declares more than the one
-agreed to. The agent must be stopped, and its conversation, its files and its
-share folder carry across. A plain `agentry install` of an installed agent's
+agreed to. Its conversation, its files and its share folder carry across. A
+running agent takes the new version at its next turn: it is laid down beside
+the version that runs, the install sends the supervisor a `change` with
+`release`, and the supervisor removes the other versions once a segment has
+started on the new one. Before CLI v0.7.19 the agent had to be stopped, and the
+plan refused a running agent. A plain `agentry install` of an installed agent's
 reference is refused and names this command.
 
 **Uninstalling.** `agentry agent uninstall <ref>` stops listing and starting the
@@ -1001,10 +1006,28 @@ share folder defaults to `~/agentry/<ns.name>-share`.
 
 ### Segments
 
-A segment ends when the agent is stopped, when a change to its roster reaches
-its next turn (the next segment starts at once), when its owner quits, and
-when its harness ends by itself (the agent then stops). If the next segment
-after a change cannot start, the agent stops and the chat says why. A stopped
+A segment ends when the agent is stopped, when a change reaches its next turn
+(the next segment starts at once), when a client holds it for a set-up, when
+its owner quits, and when its harness ends by itself (the agent then stops).
+
+**What starts the next segment.** At each turn the supervisor compares what the
+running segment started with against what it would start now: the roster and
+each entry's signature (an image server's grants, the dev server's saved
+sign-in, a knowledge pack's or voice's digest), the installed release, and the
+digest of the parts of the runner's policy that shape a segment (the model,
+the harness, the malware check, the limits, the registries, the web search and
+AI Review keys). Any difference starts the next segment before the turn. A
+policy that cannot be read keeps the last one read. A harness change starts a
+new conversation that carries the last exchange, and a model change reopens
+the credits session.
+
+**A next segment that cannot start.** When the change only added (entries
+switched on, a new release taken), the supervisor switches the additions off
+again, records them in `config.yaml`'s `notApplied` with when and why, starts
+the agent again without them and tells the chat; the envelope's roster marks
+them `not-applied`, and switching one on again tries again. When the change
+took something away, nothing is put back: the agent stops, and the chat says
+why. Before CLI v0.7.19 any such failure stopped the agent. A stopped
 agent's volumes are kept; only [`reset`](#agentry-agent) removes them. Each
 segment's usage is added to `usage.json` when it ends.
 
@@ -1101,8 +1124,9 @@ agent's grant, packs, servers, subagents.
 | `subagent:<ns>/<name>:ask` | `subagent` | off | you |
 
 An entry's state is `on`, `off`, `pending` (switched since the running segment
-started; the next turn applies it) or `needs-sign-in` (an OAuth server, which
-cannot be switched on). Its **sentence** says what it gives the agent.
+started; the next turn applies it), `needs-sign-in` (an OAuth server, which
+cannot be switched on), or, in a segment's envelope, `not-applied` (switched on,
+then off again because the next segment could not start with it). Its **sentence** says what it gives the agent.
 
 **Agreement.** Turning an entry on records its sentence in `consented`; an
 entry that is on and whose current sentence differs from the recorded one (a
@@ -1112,7 +1136,13 @@ does every next segment. Turning an entry off and on again under the same
 sentence asks nothing. The agent has no tool that changes its roster.
 
 **A change** to a running agent goes through the owner socket's `change`, the
-supervisor alone writing `config.yaml`. Name and personality are not grants:
+supervisor alone writing `config.yaml`, and reaches the agent at its next
+turn. Every change the CLI and the desktop make can be made while the agent
+runs (CLI v0.7.19 or later): the roster, the servers, packs, skills, secrets,
+accounts, ports and dev server, the mail providers (`mailProvider`),
+Microsoft 365's client and signoff (`microsoftClient`, `microsoftSignoff`), a
+mail server's recorded sign-in (`signIn`, from the client holding the agent),
+calendar feeds, and a new release (`release`). Name and personality are not grants:
 they reach the agent, quoted, at its next turn. A package server is installed
 when a segment starts, so that start waits for the install, and its container
 sees its own store and never the share. Packs and servers are added with
@@ -1133,16 +1163,20 @@ of:
 |---|---|
 | `{"attach":{}}` | every event of the segment from now on, as `{"event":…}`; a watcher that stops reading is let go |
 | `{"send":{"text":"…"}}` | one turn; the events carry the answer |
-| `{"status":{}}` | `{"status":…}`: `segment`, `run`, `adapter`, `model`, `resumed`, `busy`, `usage`, `pending` |
+| `{"status":{}}` | `{"status":…}`: `segment`, `run`, `adapter`, `model`, `resumed`, `busy`, `usage`, `pending`, and `held` and `notApplied` when they apply |
 | `{"roster":{}}` | `{"roster":[…]}`, with `pending` entries |
 | `{"change":{…}}` | the roster after the change, or a refusal |
 | `{"stop":{}}` | `{"stopped":{"status","resultFile","error"}}` |
 | `{"interrupt":{}}` | stops the turn in flight, the person's or one the agent runs on its own, and answers `{"interrupted":{"stopped":true}}` once it has ended, or `"stopped":false` when no turn was in flight (CLI v0.6.1004 or later) |
+| `{"hold":{"what":"…"}}` | ends the segment once no turn is in flight and answers `{"held":{}}`: the agent waits between turns while the client writes what a running server holds (Google Workspace's and Microsoft 365's sign-ins); `status` names `what` as `held`, and a `send` meanwhile waits (CLI v0.7.19 or later) |
+| `{"resume":{"done":true\|false}}` | ends the hold and answers `{"resumed":{}}`; the next segment starts from the config as it is, and the chats are told whether the set-up finished. The holding connection closing, the supervisor stopping, or 20 minutes passing also end it |
 
 A refusal is an `error` event with `refused` set to `malformed` (not exactly
 one command, or an empty `send`), `busy` (a turn is in flight), `ended` (the
 segment has ended), `change` (the change is invalid), `interrupt` (the harness did not stop
-the turn) or `consent` (the change
+the turn), `hold` (another client holds the agent, this connection holds it
+already or holds nothing to resume, or a `signIn` came from a connection that
+does not hold it) or `consent` (the change
 widens the roster; the reply also lists the sentences to agree to, and the
 command is sent again with `consent` set).
 
@@ -1150,6 +1184,14 @@ command is sent again with `consent` set).
 reaches an agent whichever client owns it; ending a chat closes the connection
 and leaves the agent running. `stop` ends the segment without a final result,
 writes its envelope, closes both sockets and releases the lock.
+
+**An older supervisor.** A supervisor refuses a command or a change field it
+does not know as `malformed`, so a client newer than the detached supervisor
+that runs the agent hands it over: it asks the person, waits for the turn in
+flight to end (at most 10 minutes), stops the agent and starts it again on its
+own binary, which continues the conversation, then sends the change again. An
+agent that another client runs is left to that client, and the refusal names
+it (CLI v0.7.19 or later).
 
 ### The app link
 
@@ -1722,7 +1764,7 @@ its digest, so a run record says which file a run obeyed.
 | `images.goBuilder` | the Go image the runner image is compiled in on first use (the default is pinned by digest). Its Go must be at least the CLI's own, to the patch: the build context names that version, and an older builder stops the build with "images.goBuilder … is older than the Go the runner needs" |
 | `images.runner` | override the locally built runner image tag (pin this when the CLI and desktop app share a machine) |
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
-| `model.contextWindow` | the model's context window in tokens, 1,024 to 2^30 (CLI v0.7.9 or later): the harness compacts the conversation as it nears it, and a model the harness cannot look up without it fails once the endpoint refuses the conversation as too long. Unset, the harness looks the model up itself. `agentry setup` fills it for a model server of your own ([above](#agentry-setup)); where set, it wins over the harness's own figure |
+| `model.contextWindow` | the model's context window in tokens, 1,024 to 2^30 (CLI v0.7.9 or later): the harness compacts the conversation as it nears it, and a model the harness cannot look up without it fails once the endpoint refuses the conversation as too long. Unset, the harness looks the model up itself. `agentry setup` fills it for a model server of your own ([above](#agentry-setup)); where set, it wins over the harness's own figure. From CLI v0.7.20 it also sizes a run's pages ([pages](#one-tool-result-at-a-time-pages)) |
 | `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
@@ -3099,6 +3141,32 @@ tools spec:
 | Claude Code (`claude`, `claude-image`) | 46 KiB and 1,900 lines | 50,000 characters, then the result is saved to a file the agent cannot open |
 | Copilot (`copilot-image`) | 19 KiB and 1,900 lines | 20,480 bytes, then the result is saved to a file and 500 characters shown |
 | Codex (`codex`, `codex-image`) | 20 KiB and 1,900 lines | 48,000 bytes, set by the runner in the model catalog it gives Codex, the middle cut out; an input tool's result is sent as escaped JSON, which can double it |
+
+**The page and the model's window** (CLI v0.7.20 or later). Where
+`model.contextWindow` records the model's window, the budget is also held
+to a sixteenth of it, at four bytes a token, in whole KiB and never under
+16 KiB: a 262,144-token window keeps docker-agent's 48 KiB, a
+131,072-token window gets 32 KiB, and a 32,768-token window 16 KiB. On a
+model server of your own (`custom`, or `openai` with a `baseUrl`) with no
+window recorded, the budget is 32 KiB. The line count stays the harness's.
+The System Prompt and the receipt's `toolResults` line state the run's
+budget and what set it.
+
+Under docker-agent, the run's config also sets three of docker-agent's own
+limits, none of which needs the window:
+
+- **`max_tool_result_tokens`**, twice the page in tokens, on every model. A
+  result the tools server did not page (a declared MCP server's, the
+  browser's) that passes it has its middle cut out, with a marker saying
+  so.
+- **`max_old_tool_call_tokens`**, on a model server of your own. Once the
+  newer tool results pass half the window (64k tokens when no window is
+  recorded), each older one is sent to the model as a placeholder; the
+  stored conversation keeps it whole.
+- **`compaction_threshold: 0.7`**, on a model server of your own. The
+  conversation is compacted at 70% of the window rather than docker-agent's
+  90%. With no window recorded, docker-agent compacts only a model it knows
+  itself.
 
 Within it:
 
