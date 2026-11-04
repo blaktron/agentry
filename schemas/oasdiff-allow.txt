@@ -1,0 +1,4 @@
+GET /user/report-settings api path removed without deprecation
+PUT /user/report-settings api path removed without deprecation
+PUT /user/report-settings/logo api path removed without deprecation
+DELETE /user/report-settings/logo api path removed without deprecation

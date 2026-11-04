@@ -1121,7 +1121,7 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 | (always) | `write_report`: write files into the run's output folder, and mark the one the person asked for as the run's [deliverable](#deliverables) |
 | (always) | `list_inputs`, `read_input`, `search_inputs`: the run's provided input files, read-only |
 | (always) | `scratch_list`, `scratch_read`, `scratch_write`, `scratch_search`: the run's [scratch folder](runner.md#the-scratch-folder) at `/scratch`, private to the run and deleted at its end |
-| (always, but for the built-ins) | `export_pdf`: a Markdown report as a PDF in `reports/`, in the form the agent picks (`report`, the default, `letter` or `memo`) and laid out in the person's [report theme](runner.md#the-report-theme) |
+| (always, but for the built-ins) | `export_pdf`: a Markdown report as a PDF in `reports/`, in the form the agent picks (`report`, the default, `letter` or `memo`) and laid out in the person's [report design](runner.md#the-report-design) |
 | (always) | `grep`, `glob`: [search file contents](runner.md#searching-files-grep-and-glob) by regular expression and list files by path pattern with ripgrep, one area a call, only what the run's other tools read: `/inputs`, `/knowledge/<pack>`, `/scratch`, and `/workspace` only with `filesystem.read`. ripgrep runs with an empty environment, as a user of its own when the tools server is root, a fixed argument list that never starts another program, and caps on memory and time; where the machine has Landlock it also reads only the searched area and writes nothing, and at Landlock ABI 4 or later opens no TCP connection |
 | `filesystem.read` | `fs_read`, `fs_list` |
 | `filesystem.write` | `fs_write` |

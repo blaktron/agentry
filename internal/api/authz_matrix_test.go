@@ -329,18 +329,37 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				}
 			},
 		},
-		"getUserReportSettings": {method: "GET", path: sPath("/api/v1/user/report-settings")},
-		"updateUserReportSettings": {
-			method: "PUT", path: sPath("/api/v1/user/report-settings"),
+		"listUserReportDesigns": {method: "GET", path: sPath("/api/v1/user/report-designs")},
+		"createUserReportDesign": {
+			method: "POST", path: sPath("/api/v1/user/report-designs"),
 			body: func(*matrixSeed, string) any {
 				doc, _ := reportdesign.BuiltinDocument("classic")
 				return map[string]any{"design": json.RawMessage(doc)}
 			},
 		},
-		// A JSON body is not the multipart the route reads: an authorized
-		// caller gets 400, and the matrix judges only who reaches it.
-		"putUserReportLogo":    {method: "PUT", path: sPath("/api/v1/user/report-settings/logo"), body: func(*matrixSeed, string) any { return map[string]any{} }},
-		"deleteUserReportLogo": {method: "DELETE", path: sPath("/api/v1/user/report-settings/logo")},
+		"setUserReportDesignDefault": {method: "PUT", path: sPath("/api/v1/user/report-designs/default"), body: func(*matrixSeed, string) any { return map[string]any{} }},
+		// The caller has no design of that id: an authorized caller gets
+		// 404, and the matrix judges only who reaches the route.
+		"getUserReportDesign": {method: "GET", path: sPath("/api/v1/user/report-designs/00000000-0000-0000-0000-000000000000")},
+		"updateUserReportDesign": {
+			method: "PUT", path: sPath("/api/v1/user/report-designs/00000000-0000-0000-0000-000000000000"),
+			body: func(*matrixSeed, string) any {
+				doc, _ := reportdesign.BuiltinDocument("classic")
+				return map[string]any{"design": json.RawMessage(doc)}
+			},
+		},
+		"deleteUserReportDesign": {method: "DELETE", path: sPath("/api/v1/user/report-designs/00000000-0000-0000-0000-000000000000")},
+		// A JSON body is not the multipart the image routes read: an
+		// authorized caller gets 400.
+		"putUserReportDesignLogo":          {method: "PUT", path: sPath("/api/v1/user/report-designs/00000000-0000-0000-0000-000000000000/logo"), body: func(*matrixSeed, string) any { return map[string]any{} }},
+		"deleteUserReportDesignLogo":       {method: "DELETE", path: sPath("/api/v1/user/report-designs/00000000-0000-0000-0000-000000000000/logo")},
+		"putUserReportDesignCoverImage":    {method: "PUT", path: sPath("/api/v1/user/report-designs/00000000-0000-0000-0000-000000000000/cover-image"), body: func(*matrixSeed, string) any { return map[string]any{} }},
+		"deleteUserReportDesignCoverImage": {method: "DELETE", path: sPath("/api/v1/user/report-designs/00000000-0000-0000-0000-000000000000/cover-image")},
+		"putUserReportDesignCustomCover": {
+			method: "PUT", path: sPath("/api/v1/user/report-designs/00000000-0000-0000-0000-000000000000/custom-cover"),
+			body: func(*matrixSeed, string) any { return map[string]any{"source": "#page[]", "images": []any{}} },
+		},
+		"deleteUserReportDesignCustomCover": {method: "DELETE", path: sPath("/api/v1/user/report-designs/00000000-0000-0000-0000-000000000000/custom-cover")},
 		// Public read; the registry has never seen this version, so 404.
 		"getMcpServerScan": {method: "GET", path: sPath("/api/v1/mcp-servers/scan?ecosystem=npm&package=nobody&version=0.0.0")},
 		// Non-destructive by construction: the query spares the calling

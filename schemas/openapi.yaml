@@ -759,79 +759,172 @@ paths:
                 $ref: "#/components/schemas/NotificationSettings"
         default:
           $ref: "#/components/responses/Problem"
-  /user/report-settings:
+  /user/report-designs:
     get:
-      operationId: getUserReportSettings
+      operationId: listUserReportDesigns
       tags: [users]
-      summary: The report design the caller's PDF reports take.
+      summary: The caller's report design library.
       description: >-
-        A profile setting: the whole
-        report design, a theme document version 2, that `export_pdf`
-        renders with in the caller's runs. The model never chooses it. An
-        account that never chose reads back with no `design`, which is not
-        the same as Plain: a signed-in client then falls to its own
-        configuration, else Plain.
-      parameters:
-        - $ref: "#/components/parameters/ReportSettingsInclude"
+        Up to ten named report designs, oldest first, and which one is the
+        default: the design `export_pdf` renders with in the caller's runs
+        when the run picks none. The model never chooses a design. An
+        account with no designs, or none as the default, reads back with no
+        `default`, which is not the same as Plain: a signed-in client then
+        falls to its own configuration, else Plain. The images are not
+        listed; each entry says which it has.
       responses:
         "200":
-          description: The settings.
+          description: The library.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReportSettings"
+                $ref: "#/components/schemas/ReportDesignList"
         default:
           $ref: "#/components/responses/Problem"
-    put:
-      operationId: updateUserReportSettings
+    post:
+      operationId: createUserReportDesign
       tags: [users]
-      summary: Replace the caller's report settings.
+      summary: Add a report design to the caller's library.
       description: >-
-        A full replace: a body with no `design` clears the choice. The
-        design is validated by the core's pkg/reportdesign before it is
+        The design is validated by the core's pkg/reportdesign before it is
         stored: a document that breaks a rule (an unknown key, a name off a
         closed list, a font in a role it cannot take, a colour that is not
-        `#rrggbb` or whose contrast on white is too low, a text that is not
-        one line, over 16 KB) is refused 422 (`validation`), the field
-        named `design.<path>`. The answer carries the design in its
-        canonical form. A design that carries a `logo` replaces the stored
-        logo with the core's own re-encoding of it; one that carries none
-        leaves a stored logo as it is (remove it with DELETE
-        /user/report-settings/logo), so a client that does not know logos
-        never drops one by saving. A body with no design
-        clears the logo too.
+        `#rrggbb` or whose contrast on white is too low for where it goes, a
+        text that is not one line, a cover fact twice, an image or a custom
+        cover over its bounds, over 24 KB without them) is refused 422
+        (`validation`), the field named `design.<path>`. A version-2
+        document is refused the same way, with no mapping. The library holds
+        ten designs: an eleventh is 409 `conflict`. `default` makes the new
+        design the default, and the previous default an ordinary design of
+        the library; without it the default is unchanged. A document that
+        carries `logo`, `coverImage` or `customCover` stores each as the
+        core's own re-encoding of it. The answer carries the design in its
+        canonical form, its images only on `include=assets`.
       parameters:
-        - $ref: "#/components/parameters/ReportSettingsInclude"
+        - $ref: "#/components/parameters/ReportDesignInclude"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReportSettings"
+              $ref: "#/components/schemas/ReportDesignCreate"
       responses:
-        "200":
-          description: The saved settings.
+        "201":
+          description: The design, as stored.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReportSettings"
+                $ref: "#/components/schemas/ReportDesignRecord"
         default:
           $ref: "#/components/responses/Problem"
-  /user/report-settings/logo:
+  /user/report-designs/default:
     put:
-      operationId: putUserReportLogo
+      operationId: setUserReportDesignDefault
       tags: [users]
-      summary: Set the logo of the caller's report design.
+      summary: Set which of the caller's designs their runs take by default.
       description: >-
-        Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit
-        1024 pixels each way and encodes it again as PNG from the pixels, so
-        nothing of the upload but its pixels is kept; the runner draws it
-        only in the title block, and it never comes from the model or a URL.
-        Anything but a PNG or a JPEG (SVG and GIF included) is 415
-        `unsupported-image`; over 512 KB, over 16 million pixels, or over
-        512 KB as a PNG is 413 `upload-too-large`. A logo travels with a
-        design, so with none saved this is 409 `conflict`. Replaces any logo
-        the design had. The answer carries the design with its logo.
+        An id of one of the caller's designs makes it the default; another
+        account's id, or none the caller has, is 404. No id, or null, makes
+        no design the default, so a run falls to the client's own choice.
+        The answer is the library as it now is.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportDesignDefault"
+      responses:
+        "200":
+          description: The library.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportDesignList"
+        default:
+          $ref: "#/components/responses/Problem"
+  /user/report-designs/{designId}:
+    parameters:
+      - $ref: "#/components/parameters/ReportDesignId"
+    get:
+      operationId: getUserReportDesign
+      tags: [users]
+      summary: One of the caller's report designs.
+      description: >-
+        The design in its canonical form. Its images (`logo`, `coverImage`,
+        `customCover`) come only with `include=assets`: a client that does
+        not draw them reads the document without them. Another account's
+        design is 404.
+      parameters:
+        - $ref: "#/components/parameters/ReportDesignInclude"
+      responses:
+        "200":
+          description: The design.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateUserReportDesign
+      tags: [users]
+      summary: Replace one of the caller's report designs.
+      description: >-
+        A full replace of the document, validated as a create is, the field
+        named `design.<path>` on a refusal, and the stored design standing.
+        The images stay as they are unless the document carries them: a
+        `logo`, `coverImage` or `customCover` in the document replaces the
+        stored one with the core's own re-encoding of it, and a document
+        without them leaves them, so a client that does not know an image
+        never drops one by saving (remove one with its DELETE route).
+        Whether the design is the default is not changed here.
+      parameters:
+        - $ref: "#/components/parameters/ReportDesignInclude"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportDesignUpdate"
+      responses:
+        "200":
+          description: The design, as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteUserReportDesign
+      tags: [users]
+      summary: Remove one of the caller's report designs, images included.
+      description: >-
+        Removing the default leaves the account with no default. Another
+        account's design, or one already gone, is 404.
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+  /user/report-designs/{designId}/logo:
+    parameters:
+      - $ref: "#/components/parameters/ReportDesignId"
+    put:
+      operationId: putUserReportDesignLogo
+      tags: [users]
+      summary: Set the logo of one of the caller's report designs.
+      description: >-
+        Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The
+        core decodes it, scales it down to fit 1024 pixels each way and
+        encodes it again as PNG from the pixels, so nothing of the upload
+        but its pixels is kept; the runner draws it in the title block, on
+        a cover whose facts include it and in a logoLeft header, and it
+        never comes from the model or a URL. Anything but a PNG or a JPEG
+        (SVG and GIF included) is 415 `unsupported-image`; over 512 KB,
+        over 16 million pixels, or over 512 KB as a PNG is 413
+        `upload-too-large`. Replaces any logo the design had. The answer
+        carries the design with its images.
       requestBody:
         required: true
         content:
@@ -849,22 +942,130 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReportSettings"
+                $ref: "#/components/schemas/ReportDesignRecord"
         default:
           $ref: "#/components/responses/Problem"
     delete:
-      operationId: deleteUserReportLogo
+      operationId: deleteUserReportDesignLogo
       tags: [users]
-      summary: Remove the logo from the caller's report design.
+      summary: Remove the logo from one of the caller's report designs.
       description: >-
         The design stays. Removing a logo that is not there is not an error.
+        The answer carries the design with its images.
       responses:
         "200":
-          description: The settings, now without a logo.
+          description: The design, now without a logo.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReportSettings"
+                $ref: "#/components/schemas/ReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+  /user/report-designs/{designId}/cover-image:
+    parameters:
+      - $ref: "#/components/parameters/ReportDesignId"
+    put:
+      operationId: putUserReportDesignCoverImage
+      tags: [users]
+      summary: Set the cover image of one of the caller's report designs.
+      description: >-
+        Multipart, one part named `file`: PNG or JPEG, at most 2 MB. The
+        core decodes it, scales it down to fit 2048 pixels each way and
+        encodes it again from the pixels in the format it came in (a
+        photograph stays a JPEG), so nothing of the upload but its pixels is
+        kept; the runner draws it across the top of a plate cover and offers
+        it to a custom cover, and it never comes from the model or a URL.
+        Anything but a PNG or a JPEG is 415 `unsupported-image`; over 2 MB,
+        over 16 million pixels, or over 2 MB encoded again is 413
+        `upload-too-large`. Replaces any cover image the design had. The
+        answer carries the design with its images.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: The cover image is set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteUserReportDesignCoverImage
+      tags: [users]
+      summary: Remove the cover image from one of the caller's report designs.
+      description: >-
+        The design stays. Removing a cover image that is not there is not an
+        error. The answer carries the design with its images.
+      responses:
+        "200":
+          description: The design, now without a cover image.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+  /user/report-designs/{designId}/custom-cover:
+    parameters:
+      - $ref: "#/components/parameters/ReportDesignId"
+    put:
+      operationId: putUserReportDesignCustomCover
+      tags: [users]
+      summary: Set the custom cover of one of the caller's report designs.
+      description: >-
+        The custom cover whole: its Typst source (at most 32 KiB of text),
+        its images (at most six, each a PNG or a JPEG in base64 that the
+        core decodes, pixel-caps and encodes again in its format, 2 MB in
+        all as stored) and, optionally, a PNG thumbnail of its last render
+        (at most 300 KB). The source is code the runner compiles only under
+        the confinement every export runs in, with the render root as its
+        whole world; it is held to its bounds here, not read. A cover over a
+        bound is 422 (`validation`) naming `customCover.<path>`; an image in
+        no format the core reads is 415 `unsupported-image`. Replaces any
+        custom cover the design had. The design draws it only while its
+        cover style is `custom`. The answer carries the design with its
+        images.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportDesignCustomCover"
+      responses:
+        "200":
+          description: The custom cover is set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteUserReportDesignCustomCover
+      tags: [users]
+      summary: Remove the custom cover from one of the caller's report designs.
+      description: >-
+        The design stays, its cover style included: a `custom` style with no
+        custom cover draws the band style. Removing a custom cover that is
+        not there is not an error. The answer carries the design with its
+        images.
+      responses:
+        "200":
+          description: The design, now without a custom cover.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportDesignRecord"
         default:
           $ref: "#/components/responses/Problem"
   /user/activity:
@@ -4449,14 +4650,24 @@ paths:
 
 components:
   parameters:
-    ReportSettingsInclude:
+    ReportDesignInclude:
       name: include
       in: query
       description: >-
-        `logo` answers the design with its logo, if the person has one. Without it the design comes without a `logo` key, so
-        a client built before logos still reads it.
+        `assets` answers the design with its images (`logo`, `coverImage`,
+        `customCover`), if it has them. Without it the document comes
+        without those keys, so a client that does not draw them reads it
+        whole and small.
       schema:
-        $ref: "#/components/schemas/ReportSettingsInclude"
+        $ref: "#/components/schemas/ReportDesignInclude"
+    ReportDesignId:
+      name: designId
+      in: path
+      required: true
+      description: The design's id, one of the caller's.
+      schema:
+        type: string
+        format: uuid
     VersionString:
       name: version
       in: path
@@ -6019,40 +6230,19 @@ components:
           $ref: "#/components/schemas/EmailNotificationSettings"
         web:
           $ref: "#/components/schemas/WebNotificationSettings"
-    ReportSettings:
-      type: object
-      description: >-
-        The caller's report settings, a profile setting. No
-        `design` means the person never chose one.
-      properties:
-        design:
-          $ref: "#/components/schemas/ReportDesign"
-    ReportSettingsInclude:
-      type: string
-      description: What a report settings answer carries beyond the design.
-      enum: [logo]
-      x-enum-varnames: [ReportSettingsIncludeLogo]
     ReportDesign:
       type: object
       description: >-
-        A report design, the theme document version 2. Defined by
-        the core's pkg/reportdesign, whose JSON Schema this mirrors (a core
-        test holds them equal). Beyond what the schema says, the accent must
-        reach 4.5:1 contrast on white when it touches text (titleBlock
-        `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and
-        `name` and `footer.text` are one line with no control, line-break,
-        bidirectional formatting or other invisible format characters. The tint is derived: 12% of the
-        accent over white. The five built-in themes are each a value of it.
-        `logo` is optional and not counted in the 16 KB; `"logo": null` is
-        read as no logo.
+        A report design, the theme document version 3: a whole brand. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says: the accent must reach 4.5:1 contrast on white where it carries text (titleBlock `band`, headings `smallcaps` or `numbered`, or a cover that is drawn in the `band`, `largeType` or `plate` style, or `split` with no secondary) and 3:1 otherwise; the secondary 4.5:1 where a drawn `split` cover puts the brand on it and 3:1 otherwise; every text (`name`, the brand's lines, each header and footer slot) is one line with no control, line-break, bidirectional formatting or other invisible format characters; `brand.website` is a host name or an https address, drawn as text; a cover fact is named once; the custom cover's source is at most 32 KiB of text, its images at most six and 2 MB in all as stored, its thumbnail a PNG of at most 300 KB; each image's base64 holds a PNG or a JPEG within its bounds. Each
+        colour's tint is derived: 12% of it over white. The ten built-in themes are each a value of it. `logo`, `coverImage` and `customCover` are optional, not counted in the 24 KB, answered only on `include=assets`, and null reads as none.
       additionalProperties: false
-      required: [agentryTheme, name, basedOn, version, paper, fonts, accent, titleBlock, headings, tables, quotes, footer]
+      required: [agentryTheme, name, basedOn, version, paper, fonts, accent, secondary, titleBlock, headings, headingScale, margins, tables, quotes, brand, header, footer, cover]
       properties:
         agentryTheme:
           type: integer
-          description: The document version, always 2.
-          enum: [2]
-          x-enum-varnames: [ReportDesignVersion2]
+          description: The document version, always 3.
+          enum: [3]
+          x-enum-varnames: [ReportDesignVersion3]
         name:
           type: string
           description: The design's label, a built-in's own name or the person's.
@@ -6061,7 +6251,7 @@ components:
         basedOn:
           type: string
           description: The built-in theme the design started from.
-          enum: [plain, classic, modern, editorial, technical]
+          enum: [plain, classic, modern, editorial, technical, boardroom, studio, field, civic, lumen]
         version:
           type: integer
           description: The design's revision.
@@ -6078,23 +6268,35 @@ components:
           properties:
             headings:
               type: string
-              enum: [Inter, IBM Plex Sans, Source Sans 3, Work Sans, Montserrat, Source Serif 4, Lora, Merriweather, IBM Plex Serif, EB Garamond, Playfair Display, IBM Plex Mono, JetBrains Mono, Source Code Pro]
+              enum: [Inter, IBM Plex Sans, Source Sans 3, Work Sans, DM Sans, Nunito Sans, Raleway, Space Grotesk, Montserrat, Source Serif 4, Lora, Merriweather, IBM Plex Serif, EB Garamond, Libre Baskerville, Crimson Pro, Playfair Display, Fraunces, IBM Plex Mono, JetBrains Mono, Source Code Pro, Fira Code]
             body:
               type: string
-              enum: [Inter, IBM Plex Sans, Source Sans 3, Work Sans, Source Serif 4, Lora, Merriweather, IBM Plex Serif, EB Garamond]
+              enum: [Inter, IBM Plex Sans, Source Sans 3, Work Sans, DM Sans, Nunito Sans, Raleway, Space Grotesk, Source Serif 4, Lora, Merriweather, IBM Plex Serif, EB Garamond, Libre Baskerville, Crimson Pro]
             code:
               type: string
-              enum: [IBM Plex Mono, JetBrains Mono, Source Code Pro]
+              enum: [IBM Plex Mono, JetBrains Mono, Source Code Pro, Fira Code]
         accent:
           type: string
-          description: The one colour, lower-case hex.
-          pattern: "^#[0-9a-f]{6}$"
+          description: The first colour, lower-case hex.
+          pattern: ^#[0-9a-f]{6}$
+        secondary:
+          type: string
+          description: The second colour, lower-case hex, or empty for none.
+          pattern: ^(#[0-9a-f]{6})?$
         titleBlock:
           type: string
           enum: [band, bar, ruled, none]
         headings:
           type: string
           enum: [rule, bar, smallcaps, numbered, plain]
+        headingScale:
+          type: string
+          description: How much larger than the body each heading level is set.
+          enum: [compact, regular, generous]
+        margins:
+          type: string
+          description: The page's margins.
+          enum: [narrow, regular, wide]
         tables:
           type: object
           additionalProperties: false
@@ -6107,33 +6309,309 @@ components:
         quotes:
           type: string
           enum: [callout, plain]
+        brand:
+          type: object
+          description: >-
+            Who the report is from; every line optional and drawn as text where a header, a footer or a cover asks for it.
+          additionalProperties: false
+          required: [name, strapline, contact, website, confidentiality]
+          properties:
+            name:
+              type: string
+              description: The {brand} token.
+              maxLength: 60
+            strapline:
+              type: string
+              maxLength: 120
+            contact:
+              type: array
+              maxItems: 4
+              items:
+                type: string
+                minLength: 1
+                maxLength: 120
+            website:
+              type: string
+              description: A host name or an https address, drawn as text, never a link.
+              maxLength: 120
+            confidentiality:
+              type: string
+              description: The {confidentiality} token.
+              maxLength: 120
+        header:
+          type: object
+          description: 'The running header: from page 2 on a report, every page of a memo, never on a letter.'
+          additionalProperties: false
+          required: [style, slots]
+          properties:
+            style:
+              type: string
+              enum: [none, rule, brandLine, titleAndPage, logoLeft]
+            slots:
+              type: array
+              description: >-
+                Left, centre and right: literal text and tokens from the closed set {title}, {author}, {date}, {page}, {pages}, {brand}, {section}, {confidentiality}, which the template substitutes before it sets the text; anything else between braces is literal.
+              minItems: 3
+              maxItems: 3
+              items:
+                type: string
+                maxLength: 120
         footer:
           type: object
           additionalProperties: false
-          required: [pageNumbers, text]
+          required: [pageNumbers, slots]
           properties:
             pageNumbers:
               type: string
               enum: [none, n, nOfN]
-            text:
+            slots:
+              type: array
+              description: As the header's.
+              minItems: 3
+              maxItems: 3
+              items:
+                type: string
+                maxLength: 120
+        cover:
+          type: object
+          description: The cover page.
+          additionalProperties: false
+          required: [style, shows, when]
+          properties:
+            style:
               type: string
-              description: One line, set as text, never evaluated; empty for none.
-              maxLength: 120
+              description: >-
+                A built-in layout, or custom for the design's custom cover, which falls back to band when it cannot be drawn.
+              enum: [band, split, geometric, largeType, framed, plate, custom]
+            shows:
+              type: array
+              description: The facts the cover carries, each once.
+              maxItems: 7
+              uniqueItems: true
+              items:
+                type: string
+                enum: [title, subtitle, author, date, brand, logo, confidentiality]
+            when:
+              type: string
+              description: >-
+                long draws the cover for a titled report past the template's length threshold, always for every titled report, never for none.
+              enum: [long, always, never]
         logo:
           type: object
           description: >-
-            The person's logo, drawn only in the title block; absent for
-            none. Answered only when asked for (`include=logo`).
+            The person's logo, a PNG the core encoded from their upload, at most 512 KB and 1024 pixels each way; absent for none.
           additionalProperties: false
           required: [png]
           properties:
             png:
               type: string
-              description: >-
-                A PNG in standard base64, at most 512 KB and 1024 pixels each
-                way, as the core encoded it from the person's upload.
               minLength: 1
               maxLength: 699052
+        coverImage:
+          type: object
+          description: >-
+            The design's cover image, drawn by the plate style and offered to a custom cover: a PNG or a JPEG the core encoded from the upload, at most 2 MB and 2048 pixels each way, under the key that names its format.
+          minProperties: 1
+          maxProperties: 1
+          additionalProperties: false
+          properties:
+            jpeg:
+              type: string
+              minLength: 1
+              maxLength: 2796204
+            png:
+              type: string
+              minLength: 1
+              maxLength: 2796204
+        customCover:
+          type: object
+          description: >-
+            The design's custom cover, drawn when the cover style is custom: its Typst source, the images it may draw (each a PNG or a JPEG the core encoded, named by the renderer in this order) and a PNG thumbnail of its last render.
+          additionalProperties: false
+          required: [source, images]
+          properties:
+            source:
+              type: string
+              minLength: 1
+              maxLength: 32768
+            images:
+              type: array
+              maxItems: 6
+              items:
+                type: object
+                minProperties: 1
+                maxProperties: 1
+                additionalProperties: false
+                properties:
+                  jpeg:
+                    type: string
+                    minLength: 1
+                    maxLength: 2796204
+                  png:
+                    type: string
+                    minLength: 1
+                    maxLength: 2796204
+            thumbnail:
+              type: object
+              additionalProperties: false
+              required: [png]
+              properties:
+                png:
+                  type: string
+                  minLength: 1
+                  maxLength: 409600
+    ReportDesignImage:
+      type: object
+      description: >-
+        An image in one of the two formats, standard base64 under the key that names it: exactly one of png and jpeg.
+      minProperties: 1
+      maxProperties: 1
+      additionalProperties: false
+      properties:
+        png:
+          type: string
+          minLength: 1
+          maxLength: 2796204
+        jpeg:
+          type: string
+          minLength: 1
+          maxLength: 2796204
+    ReportDesignCustomCover:
+      type: object
+      description: >-
+        A design's custom cover: its Typst source (at most 32 KiB of text), up to six images (each a PNG or a JPEG, 2 MB in all as stored; the core encodes each again) and a PNG thumbnail of its last render (at most 300 KB).
+      additionalProperties: false
+      required: [source, images]
+      properties:
+        source:
+          type: string
+          minLength: 1
+          maxLength: 32768
+        images:
+          type: array
+          maxItems: 6
+          items:
+            type: object
+            minProperties: 1
+            maxProperties: 1
+            additionalProperties: false
+            properties:
+              jpeg:
+                type: string
+                minLength: 1
+                maxLength: 2796204
+              png:
+                type: string
+                minLength: 1
+                maxLength: 2796204
+        thumbnail:
+          type: object
+          additionalProperties: false
+          required: [png]
+          properties:
+            png:
+              type: string
+              minLength: 1
+              maxLength: 409600
+    ReportDesignInclude:
+      type: string
+      description: What a report design answer carries beyond the document.
+      enum: [assets]
+      x-enum-varnames: [ReportDesignIncludeAssets]
+    ReportDesignSummary:
+      type: object
+      description: One design of the library, without its document's body or images.
+      required: [id, name, basedOn, version, default, hasLogo, hasCoverImage, hasCustomCover, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        basedOn:
+          type: string
+          description: The built-in theme it started from.
+        version:
+          type: integer
+        default:
+          type: boolean
+          description: Whether a run takes this design when the person picks none.
+        hasLogo:
+          type: boolean
+        hasCoverImage:
+          type: boolean
+        hasCustomCover:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReportDesignList:
+      type: object
+      description: >-
+        The caller's library: the designs, oldest first, and which is the default. No `default` means no design is: a run then falls to the client's own choice, never Plain at the API.
+      required: [designs]
+      properties:
+        designs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportDesignSummary'
+        default:
+          type: string
+          description: The default design's id; absent when none is.
+          format: uuid
+    ReportDesignRecord:
+      type: object
+      description: >-
+        One design with its document in canonical form. The images are in the document only on `include=assets`; the three flags say which it has.
+      required: [id, default, hasLogo, hasCoverImage, hasCustomCover, createdAt, updatedAt, design]
+      properties:
+        id:
+          type: string
+          format: uuid
+        default:
+          type: boolean
+        hasLogo:
+          type: boolean
+        hasCoverImage:
+          type: boolean
+        hasCustomCover:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        design:
+          $ref: '#/components/schemas/ReportDesign'
+    ReportDesignCreate:
+      type: object
+      required: [design]
+      properties:
+        design:
+          $ref: '#/components/schemas/ReportDesign'
+        default:
+          type: boolean
+          description: >-
+            Make the new design the default. Off, the default is unchanged, so an account whose first design is added without it still has no default.
+    ReportDesignUpdate:
+      type: object
+      required: [design]
+      properties:
+        design:
+          $ref: '#/components/schemas/ReportDesign'
+    ReportDesignDefault:
+      type: object
+      description: 'Which design is the default: an id of the caller''s, or none.'
+      properties:
+        id:
+          type: string
+          description: The design to make the default; absent or null for none.
+          format: uuid
+          nullable: true
     DependencyAlert:
       type: object
       description: >-

@@ -1074,7 +1074,13 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // readJSON decodes a request body strictly (unknown fields rejected).
 func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	return readJSONUpTo(w, r, dst, 1<<20)
+}
+
+// readJSONUpTo is readJSON with the body held to limit bytes, for a route
+// whose body carries images (a report design with its assets).
+func readJSONUpTo(w http.ResponseWriter, r *http.Request, dst any, limit int64) bool {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		problemBadRequest(w, r, "Could not decode the request body: "+err.Error())

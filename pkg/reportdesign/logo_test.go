@@ -13,6 +13,7 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -403,7 +404,7 @@ func TestDesignWithLogoRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != mine || !bytes.Equal(got.Canonical(), doc) {
+	if !reflect.DeepEqual(got, mine) || !bytes.Equal(got.Canonical(), doc) {
 		t.Fatal("a design with a logo did not round-trip")
 	}
 	if mine.SHA256() == plain.SHA256() {
@@ -421,39 +422,37 @@ func TestDesignWithLogoRoundTrips(t *testing.T) {
 	if _, err := Parse(mine.Canonical()); err != nil {
 		t.Fatalf("a design with a %d-byte logo field: %v", len(big.PNG), err)
 	}
+	// The cap is on the canonical form without its assets: blanks as sent
+	// do not count, and a design whose own texts take its canonical form
+	// over the cap is refused as a whole, with or without a logo.
 	padded := append([]byte("{"+strings.Repeat(" ", MaxDocumentBytes)), mine.Canonical()[1:]...)
-	var fe *FieldError
-	if _, err := Parse(padded); !errors.As(err, &fe) || fe.Field != "" || !strings.Contains(fe.Message, "without its logo") {
-		t.Fatalf("16 KB besides the logo: %v", err)
+	if _, err := Parse(padded); err != nil {
+		t.Fatalf("blanks beside a large logo counted against the cap: %v", err)
 	}
-
-	// The 16 KB to the byte, with a logo and without one: leading blanks make
-	// up the difference, and the document is read at the limit and refused
-	// one byte past it.
-	withBlanks := func(doc []byte, n int) []byte { return append(bytes.Repeat([]byte(" "), n), doc...) }
-	mine.Logo = l
-	withLogo := mine.Canonical()
-	for _, c := range []struct {
-		name    string
-		doc     []byte
-		counted int // the bytes the limit counts
-	}{
-		{"without a logo", plain.Canonical(), len(plain.Canonical())},
-		{"with a logo", withLogo, len(withLogo) - len(l.PNG)},
-	} {
-		if _, err := Parse(withBlanks(c.doc, MaxDocumentBytes-c.counted)); err != nil {
-			t.Errorf("%s: a document of exactly %d bytes besides the logo: %v", c.name, MaxDocumentBytes, err)
-		}
-		_, err := Parse(withBlanks(c.doc, MaxDocumentBytes-c.counted+1))
-		if !errors.As(err, &fe) || fe.Field != "" || !strings.Contains(fe.Message, "without its logo") {
-			t.Errorf("%s: a document one byte over %d: %v", c.name, MaxDocumentBytes, err)
+	over := mine
+	over.Brand.Contact = []string{strings.Repeat("\U0001F600", MaxLineRunes), strings.Repeat("\U0001F600", MaxLineRunes), strings.Repeat("\U0001F600", MaxLineRunes), strings.Repeat("\U0001F600", MaxLineRunes)}
+	over.Brand.Strapline = strings.Repeat("\U0001F600", MaxLineRunes)
+	over.Brand.Confidentiality = strings.Repeat("\U0001F600", MaxLineRunes)
+	over.Brand.Website = strings.Repeat("a", 100) + ".example"
+	for i := range over.Header.Slots {
+		over.Header.Slots[i] = strings.Repeat("\U0001F600", MaxLineRunes)
+		over.Footer.Slots[i] = strings.Repeat("\U0001F600", MaxLineRunes)
+	}
+	if n := len(over.WithoutAssets().Canonical()); n <= MaxDocumentBytes {
+		// Every line at its longest in four-byte characters is under the
+		// cap: the cap is generous, and that is the fact to record.
+		t.Logf("the largest document is %d bytes, under the %d cap", n, MaxDocumentBytes)
+	} else {
+		var fe *FieldError
+		if _, err := Parse(over.Canonical()); !errors.As(err, &fe) || fe.Field != "" || !strings.Contains(fe.Message, "without its images and custom cover") {
+			t.Fatalf("a document over the cap: %v", err)
 		}
 	}
 
-	// Past the most a document may be with a logo field of the largest size,
-	// it is refused as a whole before it is read; at that size it is read, and
-	// the logo field is the refusal.
-	limit := MaxDocumentBytes + maxLogoField + len(`"logo":{"png":""}`)
+	// Past the most a document may be with every image and the custom cover
+	// at their largest, it is refused as a whole before it is read; at that
+	// size it is read, and the logo field is the refusal.
+	limit := MaxDocumentWithAssets
 	asSent := func(fieldLen int) []byte {
 		return []byte(strings.TrimSuffix(string(plain.Canonical()), "\n}\n") + `,"logo":{"png":"` + strings.Repeat("A", fieldLen) + `"}}`)
 	}
@@ -461,14 +460,14 @@ func TestDesignWithLogoRoundTrips(t *testing.T) {
 	if doc := asSent(fieldLen); len(doc) != limit {
 		t.Fatalf("the test document is %d bytes, want %d", len(doc), limit)
 	}
+	var fe *FieldError
 	if _, err := Parse(asSent(fieldLen)); !errors.As(err, &fe) || fe.Field != "logo.png" || !errors.Is(err, ErrLogoTooLarge) {
 		t.Errorf("a document at the size limit with a logo field of %d: %v, want the logo refused as too large", fieldLen, err)
 	}
-	// The early refusal counts the whole document, the logo field included,
-	// and says so; it does not call that count "without its logo".
-	over := asSent(fieldLen + 1)
-	want := fmt.Sprintf("the document is %d bytes, over the %d bytes a document may be with its logo", len(over), limit)
-	if _, err := Parse(over); !errors.As(err, &fe) || fe.Field != "" || fe.Message != want {
+	// The early refusal counts the whole document as sent and says so.
+	overSent := asSent(fieldLen + 1)
+	want := fmt.Sprintf("the document is %d bytes, over the %d bytes a document may be with its images and custom cover", len(overSent), limit)
+	if _, err := Parse(overSent); !errors.As(err, &fe) || fe.Field != "" || fe.Message != want {
 		t.Errorf("a document one byte over the size limit: %v, want the document refused as a whole saying %q", err, want)
 	}
 }

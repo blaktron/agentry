@@ -439,9 +439,9 @@ func (s *Server) eraseAccountIn(ctx context.Context, tx pgx.Tx, tq *storegen.Que
 	if _, err = voice.Erase(ctx, tq, userID); err != nil {
 		return out, err
 	}
-	// Its report design and the logo uploaded with it: an
+	// Its report designs and the images uploaded with them: an
 	// image the person chose is theirs, not the record's.
-	if _, err := tq.DeleteUserReportSettings(ctx, userID); err != nil {
+	if _, err := tq.DeleteUserReportDesigns(ctx, userID); err != nil {
 		return out, err
 	}
 	// Its activation links too: one followed afterwards would
