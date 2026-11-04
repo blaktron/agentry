@@ -841,6 +841,7 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 		{`INSERT INTO policies (id, org_id, document) VALUES (gen_random_uuid(), $1, '{}')`, []any{orgID}},
 		{`INSERT INTO audit_exports (id, org_id, status, object_key) VALUES (gen_random_uuid(), $1, 'completed', $2)`, []any{orgID, exportKey}},
 		{`INSERT INTO fold_in_declines (org_id, user_id) VALUES ($1, $2::uuid)`, []any{orgID, memberID}},
+		{`INSERT INTO org_report_designs (org_id, document) VALUES ($1, '{"name": "house"}')`, []any{orgID}},
 		{`INSERT INTO agent_user_grants (agent_id, user_id, role) SELECT a.id, $2::uuid, 'read' FROM agents a WHERE a.namespace_id = $1`, []any{orgID, memberID}},
 		{`INSERT INTO stars (user_id, agent_id) SELECT $2::uuid, a.id FROM agents a WHERE a.namespace_id = $1`, []any{orgID, memberID}},
 		{`UPDATE agents SET summary = 'a summary', readme_text = 'a readme' WHERE namespace_id = $1`, []any{orgID}},
@@ -931,8 +932,9 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 	if members != 0 || invitations != 0 || teams != 0 || audited != 1 {
 		t.Fatalf("after erasure: %d memberships, %d invitations, %d teams, %d org.erase rows", members, invitations, teams, audited)
 	}
-	var webhooks, claims, policies, exports, declines, grants, stars, liveTokens int
+	var webhooks, claims, policies, exports, declines, grants, stars, liveTokens, designs int
 	if err := env.st.Pool().QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM org_report_designs WHERE org_id = $1),
 		(SELECT count(*) FROM webhook_endpoints WHERE org_id = $1),
 		(SELECT count(*) FROM domain_claims WHERE org_id = $1),
 		(SELECT count(*) FROM policies WHERE org_id = $1),
@@ -941,12 +943,12 @@ func TestOrgDecommissionErasesAfterTheHold(t *testing.T) {
 		(SELECT count(*) FROM agent_user_grants g JOIN agents a ON a.id = g.agent_id WHERE a.namespace_id = $1),
 		(SELECT count(*) FROM stars s JOIN agents a ON a.id = s.agent_id WHERE a.namespace_id = $1),
 		(SELECT count(*) FROM pats WHERE org_id = $1 AND revoked_at IS NULL)`, orgID).Scan(
-		&webhooks, &claims, &policies, &exports, &declines, &grants, &stars, &liveTokens); err != nil {
+		&designs, &webhooks, &claims, &policies, &exports, &declines, &grants, &stars, &liveTokens); err != nil {
 		t.Fatal(err)
 	}
-	if webhooks+claims+policies+exports+declines+grants+stars+liveTokens != 0 {
-		t.Fatalf("after erasure: %d webhooks, %d domain claims, %d policies, %d audit exports, %d declines, %d grants, %d stars, %d live tokens; want none",
-			webhooks, claims, policies, exports, declines, grants, stars, liveTokens)
+	if designs+webhooks+claims+policies+exports+declines+grants+stars+liveTokens != 0 {
+		t.Fatalf("after erasure: %d house designs, %d webhooks, %d domain claims, %d policies, %d audit exports, %d declines, %d grants, %d stars, %d live tokens; want none",
+			designs, webhooks, claims, policies, exports, declines, grants, stars, liveTokens)
 	}
 	if ok, err := srv.Blobs().Exists(ctx, exportKey); err != nil || ok {
 		t.Fatalf("audit export object after erasure: %v %v, want gone", ok, err)

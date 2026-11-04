@@ -95,6 +95,13 @@ const (
 	// marked exportable, which the handler decides with the pack in hand.
 	ActOrgKnowledgeRead  Action = "org.knowledge.read"
 	ActOrgKnowledgeWrite Action = "org.knowledge.write" // admin
+	// An organization's house report designs: org-scoped, so membership
+	// is checked at every call through the roles the request resolved.
+	// Read covers the library and each design with its images, for any
+	// active member, since a member's run picks one; write covers the
+	// rest, for its admins, since a house design is the organization's.
+	ActOrgReportDesignsRead  Action = "org.report_designs.read"
+	ActOrgReportDesignsWrite Action = "org.report_designs.write" // admin
 	// The caller's own Writing Voice: self-scoped, since a voice is found
 	// only by its owner.
 	// Read covers every version's text and review; write covers the rest.
@@ -242,26 +249,33 @@ var scopeFor = map[Action]Scope{
 	ActKnowledgeWrite:       ScopeKnowledgeWrite,
 	ActOrgKnowledgeRead:     ScopeKnowledgeRead,
 	ActOrgKnowledgeWrite:    ScopeKnowledgeWrite,
-	ActVoiceRead:            ScopeVoiceRead,
-	ActVoiceWrite:           ScopeVoiceWrite,
+	// A member's run reads a house design with the profile scope its
+	// sign-in carries, as it reads the person's own library; changing
+	// the organization's designs is an administrator's act.
+	ActOrgReportDesignsRead:  ScopeUserProfile,
+	ActOrgReportDesignsWrite: ScopeOrgAdmin,
+	ActVoiceRead:             ScopeVoiceRead,
+	ActVoiceWrite:            ScopeVoiceWrite,
 }
 
 // minRole is the role threshold per org-scoped action.
 var minRole = map[Action]OrgRole{
-	ActOrgUpdate:            RoleAdmin,
-	ActOrgMembersRead:       RoleMember,
-	ActOrgMembersManage:     RoleAdmin,
-	ActOrgMembersElevate:    RoleAdmin,
-	ActOrgTeamsRead:         RoleMember,
-	ActOrgTeamsManage:       RoleAdmin,
-	ActOrgAuditRead:         RoleAdmin,
-	ActOrgSettingsManage:    RoleAdmin,
-	ActOrgBrandingManage:    RoleAdmin,
-	ActOrgInvitationsManage: RoleAdmin,
-	ActOrgDecommission:      RoleAdmin,
-	ActOrgLeave:             RoleMember,
-	ActOrgKnowledgeRead:     RoleMember,
-	ActOrgKnowledgeWrite:    RoleAdmin,
+	ActOrgUpdate:             RoleAdmin,
+	ActOrgMembersRead:        RoleMember,
+	ActOrgMembersManage:      RoleAdmin,
+	ActOrgMembersElevate:     RoleAdmin,
+	ActOrgTeamsRead:          RoleMember,
+	ActOrgTeamsManage:        RoleAdmin,
+	ActOrgAuditRead:          RoleAdmin,
+	ActOrgSettingsManage:     RoleAdmin,
+	ActOrgBrandingManage:     RoleAdmin,
+	ActOrgInvitationsManage:  RoleAdmin,
+	ActOrgDecommission:       RoleAdmin,
+	ActOrgLeave:              RoleMember,
+	ActOrgKnowledgeRead:      RoleMember,
+	ActOrgKnowledgeWrite:     RoleAdmin,
+	ActOrgReportDesignsRead:  RoleMember,
+	ActOrgReportDesignsWrite: RoleAdmin,
 }
 
 // ReadOnly reports whether an action only reads. The audit export creates
@@ -270,7 +284,7 @@ func ReadOnly(act Action) bool {
 	switch act {
 	case ActOrgRead, ActOrgMembersRead, ActOrgTeamsRead, ActOrgAuditRead,
 		ActPublicRead, ActUserSelfRead, ActUserTokensRead,
-		ActAgentRead, ActAgentRepoRead, ActKnowledgeRead, ActOrgKnowledgeRead:
+		ActAgentRead, ActAgentRepoRead, ActKnowledgeRead, ActOrgKnowledgeRead, ActOrgReportDesignsRead:
 		return true
 	}
 	return false

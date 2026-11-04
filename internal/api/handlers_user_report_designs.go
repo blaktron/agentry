@@ -35,9 +35,44 @@ var ErrReportDesignsFull = errors.New("report designs: the library holds ten des
 type ReportDesignEntry struct {
 	ID      uuid.UUID
 	Default bool
+	// Org is the handle of the organization whose house design this is,
+	// and empty for a person's own.
+	Org string
 	// Design is the design with every image it has.
 	Design               reportdesign.Design
 	CreatedAt, UpdatedAt time.Time
+}
+
+// designRow is a stored design as both libraries keep it: a person's own
+// design and an organization's house design share every column but whose
+// they are, so one reader and one answer serve both.
+type designRow struct {
+	ID uuid.UUID
+	// Owner is the account or the organization the design belongs to.
+	Owner            uuid.UUID
+	Document         []byte
+	Logo             []byte
+	CoverImage       []byte
+	CoverImageFormat *string
+	CustomCover      []byte
+	// IsDefault is a person's default; an organization's design is never
+	// one.
+	IsDefault            bool
+	CreatedAt, UpdatedAt time.Time
+}
+
+func userDesignRow(r storegen.UserReportDesign) designRow {
+	return designRow{
+		ID: r.ID, Owner: r.UserID, Document: r.Document, Logo: r.Logo, CoverImage: r.CoverImage, CoverImageFormat: r.CoverImageFormat,
+		CustomCover: r.CustomCover, IsDefault: r.IsDefault, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+	}
+}
+
+func orgDesignRow(r storegen.OrgReportDesign) designRow {
+	return designRow{
+		ID: r.ID, Owner: r.OrgID, Document: r.Document, Logo: r.Logo, CoverImage: r.CoverImage, CoverImageFormat: r.CoverImageFormat,
+		CustomCover: r.CustomCover, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+	}
 }
 
 // reportDesignBody is a design on the wire, with the document as the
@@ -318,7 +353,7 @@ func (s *Server) CreateUserReportDesign(w http.ResponseWriter, r *http.Request, 
 		}
 		return
 	}
-	s.answerReportDesign(w, r, http.StatusCreated, row, withAssets)
+	s.answerReportDesign(w, r, http.StatusCreated, userDesignRow(row), withAssets)
 }
 
 // createReportDesign adds a design to the account's library, as the
@@ -379,7 +414,7 @@ func (s *Server) GetUserReportDesign(w http.ResponseWriter, r *http.Request, des
 		problemInternal(w, r)
 		return
 	}
-	s.answerReportDesign(w, r, http.StatusOK, row, withAssets)
+	s.answerReportDesign(w, r, http.StatusOK, userDesignRow(row), withAssets)
 }
 
 // UpdateUserReportDesign implements PUT /user/report-designs/{designId}.
@@ -447,7 +482,7 @@ func (s *Server) UpdateUserReportDesign(w http.ResponseWriter, r *http.Request, 
 		problemInternal(w, r)
 		return
 	}
-	s.answerReportDesign(w, r, http.StatusOK, row, withAssets)
+	s.answerReportDesign(w, r, http.StatusOK, userDesignRow(row), withAssets)
 }
 
 // DeleteUserReportDesign implements DELETE /user/report-designs/{designId}.
@@ -551,7 +586,7 @@ func (s *Server) PutUserReportDesignLogo(w http.ResponseWriter, r *http.Request,
 	}
 	p := principalFrom(r.Context())
 	row, err := s.q().SetUserReportDesignLogo(r.Context(), storegen.SetUserReportDesignLogoParams{UserID: p.UserID, ID: designId, Logo: png})
-	s.answerAssetChange(w, r, row, err, "logo: write")
+	s.answerAssetChange(w, r, userDesignRow(row), err, "logo: write")
 }
 
 // readImageUpload reads the one multipart part of an image upload, held to
@@ -584,7 +619,7 @@ func (s *Server) refuseImage(w http.ResponseWriter, r *http.Request, err error, 
 
 // answerAssetChange answers a row an image route changed, with its images;
 // no row is not the caller's design.
-func (s *Server) answerAssetChange(w http.ResponseWriter, r *http.Request, row storegen.UserReportDesign, err error, what string) {
+func (s *Server) answerAssetChange(w http.ResponseWriter, r *http.Request, row designRow, err error, what string) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		problemNotFound(w, r)
 		return
@@ -609,7 +644,7 @@ func (s *Server) DeleteUserReportDesignLogo(w http.ResponseWriter, r *http.Reque
 	}
 	p := principalFrom(r.Context())
 	row, err := s.q().ClearUserReportDesignLogo(r.Context(), storegen.ClearUserReportDesignLogoParams{UserID: p.UserID, ID: designId})
-	s.answerAssetChange(w, r, row, err, "logo: clear")
+	s.answerAssetChange(w, r, userDesignRow(row), err, "logo: clear")
 }
 
 // PutUserReportDesignCoverImage implements PUT
@@ -642,7 +677,7 @@ func (s *Server) PutUserReportDesignCoverImage(w http.ResponseWriter, r *http.Re
 	row, err := s.q().SetUserReportDesignCoverImage(r.Context(), storegen.SetUserReportDesignCoverImageParams{
 		UserID: p.UserID, ID: designId, CoverImage: data, CoverImageFormat: &format,
 	})
-	s.answerAssetChange(w, r, row, err, "cover image: write")
+	s.answerAssetChange(w, r, userDesignRow(row), err, "cover image: write")
 }
 
 // DeleteUserReportDesignCoverImage implements DELETE
@@ -656,7 +691,7 @@ func (s *Server) DeleteUserReportDesignCoverImage(w http.ResponseWriter, r *http
 	}
 	p := principalFrom(r.Context())
 	row, err := s.q().ClearUserReportDesignCoverImage(r.Context(), storegen.ClearUserReportDesignCoverImageParams{UserID: p.UserID, ID: designId})
-	s.answerAssetChange(w, r, row, err, "cover image: clear")
+	s.answerAssetChange(w, r, userDesignRow(row), err, "cover image: clear")
 }
 
 // PutUserReportDesignCustomCover implements PUT
@@ -685,7 +720,7 @@ func (s *Server) PutUserReportDesignCustomCover(w http.ResponseWriter, r *http.R
 	}
 	p := principalFrom(r.Context())
 	row, err := s.q().SetUserReportDesignCustomCover(r.Context(), storegen.SetUserReportDesignCustomCoverParams{UserID: p.UserID, ID: designId, CustomCover: stored})
-	s.answerAssetChange(w, r, row, err, "custom cover: write")
+	s.answerAssetChange(w, r, userDesignRow(row), err, "custom cover: write")
 }
 
 // refuseCustomCover answers a custom cover the package would not take: 415
@@ -718,15 +753,15 @@ func (s *Server) DeleteUserReportDesignCustomCover(w http.ResponseWriter, r *htt
 	}
 	p := principalFrom(r.Context())
 	row, err := s.q().ClearUserReportDesignCustomCover(r.Context(), storegen.ClearUserReportDesignCustomCoverParams{UserID: p.UserID, ID: designId})
-	s.answerAssetChange(w, r, row, err, "custom cover: clear")
+	s.answerAssetChange(w, r, userDesignRow(row), err, "custom cover: clear")
 }
 
 // answerReportDesign answers a row as the API's record, with its images
 // when asked.
-func (s *Server) answerReportDesign(w http.ResponseWriter, r *http.Request, status int, row storegen.UserReportDesign, withAssets bool) {
+func (s *Server) answerReportDesign(w http.ResponseWriter, r *http.Request, status int, row designRow, withAssets bool) {
 	rec, err := s.reportDesignOf(r.Context(), row)
 	if err != nil {
-		s.log.ErrorContext(r.Context(), "report designs: read", "user", row.UserID, "design", row.ID, "err", err)
+		s.log.ErrorContext(r.Context(), "report designs: read", "owner", row.Owner, "design", row.ID, "err", err)
 		problemInternal(w, r)
 		return
 	}
@@ -746,14 +781,14 @@ func (s *Server) answerReportDesign(w http.ResponseWriter, r *http.Request, stat
 // stored document that no longer validates (a rule tightened since it was
 // saved) is an error; a stored image that no longer validates is left out
 // and logged, and the design still stands.
-func (s *Server) reportDesignOf(ctx context.Context, row storegen.UserReportDesign) (ReportDesignEntry, error) {
+func (s *Server) reportDesignOf(ctx context.Context, row designRow) (ReportDesignEntry, error) {
 	d, err := reportdesign.Parse(row.Document)
 	if err != nil {
 		return ReportDesignEntry{}, err
 	}
 	try := func(what string, with reportdesign.Design) {
 		if err := with.Validate(); err != nil {
-			s.log.WarnContext(ctx, "report designs: the stored "+what+" no longer validates; left out", "user", row.UserID, "design", row.ID, "err", err)
+			s.log.WarnContext(ctx, "report designs: the stored "+what+" no longer validates; left out", "owner", row.Owner, "design", row.ID, "err", err)
 			return
 		}
 		d = with
@@ -771,7 +806,7 @@ func (s *Server) reportDesignOf(ctx context.Context, row storegen.UserReportDesi
 	if row.CustomCover != nil {
 		with := d
 		if err := json.Unmarshal(row.CustomCover, &with.CustomCover); err != nil {
-			s.log.WarnContext(ctx, "report designs: the stored custom cover does not decode; left out", "user", row.UserID, "design", row.ID, "err", err)
+			s.log.WarnContext(ctx, "report designs: the stored custom cover does not decode; left out", "owner", row.Owner, "design", row.ID, "err", err)
 		} else {
 			try("custom cover", with)
 		}
@@ -791,7 +826,7 @@ func (s *Server) ReportDesignDefault(ctx context.Context, user uuid.UUID) (*Repo
 	if err != nil {
 		return nil, err
 	}
-	return s.reportDesignRecord(ctx, row)
+	return s.reportDesignRecord(ctx, userDesignRow(row))
 }
 
 // ReportDesignByID is one of a person's designs with its images, or nil
@@ -804,13 +839,13 @@ func (s *Server) ReportDesignByID(ctx context.Context, user, id uuid.UUID) (*Rep
 	if err != nil {
 		return nil, err
 	}
-	return s.reportDesignRecord(ctx, row)
+	return s.reportDesignRecord(ctx, userDesignRow(row))
 }
 
-func (s *Server) reportDesignRecord(ctx context.Context, row storegen.UserReportDesign) (*ReportDesignEntry, error) {
+func (s *Server) reportDesignRecord(ctx context.Context, row designRow) (*ReportDesignEntry, error) {
 	rec, err := s.reportDesignOf(ctx, row)
 	if err != nil {
-		s.log.WarnContext(ctx, "report designs: the stored design no longer validates; read as none", "user", row.UserID, "design", row.ID, "err", err)
+		s.log.WarnContext(ctx, "report designs: the stored design no longer validates; read as none", "owner", row.Owner, "design", row.ID, "err", err)
 		return nil, nil
 	}
 	return &rec, nil
@@ -830,7 +865,7 @@ func (s *Server) CreateReportDesign(ctx context.Context, user uuid.UUID, documen
 	if err != nil {
 		return nil, err
 	}
-	rec, err := s.reportDesignOf(ctx, row)
+	rec, err := s.reportDesignOf(ctx, userDesignRow(row))
 	if err != nil {
 		return nil, err
 	}

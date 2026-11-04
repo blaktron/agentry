@@ -594,6 +594,37 @@ func requestFactories(env *testEnv) map[string]opRequest {
 			},
 		},
 		"getOrgKnowledgeUsage": {method: "GET", path: orgPath("/knowledge/usage")},
+		// An organization's house report designs: the same shapes as a
+		// person's library under the fixture organization, every design id
+		// a stranger's, so an authorized caller meets a 404 or a 400 past
+		// the gate; a create's design is stored once, the next of the name
+		// meets a 409, and neither is a denial.
+		"listOrgReportDesigns": {method: "GET", path: orgPath("/report-designs")},
+		"createOrgReportDesign": {
+			method: "POST", path: orgPath("/report-designs"),
+			body: func(*matrixSeed, string) any {
+				doc, _ := reportdesign.BuiltinDocument("classic")
+				return map[string]any{"design": json.RawMessage(doc)}
+			},
+		},
+		"getOrgReportDesign": {method: "GET", path: orgPath("/report-designs/00000000-0000-0000-0000-000000000000")},
+		"updateOrgReportDesign": {
+			method: "PUT", path: orgPath("/report-designs/00000000-0000-0000-0000-000000000000"),
+			body: func(*matrixSeed, string) any {
+				doc, _ := reportdesign.BuiltinDocument("classic")
+				return map[string]any{"design": json.RawMessage(doc)}
+			},
+		},
+		"deleteOrgReportDesign":           {method: "DELETE", path: orgPath("/report-designs/00000000-0000-0000-0000-000000000000")},
+		"putOrgReportDesignLogo":          {method: "PUT", path: orgPath("/report-designs/00000000-0000-0000-0000-000000000000/logo"), body: func(*matrixSeed, string) any { return map[string]any{} }},
+		"deleteOrgReportDesignLogo":       {method: "DELETE", path: orgPath("/report-designs/00000000-0000-0000-0000-000000000000/logo")},
+		"putOrgReportDesignCoverImage":    {method: "PUT", path: orgPath("/report-designs/00000000-0000-0000-0000-000000000000/cover-image"), body: func(*matrixSeed, string) any { return map[string]any{} }},
+		"deleteOrgReportDesignCoverImage": {method: "DELETE", path: orgPath("/report-designs/00000000-0000-0000-0000-000000000000/cover-image")},
+		"putOrgReportDesignCustomCover": {
+			method: "PUT", path: orgPath("/report-designs/00000000-0000-0000-0000-000000000000/custom-cover"),
+			body: func(*matrixSeed, string) any { return map[string]any{"source": "#page[]", "images": []any{}} },
+		},
+		"deleteOrgReportDesignCustomCover": {method: "DELETE", path: orgPath("/report-designs/00000000-0000-0000-0000-000000000000/custom-cover")},
 		// The fixture agent has no published version, so an authorized
 		// caller gets 404 (not denied) and nothing is recorded.
 		"putAccountInstall": {
