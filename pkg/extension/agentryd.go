@@ -558,27 +558,74 @@ func voiceOf(srv *api.Server, pool *pgxpool.Pool) Voice {
 	return serverVoice{srv.Voice()}
 }
 
-// reportSettingsOf adapts the server's report settings to ReportSettings:
-// nil without a database, the way Deps.DB is.
+// reportDesignsOf adapts the server's report design library to
+// ReportDesigns: nil without a database, the way Deps.DB is.
+func reportDesignsOf(srv *api.Server, pool *pgxpool.Pool) ReportDesigns {
+	if pool == nil {
+		return nil
+	}
+	return serverReportDesigns{srv}
+}
+
+type serverReportDesigns struct{ srv *api.Server }
+
+func (r serverReportDesigns) Default(ctx context.Context, user uuid.UUID) (*ReportDesign, error) {
+	rec, err := r.srv.ReportDesignDefault(ctx, user)
+	return reportDesignOf(rec), err
+}
+
+func (r serverReportDesigns) ByID(ctx context.Context, user, id uuid.UUID) (*ReportDesign, error) {
+	rec, err := r.srv.ReportDesignByID(ctx, user, id)
+	return reportDesignOf(rec), err
+}
+
+func (r serverReportDesigns) Create(ctx context.Context, user uuid.UUID, document []byte) (*ReportDesign, error) {
+	rec, err := r.srv.CreateReportDesign(ctx, user, document)
+	return reportDesignOf(rec), err
+}
+
+// reportDesignOf is the server's record in each form a reader may take.
+func reportDesignOf(rec *api.ReportDesignEntry) *ReportDesign {
+	if rec == nil {
+		return nil
+	}
+	plain := rec.Design.WithoutAssets()
+	withLogo := plain
+	withLogo.Logo = rec.Design.Logo
+	return &ReportDesign{
+		ID: rec.ID, Default: rec.Default,
+		Document:           plain.Canonical(),
+		DocumentWithAssets: rec.Design.Canonical(),
+		Version2:           plain.Version2(),
+		Version2WithLogo:   withLogo.Version2(),
+	}
+}
+
+// reportSettingsOf adapts the library's default design to ReportSettings,
+// the version-2 read: nil without a database.
 func reportSettingsOf(srv *api.Server, pool *pgxpool.Pool) ReportSettings {
 	if pool == nil {
 		return nil
 	}
-	return serverReportSettings{srv}
+	return serverReportSettings{serverReportDesigns{srv}}
 }
 
-type serverReportSettings struct{ srv *api.Server }
+type serverReportSettings struct{ designs serverReportDesigns }
 
 func (r serverReportSettings) Design(ctx context.Context, user uuid.UUID) ([]byte, error) {
-	return r.srv.ReportDesign(ctx, user)
+	d, err := r.designs.Default(ctx, user)
+	if err != nil || d == nil {
+		return nil, err
+	}
+	return d.Version2, nil
 }
 
 func (r serverReportSettings) DesignWithLogo(ctx context.Context, user uuid.UUID) ([]byte, error) {
-	return r.srv.ReportDesignWithLogo(ctx, user)
-}
-
-func (r serverReportSettings) Theme(ctx context.Context, user uuid.UUID) (string, error) {
-	return r.srv.ReportTheme(ctx, user)
+	d, err := r.designs.Default(ctx, user)
+	if err != nil || d == nil {
+		return nil, err
+	}
+	return d.Version2WithLogo, nil
 }
 
 // meterOf is the server's meter under the extension's scope, or a no-op
@@ -1092,7 +1139,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), OrgGate: orgGateOf(srv, pool), Agents: agentsOf(srv, pool), Versions: versionsOf(srv, pool), Principals: principalsOf(srv, pool),
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
-				Voice: voiceOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
+				Voice: voiceOf(srv, pool), ReportDesigns: reportDesignsOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
 				Staff: staffOf(srv, pool), Members: membersOf(srv, pool, e.Name()), Accounts: accountsOf(srv, pool, e.Name()), RememberedBrowsers: rememberedBrowsersOf(srv, pool, e.Name()), Sealer: sealerOf(srv, e.Name()),
 				ErasedAddressKey: srv.ErasedAddressKey})
 		}

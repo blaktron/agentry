@@ -285,7 +285,7 @@ It revokes every personal access token and SSH key, deletes
 every remembered browser (the ones that skip the second factor), consumes
 every pending desktop sign-in code, ends every session except the caller's,
 removes every account install, clears the display name, resets the
-notification settings to their defaults and clears the report theme. The handle, the email, the sign-in
+notification settings to their defaults and removes the report design library. The handle, the email, the sign-in
 account at the directory, organization memberships, QuickAgents with their
 versions and repositories, stars, the subscription and credits stay. It
 answers `204`, and the caller stays signed in.

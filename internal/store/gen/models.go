@@ -564,11 +564,17 @@ type UserNotificationSetting struct {
 	EmailRunFinished      bool      `json:"email_run_finished"`
 }
 
-type UserReportSetting struct {
-	UserID    uuid.UUID `json:"user_id"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Design    []byte    `json:"design"`
-	Logo      []byte    `json:"logo"`
+type UserReportDesign struct {
+	ID               uuid.UUID `json:"id"`
+	UserID           uuid.UUID `json:"user_id"`
+	Document         []byte    `json:"document"`
+	Logo             []byte    `json:"logo"`
+	CoverImage       []byte    `json:"cover_image"`
+	CoverImageFormat *string   `json:"cover_image_format"`
+	CustomCover      []byte    `json:"custom_cover"`
+	IsDefault        bool      `json:"is_default"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type UserSshKey struct {

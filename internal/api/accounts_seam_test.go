@@ -741,7 +741,7 @@ func TestStaffEraseIsThePersonsOwnErasure(t *testing.T) {
 	a.seedCredentials(t, id)
 	for _, q := range []string{
 		`INSERT INTO email_verifications (token_sha256, user_id, expires_at) VALUES (decode(md5(random()::text), 'hex'), $1, now() + interval '1 day')`,
-		`INSERT INTO user_report_settings (user_id, design) VALUES ($1, '{}')`,
+		`INSERT INTO user_report_designs (user_id, document, is_default) VALUES ($1, '{}', true)`,
 		`INSERT INTO voices (user_id, wrapper_kind, wrapper_recipient, wrapped_key) VALUES ($1, 'test', 'test', '\x00')`,
 	} {
 		if _, err := a.st.Pool().Exec(ctx, q, id); err != nil {
@@ -784,7 +784,7 @@ func TestStaffEraseIsThePersonsOwnErasure(t *testing.T) {
 		"remembered browsers":  `SELECT count(*) FROM trusted_devices WHERE user_id = $1`,
 		"unused desktop codes": `SELECT count(*) FROM desktop_grants WHERE user_id = $1 AND consumed_at IS NULL`,
 		"activation links":     `SELECT count(*) FROM email_verifications WHERE user_id = $1`,
-		"report designs":       `SELECT count(*) FROM user_report_settings WHERE user_id = $1`,
+		"report designs":       `SELECT count(*) FROM user_report_designs WHERE user_id = $1`,
 		"Writing Voices":       `SELECT count(*) FROM voices WHERE user_id = $1`,
 		"seats":                `SELECT count(*) FROM memberships WHERE user_id = $1`,
 		"live sessions":        `SELECT count(*) FROM sessions WHERE user_id = $1 AND revoked_at IS NULL`,

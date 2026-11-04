@@ -926,13 +926,13 @@ func (e PutVoiceRequestSource) Valid() bool {
 
 // Defines values for ReportDesignAgentryTheme.
 const (
-	ReportDesignVersion2 ReportDesignAgentryTheme = 2
+	ReportDesignVersion3 ReportDesignAgentryTheme = 3
 )
 
 // Valid indicates whether the value is a known member of the ReportDesignAgentryTheme enum.
 func (e ReportDesignAgentryTheme) Valid() bool {
 	switch e {
-	case ReportDesignVersion2:
+	case ReportDesignVersion3:
 		return true
 	default:
 		return false
@@ -941,23 +941,38 @@ func (e ReportDesignAgentryTheme) Valid() bool {
 
 // Defines values for ReportDesignBasedOn.
 const (
+	ReportDesignBasedOnBoardroom ReportDesignBasedOn = "boardroom"
+	ReportDesignBasedOnCivic     ReportDesignBasedOn = "civic"
 	ReportDesignBasedOnClassic   ReportDesignBasedOn = "classic"
 	ReportDesignBasedOnEditorial ReportDesignBasedOn = "editorial"
+	ReportDesignBasedOnField     ReportDesignBasedOn = "field"
+	ReportDesignBasedOnLumen     ReportDesignBasedOn = "lumen"
 	ReportDesignBasedOnModern    ReportDesignBasedOn = "modern"
 	ReportDesignBasedOnPlain     ReportDesignBasedOn = "plain"
+	ReportDesignBasedOnStudio    ReportDesignBasedOn = "studio"
 	ReportDesignBasedOnTechnical ReportDesignBasedOn = "technical"
 )
 
 // Valid indicates whether the value is a known member of the ReportDesignBasedOn enum.
 func (e ReportDesignBasedOn) Valid() bool {
 	switch e {
+	case ReportDesignBasedOnBoardroom:
+		return true
+	case ReportDesignBasedOnCivic:
+		return true
 	case ReportDesignBasedOnClassic:
 		return true
 	case ReportDesignBasedOnEditorial:
 		return true
+	case ReportDesignBasedOnField:
+		return true
+	case ReportDesignBasedOnLumen:
+		return true
 	case ReportDesignBasedOnModern:
 		return true
 	case ReportDesignBasedOnPlain:
+		return true
+	case ReportDesignBasedOnStudio:
 		return true
 	case ReportDesignBasedOnTechnical:
 		return true
@@ -966,22 +981,119 @@ func (e ReportDesignBasedOn) Valid() bool {
 	}
 }
 
+// Defines values for ReportDesignCoverShows.
+const (
+	Author          ReportDesignCoverShows = "author"
+	Brand           ReportDesignCoverShows = "brand"
+	Confidentiality ReportDesignCoverShows = "confidentiality"
+	Date            ReportDesignCoverShows = "date"
+	Logo            ReportDesignCoverShows = "logo"
+	Subtitle        ReportDesignCoverShows = "subtitle"
+	Title           ReportDesignCoverShows = "title"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignCoverShows enum.
+func (e ReportDesignCoverShows) Valid() bool {
+	switch e {
+	case Author:
+		return true
+	case Brand:
+		return true
+	case Confidentiality:
+		return true
+	case Date:
+		return true
+	case Logo:
+		return true
+	case Subtitle:
+		return true
+	case Title:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignCoverStyle.
+const (
+	ReportDesignCoverStyleBand      ReportDesignCoverStyle = "band"
+	ReportDesignCoverStyleCustom    ReportDesignCoverStyle = "custom"
+	ReportDesignCoverStyleFramed    ReportDesignCoverStyle = "framed"
+	ReportDesignCoverStyleGeometric ReportDesignCoverStyle = "geometric"
+	ReportDesignCoverStyleLargeType ReportDesignCoverStyle = "largeType"
+	ReportDesignCoverStylePlate     ReportDesignCoverStyle = "plate"
+	ReportDesignCoverStyleSplit     ReportDesignCoverStyle = "split"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignCoverStyle enum.
+func (e ReportDesignCoverStyle) Valid() bool {
+	switch e {
+	case ReportDesignCoverStyleBand:
+		return true
+	case ReportDesignCoverStyleCustom:
+		return true
+	case ReportDesignCoverStyleFramed:
+		return true
+	case ReportDesignCoverStyleGeometric:
+		return true
+	case ReportDesignCoverStyleLargeType:
+		return true
+	case ReportDesignCoverStylePlate:
+		return true
+	case ReportDesignCoverStyleSplit:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignCoverWhen.
+const (
+	Always ReportDesignCoverWhen = "always"
+	Long   ReportDesignCoverWhen = "long"
+	Never  ReportDesignCoverWhen = "never"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignCoverWhen enum.
+func (e ReportDesignCoverWhen) Valid() bool {
+	switch e {
+	case Always:
+		return true
+	case Long:
+		return true
+	case Never:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReportDesignFontsBody.
 const (
-	ReportDesignFontsBodyEBGaramond   ReportDesignFontsBody = "EB Garamond"
-	ReportDesignFontsBodyIBMPlexSans  ReportDesignFontsBody = "IBM Plex Sans"
-	ReportDesignFontsBodyIBMPlexSerif ReportDesignFontsBody = "IBM Plex Serif"
-	ReportDesignFontsBodyInter        ReportDesignFontsBody = "Inter"
-	ReportDesignFontsBodyLora         ReportDesignFontsBody = "Lora"
-	ReportDesignFontsBodyMerriweather ReportDesignFontsBody = "Merriweather"
-	ReportDesignFontsBodySourceSans3  ReportDesignFontsBody = "Source Sans 3"
-	ReportDesignFontsBodySourceSerif4 ReportDesignFontsBody = "Source Serif 4"
-	ReportDesignFontsBodyWorkSans     ReportDesignFontsBody = "Work Sans"
+	ReportDesignFontsBodyCrimsonPro       ReportDesignFontsBody = "Crimson Pro"
+	ReportDesignFontsBodyDMSans           ReportDesignFontsBody = "DM Sans"
+	ReportDesignFontsBodyEBGaramond       ReportDesignFontsBody = "EB Garamond"
+	ReportDesignFontsBodyIBMPlexSans      ReportDesignFontsBody = "IBM Plex Sans"
+	ReportDesignFontsBodyIBMPlexSerif     ReportDesignFontsBody = "IBM Plex Serif"
+	ReportDesignFontsBodyInter            ReportDesignFontsBody = "Inter"
+	ReportDesignFontsBodyLibreBaskerville ReportDesignFontsBody = "Libre Baskerville"
+	ReportDesignFontsBodyLora             ReportDesignFontsBody = "Lora"
+	ReportDesignFontsBodyMerriweather     ReportDesignFontsBody = "Merriweather"
+	ReportDesignFontsBodyNunitoSans       ReportDesignFontsBody = "Nunito Sans"
+	ReportDesignFontsBodyRaleway          ReportDesignFontsBody = "Raleway"
+	ReportDesignFontsBodySourceSans3      ReportDesignFontsBody = "Source Sans 3"
+	ReportDesignFontsBodySourceSerif4     ReportDesignFontsBody = "Source Serif 4"
+	ReportDesignFontsBodySpaceGrotesk     ReportDesignFontsBody = "Space Grotesk"
+	ReportDesignFontsBodyWorkSans         ReportDesignFontsBody = "Work Sans"
 )
 
 // Valid indicates whether the value is a known member of the ReportDesignFontsBody enum.
 func (e ReportDesignFontsBody) Valid() bool {
 	switch e {
+	case ReportDesignFontsBodyCrimsonPro:
+		return true
+	case ReportDesignFontsBodyDMSans:
+		return true
 	case ReportDesignFontsBodyEBGaramond:
 		return true
 	case ReportDesignFontsBodyIBMPlexSans:
@@ -990,13 +1102,21 @@ func (e ReportDesignFontsBody) Valid() bool {
 		return true
 	case ReportDesignFontsBodyInter:
 		return true
+	case ReportDesignFontsBodyLibreBaskerville:
+		return true
 	case ReportDesignFontsBodyLora:
 		return true
 	case ReportDesignFontsBodyMerriweather:
 		return true
+	case ReportDesignFontsBodyNunitoSans:
+		return true
+	case ReportDesignFontsBodyRaleway:
+		return true
 	case ReportDesignFontsBodySourceSans3:
 		return true
 	case ReportDesignFontsBodySourceSerif4:
+		return true
+	case ReportDesignFontsBodySpaceGrotesk:
 		return true
 	case ReportDesignFontsBodyWorkSans:
 		return true
@@ -1007,6 +1127,7 @@ func (e ReportDesignFontsBody) Valid() bool {
 
 // Defines values for ReportDesignFontsCode.
 const (
+	ReportDesignFontsCodeFiraCode      ReportDesignFontsCode = "Fira Code"
 	ReportDesignFontsCodeIBMPlexMono   ReportDesignFontsCode = "IBM Plex Mono"
 	ReportDesignFontsCodeJetBrainsMono ReportDesignFontsCode = "JetBrains Mono"
 	ReportDesignFontsCodeSourceCodePro ReportDesignFontsCode = "Source Code Pro"
@@ -1015,6 +1136,8 @@ const (
 // Valid indicates whether the value is a known member of the ReportDesignFontsCode enum.
 func (e ReportDesignFontsCode) Valid() bool {
 	switch e {
+	case ReportDesignFontsCodeFiraCode:
+		return true
 	case ReportDesignFontsCodeIBMPlexMono:
 		return true
 	case ReportDesignFontsCodeJetBrainsMono:
@@ -1028,26 +1151,42 @@ func (e ReportDesignFontsCode) Valid() bool {
 
 // Defines values for ReportDesignFontsHeadings.
 const (
-	ReportDesignFontsHeadingsEBGaramond      ReportDesignFontsHeadings = "EB Garamond"
-	ReportDesignFontsHeadingsIBMPlexMono     ReportDesignFontsHeadings = "IBM Plex Mono"
-	ReportDesignFontsHeadingsIBMPlexSans     ReportDesignFontsHeadings = "IBM Plex Sans"
-	ReportDesignFontsHeadingsIBMPlexSerif    ReportDesignFontsHeadings = "IBM Plex Serif"
-	ReportDesignFontsHeadingsInter           ReportDesignFontsHeadings = "Inter"
-	ReportDesignFontsHeadingsJetBrainsMono   ReportDesignFontsHeadings = "JetBrains Mono"
-	ReportDesignFontsHeadingsLora            ReportDesignFontsHeadings = "Lora"
-	ReportDesignFontsHeadingsMerriweather    ReportDesignFontsHeadings = "Merriweather"
-	ReportDesignFontsHeadingsMontserrat      ReportDesignFontsHeadings = "Montserrat"
-	ReportDesignFontsHeadingsPlayfairDisplay ReportDesignFontsHeadings = "Playfair Display"
-	ReportDesignFontsHeadingsSourceCodePro   ReportDesignFontsHeadings = "Source Code Pro"
-	ReportDesignFontsHeadingsSourceSans3     ReportDesignFontsHeadings = "Source Sans 3"
-	ReportDesignFontsHeadingsSourceSerif4    ReportDesignFontsHeadings = "Source Serif 4"
-	ReportDesignFontsHeadingsWorkSans        ReportDesignFontsHeadings = "Work Sans"
+	ReportDesignFontsHeadingsCrimsonPro       ReportDesignFontsHeadings = "Crimson Pro"
+	ReportDesignFontsHeadingsDMSans           ReportDesignFontsHeadings = "DM Sans"
+	ReportDesignFontsHeadingsEBGaramond       ReportDesignFontsHeadings = "EB Garamond"
+	ReportDesignFontsHeadingsFiraCode         ReportDesignFontsHeadings = "Fira Code"
+	ReportDesignFontsHeadingsFraunces         ReportDesignFontsHeadings = "Fraunces"
+	ReportDesignFontsHeadingsIBMPlexMono      ReportDesignFontsHeadings = "IBM Plex Mono"
+	ReportDesignFontsHeadingsIBMPlexSans      ReportDesignFontsHeadings = "IBM Plex Sans"
+	ReportDesignFontsHeadingsIBMPlexSerif     ReportDesignFontsHeadings = "IBM Plex Serif"
+	ReportDesignFontsHeadingsInter            ReportDesignFontsHeadings = "Inter"
+	ReportDesignFontsHeadingsJetBrainsMono    ReportDesignFontsHeadings = "JetBrains Mono"
+	ReportDesignFontsHeadingsLibreBaskerville ReportDesignFontsHeadings = "Libre Baskerville"
+	ReportDesignFontsHeadingsLora             ReportDesignFontsHeadings = "Lora"
+	ReportDesignFontsHeadingsMerriweather     ReportDesignFontsHeadings = "Merriweather"
+	ReportDesignFontsHeadingsMontserrat       ReportDesignFontsHeadings = "Montserrat"
+	ReportDesignFontsHeadingsNunitoSans       ReportDesignFontsHeadings = "Nunito Sans"
+	ReportDesignFontsHeadingsPlayfairDisplay  ReportDesignFontsHeadings = "Playfair Display"
+	ReportDesignFontsHeadingsRaleway          ReportDesignFontsHeadings = "Raleway"
+	ReportDesignFontsHeadingsSourceCodePro    ReportDesignFontsHeadings = "Source Code Pro"
+	ReportDesignFontsHeadingsSourceSans3      ReportDesignFontsHeadings = "Source Sans 3"
+	ReportDesignFontsHeadingsSourceSerif4     ReportDesignFontsHeadings = "Source Serif 4"
+	ReportDesignFontsHeadingsSpaceGrotesk     ReportDesignFontsHeadings = "Space Grotesk"
+	ReportDesignFontsHeadingsWorkSans         ReportDesignFontsHeadings = "Work Sans"
 )
 
 // Valid indicates whether the value is a known member of the ReportDesignFontsHeadings enum.
 func (e ReportDesignFontsHeadings) Valid() bool {
 	switch e {
+	case ReportDesignFontsHeadingsCrimsonPro:
+		return true
+	case ReportDesignFontsHeadingsDMSans:
+		return true
 	case ReportDesignFontsHeadingsEBGaramond:
+		return true
+	case ReportDesignFontsHeadingsFiraCode:
+		return true
+	case ReportDesignFontsHeadingsFraunces:
 		return true
 	case ReportDesignFontsHeadingsIBMPlexMono:
 		return true
@@ -1059,19 +1198,27 @@ func (e ReportDesignFontsHeadings) Valid() bool {
 		return true
 	case ReportDesignFontsHeadingsJetBrainsMono:
 		return true
+	case ReportDesignFontsHeadingsLibreBaskerville:
+		return true
 	case ReportDesignFontsHeadingsLora:
 		return true
 	case ReportDesignFontsHeadingsMerriweather:
 		return true
 	case ReportDesignFontsHeadingsMontserrat:
 		return true
+	case ReportDesignFontsHeadingsNunitoSans:
+		return true
 	case ReportDesignFontsHeadingsPlayfairDisplay:
+		return true
+	case ReportDesignFontsHeadingsRaleway:
 		return true
 	case ReportDesignFontsHeadingsSourceCodePro:
 		return true
 	case ReportDesignFontsHeadingsSourceSans3:
 		return true
 	case ReportDesignFontsHeadingsSourceSerif4:
+		return true
+	case ReportDesignFontsHeadingsSpaceGrotesk:
 		return true
 	case ReportDesignFontsHeadingsWorkSans:
 		return true
@@ -1101,6 +1248,54 @@ func (e ReportDesignFooterPageNumbers) Valid() bool {
 	}
 }
 
+// Defines values for ReportDesignHeaderStyle.
+const (
+	ReportDesignHeaderStyleBrandLine    ReportDesignHeaderStyle = "brandLine"
+	ReportDesignHeaderStyleLogoLeft     ReportDesignHeaderStyle = "logoLeft"
+	ReportDesignHeaderStyleNone         ReportDesignHeaderStyle = "none"
+	ReportDesignHeaderStyleRule         ReportDesignHeaderStyle = "rule"
+	ReportDesignHeaderStyleTitleAndPage ReportDesignHeaderStyle = "titleAndPage"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignHeaderStyle enum.
+func (e ReportDesignHeaderStyle) Valid() bool {
+	switch e {
+	case ReportDesignHeaderStyleBrandLine:
+		return true
+	case ReportDesignHeaderStyleLogoLeft:
+		return true
+	case ReportDesignHeaderStyleNone:
+		return true
+	case ReportDesignHeaderStyleRule:
+		return true
+	case ReportDesignHeaderStyleTitleAndPage:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignHeadingScale.
+const (
+	ReportDesignHeadingScaleCompact  ReportDesignHeadingScale = "compact"
+	ReportDesignHeadingScaleGenerous ReportDesignHeadingScale = "generous"
+	ReportDesignHeadingScaleRegular  ReportDesignHeadingScale = "regular"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignHeadingScale enum.
+func (e ReportDesignHeadingScale) Valid() bool {
+	switch e {
+	case ReportDesignHeadingScaleCompact:
+		return true
+	case ReportDesignHeadingScaleGenerous:
+		return true
+	case ReportDesignHeadingScaleRegular:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReportDesignHeadings.
 const (
 	ReportDesignHeadingsBar       ReportDesignHeadings = "bar"
@@ -1122,6 +1317,27 @@ func (e ReportDesignHeadings) Valid() bool {
 	case ReportDesignHeadingsRule:
 		return true
 	case ReportDesignHeadingsSmallcaps:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReportDesignMargins.
+const (
+	ReportDesignMarginsNarrow  ReportDesignMargins = "narrow"
+	ReportDesignMarginsRegular ReportDesignMargins = "regular"
+	ReportDesignMarginsWide    ReportDesignMargins = "wide"
+)
+
+// Valid indicates whether the value is a known member of the ReportDesignMargins enum.
+func (e ReportDesignMargins) Valid() bool {
+	switch e {
+	case ReportDesignMarginsNarrow:
+		return true
+	case ReportDesignMarginsRegular:
+		return true
+	case ReportDesignMarginsWide:
 		return true
 	default:
 		return false
@@ -1188,15 +1404,15 @@ func (e ReportDesignTitleBlock) Valid() bool {
 	}
 }
 
-// Defines values for ReportSettingsInclude.
+// Defines values for ReportDesignInclude.
 const (
-	ReportSettingsIncludeLogo ReportSettingsInclude = "logo"
+	ReportDesignIncludeAssets ReportDesignInclude = "assets"
 )
 
-// Valid indicates whether the value is a known member of the ReportSettingsInclude enum.
-func (e ReportSettingsInclude) Valid() bool {
+// Valid indicates whether the value is a known member of the ReportDesignInclude enum.
+func (e ReportDesignInclude) Valid() bool {
 	switch e {
-	case ReportSettingsIncludeLogo:
+	case ReportDesignIncludeAssets:
 		return true
 	default:
 		return false
@@ -3193,17 +3409,61 @@ type RedTeamReport struct {
 	RulesetSemver string                 `json:"rulesetSemver"`
 }
 
-// ReportDesign A report design, the theme document version 2. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control, line-break, bidirectional formatting or other invisible format characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB; `"logo": null` is read as no logo.
+// ReportDesign A report design, the theme document version 3: a whole brand. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says: the accent must reach 4.5:1 contrast on white where it carries text (titleBlock `band`, headings `smallcaps` or `numbered`, or a cover that is drawn in the `band`, `largeType` or `plate` style, or `split` with no secondary) and 3:1 otherwise; the secondary 4.5:1 where a drawn `split` cover puts the brand on it and 3:1 otherwise; every text (`name`, the brand's lines, each header and footer slot) is one line with no control, line-break, bidirectional formatting or other invisible format characters; `brand.website` is a host name or an https address, drawn as text; a cover fact is named once; the custom cover's source is at most 32 KiB of text, its images at most six and 2 MB in all as stored, its thumbnail a PNG of at most 300 KB; each image's base64 holds a PNG or a JPEG within its bounds. Each colour's tint is derived: 12% of it over white. The ten built-in themes are each a value of it. `logo`, `coverImage` and `customCover` are optional, not counted in the 24 KB, answered only on `include=assets`, and null reads as none.
 type ReportDesign struct {
-	// Accent The one colour, lower-case hex.
+	// Accent The first colour, lower-case hex.
 	Accent string `json:"accent"`
 
-	// AgentryTheme The document version, always 2.
+	// AgentryTheme The document version, always 3.
 	AgentryTheme ReportDesignAgentryTheme `json:"agentryTheme"`
 
 	// BasedOn The built-in theme the design started from.
 	BasedOn ReportDesignBasedOn `json:"basedOn"`
-	Fonts   struct {
+
+	// Brand Who the report is from; every line optional and drawn as text where a header, a footer or a cover asks for it.
+	Brand struct {
+		// Confidentiality The {confidentiality} token.
+		Confidentiality string   `json:"confidentiality"`
+		Contact         []string `json:"contact"`
+
+		// Name The {brand} token.
+		Name      string `json:"name"`
+		Strapline string `json:"strapline"`
+
+		// Website A host name or an https address, drawn as text, never a link.
+		Website string `json:"website"`
+	} `json:"brand"`
+
+	// Cover The cover page.
+	Cover struct {
+		// Shows The facts the cover carries, each once.
+		Shows []ReportDesignCoverShows `json:"shows"`
+
+		// Style A built-in layout, or custom for the design's custom cover, which falls back to band when it cannot be drawn.
+		Style ReportDesignCoverStyle `json:"style"`
+
+		// When long draws the cover for a titled report past the template's length threshold, always for every titled report, never for none.
+		When ReportDesignCoverWhen `json:"when"`
+	} `json:"cover"`
+
+	// CoverImage The design's cover image, drawn by the plate style and offered to a custom cover: a PNG or a JPEG the core encoded from the upload, at most 2 MB and 2048 pixels each way, under the key that names its format.
+	CoverImage *struct {
+		Jpeg *string `json:"jpeg,omitempty"`
+		Png  *string `json:"png,omitempty"`
+	} `json:"coverImage,omitempty"`
+
+	// CustomCover The design's custom cover, drawn when the cover style is custom: its Typst source, the images it may draw (each a PNG or a JPEG the core encoded, named by the renderer in this order) and a PNG thumbnail of its last render.
+	CustomCover *struct {
+		Images []struct {
+			Jpeg *string `json:"jpeg,omitempty"`
+			Png  *string `json:"png,omitempty"`
+		} `json:"images"`
+		Source    string `json:"source"`
+		Thumbnail *struct {
+			Png string `json:"png"`
+		} `json:"thumbnail,omitempty"`
+	} `json:"customCover,omitempty"`
+	Fonts struct {
 		Body     ReportDesignFontsBody     `json:"body"`
 		Code     ReportDesignFontsCode     `json:"code"`
 		Headings ReportDesignFontsHeadings `json:"headings"`
@@ -3211,16 +3471,28 @@ type ReportDesign struct {
 	Footer struct {
 		PageNumbers ReportDesignFooterPageNumbers `json:"pageNumbers"`
 
-		// Text One line, set as text, never evaluated; empty for none.
-		Text string `json:"text"`
+		// Slots As the header's.
+		Slots []string `json:"slots"`
 	} `json:"footer"`
-	Headings ReportDesignHeadings `json:"headings"`
 
-	// Logo The person's logo, drawn only in the title block; absent for none. Answered only when asked for (`include=logo`).
+	// Header The running header: from page 2 on a report, every page of a memo, never on a letter.
+	Header struct {
+		// Slots Left, centre and right: literal text and tokens from the closed set {title}, {author}, {date}, {page}, {pages}, {brand}, {section}, {confidentiality}, which the template substitutes before it sets the text; anything else between braces is literal.
+		Slots []string                `json:"slots"`
+		Style ReportDesignHeaderStyle `json:"style"`
+	} `json:"header"`
+
+	// HeadingScale How much larger than the body each heading level is set.
+	HeadingScale ReportDesignHeadingScale `json:"headingScale"`
+	Headings     ReportDesignHeadings     `json:"headings"`
+
+	// Logo The person's logo, a PNG the core encoded from their upload, at most 512 KB and 1024 pixels each way; absent for none.
 	Logo *struct {
-		// Png A PNG in standard base64, at most 512 KB and 1024 pixels each way, as the core encoded it from the person's upload.
 		Png string `json:"png"`
 	} `json:"logo,omitempty"`
+
+	// Margins The page's margins.
+	Margins ReportDesignMargins `json:"margins"`
 
 	// Name The design's label, a built-in's own name or the person's.
 	Name string `json:"name"`
@@ -3228,7 +3500,10 @@ type ReportDesign struct {
 	// Paper A4, or US Letter.
 	Paper  ReportDesignPaper  `json:"paper"`
 	Quotes ReportDesignQuotes `json:"quotes"`
-	Tables struct {
+
+	// Secondary The second colour, lower-case hex, or empty for none.
+	Secondary string `json:"secondary"`
+	Tables    struct {
 		Banded bool `json:"banded"`
 		Tinted bool `json:"tinted"`
 	} `json:"tables"`
@@ -3238,11 +3513,20 @@ type ReportDesign struct {
 	Version int `json:"version"`
 }
 
-// ReportDesignAgentryTheme The document version, always 2.
+// ReportDesignAgentryTheme The document version, always 3.
 type ReportDesignAgentryTheme int
 
 // ReportDesignBasedOn The built-in theme the design started from.
 type ReportDesignBasedOn string
+
+// ReportDesignCoverShows defines model for ReportDesign.Cover.Shows.
+type ReportDesignCoverShows string
+
+// ReportDesignCoverStyle A built-in layout, or custom for the design's custom cover, which falls back to band when it cannot be drawn.
+type ReportDesignCoverStyle string
+
+// ReportDesignCoverWhen long draws the cover for a titled report past the template's length threshold, always for every titled report, never for none.
+type ReportDesignCoverWhen string
 
 // ReportDesignFontsBody defines model for ReportDesign.Fonts.Body.
 type ReportDesignFontsBody string
@@ -3256,8 +3540,17 @@ type ReportDesignFontsHeadings string
 // ReportDesignFooterPageNumbers defines model for ReportDesign.Footer.PageNumbers.
 type ReportDesignFooterPageNumbers string
 
+// ReportDesignHeaderStyle defines model for ReportDesign.Header.Style.
+type ReportDesignHeaderStyle string
+
+// ReportDesignHeadingScale How much larger than the body each heading level is set.
+type ReportDesignHeadingScale string
+
 // ReportDesignHeadings defines model for ReportDesign.Headings.
 type ReportDesignHeadings string
+
+// ReportDesignMargins The page's margins.
+type ReportDesignMargins string
 
 // ReportDesignPaper A4, or US Letter.
 type ReportDesignPaper string
@@ -3268,14 +3561,79 @@ type ReportDesignQuotes string
 // ReportDesignTitleBlock defines model for ReportDesign.TitleBlock.
 type ReportDesignTitleBlock string
 
-// ReportSettings The caller's report settings, a profile setting. No `design` means the person never chose one.
-type ReportSettings struct {
-	// Design A report design, the theme document version 2. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says, the accent must reach 4.5:1 contrast on white when it touches text (titleBlock `band`, headings `smallcaps` or `numbered`) and 3:1 otherwise, and `name` and `footer.text` are one line with no control, line-break, bidirectional formatting or other invisible format characters. The tint is derived: 12% of the accent over white. The five built-in themes are each a value of it. `logo` is optional and not counted in the 16 KB; `"logo": null` is read as no logo.
-	Design *ReportDesign `json:"design,omitempty"`
+// ReportDesignCreate defines model for ReportDesignCreate.
+type ReportDesignCreate struct {
+	// Default Make the new design the default. Off, the default is unchanged, so an account whose first design is added without it still has no default.
+	Default *bool `json:"default,omitempty"`
+
+	// Design A report design, the theme document version 3: a whole brand. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says: the accent must reach 4.5:1 contrast on white where it carries text (titleBlock `band`, headings `smallcaps` or `numbered`, or a cover that is drawn in the `band`, `largeType` or `plate` style, or `split` with no secondary) and 3:1 otherwise; the secondary 4.5:1 where a drawn `split` cover puts the brand on it and 3:1 otherwise; every text (`name`, the brand's lines, each header and footer slot) is one line with no control, line-break, bidirectional formatting or other invisible format characters; `brand.website` is a host name or an https address, drawn as text; a cover fact is named once; the custom cover's source is at most 32 KiB of text, its images at most six and 2 MB in all as stored, its thumbnail a PNG of at most 300 KB; each image's base64 holds a PNG or a JPEG within its bounds. Each colour's tint is derived: 12% of it over white. The ten built-in themes are each a value of it. `logo`, `coverImage` and `customCover` are optional, not counted in the 24 KB, answered only on `include=assets`, and null reads as none.
+	Design ReportDesign `json:"design"`
 }
 
-// ReportSettingsInclude What a report settings answer carries beyond the design.
-type ReportSettingsInclude string
+// ReportDesignCustomCover A design's custom cover: its Typst source (at most 32 KiB of text), up to six images (each a PNG or a JPEG, 2 MB in all as stored; the core encodes each again) and a PNG thumbnail of its last render (at most 300 KB).
+type ReportDesignCustomCover struct {
+	Images []struct {
+		Jpeg *string `json:"jpeg,omitempty"`
+		Png  *string `json:"png,omitempty"`
+	} `json:"images"`
+	Source    string `json:"source"`
+	Thumbnail *struct {
+		Png string `json:"png"`
+	} `json:"thumbnail,omitempty"`
+}
+
+// ReportDesignDefault Which design is the default: an id of the caller's, or none.
+type ReportDesignDefault struct {
+	// Id The design to make the default; absent or null for none.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+}
+
+// ReportDesignInclude What a report design answer carries beyond the document.
+type ReportDesignInclude string
+
+// ReportDesignList The caller's library: the designs, oldest first, and which is the default. No `default` means no design is: a run then falls to the client's own choice, never Plain at the API.
+type ReportDesignList struct {
+	// Default The default design's id; absent when none is.
+	Default *openapi_types.UUID   `json:"default,omitempty"`
+	Designs []ReportDesignSummary `json:"designs"`
+}
+
+// ReportDesignRecord One design with its document in canonical form. The images are in the document only on `include=assets`; the three flags say which it has.
+type ReportDesignRecord struct {
+	CreatedAt time.Time `json:"createdAt"`
+	Default   bool      `json:"default"`
+
+	// Design A report design, the theme document version 3: a whole brand. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says: the accent must reach 4.5:1 contrast on white where it carries text (titleBlock `band`, headings `smallcaps` or `numbered`, or a cover that is drawn in the `band`, `largeType` or `plate` style, or `split` with no secondary) and 3:1 otherwise; the secondary 4.5:1 where a drawn `split` cover puts the brand on it and 3:1 otherwise; every text (`name`, the brand's lines, each header and footer slot) is one line with no control, line-break, bidirectional formatting or other invisible format characters; `brand.website` is a host name or an https address, drawn as text; a cover fact is named once; the custom cover's source is at most 32 KiB of text, its images at most six and 2 MB in all as stored, its thumbnail a PNG of at most 300 KB; each image's base64 holds a PNG or a JPEG within its bounds. Each colour's tint is derived: 12% of it over white. The ten built-in themes are each a value of it. `logo`, `coverImage` and `customCover` are optional, not counted in the 24 KB, answered only on `include=assets`, and null reads as none.
+	Design         ReportDesign       `json:"design"`
+	HasCoverImage  bool               `json:"hasCoverImage"`
+	HasCustomCover bool               `json:"hasCustomCover"`
+	HasLogo        bool               `json:"hasLogo"`
+	Id             openapi_types.UUID `json:"id"`
+	UpdatedAt      time.Time          `json:"updatedAt"`
+}
+
+// ReportDesignSummary One design of the library, without its document's body or images.
+type ReportDesignSummary struct {
+	// BasedOn The built-in theme it started from.
+	BasedOn   string    `json:"basedOn"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Default Whether a run takes this design when the person picks none.
+	Default        bool               `json:"default"`
+	HasCoverImage  bool               `json:"hasCoverImage"`
+	HasCustomCover bool               `json:"hasCustomCover"`
+	HasLogo        bool               `json:"hasLogo"`
+	Id             openapi_types.UUID `json:"id"`
+	Name           string             `json:"name"`
+	UpdatedAt      time.Time          `json:"updatedAt"`
+	Version        int                `json:"version"`
+}
+
+// ReportDesignUpdate defines model for ReportDesignUpdate.
+type ReportDesignUpdate struct {
+	// Design A report design, the theme document version 3: a whole brand. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says: the accent must reach 4.5:1 contrast on white where it carries text (titleBlock `band`, headings `smallcaps` or `numbered`, or a cover that is drawn in the `band`, `largeType` or `plate` style, or `split` with no secondary) and 3:1 otherwise; the secondary 4.5:1 where a drawn `split` cover puts the brand on it and 3:1 otherwise; every text (`name`, the brand's lines, each header and footer slot) is one line with no control, line-break, bidirectional formatting or other invisible format characters; `brand.website` is a host name or an https address, drawn as text; a cover fact is named once; the custom cover's source is at most 32 KiB of text, its images at most six and 2 MB in all as stored, its thumbnail a PNG of at most 300 KB; each image's base64 holds a PNG or a JPEG within its bounds. Each colour's tint is derived: 12% of it over white. The ten built-in themes are each a value of it. `logo`, `coverImage` and `customCover` are optional, not counted in the 24 KB, answered only on `include=assets`, and null reads as none.
+	Design ReportDesign `json:"design"`
+}
 
 // ReportVerdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
 type ReportVerdict string
@@ -3903,6 +4261,9 @@ type Namespace = string
 // OrgHandle defines model for OrgHandle.
 type OrgHandle = string
 
+// ReportDesignId defines model for ReportDesignId.
+type ReportDesignId = openapi_types.UUID
+
 // SocialProvider defines model for SocialProvider.
 type SocialProvider string
 
@@ -4346,20 +4707,31 @@ type DeleteCurrentUserParams struct {
 // DeleteCurrentUserParamsPublishedContent defines parameters for DeleteCurrentUser.
 type DeleteCurrentUserParamsPublishedContent string
 
-// GetUserReportSettingsParams defines parameters for GetUserReportSettings.
-type GetUserReportSettingsParams struct {
-	// Include `logo` answers the design with its logo, if the person has one. Without it the design comes without a `logo` key, so a client built before logos still reads it.
-	Include *ReportSettingsInclude `form:"include,omitempty" json:"include,omitempty"`
+// CreateUserReportDesignParams defines parameters for CreateUserReportDesign.
+type CreateUserReportDesignParams struct {
+	// Include `assets` answers the design with its images (`logo`, `coverImage`, `customCover`), if it has them. Without it the document comes without those keys, so a client that does not draw them reads it whole and small.
+	Include *ReportDesignInclude `form:"include,omitempty" json:"include,omitempty"`
 }
 
-// UpdateUserReportSettingsParams defines parameters for UpdateUserReportSettings.
-type UpdateUserReportSettingsParams struct {
-	// Include `logo` answers the design with its logo, if the person has one. Without it the design comes without a `logo` key, so a client built before logos still reads it.
-	Include *ReportSettingsInclude `form:"include,omitempty" json:"include,omitempty"`
+// GetUserReportDesignParams defines parameters for GetUserReportDesign.
+type GetUserReportDesignParams struct {
+	// Include `assets` answers the design with its images (`logo`, `coverImage`, `customCover`), if it has them. Without it the document comes without those keys, so a client that does not draw them reads it whole and small.
+	Include *ReportDesignInclude `form:"include,omitempty" json:"include,omitempty"`
 }
 
-// PutUserReportLogoMultipartBody defines parameters for PutUserReportLogo.
-type PutUserReportLogoMultipartBody struct {
+// UpdateUserReportDesignParams defines parameters for UpdateUserReportDesign.
+type UpdateUserReportDesignParams struct {
+	// Include `assets` answers the design with its images (`logo`, `coverImage`, `customCover`), if it has them. Without it the document comes without those keys, so a client that does not draw them reads it whole and small.
+	Include *ReportDesignInclude `form:"include,omitempty" json:"include,omitempty"`
+}
+
+// PutUserReportDesignCoverImageMultipartBody defines parameters for PutUserReportDesignCoverImage.
+type PutUserReportDesignCoverImageMultipartBody struct {
+	File openapi_types.File `json:"file"`
+}
+
+// PutUserReportDesignLogoMultipartBody defines parameters for PutUserReportDesignLogo.
+type PutUserReportDesignLogoMultipartBody struct {
 	File openapi_types.File `json:"file"`
 }
 
@@ -4495,11 +4867,23 @@ type PutAccountInstallJSONRequestBody = AccountInstallRequest
 // UpdateUserNotificationSettingsJSONRequestBody defines body for UpdateUserNotificationSettings for application/json ContentType.
 type UpdateUserNotificationSettingsJSONRequestBody = NotificationSettings
 
-// UpdateUserReportSettingsJSONRequestBody defines body for UpdateUserReportSettings for application/json ContentType.
-type UpdateUserReportSettingsJSONRequestBody = ReportSettings
+// CreateUserReportDesignJSONRequestBody defines body for CreateUserReportDesign for application/json ContentType.
+type CreateUserReportDesignJSONRequestBody = ReportDesignCreate
 
-// PutUserReportLogoMultipartRequestBody defines body for PutUserReportLogo for multipart/form-data ContentType.
-type PutUserReportLogoMultipartRequestBody PutUserReportLogoMultipartBody
+// SetUserReportDesignDefaultJSONRequestBody defines body for SetUserReportDesignDefault for application/json ContentType.
+type SetUserReportDesignDefaultJSONRequestBody = ReportDesignDefault
+
+// UpdateUserReportDesignJSONRequestBody defines body for UpdateUserReportDesign for application/json ContentType.
+type UpdateUserReportDesignJSONRequestBody = ReportDesignUpdate
+
+// PutUserReportDesignCoverImageMultipartRequestBody defines body for PutUserReportDesignCoverImage for multipart/form-data ContentType.
+type PutUserReportDesignCoverImageMultipartRequestBody PutUserReportDesignCoverImageMultipartBody
+
+// PutUserReportDesignCustomCoverJSONRequestBody defines body for PutUserReportDesignCustomCover for application/json ContentType.
+type PutUserReportDesignCustomCoverJSONRequestBody = ReportDesignCustomCover
+
+// PutUserReportDesignLogoMultipartRequestBody defines body for PutUserReportDesignLogo for multipart/form-data ContentType.
+type PutUserReportDesignLogoMultipartRequestBody PutUserReportDesignLogoMultipartBody
 
 // AddSshKeyJSONRequestBody defines body for AddSshKey for application/json ContentType.
 type AddSshKeyJSONRequestBody = AddSshKeyRequest
@@ -5840,46 +6224,137 @@ type ClientInterface interface {
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettings(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetUserReportSettings The report design the caller's PDF reports take.
+	// ListUserReportDesigns The caller's report design library.
 	//
-	// A profile setting: the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain.
+	// Up to ten named report designs, oldest first, and which one is the default: the design `export_pdf` renders with in the caller's runs when the run picks none. The model never chooses a design. An account with no designs, or none as the default, reads back with no `default`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain. The images are not listed; each entry says which it has.
 	//
-	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
-	GetUserReportSettings(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with GET /user/report-designs (the `ListUserReportDesigns` operationId).
+	ListUserReportDesigns(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateUserReportSettingsWithBody Replace the caller's report settings.
+	// CreateUserReportDesignWithBody Add a report design to the caller's library.
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
+	// The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low for where it goes, a text that is not one line, a cover fact twice, an image or a custom cover over its bounds, over 24 KB without them) is refused 422 (`validation`), the field named `design.<path>`. A version-2 document is refused the same way, with no mapping. The library holds ten designs: an eleventh is 409 `conflict`. `default` makes the new design the default, and the previous default an ordinary design of the library; without it the default is unchanged. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. The answer carries the design in its canonical form, its images only on `include=assets`.
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-	UpdateUserReportSettingsWithBody(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /user/report-designs (the `CreateUserReportDesign` operationId).
+	CreateUserReportDesignWithBody(ctx context.Context, params *CreateUserReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateUserReportSettings Replace the caller's report settings.
+	// CreateUserReportDesign Add a report design to the caller's library.
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
+	// The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low for where it goes, a text that is not one line, a cover fact twice, an image or a custom cover over its bounds, over 24 KB without them) is refused 422 (`validation`), the field named `design.<path>`. A version-2 document is refused the same way, with no mapping. The library holds ten designs: an eleventh is 409 `conflict`. `default` makes the new design the default, and the previous default an ordinary design of the library; without it the default is unchanged. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. The answer carries the design in its canonical form, its images only on `include=assets`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-	UpdateUserReportSettings(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /user/report-designs (the `CreateUserReportDesign` operationId).
+	CreateUserReportDesign(ctx context.Context, params *CreateUserReportDesignParams, body CreateUserReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteUserReportLogo Remove the logo from the caller's report design.
+	// SetUserReportDesignDefaultWithBody Set which of the caller's designs their runs take by default.
 	//
-	// The design stays. Removing a logo that is not there is not an error.
-	//
-	// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
-	DeleteUserReportLogo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PutUserReportLogoWithBody Set the logo of the caller's report design.
-	//
-	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+	// An id of one of the caller's designs makes it the default; another account's id, or none the caller has, is 404. No id, or null, makes no design the default, so a run falls to the client's own choice. The answer is the library as it now is.
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with PUT /user/report-settings/logo (the `PutUserReportLogo` operationId).
-	PutUserReportLogoWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with PUT /user/report-designs/default (the `SetUserReportDesignDefault` operationId).
+	SetUserReportDesignDefaultWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetUserReportDesignDefault Set which of the caller's designs their runs take by default.
+	//
+	// An id of one of the caller's designs makes it the default; another account's id, or none the caller has, is 404. No id, or null, makes no design the default, so a run falls to the client's own choice. The answer is the library as it now is.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /user/report-designs/default (the `SetUserReportDesignDefault` operationId).
+	SetUserReportDesignDefault(ctx context.Context, body SetUserReportDesignDefaultJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUserReportDesign Remove one of the caller's report designs, images included.
+	//
+	// Removing the default leaves the account with no default. Another account's design, or one already gone, is 404.
+	//
+	// Corresponds with DELETE /user/report-designs/{designId} (the `DeleteUserReportDesign` operationId).
+	DeleteUserReportDesign(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUserReportDesign One of the caller's report designs.
+	//
+	// The design in its canonical form. Its images (`logo`, `coverImage`, `customCover`) come only with `include=assets`: a client that does not draw them reads the document without them. Another account's design is 404.
+	//
+	// Corresponds with GET /user/report-designs/{designId} (the `GetUserReportDesign` operationId).
+	GetUserReportDesign(ctx context.Context, designId ReportDesignId, params *GetUserReportDesignParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateUserReportDesignWithBody Replace one of the caller's report designs.
+	//
+	// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. The images stay as they are unless the document carries them: a `logo`, `coverImage` or `customCover` in the document replaces the stored one with the core's own re-encoding of it, and a document without them leaves them, so a client that does not know an image never drops one by saving (remove one with its DELETE route). Whether the design is the default is not changed here.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /user/report-designs/{designId} (the `UpdateUserReportDesign` operationId).
+	UpdateUserReportDesignWithBody(ctx context.Context, designId ReportDesignId, params *UpdateUserReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateUserReportDesign Replace one of the caller's report designs.
+	//
+	// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. The images stay as they are unless the document carries them: a `logo`, `coverImage` or `customCover` in the document replaces the stored one with the core's own re-encoding of it, and a document without them leaves them, so a client that does not know an image never drops one by saving (remove one with its DELETE route). Whether the design is the default is not changed here.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /user/report-designs/{designId} (the `UpdateUserReportDesign` operationId).
+	UpdateUserReportDesign(ctx context.Context, designId ReportDesignId, params *UpdateUserReportDesignParams, body UpdateUserReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUserReportDesignCoverImage Remove the cover image from one of the caller's report designs.
+	//
+	// The design stays. Removing a cover image that is not there is not an error. The answer carries the design with its images.
+	//
+	// Corresponds with DELETE /user/report-designs/{designId}/cover-image (the `DeleteUserReportDesignCoverImage` operationId).
+	DeleteUserReportDesignCoverImage(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutUserReportDesignCoverImageWithBody Set the cover image of one of the caller's report designs.
+	//
+	// Multipart, one part named `file`: PNG or JPEG, at most 2 MB. The core decodes it, scales it down to fit 2048 pixels each way and encodes it again from the pixels in the format it came in (a photograph stays a JPEG), so nothing of the upload but its pixels is kept; the runner draws it across the top of a plate cover and offers it to a custom cover, and it never comes from the model or a URL. Anything but a PNG or a JPEG is 415 `unsupported-image`; over 2 MB, over 16 million pixels, or over 2 MB encoded again is 413 `upload-too-large`. Replaces any cover image the design had. The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /user/report-designs/{designId}/cover-image (the `PutUserReportDesignCoverImage` operationId).
+	PutUserReportDesignCoverImageWithBody(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUserReportDesignCustomCover Remove the custom cover from one of the caller's report designs.
+	//
+	// The design stays, its cover style included: a `custom` style with no custom cover draws the band style. Removing a custom cover that is not there is not an error. The answer carries the design with its images.
+	//
+	// Corresponds with DELETE /user/report-designs/{designId}/custom-cover (the `DeleteUserReportDesignCustomCover` operationId).
+	DeleteUserReportDesignCustomCover(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutUserReportDesignCustomCoverWithBody Set the custom cover of one of the caller's report designs.
+	//
+	// The custom cover whole: its Typst source (at most 32 KiB of text), its images (at most six, each a PNG or a JPEG in base64 that the core decodes, pixel-caps and encodes again in its format, 2 MB in all as stored) and, optionally, a PNG thumbnail of its last render (at most 300 KB). The source is code the runner compiles only under the confinement every export runs in, with the render root as its whole world; it is held to its bounds here, not read. A cover over a bound is 422 (`validation`) naming `customCover.<path>`; an image in no format the core reads is 415 `unsupported-image`. Replaces any custom cover the design had. The design draws it only while its cover style is `custom`. The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /user/report-designs/{designId}/custom-cover (the `PutUserReportDesignCustomCover` operationId).
+	PutUserReportDesignCustomCoverWithBody(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutUserReportDesignCustomCover Set the custom cover of one of the caller's report designs.
+	//
+	// The custom cover whole: its Typst source (at most 32 KiB of text), its images (at most six, each a PNG or a JPEG in base64 that the core decodes, pixel-caps and encodes again in its format, 2 MB in all as stored) and, optionally, a PNG thumbnail of its last render (at most 300 KB). The source is code the runner compiles only under the confinement every export runs in, with the render root as its whole world; it is held to its bounds here, not read. A cover over a bound is 422 (`validation`) naming `customCover.<path>`; an image in no format the core reads is 415 `unsupported-image`. Replaces any custom cover the design had. The design draws it only while its cover style is `custom`. The answer carries the design with its images.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /user/report-designs/{designId}/custom-cover (the `PutUserReportDesignCustomCover` operationId).
+	PutUserReportDesignCustomCover(ctx context.Context, designId ReportDesignId, body PutUserReportDesignCustomCoverJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUserReportDesignLogo Remove the logo from one of the caller's report designs.
+	//
+	// The design stays. Removing a logo that is not there is not an error. The answer carries the design with its images.
+	//
+	// Corresponds with DELETE /user/report-designs/{designId}/logo (the `DeleteUserReportDesignLogo` operationId).
+	DeleteUserReportDesignLogo(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutUserReportDesignLogoWithBody Set the logo of one of the caller's report designs.
+	//
+	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it in the title block, on a cover whose facts include it and in a logoLeft header, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. Replaces any logo the design had. The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /user/report-designs/{designId}/logo (the `PutUserReportDesignLogo` operationId).
+	PutUserReportDesignLogoWithBody(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeOtherUserSessions Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -9092,13 +9567,13 @@ func (c *Client) UpdateUserNotificationSettings(ctx context.Context, body Update
 	return c.Client.Do(req)
 }
 
-// GetUserReportSettings The report design the caller's PDF reports take.
+// ListUserReportDesigns The caller's report design library.
 //
-// A profile setting: the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain.
+// Up to ten named report designs, oldest first, and which one is the default: the design `export_pdf` renders with in the caller's runs when the run picks none. The model never chooses a design. An account with no designs, or none as the default, reads back with no `default`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain. The images are not listed; each entry says which it has.
 //
-// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
-func (c *Client) GetUserReportSettings(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetUserReportSettingsRequest(c.Server, params)
+// Corresponds with GET /user/report-designs (the `ListUserReportDesigns` operationId).
+func (c *Client) ListUserReportDesigns(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListUserReportDesignsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -9109,15 +9584,15 @@ func (c *Client) GetUserReportSettings(ctx context.Context, params *GetUserRepor
 	return c.Client.Do(req)
 }
 
-// UpdateUserReportSettingsWithBody Replace the caller's report settings.
+// CreateUserReportDesignWithBody Add a report design to the caller's library.
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
+// The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low for where it goes, a text that is not one line, a cover fact twice, an image or a custom cover over its bounds, over 24 KB without them) is refused 422 (`validation`), the field named `design.<path>`. A version-2 document is refused the same way, with no mapping. The library holds ten designs: an eleventh is 409 `conflict`. `default` makes the new design the default, and the previous default an ordinary design of the library; without it the default is unchanged. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. The answer carries the design in its canonical form, its images only on `include=assets`.
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-func (c *Client) UpdateUserReportSettingsWithBody(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateUserReportSettingsRequestWithBody(c.Server, params, contentType, body)
+// Corresponds with POST /user/report-designs (the `CreateUserReportDesign` operationId).
+func (c *Client) CreateUserReportDesignWithBody(ctx context.Context, params *CreateUserReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateUserReportDesignRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9128,15 +9603,15 @@ func (c *Client) UpdateUserReportSettingsWithBody(ctx context.Context, params *U
 	return c.Client.Do(req)
 }
 
-// UpdateUserReportSettings Replace the caller's report settings.
+// CreateUserReportDesign Add a report design to the caller's library.
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
+// The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low for where it goes, a text that is not one line, a cover fact twice, an image or a custom cover over its bounds, over 24 KB without them) is refused 422 (`validation`), the field named `design.<path>`. A version-2 document is refused the same way, with no mapping. The library holds ten designs: an eleventh is 409 `conflict`. `default` makes the new design the default, and the previous default an ordinary design of the library; without it the default is unchanged. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. The answer carries the design in its canonical form, its images only on `include=assets`.
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-func (c *Client) UpdateUserReportSettings(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateUserReportSettingsRequest(c.Server, params, body)
+// Corresponds with POST /user/report-designs (the `CreateUserReportDesign` operationId).
+func (c *Client) CreateUserReportDesign(ctx context.Context, params *CreateUserReportDesignParams, body CreateUserReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateUserReportDesignRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9147,32 +9622,233 @@ func (c *Client) UpdateUserReportSettings(ctx context.Context, params *UpdateUse
 	return c.Client.Do(req)
 }
 
-// DeleteUserReportLogo Remove the logo from the caller's report design.
+// SetUserReportDesignDefaultWithBody Set which of the caller's designs their runs take by default.
 //
-// The design stays. Removing a logo that is not there is not an error.
-//
-// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
-func (c *Client) DeleteUserReportLogo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteUserReportLogoRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// PutUserReportLogoWithBody Set the logo of the caller's report design.
-//
-// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+// An id of one of the caller's designs makes it the default; another account's id, or none the caller has, is 404. No id, or null, makes no design the default, so a run falls to the client's own choice. The answer is the library as it now is.
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with PUT /user/report-settings/logo (the `PutUserReportLogo` operationId).
-func (c *Client) PutUserReportLogoWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutUserReportLogoRequestWithBody(c.Server, contentType, body)
+// Corresponds with PUT /user/report-designs/default (the `SetUserReportDesignDefault` operationId).
+func (c *Client) SetUserReportDesignDefaultWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetUserReportDesignDefaultRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetUserReportDesignDefault Set which of the caller's designs their runs take by default.
+//
+// An id of one of the caller's designs makes it the default; another account's id, or none the caller has, is 404. No id, or null, makes no design the default, so a run falls to the client's own choice. The answer is the library as it now is.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /user/report-designs/default (the `SetUserReportDesignDefault` operationId).
+func (c *Client) SetUserReportDesignDefault(ctx context.Context, body SetUserReportDesignDefaultJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetUserReportDesignDefaultRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUserReportDesign Remove one of the caller's report designs, images included.
+//
+// Removing the default leaves the account with no default. Another account's design, or one already gone, is 404.
+//
+// Corresponds with DELETE /user/report-designs/{designId} (the `DeleteUserReportDesign` operationId).
+func (c *Client) DeleteUserReportDesign(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUserReportDesignRequest(c.Server, designId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUserReportDesign One of the caller's report designs.
+//
+// The design in its canonical form. Its images (`logo`, `coverImage`, `customCover`) come only with `include=assets`: a client that does not draw them reads the document without them. Another account's design is 404.
+//
+// Corresponds with GET /user/report-designs/{designId} (the `GetUserReportDesign` operationId).
+func (c *Client) GetUserReportDesign(ctx context.Context, designId ReportDesignId, params *GetUserReportDesignParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserReportDesignRequest(c.Server, designId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateUserReportDesignWithBody Replace one of the caller's report designs.
+//
+// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. The images stay as they are unless the document carries them: a `logo`, `coverImage` or `customCover` in the document replaces the stored one with the core's own re-encoding of it, and a document without them leaves them, so a client that does not know an image never drops one by saving (remove one with its DELETE route). Whether the design is the default is not changed here.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /user/report-designs/{designId} (the `UpdateUserReportDesign` operationId).
+func (c *Client) UpdateUserReportDesignWithBody(ctx context.Context, designId ReportDesignId, params *UpdateUserReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserReportDesignRequestWithBody(c.Server, designId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateUserReportDesign Replace one of the caller's report designs.
+//
+// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. The images stay as they are unless the document carries them: a `logo`, `coverImage` or `customCover` in the document replaces the stored one with the core's own re-encoding of it, and a document without them leaves them, so a client that does not know an image never drops one by saving (remove one with its DELETE route). Whether the design is the default is not changed here.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /user/report-designs/{designId} (the `UpdateUserReportDesign` operationId).
+func (c *Client) UpdateUserReportDesign(ctx context.Context, designId ReportDesignId, params *UpdateUserReportDesignParams, body UpdateUserReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserReportDesignRequest(c.Server, designId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUserReportDesignCoverImage Remove the cover image from one of the caller's report designs.
+//
+// The design stays. Removing a cover image that is not there is not an error. The answer carries the design with its images.
+//
+// Corresponds with DELETE /user/report-designs/{designId}/cover-image (the `DeleteUserReportDesignCoverImage` operationId).
+func (c *Client) DeleteUserReportDesignCoverImage(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUserReportDesignCoverImageRequest(c.Server, designId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutUserReportDesignCoverImageWithBody Set the cover image of one of the caller's report designs.
+//
+// Multipart, one part named `file`: PNG or JPEG, at most 2 MB. The core decodes it, scales it down to fit 2048 pixels each way and encodes it again from the pixels in the format it came in (a photograph stays a JPEG), so nothing of the upload but its pixels is kept; the runner draws it across the top of a plate cover and offers it to a custom cover, and it never comes from the model or a URL. Anything but a PNG or a JPEG is 415 `unsupported-image`; over 2 MB, over 16 million pixels, or over 2 MB encoded again is 413 `upload-too-large`. Replaces any cover image the design had. The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /user/report-designs/{designId}/cover-image (the `PutUserReportDesignCoverImage` operationId).
+func (c *Client) PutUserReportDesignCoverImageWithBody(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserReportDesignCoverImageRequestWithBody(c.Server, designId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUserReportDesignCustomCover Remove the custom cover from one of the caller's report designs.
+//
+// The design stays, its cover style included: a `custom` style with no custom cover draws the band style. Removing a custom cover that is not there is not an error. The answer carries the design with its images.
+//
+// Corresponds with DELETE /user/report-designs/{designId}/custom-cover (the `DeleteUserReportDesignCustomCover` operationId).
+func (c *Client) DeleteUserReportDesignCustomCover(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUserReportDesignCustomCoverRequest(c.Server, designId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutUserReportDesignCustomCoverWithBody Set the custom cover of one of the caller's report designs.
+//
+// The custom cover whole: its Typst source (at most 32 KiB of text), its images (at most six, each a PNG or a JPEG in base64 that the core decodes, pixel-caps and encodes again in its format, 2 MB in all as stored) and, optionally, a PNG thumbnail of its last render (at most 300 KB). The source is code the runner compiles only under the confinement every export runs in, with the render root as its whole world; it is held to its bounds here, not read. A cover over a bound is 422 (`validation`) naming `customCover.<path>`; an image in no format the core reads is 415 `unsupported-image`. Replaces any custom cover the design had. The design draws it only while its cover style is `custom`. The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /user/report-designs/{designId}/custom-cover (the `PutUserReportDesignCustomCover` operationId).
+func (c *Client) PutUserReportDesignCustomCoverWithBody(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserReportDesignCustomCoverRequestWithBody(c.Server, designId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutUserReportDesignCustomCover Set the custom cover of one of the caller's report designs.
+//
+// The custom cover whole: its Typst source (at most 32 KiB of text), its images (at most six, each a PNG or a JPEG in base64 that the core decodes, pixel-caps and encodes again in its format, 2 MB in all as stored) and, optionally, a PNG thumbnail of its last render (at most 300 KB). The source is code the runner compiles only under the confinement every export runs in, with the render root as its whole world; it is held to its bounds here, not read. A cover over a bound is 422 (`validation`) naming `customCover.<path>`; an image in no format the core reads is 415 `unsupported-image`. Replaces any custom cover the design had. The design draws it only while its cover style is `custom`. The answer carries the design with its images.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /user/report-designs/{designId}/custom-cover (the `PutUserReportDesignCustomCover` operationId).
+func (c *Client) PutUserReportDesignCustomCover(ctx context.Context, designId ReportDesignId, body PutUserReportDesignCustomCoverJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserReportDesignCustomCoverRequest(c.Server, designId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUserReportDesignLogo Remove the logo from one of the caller's report designs.
+//
+// The design stays. Removing a logo that is not there is not an error. The answer carries the design with its images.
+//
+// Corresponds with DELETE /user/report-designs/{designId}/logo (the `DeleteUserReportDesignLogo` operationId).
+func (c *Client) DeleteUserReportDesignLogo(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUserReportDesignLogoRequest(c.Server, designId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutUserReportDesignLogoWithBody Set the logo of one of the caller's report designs.
+//
+// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it in the title block, on a cover whose facts include it and in a logoLeft header, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. Replaces any logo the design had. The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /user/report-designs/{designId}/logo (the `PutUserReportDesignLogo` operationId).
+func (c *Client) PutUserReportDesignLogoWithBody(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutUserReportDesignLogoRequestWithBody(c.Server, designId, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -15897,8 +16573,8 @@ func NewUpdateUserNotificationSettingsRequestWithBody(server string, contentType
 	return req, nil
 }
 
-// NewGetUserReportSettingsRequest constructs an http.Request for the GetUserReportSettings method
-func NewGetUserReportSettingsRequest(server string, params *GetUserReportSettingsParams) (*http.Request, error) {
+// NewListUserReportDesignsRequest constructs an http.Request for the ListUserReportDesigns method
+func NewListUserReportDesignsRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -15906,7 +16582,182 @@ func NewGetUserReportSettingsRequest(server string, params *GetUserReportSetting
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/user/report-settings")
+	operationPath := fmt.Sprintf("/user/report-designs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateUserReportDesignRequest calls the generic CreateUserReportDesign builder with application/json body
+func NewCreateUserReportDesignRequest(server string, params *CreateUserReportDesignParams, body CreateUserReportDesignJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateUserReportDesignRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateUserReportDesignRequestWithBody constructs an http.Request for the CreateUserReportDesign method, with any body, and a specified content type
+func NewCreateUserReportDesignRequestWithBody(server string, params *CreateUserReportDesignParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-designs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Include != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include", *params.Include, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSetUserReportDesignDefaultRequest calls the generic SetUserReportDesignDefault builder with application/json body
+func NewSetUserReportDesignDefaultRequest(server string, body SetUserReportDesignDefaultJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetUserReportDesignDefaultRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSetUserReportDesignDefaultRequestWithBody constructs an http.Request for the SetUserReportDesignDefault method, with any body, and a specified content type
+func NewSetUserReportDesignDefaultRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-designs/default")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteUserReportDesignRequest constructs an http.Request for the DeleteUserReportDesign method
+func NewDeleteUserReportDesignRequest(server string, designId ReportDesignId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-designs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetUserReportDesignRequest constructs an http.Request for the GetUserReportDesign method
+func NewGetUserReportDesignRequest(server string, designId ReportDesignId, params *GetUserReportDesignParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-designs/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -15951,27 +16802,34 @@ func NewGetUserReportSettingsRequest(server string, params *GetUserReportSetting
 	return req, nil
 }
 
-// NewUpdateUserReportSettingsRequest calls the generic UpdateUserReportSettings builder with application/json body
-func NewUpdateUserReportSettingsRequest(server string, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody) (*http.Request, error) {
+// NewUpdateUserReportDesignRequest calls the generic UpdateUserReportDesign builder with application/json body
+func NewUpdateUserReportDesignRequest(server string, designId ReportDesignId, params *UpdateUserReportDesignParams, body UpdateUserReportDesignJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateUserReportSettingsRequestWithBody(server, params, "application/json", bodyReader)
+	return NewUpdateUserReportDesignRequestWithBody(server, designId, params, "application/json", bodyReader)
 }
 
-// NewUpdateUserReportSettingsRequestWithBody constructs an http.Request for the UpdateUserReportSettings method, with any body, and a specified content type
-func NewUpdateUserReportSettingsRequestWithBody(server string, params *UpdateUserReportSettingsParams, contentType string, body io.Reader) (*http.Request, error) {
+// NewUpdateUserReportDesignRequestWithBody constructs an http.Request for the UpdateUserReportDesign method, with any body, and a specified content type
+func NewUpdateUserReportDesignRequestWithBody(server string, designId ReportDesignId, params *UpdateUserReportDesignParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/user/report-settings")
+	operationPath := fmt.Sprintf("/user/report-designs/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -16018,16 +16876,23 @@ func NewUpdateUserReportSettingsRequestWithBody(server string, params *UpdateUse
 	return req, nil
 }
 
-// NewDeleteUserReportLogoRequest constructs an http.Request for the DeleteUserReportLogo method
-func NewDeleteUserReportLogoRequest(server string) (*http.Request, error) {
+// NewDeleteUserReportDesignCoverImageRequest constructs an http.Request for the DeleteUserReportDesignCoverImage method
+func NewDeleteUserReportDesignCoverImageRequest(server string, designId ReportDesignId) (*http.Request, error) {
 	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/user/report-settings/logo")
+	operationPath := fmt.Sprintf("/user/report-designs/%s/cover-image", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -16045,16 +16910,174 @@ func NewDeleteUserReportLogoRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewPutUserReportLogoRequestWithBody constructs an http.Request for the PutUserReportLogo method, with any body, and a specified content type
-func NewPutUserReportLogoRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewPutUserReportDesignCoverImageRequestWithBody constructs an http.Request for the PutUserReportDesignCoverImage method, with any body, and a specified content type
+func NewPutUserReportDesignCoverImageRequestWithBody(server string, designId ReportDesignId, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/user/report-settings/logo")
+	operationPath := fmt.Sprintf("/user/report-designs/%s/cover-image", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteUserReportDesignCustomCoverRequest constructs an http.Request for the DeleteUserReportDesignCustomCover method
+func NewDeleteUserReportDesignCustomCoverRequest(server string, designId ReportDesignId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-designs/%s/custom-cover", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutUserReportDesignCustomCoverRequest calls the generic PutUserReportDesignCustomCover builder with application/json body
+func NewPutUserReportDesignCustomCoverRequest(server string, designId ReportDesignId, body PutUserReportDesignCustomCoverJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutUserReportDesignCustomCoverRequestWithBody(server, designId, "application/json", bodyReader)
+}
+
+// NewPutUserReportDesignCustomCoverRequestWithBody constructs an http.Request for the PutUserReportDesignCustomCover method, with any body, and a specified content type
+func NewPutUserReportDesignCustomCoverRequestWithBody(server string, designId ReportDesignId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-designs/%s/custom-cover", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteUserReportDesignLogoRequest constructs an http.Request for the DeleteUserReportDesignLogo method
+func NewDeleteUserReportDesignLogoRequest(server string, designId ReportDesignId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-designs/%s/logo", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutUserReportDesignLogoRequestWithBody constructs an http.Request for the PutUserReportDesignLogo method, with any body, and a specified content type
+func NewPutUserReportDesignLogoRequestWithBody(server string, designId ReportDesignId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/report-designs/%s/logo", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -18238,50 +19261,149 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /user/notifications (the `UpdateUserNotificationSettings` operationId).
 	UpdateUserNotificationSettingsWithResponse(ctx context.Context, body UpdateUserNotificationSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserNotificationSettingsResponse, error)
 
-	// GetUserReportSettingsWithResponse The report design the caller's PDF reports take.
+	// ListUserReportDesignsWithResponse The caller's report design library.
 	//
-	// A profile setting: the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain.
+	// Up to ten named report designs, oldest first, and which one is the default: the design `export_pdf` renders with in the caller's runs when the run picks none. The model never chooses a design. An account with no designs, or none as the default, reads back with no `default`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain. The images are not listed; each entry says which it has.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
-	GetUserReportSettingsWithResponse(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error)
+	// Corresponds with GET /user/report-designs (the `ListUserReportDesigns` operationId).
+	ListUserReportDesignsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserReportDesignsResponse, error)
 
-	// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings.
+	// CreateUserReportDesignWithBodyWithResponse Add a report design to the caller's library.
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
+	// The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low for where it goes, a text that is not one line, a cover fact twice, an image or a custom cover over its bounds, over 24 KB without them) is refused 422 (`validation`), the field named `design.<path>`. A version-2 document is refused the same way, with no mapping. The library holds ten designs: an eleventh is 409 `conflict`. `default` makes the new design the default, and the previous default an ordinary design of the library; without it the default is unchanged. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. The answer carries the design in its canonical form, its images only on `include=assets`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-	UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
+	// Corresponds with POST /user/report-designs (the `CreateUserReportDesign` operationId).
+	CreateUserReportDesignWithBodyWithResponse(ctx context.Context, params *CreateUserReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateUserReportDesignResponse, error)
 
-	// UpdateUserReportSettingsWithResponse Replace the caller's report settings.
+	// CreateUserReportDesignWithResponse Add a report design to the caller's library.
 	//
-	// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
+	// The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low for where it goes, a text that is not one line, a cover fact twice, an image or a custom cover over its bounds, over 24 KB without them) is refused 422 (`validation`), the field named `design.<path>`. A version-2 document is refused the same way, with no mapping. The library holds ten designs: an eleventh is 409 `conflict`. `default` makes the new design the default, and the previous default an ordinary design of the library; without it the default is unchanged. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. The answer carries the design in its canonical form, its images only on `include=assets`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-	UpdateUserReportSettingsWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error)
+	// Corresponds with POST /user/report-designs (the `CreateUserReportDesign` operationId).
+	CreateUserReportDesignWithResponse(ctx context.Context, params *CreateUserReportDesignParams, body CreateUserReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateUserReportDesignResponse, error)
 
-	// DeleteUserReportLogoWithResponse Remove the logo from the caller's report design.
+	// SetUserReportDesignDefaultWithBodyWithResponse Set which of the caller's designs their runs take by default.
 	//
-	// The design stays. Removing a logo that is not there is not an error.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
-	DeleteUserReportLogoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteUserReportLogoResponse, error)
-
-	// PutUserReportLogoWithBodyWithResponse Set the logo of the caller's report design.
-	//
-	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+	// An id of one of the caller's designs makes it the default; another account's id, or none the caller has, is 404. No id, or null, makes no design the default, so a run falls to the client's own choice. The answer is the library as it now is.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with PUT /user/report-settings/logo (the `PutUserReportLogo` operationId).
-	PutUserReportLogoWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportLogoResponse, error)
+	// Corresponds with PUT /user/report-designs/default (the `SetUserReportDesignDefault` operationId).
+	SetUserReportDesignDefaultWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetUserReportDesignDefaultResponse, error)
+
+	// SetUserReportDesignDefaultWithResponse Set which of the caller's designs their runs take by default.
+	//
+	// An id of one of the caller's designs makes it the default; another account's id, or none the caller has, is 404. No id, or null, makes no design the default, so a run falls to the client's own choice. The answer is the library as it now is.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-designs/default (the `SetUserReportDesignDefault` operationId).
+	SetUserReportDesignDefaultWithResponse(ctx context.Context, body SetUserReportDesignDefaultJSONRequestBody, reqEditors ...RequestEditorFn) (*SetUserReportDesignDefaultResponse, error)
+
+	// DeleteUserReportDesignWithResponse Remove one of the caller's report designs, images included.
+	//
+	// Removing the default leaves the account with no default. Another account's design, or one already gone, is 404.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/report-designs/{designId} (the `DeleteUserReportDesign` operationId).
+	DeleteUserReportDesignWithResponse(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteUserReportDesignResponse, error)
+
+	// GetUserReportDesignWithResponse One of the caller's report designs.
+	//
+	// The design in its canonical form. Its images (`logo`, `coverImage`, `customCover`) come only with `include=assets`: a client that does not draw them reads the document without them. Another account's design is 404.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/report-designs/{designId} (the `GetUserReportDesign` operationId).
+	GetUserReportDesignWithResponse(ctx context.Context, designId ReportDesignId, params *GetUserReportDesignParams, reqEditors ...RequestEditorFn) (*GetUserReportDesignResponse, error)
+
+	// UpdateUserReportDesignWithBodyWithResponse Replace one of the caller's report designs.
+	//
+	// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. The images stay as they are unless the document carries them: a `logo`, `coverImage` or `customCover` in the document replaces the stored one with the core's own re-encoding of it, and a document without them leaves them, so a client that does not know an image never drops one by saving (remove one with its DELETE route). Whether the design is the default is not changed here.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-designs/{designId} (the `UpdateUserReportDesign` operationId).
+	UpdateUserReportDesignWithBodyWithResponse(ctx context.Context, designId ReportDesignId, params *UpdateUserReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportDesignResponse, error)
+
+	// UpdateUserReportDesignWithResponse Replace one of the caller's report designs.
+	//
+	// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. The images stay as they are unless the document carries them: a `logo`, `coverImage` or `customCover` in the document replaces the stored one with the core's own re-encoding of it, and a document without them leaves them, so a client that does not know an image never drops one by saving (remove one with its DELETE route). Whether the design is the default is not changed here.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-designs/{designId} (the `UpdateUserReportDesign` operationId).
+	UpdateUserReportDesignWithResponse(ctx context.Context, designId ReportDesignId, params *UpdateUserReportDesignParams, body UpdateUserReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportDesignResponse, error)
+
+	// DeleteUserReportDesignCoverImageWithResponse Remove the cover image from one of the caller's report designs.
+	//
+	// The design stays. Removing a cover image that is not there is not an error. The answer carries the design with its images.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/report-designs/{designId}/cover-image (the `DeleteUserReportDesignCoverImage` operationId).
+	DeleteUserReportDesignCoverImageWithResponse(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteUserReportDesignCoverImageResponse, error)
+
+	// PutUserReportDesignCoverImageWithBodyWithResponse Set the cover image of one of the caller's report designs.
+	//
+	// Multipart, one part named `file`: PNG or JPEG, at most 2 MB. The core decodes it, scales it down to fit 2048 pixels each way and encodes it again from the pixels in the format it came in (a photograph stays a JPEG), so nothing of the upload but its pixels is kept; the runner draws it across the top of a plate cover and offers it to a custom cover, and it never comes from the model or a URL. Anything but a PNG or a JPEG is 415 `unsupported-image`; over 2 MB, over 16 million pixels, or over 2 MB encoded again is 413 `upload-too-large`. Replaces any cover image the design had. The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-designs/{designId}/cover-image (the `PutUserReportDesignCoverImage` operationId).
+	PutUserReportDesignCoverImageWithBodyWithResponse(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportDesignCoverImageResponse, error)
+
+	// DeleteUserReportDesignCustomCoverWithResponse Remove the custom cover from one of the caller's report designs.
+	//
+	// The design stays, its cover style included: a `custom` style with no custom cover draws the band style. Removing a custom cover that is not there is not an error. The answer carries the design with its images.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/report-designs/{designId}/custom-cover (the `DeleteUserReportDesignCustomCover` operationId).
+	DeleteUserReportDesignCustomCoverWithResponse(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteUserReportDesignCustomCoverResponse, error)
+
+	// PutUserReportDesignCustomCoverWithBodyWithResponse Set the custom cover of one of the caller's report designs.
+	//
+	// The custom cover whole: its Typst source (at most 32 KiB of text), its images (at most six, each a PNG or a JPEG in base64 that the core decodes, pixel-caps and encodes again in its format, 2 MB in all as stored) and, optionally, a PNG thumbnail of its last render (at most 300 KB). The source is code the runner compiles only under the confinement every export runs in, with the render root as its whole world; it is held to its bounds here, not read. A cover over a bound is 422 (`validation`) naming `customCover.<path>`; an image in no format the core reads is 415 `unsupported-image`. Replaces any custom cover the design had. The design draws it only while its cover style is `custom`. The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-designs/{designId}/custom-cover (the `PutUserReportDesignCustomCover` operationId).
+	PutUserReportDesignCustomCoverWithBodyWithResponse(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportDesignCustomCoverResponse, error)
+
+	// PutUserReportDesignCustomCoverWithResponse Set the custom cover of one of the caller's report designs.
+	//
+	// The custom cover whole: its Typst source (at most 32 KiB of text), its images (at most six, each a PNG or a JPEG in base64 that the core decodes, pixel-caps and encodes again in its format, 2 MB in all as stored) and, optionally, a PNG thumbnail of its last render (at most 300 KB). The source is code the runner compiles only under the confinement every export runs in, with the render root as its whole world; it is held to its bounds here, not read. A cover over a bound is 422 (`validation`) naming `customCover.<path>`; an image in no format the core reads is 415 `unsupported-image`. Replaces any custom cover the design had. The design draws it only while its cover style is `custom`. The answer carries the design with its images.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-designs/{designId}/custom-cover (the `PutUserReportDesignCustomCover` operationId).
+	PutUserReportDesignCustomCoverWithResponse(ctx context.Context, designId ReportDesignId, body PutUserReportDesignCustomCoverJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserReportDesignCustomCoverResponse, error)
+
+	// DeleteUserReportDesignLogoWithResponse Remove the logo from one of the caller's report designs.
+	//
+	// The design stays. Removing a logo that is not there is not an error. The answer carries the design with its images.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /user/report-designs/{designId}/logo (the `DeleteUserReportDesignLogo` operationId).
+	DeleteUserReportDesignLogoWithResponse(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteUserReportDesignLogoResponse, error)
+
+	// PutUserReportDesignLogoWithBodyWithResponse Set the logo of one of the caller's report designs.
+	//
+	// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it in the title block, on a cover whose facts include it and in a logoLeft header, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. Replaces any logo the design had. The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /user/report-designs/{designId}/logo (the `PutUserReportDesignLogo` operationId).
+	PutUserReportDesignLogoWithBodyWithResponse(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportDesignLogoResponse, error)
 
 	// RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
 	//
@@ -24885,32 +26007,32 @@ func (r UpdateUserNotificationSettingsResponse) ContentType() string {
 	return ""
 }
 
-type GetUserReportSettingsResponse struct {
+type ListUserReportDesignsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ReportSettings
+	JSON200 *ReportDesignList
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetUserReportSettingsResponse) GetJSON200() *ReportSettings {
+func (r ListUserReportDesignsResponse) GetJSON200() *ReportDesignList {
 	return r.JSON200
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r GetUserReportSettingsResponse) GetApplicationproblemJSONDefault() *Problem {
+func (r ListUserReportDesignsResponse) GetApplicationproblemJSONDefault() *Problem {
 	return r.ApplicationproblemJSONDefault
 }
 
 // GetBody returns the raw response body bytes
-func (r GetUserReportSettingsResponse) GetBody() []byte {
+func (r ListUserReportDesignsResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r GetUserReportSettingsResponse) Status() string {
+func (r ListUserReportDesignsResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -24918,7 +26040,7 @@ func (r GetUserReportSettingsResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetUserReportSettingsResponse) StatusCode() int {
+func (r ListUserReportDesignsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -24926,39 +26048,39 @@ func (r GetUserReportSettingsResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetUserReportSettingsResponse) ContentType() string {
+func (r ListUserReportDesignsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
 	return ""
 }
 
-type UpdateUserReportSettingsResponse struct {
+type CreateUserReportDesignResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ReportSettings
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ReportDesignRecord
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
 
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r UpdateUserReportSettingsResponse) GetJSON200() *ReportSettings {
-	return r.JSON200
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateUserReportDesignResponse) GetJSON201() *ReportDesignRecord {
+	return r.JSON201
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r UpdateUserReportSettingsResponse) GetApplicationproblemJSONDefault() *Problem {
+func (r CreateUserReportDesignResponse) GetApplicationproblemJSONDefault() *Problem {
 	return r.ApplicationproblemJSONDefault
 }
 
 // GetBody returns the raw response body bytes
-func (r UpdateUserReportSettingsResponse) GetBody() []byte {
+func (r CreateUserReportDesignResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r UpdateUserReportSettingsResponse) Status() string {
+func (r CreateUserReportDesignResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -24966,7 +26088,7 @@ func (r UpdateUserReportSettingsResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r UpdateUserReportSettingsResponse) StatusCode() int {
+func (r CreateUserReportDesignResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -24974,39 +26096,39 @@ func (r UpdateUserReportSettingsResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r UpdateUserReportSettingsResponse) ContentType() string {
+func (r CreateUserReportDesignResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
 	return ""
 }
 
-type DeleteUserReportLogoResponse struct {
+type SetUserReportDesignDefaultResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ReportSettings
+	JSON200 *ReportDesignList
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r DeleteUserReportLogoResponse) GetJSON200() *ReportSettings {
+func (r SetUserReportDesignDefaultResponse) GetJSON200() *ReportDesignList {
 	return r.JSON200
 }
 
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r DeleteUserReportLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+func (r SetUserReportDesignDefaultResponse) GetApplicationproblemJSONDefault() *Problem {
 	return r.ApplicationproblemJSONDefault
 }
 
 // GetBody returns the raw response body bytes
-func (r DeleteUserReportLogoResponse) GetBody() []byte {
+func (r SetUserReportDesignDefaultResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r DeleteUserReportLogoResponse) Status() string {
+func (r SetUserReportDesignDefaultResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -25014,7 +26136,7 @@ func (r DeleteUserReportLogoResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r DeleteUserReportLogoResponse) StatusCode() int {
+func (r SetUserReportDesignDefaultResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -25022,39 +26144,32 @@ func (r DeleteUserReportLogoResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DeleteUserReportLogoResponse) ContentType() string {
+func (r SetUserReportDesignDefaultResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
 	return ""
 }
 
-type PutUserReportLogoResponse struct {
+type DeleteUserReportDesignResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ReportSettings
 	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
 	ApplicationproblemJSONDefault *Problem
 }
 
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r PutUserReportLogoResponse) GetJSON200() *ReportSettings {
-	return r.JSON200
-}
-
 // GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r PutUserReportLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+func (r DeleteUserReportDesignResponse) GetApplicationproblemJSONDefault() *Problem {
 	return r.ApplicationproblemJSONDefault
 }
 
 // GetBody returns the raw response body bytes
-func (r PutUserReportLogoResponse) GetBody() []byte {
+func (r DeleteUserReportDesignResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r PutUserReportLogoResponse) Status() string {
+func (r DeleteUserReportDesignResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -25062,7 +26177,7 @@ func (r PutUserReportLogoResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r PutUserReportLogoResponse) StatusCode() int {
+func (r DeleteUserReportDesignResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -25070,7 +26185,391 @@ func (r PutUserReportLogoResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PutUserReportLogoResponse) ContentType() string {
+func (r DeleteUserReportDesignResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetUserReportDesignResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUserReportDesignResponse) GetJSON200() *ReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetUserReportDesignResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUserReportDesignResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUserReportDesignResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUserReportDesignResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUserReportDesignResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateUserReportDesignResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateUserReportDesignResponse) GetJSON200() *ReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UpdateUserReportDesignResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateUserReportDesignResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateUserReportDesignResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateUserReportDesignResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateUserReportDesignResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteUserReportDesignCoverImageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteUserReportDesignCoverImageResponse) GetJSON200() *ReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteUserReportDesignCoverImageResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteUserReportDesignCoverImageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteUserReportDesignCoverImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteUserReportDesignCoverImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteUserReportDesignCoverImageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutUserReportDesignCoverImageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutUserReportDesignCoverImageResponse) GetJSON200() *ReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutUserReportDesignCoverImageResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutUserReportDesignCoverImageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutUserReportDesignCoverImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutUserReportDesignCoverImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutUserReportDesignCoverImageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteUserReportDesignCustomCoverResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteUserReportDesignCustomCoverResponse) GetJSON200() *ReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteUserReportDesignCustomCoverResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteUserReportDesignCustomCoverResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteUserReportDesignCustomCoverResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteUserReportDesignCustomCoverResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteUserReportDesignCustomCoverResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutUserReportDesignCustomCoverResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutUserReportDesignCustomCoverResponse) GetJSON200() *ReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutUserReportDesignCustomCoverResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutUserReportDesignCustomCoverResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutUserReportDesignCustomCoverResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutUserReportDesignCustomCoverResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutUserReportDesignCustomCoverResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteUserReportDesignLogoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteUserReportDesignLogoResponse) GetJSON200() *ReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteUserReportDesignLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteUserReportDesignLogoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteUserReportDesignLogoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteUserReportDesignLogoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteUserReportDesignLogoResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutUserReportDesignLogoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutUserReportDesignLogoResponse) GetJSON200() *ReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutUserReportDesignLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutUserReportDesignLogoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutUserReportDesignLogoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutUserReportDesignLogoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutUserReportDesignLogoResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -28557,79 +30056,244 @@ func (c *ClientWithResponses) UpdateUserNotificationSettingsWithResponse(ctx con
 	return ParseUpdateUserNotificationSettingsResponse(rsp)
 }
 
-// GetUserReportSettingsWithResponse The report design the caller's PDF reports take.
+// ListUserReportDesignsWithResponse The caller's report design library.
 //
-// A profile setting: the whole report design, a theme document version 2, that `export_pdf` renders with in the caller's runs. The model never chooses it. An account that never chose reads back with no `design`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain.
+// Up to ten named report designs, oldest first, and which one is the default: the design `export_pdf` renders with in the caller's runs when the run picks none. The model never chooses a design. An account with no designs, or none as the default, reads back with no `default`, which is not the same as Plain: a signed-in client then falls to its own configuration, else Plain. The images are not listed; each entry says which it has.
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /user/report-settings (the `GetUserReportSettings` operationId).
-func (c *ClientWithResponses) GetUserReportSettingsWithResponse(ctx context.Context, params *GetUserReportSettingsParams, reqEditors ...RequestEditorFn) (*GetUserReportSettingsResponse, error) {
-	rsp, err := c.GetUserReportSettings(ctx, params, reqEditors...)
+// Corresponds with GET /user/report-designs (the `ListUserReportDesigns` operationId).
+func (c *ClientWithResponses) ListUserReportDesignsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListUserReportDesignsResponse, error) {
+	rsp, err := c.ListUserReportDesigns(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetUserReportSettingsResponse(rsp)
+	return ParseListUserReportDesignsResponse(rsp)
 }
 
-// UpdateUserReportSettingsWithBodyWithResponse Replace the caller's report settings.
+// CreateUserReportDesignWithBodyWithResponse Add a report design to the caller's library.
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
+// The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low for where it goes, a text that is not one line, a cover fact twice, an image or a custom cover over its bounds, over 24 KB without them) is refused 422 (`validation`), the field named `design.<path>`. A version-2 document is refused the same way, with no mapping. The library holds ten designs: an eleventh is 409 `conflict`. `default` makes the new design the default, and the previous default an ordinary design of the library; without it the default is unchanged. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. The answer carries the design in its canonical form, its images only on `include=assets`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-func (c *ClientWithResponses) UpdateUserReportSettingsWithBodyWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error) {
-	rsp, err := c.UpdateUserReportSettingsWithBody(ctx, params, contentType, body, reqEditors...)
+// Corresponds with POST /user/report-designs (the `CreateUserReportDesign` operationId).
+func (c *ClientWithResponses) CreateUserReportDesignWithBodyWithResponse(ctx context.Context, params *CreateUserReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateUserReportDesignResponse, error) {
+	rsp, err := c.CreateUserReportDesignWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseUpdateUserReportSettingsResponse(rsp)
+	return ParseCreateUserReportDesignResponse(rsp)
 }
 
-// UpdateUserReportSettingsWithResponse Replace the caller's report settings.
+// CreateUserReportDesignWithResponse Add a report design to the caller's library.
 //
-// A full replace: a body with no `design` clears the choice. The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low, a text that is not one line, over 16 KB) is refused 422 (`validation`), the field named `design.<path>`. The answer carries the design in its canonical form. A design that carries a `logo` replaces the stored logo with the core's own re-encoding of it; one that carries none leaves a stored logo as it is (remove it with DELETE /user/report-settings/logo), so a client that does not know logos never drops one by saving. A body with no design clears the logo too.
+// The design is validated by the core's pkg/reportdesign before it is stored: a document that breaks a rule (an unknown key, a name off a closed list, a font in a role it cannot take, a colour that is not `#rrggbb` or whose contrast on white is too low for where it goes, a text that is not one line, a cover fact twice, an image or a custom cover over its bounds, over 24 KB without them) is refused 422 (`validation`), the field named `design.<path>`. A version-2 document is refused the same way, with no mapping. The library holds ten designs: an eleventh is 409 `conflict`. `default` makes the new design the default, and the previous default an ordinary design of the library; without it the default is unchanged. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. The answer carries the design in its canonical form, its images only on `include=assets`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with PUT /user/report-settings (the `UpdateUserReportSettings` operationId).
-func (c *ClientWithResponses) UpdateUserReportSettingsWithResponse(ctx context.Context, params *UpdateUserReportSettingsParams, body UpdateUserReportSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportSettingsResponse, error) {
-	rsp, err := c.UpdateUserReportSettings(ctx, params, body, reqEditors...)
+// Corresponds with POST /user/report-designs (the `CreateUserReportDesign` operationId).
+func (c *ClientWithResponses) CreateUserReportDesignWithResponse(ctx context.Context, params *CreateUserReportDesignParams, body CreateUserReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateUserReportDesignResponse, error) {
+	rsp, err := c.CreateUserReportDesign(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseUpdateUserReportSettingsResponse(rsp)
+	return ParseCreateUserReportDesignResponse(rsp)
 }
 
-// DeleteUserReportLogoWithResponse Remove the logo from the caller's report design.
+// SetUserReportDesignDefaultWithBodyWithResponse Set which of the caller's designs their runs take by default.
 //
-// The design stays. Removing a logo that is not there is not an error.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /user/report-settings/logo (the `DeleteUserReportLogo` operationId).
-func (c *ClientWithResponses) DeleteUserReportLogoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteUserReportLogoResponse, error) {
-	rsp, err := c.DeleteUserReportLogo(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteUserReportLogoResponse(rsp)
-}
-
-// PutUserReportLogoWithBodyWithResponse Set the logo of the caller's report design.
-//
-// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it only in the title block, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. A logo travels with a design, so with none saved this is 409 `conflict`. Replaces any logo the design had. The answer carries the design with its logo.
+// An id of one of the caller's designs makes it the default; another account's id, or none the caller has, is 404. No id, or null, makes no design the default, so a run falls to the client's own choice. The answer is the library as it now is.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with PUT /user/report-settings/logo (the `PutUserReportLogo` operationId).
-func (c *ClientWithResponses) PutUserReportLogoWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportLogoResponse, error) {
-	rsp, err := c.PutUserReportLogoWithBody(ctx, contentType, body, reqEditors...)
+// Corresponds with PUT /user/report-designs/default (the `SetUserReportDesignDefault` operationId).
+func (c *ClientWithResponses) SetUserReportDesignDefaultWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetUserReportDesignDefaultResponse, error) {
+	rsp, err := c.SetUserReportDesignDefaultWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParsePutUserReportLogoResponse(rsp)
+	return ParseSetUserReportDesignDefaultResponse(rsp)
+}
+
+// SetUserReportDesignDefaultWithResponse Set which of the caller's designs their runs take by default.
+//
+// An id of one of the caller's designs makes it the default; another account's id, or none the caller has, is 404. No id, or null, makes no design the default, so a run falls to the client's own choice. The answer is the library as it now is.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-designs/default (the `SetUserReportDesignDefault` operationId).
+func (c *ClientWithResponses) SetUserReportDesignDefaultWithResponse(ctx context.Context, body SetUserReportDesignDefaultJSONRequestBody, reqEditors ...RequestEditorFn) (*SetUserReportDesignDefaultResponse, error) {
+	rsp, err := c.SetUserReportDesignDefault(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetUserReportDesignDefaultResponse(rsp)
+}
+
+// DeleteUserReportDesignWithResponse Remove one of the caller's report designs, images included.
+//
+// Removing the default leaves the account with no default. Another account's design, or one already gone, is 404.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/report-designs/{designId} (the `DeleteUserReportDesign` operationId).
+func (c *ClientWithResponses) DeleteUserReportDesignWithResponse(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteUserReportDesignResponse, error) {
+	rsp, err := c.DeleteUserReportDesign(ctx, designId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUserReportDesignResponse(rsp)
+}
+
+// GetUserReportDesignWithResponse One of the caller's report designs.
+//
+// The design in its canonical form. Its images (`logo`, `coverImage`, `customCover`) come only with `include=assets`: a client that does not draw them reads the document without them. Another account's design is 404.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/report-designs/{designId} (the `GetUserReportDesign` operationId).
+func (c *ClientWithResponses) GetUserReportDesignWithResponse(ctx context.Context, designId ReportDesignId, params *GetUserReportDesignParams, reqEditors ...RequestEditorFn) (*GetUserReportDesignResponse, error) {
+	rsp, err := c.GetUserReportDesign(ctx, designId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUserReportDesignResponse(rsp)
+}
+
+// UpdateUserReportDesignWithBodyWithResponse Replace one of the caller's report designs.
+//
+// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. The images stay as they are unless the document carries them: a `logo`, `coverImage` or `customCover` in the document replaces the stored one with the core's own re-encoding of it, and a document without them leaves them, so a client that does not know an image never drops one by saving (remove one with its DELETE route). Whether the design is the default is not changed here.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-designs/{designId} (the `UpdateUserReportDesign` operationId).
+func (c *ClientWithResponses) UpdateUserReportDesignWithBodyWithResponse(ctx context.Context, designId ReportDesignId, params *UpdateUserReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserReportDesignResponse, error) {
+	rsp, err := c.UpdateUserReportDesignWithBody(ctx, designId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateUserReportDesignResponse(rsp)
+}
+
+// UpdateUserReportDesignWithResponse Replace one of the caller's report designs.
+//
+// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. The images stay as they are unless the document carries them: a `logo`, `coverImage` or `customCover` in the document replaces the stored one with the core's own re-encoding of it, and a document without them leaves them, so a client that does not know an image never drops one by saving (remove one with its DELETE route). Whether the design is the default is not changed here.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-designs/{designId} (the `UpdateUserReportDesign` operationId).
+func (c *ClientWithResponses) UpdateUserReportDesignWithResponse(ctx context.Context, designId ReportDesignId, params *UpdateUserReportDesignParams, body UpdateUserReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserReportDesignResponse, error) {
+	rsp, err := c.UpdateUserReportDesign(ctx, designId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateUserReportDesignResponse(rsp)
+}
+
+// DeleteUserReportDesignCoverImageWithResponse Remove the cover image from one of the caller's report designs.
+//
+// The design stays. Removing a cover image that is not there is not an error. The answer carries the design with its images.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/report-designs/{designId}/cover-image (the `DeleteUserReportDesignCoverImage` operationId).
+func (c *ClientWithResponses) DeleteUserReportDesignCoverImageWithResponse(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteUserReportDesignCoverImageResponse, error) {
+	rsp, err := c.DeleteUserReportDesignCoverImage(ctx, designId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUserReportDesignCoverImageResponse(rsp)
+}
+
+// PutUserReportDesignCoverImageWithBodyWithResponse Set the cover image of one of the caller's report designs.
+//
+// Multipart, one part named `file`: PNG or JPEG, at most 2 MB. The core decodes it, scales it down to fit 2048 pixels each way and encodes it again from the pixels in the format it came in (a photograph stays a JPEG), so nothing of the upload but its pixels is kept; the runner draws it across the top of a plate cover and offers it to a custom cover, and it never comes from the model or a URL. Anything but a PNG or a JPEG is 415 `unsupported-image`; over 2 MB, over 16 million pixels, or over 2 MB encoded again is 413 `upload-too-large`. Replaces any cover image the design had. The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-designs/{designId}/cover-image (the `PutUserReportDesignCoverImage` operationId).
+func (c *ClientWithResponses) PutUserReportDesignCoverImageWithBodyWithResponse(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportDesignCoverImageResponse, error) {
+	rsp, err := c.PutUserReportDesignCoverImageWithBody(ctx, designId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserReportDesignCoverImageResponse(rsp)
+}
+
+// DeleteUserReportDesignCustomCoverWithResponse Remove the custom cover from one of the caller's report designs.
+//
+// The design stays, its cover style included: a `custom` style with no custom cover draws the band style. Removing a custom cover that is not there is not an error. The answer carries the design with its images.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/report-designs/{designId}/custom-cover (the `DeleteUserReportDesignCustomCover` operationId).
+func (c *ClientWithResponses) DeleteUserReportDesignCustomCoverWithResponse(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteUserReportDesignCustomCoverResponse, error) {
+	rsp, err := c.DeleteUserReportDesignCustomCover(ctx, designId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUserReportDesignCustomCoverResponse(rsp)
+}
+
+// PutUserReportDesignCustomCoverWithBodyWithResponse Set the custom cover of one of the caller's report designs.
+//
+// The custom cover whole: its Typst source (at most 32 KiB of text), its images (at most six, each a PNG or a JPEG in base64 that the core decodes, pixel-caps and encodes again in its format, 2 MB in all as stored) and, optionally, a PNG thumbnail of its last render (at most 300 KB). The source is code the runner compiles only under the confinement every export runs in, with the render root as its whole world; it is held to its bounds here, not read. A cover over a bound is 422 (`validation`) naming `customCover.<path>`; an image in no format the core reads is 415 `unsupported-image`. Replaces any custom cover the design had. The design draws it only while its cover style is `custom`. The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-designs/{designId}/custom-cover (the `PutUserReportDesignCustomCover` operationId).
+func (c *ClientWithResponses) PutUserReportDesignCustomCoverWithBodyWithResponse(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportDesignCustomCoverResponse, error) {
+	rsp, err := c.PutUserReportDesignCustomCoverWithBody(ctx, designId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserReportDesignCustomCoverResponse(rsp)
+}
+
+// PutUserReportDesignCustomCoverWithResponse Set the custom cover of one of the caller's report designs.
+//
+// The custom cover whole: its Typst source (at most 32 KiB of text), its images (at most six, each a PNG or a JPEG in base64 that the core decodes, pixel-caps and encodes again in its format, 2 MB in all as stored) and, optionally, a PNG thumbnail of its last render (at most 300 KB). The source is code the runner compiles only under the confinement every export runs in, with the render root as its whole world; it is held to its bounds here, not read. A cover over a bound is 422 (`validation`) naming `customCover.<path>`; an image in no format the core reads is 415 `unsupported-image`. Replaces any custom cover the design had. The design draws it only while its cover style is `custom`. The answer carries the design with its images.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-designs/{designId}/custom-cover (the `PutUserReportDesignCustomCover` operationId).
+func (c *ClientWithResponses) PutUserReportDesignCustomCoverWithResponse(ctx context.Context, designId ReportDesignId, body PutUserReportDesignCustomCoverJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUserReportDesignCustomCoverResponse, error) {
+	rsp, err := c.PutUserReportDesignCustomCover(ctx, designId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserReportDesignCustomCoverResponse(rsp)
+}
+
+// DeleteUserReportDesignLogoWithResponse Remove the logo from one of the caller's report designs.
+//
+// The design stays. Removing a logo that is not there is not an error. The answer carries the design with its images.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /user/report-designs/{designId}/logo (the `DeleteUserReportDesignLogo` operationId).
+func (c *ClientWithResponses) DeleteUserReportDesignLogoWithResponse(ctx context.Context, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteUserReportDesignLogoResponse, error) {
+	rsp, err := c.DeleteUserReportDesignLogo(ctx, designId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUserReportDesignLogoResponse(rsp)
+}
+
+// PutUserReportDesignLogoWithBodyWithResponse Set the logo of one of the caller's report designs.
+//
+// Multipart, one part named `file`: PNG or JPEG, at most 512 KB. The core decodes it, scales it down to fit 1024 pixels each way and encodes it again as PNG from the pixels, so nothing of the upload but its pixels is kept; the runner draws it in the title block, on a cover whose facts include it and in a logoLeft header, and it never comes from the model or a URL. Anything but a PNG or a JPEG (SVG and GIF included) is 415 `unsupported-image`; over 512 KB, over 16 million pixels, or over 512 KB as a PNG is 413 `upload-too-large`. Replaces any logo the design had. The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /user/report-designs/{designId}/logo (the `PutUserReportDesignLogo` operationId).
+func (c *ClientWithResponses) PutUserReportDesignLogoWithBodyWithResponse(ctx context.Context, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutUserReportDesignLogoResponse, error) {
+	rsp, err := c.PutUserReportDesignLogoWithBody(ctx, designId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutUserReportDesignLogoResponse(rsp)
 }
 
 // RevokeOtherUserSessionsWithResponse Revoke every session except the calling one ("sign out everywhere else").
@@ -33511,22 +35175,22 @@ func ParseUpdateUserNotificationSettingsResponse(rsp *http.Response) (*UpdateUse
 	return response, nil
 }
 
-// ParseGetUserReportSettingsResponse parses an HTTP response from a GetUserReportSettingsWithResponse call
-func ParseGetUserReportSettingsResponse(rsp *http.Response) (*GetUserReportSettingsResponse, error) {
+// ParseListUserReportDesignsResponse parses an HTTP response from a ListUserReportDesignsWithResponse call
+func ParseListUserReportDesignsResponse(rsp *http.Response) (*ListUserReportDesignsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetUserReportSettingsResponse{
+	response := &ListUserReportDesignsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ReportSettings
+		var dest ReportDesignList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -33544,22 +35208,55 @@ func ParseGetUserReportSettingsResponse(rsp *http.Response) (*GetUserReportSetti
 	return response, nil
 }
 
-// ParseUpdateUserReportSettingsResponse parses an HTTP response from a UpdateUserReportSettingsWithResponse call
-func ParseUpdateUserReportSettingsResponse(rsp *http.Response) (*UpdateUserReportSettingsResponse, error) {
+// ParseCreateUserReportDesignResponse parses an HTTP response from a CreateUserReportDesignWithResponse call
+func ParseCreateUserReportDesignResponse(rsp *http.Response) (*CreateUserReportDesignResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &UpdateUserReportSettingsResponse{
+	response := &CreateUserReportDesignResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetUserReportDesignDefaultResponse parses an HTTP response from a SetUserReportDesignDefaultWithResponse call
+func ParseSetUserReportDesignDefaultResponse(rsp *http.Response) (*SetUserReportDesignDefaultResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetUserReportDesignDefaultResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ReportSettings
+		var dest ReportDesignList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -33577,22 +35274,51 @@ func ParseUpdateUserReportSettingsResponse(rsp *http.Response) (*UpdateUserRepor
 	return response, nil
 }
 
-// ParseDeleteUserReportLogoResponse parses an HTTP response from a DeleteUserReportLogoWithResponse call
-func ParseDeleteUserReportLogoResponse(rsp *http.Response) (*DeleteUserReportLogoResponse, error) {
+// ParseDeleteUserReportDesignResponse parses an HTTP response from a DeleteUserReportDesignWithResponse call
+func ParseDeleteUserReportDesignResponse(rsp *http.Response) (*DeleteUserReportDesignResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &DeleteUserReportLogoResponse{
+	response := &DeleteUserReportDesignResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUserReportDesignResponse parses an HTTP response from a GetUserReportDesignWithResponse call
+func ParseGetUserReportDesignResponse(rsp *http.Response) (*GetUserReportDesignResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUserReportDesignResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ReportSettings
+		var dest ReportDesignRecord
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -33610,22 +35336,220 @@ func ParseDeleteUserReportLogoResponse(rsp *http.Response) (*DeleteUserReportLog
 	return response, nil
 }
 
-// ParsePutUserReportLogoResponse parses an HTTP response from a PutUserReportLogoWithResponse call
-func ParsePutUserReportLogoResponse(rsp *http.Response) (*PutUserReportLogoResponse, error) {
+// ParseUpdateUserReportDesignResponse parses an HTTP response from a UpdateUserReportDesignWithResponse call
+func ParseUpdateUserReportDesignResponse(rsp *http.Response) (*UpdateUserReportDesignResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &PutUserReportLogoResponse{
+	response := &UpdateUserReportDesignResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ReportSettings
+		var dest ReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteUserReportDesignCoverImageResponse parses an HTTP response from a DeleteUserReportDesignCoverImageWithResponse call
+func ParseDeleteUserReportDesignCoverImageResponse(rsp *http.Response) (*DeleteUserReportDesignCoverImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteUserReportDesignCoverImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutUserReportDesignCoverImageResponse parses an HTTP response from a PutUserReportDesignCoverImageWithResponse call
+func ParsePutUserReportDesignCoverImageResponse(rsp *http.Response) (*PutUserReportDesignCoverImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutUserReportDesignCoverImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteUserReportDesignCustomCoverResponse parses an HTTP response from a DeleteUserReportDesignCustomCoverWithResponse call
+func ParseDeleteUserReportDesignCustomCoverResponse(rsp *http.Response) (*DeleteUserReportDesignCustomCoverResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteUserReportDesignCustomCoverResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutUserReportDesignCustomCoverResponse parses an HTTP response from a PutUserReportDesignCustomCoverWithResponse call
+func ParsePutUserReportDesignCustomCoverResponse(rsp *http.Response) (*PutUserReportDesignCustomCoverResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutUserReportDesignCustomCoverResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteUserReportDesignLogoResponse parses an HTTP response from a DeleteUserReportDesignLogoWithResponse call
+func ParseDeleteUserReportDesignLogoResponse(rsp *http.Response) (*DeleteUserReportDesignLogoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteUserReportDesignLogoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutUserReportDesignLogoResponse parses an HTTP response from a PutUserReportDesignLogoWithResponse call
+func ParsePutUserReportDesignLogoResponse(rsp *http.Response) (*PutUserReportDesignLogoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutUserReportDesignLogoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ReportDesignRecord
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

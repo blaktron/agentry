@@ -51,7 +51,7 @@ func TestAccountErasureFlow(t *testing.T) {
 		`INSERT INTO desktop_grants (id, user_id, code_sha256, state_sha256, scopes, name, expires_at)
 		 VALUES (gen_random_uuid(), $1, decode(md5(random()::text), 'hex'), '\x02', '{agent:read}', 'desktop', now() + interval '60 seconds')`,
 		`INSERT INTO email_verifications (token_sha256, user_id, expires_at) VALUES (decode(md5(random()::text), 'hex'), $1, now() + interval '1 day')`,
-		`INSERT INTO user_report_settings (user_id, design) VALUES ($1, '{}')`,
+		`INSERT INTO user_report_designs (user_id, document, logo, is_default) VALUES ($1, '{}', '\x00', true)`,
 		`INSERT INTO voices (user_id, wrapper_kind, wrapper_recipient, wrapped_key) VALUES ($1, 'test', 'test', '\x00')`,
 	} {
 		if _, err := env.st.Pool().Exec(context.Background(), q, uid); err != nil {
@@ -141,7 +141,7 @@ func TestAccountErasureFlow(t *testing.T) {
 		"remembered browsers":  `SELECT count(*) FROM trusted_devices WHERE user_id = $1`,
 		"unused desktop codes": `SELECT count(*) FROM desktop_grants WHERE user_id = $1 AND consumed_at IS NULL`,
 		"activation links":     `SELECT count(*) FROM email_verifications WHERE user_id = $1`,
-		"report designs":       `SELECT count(*) FROM user_report_settings WHERE user_id = $1`,
+		"report designs":       `SELECT count(*) FROM user_report_designs WHERE user_id = $1`,
 		"Writing Voices":       `SELECT count(*) FROM voices WHERE user_id = $1`,
 		"seats":                `SELECT count(*) FROM memberships WHERE user_id = $1`,
 		"live sessions":        `SELECT count(*) FROM sessions WHERE user_id = $1 AND revoked_at IS NULL`,
