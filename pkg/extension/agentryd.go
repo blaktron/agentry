@@ -579,6 +579,11 @@ func (r serverReportDesigns) ByID(ctx context.Context, user, id uuid.UUID) (*Rep
 	return reportDesignOf(rec), err
 }
 
+func (r serverReportDesigns) ForMember(ctx context.Context, user uuid.UUID, org, name string) (*ReportDesign, error) {
+	rec, err := r.srv.ReportDesignForMember(ctx, user, org, name)
+	return reportDesignOf(rec), err
+}
+
 func (r serverReportDesigns) Create(ctx context.Context, user uuid.UUID, document []byte) (*ReportDesign, error) {
 	rec, err := r.srv.CreateReportDesign(ctx, user, document)
 	return reportDesignOf(rec), err
@@ -593,7 +598,7 @@ func reportDesignOf(rec *api.ReportDesignEntry) *ReportDesign {
 	withLogo := plain
 	withLogo.Logo = rec.Design.Logo
 	return &ReportDesign{
-		ID: rec.ID, Default: rec.Default,
+		ID: rec.ID, Default: rec.Default, Org: rec.Org, Name: rec.Design.Name,
 		Document:           plain.Canonical(),
 		DocumentWithAssets: rec.Design.Canonical(),
 		Version2:           plain.Version2(),

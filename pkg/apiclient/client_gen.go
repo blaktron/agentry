@@ -3291,6 +3291,52 @@ type Org struct {
 	VerifiedDomains *[]string `json:"verifiedDomains,omitempty"`
 }
 
+// OrgReportDesignCreate defines model for OrgReportDesignCreate.
+type OrgReportDesignCreate struct {
+	// Design A report design, the theme document version 3: a whole brand. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says: the accent must reach 4.5:1 contrast on white where it carries text (titleBlock `band`, headings `smallcaps` or `numbered`, or a cover that is drawn in the `band`, `largeType` or `plate` style, or `split` with no secondary) and 3:1 otherwise; the secondary 4.5:1 where a drawn `split` cover puts the brand on it and 3:1 otherwise; every text (`name`, the brand's lines, each header and footer slot) is one line with no control, line-break, bidirectional formatting or other invisible format characters; `brand.website` is a host name or an https address, drawn as text; a cover fact is named once; the custom cover's source is at most 32 KiB of text, its images at most six and 2 MB in all as stored, its thumbnail a PNG of at most 300 KB; each image's base64 holds a PNG or a JPEG within its bounds. Each colour's tint is derived: 12% of it over white. The ten built-in themes are each a value of it. `logo`, `coverImage` and `customCover` are optional, not counted in the 24 KB, answered only on `include=assets`, and null reads as none.
+	Design ReportDesign `json:"design"`
+}
+
+// OrgReportDesignList An organization's house designs, oldest first. There is no default: a member picks one per run, and a run that picks none takes the person's own default.
+type OrgReportDesignList struct {
+	Designs []OrgReportDesignSummary `json:"designs"`
+
+	// Org The organization's handle, which a run names a house design under.
+	Org string `json:"org"`
+}
+
+// OrgReportDesignRecord One house design with its document in canonical form. The images are in the document only on `include=assets`; the three flags say which it has.
+type OrgReportDesignRecord struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Design A report design, the theme document version 3: a whole brand. Defined by the core's pkg/reportdesign, whose JSON Schema this mirrors (a core test holds them equal). Beyond what the schema says: the accent must reach 4.5:1 contrast on white where it carries text (titleBlock `band`, headings `smallcaps` or `numbered`, or a cover that is drawn in the `band`, `largeType` or `plate` style, or `split` with no secondary) and 3:1 otherwise; the secondary 4.5:1 where a drawn `split` cover puts the brand on it and 3:1 otherwise; every text (`name`, the brand's lines, each header and footer slot) is one line with no control, line-break, bidirectional formatting or other invisible format characters; `brand.website` is a host name or an https address, drawn as text; a cover fact is named once; the custom cover's source is at most 32 KiB of text, its images at most six and 2 MB in all as stored, its thumbnail a PNG of at most 300 KB; each image's base64 holds a PNG or a JPEG within its bounds. Each colour's tint is derived: 12% of it over white. The ten built-in themes are each a value of it. `logo`, `coverImage` and `customCover` are optional, not counted in the 24 KB, answered only on `include=assets`, and null reads as none.
+	Design         ReportDesign       `json:"design"`
+	HasCoverImage  bool               `json:"hasCoverImage"`
+	HasCustomCover bool               `json:"hasCustomCover"`
+	HasLogo        bool               `json:"hasLogo"`
+	Id             openapi_types.UUID `json:"id"`
+
+	// Org The organization's handle.
+	Org       string    `json:"org"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// OrgReportDesignSummary One house design of an organization's library, without its document's body or images.
+type OrgReportDesignSummary struct {
+	// BasedOn The built-in theme it started from.
+	BasedOn        string             `json:"basedOn"`
+	CreatedAt      time.Time          `json:"createdAt"`
+	HasCoverImage  bool               `json:"hasCoverImage"`
+	HasCustomCover bool               `json:"hasCustomCover"`
+	HasLogo        bool               `json:"hasLogo"`
+	Id             openapi_types.UUID `json:"id"`
+
+	// Name The design's name, unique within the organization; what a run names it by.
+	Name      string    `json:"name"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Version   int       `json:"version"`
+}
+
 // OrgRole An organization role, ordered admin > security_reviewer | member. Admins manage the organization, its members, settings and sign-in policy, and hold the security reviewer's powers; security_reviewer is a platform-internal role that exists only inside a first-party organization; there is no owner role, only admins. An organization always keeps one admin: demoting or removing the last one is 409 last-admin.
 type OrgRole string
 
@@ -4526,6 +4572,34 @@ type ApproveOrgMemberJSONBody struct {
 // SetOrgPolicyJSONBody defines parameters for SetOrgPolicy.
 type SetOrgPolicyJSONBody map[string]interface{}
 
+// CreateOrgReportDesignParams defines parameters for CreateOrgReportDesign.
+type CreateOrgReportDesignParams struct {
+	// Include `assets` answers the design with its images (`logo`, `coverImage`, `customCover`), if it has them. Without it the document comes without those keys, so a client that does not draw them reads it whole and small.
+	Include *ReportDesignInclude `form:"include,omitempty" json:"include,omitempty"`
+}
+
+// GetOrgReportDesignParams defines parameters for GetOrgReportDesign.
+type GetOrgReportDesignParams struct {
+	// Include `assets` answers the design with its images (`logo`, `coverImage`, `customCover`), if it has them. Without it the document comes without those keys, so a client that does not draw them reads it whole and small.
+	Include *ReportDesignInclude `form:"include,omitempty" json:"include,omitempty"`
+}
+
+// UpdateOrgReportDesignParams defines parameters for UpdateOrgReportDesign.
+type UpdateOrgReportDesignParams struct {
+	// Include `assets` answers the design with its images (`logo`, `coverImage`, `customCover`), if it has them. Without it the document comes without those keys, so a client that does not draw them reads it whole and small.
+	Include *ReportDesignInclude `form:"include,omitempty" json:"include,omitempty"`
+}
+
+// PutOrgReportDesignCoverImageMultipartBody defines parameters for PutOrgReportDesignCoverImage.
+type PutOrgReportDesignCoverImageMultipartBody struct {
+	File openapi_types.File `json:"file"`
+}
+
+// PutOrgReportDesignLogoMultipartBody defines parameters for PutOrgReportDesignLogo.
+type PutOrgReportDesignLogoMultipartBody struct {
+	File openapi_types.File `json:"file"`
+}
+
 // SuspendOrgJSONBody defines parameters for SuspendOrg.
 type SuspendOrgJSONBody struct {
 	Reason string `json:"reason"`
@@ -4833,6 +4907,21 @@ type ApproveOrgMemberJSONRequestBody ApproveOrgMemberJSONBody
 
 // SetOrgPolicyJSONRequestBody defines body for SetOrgPolicy for application/json ContentType.
 type SetOrgPolicyJSONRequestBody SetOrgPolicyJSONBody
+
+// CreateOrgReportDesignJSONRequestBody defines body for CreateOrgReportDesign for application/json ContentType.
+type CreateOrgReportDesignJSONRequestBody = OrgReportDesignCreate
+
+// UpdateOrgReportDesignJSONRequestBody defines body for UpdateOrgReportDesign for application/json ContentType.
+type UpdateOrgReportDesignJSONRequestBody = ReportDesignUpdate
+
+// PutOrgReportDesignCoverImageMultipartRequestBody defines body for PutOrgReportDesignCoverImage for multipart/form-data ContentType.
+type PutOrgReportDesignCoverImageMultipartRequestBody PutOrgReportDesignCoverImageMultipartBody
+
+// PutOrgReportDesignCustomCoverJSONRequestBody defines body for PutOrgReportDesignCustomCover for application/json ContentType.
+type PutOrgReportDesignCustomCoverJSONRequestBody = ReportDesignCustomCover
+
+// PutOrgReportDesignLogoMultipartRequestBody defines body for PutOrgReportDesignLogo for multipart/form-data ContentType.
+type PutOrgReportDesignLogoMultipartRequestBody PutOrgReportDesignLogoMultipartBody
 
 // SuspendOrgJSONRequestBody defines body for SuspendOrg for application/json ContentType.
 type SuspendOrgJSONRequestBody SuspendOrgJSONBody
@@ -5817,6 +5906,120 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
 	ReinstateOrg(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListOrgReportDesigns The organization's house report designs, for any active member.
+	//
+	// Up to ten named report designs the organization's admins keep, oldest first, which a member picks for a run by the organization's handle and the design's name. There is no default: a run that picks none takes the person's own default. Membership is read at every call, and a signed-in caller who is not an active member of the organization is answered 404, so the route says nothing of what an organization keeps to anyone outside it. The images are not listed; each entry says which it has.
+	//
+	// Corresponds with GET /orgs/{org}/report-designs (the `ListOrgReportDesigns` operationId).
+	ListOrgReportDesigns(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateOrgReportDesignWithBody Add a house report design to the organization's library (admins).
+	//
+	// As `POST /user/report-designs`, validated by the core's pkg/reportdesign the same way and refused 422 the same way, with two rules of the organization's own: the library holds ten designs, an eleventh is 409 `conflict`; and a design's name is unique within the organization, compared without regard to case, since a run names one, so a second of a name is 409 `conflict`. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. Recorded in the organization's audit log (`org.report_design_create`). The answer carries the design in its canonical form, its images only on `include=assets`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/report-designs (the `CreateOrgReportDesign` operationId).
+	CreateOrgReportDesignWithBody(ctx context.Context, org OrgHandle, params *CreateOrgReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateOrgReportDesign Add a house report design to the organization's library (admins).
+	//
+	// As `POST /user/report-designs`, validated by the core's pkg/reportdesign the same way and refused 422 the same way, with two rules of the organization's own: the library holds ten designs, an eleventh is 409 `conflict`; and a design's name is unique within the organization, compared without regard to case, since a run names one, so a second of a name is 409 `conflict`. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. Recorded in the organization's audit log (`org.report_design_create`). The answer carries the design in its canonical form, its images only on `include=assets`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/report-designs (the `CreateOrgReportDesign` operationId).
+	CreateOrgReportDesign(ctx context.Context, org OrgHandle, params *CreateOrgReportDesignParams, body CreateOrgReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgReportDesign Remove one of the organization's house report designs, images included (admins).
+	//
+	// Another organization's design, or one already gone, is 404. Recorded in the organization's audit log (`org.report_design_delete`).
+	//
+	// Corresponds with DELETE /orgs/{org}/report-designs/{designId} (the `DeleteOrgReportDesign` operationId).
+	DeleteOrgReportDesign(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgReportDesign One of the organization's house report designs, for any active member.
+	//
+	// The design in its canonical form. Its images (`logo`, `coverImage`, `customCover`) come only with `include=assets`: a run that draws them asks for them, a console that lists them does not. Another organization's design is 404.
+	//
+	// Corresponds with GET /orgs/{org}/report-designs/{designId} (the `GetOrgReportDesign` operationId).
+	GetOrgReportDesign(ctx context.Context, org OrgHandle, designId ReportDesignId, params *GetOrgReportDesignParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateOrgReportDesignWithBody Replace one of the organization's house report designs (admins).
+	//
+	// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. A name another of the organization's designs holds is 409 `conflict`. The images stay as they are unless the document carries them, as for a person's own design. An admin's change reaches a member's next run. Recorded in the organization's audit log (`org.report_design_update`).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId} (the `UpdateOrgReportDesign` operationId).
+	UpdateOrgReportDesignWithBody(ctx context.Context, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateOrgReportDesign Replace one of the organization's house report designs (admins).
+	//
+	// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. A name another of the organization's designs holds is 409 `conflict`. The images stay as they are unless the document carries them, as for a person's own design. An admin's change reaches a member's next run. Recorded in the organization's audit log (`org.report_design_update`).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId} (the `UpdateOrgReportDesign` operationId).
+	UpdateOrgReportDesign(ctx context.Context, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, body UpdateOrgReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgReportDesignCoverImage Remove the cover image from one of the organization's house report designs (admins).
+	//
+	// The design stays. Removing a cover image that is not there is not an error. The answer carries the design with its images.
+	//
+	// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/cover-image (the `DeleteOrgReportDesignCoverImage` operationId).
+	DeleteOrgReportDesignCoverImage(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutOrgReportDesignCoverImageWithBody Set the cover image of one of the organization's house report designs (admins).
+	//
+	// As `PUT /user/report-designs/{designId}/cover-image`: multipart, one part named `file`, a PNG or a JPEG of at most 2 MB, kept only as the core's own re-encoding of its pixels in the format it came in. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId}/cover-image (the `PutOrgReportDesignCoverImage` operationId).
+	PutOrgReportDesignCoverImageWithBody(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgReportDesignCustomCover Remove the custom cover from one of the organization's house report designs (admins).
+	//
+	// The design stays, its cover style included. Removing a custom cover that is not there is not an error. The answer carries the design with its images.
+	//
+	// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/custom-cover (the `DeleteOrgReportDesignCustomCover` operationId).
+	DeleteOrgReportDesignCustomCover(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutOrgReportDesignCustomCoverWithBody Set the custom cover of one of the organization's house report designs (admins).
+	//
+	// As `PUT /user/report-designs/{designId}/custom-cover`: the custom cover whole, its source held to its bounds and never read, each image and the thumbnail encoded again by the core. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId}/custom-cover (the `PutOrgReportDesignCustomCover` operationId).
+	PutOrgReportDesignCustomCoverWithBody(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutOrgReportDesignCustomCover Set the custom cover of one of the organization's house report designs (admins).
+	//
+	// As `PUT /user/report-designs/{designId}/custom-cover`: the custom cover whole, its source held to its bounds and never read, each image and the thumbnail encoded again by the core. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId}/custom-cover (the `PutOrgReportDesignCustomCover` operationId).
+	PutOrgReportDesignCustomCover(ctx context.Context, org OrgHandle, designId ReportDesignId, body PutOrgReportDesignCustomCoverJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgReportDesignLogo Remove the logo from one of the organization's house report designs (admins).
+	//
+	// The design stays. Removing a logo that is not there is not an error. The answer carries the design with its images.
+	//
+	// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/logo (the `DeleteOrgReportDesignLogo` operationId).
+	DeleteOrgReportDesignLogo(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutOrgReportDesignLogoWithBody Set the logo of one of the organization's house report designs (admins).
+	//
+	// As `PUT /user/report-designs/{designId}/logo`: multipart, one part named `file`, a PNG or a JPEG of at most 512 KB, kept only as the core's own re-encoding of its pixels. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId}/logo (the `PutOrgReportDesignLogo` operationId).
+	PutOrgReportDesignLogoWithBody(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SuspendOrgWithBody Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
 	//
@@ -8571,6 +8774,260 @@ func (c *Client) SetOrgPolicy(ctx context.Context, org OrgHandle, body SetOrgPol
 // Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
 func (c *Client) ReinstateOrg(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReinstateOrgRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListOrgReportDesigns The organization's house report designs, for any active member.
+//
+// Up to ten named report designs the organization's admins keep, oldest first, which a member picks for a run by the organization's handle and the design's name. There is no default: a run that picks none takes the person's own default. Membership is read at every call, and a signed-in caller who is not an active member of the organization is answered 404, so the route says nothing of what an organization keeps to anyone outside it. The images are not listed; each entry says which it has.
+//
+// Corresponds with GET /orgs/{org}/report-designs (the `ListOrgReportDesigns` operationId).
+func (c *Client) ListOrgReportDesigns(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOrgReportDesignsRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateOrgReportDesignWithBody Add a house report design to the organization's library (admins).
+//
+// As `POST /user/report-designs`, validated by the core's pkg/reportdesign the same way and refused 422 the same way, with two rules of the organization's own: the library holds ten designs, an eleventh is 409 `conflict`; and a design's name is unique within the organization, compared without regard to case, since a run names one, so a second of a name is 409 `conflict`. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. Recorded in the organization's audit log (`org.report_design_create`). The answer carries the design in its canonical form, its images only on `include=assets`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/report-designs (the `CreateOrgReportDesign` operationId).
+func (c *Client) CreateOrgReportDesignWithBody(ctx context.Context, org OrgHandle, params *CreateOrgReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOrgReportDesignRequestWithBody(c.Server, org, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateOrgReportDesign Add a house report design to the organization's library (admins).
+//
+// As `POST /user/report-designs`, validated by the core's pkg/reportdesign the same way and refused 422 the same way, with two rules of the organization's own: the library holds ten designs, an eleventh is 409 `conflict`; and a design's name is unique within the organization, compared without regard to case, since a run names one, so a second of a name is 409 `conflict`. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. Recorded in the organization's audit log (`org.report_design_create`). The answer carries the design in its canonical form, its images only on `include=assets`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/report-designs (the `CreateOrgReportDesign` operationId).
+func (c *Client) CreateOrgReportDesign(ctx context.Context, org OrgHandle, params *CreateOrgReportDesignParams, body CreateOrgReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOrgReportDesignRequest(c.Server, org, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgReportDesign Remove one of the organization's house report designs, images included (admins).
+//
+// Another organization's design, or one already gone, is 404. Recorded in the organization's audit log (`org.report_design_delete`).
+//
+// Corresponds with DELETE /orgs/{org}/report-designs/{designId} (the `DeleteOrgReportDesign` operationId).
+func (c *Client) DeleteOrgReportDesign(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgReportDesignRequest(c.Server, org, designId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgReportDesign One of the organization's house report designs, for any active member.
+//
+// The design in its canonical form. Its images (`logo`, `coverImage`, `customCover`) come only with `include=assets`: a run that draws them asks for them, a console that lists them does not. Another organization's design is 404.
+//
+// Corresponds with GET /orgs/{org}/report-designs/{designId} (the `GetOrgReportDesign` operationId).
+func (c *Client) GetOrgReportDesign(ctx context.Context, org OrgHandle, designId ReportDesignId, params *GetOrgReportDesignParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgReportDesignRequest(c.Server, org, designId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateOrgReportDesignWithBody Replace one of the organization's house report designs (admins).
+//
+// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. A name another of the organization's designs holds is 409 `conflict`. The images stay as they are unless the document carries them, as for a person's own design. An admin's change reaches a member's next run. Recorded in the organization's audit log (`org.report_design_update`).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId} (the `UpdateOrgReportDesign` operationId).
+func (c *Client) UpdateOrgReportDesignWithBody(ctx context.Context, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrgReportDesignRequestWithBody(c.Server, org, designId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateOrgReportDesign Replace one of the organization's house report designs (admins).
+//
+// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. A name another of the organization's designs holds is 409 `conflict`. The images stay as they are unless the document carries them, as for a person's own design. An admin's change reaches a member's next run. Recorded in the organization's audit log (`org.report_design_update`).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId} (the `UpdateOrgReportDesign` operationId).
+func (c *Client) UpdateOrgReportDesign(ctx context.Context, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, body UpdateOrgReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrgReportDesignRequest(c.Server, org, designId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgReportDesignCoverImage Remove the cover image from one of the organization's house report designs (admins).
+//
+// The design stays. Removing a cover image that is not there is not an error. The answer carries the design with its images.
+//
+// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/cover-image (the `DeleteOrgReportDesignCoverImage` operationId).
+func (c *Client) DeleteOrgReportDesignCoverImage(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgReportDesignCoverImageRequest(c.Server, org, designId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutOrgReportDesignCoverImageWithBody Set the cover image of one of the organization's house report designs (admins).
+//
+// As `PUT /user/report-designs/{designId}/cover-image`: multipart, one part named `file`, a PNG or a JPEG of at most 2 MB, kept only as the core's own re-encoding of its pixels in the format it came in. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId}/cover-image (the `PutOrgReportDesignCoverImage` operationId).
+func (c *Client) PutOrgReportDesignCoverImageWithBody(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutOrgReportDesignCoverImageRequestWithBody(c.Server, org, designId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgReportDesignCustomCover Remove the custom cover from one of the organization's house report designs (admins).
+//
+// The design stays, its cover style included. Removing a custom cover that is not there is not an error. The answer carries the design with its images.
+//
+// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/custom-cover (the `DeleteOrgReportDesignCustomCover` operationId).
+func (c *Client) DeleteOrgReportDesignCustomCover(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgReportDesignCustomCoverRequest(c.Server, org, designId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutOrgReportDesignCustomCoverWithBody Set the custom cover of one of the organization's house report designs (admins).
+//
+// As `PUT /user/report-designs/{designId}/custom-cover`: the custom cover whole, its source held to its bounds and never read, each image and the thumbnail encoded again by the core. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId}/custom-cover (the `PutOrgReportDesignCustomCover` operationId).
+func (c *Client) PutOrgReportDesignCustomCoverWithBody(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutOrgReportDesignCustomCoverRequestWithBody(c.Server, org, designId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutOrgReportDesignCustomCover Set the custom cover of one of the organization's house report designs (admins).
+//
+// As `PUT /user/report-designs/{designId}/custom-cover`: the custom cover whole, its source held to its bounds and never read, each image and the thumbnail encoded again by the core. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId}/custom-cover (the `PutOrgReportDesignCustomCover` operationId).
+func (c *Client) PutOrgReportDesignCustomCover(ctx context.Context, org OrgHandle, designId ReportDesignId, body PutOrgReportDesignCustomCoverJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutOrgReportDesignCustomCoverRequest(c.Server, org, designId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgReportDesignLogo Remove the logo from one of the organization's house report designs (admins).
+//
+// The design stays. Removing a logo that is not there is not an error. The answer carries the design with its images.
+//
+// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/logo (the `DeleteOrgReportDesignLogo` operationId).
+func (c *Client) DeleteOrgReportDesignLogo(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgReportDesignLogoRequest(c.Server, org, designId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutOrgReportDesignLogoWithBody Set the logo of one of the organization's house report designs (admins).
+//
+// As `PUT /user/report-designs/{designId}/logo`: multipart, one part named `file`, a PNG or a JPEG of at most 512 KB, kept only as the core's own re-encoding of its pixels. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId}/logo (the `PutOrgReportDesignLogo` operationId).
+func (c *Client) PutOrgReportDesignLogoWithBody(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutOrgReportDesignLogoRequestWithBody(c.Server, org, designId, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -14371,6 +14828,567 @@ func NewReinstateOrgRequest(server string, org OrgHandle) (*http.Request, error)
 	return req, nil
 }
 
+// NewListOrgReportDesignsRequest constructs an http.Request for the ListOrgReportDesigns method
+func NewListOrgReportDesignsRequest(server string, org OrgHandle) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateOrgReportDesignRequest calls the generic CreateOrgReportDesign builder with application/json body
+func NewCreateOrgReportDesignRequest(server string, org OrgHandle, params *CreateOrgReportDesignParams, body CreateOrgReportDesignJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateOrgReportDesignRequestWithBody(server, org, params, "application/json", bodyReader)
+}
+
+// NewCreateOrgReportDesignRequestWithBody constructs an http.Request for the CreateOrgReportDesign method, with any body, and a specified content type
+func NewCreateOrgReportDesignRequestWithBody(server string, org OrgHandle, params *CreateOrgReportDesignParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Include != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include", *params.Include, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgReportDesignRequest constructs an http.Request for the DeleteOrgReportDesign method
+func NewDeleteOrgReportDesignRequest(server string, org OrgHandle, designId ReportDesignId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgReportDesignRequest constructs an http.Request for the GetOrgReportDesign method
+func NewGetOrgReportDesignRequest(server string, org OrgHandle, designId ReportDesignId, params *GetOrgReportDesignParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Include != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include", *params.Include, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateOrgReportDesignRequest calls the generic UpdateOrgReportDesign builder with application/json body
+func NewUpdateOrgReportDesignRequest(server string, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, body UpdateOrgReportDesignJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateOrgReportDesignRequestWithBody(server, org, designId, params, "application/json", bodyReader)
+}
+
+// NewUpdateOrgReportDesignRequestWithBody constructs an http.Request for the UpdateOrgReportDesign method, with any body, and a specified content type
+func NewUpdateOrgReportDesignRequestWithBody(server string, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Include != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include", *params.Include, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgReportDesignCoverImageRequest constructs an http.Request for the DeleteOrgReportDesignCoverImage method
+func NewDeleteOrgReportDesignCoverImageRequest(server string, org OrgHandle, designId ReportDesignId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs/%s/cover-image", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutOrgReportDesignCoverImageRequestWithBody constructs an http.Request for the PutOrgReportDesignCoverImage method, with any body, and a specified content type
+func NewPutOrgReportDesignCoverImageRequestWithBody(server string, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs/%s/cover-image", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgReportDesignCustomCoverRequest constructs an http.Request for the DeleteOrgReportDesignCustomCover method
+func NewDeleteOrgReportDesignCustomCoverRequest(server string, org OrgHandle, designId ReportDesignId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs/%s/custom-cover", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutOrgReportDesignCustomCoverRequest calls the generic PutOrgReportDesignCustomCover builder with application/json body
+func NewPutOrgReportDesignCustomCoverRequest(server string, org OrgHandle, designId ReportDesignId, body PutOrgReportDesignCustomCoverJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutOrgReportDesignCustomCoverRequestWithBody(server, org, designId, "application/json", bodyReader)
+}
+
+// NewPutOrgReportDesignCustomCoverRequestWithBody constructs an http.Request for the PutOrgReportDesignCustomCover method, with any body, and a specified content type
+func NewPutOrgReportDesignCustomCoverRequestWithBody(server string, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs/%s/custom-cover", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgReportDesignLogoRequest constructs an http.Request for the DeleteOrgReportDesignLogo method
+func NewDeleteOrgReportDesignLogoRequest(server string, org OrgHandle, designId ReportDesignId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs/%s/logo", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutOrgReportDesignLogoRequestWithBody constructs an http.Request for the PutOrgReportDesignLogo method, with any body, and a specified content type
+func NewPutOrgReportDesignLogoRequestWithBody(server string, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "designId", designId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/report-designs/%s/logo", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewSuspendOrgRequest calls the generic SuspendOrg builder with application/json body
 func NewSuspendOrgRequest(server string, org OrgHandle, body SuspendOrgJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -18782,6 +19800,132 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/reinstate (the `ReinstateOrg` operationId).
 	ReinstateOrgWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ReinstateOrgResponse, error)
+
+	// ListOrgReportDesignsWithResponse The organization's house report designs, for any active member.
+	//
+	// Up to ten named report designs the organization's admins keep, oldest first, which a member picks for a run by the organization's handle and the design's name. There is no default: a run that picks none takes the person's own default. Membership is read at every call, and a signed-in caller who is not an active member of the organization is answered 404, so the route says nothing of what an organization keeps to anyone outside it. The images are not listed; each entry says which it has.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/report-designs (the `ListOrgReportDesigns` operationId).
+	ListOrgReportDesignsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListOrgReportDesignsResponse, error)
+
+	// CreateOrgReportDesignWithBodyWithResponse Add a house report design to the organization's library (admins).
+	//
+	// As `POST /user/report-designs`, validated by the core's pkg/reportdesign the same way and refused 422 the same way, with two rules of the organization's own: the library holds ten designs, an eleventh is 409 `conflict`; and a design's name is unique within the organization, compared without regard to case, since a run names one, so a second of a name is 409 `conflict`. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. Recorded in the organization's audit log (`org.report_design_create`). The answer carries the design in its canonical form, its images only on `include=assets`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/report-designs (the `CreateOrgReportDesign` operationId).
+	CreateOrgReportDesignWithBodyWithResponse(ctx context.Context, org OrgHandle, params *CreateOrgReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOrgReportDesignResponse, error)
+
+	// CreateOrgReportDesignWithResponse Add a house report design to the organization's library (admins).
+	//
+	// As `POST /user/report-designs`, validated by the core's pkg/reportdesign the same way and refused 422 the same way, with two rules of the organization's own: the library holds ten designs, an eleventh is 409 `conflict`; and a design's name is unique within the organization, compared without regard to case, since a run names one, so a second of a name is 409 `conflict`. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. Recorded in the organization's audit log (`org.report_design_create`). The answer carries the design in its canonical form, its images only on `include=assets`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/report-designs (the `CreateOrgReportDesign` operationId).
+	CreateOrgReportDesignWithResponse(ctx context.Context, org OrgHandle, params *CreateOrgReportDesignParams, body CreateOrgReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOrgReportDesignResponse, error)
+
+	// DeleteOrgReportDesignWithResponse Remove one of the organization's house report designs, images included (admins).
+	//
+	// Another organization's design, or one already gone, is 404. Recorded in the organization's audit log (`org.report_design_delete`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/report-designs/{designId} (the `DeleteOrgReportDesign` operationId).
+	DeleteOrgReportDesignWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteOrgReportDesignResponse, error)
+
+	// GetOrgReportDesignWithResponse One of the organization's house report designs, for any active member.
+	//
+	// The design in its canonical form. Its images (`logo`, `coverImage`, `customCover`) come only with `include=assets`: a run that draws them asks for them, a console that lists them does not. Another organization's design is 404.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/report-designs/{designId} (the `GetOrgReportDesign` operationId).
+	GetOrgReportDesignWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, params *GetOrgReportDesignParams, reqEditors ...RequestEditorFn) (*GetOrgReportDesignResponse, error)
+
+	// UpdateOrgReportDesignWithBodyWithResponse Replace one of the organization's house report designs (admins).
+	//
+	// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. A name another of the organization's designs holds is 409 `conflict`. The images stay as they are unless the document carries them, as for a person's own design. An admin's change reaches a member's next run. Recorded in the organization's audit log (`org.report_design_update`).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId} (the `UpdateOrgReportDesign` operationId).
+	UpdateOrgReportDesignWithBodyWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrgReportDesignResponse, error)
+
+	// UpdateOrgReportDesignWithResponse Replace one of the organization's house report designs (admins).
+	//
+	// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. A name another of the organization's designs holds is 409 `conflict`. The images stay as they are unless the document carries them, as for a person's own design. An admin's change reaches a member's next run. Recorded in the organization's audit log (`org.report_design_update`).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId} (the `UpdateOrgReportDesign` operationId).
+	UpdateOrgReportDesignWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, body UpdateOrgReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgReportDesignResponse, error)
+
+	// DeleteOrgReportDesignCoverImageWithResponse Remove the cover image from one of the organization's house report designs (admins).
+	//
+	// The design stays. Removing a cover image that is not there is not an error. The answer carries the design with its images.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/cover-image (the `DeleteOrgReportDesignCoverImage` operationId).
+	DeleteOrgReportDesignCoverImageWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteOrgReportDesignCoverImageResponse, error)
+
+	// PutOrgReportDesignCoverImageWithBodyWithResponse Set the cover image of one of the organization's house report designs (admins).
+	//
+	// As `PUT /user/report-designs/{designId}/cover-image`: multipart, one part named `file`, a PNG or a JPEG of at most 2 MB, kept only as the core's own re-encoding of its pixels in the format it came in. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId}/cover-image (the `PutOrgReportDesignCoverImage` operationId).
+	PutOrgReportDesignCoverImageWithBodyWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgReportDesignCoverImageResponse, error)
+
+	// DeleteOrgReportDesignCustomCoverWithResponse Remove the custom cover from one of the organization's house report designs (admins).
+	//
+	// The design stays, its cover style included. Removing a custom cover that is not there is not an error. The answer carries the design with its images.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/custom-cover (the `DeleteOrgReportDesignCustomCover` operationId).
+	DeleteOrgReportDesignCustomCoverWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteOrgReportDesignCustomCoverResponse, error)
+
+	// PutOrgReportDesignCustomCoverWithBodyWithResponse Set the custom cover of one of the organization's house report designs (admins).
+	//
+	// As `PUT /user/report-designs/{designId}/custom-cover`: the custom cover whole, its source held to its bounds and never read, each image and the thumbnail encoded again by the core. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId}/custom-cover (the `PutOrgReportDesignCustomCover` operationId).
+	PutOrgReportDesignCustomCoverWithBodyWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgReportDesignCustomCoverResponse, error)
+
+	// PutOrgReportDesignCustomCoverWithResponse Set the custom cover of one of the organization's house report designs (admins).
+	//
+	// As `PUT /user/report-designs/{designId}/custom-cover`: the custom cover whole, its source held to its bounds and never read, each image and the thumbnail encoded again by the core. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId}/custom-cover (the `PutOrgReportDesignCustomCover` operationId).
+	PutOrgReportDesignCustomCoverWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, body PutOrgReportDesignCustomCoverJSONRequestBody, reqEditors ...RequestEditorFn) (*PutOrgReportDesignCustomCoverResponse, error)
+
+	// DeleteOrgReportDesignLogoWithResponse Remove the logo from one of the organization's house report designs (admins).
+	//
+	// The design stays. Removing a logo that is not there is not an error. The answer carries the design with its images.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/logo (the `DeleteOrgReportDesignLogo` operationId).
+	DeleteOrgReportDesignLogoWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteOrgReportDesignLogoResponse, error)
+
+	// PutOrgReportDesignLogoWithBodyWithResponse Set the logo of one of the organization's house report designs (admins).
+	//
+	// As `PUT /user/report-designs/{designId}/logo`: multipart, one part named `file`, a PNG or a JPEG of at most 512 KB, kept only as the core's own re-encoding of its pixels. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/report-designs/{designId}/logo (the `PutOrgReportDesignLogo` operationId).
+	PutOrgReportDesignLogoWithBodyWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgReportDesignLogoResponse, error)
 
 	// SuspendOrgWithBodyWithResponse Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
 	//
@@ -23792,6 +24936,527 @@ func (r ReinstateOrgResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ReinstateOrgResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListOrgReportDesignsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgReportDesignList
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListOrgReportDesignsResponse) GetJSON200() *OrgReportDesignList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListOrgReportDesignsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListOrgReportDesignsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListOrgReportDesignsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOrgReportDesignsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListOrgReportDesignsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateOrgReportDesignResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *OrgReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateOrgReportDesignResponse) GetJSON201() *OrgReportDesignRecord {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r CreateOrgReportDesignResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateOrgReportDesignResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateOrgReportDesignResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateOrgReportDesignResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateOrgReportDesignResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgReportDesignResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteOrgReportDesignResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgReportDesignResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgReportDesignResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgReportDesignResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgReportDesignResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgReportDesignResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgReportDesignResponse) GetJSON200() *OrgReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetOrgReportDesignResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgReportDesignResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgReportDesignResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgReportDesignResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgReportDesignResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateOrgReportDesignResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateOrgReportDesignResponse) GetJSON200() *OrgReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r UpdateOrgReportDesignResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateOrgReportDesignResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateOrgReportDesignResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateOrgReportDesignResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateOrgReportDesignResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgReportDesignCoverImageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteOrgReportDesignCoverImageResponse) GetJSON200() *OrgReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteOrgReportDesignCoverImageResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgReportDesignCoverImageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgReportDesignCoverImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgReportDesignCoverImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgReportDesignCoverImageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutOrgReportDesignCoverImageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutOrgReportDesignCoverImageResponse) GetJSON200() *OrgReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutOrgReportDesignCoverImageResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutOrgReportDesignCoverImageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutOrgReportDesignCoverImageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutOrgReportDesignCoverImageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutOrgReportDesignCoverImageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgReportDesignCustomCoverResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteOrgReportDesignCustomCoverResponse) GetJSON200() *OrgReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteOrgReportDesignCustomCoverResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgReportDesignCustomCoverResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgReportDesignCustomCoverResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgReportDesignCustomCoverResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgReportDesignCustomCoverResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutOrgReportDesignCustomCoverResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutOrgReportDesignCustomCoverResponse) GetJSON200() *OrgReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutOrgReportDesignCustomCoverResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutOrgReportDesignCustomCoverResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutOrgReportDesignCustomCoverResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutOrgReportDesignCustomCoverResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutOrgReportDesignCustomCoverResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgReportDesignLogoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteOrgReportDesignLogoResponse) GetJSON200() *OrgReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r DeleteOrgReportDesignLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgReportDesignLogoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgReportDesignLogoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgReportDesignLogoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgReportDesignLogoResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutOrgReportDesignLogoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgReportDesignRecord
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutOrgReportDesignLogoResponse) GetJSON200() *OrgReportDesignRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r PutOrgReportDesignLogoResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PutOrgReportDesignLogoResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutOrgReportDesignLogoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutOrgReportDesignLogoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutOrgReportDesignLogoResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -29230,6 +30895,216 @@ func (c *ClientWithResponses) ReinstateOrgWithResponse(ctx context.Context, org 
 	return ParseReinstateOrgResponse(rsp)
 }
 
+// ListOrgReportDesignsWithResponse The organization's house report designs, for any active member.
+//
+// Up to ten named report designs the organization's admins keep, oldest first, which a member picks for a run by the organization's handle and the design's name. There is no default: a run that picks none takes the person's own default. Membership is read at every call, and a signed-in caller who is not an active member of the organization is answered 404, so the route says nothing of what an organization keeps to anyone outside it. The images are not listed; each entry says which it has.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/report-designs (the `ListOrgReportDesigns` operationId).
+func (c *ClientWithResponses) ListOrgReportDesignsWithResponse(ctx context.Context, org OrgHandle, reqEditors ...RequestEditorFn) (*ListOrgReportDesignsResponse, error) {
+	rsp, err := c.ListOrgReportDesigns(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListOrgReportDesignsResponse(rsp)
+}
+
+// CreateOrgReportDesignWithBodyWithResponse Add a house report design to the organization's library (admins).
+//
+// As `POST /user/report-designs`, validated by the core's pkg/reportdesign the same way and refused 422 the same way, with two rules of the organization's own: the library holds ten designs, an eleventh is 409 `conflict`; and a design's name is unique within the organization, compared without regard to case, since a run names one, so a second of a name is 409 `conflict`. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. Recorded in the organization's audit log (`org.report_design_create`). The answer carries the design in its canonical form, its images only on `include=assets`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/report-designs (the `CreateOrgReportDesign` operationId).
+func (c *ClientWithResponses) CreateOrgReportDesignWithBodyWithResponse(ctx context.Context, org OrgHandle, params *CreateOrgReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOrgReportDesignResponse, error) {
+	rsp, err := c.CreateOrgReportDesignWithBody(ctx, org, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOrgReportDesignResponse(rsp)
+}
+
+// CreateOrgReportDesignWithResponse Add a house report design to the organization's library (admins).
+//
+// As `POST /user/report-designs`, validated by the core's pkg/reportdesign the same way and refused 422 the same way, with two rules of the organization's own: the library holds ten designs, an eleventh is 409 `conflict`; and a design's name is unique within the organization, compared without regard to case, since a run names one, so a second of a name is 409 `conflict`. A document that carries `logo`, `coverImage` or `customCover` stores each as the core's own re-encoding of it. Recorded in the organization's audit log (`org.report_design_create`). The answer carries the design in its canonical form, its images only on `include=assets`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/report-designs (the `CreateOrgReportDesign` operationId).
+func (c *ClientWithResponses) CreateOrgReportDesignWithResponse(ctx context.Context, org OrgHandle, params *CreateOrgReportDesignParams, body CreateOrgReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOrgReportDesignResponse, error) {
+	rsp, err := c.CreateOrgReportDesign(ctx, org, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOrgReportDesignResponse(rsp)
+}
+
+// DeleteOrgReportDesignWithResponse Remove one of the organization's house report designs, images included (admins).
+//
+// Another organization's design, or one already gone, is 404. Recorded in the organization's audit log (`org.report_design_delete`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/report-designs/{designId} (the `DeleteOrgReportDesign` operationId).
+func (c *ClientWithResponses) DeleteOrgReportDesignWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteOrgReportDesignResponse, error) {
+	rsp, err := c.DeleteOrgReportDesign(ctx, org, designId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgReportDesignResponse(rsp)
+}
+
+// GetOrgReportDesignWithResponse One of the organization's house report designs, for any active member.
+//
+// The design in its canonical form. Its images (`logo`, `coverImage`, `customCover`) come only with `include=assets`: a run that draws them asks for them, a console that lists them does not. Another organization's design is 404.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/report-designs/{designId} (the `GetOrgReportDesign` operationId).
+func (c *ClientWithResponses) GetOrgReportDesignWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, params *GetOrgReportDesignParams, reqEditors ...RequestEditorFn) (*GetOrgReportDesignResponse, error) {
+	rsp, err := c.GetOrgReportDesign(ctx, org, designId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgReportDesignResponse(rsp)
+}
+
+// UpdateOrgReportDesignWithBodyWithResponse Replace one of the organization's house report designs (admins).
+//
+// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. A name another of the organization's designs holds is 409 `conflict`. The images stay as they are unless the document carries them, as for a person's own design. An admin's change reaches a member's next run. Recorded in the organization's audit log (`org.report_design_update`).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId} (the `UpdateOrgReportDesign` operationId).
+func (c *ClientWithResponses) UpdateOrgReportDesignWithBodyWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrgReportDesignResponse, error) {
+	rsp, err := c.UpdateOrgReportDesignWithBody(ctx, org, designId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrgReportDesignResponse(rsp)
+}
+
+// UpdateOrgReportDesignWithResponse Replace one of the organization's house report designs (admins).
+//
+// A full replace of the document, validated as a create is, the field named `design.<path>` on a refusal, and the stored design standing. A name another of the organization's designs holds is 409 `conflict`. The images stay as they are unless the document carries them, as for a person's own design. An admin's change reaches a member's next run. Recorded in the organization's audit log (`org.report_design_update`).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId} (the `UpdateOrgReportDesign` operationId).
+func (c *ClientWithResponses) UpdateOrgReportDesignWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, params *UpdateOrgReportDesignParams, body UpdateOrgReportDesignJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrgReportDesignResponse, error) {
+	rsp, err := c.UpdateOrgReportDesign(ctx, org, designId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrgReportDesignResponse(rsp)
+}
+
+// DeleteOrgReportDesignCoverImageWithResponse Remove the cover image from one of the organization's house report designs (admins).
+//
+// The design stays. Removing a cover image that is not there is not an error. The answer carries the design with its images.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/cover-image (the `DeleteOrgReportDesignCoverImage` operationId).
+func (c *ClientWithResponses) DeleteOrgReportDesignCoverImageWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteOrgReportDesignCoverImageResponse, error) {
+	rsp, err := c.DeleteOrgReportDesignCoverImage(ctx, org, designId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgReportDesignCoverImageResponse(rsp)
+}
+
+// PutOrgReportDesignCoverImageWithBodyWithResponse Set the cover image of one of the organization's house report designs (admins).
+//
+// As `PUT /user/report-designs/{designId}/cover-image`: multipart, one part named `file`, a PNG or a JPEG of at most 2 MB, kept only as the core's own re-encoding of its pixels in the format it came in. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId}/cover-image (the `PutOrgReportDesignCoverImage` operationId).
+func (c *ClientWithResponses) PutOrgReportDesignCoverImageWithBodyWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgReportDesignCoverImageResponse, error) {
+	rsp, err := c.PutOrgReportDesignCoverImageWithBody(ctx, org, designId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutOrgReportDesignCoverImageResponse(rsp)
+}
+
+// DeleteOrgReportDesignCustomCoverWithResponse Remove the custom cover from one of the organization's house report designs (admins).
+//
+// The design stays, its cover style included. Removing a custom cover that is not there is not an error. The answer carries the design with its images.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/custom-cover (the `DeleteOrgReportDesignCustomCover` operationId).
+func (c *ClientWithResponses) DeleteOrgReportDesignCustomCoverWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteOrgReportDesignCustomCoverResponse, error) {
+	rsp, err := c.DeleteOrgReportDesignCustomCover(ctx, org, designId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgReportDesignCustomCoverResponse(rsp)
+}
+
+// PutOrgReportDesignCustomCoverWithBodyWithResponse Set the custom cover of one of the organization's house report designs (admins).
+//
+// As `PUT /user/report-designs/{designId}/custom-cover`: the custom cover whole, its source held to its bounds and never read, each image and the thumbnail encoded again by the core. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId}/custom-cover (the `PutOrgReportDesignCustomCover` operationId).
+func (c *ClientWithResponses) PutOrgReportDesignCustomCoverWithBodyWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgReportDesignCustomCoverResponse, error) {
+	rsp, err := c.PutOrgReportDesignCustomCoverWithBody(ctx, org, designId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutOrgReportDesignCustomCoverResponse(rsp)
+}
+
+// PutOrgReportDesignCustomCoverWithResponse Set the custom cover of one of the organization's house report designs (admins).
+//
+// As `PUT /user/report-designs/{designId}/custom-cover`: the custom cover whole, its source held to its bounds and never read, each image and the thumbnail encoded again by the core. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId}/custom-cover (the `PutOrgReportDesignCustomCover` operationId).
+func (c *ClientWithResponses) PutOrgReportDesignCustomCoverWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, body PutOrgReportDesignCustomCoverJSONRequestBody, reqEditors ...RequestEditorFn) (*PutOrgReportDesignCustomCoverResponse, error) {
+	rsp, err := c.PutOrgReportDesignCustomCover(ctx, org, designId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutOrgReportDesignCustomCoverResponse(rsp)
+}
+
+// DeleteOrgReportDesignLogoWithResponse Remove the logo from one of the organization's house report designs (admins).
+//
+// The design stays. Removing a logo that is not there is not an error. The answer carries the design with its images.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/report-designs/{designId}/logo (the `DeleteOrgReportDesignLogo` operationId).
+func (c *ClientWithResponses) DeleteOrgReportDesignLogoWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, reqEditors ...RequestEditorFn) (*DeleteOrgReportDesignLogoResponse, error) {
+	rsp, err := c.DeleteOrgReportDesignLogo(ctx, org, designId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgReportDesignLogoResponse(rsp)
+}
+
+// PutOrgReportDesignLogoWithBodyWithResponse Set the logo of one of the organization's house report designs (admins).
+//
+// As `PUT /user/report-designs/{designId}/logo`: multipart, one part named `file`, a PNG or a JPEG of at most 512 KB, kept only as the core's own re-encoding of its pixels. Recorded in the organization's audit log (`org.report_design_update`). The answer carries the design with its images.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/report-designs/{designId}/logo (the `PutOrgReportDesignLogo` operationId).
+func (c *ClientWithResponses) PutOrgReportDesignLogoWithBodyWithResponse(ctx context.Context, org OrgHandle, designId ReportDesignId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgReportDesignLogoResponse, error) {
+	rsp, err := c.PutOrgReportDesignLogoWithBody(ctx, org, designId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutOrgReportDesignLogoResponse(rsp)
+}
+
 // SuspendOrgWithBodyWithResponse Suspend the organization (platform staff). It and everything under it answer 404 to everyone, over the API and over git, until it is reinstated. Nothing is deleted.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -33600,6 +35475,365 @@ func ParseReinstateOrgResponse(rsp *http.Response) (*ReinstateOrgResponse, error
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListOrgReportDesignsResponse parses an HTTP response from a ListOrgReportDesignsWithResponse call
+func ParseListOrgReportDesignsResponse(rsp *http.Response) (*ListOrgReportDesignsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOrgReportDesignsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgReportDesignList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateOrgReportDesignResponse parses an HTTP response from a CreateOrgReportDesignWithResponse call
+func ParseCreateOrgReportDesignResponse(rsp *http.Response) (*CreateOrgReportDesignResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateOrgReportDesignResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest OrgReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgReportDesignResponse parses an HTTP response from a DeleteOrgReportDesignWithResponse call
+func ParseDeleteOrgReportDesignResponse(rsp *http.Response) (*DeleteOrgReportDesignResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgReportDesignResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgReportDesignResponse parses an HTTP response from a GetOrgReportDesignWithResponse call
+func ParseGetOrgReportDesignResponse(rsp *http.Response) (*GetOrgReportDesignResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgReportDesignResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateOrgReportDesignResponse parses an HTTP response from a UpdateOrgReportDesignWithResponse call
+func ParseUpdateOrgReportDesignResponse(rsp *http.Response) (*UpdateOrgReportDesignResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateOrgReportDesignResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgReportDesignCoverImageResponse parses an HTTP response from a DeleteOrgReportDesignCoverImageWithResponse call
+func ParseDeleteOrgReportDesignCoverImageResponse(rsp *http.Response) (*DeleteOrgReportDesignCoverImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgReportDesignCoverImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutOrgReportDesignCoverImageResponse parses an HTTP response from a PutOrgReportDesignCoverImageWithResponse call
+func ParsePutOrgReportDesignCoverImageResponse(rsp *http.Response) (*PutOrgReportDesignCoverImageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutOrgReportDesignCoverImageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgReportDesignCustomCoverResponse parses an HTTP response from a DeleteOrgReportDesignCustomCoverWithResponse call
+func ParseDeleteOrgReportDesignCustomCoverResponse(rsp *http.Response) (*DeleteOrgReportDesignCustomCoverResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgReportDesignCustomCoverResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutOrgReportDesignCustomCoverResponse parses an HTTP response from a PutOrgReportDesignCustomCoverWithResponse call
+func ParsePutOrgReportDesignCustomCoverResponse(rsp *http.Response) (*PutOrgReportDesignCustomCoverResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutOrgReportDesignCustomCoverResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgReportDesignLogoResponse parses an HTTP response from a DeleteOrgReportDesignLogoWithResponse call
+func ParseDeleteOrgReportDesignLogoResponse(rsp *http.Response) (*DeleteOrgReportDesignLogoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgReportDesignLogoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgReportDesignRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutOrgReportDesignLogoResponse parses an HTTP response from a PutOrgReportDesignLogoWithResponse call
+func ParsePutOrgReportDesignLogoResponse(rsp *http.Response) (*PutOrgReportDesignLogoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutOrgReportDesignLogoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgReportDesignRecord
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -627,8 +627,8 @@ func TestHiddenFromOutsidersIsOnlyOnMemberRoutes(t *testing.T) {
 			t.Errorf("%s: %s admits a caller with no role in the organization", id, d.Action)
 		}
 	}
-	if n != 11 {
-		t.Fatalf("%d routes are HiddenFromOutsiders, want the 11 of shared knowledge", n)
+	if n != 22 {
+		t.Fatalf("%d routes are HiddenFromOutsiders, want the 11 of shared knowledge and the 11 of house designs", n)
 	}
 }
 

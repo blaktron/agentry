@@ -3437,6 +3437,38 @@ offer each as the nearest shade that passes the contrast rule for text,
 for an editor to show as a suggestion for the accent and the secondary;
 nothing applies them unasked.
 
+**House designs.** An organization keeps a library of its own, which its
+admins make and its members pick for a run: a brand is usually an
+organization's, and a house design spares each member a copy of it. The
+routes are the personal ones under the organization, with the same
+validation, the same images and the same answers, at
+`/api/v1/orgs/{org}/report-designs`:
+
+| Route | Who |
+|---|---|
+| `GET /api/v1/orgs/{org}/report-designs`, `…/{id}`, `…/{id}?include=assets` | members: the library, one design, one design with its images |
+| `POST /api/v1/orgs/{org}/report-designs` | admins: add a design from its document; an eleventh is 409 |
+| `PUT`, `DELETE /api/v1/orgs/{org}/report-designs/{id}` | admins: replace the document (the images stay unless it carries them), remove the design |
+| `PUT`, `DELETE …/{id}/logo`, `…/{id}/cover-image`, `…/{id}/custom-cover` | admins: the images, as a person's own |
+
+What differs from a person's library: a design's name is unique within the
+organization, compared without regard to case, since a run names a house
+design by the organization's handle and the design's name (`org/NAME`), so
+a second of a name is 409; there is no default, a member picks a house
+design per run and a run that picks none takes the person's own default;
+and a member cannot change a house design, so an admin's change reaches
+every member's next run. A read needs the `user:profile` scope a sign-in
+carries, a write the `org:admin` scope. Membership is read at every call:
+a signed-in caller who is not an active member of the organization is
+answered 404 on every route, as for its shared knowledge, so a member who
+is removed, or who leaves, is refused the library from their next call on
+and their next run goes on in their own default. While an organization is
+in its decommission hold the reads still work and the writes do not, and
+its erasure removes every house design and image. Each admin's write is in
+the organization's audit log (`org.report_design_create`,
+`org.report_design_update`, naming the image when one changed, and
+`org.report_design_delete`), naming the design and never a byte of it.
+
 **How a run takes a design.** A hosted run's job carries the design the run
 picked, or the account's default, to a sandbox host that says it takes the
 design's version; a host that reads only version 2 is handed the design's
