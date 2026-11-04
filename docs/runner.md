@@ -124,7 +124,7 @@ One QuickAgent, one job, one container tree, then gone.
 | `--file PATH` | provide a file or directory to the run, read-only under `/inputs` (repeatable; basename-rooted; duplicate basenames refused); it is checked for malware and turned into text before the agent starts ([running with files](#running-with-files)) |
 | `--knowledge DIR` | attach a knowledge pack read-only at `/knowledge/<name>`, searched with the knowledge tools (repeatable; [below](#knowledge-packs)) |
 | `--voice` / `--no-voice` | attach the [Writing Voice](#a-writing-voice) kept on this computer to this run, or leave it off; with neither, the voice's own flag decides (`agentry voice attach on\|off`) |
-| `--report-theme NAME` | the [report theme](#the-report-theme) this run's PDFs take, for this run alone: `plain`, `formal`, `brief`, `technical` or `letter` (default: the signed-in account's, else `report.theme` in the CLI's config, else `plain`); any other name refuses the run (exit 2) |
+| `--report-theme NAME` | the [report design](#the-report-design) this run's PDFs take, for this run alone: `plain`, `formal`, `brief`, `technical` or `letter` (default: the signed-in account's, else `report.theme` in the CLI's config, else `plain`); any other name refuses the run (exit 2) |
 | `--voice-file FILE` | attach the `VOICE.md` in FILE instead of the one kept here: a regular file, never through a link, at most 32 KiB (for a driver such as a sandbox host) |
 | `--out DIR` | output folder (default `./agentry-out/<ns>-<name>-<runid>/`) |
 | `--deliver-to DIR` | copy the run's [deliverables](#deliverables), the files it was for, to `DIR/<QuickAgent>/<date time> <title>/` once it succeeds (default: `deliver.folder` in the CLI's config, else nowhere; needs agentry-cli v0.6.138 or later) |
@@ -2960,7 +2960,7 @@ adds a browser, a site, a host or a secret, or moves from `site` to
 ## The scratch folder and PDF reports
 
 From agentry-cli v0.6.82 every release's run and session gets a
-**scratch folder** and the **`export_pdf`** tool, with five report themes.
+**scratch folder** and the **`export_pdf`** tool, laid out in the person's report design.
 They are the runner's grants, not lines of
 the contract: no manifest declares them, and an install asks no consent for
 them. A hosted run has them on a
@@ -3257,145 +3257,207 @@ What a render is held to:
 first 1,024 bytes. With the rule that a declared command cannot write
 `/out`, `export_pdf` is the only way a PDF reaches `reports/`.
 
-### The report theme
+### The report design
 
-How a PDF looks comes from a **theme document** (`"agentryTheme": 1`:
-page, fonts, sizes, colours, header, footer, tables), one template for all
-of them. The model never chooses it: `export_pdf` takes no theme argument,
-and a request for "something formal" changes the words, not the layout.
-There are five, all in the runner image from agentry-cli v0.6.82:
-
-- **Plain**, the default: Noto Sans, page numbers.
-- **Formal**: Noto Serif, a cover page with the title and the date, and
-  "n of N" counting the body's pages. The cover is drawn only for a report
-  whose first heading is its title; a report with no heading starts on its
-  first page.
-- **Brief**: a compact memo, its heading ruled, no cover. Its length is the
-  agent's writing; nothing cuts it to a page or two.
-- **Technical**: dense, with banded tables, a stronger code background and
-  "n of N".
-- **Letter**: Noto Serif, the first heading as a centred, ruled letterhead,
-  and each short line of a paragraph kept as its own line, so an address
-  block or a To, From, Date and Subject block stays one to a line. A line
-  of 60 characters or more is prose wrapped in the source and is joined as
-  usual. A letter with no heading has no letterhead.
-
-No theme carries a logo, a name or an address, and none carries Agentry's
-branding.
-
-The account's setting is a **report design**: the whole theme document
-version 2, not a theme's name. `GET` and `PUT /api/v1/user/report-settings` read and write
-it, with the `user:profile` scope that the CLI's and the desktop's sign-in
-carries:
-
-```json
-{"design": {
-  "agentryTheme": 2, "name": "Technical", "basedOn": "technical", "version": 1,
-  "paper": "a4",
-  "fonts": {"headings": "IBM Plex Sans", "body": "IBM Plex Sans", "code": "IBM Plex Mono"},
-  "accent": "#0f766e", "titleBlock": "ruled", "headings": "numbered",
-  "tables": {"tinted": true, "banded": true}, "quotes": "callout",
-  "footer": {"pageNumbers": "nOfN", "text": ""}
-}}
-```
+How a PDF looks comes from the person's **report design**: a theme
+document (`"agentryTheme": 3`) that is a whole brand. The model never
+chooses it: `export_pdf` takes a form (`report`, `letter`, `memo`) and no
+design, colour, font or cover, and a request for "something formal" changes
+the words, not the layout. An account keeps a **library** of up to ten
+named designs with one of them the default, and the person picks one per
+run.
 
 The core's `pkg/reportdesign` is the one definition of a design: the type,
-the closed lists, the five built-in themes (Plain, Classic, Modern,
-Editorial, Technical) as embedded documents, the JSON Schema the openapi's
-`ReportDesign` mirrors, and the validation a `PUT` runs before it stores
-anything:
-
-- every field present and no other key, at most 16 KB as sent;
-- `paper` `a4` or `letter`; `titleBlock` `band`, `bar`, `ruled` or `none`;
-  `headings` `rule`, `bar`, `smallcaps`, `numbered` or `plain`; `quotes`
-  `callout` or `plain`; `footer.pageNumbers` `none`, `n` or `nOfN`;
-- the three faces from the fourteen families in the Typst image: any for
-  headings, a sans or serif that is not a display face (Montserrat,
-  Playfair Display) for the body, a mono for code;
-- `accent` a `#rrggbb` colour in lower case that reaches 4.5:1 on white
-  where it touches text (a `band` title block, `smallcaps` or `numbered`
-  headings) and 3:1 where it colours only rules, bars and tints. A refusal
-  names the nearest shade that passes. The tint is derived (12% of the
-  accent over white), never stored;
-- `name` (60 characters) and `footer.text` (120) one line of plain text, no
-  control, line-break, bidirectional formatting or other invisible format
-  characters (zero-width characters, the soft hyphen, the tag block). The
-  footer is set as text by the template, never evaluated;
-- `agentryTheme` 2. The version-1 documents and the old names (`formal`,
-  `brief`, `letter`) are not read.
-
-A refusal is a 422 whose field is `design.<path>` (`design.fonts.body`).
-The answer, and every later read, is the design's canonical document. An
-account that never chose reads back `{}`, which is not the same as Plain,
-and a `PUT` with no `design` clears the choice. Clearing an account's data
-clears it too. An account that had saved only a theme's name reads back as
-never chosen.
-
-**The logo.** A design may carry the person's own
-logo, which the runner draws only in the title block. It never comes from
-the model or from a URL: the person uploads a file to
-`PUT /api/v1/user/report-settings/logo`, one multipart part named `file`,
-a PNG or a JPEG of at most 512 KB. The core decodes it, scales it down to
-fit 1,024 pixels each way and encodes it again as PNG from the pixels, so
-nothing of the upload but its pixels is kept. SVG, GIF and anything else
-is 415. Over 512 KB, over 16 million pixels, or over 512 KB once encoded
-as PNG is 413. With no design saved it is 409, because a logo travels with
-a design. `DELETE /api/v1/user/report-settings/logo` removes it and keeps
-the design.
-
-In the document the logo is the optional last key, the PNG in standard
-base64. It is not counted in the 16 KB:
+the closed lists, the tokens, the cover styles, the ten built-in themes as
+embedded documents, the JSON Schema the openapi's `ReportDesign` mirrors,
+and the validation the registry runs before it stores anything. A design is
+data, never markup, with one bounded exception, the custom cover below.
 
 ```json
-"logo": {"png": "iVBORw0KGgo…"}
+{
+  "agentryTheme": 3, "name": "Technical", "basedOn": "technical", "version": 1,
+  "paper": "a4",
+  "fonts": {"headings": "IBM Plex Sans", "body": "IBM Plex Sans", "code": "IBM Plex Mono"},
+  "accent": "#0f766e", "secondary": "",
+  "titleBlock": "ruled", "headings": "numbered", "headingScale": "regular", "margins": "regular",
+  "tables": {"tinted": true, "banded": true}, "quotes": "callout",
+  "brand": {"name": "", "strapline": "", "contact": [], "website": "", "confidentiality": ""},
+  "header": {"style": "titleAndPage", "slots": ["{title}", "", "{page} of {pages}"]},
+  "footer": {"pageNumbers": "nOfN", "slots": ["", "", ""]},
+  "cover": {"style": "geometric", "shows": ["title", "subtitle", "author", "date"], "when": "long"}
+}
 ```
 
-`pkg/reportdesign` holds it to a PNG of at most 512 KB and 1,024 pixels
-each way that decodes whole, and its canonical form and SHA-256 cover it. A
-design without a logo has no `logo` key, so the built-ins' documents and
-hashes are unchanged. A `GET` (or the answer to a `PUT`) carries the logo
-only with `?include=logo`, because a client built before logos refuses a
-key it does not know and would run without the design. A `PUT` of a design
-with no `logo` leaves a stored logo as it is, so such a client cannot drop
-one by saving. A `PUT` of a design that carries one replaces it with the
-core's own encoding of it. Clearing the design, clearing the account's
-data and erasing the account delete the logo with it.
+**The document.** Every field is present and no other key is accepted; the
+canonical form is at most 24 KB without its images and custom cover.
 
-A CLI run takes the first of these that is set:
+- `name` (60 characters) is the design's label; `basedOn` names the
+  built-in it started from; `version` is its revision.
+- `paper` is `a4` or `letter`; `titleBlock` `band`, `bar`, `ruled` or
+  `none`; `headings` `rule`, `bar`, `smallcaps`, `numbered` or `plain`;
+  `headingScale` `compact`, `regular` or `generous`; `margins` `narrow`,
+  `regular` or `wide`; `quotes` `callout` or `plain`; `footer.pageNumbers`
+  `none`, `n` or `nOfN`.
+- The three faces come from the twenty-two families in the Typst image:
+  any for headings, a sans or serif that is not a display face
+  (Montserrat, Playfair Display, Fraunces) for the body, a mono for code.
+- `accent` is a `#rrggbb` colour in lower case; `secondary` another, or
+  empty for none. Each must reach 4.5:1 on white where it carries text and
+  3:1 where it colours only rules, bars, shapes and tints. The accent
+  carries text under a `band` title block, `smallcaps` or `numbered`
+  headings, and a cover that is drawn in the `band`, `largeType` or `plate`
+  style (or `split` with no secondary); the secondary carries text on a
+  drawn `split` cover. A refusal names the nearest shade that passes. Each
+  colour's tint is derived (12% of it over white), never stored.
+- `brand` is who the report is from: `name` (60 characters), `strapline`,
+  up to four `contact` lines, `website` (a host name or an https address,
+  drawn as text, never a link) and `confidentiality` (120 each), every one
+  optional. The template draws them where a header, a footer or a cover
+  asks for them.
+- `header` is the running header, drawn from page 2 on a report, on every
+  page of a memo and never on a letter: `style` `none`, `rule`,
+  `brandLine` (the brand's name at the left), `titleAndPage` or `logoLeft`
+  (the logo small at the left), and three `slots` (left, centre, right).
+  `footer` has its page numbers and three slots of its own. A slot is one
+  line of at most 120 characters of literal text and **tokens** from a
+  closed set: `{title}`, `{author}`, `{date}`, `{page}`, `{pages}`,
+  `{brand}`, `{section}` (the current level-1 heading) and
+  `{confidentiality}`. The template substitutes the tokens and sets the
+  result as text, never evaluates it; anything else between braces, and
+  any Typst markup in a slot, is literal text on the page.
+- `cover` is the cover page: `style` from the six built-in layouts or
+  `custom`; `shows`, the facts it carries, each at most once, from
+  `title`, `subtitle`, `author`, `date`, `brand`, `logo` and
+  `confidentiality`; and `when`: `long` draws it for a titled report past
+  the template's length threshold, `always` for every titled report,
+  `never` for none.
+- Every free text is one line of plain text: no control, line-break,
+  bidirectional formatting or other invisible format characters
+  (zero-width characters, the soft hyphen, the tag block).
 
-1. `agentry run --report-theme <name>`, for that run alone;
-2. the account's report theme, when the CLI is signed in to its registry
-   (read when the run starts, but not by `--dry-run` or `--prepare`; an
-   account that never chose one is skipped);
-3. `report.theme` in the CLI's config (`~/.config/agentry/config.yaml`):
+**The cover styles.** `band` sets the title in white on a full-height
+accent panel at the top third. `split` runs a secondary panel down the
+left third with the brand and the logo in white, the title in ink on
+white. `geometric` is an ink title on white with accent and secondary
+shapes. `largeType` sets the title at display size in the accent and
+nothing else above the fold. `framed` is a hairline frame, a centred title,
+the brand and the date. `plate` runs the cover image across the top half
+with the title block below, and without a cover image draws as `band`.
+`custom` draws the design's custom cover, and falls back to `band` when
+that cannot be drawn.
 
-   ```yaml
-   report:
-     theme: letter
-   ```
+**The built-in themes** are ten kits, each a complete design that is
+exactly a value of the editors' model: Plain (the default, near-monochrome),
+Classic, Modern, Editorial, Technical, Boardroom, Studio, Field, Civic and
+Lumen. Loading one is one click, and its document round-trips byte for
+byte. None carries a logo, a name, an address or Agentry's branding.
 
-4. Plain.
+**The images.** A design may carry three, each the person's own upload,
+never the model's and never a URL, each kept only as the core's own
+encoding of its pixels and never counted in the 24 KB:
 
-A name typed in the flag or the config that is not a theme's refuses the
-run before anything starts (exit 2). The account's theme is only read: if
-the registry cannot be reached, or names a theme this CLI does not have,
-the run warns on stderr and takes the next choice, since how a PDF looks is
+- the **logo** (`logo`), a PNG of at most 512 KB and 1,024 pixels each way,
+  drawn in the title block, on a cover whose facts include it and in a
+  `logoLeft` header;
+- the **cover image** (`coverImage`), a PNG or a JPEG of at most 2 MB and
+  2,048 pixels each way, under the key that names its format
+  (`{"jpeg": "…"}`), drawn across the top of a `plate` cover and offered to
+  a custom cover;
+- the **custom cover** (`customCover`), below.
+
+**The custom cover** is the one field of a design that is code. Its
+`source` is Typst, at most 32 KiB of text, which the person writes or the
+Report Designer writes for them; its `images` are up to six PNG or JPEG
+files, 2 MB in all; its `thumbnail` is a PNG of its last render, at most
+300 KB, for the editors. When the cover style is `custom` and the form and
+`when` call for a cover, the runner's tools server writes the source as
+`cover.typ` and the images under `cover/` in the render root, and the
+template calls the source as a function of the facts it has (the title,
+subtitle, author and date, the brand block, the design's colours and faces,
+the paths of the logo and the images) and places what it returns as the
+first page, then continues as a built-in cover does. The trust boundary of
+that code is the render root and nothing beyond it: it can read the report,
+the design, the facts and the images copied there, none of which is secret,
+and it has no shell, no network, no package imports and no file writes,
+because the renderer runs under the same confinement as every export
+(offline, the package downloader compiled out, a fixed argument list, an
+empty environment, a time and memory cap). The registry holds the cover to
+its bounds and never reads the code. A custom cover that fails to compile,
+draws more or fewer than one page, leaves an image untagged or runs past
+the cap is passed over for the design's built-in cover style; the agent's
+answer and the receipt say so, naming the kind of failure and never the
+compiler's text, and the export never fails for its cover.
+
+**The library.** The registry keeps an account's designs at
+`/api/v1/user/report-designs`, with the `user:profile` scope that the CLI's
+and the desktop's sign-in carries, and every route reaches only the
+caller's own:
+
+- `GET /api/v1/user/report-designs` lists them (id, name, the built-in it
+  started from, its revision, which images it has) and names the default.
+  An account with no designs, or none as the default, answers no default,
+  which is not the same as Plain: a signed-in client then falls to its own
+  configuration, else Plain.
+- `POST /api/v1/user/report-designs` adds one from its document
+  (`{"design": {…}, "default": true}`), validated as above; an eleventh is
+  409. `default` makes it the default; without it the default is unchanged.
+- `GET`, `PUT` and `DELETE /api/v1/user/report-designs/{id}` read, replace
+  and remove one. A `PUT` replaces the document and leaves the images as
+  they are unless the document carries them, so a client that does not
+  know an image never drops one by saving. Deleting the default leaves the
+  account with none.
+- `PUT /api/v1/user/report-designs/default` with `{"id": "…"}` picks the
+  default; `{}` or `{"id": null}` makes none the default.
+- `PUT` and `DELETE /api/v1/user/report-designs/{id}/logo` and
+  `/cover-image` take and remove an image: one multipart part named `file`,
+  a PNG or a JPEG within the bounds above, decoded, scaled down to fit and
+  encoded again from its pixels, so nothing of the upload but its pixels is
+  kept. SVG, GIF and anything else is 415; over a bound is 413.
+- `PUT` and `DELETE /api/v1/user/report-designs/{id}/custom-cover` take
+  and remove the custom cover whole, as JSON (`source`, `images` in base64,
+  `thumbnail`), each image encoded again by the core.
+- The images come only with `?include=assets`, on a read and on the answer
+  to a write; without it the document comes without `logo`, `coverImage`
+  and `customCover`, and the record says which it has, so a client that
+  does not draw them reads the document whole and small.
+
+A refusal is a 422 whose field is `design.<path>` (`design.fonts.body`,
+`design.cover.shows.1`). The answer, and every later read, is the design's
+canonical document. A document of an earlier version is refused by its
+version, with no mapping: the registry moved every stored version-2 design
+forward once, as one default design of the same name with no header, its
+footer line in the left slot, a `band` cover for a `band` title block and
+a `framed` cover otherwise, drawn for a long report. Clearing the account's
+data and erasing the account remove every design and image.
+
+**Suggested colours.** The core can read a logo's two dominant colours and
+offer each as the nearest shade that passes the contrast rule for text,
+for an editor to show as a suggestion for the accent and the secondary;
+nothing applies them unasked.
+
+**How a run takes a design.** A hosted run's job carries the design the run
+picked, or the account's default, to a sandbox host that says it takes the
+design's version; a host that reads only version 2 is handed the design's
+version-2 projection (its accent, faces, title block, headings, tables,
+quotes, page numbers and the first footer slot's text, with a family or a
+built-in it does not know replaced by the nearest it does). A CLI from
+before the library reads no account design and takes its own
+configuration, else Plain. A choice typed at the CLI that is not a design
+refuses the run before anything starts (exit 2); an account design the CLI
+cannot read is a warning and the next choice runs, since how a PDF looks is
 no reason to stop a run.
 
-The other places the theme is chosen and used:
+The other places the design is chosen and used:
 
-- **The site** sets the design on its *Report design* page.
-- **The desktop app** sets it on its own *Report design* page and passes
-  the account's choice to every local run and chat. It has no
-  `report.theme` of its own, so *Not chosen* is Plain there.
+- **The site** keeps the library on its *Report design* page.
+- **The desktop app** keeps it on its own *Report design* page and passes
+  the picked design to every local run and chat. It has no configuration
+  of its own, so *Not chosen* is Plain there.
 - **A hosted run** holds a run grant, not the person's sign-in, so its CLI
-  never reads the account. Agentry reads the account's choice when it hands
-  the run to a sandbox host and puts it in the job, and the host passes it
-  as `--report-theme`. So the receipt says
-  "chosen by the --report-theme flag". A host whose runhost is too old to
-  take it is sent no theme, and its runs use Plain.
+  never reads the account. Agentry reads the design when it hands the run
+  to a sandbox host and puts it in the job.
 
-There is no theme picker in a run dialog.
+The agent never picks a design.
 
 ### What the receipt records
 

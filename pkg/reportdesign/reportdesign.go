@@ -478,8 +478,8 @@ func Parse(data []byte) (Design, error) {
 	// Before reading it: the most a document may be with every image and
 	// the custom cover at their largest, which counts the whole document
 	// as sent.
-	if len(data) > maxDocumentWithAssets {
-		return Design{}, fieldErr("", "the document is %d bytes, over the %d bytes a document may be with its images and custom cover", len(data), maxDocumentWithAssets)
+	if len(data) > MaxDocumentWithAssets {
+		return Design{}, fieldErr("", "the document is %d bytes, over the %d bytes a document may be with its images and custom cover", len(data), MaxDocumentWithAssets)
 	}
 	if !utf8.Valid(data) {
 		return Design{}, fieldErr("", "the document is not UTF-8")
@@ -778,7 +778,7 @@ func (d Design) Validate() error {
 		}
 	}
 	if !d.CustomCover.IsZero() {
-		return d.CustomCover.validate()
+		return d.CustomCover.Validate()
 	}
 	return nil
 }

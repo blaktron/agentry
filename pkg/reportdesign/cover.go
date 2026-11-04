@@ -35,12 +35,13 @@ const (
 	MaxThumbnailBytes = 300 << 10
 )
 
-// maxDocumentWithAssets is the most a document may be as sent with every
+// MaxDocumentWithAssets is the most a document may be as sent with every
 // image at its largest and the custom cover at its bounds: the base64 of
 // each image, the source escaped for JSON (a line break or a quote takes
 // two bytes, a control character six) and a margin for the keys around
-// them, over MaxDocumentBytes for the document itself.
-var maxDocumentWithAssets = MaxDocumentBytes +
+// them, over MaxDocumentBytes for the document itself. A server reads a
+// design's body up to this.
+var MaxDocumentWithAssets = MaxDocumentBytes +
 	base64.StdEncoding.EncodedLen(MaxLogoBytes) +
 	base64.StdEncoding.EncodedLen(MaxCoverImageBytes) +
 	6*MaxCoverSourceBytes +
@@ -99,13 +100,13 @@ func (w *wireCustomCover) customCover() (CustomCover, error) {
 	return out, nil
 }
 
-// validate holds the custom cover to its bounds: a source that is not
+// Validate holds the custom cover to its bounds: a source that is not
 // empty, UTF-8 text with no control character but a tab, a line feed or a
 // carriage return, at most MaxCoverSourceBytes; at most MaxCoverImages
 // images, each a PNG or a JPEG within the cover image's pixel bound, and
 // MaxCoverImagesBytes in all; a thumbnail that is a PNG of at most
 // MaxThumbnailBytes.
-func (c CustomCover) validate() error {
+func (c CustomCover) Validate() error {
 	if strings.TrimSpace(c.Source) == "" {
 		return fieldErr("customCover.source", "must not be empty; a design without a custom cover has no customCover key")
 	}

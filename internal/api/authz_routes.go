@@ -254,13 +254,21 @@ var routeAuthz = map[string]RouteDecl{
 	// The report theme, a profile setting like the above:
 	// user:profile, which the sign-in grant carries, so the CLI and the
 	// desktop read it for a local run.
-	"getUserReportSettings":    {Action: auth.ActUserSelfRead},
-	"updateUserReportSettings": {Action: auth.ActUserSelfUpdate},
-	// Its logo, the same setting's image.
-	"putUserReportLogo":       {Action: auth.ActUserSelfUpdate},
-	"deleteUserReportLogo":    {Action: auth.ActUserSelfUpdate},
-	"revokeUserSession":       {Action: auth.ActUserSecurityManage, SessionOnly: true},
-	"revokeOtherUserSessions": {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	// The report design library is the caller's own: self-scoped.
+	"listUserReportDesigns":             {Action: auth.ActUserSelfRead},
+	"createUserReportDesign":            {Action: auth.ActUserSelfUpdate},
+	"setUserReportDesignDefault":        {Action: auth.ActUserSelfUpdate},
+	"getUserReportDesign":               {Action: auth.ActUserSelfRead},
+	"updateUserReportDesign":            {Action: auth.ActUserSelfUpdate},
+	"deleteUserReportDesign":            {Action: auth.ActUserSelfUpdate},
+	"putUserReportDesignLogo":           {Action: auth.ActUserSelfUpdate},
+	"deleteUserReportDesignLogo":        {Action: auth.ActUserSelfUpdate},
+	"putUserReportDesignCoverImage":     {Action: auth.ActUserSelfUpdate},
+	"deleteUserReportDesignCoverImage":  {Action: auth.ActUserSelfUpdate},
+	"putUserReportDesignCustomCover":    {Action: auth.ActUserSelfUpdate},
+	"deleteUserReportDesignCustomCover": {Action: auth.ActUserSelfUpdate},
+	"revokeUserSession":                 {Action: auth.ActUserSecurityManage, SessionOnly: true},
+	"revokeOtherUserSessions":           {Action: auth.ActUserSecurityManage, SessionOnly: true},
 	// Remembered browsers, on the sessions' rule: a token
 	// reads a count of 0 and cannot clear them.
 	"countTrustedDevices": {Action: auth.ActUserSelfRead},

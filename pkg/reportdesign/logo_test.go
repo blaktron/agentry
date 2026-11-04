@@ -452,7 +452,7 @@ func TestDesignWithLogoRoundTrips(t *testing.T) {
 	// Past the most a document may be with every image and the custom cover
 	// at their largest, it is refused as a whole before it is read; at that
 	// size it is read, and the logo field is the refusal.
-	limit := maxDocumentWithAssets
+	limit := MaxDocumentWithAssets
 	asSent := func(fieldLen int) []byte {
 		return []byte(strings.TrimSuffix(string(plain.Canonical()), "\n}\n") + `,"logo":{"png":"` + strings.Repeat("A", fieldLen) + `"}}`)
 	}

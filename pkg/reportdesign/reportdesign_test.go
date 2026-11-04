@@ -259,10 +259,10 @@ func TestValidationTable(t *testing.T) {
 		{"slot over 120", "header.slots", []string{strings.Repeat("x", 121), "", ""}, "header.slots.0"},
 		{"slot two lines", "footer.slots", []string{"", "one\ntwo", ""}, "footer.slots.1"},
 		{"slot tab", "footer.slots", []string{"", "", "a\tb"}, "footer.slots.2"},
-		{"slot bidi override", "header.slots", []string{"Invoice ‮exe.pdf", "", ""}, "header.slots.0"},
-		{"slot line separator", "header.slots", []string{"", "a b", ""}, "header.slots.1"},
+		{"slot bidi override", "header.slots", []string{"Invoice \u202eexe.pdf", "", ""}, "header.slots.0"},
+		{"slot line separator", "header.slots", []string{"", "a\u2028b", ""}, "header.slots.1"},
 		{"slot only spaces", "footer.slots", []string{"   ", "", ""}, "footer.slots.0"},
-		{"slot zero-width space", "footer.slots", []string{"a​b", "", ""}, "footer.slots.0"},
+		{"slot zero-width space", "footer.slots", []string{"a\u200bb", "", ""}, "footer.slots.0"},
 		{"empty name", "name", "", "name"},
 		{"blank name", "name", "  ", "name"},
 		{"long name", "name", strings.Repeat("n", 61), "name"},
@@ -270,7 +270,7 @@ func TestValidationTable(t *testing.T) {
 		{"blank brand name", "brand.name", "  ", "brand.name"},
 		{"brand name two lines", "brand.name", "a\nb", "brand.name"},
 		{"long strapline", "brand.strapline", strings.Repeat("s", 121), "brand.strapline"},
-		{"strapline soft hyphen", "brand.strapline", "a­b", "brand.strapline"},
+		{"strapline soft hyphen", "brand.strapline", "a\u00adb", "brand.strapline"},
 		{"five contact lines", "brand.contact", []string{"a", "b", "c", "d", "e"}, "brand.contact"},
 		{"empty contact line", "brand.contact", []string{"a", ""}, "brand.contact.1"},
 		{"long contact line", "brand.contact", []string{strings.Repeat("c", 121)}, "brand.contact.0"},
@@ -285,7 +285,7 @@ func TestValidationTable(t *testing.T) {
 		{"website one label", "brand.website", "localhost", "brand.website"},
 		{"website with a scheme in the path", "brand.website", "javascript:alert(1)", "brand.website"},
 		{"long confidentiality", "brand.confidentiality", strings.Repeat("c", 121), "brand.confidentiality"},
-		{"confidentiality bidi mark", "brand.confidentiality", "a‏b", "brand.confidentiality"},
+		{"confidentiality bidi mark", "brand.confidentiality", "a\u200fb", "brand.confidentiality"},
 		{"unknown cover style", "cover.style", "hero", "cover.style"},
 		{"unknown cover fact", "cover.shows", []string{"title", "price"}, "cover.shows.1"},
 		{"cover fact twice", "cover.shows", []string{"title", "date", "title"}, "cover.shows.2"},
@@ -567,7 +567,7 @@ func TestValidationTable(t *testing.T) {
 	tooBig := modern(t)
 	set(tooBig, "brand.contact", []string{strings.Repeat("c", 120), strings.Repeat("c", 120), strings.Repeat("c", 120), strings.Repeat("c", 120)})
 	for name, data := range map[string][]byte{
-		"over-size":     append(bytes.Repeat([]byte(" "), maxDocumentWithAssets), doc...),
+		"over-size":     append(bytes.Repeat([]byte(" "), MaxDocumentWithAssets), doc...),
 		"two values":    append(append([]byte{}, doc...), []byte("{}")...),
 		"an array":      []byte("[]"),
 		"not json":      []byte("agentryTheme: 3"),

@@ -727,9 +727,9 @@
           ]
         },
         {
-          "path": "internal/api/user_report_logo_test.go",
+          "path": "internal/api/user_report_design_assets_test.go",
           "tests": [
-            "TestReportLogo"
+            "TestReportDesignAssets"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -740,9 +740,9 @@
           ]
         },
         {
-          "path": "internal/api/user_report_settings_test.go",
+          "path": "internal/api/user_report_designs_test.go",
           "tests": [
-            "TestReportSettingsRoundTrip",
+            "TestReportDesignsRoundTrip",
             "TestOpenAPIReportDesignIsTheCoreSchema"
           ],
           "fuzz": [],
@@ -4697,7 +4697,7 @@
             "TestBindHandsTheVoiceStore",
             "TestVoiceStoreProposesOnlyTheSourcesAVoiceWriterHas",
             "TestBindHandsTheServersMeter",
-            "TestBindHandsTheReportSettings",
+            "TestBindHandsTheReportDesigns",
             "TestBindHandsTheAccountsDoor",
             "TestBindHandsTheMembersDoor"
           ],
@@ -5365,6 +5365,19 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "pkg/reportdesign/image_test.go",
+          "tests": [
+            "TestNormalizeCoverImageKeepsOnlyThePixels",
+            "TestDesignWithImagesRoundTrips",
+            "TestCustomCoverAndCoverImageRefusals",
+            "TestSuggestColours"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "pkg/reportdesign/logo_test.go",
           "tests": [
             "TestNormalizeLogoKeepsOnlyThePixels",
@@ -5385,13 +5398,16 @@
             "TestBuiltinsRoundTripByteForByte",
             "TestPlainIsNearMonochrome",
             "TestBuiltinsDiffer",
+            "TestBuiltinsAreKits",
             "TestValidationTable",
             "TestTextIsData",
+            "TestTokens",
             "TestContrastRefusalNeverPrintsAPass",
             "TestContrast",
             "TestNearestPassing",
             "TestTint",
             "TestFamilies",
+            "TestVersion2Projection",
             "TestSchemaFileIsCurrent"
           ],
           "fuzz": [],

@@ -398,29 +398,63 @@ var (
 	ErrVoiceTooLarge     = voice.ErrTooLarge
 )
 
-// ReportSettings is the core's store of a person's report settings as
-// an extension may read them: the hosted runs read the account's report
-// design and hand it to the sandbox host, whose CLI lays the run's PDFs
-// out in it. Read-only: the person sets it on the Report design page.
-// Deps.ReportSettings is nil without a database.
+// ReportDesign is one design of a person's library as an extension reads
+// it: the document in each form a reader may take.
+type ReportDesign struct {
+	ID uuid.UUID
+	// Default says a run takes this design when the person picks none.
+	Default bool
+	// Document is the canonical theme document version 3 that
+	// pkg/reportdesign validated (Parse it to read it), without its
+	// images.
+	Document []byte
+	// DocumentWithAssets is Document with every image the design has:
+	// its logo, cover image and custom cover. Hand it only to a reader
+	// that draws them.
+	DocumentWithAssets []byte
+	// Version2 is the design's version-2 projection, a canonical
+	// version-2 document that keeps its look, for a reader that reads
+	// only version 2; without the logo.
+	Version2 []byte
+	// Version2WithLogo is Version2 with the person's logo in it, when
+	// they have one, for a version-2 reader that draws logos.
+	Version2WithLogo []byte
+}
+
+// ErrReportDesignsFull is a create past the library's bound of ten.
+var ErrReportDesignsFull = api.ErrReportDesignsFull
+
+// ReportDesigns is the core's store of a person's report design library as
+// an extension reads it: the hosted runs read the design a run picked, or
+// the account's default, and hand it to the sandbox host, whose CLI lays
+// the run's PDFs out in it. Read-only but for Create, through which the
+// hosted Report Designer saves what it made. Deps.ReportDesigns is nil
+// without a database.
+type ReportDesigns interface {
+	// Default is the person's default design, or nil when they have
+	// none, which is not Plain: the reader decides what nothing means.
+	Default(ctx context.Context, user uuid.UUID) (*ReportDesign, error)
+	// ByID is one of the person's designs, or nil when the id is not one
+	// of theirs.
+	ByID(ctx context.Context, user, id uuid.UUID) (*ReportDesign, error)
+	// Create adds a design to the person's library from a document that
+	// may carry its images, never as the default: the person picks it. An
+	// invalid document is a *reportdesign.FieldError; a full library is
+	// ErrReportDesignsFull.
+	Create(ctx context.Context, user uuid.UUID, document []byte) (*ReportDesign, error)
+}
+
+// ReportSettings is the earlier shape of ReportDesigns: the person's
+// default design as a version-2 document. Kept while a reader still takes
+// it; a new reader takes ReportDesigns. Deps.ReportSettings is nil without
+// a database.
 type ReportSettings interface {
-	// Design is the person's report design, the canonical theme
-	// document version 2 that pkg/reportdesign validated (Parse it to
-	// read it), or nil when they never chose one, which is not Plain:
-	// the reader decides what nothing means.
+	// Design is the version-2 projection of the person's default design,
+	// or nil when they have none, which is not Plain.
 	Design(ctx context.Context, user uuid.UUID) ([]byte, error)
-	// DesignWithLogo is Design with the person's logo in it, when they
-	// have one: its "logo" key holds the PNG the core encoded from
-	// their upload. Design leaves it out, because a reader whose
-	// pkg/reportdesign predates logos refuses the key and with it the
-	// whole design; hand this one only to a reader that draws logos.
+	// DesignWithLogo is Design with the person's logo in it, when the
+	// design has one, for a reader that draws logos.
 	DesignWithLogo(ctx context.Context, user uuid.UUID) ([]byte, error)
-	// Theme is the id of the built-in theme the person's design started
-	// from (its basedOn), or "" when they never chose one.
-	// Transitional: the hosted job carries a theme's name rather than
-	// the design itself, and this field goes once the job carries the
-	// design.
-	Theme(ctx context.Context, user uuid.UUID) (string, error)
 }
 
 // Unthrottles is the optional interface for an extension whose receiver
@@ -646,8 +680,11 @@ type Deps struct {
 	// runs without a database; while the store is off its calls answer
 	// ErrVoiceUnconfigured.
 	Voice Voice
-	// ReportSettings is the core's store of report settings. nil when
-	// the server runs without a database.
+	// ReportDesigns is the core's store of report design libraries. nil
+	// when the server runs without a database.
+	ReportDesigns ReportDesigns
+	// ReportSettings is the earlier read of the default design, as a
+	// version-2 document. nil when the server runs without a database.
 	ReportSettings ReportSettings
 	// Meter is the server's meter under the extension's own scope: an
 	// instrument created on it is scraped from /metrics beside the

@@ -274,8 +274,8 @@ func TestApplyExtensionsBindsAndRegistersActions(t *testing.T) {
 	if ext.deps.Orgs != nil || ext.deps.OrgGate != nil || ext.deps.Agents != nil || ext.deps.Principals != nil || ext.deps.ScheduleCredentials != nil {
 		t.Fatal("a server without a database handed out an organization, organization-gate, agent, principal or schedule-credential read: each reads a row")
 	}
-	if ext.deps.Voice != nil || ext.deps.ReportSettings != nil {
-		t.Fatal("a server without a database handed out the voice store or the report settings")
+	if ext.deps.Voice != nil || ext.deps.ReportSettings != nil || ext.deps.ReportDesigns != nil {
+		t.Fatal("a server without a database handed out the voice store or the report designs")
 	}
 	if ext.deps.Meter == nil {
 		t.Fatal("a server without a database handed out a nil meter: it must be a no-op one")
@@ -392,6 +392,7 @@ func TestDepsAdaptersFollowThePoolAndKeepTheExtensionsName(t *testing.T) {
 		{"notifier", func(p *pgxpool.Pool) any { return notifierOf(srv, p) }, false},
 		{"webhooks", func(p *pgxpool.Pool) any { return webhooksOf(srv, p) }, false},
 		{"report settings", func(p *pgxpool.Pool) any { return reportSettingsOf(srv, p) }, false},
+		{"report designs", func(p *pgxpool.Pool) any { return reportDesignsOf(srv, p) }, false},
 		{"staff", func(p *pgxpool.Pool) any { return staffOf(srv, p) }, false},
 		{"members", func(p *pgxpool.Pool) any { return membersOf(srv, p, "directory") }, false},
 		{"accounts", func(p *pgxpool.Pool) any { return accountsOf(srv, p, "directory") }, false},
@@ -1034,20 +1035,24 @@ func TestBindHandsTheServersMeter(t *testing.T) {
 }
 
 // designReader is the shape a hosted run takes for the report design:
-// it is handed the core's report settings.
+// it is handed the core's report design library, and the earlier read of
+// the default design as a version-2 document.
 type designReader struct {
 	noop
+	designs  ReportDesigns
 	settings ReportSettings
 }
 
-func (r *designReader) Bind(d Deps) { r.settings = d.ReportSettings }
+func (r *designReader) Bind(d Deps) { r.designs, r.settings = d.ReportDesigns, d.ReportSettings }
 
-// TestBindHandsTheReportSettings: a bound extension reads a person's
-// report design as its canonical document, nil while they never chose
-// one and again once they clear it, and another person's design is
-// never theirs (no row is not Plain). Theme, the transitional read,
-// answers the design's basedOn.
-func TestBindHandsTheReportSettings(t *testing.T) {
+// TestBindHandsTheReportDesigns: a bound extension reads a person's
+// default design and any design of theirs by id, each as its canonical
+// document, with its images, and as a version-2 projection, nil while they
+// have none and again once the default is gone, and another person's
+// design is never theirs (no row is not Plain); it creates a design on
+// their behalf that is never the default, under the library's bound; and
+// the earlier read answers the default's version-2 projection.
+func TestBindHandsTheReportDesigns(t *testing.T) {
 	st := migratedStore(t)
 	cfg := config.Default()
 	cfg.DevMode = true
@@ -1055,8 +1060,8 @@ func TestBindHandsTheReportSettings(t *testing.T) {
 	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
 	r := &designReader{}
 	applyExtensions(srv, []Extension{r})
-	if r.settings == nil {
-		t.Fatal("a server with a database handed out no report settings")
+	if r.designs == nil || r.settings == nil {
+		t.Fatal("a server with a database handed out no report designs")
 	}
 	ctx := context.Background()
 	mk := func(prefix string) uuid.UUID {
@@ -1070,32 +1075,44 @@ func TestBindHandsTheReportSettings(t *testing.T) {
 		return id
 	}
 	user, other := mk("rt-"), mk("ro-")
-	if got, err := r.settings.Design(ctx, user); err != nil || got != nil {
-		t.Fatalf("never chosen: %q, %v", got, err)
+	if got, err := r.designs.Default(ctx, user); err != nil || got != nil {
+		t.Fatalf("never chosen: %v, %v", got, err)
 	}
-	if got, err := r.settings.Theme(ctx, user); err != nil || got != "" {
-		t.Fatalf("never chosen: %q, %v", got, err)
+	if got, err := r.settings.Design(ctx, user); err != nil || got != nil {
+		t.Fatalf("never chosen, the earlier read: %q, %v", got, err)
+	}
+	if got, err := r.designs.ByID(ctx, user, uuid.New()); err != nil || got != nil {
+		t.Fatalf("an id that is nobody's: %v, %v", got, err)
 	}
 	classic, _ := reportdesign.Builtin("classic")
 	technical, _ := reportdesign.Builtin("technical")
 	technical.Name, technical.Accent = "Acme", "#0b5c55"
-	if _, err := st.Queries().UpsertUserReportSettings(ctx, storegen.UpsertUserReportSettingsParams{UserID: other, Design: classic.Canonical()}); err != nil {
-		t.Fatal(err)
+	technical.Brand.Name, technical.Footer.Slots[0] = "Acme Ltd", "{brand} — {page}"
+	create := func(who uuid.UUID, d reportdesign.Design, asDefault bool) uuid.UUID {
+		t.Helper()
+		row, err := st.Queries().CreateUserReportDesign(ctx, storegen.CreateUserReportDesignParams{UserID: who, Document: d.Canonical(), IsDefault: asDefault})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.ID
 	}
-	if _, err := st.Queries().UpsertUserReportSettings(ctx, storegen.UpsertUserReportSettingsParams{UserID: user, Design: technical.Canonical()}); err != nil {
-		t.Fatal(err)
+	create(other, classic, true)
+	mine := create(user, technical, true)
+	got, err := r.designs.Default(ctx, user)
+	if err != nil || got == nil || got.ID != mine || !got.Default || !bytes.Equal(got.Document, technical.Canonical()) || !bytes.Equal(got.DocumentWithAssets, technical.Canonical()) {
+		t.Fatalf("chosen: %+v, %v", got, err)
 	}
-	if got, err := r.settings.Design(ctx, user); err != nil || !bytes.Equal(got, technical.Canonical()) {
-		t.Fatalf("chosen: %s, %v", got, err)
+	if !bytes.Equal(got.Version2, technical.Version2()) || !bytes.Contains(got.Version2, []byte(`"text": "Acme Ltd —"`)) || !bytes.Contains(got.Version2, []byte(`"agentryTheme": 2`)) {
+		t.Fatalf("the version-2 projection: %s", got.Version2)
 	}
-	if got, err := r.settings.Theme(ctx, user); err != nil || got != "technical" {
-		t.Fatalf("chosen: %q, %v", got, err)
+	if v2, err := r.settings.Design(ctx, user); err != nil || !bytes.Equal(v2, technical.Version2()) {
+		t.Fatalf("the earlier read: %s, %v", v2, err)
 	}
-	if got, err := r.settings.DesignWithLogo(ctx, user); err != nil || !bytes.Equal(got, technical.Canonical()) {
-		t.Fatalf("chosen, no logo: %s, %v", got, err)
+	if byID, err := r.designs.ByID(ctx, user, mine); err != nil || byID == nil || !bytes.Equal(byID.Document, got.Document) {
+		t.Fatalf("by id: %+v, %v", byID, err)
 	}
-	// A logo comes only with DesignWithLogo: Design stays what a reader
-	// without logos can parse.
+	// A logo comes only in the forms that carry it: Document and Version2
+	// stay what a reader without logos can parse.
 	var pb bytes.Buffer
 	if err := png.Encode(&pb, image.NewNRGBA(image.Rect(0, 0, 8, 4))); err != nil {
 		t.Fatal(err)
@@ -1105,25 +1122,78 @@ func TestBindHandsTheReportSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw, _ := logo.Decode()
-	if _, err := st.Queries().SetUserReportLogo(ctx, storegen.SetUserReportLogoParams{UserID: user, Logo: raw}); err != nil {
+	if _, err := st.Queries().SetUserReportDesignLogo(ctx, storegen.SetUserReportDesignLogoParams{UserID: user, ID: mine, Logo: raw}); err != nil {
 		t.Fatal(err)
-	}
-	if got, err := r.settings.Design(ctx, user); err != nil || !bytes.Equal(got, technical.Canonical()) {
-		t.Fatalf("Design with a logo stored: %s, %v", got, err)
 	}
 	withLogo := technical
 	withLogo.Logo = logo
-	if got, err := r.settings.DesignWithLogo(ctx, user); err != nil || !bytes.Equal(got, withLogo.Canonical()) {
-		t.Fatalf("DesignWithLogo: %.200s, %v", got, err)
+	got, err = r.designs.Default(ctx, user)
+	if err != nil || !bytes.Equal(got.Document, technical.Canonical()) || !bytes.Equal(got.DocumentWithAssets, withLogo.Canonical()) {
+		t.Fatalf("with a logo stored: %.200s, %v", got.DocumentWithAssets, err)
 	}
-	if _, err := st.Queries().DeleteUserReportSettings(ctx, user); err != nil {
+	if !bytes.Equal(got.Version2, technical.Version2()) || !bytes.Equal(got.Version2WithLogo, withLogo.Version2()) {
+		t.Fatalf("the version-2 projections with a logo: %.200s", got.Version2WithLogo)
+	}
+	if v2, err := r.settings.DesignWithLogo(ctx, user); err != nil || !bytes.Equal(v2, withLogo.Version2()) {
+		t.Fatalf("the earlier read with a logo: %.200s, %v", v2, err)
+	}
+	if v2, _ := r.settings.Design(ctx, user); !bytes.Equal(v2, technical.Version2()) {
+		t.Fatalf("the earlier read carries the logo: %.200s", v2)
+	}
+	// Another person's design is not theirs, by id or as the default.
+	if byID, err := r.designs.ByID(ctx, other, mine); err != nil || byID != nil {
+		t.Fatalf("another person's design by id: %+v, %v", byID, err)
+	}
+	if theirs, _ := r.designs.Default(ctx, other); theirs == nil || !bytes.Equal(theirs.Document, classic.Canonical()) {
+		t.Fatalf("the other person's design moved: %+v", theirs)
+	}
+	// Create: never the default, the images it carries stored, the
+	// document refused on a rule, and the library's bound held.
+	modern, _ := reportdesign.Builtin("modern")
+	modern.Logo = logo
+	made, err := r.designs.Create(ctx, user, modern.Canonical())
+	if err != nil || made == nil || made.Default || !bytes.Equal(made.Document, modern.WithoutAssets().Canonical()) || !bytes.Equal(made.DocumentWithAssets, modern.Canonical()) {
+		t.Fatalf("Create: %+v, %v", made, err)
+	}
+	if got, _ := r.designs.Default(ctx, user); got.ID != mine {
+		t.Fatalf("Create moved the default to %s", got.ID)
+	}
+	if byID, err := r.designs.ByID(ctx, user, made.ID); err != nil || byID == nil || !bytes.Equal(byID.DocumentWithAssets, modern.Canonical()) {
+		t.Fatalf("the created design by id: %+v, %v", byID, err)
+	}
+	bad := modern
+	bad.Accent = "#7fb3d5"
+	var fe *reportdesign.FieldError
+	if _, err := r.designs.Create(ctx, user, bad.Canonical()); !errors.As(err, &fe) || fe.Field != "accent" {
+		t.Fatalf("Create of a design that breaks a rule: %v", err)
+	}
+	v2, _ := os.ReadFile("../reportdesign/testdata/v2/plain.json")
+	if _, err := r.designs.Create(ctx, user, v2); !errors.As(err, &fe) || fe.Field != "agentryTheme" {
+		t.Fatalf("Create of a version-2 document: %v", err)
+	}
+	for range reportdesign.MaxLibrary - 2 {
+		if _, err := r.designs.Create(ctx, user, classic.Canonical()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := r.designs.Create(ctx, user, classic.Canonical()); !errors.Is(err, ErrReportDesignsFull) {
+		t.Fatalf("the eleventh: %v", err)
+	}
+	// No default again once it is cleared; the designs stay.
+	if _, err := st.Queries().ClearUserReportDesignDefault(ctx, user); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := r.settings.Design(ctx, user); err != nil || got != nil {
-		t.Fatalf("cleared: %q, %v", got, err)
+	if got, err := r.designs.Default(ctx, user); err != nil || got != nil {
+		t.Fatalf("no default: %v, %v", got, err)
 	}
-	if got, _ := r.settings.Design(ctx, other); !bytes.Equal(got, classic.Canonical()) {
-		t.Fatalf("the other person's design moved: %s", got)
+	if got, err := r.settings.Design(ctx, user); err != nil || got != nil {
+		t.Fatalf("no default, the earlier read: %q, %v", got, err)
+	}
+	if byID, err := r.designs.ByID(ctx, user, mine); err != nil || byID == nil || byID.Default {
+		t.Fatalf("the former default by id: %+v, %v", byID, err)
+	}
+	if theirs, _ := r.designs.Default(ctx, other); theirs == nil || !bytes.Equal(theirs.Document, classic.Canonical()) {
+		t.Fatalf("the other person's design moved: %+v", theirs)
 	}
 }
 

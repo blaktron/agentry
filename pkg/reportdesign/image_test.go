@@ -159,7 +159,7 @@ func TestDesignWithImagesRoundTrips(t *testing.T) {
 			t.Fatalf("the document lacks %q:\n%.600s", want, doc)
 		}
 	}
-	if i, j, k := bytes.Index(doc, []byte(`"logo"`)), bytes.Index(doc, []byte(`"coverImage"`)), bytes.Index(doc, []byte(`"customCover"`)); !(i < j && j < k) {
+	if i, j, k := bytes.Index(doc, []byte(`"logo"`)), bytes.Index(doc, []byte(`"coverImage"`)), bytes.Index(doc, []byte(`"customCover"`)); i >= j || j >= k {
 		t.Fatal("the assets are not the last keys in order")
 	}
 	got, err := Parse(doc)
