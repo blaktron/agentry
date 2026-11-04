@@ -4,7 +4,9 @@ The complete operator reference for running QuickAgents: every command,
 flag, file, and enforcement mechanism. The [QuickAgents](quickagents.md)
 page explains the package format; this page is the runtime side, and
 [Hosted runs](hosted-runs.md) is the same runner driven on a deployment's
-own machine, with caps and credits, instead of yours.
+own machine, with caps and credits, instead of yours, and
+[Remote runhosts](remote-runhosts.md) the same runner on a server of your own,
+driven from this computer over SSH.
 
 ## Commands
 
