@@ -379,6 +379,18 @@ type OrgInvitation struct {
 	AcceptedBy  *uuid.UUID `json:"accepted_by"`
 }
 
+type OrgReportDesign struct {
+	ID               uuid.UUID `json:"id"`
+	OrgID            uuid.UUID `json:"org_id"`
+	Document         []byte    `json:"document"`
+	Logo             []byte    `json:"logo"`
+	CoverImage       []byte    `json:"cover_image"`
+	CoverImageFormat *string   `json:"cover_image_format"`
+	CustomCover      []byte    `json:"custom_cover"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
 type Pat struct {
 	ID          uuid.UUID  `json:"id"`
 	UserID      uuid.UUID  `json:"user_id"`

@@ -404,6 +404,11 @@ type ReportDesign struct {
 	ID uuid.UUID
 	// Default says a run takes this design when the person picks none.
 	Default bool
+	// Org is the handle of the organization whose house design this is,
+	// read through ForMember; empty for a person's own design.
+	Org string
+	// Name is the design's name, which a run names a house design by.
+	Name string
 	// Document is the canonical theme document version 3 that
 	// pkg/reportdesign validated (Parse it to read it), without its
 	// images.
@@ -424,12 +429,12 @@ type ReportDesign struct {
 // ErrReportDesignsFull is a create past the library's bound of ten.
 var ErrReportDesignsFull = api.ErrReportDesignsFull
 
-// ReportDesigns is the core's store of a person's report design library as
-// an extension reads it: the hosted runs read the design a run picked, or
-// the account's default, and hand it to the sandbox host, whose CLI lays
-// the run's PDFs out in it. Read-only but for Create, through which the
-// hosted Report Designer saves what it made. Deps.ReportDesigns is nil
-// without a database.
+// ReportDesigns is the core's store of report design libraries, a person's
+// own and an organization's house designs, as an extension reads it: the
+// hosted runs read the design a run picked, or the account's default, and
+// hand it to the sandbox host, whose CLI lays the run's PDFs out in it.
+// Read-only but for Create, through which the hosted Report Designer saves
+// what it made. Deps.ReportDesigns is nil without a database.
 type ReportDesigns interface {
 	// Default is the person's default design, or nil when they have
 	// none, which is not Plain: the reader decides what nothing means.
@@ -437,6 +442,14 @@ type ReportDesigns interface {
 	// ByID is one of the person's designs, or nil when the id is not one
 	// of theirs.
 	ByID(ctx context.Context, user, id uuid.UUID) (*ReportDesign, error)
+	// ForMember is one of an organization's house designs, by the
+	// organization's handle and the design's name (compared without
+	// regard to case), for a run of the person's: nil when there is no
+	// such organization, when the person is not an active member of it,
+	// or when it has no design of that name. Membership is read at the
+	// call, so a former member is refused the design at their next run
+	// and goes on in their own default.
+	ForMember(ctx context.Context, user uuid.UUID, org, name string) (*ReportDesign, error)
 	// Create adds a design to the person's library from a document that
 	// may carry its images, never as the default: the person picks it. An
 	// invalid document is a *reportdesign.FieldError; a full library is

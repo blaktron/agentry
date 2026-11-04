@@ -1312,3 +1312,109 @@ func TestBindHandsTheMembersDoor(t *testing.T) {
 		t.Fatalf("deprovisioning nobody: kept %v, %v; want a quiet no-op", kept, err)
 	}
 }
+
+// TestTheReportDesignsSeamReadsAHouseDesignForAMember: through ForMember an
+// extension reads one of an organization's house designs, by the
+// organization's handle and the design's name whatever its case, with its
+// images, for an active member of the organization; it reads nothing for a
+// name the organization has no design of, for an organization that does
+// not exist, for a person who is not a member, for a pending member, and
+// for a member once they are removed, since membership is read at the
+// call.
+func TestTheReportDesignsSeamReadsAHouseDesignForAMember(t *testing.T) {
+	st := migratedStore(t)
+	cfg := config.Default()
+	cfg.DevMode = true
+	cfg.Scan.OSVURL = "none"
+	srv := api.New(cfg, st, slog.New(slog.DiscardHandler))
+	r := &designReader{}
+	applyExtensions(srv, []Extension{r})
+	ctx := context.Background()
+	mk := func(prefix string) uuid.UUID {
+		id := uuid.New()
+		if err := st.Queries().CreateHandle(ctx, storegen.CreateHandleParams{ID: id, Handle: prefix + id.String()[:8], Kind: "user"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Queries().CreateUser(ctx, storegen.CreateUserParams{ID: id, Email: id.String() + "@example.test"}); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	admin, member, pending, outsider := mk("ha-"), mk("hm-"), mk("hp-"), mk("ho-")
+	orgID := uuid.New()
+	org := "house-" + orgID.String()[:8]
+	if err := st.Queries().CreateHandle(ctx, storegen.CreateHandleParams{ID: orgID, Handle: org, Kind: "org"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Queries().CreateOrg(ctx, storegen.CreateOrgParams{ID: orgID, DisplayName: "House", CreatedBy: &admin, Activated: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Queries().CreateFounderMembership(ctx, storegen.CreateFounderMembershipParams{OrgID: orgID, UserID: admin, Role: "admin"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Queries().CreateFounderMembership(ctx, storegen.CreateFounderMembershipParams{OrgID: orgID, UserID: member, Role: "member"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Pool().Exec(ctx, `INSERT INTO memberships (org_id, user_id, role, state) VALUES ($1, $2, 'member', 'pending')`, orgID, pending); err != nil {
+		t.Fatal(err)
+	}
+	house, _ := reportdesign.Builtin("boardroom")
+	house.Name, house.Brand.Name = "Acme House", "Acme Ltd"
+	var pb bytes.Buffer
+	if err := png.Encode(&pb, image.NewNRGBA(image.Rect(0, 0, 8, 4))); err != nil {
+		t.Fatal(err)
+	}
+	logo, err := reportdesign.NormalizeLogo(pb.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := logo.Decode()
+	row, err := st.Queries().CreateOrgReportDesign(ctx, storegen.CreateOrgReportDesignParams{OrgID: orgID, Document: house.Canonical(), Logo: raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withLogo := house
+	withLogo.Logo = logo
+
+	for _, who := range []uuid.UUID{member, admin} {
+		for _, name := range []string{"Acme House", "acme house", "ACME HOUSE"} {
+			got, err := r.designs.ForMember(ctx, who, org, name)
+			if err != nil || got == nil || got.ID != row.ID || got.Default || got.Org != org || got.Name != "Acme House" {
+				t.Fatalf("ForMember(%s, %q): %+v, %v", who, name, got, err)
+			}
+			if !bytes.Equal(got.Document, house.Canonical()) || !bytes.Equal(got.DocumentWithAssets, withLogo.Canonical()) || !bytes.Equal(got.Version2WithLogo, withLogo.Version2()) {
+				t.Fatalf("ForMember(%s, %q) read %.200s", who, name, got.DocumentWithAssets)
+			}
+		}
+	}
+	for _, c := range []struct {
+		what string
+		who  uuid.UUID
+		org  string
+		name string
+	}{
+		{"a name the organization has no design of", member, org, "Acme Letters"},
+		{"an organization that does not exist", member, "nobody-" + org, "Acme House"},
+		{"a person outside the organization", outsider, org, "Acme House"},
+		{"a pending member", pending, org, "Acme House"},
+	} {
+		if got, err := r.designs.ForMember(ctx, c.who, c.org, c.name); err != nil || got != nil {
+			t.Fatalf("ForMember for %s: %+v, %v", c.what, got, err)
+		}
+	}
+	// Removed, the member is refused at the next call.
+	if _, err := st.Queries().DeleteMembership(ctx, storegen.DeleteMembershipParams{OrgID: orgID, UserID: member}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := r.designs.ForMember(ctx, member, org, "Acme House"); err != nil || got != nil {
+		t.Fatalf("ForMember for a former member: %+v, %v", got, err)
+	}
+	if got, err := r.designs.ForMember(ctx, admin, org, "Acme House"); err != nil || got == nil {
+		t.Fatalf("ForMember for the admin after the member left: %+v, %v", got, err)
+	}
+	// A person's own designs do not answer to an organization's handle,
+	// and ByID never reads a house design.
+	if got, err := r.designs.ByID(ctx, admin, row.ID); err != nil || got != nil {
+		t.Fatalf("ByID of a house design: %+v, %v", got, err)
+	}
+}

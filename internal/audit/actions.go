@@ -85,6 +85,12 @@ const (
 	// release of an agent in the organization's namespace. The detail
 	// names the pack, the agent, the version and the submitter.
 	ActionOrgKnowledgeShip Action = "org.knowledge_ship"
+	// An organization's house report designs: a design created, replaced
+	// (its document or one of its images) or deleted by an admin. The
+	// detail names the design, never a byte of it.
+	ActionOrgReportDesignCreate Action = "org.report_design_create"
+	ActionOrgReportDesignUpdate Action = "org.report_design_update"
+	ActionOrgReportDesignDelete Action = "org.report_design_delete"
 	// The fold-in: an existing account at the organization's
 	// domain became a pending member, at its sign-in or by the sweep.
 	ActionOrgMemberPending Action = "org.member_pending"
@@ -183,6 +189,7 @@ func init() {
 		ActionOrgInviteAccept, ActionOrgMemberDecline, ActionOrgMemberPending,
 		ActionOrgLogoSet, ActionOrgLogoRemoved,
 		ActionOrgKnowledgeCreate, ActionOrgKnowledgeUpdate, ActionOrgKnowledgeDelete, ActionOrgKnowledgeExport, ActionOrgKnowledgeShip,
+		ActionOrgReportDesignCreate, ActionOrgReportDesignUpdate, ActionOrgReportDesignDelete,
 		ActionOrgDecommission, ActionOrgErase, ActionOrgSuspend, ActionOrgReinstate, ActionOrgAccessRequest,
 		ActionTeamCreate, ActionTeamDelete,
 		ActionTeamMemberAdd, ActionTeamMemberRemove,

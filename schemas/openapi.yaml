@@ -3659,6 +3659,277 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 
+  /orgs/{org}/report-designs:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+    get:
+      operationId: listOrgReportDesigns
+      tags: [orgs]
+      summary: The organization's house report designs, for any active member.
+      description: >-
+        Up to ten named report designs the organization's admins keep, oldest
+        first, which a member picks for a run by the organization's handle
+        and the design's name. There is no default: a run that picks none
+        takes the person's own default. Membership is read at every call,
+        and a signed-in caller who is not an active member of the
+        organization is answered 404, so the route says nothing of what an
+        organization keeps to anyone outside it. The images are not listed;
+        each entry says which it has.
+      responses:
+        "200":
+          description: The organization's library.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignList"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createOrgReportDesign
+      tags: [orgs]
+      summary: Add a house report design to the organization's library (admins).
+      description: >-
+        As `POST /user/report-designs`, validated by the core's
+        pkg/reportdesign the same way and refused 422 the same way, with two
+        rules of the organization's own: the library holds ten designs, an
+        eleventh is 409 `conflict`; and a design's name is unique within the
+        organization, compared without regard to case, since a run names
+        one, so a second of a name is 409 `conflict`. A document that
+        carries `logo`, `coverImage` or `customCover` stores each as the
+        core's own re-encoding of it. Recorded in the organization's audit
+        log (`org.report_design_create`). The answer carries the design in
+        its canonical form, its images only on `include=assets`.
+      parameters:
+        - $ref: "#/components/parameters/ReportDesignInclude"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrgReportDesignCreate"
+      responses:
+        "201":
+          description: The design, as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/report-designs/{designId}:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+      - $ref: "#/components/parameters/ReportDesignId"
+    get:
+      operationId: getOrgReportDesign
+      tags: [orgs]
+      summary: One of the organization's house report designs, for any active member.
+      description: >-
+        The design in its canonical form. Its images (`logo`, `coverImage`,
+        `customCover`) come only with `include=assets`: a run that draws
+        them asks for them, a console that lists them does not. Another
+        organization's design is 404.
+      parameters:
+        - $ref: "#/components/parameters/ReportDesignInclude"
+      responses:
+        "200":
+          description: The design.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateOrgReportDesign
+      tags: [orgs]
+      summary: Replace one of the organization's house report designs (admins).
+      description: >-
+        A full replace of the document, validated as a create is, the field
+        named `design.<path>` on a refusal, and the stored design standing.
+        A name another of the organization's designs holds is 409
+        `conflict`. The images stay as they are unless the document carries
+        them, as for a person's own design. An admin's change reaches a
+        member's next run. Recorded in the organization's audit log
+        (`org.report_design_update`).
+      parameters:
+        - $ref: "#/components/parameters/ReportDesignInclude"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportDesignUpdate"
+      responses:
+        "200":
+          description: The design, as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteOrgReportDesign
+      tags: [orgs]
+      summary: Remove one of the organization's house report designs, images included (admins).
+      description: >-
+        Another organization's design, or one already gone, is 404.
+        Recorded in the organization's audit log
+        (`org.report_design_delete`).
+      responses:
+        "204":
+          description: Removed.
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/report-designs/{designId}/logo:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+      - $ref: "#/components/parameters/ReportDesignId"
+    put:
+      operationId: putOrgReportDesignLogo
+      tags: [orgs]
+      summary: Set the logo of one of the organization's house report designs (admins).
+      description: >-
+        As `PUT /user/report-designs/{designId}/logo`: multipart, one part
+        named `file`, a PNG or a JPEG of at most 512 KB, kept only as the
+        core's own re-encoding of its pixels. Recorded in the organization's
+        audit log (`org.report_design_update`). The answer carries the
+        design with its images.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: The logo is set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteOrgReportDesignLogo
+      tags: [orgs]
+      summary: Remove the logo from one of the organization's house report designs (admins).
+      description: >-
+        The design stays. Removing a logo that is not there is not an error.
+        The answer carries the design with its images.
+      responses:
+        "200":
+          description: The design, now without a logo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/report-designs/{designId}/cover-image:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+      - $ref: "#/components/parameters/ReportDesignId"
+    put:
+      operationId: putOrgReportDesignCoverImage
+      tags: [orgs]
+      summary: Set the cover image of one of the organization's house report designs (admins).
+      description: >-
+        As `PUT /user/report-designs/{designId}/cover-image`: multipart, one
+        part named `file`, a PNG or a JPEG of at most 2 MB, kept only as the
+        core's own re-encoding of its pixels in the format it came in.
+        Recorded in the organization's audit log
+        (`org.report_design_update`). The answer carries the design with its
+        images.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: The cover image is set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteOrgReportDesignCoverImage
+      tags: [orgs]
+      summary: Remove the cover image from one of the organization's house report designs (admins).
+      description: >-
+        The design stays. Removing a cover image that is not there is not an
+        error. The answer carries the design with its images.
+      responses:
+        "200":
+          description: The design, now without a cover image.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/report-designs/{designId}/custom-cover:
+    parameters:
+      - $ref: "#/components/parameters/OrgHandle"
+      - $ref: "#/components/parameters/ReportDesignId"
+    put:
+      operationId: putOrgReportDesignCustomCover
+      tags: [orgs]
+      summary: Set the custom cover of one of the organization's house report designs (admins).
+      description: >-
+        As `PUT /user/report-designs/{designId}/custom-cover`: the custom
+        cover whole, its source held to its bounds and never read, each
+        image and the thumbnail encoded again by the core. Recorded in the
+        organization's audit log (`org.report_design_update`). The answer
+        carries the design with its images.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportDesignCustomCover"
+      responses:
+        "200":
+          description: The custom cover is set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteOrgReportDesignCustomCover
+      tags: [orgs]
+      summary: Remove the custom cover from one of the organization's house report designs (admins).
+      description: >-
+        The design stays, its cover style included. Removing a custom cover
+        that is not there is not an error. The answer carries the design
+        with its images.
+      responses:
+        "200":
+          description: The design, now without a custom cover.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgReportDesignRecord"
+        default:
+          $ref: "#/components/responses/Problem"
+
   /platform/knowledge:
     get:
       operationId: listKnowledgePackSizes
@@ -6612,6 +6883,79 @@ components:
           description: The design to make the default; absent or null for none.
           format: uuid
           nullable: true
+    OrgReportDesignSummary:
+      type: object
+      description: One house design of an organization's library, without its document's body or images.
+      required: [id, name, basedOn, version, hasLogo, hasCoverImage, hasCustomCover, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: The design's name, unique within the organization; what a run names it by.
+        basedOn:
+          type: string
+          description: The built-in theme it started from.
+        version:
+          type: integer
+        hasLogo:
+          type: boolean
+        hasCoverImage:
+          type: boolean
+        hasCustomCover:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    OrgReportDesignList:
+      type: object
+      description: >-
+        An organization's house designs, oldest first. There is no default: a member picks one per run, and a run that picks none takes the person's own default.
+      required: [org, designs]
+      properties:
+        org:
+          type: string
+          description: The organization's handle, which a run names a house design under.
+        designs:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrgReportDesignSummary'
+    OrgReportDesignRecord:
+      type: object
+      description: >-
+        One house design with its document in canonical form. The images are in the document only on `include=assets`; the three flags say which it has.
+      required: [id, org, hasLogo, hasCoverImage, hasCustomCover, createdAt, updatedAt, design]
+      properties:
+        id:
+          type: string
+          format: uuid
+        org:
+          type: string
+          description: The organization's handle.
+        hasLogo:
+          type: boolean
+        hasCoverImage:
+          type: boolean
+        hasCustomCover:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        design:
+          $ref: '#/components/schemas/ReportDesign'
+    OrgReportDesignCreate:
+      type: object
+      required: [design]
+      properties:
+        design:
+          $ref: '#/components/schemas/ReportDesign'
     DependencyAlert:
       type: object
       description: >-
