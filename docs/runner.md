@@ -65,7 +65,9 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
    model with a smaller window than it was trained for unless you set one
    (`num_ctx`, `--ctx-size`), and setup never reads the trained window.
    When setup cannot find it, it says so; `agentry doctor` repeats the
-   warning (`model:context`) until the window is set.
+   warning (`model:context`) until the window is set. The window also
+   sizes the pages a run reads (CLI v0.7.20 or later;
+   [pages](#one-tool-result-at-a-time-pages)).
    A provider can also be paid by **your own plan or account** instead of a
    key: `--api-key-kind chatgpt-plan` (provider `openai`),
    `--api-key-kind claude-signin` (`anthropic`), `--provider copilot` with
@@ -1722,7 +1724,7 @@ its digest, so a run record says which file a run obeyed.
 | `images.goBuilder` | the Go image the runner image is compiled in on first use (the default is pinned by digest). Its Go must be at least the CLI's own, to the patch: the build context names that version, and an older builder stops the build with "images.goBuilder … is older than the Go the runner needs" |
 | `images.runner` | override the locally built runner image tag (pin this when the CLI and desktop app share a machine) |
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
-| `model.contextWindow` | the model's context window in tokens, 1,024 to 2^30 (CLI v0.7.9 or later): the harness compacts the conversation as it nears it, and a model the harness cannot look up without it fails once the endpoint refuses the conversation as too long. Unset, the harness looks the model up itself. `agentry setup` fills it for a model server of your own ([above](#agentry-setup)); where set, it wins over the harness's own figure |
+| `model.contextWindow` | the model's context window in tokens, 1,024 to 2^30 (CLI v0.7.9 or later): the harness compacts the conversation as it nears it, and a model the harness cannot look up without it fails once the endpoint refuses the conversation as too long. Unset, the harness looks the model up itself. `agentry setup` fills it for a model server of your own ([above](#agentry-setup)); where set, it wins over the harness's own figure. From CLI v0.7.20 it also sizes a run's pages ([pages](#one-tool-result-at-a-time-pages)) |
 | `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
@@ -3099,6 +3101,32 @@ tools spec:
 | Claude Code (`claude`, `claude-image`) | 46 KiB and 1,900 lines | 50,000 characters, then the result is saved to a file the agent cannot open |
 | Copilot (`copilot-image`) | 19 KiB and 1,900 lines | 20,480 bytes, then the result is saved to a file and 500 characters shown |
 | Codex (`codex`, `codex-image`) | 20 KiB and 1,900 lines | 48,000 bytes, set by the runner in the model catalog it gives Codex, the middle cut out; an input tool's result is sent as escaped JSON, which can double it |
+
+**The page and the model's window** (CLI v0.7.20 or later). Where
+`model.contextWindow` records the model's window, the budget is also held
+to a sixteenth of it, at four bytes a token, in whole KiB and never under
+16 KiB: a 262,144-token window keeps docker-agent's 48 KiB, a
+131,072-token window gets 32 KiB, and a 32,768-token window 16 KiB. On a
+model server of your own (`custom`, or `openai` with a `baseUrl`) with no
+window recorded, the budget is 32 KiB. The line count stays the harness's.
+The System Prompt and the receipt's `toolResults` line state the run's
+budget and what set it.
+
+Under docker-agent, the run's config also sets three of docker-agent's own
+limits, none of which needs the window:
+
+- **`max_tool_result_tokens`**, twice the page in tokens, on every model. A
+  result the tools server did not page (a declared MCP server's, the
+  browser's) that passes it has its middle cut out, with a marker saying
+  so.
+- **`max_old_tool_call_tokens`**, on a model server of your own. Once the
+  newer tool results pass half the window (64k tokens when no window is
+  recorded), each older one is sent to the model as a placeholder; the
+  stored conversation keeps it whole.
+- **`compaction_threshold: 0.7`**, on a model server of your own. The
+  conversation is compacted at 70% of the window rather than docker-agent's
+  90%. With no window recorded, docker-agent compacts only a model it knows
+  itself.
 
 Within it:
 
