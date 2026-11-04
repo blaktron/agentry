@@ -32,7 +32,7 @@ CREATE INDEX user_report_designs_user ON user_report_designs (user_id, created_a
 -- it was, with the version-3 defaults that keep its look: no secondary, no
 -- brand block, no header, the footer's line in its left slot, a cover in the
 -- band style for a band title block and the framed style otherwise, drawn
--- for a long report as before, regular heading scale and margins. The logo
+-- for a long report, regular heading scale and margins. The logo
 -- moves with it. A row that holds no version-2 document is dropped.
 INSERT INTO user_report_designs (user_id, document, logo, is_default, created_at, updated_at)
 SELECT

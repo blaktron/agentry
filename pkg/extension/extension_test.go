@@ -1035,7 +1035,7 @@ func TestBindHandsTheServersMeter(t *testing.T) {
 }
 
 // designReader is the shape a hosted run takes for the report design:
-// it is handed the core's report design library, and the earlier read of
+// it is handed the core's report design library, and the version-2 read of
 // the default design as a version-2 document.
 type designReader struct {
 	noop
@@ -1051,7 +1051,7 @@ func (r *designReader) Bind(d Deps) { r.designs, r.settings = d.ReportDesigns, d
 // have none and again once the default is gone, and another person's
 // design is never theirs (no row is not Plain); it creates a design on
 // their behalf that is never the default, under the library's bound; and
-// the earlier read answers the default's version-2 projection.
+// the version-2 read answers the default's version-2 projection.
 func TestBindHandsTheReportDesigns(t *testing.T) {
 	st := migratedStore(t)
 	cfg := config.Default()
@@ -1079,7 +1079,7 @@ func TestBindHandsTheReportDesigns(t *testing.T) {
 		t.Fatalf("never chosen: %v, %v", got, err)
 	}
 	if got, err := r.settings.Design(ctx, user); err != nil || got != nil {
-		t.Fatalf("never chosen, the earlier read: %q, %v", got, err)
+		t.Fatalf("never chosen, the version-2 read: %q, %v", got, err)
 	}
 	if got, err := r.designs.ByID(ctx, user, uuid.New()); err != nil || got != nil {
 		t.Fatalf("an id that is nobody's: %v, %v", got, err)
@@ -1106,7 +1106,7 @@ func TestBindHandsTheReportDesigns(t *testing.T) {
 		t.Fatalf("the version-2 projection: %s", got.Version2)
 	}
 	if v2, err := r.settings.Design(ctx, user); err != nil || !bytes.Equal(v2, technical.Version2()) {
-		t.Fatalf("the earlier read: %s, %v", v2, err)
+		t.Fatalf("the version-2 read: %s, %v", v2, err)
 	}
 	if byID, err := r.designs.ByID(ctx, user, mine); err != nil || byID == nil || !bytes.Equal(byID.Document, got.Document) {
 		t.Fatalf("by id: %+v, %v", byID, err)
@@ -1135,10 +1135,10 @@ func TestBindHandsTheReportDesigns(t *testing.T) {
 		t.Fatalf("the version-2 projections with a logo: %.200s", got.Version2WithLogo)
 	}
 	if v2, err := r.settings.DesignWithLogo(ctx, user); err != nil || !bytes.Equal(v2, withLogo.Version2()) {
-		t.Fatalf("the earlier read with a logo: %.200s, %v", v2, err)
+		t.Fatalf("the version-2 read with a logo: %.200s, %v", v2, err)
 	}
 	if v2, _ := r.settings.Design(ctx, user); !bytes.Equal(v2, technical.Version2()) {
-		t.Fatalf("the earlier read carries the logo: %.200s", v2)
+		t.Fatalf("the version-2 read carries the logo: %.200s", v2)
 	}
 	// Another person's design is not theirs, by id or as the default.
 	if byID, err := r.designs.ByID(ctx, other, mine); err != nil || byID != nil {
@@ -1187,7 +1187,7 @@ func TestBindHandsTheReportDesigns(t *testing.T) {
 		t.Fatalf("no default: %v, %v", got, err)
 	}
 	if got, err := r.settings.Design(ctx, user); err != nil || got != nil {
-		t.Fatalf("no default, the earlier read: %q, %v", got, err)
+		t.Fatalf("no default, the version-2 read: %q, %v", got, err)
 	}
 	if byID, err := r.designs.ByID(ctx, user, mine); err != nil || byID == nil || byID.Default {
 		t.Fatalf("the former default by id: %+v, %v", byID, err)

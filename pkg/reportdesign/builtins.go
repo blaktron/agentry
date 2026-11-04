@@ -14,8 +14,9 @@ import (
 var builtinFiles embed.FS
 
 // builtinIDs is the order the themes are offered in; Plain is the default
-// and stays near-monochrome. The first five are the themes version 2 had,
-// each with the same look; the five after them are new.
+// and stays near-monochrome. The first five are the themes a version-2
+// document may name, with the same look in each version; the five after
+// them are version 3's own.
 var builtinIDs = []string{"plain", "classic", "modern", "editorial", "technical", "boardroom", "studio", "field", "civic", "lumen"}
 
 // version2BasedOns are the built-ins a version-2 document may name: the
@@ -33,7 +34,7 @@ var version2Nearest = map[string]string{
 }
 
 // version2BasedOn is the built-in a version-2 projection names: the design's
-// own where version 2 had it, else the nearest of the first five.
+// own where version 2 knows it, else the nearest of the first five.
 func version2BasedOn(id string) string {
 	for _, v2 := range builtinIDs[:version2Count] {
 		if id == v2 {

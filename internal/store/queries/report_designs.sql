@@ -17,8 +17,8 @@ ORDER BY created_at, id;
 SELECT count(*) FROM user_report_designs WHERE user_id = $1;
 
 -- name: LockUserForReportDesigns :exec
--- Serializes an account's creates, so the library's bound holds under two
--- at once.
+-- Serializes an account's creates and default moves, so the library's bound
+-- and its one default hold under two at once.
 SELECT 1 FROM users WHERE id = $1 FOR UPDATE;
 
 -- name: GetUserReportDesign :one

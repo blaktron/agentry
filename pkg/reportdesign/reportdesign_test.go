@@ -113,7 +113,8 @@ func TestBuiltinsDiffer(t *testing.T) {
 }
 
 // Each built-in is a kit: a cover style, a header style and a footer that
-// go with it, and the five themes version 2 had keep their look (no
+// go with it, and the five themes a version-2 document may name keep that
+// look (no
 // secondary, the cover drawn only for a long report, and a version-2
 // projection that is the version-2 document byte for byte), while the five
 // new ones carry a secondary and a cover on every titled report.
@@ -853,6 +854,8 @@ func TestContrast(t *testing.T) {
 	for _, onText := range []struct{ path, value string }{
 		{"titleBlock", "band"}, {"headings", "smallcaps"}, {"headings", "numbered"},
 		{"cover.style", "band"}, {"cover.style", "largeType"}, {"cover.style", "plate"},
+		// custom falls back to band when it cannot be drawn.
+		{"cover.style", "custom"},
 		// split with no secondary: the panel is the accent.
 		{"cover.style", "split"},
 	} {
@@ -873,7 +876,7 @@ func TestContrast(t *testing.T) {
 	}
 	// The styles that colour only graphics take the 3.4:1 accent on the
 	// cover, drawn always.
-	for _, style := range []string{"geometric", "framed", "custom"} {
+	for _, style := range []string{"geometric", "framed"} {
 		m := base()
 		set(m, "cover.style", style)
 		set(m, "cover.when", "always")
@@ -948,7 +951,7 @@ func TestContrast(t *testing.T) {
 	// Each cover style's declaration, as the table reads.
 	want := map[string][2]bool{
 		"band": {true, false}, "split": {false, true}, "geometric": {false, false}, "largeType": {true, false},
-		"framed": {false, false}, "plate": {true, false}, "custom": {false, false},
+		"framed": {false, false}, "plate": {true, false}, "custom": {true, false},
 	}
 	if got := CoverStyleNames(); !slices.Equal(got, []string{"band", "split", "geometric", "largeType", "framed", "plate", "custom"}) {
 		t.Fatalf("cover styles %v", got)

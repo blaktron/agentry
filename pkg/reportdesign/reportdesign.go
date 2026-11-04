@@ -35,8 +35,9 @@
 //     accent;
 //   - a cover that is drawn (cover.when is not "never") puts text on or in a
 //     colour as its style declares (CoverStyles): "band" and "largeType" the
-//     accent, "plate" the accent (it draws as "band" without a cover image),
-//     "split" the secondary, or the accent when the design has none;
+//     accent, "plate" and "custom" the accent too (each draws as "band" when
+//     it cannot be drawn as itself), "split" the secondary, or the accent
+//     when the design has none;
 //   - every other choice colours only rules, bars, shapes, tinted cells and
 //     callout edges, and keeps text near-black.
 package reportdesign
@@ -57,9 +58,8 @@ import (
 	"unicode/utf8"
 )
 
-// DocumentVersion is the value of "agentryTheme" this package reads. An
-// earlier theme document (version 1 or 2) is refused, with no mapping; a
-// stored version-2 design was moved forward once, by the registry.
+// DocumentVersion is the value of "agentryTheme" this package reads. A
+// theme document of version 1 or 2 is refused, with no mapping.
 const DocumentVersion = 3
 
 // Bounds on a design.
@@ -86,8 +86,8 @@ const (
 	MaxLibrary = 10
 )
 
-// MaxFooterTextRunes is the cap on a footer slot, kept under its earlier
-// name for readers that count the footer's one line.
+// MaxFooterTextRunes is the cap on the footer's one line in a version-2
+// document, which Version2 writes from a slot: one slot's worth.
 const MaxFooterTextRunes = MaxLineRunes
 
 // Design is a report design: the theme document, version 3. Field order is
@@ -253,9 +253,10 @@ var coverStyles = []CoverStyle{
 	// The cover image across the top half, the title block below; without
 	// a cover image it draws as band, so the accent must carry text.
 	{Name: "plate", AccentOnText: true},
-	// The design's custom cover, the person's own code; what it draws is
-	// theirs, so it declares no colour.
-	{Name: "custom"},
+	// The design's custom cover, the person's own code: what it draws is
+	// theirs, but a custom cover that cannot be drawn falls back to band,
+	// so the accent must carry text.
+	{Name: "custom", AccentOnText: true},
 }
 
 // CoverStyles is every cover style with its declaration, in the order an
@@ -921,7 +922,8 @@ func checkText(field, s string, maxRunes int, mayBeEmpty bool) error {
 // AccentOnText reports whether the design sets text in its accent or on it:
 // a band title block (the title in white on the accent), headings set in the
 // accent (smallcaps, numbered), or a cover that is drawn in a style that
-// declares the accent (band, largeType, plate; split without a secondary).
+// declares the accent (band, largeType, plate, custom; split without a
+// secondary).
 // The runner's template draws exactly these with the accent on text;
 // everything else colours only graphics.
 func (d Design) AccentOnText() bool {

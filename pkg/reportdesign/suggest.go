@@ -26,19 +26,27 @@ var ErrNoColour = errors.New("the logo has no colour to suggest")
 // SuggestColours reads the two dominant colours of a logo (its PNG or JPEG
 // bytes, as a design carries them) and offers each as a shade that passes
 // the contrast rule for text: the editors show them for the person to take
-// as the accent and the secondary, never apply them unasked. Transparent
+// as the accent and the secondary, never apply them unasked. The logo is
+// held to the logo's upload bounds before a pixel is decoded. Transparent
 // and near-white pixels are the background and are not read; the colour
 // read most is the accent, and the next most that is far enough from it,
 // and at least a twentieth as common, is the secondary.
 func SuggestColours(logo []byte) (Suggestion, error) {
-	img, _, err := image.Decode(bytes.NewReader(logo))
-	if err != nil {
-		return Suggestion{}, err
-	}
-	b := img.Bounds()
-	if b.Dx() <= 0 || b.Dy() <= 0 || int64(b.Dx())*int64(b.Dy()) > MaxLogoUploadPixels {
+	if len(logo) > MaxLogoUploadBytes {
 		return Suggestion{}, ErrImageTooLarge
 	}
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(logo))
+	if err != nil || (format != "png" && format != "jpeg") {
+		return Suggestion{}, ErrImageFormat
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > MaxLogoUploadPixels {
+		return Suggestion{}, ErrImageTooLarge
+	}
+	img, _, err := image.Decode(bytes.NewReader(logo))
+	if err != nil {
+		return Suggestion{}, ErrImageFormat
+	}
+	b := img.Bounds()
 	// Five bits a channel: 32,768 bins, each the sum of its pixels' colour
 	// and their weight, so a bin's colour is its pixels' mean.
 	type bin struct {

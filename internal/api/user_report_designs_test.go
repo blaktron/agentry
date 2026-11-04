@@ -354,6 +354,7 @@ func TestReportDesignsRoundTrip(t *testing.T) {
 		{"a largeType cover sets text in the accent", both(set("headings", "rule"), set("cover.style", "largeType"), set("accent", "#3f8ad8")), "design.accent", "", "an accent that colours text needs 4.5:1"},
 		{"a plate cover sets text in the accent", both(set("headings", "rule"), set("cover.style", "plate"), set("accent", "#3f8ad8")), "design.accent", "", "an accent that colours text needs 4.5:1"},
 		{"a split cover with no secondary sets text in the accent", both(set("headings", "rule"), set("secondary", ""), set("accent", "#3f8ad8")), "design.accent", "", "an accent that colours text needs 4.5:1"},
+		{"a custom cover falls back to band, so the accent sets text", both(set("headings", "rule"), set("cover.style", "custom"), set("accent", "#3f8ad8")), "design.accent", "", "an accent that colours text needs 4.5:1"},
 		{"a tab in a slot", set("footer.slots", []string{"a\tb", "", ""}), "design.footer.slots.0", oneLine, ""},
 		{"a bidirectional override in the brand name", set("brand.name", "a\u202eb"), "design.brand.name", oneLine, ""},
 		{"a zero-width space in the strapline", set("brand.strapline", "a\u200bb"), "design.brand.strapline", oneLine, ""},
@@ -380,8 +381,7 @@ func TestReportDesignsRoundTrip(t *testing.T) {
 			}
 		}
 	}
-	// A version-2 document, as the earlier clients sent it, is refused by
-	// its version with no mapping.
+	// A version-2 document is refused by its version, with no mapping.
 	v2, err := os.ReadFile("../../pkg/reportdesign/testdata/v2/modern.json")
 	if err != nil {
 		t.Fatal(err)

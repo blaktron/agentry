@@ -45,7 +45,8 @@ var (
 	ErrImageFormat = errors.New("image not a PNG or JPEG")
 )
 
-// The logo's refusals are the same kinds under their earlier names.
+// ErrLogoTooLarge and ErrLogoFormat are the logo's names for the same two
+// kinds.
 var (
 	ErrLogoTooLarge = ErrImageTooLarge
 	ErrLogoFormat   = ErrImageFormat

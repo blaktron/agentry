@@ -602,7 +602,7 @@ func reportDesignOf(rec *api.ReportDesignEntry) *ReportDesign {
 }
 
 // reportSettingsOf adapts the library's default design to ReportSettings,
-// the earlier read: nil without a database.
+// the version-2 read: nil without a database.
 func reportSettingsOf(srv *api.Server, pool *pgxpool.Pool) ReportSettings {
 	if pool == nil {
 		return nil

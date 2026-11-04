@@ -4253,6 +4253,16 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/store/report_designs_migration_test.go",
+          "tests": [
+            "TestReportDesignsMigration"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/store/store_test.go",
           "tests": [
             "TestMigrateAndConnect",

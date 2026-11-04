@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -248,7 +249,7 @@ func normalizedCustomCover(cc reportdesign.CustomCover) ([]byte, error) {
 	for i, img := range cc.Images {
 		data, format, err := normalizedImage(img, reportdesign.NormalizeCustomCoverImage)
 		if err != nil {
-			return nil, &reportdesign.FieldError{Field: "customCover.images." + itoa(i), Message: fieldMessage(err)}
+			return nil, &reportdesign.FieldError{Field: "customCover.images." + strconv.Itoa(i), Message: fieldMessage(err)}
 		}
 		total += len(data)
 		out.Images = append(out.Images, reportdesign.ImageOf(data, format))
@@ -277,10 +278,6 @@ func customCoverJSON(cc reportdesign.CustomCover) []byte {
 		panic(err)
 	}
 	return bytes.TrimSuffix(b.Bytes(), []byte("\n"))
-}
-
-func itoa(i int) string {
-	return string(rune('0' + i))
 }
 
 // CreateUserReportDesign implements POST /user/report-designs.
@@ -492,6 +489,11 @@ func (s *Server) SetUserReportDesignDefault(w http.ResponseWriter, r *http.Reque
 	p := principalFrom(r.Context())
 	var list reportDesignList
 	err := s.st.WithPgxTx(r.Context(), func(tx pgx.Tx, tq *storegen.Queries) error {
+		// One move at a time per account, so two at once never both set
+		// a default under the one-default index.
+		if err := tq.LockUserForReportDesigns(r.Context(), p.UserID); err != nil {
+			return err
+		}
 		if _, err := tq.ClearUserReportDesignDefault(r.Context(), p.UserID); err != nil {
 			return err
 		}

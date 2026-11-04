@@ -444,10 +444,9 @@ type ReportDesigns interface {
 	Create(ctx context.Context, user uuid.UUID, document []byte) (*ReportDesign, error)
 }
 
-// ReportSettings is the earlier shape of ReportDesigns: the person's
-// default design as a version-2 document. Kept while a reader still takes
-// it; a new reader takes ReportDesigns. Deps.ReportSettings is nil without
-// a database.
+// ReportSettings is the person's default design as a version-2 document,
+// for a reader that reads only version 2; a reader of version 3 takes
+// ReportDesigns. Deps.ReportSettings is nil without a database.
 type ReportSettings interface {
 	// Design is the version-2 projection of the person's default design,
 	// or nil when they have none, which is not Plain.
@@ -683,8 +682,8 @@ type Deps struct {
 	// ReportDesigns is the core's store of report design libraries. nil
 	// when the server runs without a database.
 	ReportDesigns ReportDesigns
-	// ReportSettings is the earlier read of the default design, as a
-	// version-2 document. nil when the server runs without a database.
+	// ReportSettings is the default design as a version-2 document, for a
+	// reader of version 2 alone. nil when the server runs without a database.
 	ReportSettings ReportSettings
 	// Meter is the server's meter under the extension's own scope: an
 	// instrument created on it is scraped from /metrics beside the

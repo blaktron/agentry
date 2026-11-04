@@ -3305,9 +3305,10 @@ canonical form is at most 24 KB without its images and custom cover.
   empty for none. Each must reach 4.5:1 on white where it carries text and
   3:1 where it colours only rules, bars, shapes and tints. The accent
   carries text under a `band` title block, `smallcaps` or `numbered`
-  headings, and a cover that is drawn in the `band`, `largeType` or `plate`
-  style (or `split` with no secondary); the secondary carries text on a
-  drawn `split` cover. A refusal names the nearest shade that passes. Each
+  headings, and a cover that is drawn in the `band`, `largeType`, `plate`
+  or `custom` style (the last two draw as `band` when they cannot be drawn
+  as themselves), or `split` with no secondary; the secondary carries text
+  on a drawn `split` cover. A refusal names the nearest shade that passes. Each
   colour's tint is derived (12% of it over white), never stored.
 - `brand` is who the report is from: `name` (60 characters), `strapline`,
   up to four `contact` lines, `website` (a host name or an https address,
@@ -3377,8 +3378,9 @@ subtitle, author and date, the brand block, the design's colours and faces,
 the paths of the logo and the images) and places what it returns as the
 first page, then continues as a built-in cover does. The trust boundary of
 that code is the render root and nothing beyond it: it can read the report,
-the design, the facts and the images copied there, none of which is secret,
-and it has no shell, no network, no package imports and no file writes,
+the design, the facts and the images copied there, all of them the
+person's own or the agent's writing and nothing of the runner's or the
+registry's, and it has no shell, no network, no package imports and no file writes,
 because the renderer runs under the same confinement as every export
 (offline, the package downloader compiled out, a fixed argument list, an
 empty environment, a time and memory cap). The registry holds the cover to
@@ -3440,9 +3442,8 @@ picked, or the account's default, to a sandbox host that says it takes the
 design's version; a host that reads only version 2 is handed the design's
 version-2 projection (its accent, faces, title block, headings, tables,
 quotes, page numbers and the first footer slot's text, with a family or a
-built-in it does not know replaced by the nearest it does). A CLI from
-before the library reads no account design and takes its own
-configuration, else Plain. A choice typed at the CLI that is not a design
+built-in it does not know replaced by the nearest it does). A CLI that
+does not read the library takes its own configuration, else Plain. A choice typed at the CLI that is not a design
 refuses the run before anything starts (exit 2); an account design the CLI
 cannot read is a warning and the next choice runs, since how a PDF looks is
 no reason to stop a run.

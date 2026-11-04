@@ -311,8 +311,8 @@ const lockUserForReportDesigns = `-- name: LockUserForReportDesigns :exec
 SELECT 1 FROM users WHERE id = $1 FOR UPDATE
 `
 
-// Serializes an account's creates, so the library's bound holds under two
-// at once.
+// Serializes an account's creates and default moves, so the library's bound
+// and its one default hold under two at once.
 func (q *Queries) LockUserForReportDesigns(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockUserForReportDesigns, id)
 	return err
