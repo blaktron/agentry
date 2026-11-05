@@ -3165,8 +3165,22 @@ limits, none of which needs the window:
   stored conversation keeps it whole.
 - **`compaction_threshold: 0.7`**, on a model server of your own. The
   conversation is compacted at 70% of the window rather than docker-agent's
-  90%. With no window recorded, docker-agent compacts only a model it knows
-  itself.
+  90%. With no window recorded, docker-agent cannot compact ahead of time.
+- **`stream_idle_timeout: 30m`** in the model's `provider_opts`, on a model
+  server of your own (CLI v0.7.25 or later). The harness waits up to 30
+  minutes for a silent model stream before it gives up, rather than 5: a
+  server on your own machine reads a long prompt it has not cached before it
+  sends anything. Hosted models keep 5 minutes.
+
+**When the server refuses the conversation as too long** (CLI v0.7.25 or
+later, whose default harness is Agentry's build of docker-agent 1.157.2).
+docker-agent recognises the refusal of llama.cpp, LM Studio, vLLM and
+OpenAI-compatible servers, compacts the conversation and sends the request
+again. With no window recorded it compacts against the window the refusal
+states (llama.cpp and vLLM state it), or else against half the refused
+request's size, halved again if the summary itself is refused. Earlier
+harnesses ended such a run with `Failed to get model definition`. A policy
+that pins the vendor's docker-agent image keeps the vendor's behaviour.
 
 Within it:
 
