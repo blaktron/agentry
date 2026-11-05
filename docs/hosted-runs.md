@@ -31,12 +31,15 @@ is the deployment's configuration and not a secret: every tier's caps and
 hold under `tiers` (each with the `build` caps and hold of a [knowledge
 build](#a-knowledge-build)), and `knowledgeBuild` — whether a build can run
 here, what it holds, and the pack scan's credit — and `draft`, the terms of a
-[hosted draft](#a-hosted-draft), and `voiceBuild`, the terms of a [hosted
-Voice Writer run](#a-hosted-voice-writer-run). A signed-in caller also gets
+[hosted draft](#a-hosted-draft), `voiceBuild`, the terms of a [hosted
+Voice Writer run](#a-hosted-voice-writer-run), and `designBuild`, the terms
+of a [hosted Report Designer run](#a-hosted-report-designer-run). A
+signed-in caller also gets
 `caller` — the tier a run of theirs is held at, `account` (whose row it is
 held on: their own, or the organization whose pool pays for their runs), that
 tier's caps, the credits a run holds, the tier's `build` and the `draft`
-hold, and `voice`, whether their payer may start a Voice Writer run now — so
+hold, `voice`, whether their payer may start a Voice Writer run now, and
+`designBuild.holdCredits`, what a Report Designer run would hold — so
 a client can state the cost, and whose credits it is, before any run exists.
 `sessions` states a [hosted session](#a-hosted-session)'s terms to anyone:
 whether this deployment runs sessions (`enabled`), the free minutes, a paid
@@ -474,7 +477,7 @@ The run's stored record keeps every count, and the receipt keeps its
 `usage`: the settlement is computed from them and they are its audit. The
 deployment counts them in metrics: `RunsHostedInputTokens` and
 `RunsHostedOutputTokens`, by the run's kind (`run`, `session`,
-`knowledge_build`, `draft`, `revision`, `voice_build`) and its payer's tier
+`knowledge_build`, `draft`, `revision`, `voice_build`, `design_build`) and its payer's tier
 at the close, and `RunsDraftAbsorbedCredits`, what a draft's use came to
 past what it settled. They are scraped from `/metrics` beside the core's own
 series ([metrics](self-hosting.md#metrics)).
@@ -1206,6 +1209,95 @@ Its caps are `AGENTRY_RUNS_VOICE_SECONDS` (1,800 s) and
 runs, so the run needs no registry scan of a package; what it writes is
 reviewed before it is live.
 
+## A hosted Report Designer run
+
+A run of the kind `design_build` runs the CLI's built-in Report Designer
+(`agentry/report-designer`) on a sandbox host against the platform's model,
+to design how the caller's PDF reports look ([the report
+design](runner.md#the-report-design)). It is created by the same `POST
+/api/v1/x/runs/` with `kind: design_build`, an `op` and a `brief`, what the
+reports are and how they should look (required, text of at most 4 KiB, the
+run's task):
+
+- `design`: a whole report design, written from the brief. `from`, the id
+  of one of the caller's own report designs, is the design to start from
+  (optional); `inputs` (from the input route) are up to four reference
+  images, PNG or JPEG, which the Designer looks at and never keeps, and a
+  logo, named by its input id in `logo`; `urls` are up to two web
+  addresses about the caller or their brand, such as their own site
+  (below).
+- `cover`: a custom cover page in Typst for the design `from` names
+  (required), with up to four `inputs`, images the cover may draw. A cover
+  takes no `logo` (it uses the design's own) and no `urls`.
+
+The run takes no `ref`, `task`, `intake`, `description`, `hints`, `name`,
+`pack`, `continue`, `org`, `knowledge`, `voice`, `note`, `revises`,
+`instructions` or `problems`, an `op` it does not know, a `from` that is not
+one of the caller's own designs, or a `logo` that is not one of its inputs:
+each is `422`. More images is `413 too-large`. A token needs `user:profile`
+beside `run:write`, since the run reads one of the caller's designs and adds
+a new one, and downloading the run's output needs `user:profile` beside
+`run:read`.
+
+**Price.** Each run costs **20 credits flat**
+(`AGENTRY_RUNS_DESIGN_CREDITS`), AI Review of its web pages included, on
+every tier, with no count a billing cycle. The whole price is held under
+`design_build_hold`, then settled whole under `design_build` when the
+design it made was saved to the caller's library, or refunded in full under
+`design_build_refund` when none was. It is not metered: the host stops it at
+the tokens its credits buy at the input rate. It pays under the same payer
+rule as a run and counts against one active run per account.
+
+**How it runs.** At the hand-off the design `from` names is read from the
+caller's library as it stands then, with its logo, cover image and custom
+cover, and staged for the host with its SHA-256, which the run's
+`designBuild.fromDigest` keeps; a design deleted by then closes the run,
+refunded. Only a sandbox host whose CLI runs the Report Designer is handed
+one; the run waits in the queue for such a host. The host holds the design
+to its digest and to the core's design rules, then runs `agentry
+report-design design|cover` over it and the run's images, without
+`--save`, so nothing is kept on the host or written to any library from it.
+The job carries no Writing Voice, no knowledge, no secret and no release.
+On collect the registry opens the sealed output with the runner's key,
+holds `design/design.json` to the same rules and creates it in the caller's
+library as a **new design, named by the Designer, never the default and
+never in the place of a design there**: the person picks it, or makes it
+their default with the library's routes, the site, the desktop or `agentry
+report-design use`. The core encodes every image again as it stores it. A
+Cover saves a new design, the one it was for with the custom cover, and
+leaves that one as it is. A name the library already has is kept as it is;
+the library tells two designs of one name apart by their ids.
+
+The run's `designBuild` record says what happened: `op`, `from`,
+`fromDigest`, `logo` (the logo's input name), and `applied` with the new
+design's `designId` and `name`, or a `note`: `nothing` (no design came
+out), `invalid` (the output held no design the library takes), `gone` (the
+design it worked on was deleted before it started), `full` (the library
+already held ten designs) or `unavailable` (the library was off). Each of
+those is refunded.
+
+**Web addresses.** A `design` given `urls` is handed a credential minted
+for it alone, which the registry admits only for AI Review's reads of
+pages, at most `AGENTRY_RUNS_DESIGN_PAGES` (60) of them, and only while the
+run is claimed or running; a run given none holds no credential. The CLI
+fetches each address, has AI Review read the page's text through the
+registry's [model-input routes](model-input.md) with that credential, and
+withholds a page AI Review flags or cannot scan. A run given addresses is a
+browser job of two slots, so a page drawn by scripts is rendered before it
+is read. The run's `designBuild` record counts the pages read, what AI
+Review read and what it withheld.
+
+Its caps are `AGENTRY_RUNS_DESIGN_SECONDS` (1,800 s) and
+`AGENTRY_RUNS_DESIGN_MAX_TURNS` (300). `designBuild` in `GET
+/api/v1/x/runs/status` states its terms to anyone: `enabled`, `credits`,
+`caps`, `maxImages`, `maxBriefBytes`, `ops` and `urls` (`enabled`, `max`
+and `maxPages`). A deployment with no sandbox hosts or no report design
+library answers `503 design-build-unavailable`. The Report Designer is part
+of the CLI the host runs, so the run needs no registry scan of a package.
+Its output holds `design/design.json`, the whole design with its images,
+which `agentry report-design import` takes, and for a custom cover
+`design/cover.typ`, its images and its thumbnail.
+
 ## A hosted session
 
 A **hosted session** is a hosted run of a release's interactive mode: the
@@ -1637,6 +1729,10 @@ destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
 | `AGENTRY_RUNS_VOICE_SECONDS` | `1800` | a Voice Writer run's wall time, on every tier |
 | `AGENTRY_RUNS_VOICE_MAX_TURNS` | `300` | a Voice Writer run's turn cap |
 | `AGENTRY_RUNS_VOICE_PAGES` | `100` | AI Review's page reads for one Voice Writer run given web addresses: each page before the run, a long page in several pieces, and each page drawn by scripts that its `web_read` renders |
+| `AGENTRY_RUNS_DESIGN_CREDITS` | `20` | what a Report Designer run costs, flat, AI Review of its web pages included |
+| `AGENTRY_RUNS_DESIGN_SECONDS` | `1800` | a Report Designer run's wall time, on every tier |
+| `AGENTRY_RUNS_DESIGN_MAX_TURNS` | `300` | a Report Designer run's turn cap |
+| `AGENTRY_RUNS_DESIGN_PAGES` | `60` | AI Review's page reads for one Report Designer run given web addresses |
 | `AGENTRY_RUNS_QUEUE_MAX` | `1h` | how long a run may wait for a host before it is cancelled and refunded; at most `12h`, half the day a secret held for one run waits for it |
 | `AGENTRY_RUNS_STALE` | `10m` | how long a run's sandbox host may be silent before the run is closed as `error` and refunded |
 | `AGENTRY_RUNS_TASK_MAX_BYTES` | `65536` | the task text's cap |
