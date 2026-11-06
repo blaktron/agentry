@@ -164,22 +164,22 @@ func (e AgentMode) Valid() bool {
 
 // Defines values for AgentRole.
 const (
-	Maintain AgentRole = "maintain"
-	Publish  AgentRole = "publish"
-	Read     AgentRole = "read"
-	Write    AgentRole = "write"
+	AgentRoleMaintain AgentRole = "maintain"
+	AgentRolePublish  AgentRole = "publish"
+	AgentRoleRead     AgentRole = "read"
+	AgentRoleWrite    AgentRole = "write"
 )
 
 // Valid indicates whether the value is a known member of the AgentRole enum.
 func (e AgentRole) Valid() bool {
 	switch e {
-	case Maintain:
+	case AgentRoleMaintain:
 		return true
-	case Publish:
+	case AgentRolePublish:
 		return true
-	case Read:
+	case AgentRoleRead:
 		return true
-	case Write:
+	case AgentRoleWrite:
 		return true
 	default:
 		return false
@@ -360,6 +360,84 @@ func (e DependencyAlertSeverity) Valid() bool {
 	}
 }
 
+// Defines values for DesktopAppAttachment.
+const (
+	LoopbackHttp DesktopAppAttachment = "loopback-http"
+	Stdio        DesktopAppAttachment = "stdio"
+)
+
+// Valid indicates whether the value is a known member of the DesktopAppAttachment enum.
+func (e DesktopAppAttachment) Valid() bool {
+	switch e {
+	case LoopbackHttp:
+		return true
+	case Stdio:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DesktopAppPlatforms.
+const (
+	Darwin  DesktopAppPlatforms = "darwin"
+	Linux   DesktopAppPlatforms = "linux"
+	Windows DesktopAppPlatforms = "windows"
+)
+
+// Valid indicates whether the value is a known member of the DesktopAppPlatforms enum.
+func (e DesktopAppPlatforms) Valid() bool {
+	switch e {
+	case Darwin:
+		return true
+	case Linux:
+		return true
+	case Windows:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DesktopAppServerEcosystem.
+const (
+	DesktopAppServerEcosystemNpm  DesktopAppServerEcosystem = "npm"
+	DesktopAppServerEcosystemPypi DesktopAppServerEcosystem = "pypi"
+)
+
+// Valid indicates whether the value is a known member of the DesktopAppServerEcosystem enum.
+func (e DesktopAppServerEcosystem) Valid() bool {
+	switch e {
+	case DesktopAppServerEcosystemNpm:
+		return true
+	case DesktopAppServerEcosystemPypi:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DesktopAppToolsClass.
+const (
+	DesktopAppToolsClassAct  DesktopAppToolsClass = "act"
+	DesktopAppToolsClassExec DesktopAppToolsClass = "exec"
+	DesktopAppToolsClassRead DesktopAppToolsClass = "read"
+)
+
+// Valid indicates whether the value is a known member of the DesktopAppToolsClass enum.
+func (e DesktopAppToolsClass) Valid() bool {
+	switch e {
+	case DesktopAppToolsClassAct:
+		return true
+	case DesktopAppToolsClassExec:
+		return true
+	case DesktopAppToolsClassRead:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DraftCheckFailure.
 const (
 	DraftCheckFailureJudgeError DraftCheckFailure = "judge-error"
@@ -467,55 +545,61 @@ func (e DraftSetCheckFlagged) Valid() bool {
 
 // Defines values for DraftUngrantedToolGrant.
 const (
-	Browser                 DraftUngrantedToolGrant = "browser"
-	Egress                  DraftUngrantedToolGrant = "egress"
-	Exec                    DraftUngrantedToolGrant = "exec"
-	FilesystemRead          DraftUngrantedToolGrant = "filesystem.read"
-	FilesystemWrite         DraftUngrantedToolGrant = "filesystem.write"
-	McpServers              DraftUngrantedToolGrant = "mcpServers"
-	PersistentClock         DraftUngrantedToolGrant = "persistent.clock"
-	PersistentHelper        DraftUngrantedToolGrant = "persistent.helper"
-	PersistentMeetings      DraftUngrantedToolGrant = "persistent.meetings"
-	PersistentMemory        DraftUngrantedToolGrant = "persistent.memory"
-	PersistentReview        DraftUngrantedToolGrant = "persistent.review"
-	PersistentSelfConfigure DraftUngrantedToolGrant = "persistent.selfConfigure"
-	PersistentWeb           DraftUngrantedToolGrant = "persistent.web"
-	Subagents               DraftUngrantedToolGrant = "subagents"
-	TargetHosts             DraftUngrantedToolGrant = "targetHosts"
+	DraftUngrantedToolGrantBrowser                 DraftUngrantedToolGrant = "browser"
+	DraftUngrantedToolGrantComputerUse             DraftUngrantedToolGrant = "computerUse"
+	DraftUngrantedToolGrantDesktop                 DraftUngrantedToolGrant = "desktop"
+	DraftUngrantedToolGrantEgress                  DraftUngrantedToolGrant = "egress"
+	DraftUngrantedToolGrantExec                    DraftUngrantedToolGrant = "exec"
+	DraftUngrantedToolGrantFilesystemRead          DraftUngrantedToolGrant = "filesystem.read"
+	DraftUngrantedToolGrantFilesystemWrite         DraftUngrantedToolGrant = "filesystem.write"
+	DraftUngrantedToolGrantMcpServers              DraftUngrantedToolGrant = "mcpServers"
+	DraftUngrantedToolGrantPersistentClock         DraftUngrantedToolGrant = "persistent.clock"
+	DraftUngrantedToolGrantPersistentHelper        DraftUngrantedToolGrant = "persistent.helper"
+	DraftUngrantedToolGrantPersistentMeetings      DraftUngrantedToolGrant = "persistent.meetings"
+	DraftUngrantedToolGrantPersistentMemory        DraftUngrantedToolGrant = "persistent.memory"
+	DraftUngrantedToolGrantPersistentReview        DraftUngrantedToolGrant = "persistent.review"
+	DraftUngrantedToolGrantPersistentSelfConfigure DraftUngrantedToolGrant = "persistent.selfConfigure"
+	DraftUngrantedToolGrantPersistentWeb           DraftUngrantedToolGrant = "persistent.web"
+	DraftUngrantedToolGrantSubagents               DraftUngrantedToolGrant = "subagents"
+	DraftUngrantedToolGrantTargetHosts             DraftUngrantedToolGrant = "targetHosts"
 )
 
 // Valid indicates whether the value is a known member of the DraftUngrantedToolGrant enum.
 func (e DraftUngrantedToolGrant) Valid() bool {
 	switch e {
-	case Browser:
+	case DraftUngrantedToolGrantBrowser:
 		return true
-	case Egress:
+	case DraftUngrantedToolGrantComputerUse:
 		return true
-	case Exec:
+	case DraftUngrantedToolGrantDesktop:
 		return true
-	case FilesystemRead:
+	case DraftUngrantedToolGrantEgress:
 		return true
-	case FilesystemWrite:
+	case DraftUngrantedToolGrantExec:
 		return true
-	case McpServers:
+	case DraftUngrantedToolGrantFilesystemRead:
 		return true
-	case PersistentClock:
+	case DraftUngrantedToolGrantFilesystemWrite:
 		return true
-	case PersistentHelper:
+	case DraftUngrantedToolGrantMcpServers:
 		return true
-	case PersistentMeetings:
+	case DraftUngrantedToolGrantPersistentClock:
 		return true
-	case PersistentMemory:
+	case DraftUngrantedToolGrantPersistentHelper:
 		return true
-	case PersistentReview:
+	case DraftUngrantedToolGrantPersistentMeetings:
 		return true
-	case PersistentSelfConfigure:
+	case DraftUngrantedToolGrantPersistentMemory:
 		return true
-	case PersistentWeb:
+	case DraftUngrantedToolGrantPersistentReview:
 		return true
-	case Subagents:
+	case DraftUngrantedToolGrantPersistentSelfConfigure:
 		return true
-	case TargetHosts:
+	case DraftUngrantedToolGrantPersistentWeb:
+		return true
+	case DraftUngrantedToolGrantSubagents:
+		return true
+	case DraftUngrantedToolGrantTargetHosts:
 		return true
 	default:
 		return false
@@ -2651,6 +2735,86 @@ type DependencyAlertEcosystem string
 // DependencyAlertSeverity defines model for DependencyAlert.Severity.
 type DependencyAlertSeverity string
 
+// DesktopApp One application server: an application a QuickAgent may use on the person's own computer and the installed server Agentry has vetted for it. Agentry Desktop runs the server as the person from this entry alone; a release never names a command, a path or a port.
+type DesktopApp struct {
+	// Application Example: Blender
+	Application string `json:"application"`
+
+	// Attachment `stdio`: Agentry Desktop launches the server and speaks MCP over its standard input and output. `loopback-http`: the application serves MCP itself at `endpoint`, which Agentry Desktop connects to.
+	Attachment DesktopAppAttachment `json:"attachment"`
+
+	// Egress Hosts the server or the application's add-on is known to reach from the person's computer.
+	Egress *[]string `json:"egress,omitempty"`
+
+	// Endpoint A loopback-http server's http://127.0.0.1 address.
+	Endpoint *string `json:"endpoint,omitempty"`
+
+	// Id The id `capabilities.desktop.servers` names.
+	//
+	// Example: blender
+	Id string `json:"id"`
+
+	// Launch A stdio server's command line, which holds the pinned version, and its environment.
+	Launch *struct {
+		Command []string           `json:"command"`
+		Env     *map[string]string `json:"env,omitempty"`
+	} `json:"launch,omitempty"`
+
+	// Listener The loopback port the application listens on for its server, checked before a run starts.
+	Listener struct {
+		Port int `json:"port"`
+	} `json:"listener"`
+	Platforms []DesktopAppPlatforms `json:"platforms"`
+	Server    struct {
+		Ecosystem DesktopAppServerEcosystem `json:"ecosystem"`
+
+		// Name Example: mcp-for-blender
+		Name   string `json:"name"`
+		Source string `json:"source"`
+
+		// Version The one release vetted; a newer one is not until it is listed.
+		//
+		// Example: 2.2.7
+		Version string `json:"version"`
+	} `json:"server"`
+
+	// Steps What the person does once before the first run.
+	Steps []string `json:"steps"`
+
+	// Tools Every tool a run may call.
+	Tools []struct {
+		// Class `read` reads the application's state; `act` changes it or works inside it; `exec` runs code or commands the application interprets, and each call asks the person first.
+		Class DesktopAppToolsClass `json:"class"`
+
+		// Egress The tool reaches the entry's egress hosts from the person's computer.
+		Egress *bool  `json:"egress,omitempty"`
+		Name   string `json:"name"`
+	} `json:"tools"`
+
+	// Withheld Tools the server offers that no run is given.
+	Withheld *[]string `json:"withheld,omitempty"`
+}
+
+// DesktopAppAttachment `stdio`: Agentry Desktop launches the server and speaks MCP over its standard input and output. `loopback-http`: the application serves MCP itself at `endpoint`, which Agentry Desktop connects to.
+type DesktopAppAttachment string
+
+// DesktopAppPlatforms defines model for DesktopApp.Platforms.
+type DesktopAppPlatforms string
+
+// DesktopAppServerEcosystem defines model for DesktopApp.Server.Ecosystem.
+type DesktopAppServerEcosystem string
+
+// DesktopAppToolsClass `read` reads the application's state; `act` changes it or works inside it; `exec` runs code or commands the application interprets, and each call asks the person first.
+type DesktopAppToolsClass string
+
+// DesktopAppCatalogue defines model for DesktopAppCatalogue.
+type DesktopAppCatalogue struct {
+	Servers []DesktopApp `json:"servers"`
+
+	// Version The catalogue's version, raised on every change to it.
+	Version int `json:"version"`
+}
+
 // DesktopExchangeRequest defines model for DesktopExchangeRequest.
 type DesktopExchangeRequest struct {
 	Code  string `json:"code"`
@@ -2829,7 +2993,7 @@ type DraftUngrantedTool struct {
 	// Reason One sentence saying why, which quotes nothing of the instruction but the tool's name (and, for a server's tool, the server's).
 	Reason string `json:"reason"`
 
-	// Tool The tool as the instruction names it (`browser_click`, `run_command`, `fetch`), `browser_*` or `host_*` for a whole family, or `<server>__<tool>` for a declared server's tool.
+	// Tool The tool as the instruction names it (`browser_click`, `run_command`, `fetch`), `browser_*` or `host_*` for a whole family, or `<server>__<tool>` for a declared server's tool or an application server's on the person's computer.
 	Tool string `json:"tool"`
 }
 
@@ -4731,7 +4895,7 @@ type SearchAgentsParams struct {
 	// Mode Only agents that support this run mode.
 	Mode *AgentMode `form:"mode,omitempty" json:"mode,omitempty"`
 
-	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess`, or `targetHosts` (a machine the person names when the run starts), or `browser` (a headless browser for the sites the person names). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent.
+	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess`, or `targetHosts` (a machine the person names when the run starts), or `browser` (a headless browser for the sites the person names), or `desktop` (applications on the person's own computer, through Agentry Desktop). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent.
 	Capability *string `form:"capability,omitempty" json:"capability,omitempty"`
 
 	// License SPDX identifier from the latest published manifest.
@@ -5386,6 +5550,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /connectors (the `GetConnectors` operationId).
 	GetConnectors(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetDesktopApps Agentry's catalogue of application servers.
+	//
+	// Every entry of this build's catalogue of application servers: for each application a QuickAgent may use on the person's own computer (`capabilities.desktop.servers` names an entry by its id), the MCP server Agentry has vetted for it, pinned to one exact release; how Agentry Desktop launches or reaches it; the loopback port the application listens on; every tool a run may call, with its class (`read`, `act` or `exec`, which asks the person before each call); the tools no run is given; and the hosts the server is known to reach from the person's computer, which no run can hold it to. Clients carry the same catalogue from their build; this route lets a page or a script read it.
+	//
+	// Corresponds with GET /desktop-apps (the `GetDesktopApps` operationId).
+	GetDesktopApps(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetFindingVerdictWithBody Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
 	//
@@ -7514,6 +7685,23 @@ func (c *Client) VerifyEmail(ctx context.Context, body VerifyEmailJSONRequestBod
 // Corresponds with GET /connectors (the `GetConnectors` operationId).
 func (c *Client) GetConnectors(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetConnectorsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetDesktopApps Agentry's catalogue of application servers.
+//
+// Every entry of this build's catalogue of application servers: for each application a QuickAgent may use on the person's own computer (`capabilities.desktop.servers` names an entry by its id), the MCP server Agentry has vetted for it, pinned to one exact release; how Agentry Desktop launches or reaches it; the loopback port the application listens on; every tool a run may call, with its class (`read`, `act` or `exec`, which asks the person before each call); the tools no run is given; and the hosts the server is known to reach from the person's computer, which no run can hold it to. Clients carry the same catalogue from their build; this route lets a page or a script read it.
+//
+// Corresponds with GET /desktop-apps (the `GetDesktopApps` operationId).
+func (c *Client) GetDesktopApps(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDesktopAppsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -12633,6 +12821,33 @@ func NewGetConnectorsRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/connectors")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetDesktopAppsRequest constructs an http.Request for the GetDesktopApps method
+func NewGetDesktopAppsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/desktop-apps")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -19223,6 +19438,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /connectors (the `GetConnectors` operationId).
 	GetConnectorsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetConnectorsResponse, error)
 
+	// GetDesktopAppsWithResponse Agentry's catalogue of application servers.
+	//
+	// Every entry of this build's catalogue of application servers: for each application a QuickAgent may use on the person's own computer (`capabilities.desktop.servers` names an entry by its id), the MCP server Agentry has vetted for it, pinned to one exact release; how Agentry Desktop launches or reaches it; the loopback port the application listens on; every tool a run may call, with its class (`read`, `act` or `exec`, which asks the person before each call); the tools no run is given; and the hosts the server is known to reach from the person's computer, which no run can hold it to. Clients carry the same catalogue from their build; this route lets a page or a script read it.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /desktop-apps (the `GetDesktopApps` operationId).
+	GetDesktopAppsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDesktopAppsResponse, error)
+
 	// SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
 	//
 	// An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
@@ -22421,6 +22645,54 @@ func (r GetConnectorsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetConnectorsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetDesktopAppsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DesktopAppCatalogue
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetDesktopAppsResponse) GetJSON200() *DesktopAppCatalogue {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetDesktopAppsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetDesktopAppsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetDesktopAppsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetDesktopAppsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetDesktopAppsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -29873,6 +30145,21 @@ func (c *ClientWithResponses) GetConnectorsWithResponse(ctx context.Context, req
 	return ParseGetConnectorsResponse(rsp)
 }
 
+// GetDesktopAppsWithResponse Agentry's catalogue of application servers.
+//
+// Every entry of this build's catalogue of application servers: for each application a QuickAgent may use on the person's own computer (`capabilities.desktop.servers` names an entry by its id), the MCP server Agentry has vetted for it, pinned to one exact release; how Agentry Desktop launches or reaches it; the loopback port the application listens on; every tool a run may call, with its class (`read`, `act` or `exec`, which asks the person before each call); the tools no run is given; and the hosts the server is known to reach from the person's computer, which no run can hold it to. Clients carry the same catalogue from their build; this route lets a page or a script read it.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /desktop-apps (the `GetDesktopApps` operationId).
+func (c *ClientWithResponses) GetDesktopAppsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDesktopAppsResponse, error) {
+	rsp, err := c.GetDesktopApps(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetDesktopAppsResponse(rsp)
+}
+
 // SetFindingVerdictWithBodyWithResponse Confirm or dismiss a finding (not on the caller's own version, unless platform staff).
 //
 // An author cannot set a verdict on a finding of their own version (403), whatever their organization role, as with a review decision. Platform staff may, their own versions included; the verdict's audit event then carries `self_decision: true`.
@@ -33710,6 +33997,39 @@ func ParseGetConnectorsResponse(rsp *http.Response) (*GetConnectorsResponse, err
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest ConnectorList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetDesktopAppsResponse parses an HTTP response from a GetDesktopAppsWithResponse call
+func ParseGetDesktopAppsResponse(rsp *http.Response) (*GetDesktopAppsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetDesktopAppsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DesktopAppCatalogue
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -1,0 +1,11 @@
+# Fixture expectation (see README.md).
+# The same instruction in a release that declares Blender in its line for
+# the person's computer: every tool it calls for is granted, so S6 has
+# nothing to say about the tools.
+technique: "Benign twin: the same instruction with capabilities.desktop declaring blender"
+manifest: |
+  {"license":"MIT","schemaVersion":"2","modes":["autonomous"],"entrypoints":{"instruction":"AGENT.md"},"capabilities":{"network":{"egress":"none"},"filesystem":{"read":"none","write":"none"},"exec":"none","desktop":{"servers":[{"id":"blender"}]}}}
+expect: []
+forbid:
+  - S6/ungranted-tool
+expectClean: true

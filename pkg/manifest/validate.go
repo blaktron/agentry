@@ -280,6 +280,7 @@ func Validate(m *Manifest) []error {
 	validateSources(&s, m)
 	validateTargetHosts(&s, m)
 	validateBrowser(&s, m)
+	validateDesktop(&s, m)
 	validatePersistent(&s, m)
 	validatePersona(&s, m)
 	validateSubagents(&s, m)

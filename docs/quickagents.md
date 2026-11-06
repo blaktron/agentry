@@ -708,6 +708,36 @@ default, or `public`) and the declared `secrets` it may type
 A new browser, site, host or secret, or `site` to `public`, is a widening,
 so an upgrade that does one asks for consent again.
 
+**`desktop`** (v2): applications on the person's own computer, used
+through [Agentry Desktop](desktop.md). `servers` names, by id, entries of
+the catalogue of application servers (`blender` is the first), each of
+which may narrow the entry's tools with `tools`; `computerUse` is `app`
+(the windows of those applications) or `screen` (the whole display):
+
+```yaml
+capabilities:
+  desktop:
+    servers:
+      - id: blender
+        tools: [get_scene_info, look, execute_blender_code]
+    computerUse: app
+```
+
+The release names an entry of the catalogue, never a command, a path or a
+port: Agentry Desktop launches the entry's pinned server as the person and
+answers every call by the class the catalogue gives its tool (`read`,
+`act`, or `exec`, which asks the person before each call). A narrowing can
+only take tools away. At most four servers, each named once; a tool the
+entry does not give, an id the catalogue does not hold, and the line in a v1
+manifest are refused by name (rule V19). A new server, a narrowing lifted or
+a tool added to it, computer use declared, or `app` to `screen` is a
+widening, so an upgrade that does one asks for consent again. The line is
+for a run on the person's own computer or on their own runhost, never a run
+in Agentry, and `GET /search?capability=desktop` finds such releases. The
+catalogue is served at `GET /api/v1/desktop-apps` and built into every
+client. A CLI or desktop that pins a core older than this field refuses a
+manifest that carries it, naming the field.
+
 **`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.
 Operators may catalog extra MCP servers per category in their runner
@@ -1326,9 +1356,10 @@ What it checks, over the files a submission would carry:
 - **The instruction against the contract** (from agentry-cli v0.6.145).
   The registry's check of which runner tools an instruction calls for: an
   instruction that calls a tool such as `browser_*`, `host_*`,
-  `run_command`, `fetch` or `fs_write` without the contract line that
-  grants it is a high `S6/ungranted-tool` finding at the instruction's
-  first call, as it is at submission.
+  `run_command`, `fetch`, `fs_write` or an application server's
+  `blender__execute_blender_code` without the contract line that grants it
+  is a high `S6/ungranted-tool` finding at the instruction's first call, as
+  it is at submission.
 - **AI Review.** AI Review's questions over the package, read from the
   run's own record of what AI Review answered, never from what the model
   says.
@@ -1340,7 +1371,8 @@ What it checks, over the files a submission would carry:
 The expected outcome is reached as the registry's gate reaches it, from the
 capabilities the registry itself derives from the manifest: a browser line
 on any public site, or one that does not read, is held for review as `"*"`
-egress is, and a policy that names `browser` or `targetHosts` is applied. It
+egress is, and a policy that names `browser`, `targetHosts`, `desktop` or
+`computerUse` is applied. It
 is `published`, `needs_review` (held for a security reviewer), `rejected`,
 `refused_at_submit` (the manifest rules refuse it), or `undetermined` when
 something the gate weighs did not answer here and the best and the worst

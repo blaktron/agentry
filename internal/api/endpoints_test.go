@@ -1110,6 +1110,31 @@ capabilities:
 		t.Fatalf("capability=network matched a browser release: %+v", caps.Results)
 	}
 
+	// capability=desktop matches only a release that uses the person's own
+	// computer, which publishes under the baseline.
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "facetdesktop", "modes": []string{"autonomous"}, "visibility": "public",
+		"summary": q,
+	}, nil, http.StatusCreated)
+	files = skillFiles(owner, "facetdesktop", "1.0.0", nil)
+	files["agent.yaml"] += `capabilities:
+  desktop:
+    servers:
+      - id: blender
+        tools: [get_scene_info, look]
+    computerUse: app
+`
+	status, body = env.uploadVersionCLI(owner, "facetdesktop", pat, files)
+	if status != http.StatusAccepted {
+		t.Fatalf("publish a desktop release: %d %s", status, body)
+	}
+	env.waitStatus(owner, "facetdesktop", "1.0.0", "published")
+	var desktops results
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/search?q="+q+"&capability=desktop", nil, &desktops, http.StatusOK)
+	if len(desktops.Results) != 1 || desktops.Results[0].Name != "facetdesktop" {
+		t.Fatalf("capability=desktop = %+v; want facetdesktop alone", desktops.Results)
+	}
+
 	// capability=network matches the release that declares network egress, and
 	// only that one, however the capability is spaced.
 	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{

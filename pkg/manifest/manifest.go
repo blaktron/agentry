@@ -434,6 +434,11 @@ type Capabilities struct {
 	// need, its scope, and the declared secrets it may type. Absent, a
 	// run has no browser (browser.go).
 	Browser *Browser `yaml:"browser,omitempty" json:"browser,omitempty"`
+	// Desktop declares that the run uses the person's own computer (v2,
+	// V19): application servers by catalogue id, and computer use of
+	// their windows or of the whole screen. Absent, a run reaches nothing
+	// on that computer (desktop.go).
+	Desktop *Desktop `yaml:"desktop,omitempty" json:"desktop,omitempty"`
 	// Persistent declares what a persistent agent may do beyond an
 	// ordinary run (v2, V16), valid only with the persistent mode; nil
 	// declares nothing (persistent.go).

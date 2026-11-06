@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/blaktron/agentry/pkg/appserver"
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
@@ -208,6 +210,21 @@ func mcpServerEntries(manifestJSON []byte) (declared []declaredServer, uncovered
 		}
 		uncovered = append(uncovered, ref)
 		reasons[ref] = why
+	}
+	// An application server the desktop line uses runs on the person's
+	// computer at the catalogue's pin, which is looked up as a declared
+	// server's is.
+	if d := m.Capabilities.Desktop; d != nil {
+		for _, srv := range d.Servers {
+			e, known := appserver.Builtin().Lookup(srv.ID)
+			if !known {
+				continue
+			}
+			pin := declaredServer{Ecosystem: string(e.Package.Ecosystem), Package: e.Package.Name, Version: e.Package.Version}
+			if !slices.Contains(declared, pin) {
+				declared = append(declared, pin)
+			}
+		}
 	}
 	sort.Slice(declared, func(a, b int) bool {
 		if declared[a].Ecosystem != declared[b].Ecosystem {

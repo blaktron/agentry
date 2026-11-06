@@ -21,6 +21,11 @@ const (
 	CapEnv         = "env"
 	CapTargetHosts = "targetHosts"
 	CapBrowser     = "browser"
+	// CapDesktop is a release that uses the person's own computer: any
+	// capabilities.desktop line.
+	CapDesktop = "desktop"
+	// CapComputerUse is a desktop line that does computer use.
+	CapComputerUse = "computerUse"
 	// CapSubagents is a persistent release that declares subagents.
 	CapSubagents = "subagents"
 )
@@ -41,6 +46,10 @@ func CapPersistent(key string) string { return "persistent." + key }
 //   - browser: a browser line, readable or not, a token of its own and never
 //     network, because the browser reaches sites through the runner's browse
 //     proxy;
+//   - desktop: a line for the person's own computer, readable or not, a
+//     token of its own; and computerUse when that line does computer use
+//     or does not read. The catalogue's egress for the servers it uses
+//     counts as network, as a package server's own egress does;
 //   - persistent.<key>: each key capabilities.persistent declares, and every
 //     key when the block does not read;
 //   - subagents: a persistent release that declares subagents, or whose
@@ -74,6 +83,12 @@ func DeclaredCapabilities(manifestJSON []byte) []string {
 	}
 	if _, declared, _ := c.Browser(); declared {
 		out = append(out, CapBrowser)
+	}
+	if d, declared, ok := c.Desktop(); declared {
+		out = append(out, CapDesktop)
+		if !ok || d.HasComputerUse() {
+			out = append(out, CapComputerUse)
+		}
 	}
 	if p, declared, ok := c.Persistent(); declared {
 		for _, k := range manifest.PersistentCapabilities() {

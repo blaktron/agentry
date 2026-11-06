@@ -10,6 +10,7 @@ import (
 
 	"github.com/blaktron/agentry/internal/manifestcaps"
 	"github.com/blaktron/agentry/pkg/gatecases"
+	"github.com/blaktron/agentry/pkg/manifest"
 	"github.com/blaktron/agentry/pkg/rules"
 )
 
@@ -405,13 +406,55 @@ func s9ManifestDiff(in *Input) []Finding {
 	}
 	prevCaps := declaredCaps(in.PrevManifestJSON)
 	for _, c := range sortedSet(declaredCaps(in.ManifestJSON)) {
-		// A subagent is reported by name below, not as the bare token.
-		if !prevCaps[c] && c != gatecases.CapSubagents {
+		// A subagent is reported by name below, and the desktop line by
+		// what it adds, not as the bare token.
+		if !prevCaps[c] && c != gatecases.CapSubagents && c != gatecases.CapDesktop && c != gatecases.CapComputerUse {
 			findings = append(findings, capabilityWidened("Capability newly declared this release: "+c, map[string]any{"capability": c}))
 		}
 	}
 	findings = append(findings, s9PersistentListDiff(prevCapsBlock, curCapsBlock)...)
+	findings = append(findings, s9DesktopDiff(prevCapsBlock, curCapsBlock)...)
 	return append(findings, s9SubagentDiff(in)...)
+}
+
+// scannerNewDesktop is S9's finding for what a release newly does on the
+// person's own computer: the line declared for the first time, or widened
+// (a new application server, a tool narrowing lifted or a tool added to it,
+// computer use declared or moved to the whole screen). It is medium, as a
+// newly declared capability is: the person consents to the line at install
+// and again on the widening, so declaring it is not suspicious by itself.
+const scannerNewDesktop = "S9/new-desktop"
+
+// s9DesktopDiff reports each widening of capabilities.desktop against the
+// previous release, one finding a change, in the consent's words. A line
+// that does not read is reported once, as everything it could mean.
+func s9DesktopDiff(prev, cur manifestcaps.Caps) []Finding {
+	was, _, prevOK := prev.Desktop()
+	is, declared, curOK := cur.Desktop()
+	if !declared {
+		return nil
+	}
+	if !curOK {
+		return []Finding{newDesktop("The line for the person's computer does not read: every application server and the whole screen",
+			map[string]any{"capability": gatecases.CapDesktop})}
+	}
+	// A previous line that does not read counts as none, so everything the
+	// current line declares is reported: the side that says too much.
+	if !prevOK {
+		was = nil
+	}
+	var out []Finding
+	for _, line := range manifest.DiffCapabilities(manifest.Capabilities{Desktop: was}, manifest.Capabilities{Desktop: is}).Widened {
+		out = append(out, newDesktop("On the person's computer, this release newly "+line, map[string]any{"capability": gatecases.CapDesktop, "change": line}))
+	}
+	return out
+}
+
+func newDesktop(title string, detail map[string]any) Finding {
+	return Finding{
+		Scanner: scannerNewDesktop, Severity: SevMedium, Confidence: ConfHigh,
+		Title: title, Detail: detail, Taxonomy: []string{"ASI04"},
+	}
 }
 
 // capabilityWidened is S9's finding for a capability a release declares
