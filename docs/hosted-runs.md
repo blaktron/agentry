@@ -1223,12 +1223,13 @@ run's task):
   of one of the caller's own report designs, is the design to start from
   (optional); `inputs` (from the input route) are up to four reference
   images, PNG or JPEG, which the Designer looks at and never keeps, and a
-  logo, named by its input id in `logo`; `urls` are up to two web
-  addresses about the caller or their brand, such as their own site
-  (below).
+  logo, named by its input id in `logo`; `document` names one more input,
+  a PDF or a Word document (`.docx`) of at most 20 MB that the design is
+  built around (below); `urls` are up to two web addresses about the
+  caller or their brand, such as their own site (below).
 - `cover`: a custom cover page in Typst for the design `from` names
   (required), with up to four `inputs`, images the cover may draw. A cover
-  takes no `logo` (it uses the design's own) and no `urls`.
+  takes no `logo` (it uses the design's own), no `document` and no `urls`.
 
 The run takes no `ref`, `task`, `intake`, `description`, `hints`, `name`,
 `pack`, `continue`, `org`, `knowledge`, `voice`, `note`, `revises`,
@@ -1275,6 +1276,26 @@ out), `invalid` (the output held no design the library takes), `gone` (the
 design it worked on was deleted before it started), `full` (the library
 already held ten designs) or `unavailable` (the library was off). Each of
 those is refunded.
+
+**A document.** A `design` may be built around one document, such as a
+brand guideline or a report the caller already sends: a PDF or a Word
+document (`.docx`) of at most 20 MB (the status route's
+`designBuild.document`, `{enabled, maxBytes, types}`). Upload it with
+`POST /api/v1/x/runs/inputs?kind=document&name=<file>`. The upload is
+checked by its own first bytes, a PDF by its header and a `.docx` by its
+archive's signature and its name, and refused with `422` before anything
+is kept if it is neither. Past 20 MB it is `413`. Every other input stays
+at 10 MB, and an upload over that is a Design's document alone. Name its
+id in `inputs` and in `document`. A document that is not one of the run's
+inputs, is its logo, or is not a PDF or a `.docx` is `422`, as is a second
+PDF or `.docx` among the inputs, or any document on a `cover`. Only a
+sandbox host whose CLI reads a document is handed such a run. Before the
+Designer starts, the host checks that every staged input is a plain file
+of the run's own, that the document is a PDF or `.docx` by its bytes and
+that no other input is a document. The CLI then reads it as `agentry
+report-design design --document` does locally ([the report
+design](runner.md#the-report-design)). The run's `designBuild.document` is
+the document's input name. The price is the same 20 credits.
 
 **Web addresses.** A `design` given `urls` is handed a credential minted
 for it alone, which the registry admits only for AI Review's reads of
