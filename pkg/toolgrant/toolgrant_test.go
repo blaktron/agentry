@@ -428,3 +428,47 @@ func TestTheSubagentToolsNeedASubagent(t *testing.T) {
 		}
 	}
 }
+
+// An application server's tool is read by its catalogue id or by the
+// desktop link's own server name, and is given only by the desktop line;
+// computer use by its own name. A declared MCP server of the same name is
+// the release's own and keeps its reading.
+func TestTheDesktopLineGivesApplicationServerTools(t *testing.T) {
+	blender := &manifest.Desktop{Servers: []manifest.DesktopServer{{ID: "blender"}}}
+	for _, c := range []struct {
+		name  string
+		caps  manifest.Capabilities
+		instr string
+		grant toolgrant.Grant
+	}{
+		{"by catalogue id, no line", manifest.Capabilities{}, "Call blender__look first.", toolgrant.GrantDesktop},
+		{"by the link's name, no line", manifest.Capabilities{}, "Call agentry-desktop-blender__look first.", toolgrant.GrantDesktop},
+		{"by the link's name in underscores", manifest.Capabilities{}, "Call agentry_desktop_blender__look first.", toolgrant.GrantDesktop},
+		{"a withheld tool", manifest.Capabilities{Desktop: blender}, "Call blender__disable_telemetry first.", toolgrant.GrantDesktop},
+		{"an unknown application under the link's name", manifest.Capabilities{Desktop: blender}, "Call agentry-desktop-photoshop__open first.", toolgrant.GrantDesktop},
+		{"computer use, no line", manifest.Capabilities{Desktop: blender}, "Take agentry-desktop-computer__screenshot first.", toolgrant.GrantComputerUse},
+		{"a tool the catalogue does not list, by bare id", manifest.Capabilities{}, "Call blender__render_movie first.", toolgrant.GrantMCPServer},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := toolgrant.Check(c.caps, c.instr)
+			if len(got) != 1 || got[0].Grant != c.grant || got[0].Path != c.grant.Path() {
+				t.Fatalf("Check = %+v; want one %s", got, c.grant)
+			}
+		})
+	}
+	for _, c := range []struct {
+		name  string
+		caps  manifest.Capabilities
+		instr string
+	}{
+		{"a declared application", manifest.Capabilities{Desktop: blender}, "Call blender__execute_blender_code and agentry-desktop-blender__look."},
+		{"computer use declared", manifest.Capabilities{Desktop: &manifest.Desktop{ComputerUse: manifest.ComputerUseApp}}, "Take agentry-desktop-computer__screenshot."},
+		{"a declared MCP server of that name", manifest.Capabilities{MCPServers: []manifest.MCPServer{{PyPI: "mcp-for-blender", Version: "2.2.7"}}}, "Call blender__look."},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := toolgrant.Check(c.caps, c.instr); len(got) != 0 {
+				t.Fatalf("Check = %+v; want nothing missing", got)
+			}
+		})
+	}
+}

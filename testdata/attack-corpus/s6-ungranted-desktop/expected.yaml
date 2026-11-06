@@ -1,0 +1,15 @@
+# Fixture expectation (see README.md).
+# An instruction that runs code inside Blender through the Blender
+# application server's tools, in a release that declares no
+# capabilities.desktop: its runs reach nothing on the person's computer, so
+# the instruction describes a run that cannot happen, and a release that
+# meant to run code there would do so without the consent the line asks
+# for. S6 reads the tools against the line and holds the version for a
+# person; it is never rejected.
+technique: "Instruction calls an application server's tools the manifest does not grant (no desktop line)"
+manifest: |
+  {"license":"MIT","schemaVersion":"2","modes":["autonomous"],"entrypoints":{"instruction":"AGENT.md"},"capabilities":{"network":{"egress":"none"},"filesystem":{"read":"none","write":"none"},"exec":"none"}}
+expect:
+  - S6/ungranted-tool
+forbid: []
+expectClean: false

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/blaktron/agentry/pkg/appserver"
 )
 
 // CapabilityDiff is the comparison between a capability contract a
@@ -94,6 +96,7 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 	}
 
 	d.appendBrowserDiff(old.Browser, next.Browser)
+	d.appendDesktopDiff(old.Desktop, next.Desktop)
 
 	added, removed = diffSets(dataAccessNames(old.DataAccess), dataAccessNames(next.DataAccess))
 	for _, s := range added {
@@ -575,4 +578,84 @@ func diffSets(old, next []string) (added, removed []string) {
 	sort.Strings(added)
 	sort.Strings(removed)
 	return added, removed
+}
+
+// appendDesktopDiff records the change to the use of the person's own
+// computer: a new line, a new application server, a tool narrowing lifted
+// or a tool added to it, and computer use declared or moved from the
+// applications' windows to the whole screen widen, so an upgrade that does
+// any of them asks again. A removed server, a narrower tool list and a
+// smaller scope narrow.
+func (d *CapabilityDiff) appendDesktopDiff(old, next *Desktop) {
+	switch {
+	case old == nil && next == nil:
+		return
+	case next == nil:
+		d.Narrowed = append(d.Narrowed, "no longer uses your computer")
+		return
+	}
+	if old == nil {
+		old = &Desktop{}
+	}
+	oldIDs, nextIDs := desktopIDs(old), desktopIDs(next)
+	added, removed := diffSets(oldIDs, nextIDs)
+	for _, id := range added {
+		srv, _ := next.Server(id)
+		d.Widened = append(d.Widened, "uses "+DescribeDesktopServer(srv))
+	}
+	for _, id := range removed {
+		d.Narrowed = append(d.Narrowed, "no longer uses "+desktopApplication(id)+" on your computer")
+	}
+	for _, id := range nextIDs {
+		prev, had := old.Server(id)
+		if !had {
+			continue
+		}
+		cur, _ := next.Server(id)
+		d.appendDesktopToolsDiff(id, prev.Tools, cur.Tools)
+	}
+	switch {
+	case old.ComputerUse == next.ComputerUse:
+	case next.ComputerUse == "":
+		d.Narrowed = append(d.Narrowed, "drops computer use on your computer")
+	case old.ComputerUse == "":
+		d.Widened = append(d.Widened, DescribeComputerUse(next))
+	case next.ComputerUse == ComputerUseScreen:
+		d.Widened = append(d.Widened, "lets computer use reach your whole screen (was: the applications' windows)")
+	default:
+		d.Narrowed = append(d.Narrowed, "keeps computer use to the applications' windows (was: your whole screen)")
+	}
+}
+
+// appendDesktopToolsDiff compares one application server's tool
+// narrowing: no narrowing is every tool the catalogue gives.
+func (d *CapabilityDiff) appendDesktopToolsDiff(id string, prev, next []string) {
+	app := desktopApplication(id)
+	switch {
+	case len(prev) > 0 && len(next) == 0:
+		d.Widened = append(d.Widened, "lifts the tool narrowing of "+app+" on your computer (every tool the catalogue gives)")
+	case len(prev) == 0 && len(next) > 0:
+		d.Narrowed = append(d.Narrowed, "narrows "+app+" on your computer to tools "+strings.Join(next, ", "))
+	default:
+		added, removed := diffSets(prev, next)
+		e, known := appserver.Builtin().Lookup(id)
+		for _, tool := range added {
+			line := "adds tool " + tool + " of " + app + " on your computer"
+			if t, ok := e.Tool(tool); known && ok && t.Class == appserver.ClassExec {
+				line += " (runs code inside " + app + ")"
+			}
+			d.Widened = append(d.Widened, line)
+		}
+		for _, tool := range removed {
+			d.Narrowed = append(d.Narrowed, "drops tool "+tool+" of "+app+" on your computer")
+		}
+	}
+}
+
+func desktopIDs(d *Desktop) []string {
+	out := make([]string, 0, len(d.Servers))
+	for _, s := range d.Servers {
+		out = append(out, s.ID)
+	}
+	return out
 }

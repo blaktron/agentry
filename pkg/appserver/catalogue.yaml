@@ -1,0 +1,88 @@
+# Agentry's catalogue of application servers: for each application a
+# QuickAgent may use on the person's own computer, the MCP server Agentry
+# has vetted for it, pinned to one exact release. A release names an entry
+# by its id in capabilities.desktop.servers; Agentry Desktop launches the
+# entry's server as the person, never a command the release or the agent
+# names, and answers each call by the class the entry gives its tool.
+#
+# Each entry:
+#   id           stable, lowercase: what capabilities.desktop.servers names
+#   application  the application, as people know it
+#   platforms    the operating systems the entry is offered on (linux,
+#                darwin, windows)
+#   server       the installed server: ecosystem (pypi, npm), name, exact
+#                version, and where its source lives
+#   attachment   stdio: Agentry Desktop launches the server and speaks MCP
+#                  over its standard input and output
+#                loopback-http: the application serves MCP itself on a
+#                  loopback address, which Agentry Desktop connects to
+#   launch       for stdio: the command line, holding the pinned version,
+#                and the environment it runs with
+#   endpoint     for loopback-http: the http://127.0.0.1 address
+#   listener     the loopback port the application listens on for the
+#                server, which Agentry Desktop checks before a run starts
+#   tools        every tool a run may call, each with its class:
+#                  read  reads the application's state
+#                  act   changes it, or works inside it
+#                  exec  runs code or commands the application interprets;
+#                        each call asks the person first
+#                and, with egress: true, a tool that reaches the hosts
+#                below from the person's computer
+#   withheld     tools the server offers that no run is given
+#   egress       the hosts the server or its add-on is known to reach from
+#                the person's computer; nothing in a run holds it to them
+#   steps        what the person does once before the first run
+#
+# An entry's pin moves to the server's newest release by a change to this
+# file, which raises version.
+version: 1
+servers:
+  - id: blender
+    application: Blender
+    platforms: [linux, darwin, windows]
+    server:
+      ecosystem: pypi
+      name: mcp-for-blender
+      version: 2.2.7
+      source: https://github.com/ahujasid/blender-mcp
+    attachment: stdio
+    launch:
+      command: [uvx, mcp-for-blender==2.2.7]
+      env:
+        DISABLE_TELEMETRY: "true"
+        BLENDER_MCP_SAFE_MODE: "1"
+    listener:
+      port: 9876
+    tools:
+      - {name: execute_blender_code, class: exec}
+      - {name: generate_3d, class: act, egress: true}
+      - {name: import_asset, class: act, egress: true}
+      - {name: search_assets, class: read, egress: true}
+      - {name: look, class: read}
+      - {name: get_scene_info, class: read}
+      - {name: get_addon_status, class: read}
+    withheld:
+      - disable_telemetry
+      - record_trajectory_feedback
+      - search_mentions
+      - open_viewport
+      - viewport_latest
+      - viewport_capture
+      - viewport_pick
+    egress:
+      - api.polyhaven.com
+      - cdn.polyhaven.com
+      - api.sketchfab.com
+      - api.poly.pizza
+      - hyperhuman.deemos.com
+      - queue.fal.run
+      - api.meshy.ai
+      - openapi.tripo3d.ai
+      - openapi.tripo3d.com
+      - ai3d.tencentcloudapi.com
+      - hunyuan.tencentcloudapi.com
+      - mcp-for-blender.com
+    steps:
+      - "Install uv, which runs the server: https://docs.astral.sh/uv/"
+      - "Install the add-on that comes with this server, with uvx mcp-for-blender==2.2.7 install-addon, and enable Interface: MCP for Blender in Blender's Preferences, Add-ons."
+      - In the sidebar of Blender's 3D view, open the BlenderMCP tab and start the server, which listens on port 9876.

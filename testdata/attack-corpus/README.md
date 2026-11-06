@@ -116,6 +116,14 @@ S6 reports `S6/ungranted-tool` and the version goes to a person. Its twin
 declared, and must draw no finding, including for the `browser_evaluate` the
 instruction names only to turn it away.
 
+S6 over the instruction, the person's computer: `s6-ungranted-desktop` is an
+instruction that runs code inside Blender through the Blender application
+server's tools (`blender__execute_blender_code`) in a release that declares
+no `capabilities.desktop`; S6 reports `S6/ungranted-tool` and the version
+goes to a person. Its twin `s6-ungranted-desktop-benign` is the same
+instruction with `blender` declared in the line, and must draw no finding
+for the tools.
+
 S6 over a support script (ruleset 0.4.12): `script-network-forms` is a shell
 script that reaches four undeclared hosts without a curl, wget or ssh on the
 line: a redirection to `/dev/tcp`, a `socat` address, a `git clone` of an

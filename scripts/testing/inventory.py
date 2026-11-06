@@ -40,6 +40,7 @@ PURPOSES = {
     "internal/ui": "The sign-in hand-off and device-authorize pages through the in-process API",
     "internal/voice": "Voice review stages, text bounds and question corpus",
     "internal/webhook": "Signed webhook delivery and guarded external HTTP",
+    "pkg/appserver": "Application server catalogue validation: exact pins, launches and the closed tool classes",
     "pkg/archive": "Reproducible packing and hostile archive extraction",
     "pkg/attest": "DSSE envelope signing and verification",
     "pkg/connector": "Connector catalogue validation and which servers get an Agentry app",

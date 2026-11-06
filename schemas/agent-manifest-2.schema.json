@@ -264,6 +264,36 @@
             }
           }
         },
+        "desktop": {
+          "type": "object",
+          "description": "The person's own computer (V19): application servers the run uses there, by their id in the catalogue of application servers, and computer use of those applications' windows (app) or of the whole display (screen). Agentry Desktop launches each catalogue entry's pinned server as the person and answers every call; a release never names a command, a path or a port. No hosted run has this line.",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "servers": {
+              "type": "array",
+              "description": "Application servers, at most four, each a catalogue id named once.",
+              "uniqueItems": true,
+              "maxItems": 4,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "The server's id in the catalogue of application servers, such as blender." },
+                  "tools": {
+                    "type": "array",
+                    "description": "Narrows the run to these of the catalogue entry's tools; absent, the run has every tool the entry gives. A narrowing never widens.",
+                    "uniqueItems": true,
+                    "minItems": 1,
+                    "items": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" }
+                  }
+                }
+              }
+            },
+            "computerUse": { "type": "string", "enum": ["app", "screen"], "description": "Computer use: app holds the agent to the windows of the applications the run uses; screen gives it the whole display." }
+          }
+        },
         "persistent": {
           "type": "object",
           "description": "What a persistent agent may do beyond an ordinary run (V16), valid only with persistent in modes. Every key is off unless declared, and the set is closed: a runner grants only what is named. Part of the capability contract: consent lists each key, and a newly declared one asks again.",

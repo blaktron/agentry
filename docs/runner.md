@@ -2957,6 +2957,21 @@ scope and secrets. The install record keeps the line, so an update that
 adds a browser, a site, a host or a secret, or moves from `site` to
 `public`, asks for consent again.
 
+### The person's computer: `capabilities.desktop`
+
+A QuickAgent that works an application on the person's own computer, such
+as Blender, declares `capabilities.desktop`: entries of the catalogue of
+application servers by id, and computer use of their windows or of the whole
+screen ([the person's computer](desktop.md)). The release names an entry,
+never a command: what runs on the person's computer is the entry's pinned
+server, launched as the person by Agentry Desktop, which is the only thing
+that answers the run's calls there. The sandbox keeps its routes; no
+container of the run is given a route to the person's computer.
+
+The line is for a run on the person's own computer or on their own runhost,
+never a run in Agentry. A runner that does not carry the line refuses a
+manifest that declares it, naming the field.
+
 ## The scratch folder and PDF reports
 
 From agentry-cli v0.6.82 every release's run and session gets a
@@ -5506,7 +5521,7 @@ page covers authoring and publishing in depth.
 |---|---|
 | `agentry login [--browser \| --paste]` | signs in to a registry: the browser flow hands the CLI a one-time code on a loopback listener and the CLI exchanges it for a scoped token from its own process; `--paste` reads a token from stdin for machines without a browser. Signing in also pins the registry's signing keys (TOFU) |
 | `agentry init [--from PATH]` | scaffolds a workspace, or imports a `SKILL.md` or an MCP registry `server.json` |
-| `agentry validate DIR` | the registry's manifest rules and offline scanners (V1–V18, S1/S3/S4) |
+| `agentry validate DIR` | the registry's manifest rules and offline scanners (V1–V19, S1/S3/S4) |
 | `agentry list` | every install record in `installed.yaml` — the embedded installs and the runner consents — with whether each directory is still present (`--json`) |
 | `agentry info ns/name` / `agentry search` | a QuickAgent's page and capability contract; full-text search with the mode, capability, license and verified-org facets (`--json` on both) |
 | `agentry verify ns/name@version` | digest and DSSE attestation check against the pinned keys — an exit code for CI |

@@ -1485,6 +1485,83 @@
       }
     },
     {
+      "name": "a desktop line is its own token, and its server's catalogue egress is network",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "desktop": {
+            "servers": [
+              {
+                "id": "blender"
+              }
+            ]
+          }
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "desktop",
+          "network"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "computer use is a token of its own beside desktop",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "desktop": {
+            "computerUse": "app"
+          }
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "computerUse",
+          "desktop"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "a desktop line that does not read counts as computer use",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "desktop": 7
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "computerUse",
+          "desktop"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
       "name": "a manifest with no capabilities block declares nothing",
       "manifest": {
         "name": "example"

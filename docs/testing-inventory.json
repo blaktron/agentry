@@ -1091,7 +1091,8 @@
           "tests": [
             "TestConnectorsListsTheCatalogue",
             "TestConnectorsServeTheConfiguredPublicClientID",
-            "TestEveryCatalogueStrategyIsInTheAPI"
+            "TestEveryCatalogueStrategyIsInTheAPI",
+            "TestDesktopAppsServesTheCatalogue"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -3282,6 +3283,24 @@
           "dependencyHints": []
         },
         {
+          "path": "internal/scan/desktop_test.go",
+          "tests": [
+            "TestTheDesktopLineIsTwoPolicyTokens",
+            "TestADesktopLineOfAnOddShapeLeavesTheRestDeclared",
+            "TestAPolicyCanBlockTheDesktopOrComputerUse",
+            "TestS7LooksUpTheCataloguePinOfAnApplicationServer",
+            "TestS9ReportsWhatAReleaseNewlyDoesOnThePersonsComputer",
+            "TestS9CountsTheCataloguesEgressAsNewHosts",
+            "TestS6TiesApplicationServerToolsToTheDesktopLine"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/scan/lifecycle_test.go",
           "tests": [
             "TestBlockWalksVersionsAndReinstateReverses",
@@ -4439,6 +4458,29 @@
       ]
     },
     {
+      "owner": "pkg/appserver",
+      "behavior": "Application server catalogue validation: exact pins, launches and the closed tool classes",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/appserver/appserver_test.go",
+          "tests": [
+            "TestTheBlenderEntryIsTheVettedServerAtItsPin",
+            "TestEveryEntryClassesEveryToolFromTheClosedSet",
+            "TestAnEntryWithoutAnExactPinIsRefused",
+            "TestTheCatalogueRefusesWhatItCannotVouchFor",
+            "TestALoopbackServerIsReachedOnLoopbackAlone",
+            "TestTheStepsNameThePinnedRelease",
+            "TestLookupHandsOutACopy"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
       "owner": "pkg/archive",
       "behavior": "Reproducible packing and hostile archive extraction",
       "disposition": "retain",
@@ -5034,6 +5076,25 @@
           "dependencyHints": []
         },
         {
+          "path": "pkg/manifest/desktop_test.go",
+          "tests": [
+            "TestADesktopLineParsesAndValidates",
+            "TestV19RefusesWhatTheLineCannotMean",
+            "TestV19TakesWhatTheLineMeans",
+            "TestDesktopIsAV2Field",
+            "TestDesktopIsInTheContract",
+            "TestAllowedIsTheCatalogueNarrowed",
+            "TestDiffCapabilitiesDesktop",
+            "TestV2SchemaDesktopShape"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
           "path": "pkg/manifest/execcommand_test.go",
           "tests": [
             "TestValidExecCommand",
@@ -5609,7 +5670,8 @@
             "TestTheAnswerIsBounded",
             "TestThePersistentToolsNeedTheirKeys",
             "TestCoderHoldsTheToolchainsGrants",
-            "TestTheSubagentToolsNeedASubagent"
+            "TestTheSubagentToolsNeedASubagent",
+            "TestTheDesktopLineGivesApplicationServerTools"
           ],
           "fuzz": [],
           "benchmarks": [],
