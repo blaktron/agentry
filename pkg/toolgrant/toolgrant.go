@@ -37,6 +37,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/blaktron/agentry/pkg/appserver"
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
@@ -64,6 +65,12 @@ const (
 	// GrantMCPServer is capabilities.mcpServers: a declared server's
 	// tools.
 	GrantMCPServer Grant = "mcpServers"
+	// GrantDesktop is capabilities.desktop.servers: an application
+	// server's tools on the person's computer.
+	GrantDesktop Grant = "desktop"
+	// GrantComputerUse is capabilities.desktop.computerUse: the computer
+	// use tools.
+	GrantComputerUse Grant = "computerUse"
 	// GrantClock is capabilities.persistent.clock: a persistent agent's
 	// task tools.
 	GrantClock Grant = "persistent.clock"
@@ -92,7 +99,7 @@ const (
 // Grants returns every grant, in a fixed order.
 func Grants() []Grant {
 	return []Grant{GrantBrowser, GrantExec, GrantEgress, GrantTargetHosts, GrantFSRead, GrantFSWrite, GrantMCPServer,
-		GrantClock, GrantMemory, GrantSelfConfigure, GrantMeetings, GrantHelper, GrantWeb, GrantReview, GrantSubagents}
+		GrantDesktop, GrantComputerUse, GrantClock, GrantMemory, GrantSelfConfigure, GrantMeetings, GrantHelper, GrantWeb, GrantReview, GrantSubagents}
 }
 
 // persistentKey is the capabilities.persistent key a persistent grant is;
@@ -122,6 +129,10 @@ func (g Grant) Path() string {
 		return "capabilities.filesystem.write"
 	case GrantMCPServer:
 		return "capabilities.mcpServers"
+	case GrantDesktop:
+		return "capabilities.desktop.servers"
+	case GrantComputerUse:
+		return "capabilities.desktop.computerUse"
 	case GrantSubagents:
 		return "dependencies.agents"
 	}
@@ -148,6 +159,10 @@ func (g Grant) what() string {
 		return "workspace write access"
 	case GrantMCPServer:
 		return "a declared MCP server"
+	case GrantDesktop:
+		return "an application server on the person's computer"
+	case GrantComputerUse:
+		return "computer use on the person's computer"
 	case GrantClock:
 		return "a persistent agent's clock and tasks"
 	case GrantMemory:
@@ -364,8 +379,15 @@ func (rd reading) check(c manifest.Capabilities, instruction string) []Missing {
 			if serverDeclared(c.MCPServers, m.server) {
 				continue
 			}
-			miss = Missing{Tool: m.key, Grant: GrantMCPServer, Path: GrantMCPServer.Path(),
-				Reason: "The instruction calls " + m.key + ", a tool of an MCP server named " + m.server + ", and the manifest declares no such server."}
+			if onDesktop, dm := desktopMissing(c, m.key, m.server); onDesktop {
+				if dm == nil {
+					continue // the desktop line gives it
+				}
+				miss = *dm
+			} else {
+				miss = Missing{Tool: m.key, Grant: GrantMCPServer, Path: GrantMCPServer.Path(),
+					Reason: "The instruction calls " + m.key + ", a tool of an MCP server named " + m.server + ", and the manifest declares no such server."}
+			}
 		} else {
 			g := m.grant
 			switch {
@@ -724,4 +746,49 @@ var listJoin = regexp.MustCompile("(?i)^(?:[ \\t\\n`*,/]|\\bor\\b|\\band\\b|\\bn
 
 func continuesList(gap string) bool {
 	return !strings.Contains(gap, "\n\n") && listJoin.MatchString(gap)
+}
+
+// The desktop link's server names in the run's gateway catalog: one per
+// application server, agentry-desktop-<id>, and agentry-desktop-computer
+// for computer use. An instruction may also name an application server's
+// tool by its catalogue id alone (blender__look).
+const (
+	desktopServerPrefix = "agentry-desktop-"
+	desktopComputer     = "computer"
+)
+
+// desktopMissing reads a <server>__<tool> mention as a tool on the person's
+// computer. onDesktop is false when the prefix names no application server
+// of the catalogue and is not the desktop link's own name, and the mention is
+// then read as a declared server's. Otherwise miss is nil when the desktop
+// line gives the tool, and what is missing when it does not.
+func desktopMissing(c manifest.Capabilities, key, server string) (onDesktop bool, miss *Missing) {
+	_, tool, _ := strings.Cut(key, "__")
+	name := strings.ReplaceAll(server, "_", "-")
+	id, linked := strings.CutPrefix(name, desktopServerPrefix)
+	if linked && id == desktopComputer {
+		if c.Desktop.HasComputerUse() {
+			return true, nil
+		}
+		return true, &Missing{Tool: key, Grant: GrantComputerUse, Path: GrantComputerUse.Path(),
+			Reason: "The instruction calls " + key + ", a computer use tool, and the manifest does not declare " + GrantComputerUse.Path() + "."}
+	}
+	e, known := appserver.Builtin().Lookup(id)
+	if !known || (!linked && !e.Offers(tool)) {
+		if linked {
+			return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
+				Reason: "The instruction calls " + key + ", and " + id + " is not in the catalogue of application servers."}
+		}
+		return false, nil
+	}
+	srv, declared := c.Desktop.Server(e.ID)
+	if !declared {
+		return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
+			Reason: "The instruction calls " + key + ", a tool of " + e.Application + "'s server on the person's computer, and the manifest does not declare " + e.ID + " in " + GrantDesktop.Path() + "."}
+	}
+	if !slices.ContainsFunc(srv.Allowed(e), func(t appserver.Tool) bool { return t.Name == tool }) {
+		return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
+			Reason: "The instruction calls " + key + ", which the run is not given: " + e.Application + "'s catalogue entry or the line's narrowing of " + e.ID + " leaves it out."}
+	}
+	return true, nil
 }

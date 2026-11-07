@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/blaktron/agentry/pkg/appserver"
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
@@ -37,6 +38,22 @@ type Caps struct {
 	// PersistentBlock is capabilities.persistent, kept raw and read by
 	// Persistent() for the same reason.
 	PersistentBlock json.RawMessage `json:"persistent"`
+	// DesktopLine is capabilities.desktop, kept raw and read by Desktop()
+	// for the same reason.
+	DesktopLine json.RawMessage `json:"desktop"`
+}
+
+// Desktop reads the line for the person's computer. declared is false when
+// there is none; ok is false when there is one that does not decode, which
+// the callers read the strict way: computer use and every server.
+func (c Caps) Desktop() (d *manifest.Desktop, declared, ok bool) {
+	if len(c.DesktopLine) == 0 || string(c.DesktopLine) == "null" {
+		return nil, false, true
+	}
+	if err := json.Unmarshal(c.DesktopLine, &d); err != nil || d == nil {
+		return nil, true, false
+	}
+	return d, true, true
 }
 
 // Persistent reads capabilities.persistent. declared is false when there
@@ -123,9 +140,25 @@ func (c Caps) RemoteServerHosts() []string {
 // names (lowercased, "*" kept) to the server that names it first. It is
 // network the release reaches, from the server's container rather than the
 // agent's, so it counts for policy and S9 and never marks an agent script's
-// own host as declared (S6 does not read it).
+// own host as declared (S6 does not read it). An application server the
+// desktop line uses counts the same way, keyed "desktop:<id> <pin>", with
+// the hosts the catalogue lists for it: network the release reaches from
+// the person's own computer rather than from any container of the run.
 func (c Caps) ServerEgress() map[string]string {
 	out := map[string]string{}
+	if d, _, ok := c.Desktop(); ok && d != nil {
+		for _, srv := range d.Servers {
+			e, known := appserver.Builtin().Lookup(srv.ID)
+			if !known {
+				continue
+			}
+			for _, h := range e.Egress {
+				if _, seen := out[h]; !seen {
+					out[h] = "desktop:" + e.ID + " " + e.Package.Ref()
+				}
+			}
+		}
+	}
 	for _, srv := range c.MCPServers {
 		if srv.IsRemote() {
 			continue
