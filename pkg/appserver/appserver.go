@@ -61,6 +61,12 @@ type Ecosystem string
 const (
 	EcosystemPyPI Ecosystem = "pypi"
 	EcosystemNPM  Ecosystem = "npm"
+	// EcosystemApplication is a server the application ships itself, as a
+	// plugin released with it: its name is the plugin's and its version the
+	// application's release that brought it. No package registry holds it,
+	// so there is nothing to launch and no advisory database to look it up
+	// in; only a loopback-http entry may name it.
+	EcosystemApplication Ecosystem = "application"
 )
 
 // Attachment is how Agentry Desktop reaches an installed server.
@@ -241,8 +247,9 @@ var (
 // catalogue without a version, a repeated or malformed id, an entry
 // without an application, a platform or a step, a server without an exact
 // version, a source that is not https, a launch that does not hold the
-// pin, an attachment other than stdio or loopback-http, a loopback address
-// that is not loopback, a port out of range, a tool of no class or one
+// pin, an attachment other than stdio or loopback-http, a stdio server of
+// the application's own, a loopback address that is not loopback or not on
+// the listener's port, a port out of range, a tool of no class or one
 // outside the closed set, a tool listed twice or both given and withheld,
 // and an egress host that is not a DNS name.
 func Parse(data []byte) (Catalogue, error) {
@@ -337,7 +344,7 @@ func (s Server) validate() error {
 
 func (p Package) validate() error {
 	switch {
-	case p.Ecosystem != EcosystemPyPI && p.Ecosystem != EcosystemNPM:
+	case p.Ecosystem != EcosystemPyPI && p.Ecosystem != EcosystemNPM && p.Ecosystem != EcosystemApplication:
 		return fmt.Errorf("unknown ecosystem %q", p.Ecosystem)
 	case p.Name == "":
 		return errors.New("the server needs its package name")
@@ -362,6 +369,8 @@ func (s Server) validateAttachment() error {
 	switch s.Attachment {
 	case AttachmentStdio:
 		switch {
+		case s.Package.Ecosystem == EcosystemApplication:
+			return errors.New("a stdio server is launched from a package: the application's own plugin is reached on loopback")
 		case s.Launch == nil || len(s.Launch.Command) == 0:
 			return errors.New("a stdio server needs its launch command")
 		case s.Endpoint != "":
@@ -381,6 +390,9 @@ func (s Server) validateAttachment() error {
 		u, err := url.Parse(s.Endpoint)
 		if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 			return fmt.Errorf("endpoint %q is not an http://127.0.0.1 address", s.Endpoint)
+		}
+		if u.Port() != fmt.Sprint(s.Listener.Port) {
+			return fmt.Errorf("endpoint %q is not on the listener's port %d", s.Endpoint, s.Listener.Port)
 		}
 	default:
 		return fmt.Errorf("unknown attachment %q (stdio or loopback-http)", s.Attachment)

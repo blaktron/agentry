@@ -3289,6 +3289,7 @@
             "TestADesktopLineOfAnOddShapeLeavesTheRestDeclared",
             "TestAPolicyCanBlockTheDesktopOrComputerUse",
             "TestS7LooksUpTheCataloguePinOfAnApplicationServer",
+            "TestS7NamesTheApplicationsOwnPluginAsNotCovered",
             "TestS9ReportsWhatAReleaseNewlyDoesOnThePersonsComputer",
             "TestS9CountsTheCataloguesEgressAsNewHosts",
             "TestS6TiesApplicationServerToolsToTheDesktopLine"
@@ -4471,7 +4472,9 @@
             "TestTheCatalogueRefusesWhatItCannotVouchFor",
             "TestALoopbackServerIsReachedOnLoopbackAlone",
             "TestTheStepsNameThePinnedRelease",
-            "TestLookupHandsOutACopy"
+            "TestLookupHandsOutACopy",
+            "TestTheApplicationsOwnServerIsReachedNotLaunched",
+            "TestTheUnrealEntryIsEpicsPluginOnLoopback"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5085,7 +5088,8 @@
             "TestDesktopIsInTheContract",
             "TestAllowedIsTheCatalogueNarrowed",
             "TestDiffCapabilitiesDesktop",
-            "TestV2SchemaDesktopShape"
+            "TestV2SchemaDesktopShape",
+            "TestUnrealIsNamedByItsIDAlone"
           ],
           "fuzz": [],
           "benchmarks": [],

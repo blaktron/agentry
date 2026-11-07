@@ -401,13 +401,16 @@ func (e DesktopAppPlatforms) Valid() bool {
 
 // Defines values for DesktopAppServerEcosystem.
 const (
-	DesktopAppServerEcosystemNpm  DesktopAppServerEcosystem = "npm"
-	DesktopAppServerEcosystemPypi DesktopAppServerEcosystem = "pypi"
+	DesktopAppServerEcosystemApplication DesktopAppServerEcosystem = "application"
+	DesktopAppServerEcosystemNpm         DesktopAppServerEcosystem = "npm"
+	DesktopAppServerEcosystemPypi        DesktopAppServerEcosystem = "pypi"
 )
 
 // Valid indicates whether the value is a known member of the DesktopAppServerEcosystem enum.
 func (e DesktopAppServerEcosystem) Valid() bool {
 	switch e {
+	case DesktopAppServerEcosystemApplication:
+		return true
 	case DesktopAppServerEcosystemNpm:
 		return true
 	case DesktopAppServerEcosystemPypi:
@@ -2766,6 +2769,7 @@ type DesktopApp struct {
 	} `json:"listener"`
 	Platforms []DesktopAppPlatforms `json:"platforms"`
 	Server    struct {
+		// Ecosystem The package registry the server is published in, or `application` for a server the application ships itself as a plugin, which only a `loopback-http` entry names: then `name` is the plugin's, `version` the application's release that brought it, and `source` where it is documented.
 		Ecosystem DesktopAppServerEcosystem `json:"ecosystem"`
 
 		// Name Example: mcp-for-blender
@@ -2801,7 +2805,7 @@ type DesktopAppAttachment string
 // DesktopAppPlatforms defines model for DesktopApp.Platforms.
 type DesktopAppPlatforms string
 
-// DesktopAppServerEcosystem defines model for DesktopApp.Server.Ecosystem.
+// DesktopAppServerEcosystem The package registry the server is published in, or `application` for a server the application ships itself as a plugin, which only a `loopback-http` entry names: then `name` is the plugin's, `version` the application's release that brought it, and `source` where it is documented.
 type DesktopAppServerEcosystem string
 
 // DesktopAppToolsClass `read` reads the application's state; `act` changes it or works inside it; `exec` runs code or commands the application interprets, and each call asks the person first.

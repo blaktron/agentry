@@ -53,7 +53,7 @@ holds:
 | Field | Meaning |
 |---|---|
 | `id`, `application`, `platforms` | what the line names, the application, and the systems it is offered on |
-| `server` | the installed server, pinned by ecosystem (`pypi`, `npm`), name and one exact version, and its source |
+| `server` | the installed server, pinned by ecosystem (`pypi`, `npm`), name and one exact version, and its source; or, for a server the application ships itself as a plugin, `application`, the plugin's name, the application's release that brought it, and where it is documented |
 | `attachment` | `stdio`, a server Agentry Desktop launches and speaks MCP to over its standard input and output; or `loopback-http`, a server the application runs inside itself at an `http://127.0.0.1` `endpoint` |
 | `launch` | for `stdio`, the command line, which holds the pinned version, and its environment |
 | `listener` | the loopback port the application listens on for its server, checked before a run starts |
@@ -61,6 +61,10 @@ holds:
 | `withheld` | tools the server offers that no run is given |
 | `egress` | the hosts the server or the application's add-on is known to reach from the person's computer |
 | `steps` | what the person does once before the first run |
+
+An `application` server is reached, never launched: only a `loopback-http`
+entry names one, its endpoint is on its listener's port, and no package
+registry or advisory database holds it.
 
 The classes are the catalogue's, never the server's own tool annotations,
 which a server sets as it likes. An entry without an exact pin, a launch
@@ -87,6 +91,25 @@ preferences, and starts the add-on's server from the BlenderMCP tab of the
 3D view's sidebar. The add-on listens on loopback without authentication:
 anything on that computer that reaches the port can run Python in Blender.
 
+### `unreal`
+
+| | |
+|---|---|
+| Server | Unreal Engine's own Unreal MCP plugin (`ModelContextProtocol`), which comes with Unreal Engine 5.8 and is Experimental ([Epic's documentation](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-mcp-in-unreal-editor)) |
+| Attachment | `loopback-http`: the editor serves MCP itself at `http://127.0.0.1:8000/mcp`, which Agentry Desktop connects to; nothing is launched |
+| Listener | the editor's port, 8000 on loopback |
+| `act` | `call_tool`: calls one tool of the editor's toolsets (scene, actors, material instances, objects, and any toolset the project adds) |
+| `read` | `list_toolsets`, `describe_toolset` |
+| Egress | none known; a toolset the project adds can do what its author wrote |
+
+Before the first run the person uses Unreal Engine 5.8 or later, enables the
+Unreal MCP and All Toolsets plugins in the editor (Edit, Plugins) and restarts
+it, and in Editor Preferences, General, Model Context Protocol, keeps Auto
+Start Server on, the port 8000 and the path `/mcp`, and leaves Enable Tool
+Search on, so the server offers its three tools. The plugin answers on
+loopback without authentication: anything on that computer that reaches the
+port can drive the open editor.
+
 ## What the registry does with the line
 
 - **Consent.** The line is part of the contract, so the install consent shows
@@ -112,13 +135,45 @@ anything on that computer that reaches the port can run Python in Blender.
   `capabilities.desktop.computerUse`.
 - **S7** looks the catalogue's pin of every server the line uses up in OSV
   and in its package registry, as it looks up a declared server, and the
-  daily sweep checks it again.
+  daily sweep checks it again. An application's own plugin is in neither,
+  so S7 names it as not covered (`S7/osv-no-data`, "the application's own
+  plugin, released with it").
 - **S9** reports `S9/new-desktop`, medium, for each thing a release newly
   does on the person's computer against the previous release, in the
   consent's words, and the catalogue's egress hosts as new hosts
   (`S9/new-egress`).
 - **Search.** `GET /search?capability=desktop` finds the releases that
   declare the line.
+
+## What the runner does with the line
+
+A run that declares the line, from the CLI or the desktop app, binds to
+Agentry Desktop before anything starts, and is refused there, exit 11 with
+the reason `desktop-refused`, when no Agentry Desktop answers on the computer
+(`desktop-unavailable`: "this QuickAgent uses Blender on your computer, which
+needs Agentry Desktop running on this computer"), when an application or its
+server is not ready (`desktop-not-installed`, with the step to take), when
+computer use is not granted (`desktop-not-granted`), and always in a hosted
+run (`hosted`). Then the sandbox is built as for any run, with its two routes
+unchanged, plus one entry of the gateway's catalog per application server and
+one for computer use: the runner image, with no network, run as the person,
+held to the catalogue's tools. A relay container of the run's own carries
+each tool call of those entries, and nothing else, to Agentry Desktop, which
+answers it on the person's computer by the catalogue's class. Under a
+sandboxed runtime the entries take `docker.gatewayRuntime` and the relay the
+daemon's default, because a socket shared through a volume is a host socket
+to gVisor.
+
+The receipt says what reached the person's computer, in these keys:
+`desktop.<id>` (the installed server, the tools allowed, the calls by class,
+the refusals by reason, and that "the person's computer is outside the
+run"), `desktop.computerUse` (the scope, the windows, and what the computer's
+own system enforced, as Agentry Desktop states it), `desktop.transport`, and
+one line a call in `receipts/desktop-<id>.log`. A call refused while the run
+goes on (`desktop-paused`, `desktop-stopped`, `desktop-declined`,
+`outside-window`) reaches the agent as that refusal and is counted, never the
+run's own reason. The run keeps no screenshot. The containers, the transport
+and every key are in [the runner](runner.md#the-persons-computer-capabilitiesdesktop).
 
 ## What no run can enforce
 

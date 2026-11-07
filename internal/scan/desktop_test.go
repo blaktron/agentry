@@ -2,6 +2,7 @@ package scan
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -105,6 +106,26 @@ func TestS7LooksUpTheCataloguePinOfAnApplicationServer(t *testing.T) {
 	res = (S7MCPServers{}).Run(s7ctx(osv, &MemoryMCPScanCache{}), &Input{ManifestJSON: []byte(desktopManifest(`{"computerUse":"app"}`))})
 	if osv.calls != 0 || len(res.Findings) != 0 {
 		t.Fatalf("computer use alone: calls %d, findings %+v", osv.calls, res.Findings)
+	}
+}
+
+// Unreal Engine's server is the editor's own plugin: no package registry
+// holds it and no advisory database covers it, so S7 queries nothing for it
+// and names it as not covered, with why, as it names a server it could not
+// look up.
+func TestS7NamesTheApplicationsOwnPluginAsNotCovered(t *testing.T) {
+	osv := &fakeOSV{}
+	res := S7MCPServers{}.Run(s7ctx(osv, &MemoryMCPScanCache{}), &Input{ManifestJSON: []byte(desktopManifest(`{"servers":[{"id":"unreal"}]}`))})
+	if osv.calls != 0 {
+		t.Fatalf("OSV was asked %d times about the editor's own plugin", osv.calls)
+	}
+	got := findScanner(res.Findings, scannerOSVNoData)
+	if len(got) != 1 || !strings.Contains(fmt.Sprint(got[0].Title, got[0].Detail), "application:ModelContextProtocol@5.8.0") ||
+		!strings.Contains(fmt.Sprint(got[0].Title, got[0].Detail), noDataApplication) {
+		t.Fatalf("findings %+v", res.Findings)
+	}
+	if servers := DeclaredMCPServers([]byte(desktopManifest(`{"servers":[{"id":"unreal"}]}`))); len(servers) != 0 {
+		t.Fatalf("the sweep would look up %+v", servers)
 	}
 }
 
