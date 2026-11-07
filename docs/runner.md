@@ -68,6 +68,18 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
    warning (`model:context`) until the window is set. The window also
    sizes the pages a run reads (CLI v0.7.20 or later;
    [pages](#one-tool-result-at-a-time-pages)).
+   **A run asks too** (CLI v0.7.28 or later): `agentry run`, and a
+   runhost's job, on a model server of your own whose policy records no
+   window asks the server the same questions before it compiles the run,
+   within 30 seconds, sending the key only as a bearer and only when the
+   run has one. It prints the window and the address that reported it (or
+   that it found none), uses it for that run only, and leaves
+   `policy.yaml` as it is. The run plan, and so the run's
+   `receipts/run-plan.json`, records it as `harness.contextWindow`
+   (`tokens`, and `source`: that address, or `policy` for a window the
+   policy records). A server that reports another window next time gets a
+   plan compiled for it. Recording the window with setup saves the question
+   and covers a server that does not answer it.
    A provider can also be paid by **your own plan or account** instead of a
    key: `--api-key-kind chatgpt-plan` (provider `openai`),
    `--api-key-kind claude-signin` (`anthropic`), `--provider copilot` with
@@ -110,7 +122,9 @@ is the one the adapter was written against, and whether the endpoint
 `harness.<name>.baseUrl` names is one `model.proxyAllow` permits.
 For a model server of your own with no `model.contextWindow`, the
 `model:context` line warns that a long run cannot compact (CLI v0.7.9 or
-later; [`agentry setup`](#agentry-setup)).
+later; [`agentry setup`](#agentry-setup)). From CLI v0.7.28 a run asks
+the server for the window itself; the warning stays, because a server
+that does not report it leaves the run without one.
 
 ### `agentry run <ns/name[@range]>`
 
@@ -1764,7 +1778,7 @@ its digest, so a run record says which file a run obeyed.
 | `images.goBuilder` | the Go image the runner image is compiled in on first use (the default is pinned by digest). Its Go must be at least the CLI's own, to the patch: the build context names that version, and an older builder stops the build with "images.goBuilder … is older than the Go the runner needs" |
 | `images.runner` | override the locally built runner image tag (pin this when the CLI and desktop app share a machine) |
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
-| `model.contextWindow` | the model's context window in tokens, 1,024 to 2^30 (CLI v0.7.9 or later): the harness compacts the conversation as it nears it, and a model the harness cannot look up without it fails once the endpoint refuses the conversation as too long. Unset, the harness looks the model up itself. `agentry setup` fills it for a model server of your own ([above](#agentry-setup)); where set, it wins over the harness's own figure. From CLI v0.7.20 it also sizes a run's pages ([pages](#one-tool-result-at-a-time-pages)) |
+| `model.contextWindow` | the model's context window in tokens, 1,024 to 2^30 (CLI v0.7.9 or later): the harness compacts the conversation as it nears it, and a model the harness cannot look up without it fails once the endpoint refuses the conversation as too long. Unset, the harness looks the model up itself. `agentry setup` fills it for a model server of your own ([above](#agentry-setup)); where set, it wins over the harness's own figure. From CLI v0.7.20 it also sizes a run's pages ([pages](#one-tool-result-at-a-time-pages)). From CLI v0.7.28, a run on a model server of your own with none here asks the server for it, for that run only |
 | `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
@@ -3052,6 +3066,22 @@ filter runs (a platform other than Linux, macOS and Windows) both are
 folders in the container's own layer and are **not bounded**, and the
 run's `capabilities_enforced.scratch` says so.
 
+**A long task's notes** (CLI v0.7.29 or later). An autonomous run's System
+Prompt tells the agent that a task reading more than a few pages keeps
+`notes.md` in the scratch folder: the task in one line, a cursor saying
+what is done and what is next, and the findings so far, appended after
+each page. When the harness has summarised earlier work to stay inside the
+model's window, the agent reads `notes.md` before anything else and goes
+on from its cursor, and it builds its answer and reports from the notes.
+A page it read before the summary may come back from the tools as
+unchanged; the System Prompt has it read the page again with
+`fresh: true`. Under docker-agent the run's config also sets
+`compaction_notes`, so each summary of Agentry's harness build ends with a
+sentence pointing the agent back to the file. `notes.md` is a working
+note: it is never a deliverable and goes with the scratch folder at the
+end of the run. An interactive session and a persistent agent get neither
+(a persistent agent keeps its notes in its own folders).
+
 ### Fetch into the scratch folder: `saveTo`
 
 A run whose QuickAgent declares egress can keep a file it fetches, of any
@@ -3163,7 +3193,8 @@ to a sixteenth of it, at four bytes a token, in whole KiB and never under
 16 KiB: a 262,144-token window keeps docker-agent's 48 KiB, a
 131,072-token window gets 32 KiB, and a 32,768-token window 16 KiB. On a
 model server of your own (`custom`, or `openai` with a `baseUrl`) with no
-window recorded, the budget is 32 KiB. The line count stays the harness's.
+window recorded, the budget is 32 KiB, unless the run finds the window by
+asking the server (CLI v0.7.28 or later; [`agentry setup`](#agentry-setup)). The line count stays the harness's.
 The System Prompt and the receipt's `toolResults` line state the run's
 budget and what set it.
 
@@ -3196,6 +3227,8 @@ states (llama.cpp and vLLM state it), or else against half the refused
 request's size, halved again if the summary itself is refused. Earlier
 harnesses ended such a run with `Failed to get model definition`. A policy
 that pins the vendor's docker-agent image keeps the vendor's behaviour.
+From CLI v0.7.29 the summary of an autonomous run points the agent back to
+its notes ([a long task's notes](#the-scratch-folder)).
 
 Within it:
 
