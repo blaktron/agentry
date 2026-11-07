@@ -1,1 +1,0 @@
-GET /desktop-apps added the new `application` enum value to the `servers/items/server/ecosystem` response property for the response status `200`
