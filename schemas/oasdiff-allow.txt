@@ -1,2 +1,0 @@
-POST /model-input/check added the new `computerUse` enum value to the `ungranted/items/grant` response property for the response status `200`
-POST /model-input/check added the new `desktop` enum value to the `ungranted/items/grant` response property for the response status `200`
