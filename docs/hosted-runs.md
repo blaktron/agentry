@@ -1245,8 +1245,11 @@ a new one, and downloading the run's output needs `user:profile` beside
 every tier, with no count a billing cycle. The whole price is held under
 `design_build_hold`, then settled whole under `design_build` when the
 design it made was saved to the caller's library, or refunded in full under
-`design_build_refund` when none was. It is not metered: the host stops it at
-the tokens its credits buy at the input rate. It pays under the same payer
+`design_build_refund` when none was. It is not metered, and its token cap
+is its own (`AGENTRY_RUNS_DESIGN_MAX_TOKENS`, 4,000,000), not what its price
+buys: the Designer looks at its images again on every turn, mostly from the
+model's prompt cache, so its tokens add up fast while costing little. The
+host stops it at that cap's price at the output rate. It pays under the same payer
 rule as a run and counts against one active run per account.
 
 **How it runs.** At the hand-off the design `from` names is read from the
@@ -1308,7 +1311,8 @@ browser job of two slots, so a page drawn by scripts is rendered before it
 is read. The run's `designBuild` record counts the pages read, what AI
 Review read and what it withheld.
 
-Its caps are `AGENTRY_RUNS_DESIGN_SECONDS` (1,800 s) and
+Its caps are `AGENTRY_RUNS_DESIGN_MAX_TOKENS` (4,000,000 tokens),
+`AGENTRY_RUNS_DESIGN_SECONDS` (1,800 s) and
 `AGENTRY_RUNS_DESIGN_MAX_TURNS` (300). `designBuild` in `GET
 /api/v1/x/runs/status` states its terms to anyone: `enabled`, `credits`,
 `caps`, `maxImages`, `maxBriefBytes`, `ops` and `urls` (`enabled`, `max`
@@ -1751,6 +1755,7 @@ destroyed ([what erasure does](#the-output-encrypted-to-the-person-who-ran-it)).
 | `AGENTRY_RUNS_VOICE_MAX_TURNS` | `300` | a Voice Writer run's turn cap |
 | `AGENTRY_RUNS_VOICE_PAGES` | `100` | AI Review's page reads for one Voice Writer run given web addresses: each page before the run, a long page in several pieces, and each page drawn by scripts that its `web_read` renders |
 | `AGENTRY_RUNS_DESIGN_CREDITS` | `20` | what a Report Designer run costs, flat, AI Review of its web pages included |
+| `AGENTRY_RUNS_DESIGN_MAX_TOKENS` | `4000000` | a Report Designer run's token cap, which its price does not set; the host stops it at this cap's price at the output rate |
 | `AGENTRY_RUNS_DESIGN_SECONDS` | `1800` | a Report Designer run's wall time, on every tier |
 | `AGENTRY_RUNS_DESIGN_MAX_TURNS` | `300` | a Report Designer run's turn cap |
 | `AGENTRY_RUNS_DESIGN_PAGES` | `60` | AI Review's page reads for one Report Designer run given web addresses |
