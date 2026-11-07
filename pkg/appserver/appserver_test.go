@@ -115,13 +115,13 @@ func TestTheCatalogueRefusesWhatItCannotVouchFor(t *testing.T) {
 func TestALoopbackServerIsReachedOnLoopbackAlone(t *testing.T) {
 	loopback := strings.NewReplacer(
 		"attachment: stdio", "attachment: loopback-http",
-		"    launch:\n      command: [uvx, example-mcp==1.2.3]\n", "    endpoint: http://127.0.0.1:8000/mcp\n",
+		"    launch:\n      command: [uvx, example-mcp==1.2.3]\n", "    endpoint: http://127.0.0.1:9000/mcp\n",
 	).Replace(validDoc)
 	if _, err := Parse([]byte(loopback)); err != nil {
 		t.Fatalf("a loopback endpoint: %v", err)
 	}
-	for _, endpoint := range []string{"http://localhost:8000/mcp", "http://192.168.1.5:8000/mcp", "https://127.0.0.1:8000/mcp", "http://u@127.0.0.1:8000/mcp"} {
-		doc := strings.Replace(loopback, "http://127.0.0.1:8000/mcp", endpoint, 1)
+	for _, endpoint := range []string{"http://localhost:9000/mcp", "http://192.168.1.5:9000/mcp", "https://127.0.0.1:9000/mcp", "http://u@127.0.0.1:9000/mcp", "http://127.0.0.1:8000/mcp", "http://127.0.0.1/mcp"} {
+		doc := strings.Replace(loopback, "http://127.0.0.1:9000/mcp", endpoint, 1)
 		if _, err := Parse([]byte(doc)); err == nil {
 			t.Errorf("endpoint %s was accepted", endpoint)
 		}
@@ -177,3 +177,52 @@ servers:
     egress: [api.example.com]
     steps: [Install it.]
 `
+
+// The application's own plugin is a server no package registry holds: an
+// entry names it only to be reached on loopback, never to be launched.
+func TestTheApplicationsOwnServerIsReachedNotLaunched(t *testing.T) {
+	own := strings.NewReplacer(
+		"ecosystem: pypi", "ecosystem: application",
+		"attachment: stdio", "attachment: loopback-http",
+		"    launch:\n      command: [uvx, example-mcp==1.2.3]\n", "    endpoint: http://127.0.0.1:9000/mcp\n",
+	).Replace(validDoc)
+	if _, err := Parse([]byte(own)); err != nil {
+		t.Fatalf("the application's own server on loopback: %v", err)
+	}
+	launched := strings.Replace(validDoc, "ecosystem: pypi", "ecosystem: application", 1)
+	if _, err := Parse([]byte(launched)); err == nil || !strings.Contains(err.Error(), "reached on loopback") {
+		t.Fatalf("the application's own server as stdio: %v", err)
+	}
+}
+
+// Unreal Engine's entry is Epic's own plugin on the editor's loopback
+// endpoint: nothing launched, its three tools classed, no code tool, no
+// egress, and steps that say it is Experimental and unauthenticated.
+func TestTheUnrealEntryIsEpicsPluginOnLoopback(t *testing.T) {
+	e, ok := Builtin().Lookup("unreal")
+	if !ok {
+		t.Fatal("the catalogue has no unreal entry")
+	}
+	if e.Application != "Unreal Engine" || e.Attachment != AttachmentLoopbackHTTP || e.Launch != nil ||
+		e.Endpoint != "http://127.0.0.1:8000/mcp" || e.Listener.Port != 8000 || e.Package.Ecosystem != EcosystemApplication {
+		t.Fatalf("unreal = %+v", e)
+	}
+	want := map[string]Class{"list_toolsets": ClassRead, "describe_toolset": ClassRead, "call_tool": ClassAct}
+	if len(e.Tools) != len(want) {
+		t.Fatalf("unreal tools = %+v", e.Tools)
+	}
+	for _, tool := range e.Tools {
+		if want[tool.Name] != tool.Class || tool.Egress {
+			t.Errorf("unreal tool %+v", tool)
+		}
+	}
+	if len(e.Egress) != 0 {
+		t.Errorf("unreal egress = %v", e.Egress)
+	}
+	steps := strings.Join(e.Steps, " ")
+	for _, w := range []string{"Unreal MCP", "All Toolsets", "Experimental", "no authentication", "8000", "Enable Tool Search"} {
+		if !strings.Contains(steps, w) {
+			t.Errorf("the steps do not say %q: %s", w, steps)
+		}
+	}
+}

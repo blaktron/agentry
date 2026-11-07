@@ -5200,7 +5200,13 @@ components:
           properties:
             ecosystem:
               type: string
-              enum: [pypi, npm]
+              description: >
+                The package registry the server is published in, or
+                `application` for a server the application ships itself as a
+                plugin, which only a `loopback-http` entry names: then `name`
+                is the plugin's, `version` the application's release that
+                brought it, and `source` where it is documented.
+              enum: [pypi, npm, application]
             name:
               type: string
               example: mcp-for-blender

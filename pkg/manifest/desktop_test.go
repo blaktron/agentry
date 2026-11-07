@@ -94,6 +94,9 @@ func TestV19TakesWhatTheLineMeans(t *testing.T) {
 		{"computer use alone", Desktop{ComputerUse: ComputerUseApp}},
 		{"the whole screen", Desktop{ComputerUse: ComputerUseScreen}},
 		{"a server and computer use", Desktop{Servers: []DesktopServer{{ID: "blender"}}, ComputerUse: ComputerUseApp}},
+		{"Unreal Engine's own server", Desktop{Servers: []DesktopServer{{ID: "unreal"}}}},
+		{"Unreal Engine narrowed to reading", Desktop{Servers: []DesktopServer{{ID: "unreal", Tools: []string{"list_toolsets", "describe_toolset"}}}}},
+		{"two applications", Desktop{Servers: []DesktopServer{{ID: "blender"}, {ID: "unreal"}}, ComputerUse: ComputerUseApp}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			m := validV2Manifest(t)
@@ -279,5 +282,24 @@ func TestV2SchemaDesktopShape(t *testing.T) {
 	}
 	if !slices.Equal(d.Properties.ComputerUse.Enum, []string{string(ComputerUseApp), string(ComputerUseScreen)}) {
 		t.Fatalf("computerUse = %v", d.Properties.ComputerUse.Enum)
+	}
+}
+
+// A release that uses Unreal Engine names the kind, never the instance: the
+// catalogue's id and nothing of the editor's address, and the consent says
+// what it reaches in the install's words. A line that tried to carry an
+// endpoint or a port is no manifest.
+func TestUnrealIsNamedByItsIDAlone(t *testing.T) {
+	if got := DescribeDesktopServer(DesktopServer{ID: "unreal"}); got != "Unreal Engine on your computer through its MCP server (3 tools)" {
+		t.Fatalf("unreal's consent = %q", got)
+	}
+	if got := DescribeComputerUse(&Desktop{Servers: []DesktopServer{{ID: "unreal"}}, ComputerUse: ComputerUseApp}); got != "can see and use Unreal Engine's windows on your computer" {
+		t.Fatalf("unreal's computer use = %q", got)
+	}
+	for _, extra := range []string{"        endpoint: http://127.0.0.1:8000/mcp\n", "        port: 8000\n"} {
+		doc := strings.Replace(v2YAML, "  secrets: [PAGERDUTY_TOKEN]\n", "  secrets: [PAGERDUTY_TOKEN]\n  desktop:\n    servers:\n      - id: unreal\n"+extra, 1)
+		if _, err := Parse([]byte(doc)); err == nil {
+			t.Errorf("a server entry carrying %q parsed", strings.TrimSpace(extra))
+		}
 	}
 }
