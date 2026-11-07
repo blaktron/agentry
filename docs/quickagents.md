@@ -1237,7 +1237,10 @@ more than the cost ceiling, `0` = unlimited). Exit codes: `0` ok · `1`
 other CLI error · `2` usage · `10` verify failed · `11` refused by policy /
 missing secret · `12` not compilable/runnable · `13` gateway or docker
 environment · `14` the QuickAgent failed · `15` timeout · `16` budget ·
-`17` output schema.
+`17` output schema. A long autonomous run under docker-agent survives a
+model server that fails after its first tool call: the runner resumes its
+conversation, up to 5 times, within the timeout (CLI v0.7.27 or later;
+[when the model server fails](runner.md#when-the-model-server-fails-during-a-run)).
 
 **The output folder** (`--out`, default
 `./agentry-out/<ns>-<name>-<runid>/`) holds `reports/…`, `result.json`

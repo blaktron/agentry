@@ -4444,7 +4444,9 @@ and sends the request again:
 
 Either happens only if the turn or the run failed before its first tool call.
 One whose tools already ran is not sent again, because those tools could run
-twice: it fails at once with the provider's words.
+twice: it fails at once with the provider's words. The exception is an
+autonomous docker-agent run, which is resumed on its own conversation instead
+([below](#when-the-model-server-fails-during-a-run)).
 
 Each wait is announced, on stderr for an autonomous run and as a notice in a
 session. The runner waits at most 10 times for one turn or one run. It never
@@ -4456,6 +4458,41 @@ receipts keep every attempt, and the run's usage counts them all.
 
 A 429 is not a capacity answer. On a model sign-in it is the plan's limit,
 which is never retried ([Outcomes](#outcomes)).
+
+### When the model server fails during a run
+
+CLI v0.7.27 or later. An autonomous run under docker-agent keeps its
+conversation in a store of the run's own: a volume mounted in the agent
+container at `/session`, the container's one writable mount, removed when the
+run ends. When the harness ends on a failure of the model server after its
+first tool call, the runner starts it again on that conversation instead of
+failing the run. The failures that count are these:
+
+- a server error (HTTP 5xx), a capacity answer or a rate limit (HTTP 429),
+  after the harness's own quick retries;
+- a connection to the server that was refused, reset or dropped;
+- a stream that stalled;
+- a conversation that outgrew the model's window and could not be compacted.
+
+The restarted harness is given a fixed message to carry on from where it
+stopped, not the task again, so nothing it already did is started over. A tool
+call that was in flight when the server failed reaches the model as a call
+that returned no result. The message asks the model to check what such a call
+did before it calls it again, but a model can still repeat it.
+
+The runner waits 30 seconds before the first resume, then 60, then 120, and
+120 for each one after that, at most 5 resumes a run. Each wait is announced
+on stderr, and the stderr receipt marks each resume. It never waits past the
+run's `--timeout`, which counts from the harness's first start. The run's
+usage, its tool-call budget and its cost ceiling count every attempt. A
+failure before the first tool call is handled as
+[a capacity answer](#when-the-model-is-at-capacity) is, on a fresh
+conversation with the task. Any other failure ends the run at once.
+
+A conversation that outgrew a window the harness cannot compact in usually
+outgrows it again when it is resumed, so the resumes run out and the run fails
+as before. Record the model's window (`model.contextWindow`) so the harness
+compacts in time.
 
 ## Model sign-ins
 
