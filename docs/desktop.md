@@ -120,6 +120,36 @@ anything on that computer that reaches the port can run Python in Blender.
 - **Search.** `GET /search?capability=desktop` finds the releases that
   declare the line.
 
+## What the runner does with the line
+
+A run that declares the line, from the CLI or the desktop app, binds to
+Agentry Desktop before anything starts, and is refused there, exit 11 with
+the reason `desktop-refused`, when no Agentry Desktop answers on the computer
+(`desktop-unavailable`: "this QuickAgent uses Blender on your computer, which
+needs Agentry Desktop running on this computer"), when an application or its
+server is not ready (`desktop-not-installed`, with the step to take), when
+computer use is not granted (`desktop-not-granted`), and always in a hosted
+run (`hosted`). Then the sandbox is built as for any run, with its two routes
+unchanged, plus one entry of the gateway's catalog per application server and
+one for computer use: the runner image, with no network, run as the person,
+held to the catalogue's tools. A relay container of the run's own carries
+each tool call of those entries, and nothing else, to Agentry Desktop, which
+answers it on the person's computer by the catalogue's class. Under a
+sandboxed runtime the entries take `docker.gatewayRuntime` and the relay the
+daemon's default, because a socket shared through a volume is a host socket
+to gVisor.
+
+The receipt says what reached the person's computer, in these keys:
+`desktop.<id>` (the installed server, the tools allowed, the calls by class,
+the refusals by reason, and that "the person's computer is outside the
+run"), `desktop.computerUse` (the scope, the windows, and what the computer's
+own system enforced, as Agentry Desktop states it), `desktop.transport`, and
+one line a call in `receipts/desktop-<id>.log`. A call refused while the run
+goes on (`desktop-paused`, `desktop-stopped`, `desktop-declined`,
+`outside-window`) reaches the agent as that refusal and is counted, never the
+run's own reason. The run keeps no screenshot. The containers, the transport
+and every key are in [the runner](runner.md#the-persons-computer-capabilitiesdesktop).
+
 ## What no run can enforce
 
 An installed server runs on the person's computer with that computer's
