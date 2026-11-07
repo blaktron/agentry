@@ -11,7 +11,10 @@
 #   platforms    the operating systems the entry is offered on (linux,
 #                darwin, windows)
 #   server       the installed server: ecosystem (pypi, npm), name, exact
-#                version, and where its source lives
+#                version, and where its source lives; or, for a server the
+#                application ships itself, ecosystem application, the
+#                plugin's name, the application's release that brought it,
+#                and where it is documented
 #   attachment   stdio: Agentry Desktop launches the server and speaks MCP
 #                  over its standard input and output
 #                loopback-http: the application serves MCP itself on a
@@ -35,7 +38,7 @@
 #
 # An entry's pin moves to the server's newest release by a change to this
 # file, which raises version.
-version: 1
+version: 2
 servers:
   - id: blender
     application: Blender
@@ -86,3 +89,23 @@ servers:
       - "Install uv, which runs the server: https://docs.astral.sh/uv/"
       - "Install the add-on that comes with this server, with uvx mcp-for-blender==2.2.7 install-addon, and enable Interface: MCP for Blender in Blender's Preferences, Add-ons."
       - In the sidebar of Blender's 3D view, open the BlenderMCP tab and start the server, which listens on port 9876.
+  - id: unreal
+    application: Unreal Engine
+    platforms: [linux, darwin, windows]
+    server:
+      ecosystem: application
+      name: ModelContextProtocol
+      version: 5.8.0
+      source: https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-mcp-in-unreal-editor
+    attachment: loopback-http
+    endpoint: http://127.0.0.1:8000/mcp
+    listener:
+      port: 8000
+    tools:
+      - {name: list_toolsets, class: read}
+      - {name: describe_toolset, class: read}
+      - {name: call_tool, class: act}
+    steps:
+      - Use Unreal Engine 5.8 or later. In the editor's Edit, Plugins, enable Unreal MCP and All Toolsets, then restart the editor.
+      - "In Editor Preferences, General, Model Context Protocol, keep Auto Start Server on, the Server Port Number 8000 and the Server URL Path /mcp, and leave Enable Tool Search on, so the server offers its three tools."
+      - "Unreal MCP is Experimental and has no authentication: anything on this computer that reaches port 8000 can drive the open editor."

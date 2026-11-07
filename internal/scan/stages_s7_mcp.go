@@ -144,6 +144,7 @@ const (
 	noDataLookupFailed = "lookup failed"
 	noDataEcosystem    = "ecosystem not covered"
 	noDataNoVersion    = "no pinned version"
+	noDataApplication  = "the application's own plugin, released with it"
 )
 
 // scored reports whether every advisory on the row was read with CVSS
@@ -218,6 +219,16 @@ func mcpServerEntries(manifestJSON []byte) (declared []declaredServer, uncovered
 		for _, srv := range d.Servers {
 			e, known := appserver.Builtin().Lookup(srv.ID)
 			if !known {
+				continue
+			}
+			if e.Package.Ecosystem == appserver.EcosystemApplication {
+				// The application's own plugin: no package registry holds
+				// it and no advisory database covers it.
+				ref := e.Package.Ref()
+				if !slices.Contains(uncovered, ref) {
+					uncovered = append(uncovered, ref)
+					reasons[ref] = noDataApplication
+				}
 				continue
 			}
 			pin := declaredServer{Ecosystem: string(e.Package.Ecosystem), Package: e.Package.Name, Version: e.Package.Version}
