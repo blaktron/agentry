@@ -3066,6 +3066,22 @@ filter runs (a platform other than Linux, macOS and Windows) both are
 folders in the container's own layer and are **not bounded**, and the
 run's `capabilities_enforced.scratch` says so.
 
+**A long task's notes** (CLI v0.7.29 or later). An autonomous run's System
+Prompt tells the agent that a task reading more than a few pages keeps
+`notes.md` in the scratch folder: the task in one line, a cursor saying
+what is done and what is next, and the findings so far, appended after
+each page. When the harness has summarised earlier work to stay inside the
+model's window, the agent reads `notes.md` before anything else and goes
+on from its cursor, and it builds its answer and reports from the notes.
+A page it read before the summary may come back from the tools as
+unchanged; the System Prompt has it read the page again with
+`fresh: true`. Under docker-agent the run's config also sets
+`compaction_notes`, so each summary of Agentry's harness build ends with a
+sentence pointing the agent back to the file. `notes.md` is a working
+note: it is never a deliverable and goes with the scratch folder at the
+end of the run. An interactive session and a persistent agent get neither
+(a persistent agent keeps its notes in its own folders).
+
 ### Fetch into the scratch folder: `saveTo`
 
 A run whose QuickAgent declares egress can keep a file it fetches, of any
@@ -3211,6 +3227,8 @@ states (llama.cpp and vLLM state it), or else against half the refused
 request's size, halved again if the summary itself is refused. Earlier
 harnesses ended such a run with `Failed to get model definition`. A policy
 that pins the vendor's docker-agent image keeps the vendor's behaviour.
+From CLI v0.7.29 the summary of an autonomous run points the agent back to
+its notes ([a long task's notes](#the-scratch-folder)).
 
 Within it:
 

@@ -1242,6 +1242,19 @@ model server that fails after its first tool call: the runner resumes its
 conversation, up to 5 times, within the timeout (CLI v0.7.27 or later;
 [when the model server fails](runner.md#when-the-model-server-fails-during-a-run)).
 
+**A long task.** What an autonomous run that reads a lot can rely on:
+its read tools hand it one page at a time, sized to the model's window
+(CLI v0.7.20 or later); on a model server of your own, the run asks the
+server for that window when the policy records none (CLI v0.7.28 or
+later); under docker-agent the conversation is summarised before it
+outgrows the window, and a refusal as too long is summarised and sent
+again (CLI v0.7.25 or later); and the agent keeps its place and its
+findings in `notes.md` in its scratch folder, which it reads back after
+each summary (CLI v0.7.29 or later;
+[a long task's notes](runner.md#the-scratch-folder)). An instruction for
+a task that reads many files can lean on that: name what the notes should
+collect, and build the deliverable from them.
+
 **The output folder** (`--out`, default
 `./agentry-out/<ns>-<name>-<runid>/`) holds `reports/…`, `result.json`
 (the machine-readable envelope: enforcement mechanisms applied, digest,
