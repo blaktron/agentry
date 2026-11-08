@@ -709,10 +709,13 @@ A new browser, site, host or secret, or `site` to `public`, is a widening,
 so an upgrade that does one asks for consent again.
 
 **`desktop`** (v2): applications on the person's own computer, used
-through [Agentry Desktop](desktop.md). `servers` names, by id, entries of
-the catalogue of application servers (`blender` is the first), each of
-which may narrow the entry's tools with `tools`; `computerUse` is `app`
-(the windows of those applications) or `screen` (the whole display):
+through [Agentry Desktop](desktop.md). `servers` names each application by
+a short id, resolved on the person's computer against the applications they
+approved in Agentry Desktop, or, with `choose: true`, asks the person to
+choose one when the run starts. `use` says what of it the run uses (`mcp`,
+its MCP server; `computer`, its windows; `both`), and `tools` may narrow
+its server's tools; `computerUse` is `app` (the windows of those
+applications) or `screen` (the whole display):
 
 ```yaml
 capabilities:
@@ -720,23 +723,28 @@ capabilities:
     servers:
       - id: blender
         tools: [get_scene_info, look, execute_blender_code]
+      - id: kdenlive
+        use: computer
     computerUse: app
 ```
 
-The release names an entry of the catalogue, never a command, a path or a
-port: Agentry Desktop launches the entry's pinned server as the person and
-answers every call by the class the catalogue gives its tool (`read`,
-`act`, or `exec`, which asks the person before each call). A narrowing can
-only take tools away. At most four servers, each named once; a tool the
-entry does not give, an id the catalogue does not hold, and the line in a v1
-manifest are refused by name (rule V19). A new server, a narrowing lifted or
-a tool added to it, computer use declared, or `app` to `screen` is a
-widening, so an upgrade that does one asks for consent again. The line is
-for a run on the person's own computer or on their own runhost, never a run
-in Agentry, and `GET /search?capability=desktop` finds such releases. The
-catalogue is served at `GET /api/v1/desktop-apps` and built into every
-client. A CLI or desktop that pins a core older than this field refuses a
-manifest that carries it, naming the field.
+The release names an application, never a command, a path or a port: what
+answers on the person's computer is the server they approved for it, and
+Agentry Desktop asks the person before a call that runs code. The registry
+holds no list of applications, so any id of the grammar is taken. A
+narrowing can only take tools away. At most four applications, each named
+once, and one chooser; an id outside the grammar, a `use` that needs
+`computerUse` without it, and the line in a v1 manifest are refused by name
+(rule V19). A new application, an application's server or windows newly
+used, a narrowing lifted or a tool added to it, computer use declared, or
+`app` to `screen` is a widening, so an upgrade that does one asks for
+consent again. The line is for a run on the person's own computer or on
+their own runhost, never a run in Agentry, and
+`GET /search?capability=desktop` finds such releases. The CLI and Agentry
+Desktop released so far bind only `blender` and `unreal`, the applications
+of the catalogue served at `GET /api/v1/desktop-apps`. A CLI or desktop that
+pins a core older than this field refuses a manifest that carries it,
+naming the field.
 
 **`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.

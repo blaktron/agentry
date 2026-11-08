@@ -53,8 +53,8 @@ type Persistent struct {
 	// Meetings lets the agent take meeting notes the person arms.
 	Meetings bool `yaml:"meetings,omitempty" json:"meetings,omitempty"`
 	// Desktop lets the agent be offered the applications on the person's
-	// computer, through Agentry Desktop: each application server of the
-	// catalogue, and computer use, once the person switches it on. The
+	// computer, through Agentry Desktop: each application the person
+	// approved there, and computer use, once the person switches it on. The
 	// release's capabilities.desktop line, when it has one, narrows what is
 	// offered.
 	Desktop bool `yaml:"desktop,omitempty" json:"desktop,omitempty"`

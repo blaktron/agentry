@@ -1485,7 +1485,7 @@
       }
     },
     {
-      "name": "a desktop line is its own token, and its server's catalogue egress is network",
+      "name": "a desktop line is its own token, and an application's server is network, its reach unknown",
       "manifest": {
         "capabilities": {
           "network": {
@@ -1539,7 +1539,38 @@
       }
     },
     {
-      "name": "a desktop line that does not read counts as computer use",
+      "name": "an application used through its windows alone is not network",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "desktop": {
+            "servers": [
+              {
+                "id": "kdenlive",
+                "use": "computer"
+              }
+            ],
+            "computerUse": "app"
+          }
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "computerUse",
+          "desktop"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "a desktop line that does not read counts as computer use and network",
       "manifest": {
         "capabilities": {
           "network": {
@@ -1556,7 +1587,8 @@
       "want": {
         "declaredCapabilities": [
           "computerUse",
-          "desktop"
+          "desktop",
+          "network"
         ],
         "unrestrictedNetwork": false
       }

@@ -419,8 +419,9 @@ func s9ManifestDiff(in *Input) []Finding {
 
 // scannerNewDesktop is S9's finding for what a release newly does on the
 // person's own computer: the line declared for the first time, or widened
-// (a new application server, a tool narrowing lifted or a tool added to it,
-// computer use declared or moved to the whole screen). It is medium, as a
+// (a new application, an application's server or windows newly used, a
+// tool narrowing lifted or a tool added to it, computer use declared or
+// moved to the whole screen). It is medium, as a
 // newly declared capability is: the person consents to the line at install
 // and again on the widening, so declaring it is not suspicious by itself.
 const scannerNewDesktop = "S9/new-desktop"
@@ -435,7 +436,7 @@ func s9DesktopDiff(prev, cur manifestcaps.Caps) []Finding {
 		return nil
 	}
 	if !curOK {
-		return []Finding{newDesktop("The line for the person's computer does not read: every application server and the whole screen",
+		return []Finding{newDesktop("The line for the person's computer does not read: every application on the person's computer and the whole screen",
 			map[string]any{"capability": gatecases.CapDesktop})}
 	}
 	// A previous line that does not read counts as none, so everything the

@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/blaktron/agentry/pkg/appserver"
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
@@ -54,6 +53,15 @@ func (c Caps) Desktop() (d *manifest.Desktop, declared, ok bool) {
 		return nil, true, false
 	}
 	return d, true, true
+}
+
+// DesktopReachUnknown reports whether the desktop line uses an
+// application's MCP server, or does not decode: that server runs on the
+// person's computer with their network, and the registry cannot know what
+// it reaches, so it counts as network for policy.
+func (c Caps) DesktopReachUnknown() bool {
+	d, declared, ok := c.Desktop()
+	return declared && (!ok || d.UsesAnyServer())
 }
 
 // Persistent reads capabilities.persistent. declared is false when there
@@ -140,25 +148,11 @@ func (c Caps) RemoteServerHosts() []string {
 // names (lowercased, "*" kept) to the server that names it first. It is
 // network the release reaches, from the server's container rather than the
 // agent's, so it counts for policy and S9 and never marks an agent script's
-// own host as declared (S6 does not read it). An application server the
-// desktop line uses counts the same way, keyed "desktop:<id> <pin>", with
-// the hosts the catalogue lists for it: network the release reaches from
-// the person's own computer rather than from any container of the run.
+// own host as declared (S6 does not read it). An application the desktop
+// line uses names no hosts: what its server reaches from the person's
+// computer is not known (DesktopReachUnknown).
 func (c Caps) ServerEgress() map[string]string {
 	out := map[string]string{}
-	if d, _, ok := c.Desktop(); ok && d != nil {
-		for _, srv := range d.Servers {
-			e, known := appserver.Builtin().Lookup(srv.ID)
-			if !known {
-				continue
-			}
-			for _, h := range e.Egress {
-				if _, seen := out[h]; !seen {
-					out[h] = "desktop:" + e.ID + " " + e.Package.Ref()
-				}
-			}
-		}
-	}
 	for _, srv := range c.MCPServers {
 		if srv.IsRemote() {
 			continue
