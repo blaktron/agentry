@@ -80,6 +80,7 @@ func TestPublishErrorsSayWhatIsMissing(t *testing.T) {
 		status, body, _ := env.uploadVersionCLIResult(user, "errs", pat, publishFiles(m), nil, "", nil)
 		p := readPublishProblem(t, body)
 		if status != http.StatusUnprocessableEntity || len(p.Errors) != 1 || p.Errors[0].Field != "manifest" ||
+			!strings.HasPrefix(p.Errors[0].Message, "Line ") ||
 			!strings.Contains(p.Errors[0].Message, `has no field "licence"`) || !strings.Contains(p.Errors[0].Message, `did you mean "license"`) ||
 			strings.Contains(p.Errors[0].Message, "manifest.Manifest") {
 			t.Fatalf("%d %+v", status, p)
