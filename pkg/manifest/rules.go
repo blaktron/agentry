@@ -31,7 +31,7 @@ var rules = []Rule{
 	{ID: "V16", Title: "a persistent agent's capabilities: capabilities.persistent and its folders"},
 	{ID: "V17", Title: "a persistent agent's persona"},
 	{ID: "V18", Title: "a persistent agent's subagents: dependencies.agents"},
-	{ID: "V19", Title: "the person's computer: capabilities.desktop's application servers and computer use"},
+	{ID: "V19", Title: "the person's computer: capabilities.desktop's applications and computer use"},
 }
 
 // Rules returns the rules Validate and ValidateInContext can report, in

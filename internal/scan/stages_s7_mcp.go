@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/blaktron/agentry/pkg/appserver"
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
@@ -144,7 +143,7 @@ const (
 	noDataLookupFailed = "lookup failed"
 	noDataEcosystem    = "ecosystem not covered"
 	noDataNoVersion    = "no pinned version"
-	noDataApplication  = "the application's own plugin, released with it"
+	noDataDesktop      = "an application on the person's computer, with the server they approve there; the registry cannot know which, so nothing is looked up and what it reaches is not known"
 )
 
 // scored reports whether every advisory on the row was read with CVSS
@@ -212,28 +211,22 @@ func mcpServerEntries(manifestJSON []byte) (declared []declaredServer, uncovered
 		uncovered = append(uncovered, ref)
 		reasons[ref] = why
 	}
-	// An application server the desktop line uses runs on the person's
-	// computer at the catalogue's pin, which is looked up as a declared
-	// server's is.
+	// An application the desktop line uses runs on the person's computer,
+	// with the server they approved there: the registry cannot know which,
+	// so there is nothing to look up and its reach is not known. Each is
+	// named as not covered, with why.
 	if d := m.Capabilities.Desktop; d != nil {
 		for _, srv := range d.Servers {
-			e, known := appserver.Builtin().Lookup(srv.ID)
-			if !known {
+			if !srv.UsesServer() {
 				continue
 			}
-			if e.Package.Ecosystem == appserver.EcosystemApplication {
-				// The application's own plugin: no package registry holds
-				// it and no advisory database covers it.
-				ref := e.Package.Ref()
-				if !slices.Contains(uncovered, ref) {
-					uncovered = append(uncovered, ref)
-					reasons[ref] = noDataApplication
-				}
-				continue
+			ref := "desktop:" + srv.ID
+			if srv.Choose {
+				ref = "desktop:(an application the person chooses)"
 			}
-			pin := declaredServer{Ecosystem: string(e.Package.Ecosystem), Package: e.Package.Name, Version: e.Package.Version}
-			if !slices.Contains(declared, pin) {
-				declared = append(declared, pin)
+			if !slices.Contains(uncovered, ref) {
+				uncovered = append(uncovered, ref)
+				reasons[ref] = noDataDesktop
 			}
 		}
 	}

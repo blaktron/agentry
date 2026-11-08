@@ -435,8 +435,8 @@ type Capabilities struct {
 	// run has no browser (browser.go).
 	Browser *Browser `yaml:"browser,omitempty" json:"browser,omitempty"`
 	// Desktop declares that the run uses the person's own computer (v2,
-	// V19): application servers by catalogue id, and computer use of
-	// their windows or of the whole screen. Absent, a run reaches nothing
+	// V19): the applications it uses there, by id or chosen by the
+	// person, and computer use of their windows or of the whole screen. Absent, a run reaches nothing
 	// on that computer (desktop.go).
 	Desktop *Desktop `yaml:"desktop,omitempty" json:"desktop,omitempty"`
 	// Persistent declares what a persistent agent may do beyond an

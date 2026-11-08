@@ -6,8 +6,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-
-	"github.com/blaktron/agentry/pkg/appserver"
 )
 
 // CapabilityDiff is the comparison between a capability contract a
@@ -581,11 +579,12 @@ func diffSets(old, next []string) (added, removed []string) {
 }
 
 // appendDesktopDiff records the change to the use of the person's own
-// computer: a new line, a new application server, a tool narrowing lifted
-// or a tool added to it, and computer use declared or moved from the
-// applications' windows to the whole screen widen, so an upgrade that does
-// any of them asks again. A removed server, a narrower tool list and a
-// smaller scope narrow.
+// computer: a new line, a new application, an application's server or its
+// windows newly used, a tool narrowing lifted or a tool added to it, and
+// computer use declared or moved from the applications' windows to the
+// whole screen widen, so an upgrade that does any of them asks again. A
+// removed application, a narrower use or tool list and a smaller scope
+// narrow.
 func (d *CapabilityDiff) appendDesktopDiff(old, next *Desktop) {
 	switch {
 	case old == nil && next == nil:
@@ -597,25 +596,40 @@ func (d *CapabilityDiff) appendDesktopDiff(old, next *Desktop) {
 	if old == nil {
 		old = &Desktop{}
 	}
-	oldIDs, nextIDs := desktopIDs(old), desktopIDs(next)
-	added, removed := diffSets(oldIDs, nextIDs)
-	for _, id := range added {
-		srv, _ := next.Server(id)
-		d.Widened = append(d.Widened, "uses "+DescribeDesktopServer(srv))
+	oldKeys, nextKeys := desktopKeys(old), desktopKeys(next)
+	added, removed := diffSets(oldKeys, nextKeys)
+	for _, key := range added {
+		srv := desktopEntry(next, key)
+		if srv.UsesServer() {
+			d.Widened = append(d.Widened, "uses "+DescribeDesktopServer(srv))
+		}
 	}
-	for _, id := range removed {
-		d.Narrowed = append(d.Narrowed, "no longer uses "+desktopApplication(id)+" on your computer")
+	for _, key := range removed {
+		d.Narrowed = append(d.Narrowed, "no longer uses "+desktopApplication(desktopEntry(old, key))+" on your computer")
 	}
-	for _, id := range nextIDs {
-		prev, had := old.Server(id)
-		if !had {
+	for _, key := range nextKeys {
+		if !slices.Contains(oldKeys, key) {
 			continue
 		}
-		cur, _ := next.Server(id)
-		d.appendDesktopToolsDiff(id, prev.Tools, cur.Tools)
+		prev, cur := desktopEntry(old, key), desktopEntry(next, key)
+		app := desktopApplication(cur)
+		switch was, is := prev.UsesServer(), cur.UsesServer(); {
+		case !was && is:
+			d.Widened = append(d.Widened, "uses "+DescribeDesktopServer(cur))
+			continue
+		case was && !is:
+			d.Narrowed = append(d.Narrowed, "no longer uses the MCP server of "+app+" on your computer")
+			continue
+		case !is:
+			continue
+		}
+		d.appendDesktopToolsDiff(app, prev.Tools, cur.Tools)
 	}
 	switch {
 	case old.ComputerUse == next.ComputerUse:
+		if next.ComputerUse == ComputerUseApp {
+			d.appendDesktopWindowsDiff(old, next)
+		}
 	case next.ComputerUse == "":
 		d.Narrowed = append(d.Narrowed, "drops computer use on your computer")
 	case old.ComputerUse == "":
@@ -627,24 +641,30 @@ func (d *CapabilityDiff) appendDesktopDiff(old, next *Desktop) {
 	}
 }
 
-// appendDesktopToolsDiff compares one application server's tool
-// narrowing: no narrowing is every tool the catalogue gives.
-func (d *CapabilityDiff) appendDesktopToolsDiff(id string, prev, next []string) {
-	app := desktopApplication(id)
+// appendDesktopWindowsDiff compares, under app-scope computer use on both
+// sides, whose windows the agent sees and uses.
+func (d *CapabilityDiff) appendDesktopWindowsDiff(old, next *Desktop) {
+	added, removed := diffSets(old.WindowApps(), next.WindowApps())
+	for _, w := range added {
+		d.Widened = append(d.Widened, "can see and use the windows of "+w+" on your computer")
+	}
+	for _, w := range removed {
+		d.Narrowed = append(d.Narrowed, "no longer sees or uses the windows of "+w+" on your computer")
+	}
+}
+
+// appendDesktopToolsDiff compares one application's tool narrowing: no
+// narrowing is every tool its server lists.
+func (d *CapabilityDiff) appendDesktopToolsDiff(app string, prev, next []string) {
 	switch {
 	case len(prev) > 0 && len(next) == 0:
-		d.Widened = append(d.Widened, "lifts the tool narrowing of "+app+" on your computer (every tool the catalogue gives)")
+		d.Widened = append(d.Widened, "lifts the tool narrowing of "+app+" on your computer (every tool its server lists)")
 	case len(prev) == 0 && len(next) > 0:
 		d.Narrowed = append(d.Narrowed, "narrows "+app+" on your computer to tools "+strings.Join(next, ", "))
 	default:
 		added, removed := diffSets(prev, next)
-		e, known := appserver.Builtin().Lookup(id)
 		for _, tool := range added {
-			line := "adds tool " + tool + " of " + app + " on your computer"
-			if t, ok := e.Tool(tool); known && ok && t.Class == appserver.ClassExec {
-				line += " (runs code inside " + app + ")"
-			}
-			d.Widened = append(d.Widened, line)
+			d.Widened = append(d.Widened, "adds tool "+tool+" of "+app+" on your computer")
 		}
 		for _, tool := range removed {
 			d.Narrowed = append(d.Narrowed, "drops tool "+tool+" of "+app+" on your computer")
@@ -652,10 +672,19 @@ func (d *CapabilityDiff) appendDesktopToolsDiff(id string, prev, next []string) 
 	}
 }
 
-func desktopIDs(d *Desktop) []string {
+func desktopKeys(d *Desktop) []string {
 	out := make([]string, 0, len(d.Servers))
 	for _, s := range d.Servers {
-		out = append(out, s.ID)
+		out = append(out, desktopKey(s))
 	}
 	return out
+}
+
+func desktopEntry(d *Desktop, key string) DesktopServer {
+	for _, s := range d.Servers {
+		if desktopKey(s) == key {
+			return s
+		}
+	}
+	return DesktopServer{}
 }
