@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -224,6 +225,25 @@ var (
 	ErrForbidden    = errors.New("forbidden")
 )
 
+// ScopeError is a forbidden answer whose cause is a token that lacks the
+// scope the action needs: any one of Scopes admits it. errors.Is(err,
+// ErrForbidden) holds for it, so a caller that only maps 403 needs nothing
+// new; one that can name the scope finds it with errors.As.
+type ScopeError struct {
+	Scopes []Scope
+}
+
+func (e *ScopeError) Error() string {
+	names := make([]string, len(e.Scopes))
+	for i, s := range e.Scopes {
+		names[i] = string(s)
+	}
+	return "forbidden: the token lacks the scope " + strings.Join(names, " or ")
+}
+
+// Unwrap makes a ScopeError an ErrForbidden.
+func (e *ScopeError) Unwrap() error { return ErrForbidden }
+
 // scopeFor maps each action to the PAT scope that unlocks it.
 // Actions absent here are session-only for PATs (minting PATs, org
 // settings) — a deliberate least-privilege default.
@@ -325,7 +345,7 @@ func Check(p *Principal, res Resource, act Action) error {
 			return ErrForbidden // session-only action
 		}
 		if !HasScope(p.Scopes, sc) {
-			return ErrForbidden
+			return &ScopeError{Scopes: []Scope{sc}}
 		}
 	}
 

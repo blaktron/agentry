@@ -913,7 +913,7 @@ func Parse(data []byte) (*Manifest, error) {
 		if errors.Is(err, io.EOF) {
 			return nil, fmt.Errorf("manifest: empty document")
 		}
-		return nil, fmt.Errorf("manifest: parsing agent.yaml: %w", err)
+		return nil, parseError(err)
 	}
 	var extra yaml.Node
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {

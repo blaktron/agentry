@@ -69,11 +69,13 @@ func (env *testEnv) uploadVersionCLIResult(ns, name, pat string, files map[strin
 	if err != nil {
 		env.t.Fatal(err)
 	}
-	m, err := manifest.Parse(raw)
-	if err != nil {
-		env.t.Fatal(err)
+	// A manifest that does not parse ships every file, so a test can see
+	// what the registry says of it.
+	patterns := []string{"**"}
+	if m, err := manifest.Parse(raw); err == nil {
+		patterns = m.Publish.Include
 	}
-	include := manifest.ResolveInclude(m.Publish.Include, inv)
+	include := manifest.ResolveInclude(patterns, inv)
 	var archive bytes.Buffer
 	info, err := registry.BuildArchive(ws, include, &archive)
 	if err != nil {

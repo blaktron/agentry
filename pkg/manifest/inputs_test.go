@@ -183,7 +183,7 @@ func TestInputsChangesNothingAboutTheContract(t *testing.T) {
 
 // TestInputsDecodingStaysStrict: the block is closed.
 func TestInputsDecodingStaysStrict(t *testing.T) {
-	if _, err := Parse([]byte(inputsYAML + "  archives: unpack\n")); err == nil || !strings.Contains(err.Error(), "field archives not found") {
+	if _, err := Parse([]byte(inputsYAML + "  archives: unpack\n")); err == nil || !strings.Contains(err.Error(), "has no field \"archives\"") {
 		t.Fatalf("an unknown field inside inputs was not refused by name: %v", err)
 	}
 }

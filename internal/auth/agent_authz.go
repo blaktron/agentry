@@ -169,8 +169,11 @@ func CheckAgent(p *Principal, res AgentResource, act Action) error {
 	}
 	if p.ScopeBound() {
 		scopes, ok := agentScopeFor[act]
-		if !ok || !hasAnyScope(p.Scopes, scopes) {
+		if !ok {
 			return ErrForbidden
+		}
+		if !hasAnyScope(p.Scopes, scopes) {
+			return &ScopeError{Scopes: scopes}
 		}
 	}
 	need, ok := minAgentRole[act]

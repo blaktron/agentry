@@ -268,7 +268,7 @@ func TestMCPServersUnknownKeyRejected(t *testing.T) {
       version: 1.0.0
       image: docker.io/x
 `)
-	if _, err := Parse([]byte(doc)); err == nil || !strings.Contains(err.Error(), "field image not found") {
+	if _, err := Parse([]byte(doc)); err == nil || !strings.Contains(err.Error(), "has no field \"image\"") {
 		t.Fatalf("unknown mcpServers key survived the closed schema: %v", err)
 	}
 }

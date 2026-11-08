@@ -202,12 +202,12 @@ func TestKnowledgeIsAV2Field(t *testing.T) {
 }
 
 func TestKnowledgeDecodingStaysStrict(t *testing.T) {
-	if _, err := Parse([]byte(strings.Replace(knowledgeYAML, "    required: false\n", "    required: false\n    extra: nope\n", 1))); err == nil || !strings.Contains(err.Error(), "field extra not found") {
+	if _, err := Parse([]byte(strings.Replace(knowledgeYAML, "    required: false\n", "    required: false\n    extra: nope\n", 1))); err == nil || !strings.Contains(err.Error(), "has no field \"extra\"") {
 		t.Fatalf("an unknown field inside knowledge.accepts was not refused by name: %v", err)
 	}
 	// The contract's knowledge names come only from the knowledge block.
 	withCaps := strings.Replace(knowledgeYAML, "publish:", "capabilities:\n  knowledge: [aws-docs]\npublish:", 1)
-	if _, err := Parse([]byte(withCaps)); err == nil || !strings.Contains(err.Error(), "field knowledge not found") {
+	if _, err := Parse([]byte(withCaps)); err == nil || !strings.Contains(err.Error(), "has no field \"knowledge\"") {
 		t.Fatalf("capabilities.knowledge was not refused by name in agent.yaml: %v", err)
 	}
 }

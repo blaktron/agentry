@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -266,7 +268,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, act auth.Acti
 		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 		return false
 	default:
-		problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
+		problemForbidden(w, r, forbiddenDetail(err))
 		return false
 	}
 	if orgID != uuid.Nil && !p.Anonymous && !s.enforceSSO(r.Context(), p, orgID) {
@@ -331,4 +333,18 @@ func (s *Server) enforceSSO(ctx context.Context, p *auth.Principal, orgID uuid.U
 func revokeOwnTokenPath(r *http.Request, p *auth.Principal) bool {
 	return r.Method == http.MethodDelete && p.PATID != uuid.Nil &&
 		strings.TrimSuffix(r.URL.Path, "/") == "/api/v1/user/tokens/"+p.PATID.String()
+}
+
+// forbiddenDetail says why a credential was refused: by name, the scope a
+// token lacks when that is the cause, else the role or scope in general.
+func forbiddenDetail(err error) string {
+	var se *auth.ScopeError
+	if errors.As(err, &se) && len(se.Scopes) > 0 {
+		names := make([]string, len(se.Scopes))
+		for i, sc := range se.Scopes {
+			names[i] = string(sc)
+		}
+		return fmt.Sprintf("This token does not carry the %s scope this action needs. Make a token that carries it, or use a signed-in session.", strings.Join(names, " or "))
+	}
+	return "This credential does not carry the role or scope this action needs."
 }

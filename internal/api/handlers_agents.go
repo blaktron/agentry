@@ -118,7 +118,7 @@ func (s *Server) agentAccess(w http.ResponseWriter, r *http.Request, ns, name st
 	case errors.Is(err, auth.ErrUnauthorized):
 		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 	case errors.Is(err, auth.ErrForbidden):
-		problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
+		problemForbidden(w, r, forbiddenDetail(err))
 	case s.orgGateProblem(w, r, a.Namespace, err):
 		// The owning organization's state, written.
 	default:

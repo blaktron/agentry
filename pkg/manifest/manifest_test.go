@@ -94,16 +94,16 @@ func TestParseClosedSchema(t *testing.T) {
 		yaml string
 		says string // the refusal's own text: the unknown key and where it sits
 	}{
-		{"top-level", normativeYAML + "extraKey: true\n", "field extraKey not found"},
-		{"nested publish", strings.Replace(normativeYAML, "channel: stable", "channel: stable\n  compress: true", 1), "field compress not found"},
-		{"nested entrypoints", strings.Replace(normativeYAML, "skill: SKILL.md", "skill: SKILL.md\n  binary: a.out", 1), "field binary not found"},
-		{"capabilities", strings.Replace(normativeYAML, "exec: none", "exec: none\n  gpu: true", 1), "field gpu not found"},
+		{"top-level", normativeYAML + "extraKey: true\n", "has no field \"extraKey\""},
+		{"nested publish", strings.Replace(normativeYAML, "channel: stable", "channel: stable\n  compress: true", 1), "has no field \"compress\""},
+		{"nested entrypoints", strings.Replace(normativeYAML, "skill: SKILL.md", "skill: SKILL.md\n  binary: a.out", 1), "has no field \"binary\""},
+		{"capabilities", strings.Replace(normativeYAML, "exec: none", "exec: none\n  gpu: true", 1), "has no field \"gpu\""},
 		{"filesystem paths sibling", strings.Replace(normativeYAML, "read: workspace",
 			"read:\n      paths: [data/]\n      mode: fast", 1), `unknown key "mode"`},
 		{"exec commands sibling", strings.Replace(normativeYAML, "exec: none",
 			"exec:\n    commands: [git]\n    shell: true", 1), `unknown key "shell"`},
 		{"mcp entrypoint", strings.Replace(normativeYAML, "skill: SKILL.md",
-			"mcp:\n    command: node\n    args: [x.js]\n    transport: stdio\n    port: 80", 1), "field port not found"},
+			"mcp:\n    command: node\n    args: [x.js]\n    transport: stdio\n    port: 80", 1), "has no field \"port\""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
