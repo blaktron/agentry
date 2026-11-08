@@ -37,7 +37,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/blaktron/agentry/pkg/appserver"
 	"github.com/blaktron/agentry/pkg/manifest"
 )
 
@@ -66,7 +65,7 @@ const (
 	// tools.
 	GrantMCPServer Grant = "mcpServers"
 	// GrantDesktop is capabilities.desktop.servers: an application
-	// server's tools on the person's computer.
+	// server's tools on the person's computer, by application id.
 	GrantDesktop Grant = "desktop"
 	// GrantComputerUse is capabilities.desktop.computerUse: the computer
 	// use tools.
@@ -160,7 +159,7 @@ func (g Grant) what() string {
 	case GrantMCPServer:
 		return "a declared MCP server"
 	case GrantDesktop:
-		return "an application server on the person's computer"
+		return "an application on the person's computer"
 	case GrantComputerUse:
 		return "computer use on the person's computer"
 	case GrantClock:
@@ -749,19 +748,26 @@ func continuesList(gap string) bool {
 }
 
 // The desktop link's server names in the run's gateway catalog: one per
-// application server, agentry-desktop-<id>, and agentry-desktop-computer
-// for computer use. An instruction may also name an application server's
-// tool by its catalogue id alone (blender__look).
+// application whose server the run uses, agentry-desktop-<id>, and
+// agentry-desktop-computer for computer use. An instruction may also name
+// such a tool by the application's id alone (blender__look) when the line
+// declares that id.
 const (
 	desktopServerPrefix = "agentry-desktop-"
 	desktopComputer     = "computer"
 )
 
 // desktopMissing reads a <server>__<tool> mention as a tool on the person's
-// computer. onDesktop is false when the prefix names no application server
-// of the catalogue and is not the desktop link's own name, and the mention is
-// then read as a declared server's. Otherwise miss is nil when the desktop
-// line gives the tool, and what is missing when it does not.
+// computer. The registry holds no list of the applications a person may
+// approve, so a mention is on the person's computer when its prefix is the
+// desktop link's own name (agentry-desktop-<id>, or agentry-desktop-computer
+// for computer use), or a bare <id> that the line declares. onDesktop is
+// false otherwise, and the mention is then read as a declared server's.
+// miss is nil when the desktop line gives the tool, and what is missing when
+// it does not. Which tools an application's server lists is known only on
+// the person's computer, so a tool is checked against the line's narrowing
+// alone; an application the person chooses when the run starts gives any
+// linked application's tools.
 func desktopMissing(c manifest.Capabilities, key, server string) (onDesktop bool, miss *Missing) {
 	_, tool, _ := strings.Cut(key, "__")
 	name := strings.ReplaceAll(server, "_", "-")
@@ -773,22 +779,39 @@ func desktopMissing(c manifest.Capabilities, key, server string) (onDesktop bool
 		return true, &Missing{Tool: key, Grant: GrantComputerUse, Path: GrantComputerUse.Path(),
 			Reason: "The instruction calls " + key + ", a computer use tool, and the manifest does not declare " + GrantComputerUse.Path() + "."}
 	}
-	e, known := appserver.Builtin().Lookup(id)
-	if !known || (!linked && !e.Offers(tool)) {
-		if linked {
-			return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
-				Reason: "The instruction calls " + key + ", and " + id + " is not in the catalogue of application servers."}
-		}
+	srv, declared := c.Desktop.Server(id)
+	usesServer := declared && c.Desktop.UsesServer(srv)
+	if !linked && !usesServer {
 		return false, nil
 	}
-	srv, declared := c.Desktop.Server(e.ID)
-	if !declared {
+	if !usesServer {
+		if declared {
+			return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
+				Reason: "The instruction calls " + key + ", a tool of " + id + "'s server on the person's computer, and the manifest uses " + id + " through its windows only."}
+		}
+		if chooser(c.Desktop) {
+			return true, nil
+		}
 		return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
-			Reason: "The instruction calls " + key + ", a tool of " + e.Application + "'s server on the person's computer, and the manifest does not declare " + e.ID + " in " + GrantDesktop.Path() + "."}
+			Reason: "The instruction calls " + key + ", a tool of " + id + "'s server on the person's computer, and the manifest does not declare " + id + " in " + GrantDesktop.Path() + "."}
 	}
-	if !slices.ContainsFunc(srv.Allowed(e), func(t appserver.Tool) bool { return t.Name == tool }) {
+	if len(srv.Tools) > 0 && !slices.Contains(srv.Tools, tool) {
 		return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
-			Reason: "The instruction calls " + key + ", which the run is not given: " + e.Application + "'s catalogue entry or the line's narrowing of " + e.ID + " leaves it out."}
+			Reason: "The instruction calls " + key + ", which the run is not given: the line's narrowing of " + id + " leaves it out."}
 	}
 	return true, nil
+}
+
+// chooser reports whether the line asks for an application's server that
+// the person chooses when the run starts.
+func chooser(d *manifest.Desktop) bool {
+	if d == nil {
+		return false
+	}
+	for _, s := range d.Servers {
+		if s.Choose && d.UsesServer(s) {
+			return true
+		}
+	}
+	return false
 }

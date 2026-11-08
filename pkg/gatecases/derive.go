@@ -63,7 +63,7 @@ func DeclaredCapabilities(manifestJSON []byte) []string {
 		return nil
 	}
 	var out []string
-	if (len(c.Network.Egress.Hosts) > 0 && !manifestcaps.OnlyNone(c.Network.Egress.Hosts)) || len(c.RemoteServerHosts()) > 0 || len(c.ServerEgress()) > 0 {
+	if (len(c.Network.Egress.Hosts) > 0 && !manifestcaps.OnlyNone(c.Network.Egress.Hosts)) || len(c.RemoteServerHosts()) > 0 || len(c.ServerEgress()) > 0 || c.DesktopReachUnknown() {
 		out = append(out, CapNetwork)
 	}
 	if manifestcaps.NotNone(c.Filesystem.Write) {

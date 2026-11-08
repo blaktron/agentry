@@ -1,13 +1,14 @@
-# The person's computer: application servers and computer use
+# The person's computer: applications and computer use
 
 A QuickAgent can work an application on the computer a person runs it from,
 such as Blender, through that application's MCP server and through computer
 use of its windows, without leaving the sandbox. The release declares it in
-its contract with one line, `capabilities.desktop`; the run reaches the
-person's computer only through Agentry Desktop, which launches the
-application's server as the person and answers each call. This page covers
-the line, the catalogue of application servers it names, and what the
-registry does with both. The manifest's other lines are in
+its contract with one line, `capabilities.desktop`, naming each application
+by a short id; the run reaches the person's computer only through Agentry
+Desktop, which answers each call with the application the person approved
+on that computer. This page covers the line, what the registry does with
+it, and the application servers the CLI and Agentry Desktop carry today.
+The manifest's other lines are in
 [QuickAgents](quickagents.md#capabilities-the-security-contract).
 
 ## The line
@@ -17,38 +18,61 @@ schemaVersion: "2"
 capabilities:
   desktop:
     servers:
-      - id: blender                 # an entry of the catalogue below
+      - id: blender                 # an application, by its id
         tools: [get_scene_info, look, execute_blender_code]   # optional narrowing
+      - id: kdenlive
+        use: computer               # its windows only, through computer use
+      - choose: true                # an application the person chooses at the start
+        use: mcp
     computerUse: app                # app or screen; leave it out for none
 ```
 
-- **`servers`**: at most four entries of the catalogue of application
-  servers, by id, each named once. An entry's `tools` narrows the run to
-  some of the tools the catalogue gives it, at least one; without `tools`
-  the run has every tool the catalogue gives. A narrowing can only take tools
-  away: a tool the catalogue withholds or does not list is refused.
+- **`servers`**: at most four applications. Each is an `id` named once, or
+  the one entry with `choose: true`, which asks the person to choose one of
+  their applications when the run starts and names no id and no tools. An id
+  is lowercase letters and digits in words joined by single hyphens, at most
+  40 characters. The registry holds no list of applications: the id is
+  resolved on the person's computer, against the applications they approved
+  in Agentry Desktop.
+- **`use`**: what of the application the run uses: `mcp`, its MCP server;
+  `computer`, its windows through computer use; `both`. Left out, it is the
+  application's server, and its windows too when the line declares
+  `computerUse`. `computer` and `both` need `computerUse`.
+- **`tools`** narrows the run to some of the tools of the application's
+  server, at least one; without `tools` the run has every tool the server
+  lists. A narrowing can only take tools away, and only an entry that uses
+  the server has one. Which tools a server lists is known only on the
+  person's computer, so a run whose narrowing names a tool the server does
+  not list is refused when it starts.
 - **`computerUse`**: `app` lets the agent see and act in the windows of the
-  applications it uses (or, with no server, one application the person picks
-  when the run starts); `screen` gives it the whole display, and the
-  consent says so in those words.
-- The line needs a server or `computerUse`, and is a v2 field. Manifest rule
-  **V19** refuses, naming the path, an id the catalogue does not hold, a
-  duplicate id, more than four servers, a tool that is not the entry's or
-  that the entry withholds, a duplicate or empty narrowing, a scope other
-  than `app` or `screen`, and the line in a v1 manifest.
-- The release names an entry, never a command, a path, a port or an address:
-  what runs on the person's computer is the catalogue's pinned server, chosen
-  from the id alone.
+  applications whose windows it uses (or, when it names none, one
+  application the person chooses when the run starts); `screen` gives it the
+  whole display, and the consent says so in those words.
+- The line needs an application or `computerUse`, and is a v2 field.
+  Manifest rule **V19** refuses, naming the path, an id outside the grammar,
+  an entry with neither an id nor `choose`, a duplicate id, a second
+  chooser, a chooser with an id or tools, more than four applications, a
+  `use` other than the three or one that needs `computerUse` without it, a
+  narrowing of an application used through its windows only, a tool name
+  outside letters, digits, hyphens and underscores, a duplicate or empty
+  narrowing, a scope other than `app` or `screen`, and the line in a v1
+  manifest.
+- The release names an application, never a command, a path, a port or an
+  address: what runs on the person's computer is the server the person
+  approved for that application.
 
 The line is for a run on the person's own computer or on their own runhost.
 A run in Agentry never has it. A CLI or desktop that pins a core older than
-this field refuses a manifest that carries it, naming the field.
+this field refuses a manifest that carries it, naming the field, and one
+older than `use` and `choose` refuses an entry that carries either.
 
-## The catalogue of application servers
+## The application servers today's clients carry
 
-Each application a release may use has one entry, released with the core,
-built into every client, and served at `GET /api/v1/desktop-apps`. An entry
-holds:
+The CLI and Agentry Desktop released so far bind only the applications of
+the catalogue of application servers below, `blender` and `unreal`, and
+refuse a run that names any other id before it starts, naming the id. The
+catalogue is released with the core, built into those clients, and served
+at `GET /api/v1/desktop-apps`. An entry holds:
 
 | Field | Meaning |
 |---|---|
@@ -113,35 +137,41 @@ port can drive the open editor.
 ## What the registry does with the line
 
 - **Consent.** The line is part of the contract, so the install consent shows
-  it ("uses Blender on your computer through its MCP server (7 tools, 1 runs
-  code inside Blender; it reaches 12 hosts from your computer)", "can see and
-  use Blender's windows on your computer"), and an upgrade that adds a
-  server, lifts a narrowing or adds a tool to it, declares computer use, or
-  moves `app` to `screen` asks again. A removed server, a narrower tool list
-  and a smaller scope do not.
+  it by id ("uses the application blender on your computer, through its MCP
+  server (every tool it lists)", "can see and use the windows of blender on
+  your computer"); Agentry Desktop, which resolves the id, adds what it
+  knows of the application. An upgrade that adds an application, uses an
+  application's server or windows it did not, lifts a narrowing or adds a
+  tool to it, declares computer use, or moves `app` to `screen` asks again.
+  A removed application, a narrower use or tool list and a smaller scope do
+  not.
 - **Policy.** The line is two capability tokens: `desktop` for any desktop
   line, and `computerUse` when it does computer use, so a publication policy
   can block or review either by name in `blockedCapabilities` or
-  `requireHumanReview.whenCapabilities`. The catalogue's egress hosts for a
-  server the line uses count as `network`, as a declared package server's
-  own egress does. Under the platform baseline the line routes nothing to
-  review by itself.
-- **S6** reads an application server's tools in the instruction, named
-  `<id>__<tool>` (`blender__execute_blender_code`) or by the desktop link's
-  own server name (`agentry-desktop-blender__look`), against the line: a tool
-  of a server the line does not declare, or one its narrowing leaves out, is
-  a high `S6/ungranted-tool` finding naming `capabilities.desktop.servers`,
-  and `agentry-desktop-computer__<tool>` without computer use names
-  `capabilities.desktop.computerUse`.
-- **S7** looks the catalogue's pin of every server the line uses up in OSV
-  and in its package registry, as it looks up a declared server, and the
-  daily sweep checks it again. An application's own plugin is in neither,
-  so S7 names it as not covered (`S7/osv-no-data`, "the application's own
-  plugin, released with it").
+  `requireHumanReview.whenCapabilities`. A line that uses any application's
+  server also counts as `network`: that server runs on the person's
+  computer with their network, and the registry cannot know what it
+  reaches. An application used through its windows alone does not. Under
+  the platform baseline the line routes nothing to review by itself.
+- **S6** reads an application's tools in the instruction, named by the
+  desktop link's own server name (`agentry-desktop-blender__look`), or by an
+  id the line declares (`blender__execute_blender_code`), against the line: a
+  tool of an application the line does not declare, of one it uses through
+  its windows only, or one its narrowing leaves out, is a high
+  `S6/ungranted-tool` finding naming `capabilities.desktop.servers`, and
+  `agentry-desktop-computer__<tool>` without computer use names
+  `capabilities.desktop.computerUse`. A bare `<id>__<tool>` for an id the
+  line does not declare is read as a declared MCP server's. A line with an
+  application the person chooses gives any `agentry-desktop-<id>__<tool>`.
+- **S7** asks no advisory database about the line: which server answers for
+  an application is known only on the person's computer. It names each
+  application whose server the line uses as not covered (`S7/osv-no-data`,
+  medium, "the registry cannot know which, so nothing is looked up and what
+  it reaches is not known"), and the daily sweep has nothing of the line to
+  check.
 - **S9** reports `S9/new-desktop`, medium, for each thing a release newly
   does on the person's computer against the previous release, in the
-  consent's words, and the catalogue's egress hosts as new hosts
-  (`S9/new-egress`).
+  consent's words.
 - **Search.** `GET /search?capability=desktop` finds the releases that
   declare the line.
 
@@ -182,4 +212,5 @@ network and files. Blender's `execute_blender_code` is Python as the person,
 and its asset and generation tools fetch from outside services. Nothing in a
 run's sandbox holds any of that: the `exec` class asks the person before
 each such call, the launch turns telemetry off and the code screen on, and
-the catalogue names the hosts so the consent and the scan can.
+the registry, which cannot know what a person's server reaches, counts the
+line as network and says so in the scan.

@@ -3288,11 +3288,9 @@
             "TestTheDesktopLineIsTwoPolicyTokens",
             "TestADesktopLineOfAnOddShapeLeavesTheRestDeclared",
             "TestAPolicyCanBlockTheDesktopOrComputerUse",
-            "TestS7LooksUpTheCataloguePinOfAnApplicationServer",
-            "TestS7NamesTheApplicationsOwnPluginAsNotCovered",
+            "TestS7NamesEachApplicationAsNotCovered",
             "TestS9ReportsWhatAReleaseNewlyDoesOnThePersonsComputer",
-            "TestS9CountsTheCataloguesEgressAsNewHosts",
-            "TestS6TiesApplicationServerToolsToTheDesktopLine"
+            "TestS6TiesApplicationToolsToTheDesktopLine"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5084,12 +5082,13 @@
             "TestADesktopLineParsesAndValidates",
             "TestV19RefusesWhatTheLineCannotMean",
             "TestV19TakesWhatTheLineMeans",
+            "TestWhatOfAnApplicationTheRunUses",
             "TestDesktopIsAV2Field",
             "TestDesktopIsInTheContract",
             "TestAllowedIsTheCatalogueNarrowed",
             "TestDiffCapabilitiesDesktop",
             "TestV2SchemaDesktopShape",
-            "TestUnrealIsNamedByItsIDAlone"
+            "TestAnApplicationIsNamedByItsIDAlone"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5676,7 +5675,7 @@
             "TestThePersistentToolsNeedTheirKeys",
             "TestCoderHoldsTheToolchainsGrants",
             "TestTheSubagentToolsNeedASubagent",
-            "TestTheDesktopLineGivesApplicationServerTools"
+            "TestTheDesktopLineGivesApplicationTools"
           ],
           "fuzz": [],
           "benchmarks": [],

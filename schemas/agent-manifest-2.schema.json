@@ -266,32 +266,37 @@
         },
         "desktop": {
           "type": "object",
-          "description": "The person's own computer (V19): application servers the run uses there, by their id in the catalogue of application servers, and computer use of those applications' windows (app) or of the whole display (screen). Agentry Desktop launches each catalogue entry's pinned server as the person and answers every call; a release never names a command, a path or a port. No hosted run has this line.",
+          "description": "The person's own computer (V19): the applications the run uses there, each by an id that Agentry Desktop resolves to an application the person approved on that computer, or one the person chooses when the run starts; what of each it uses (its MCP server, its windows, or both); and computer use of those applications' windows (app) or of the whole display (screen). Agentry Desktop starts the server the person approved and answers every call; a release never names a command, a path or a port. No hosted run has this line.",
           "additionalProperties": false,
           "minProperties": 1,
           "properties": {
             "servers": {
               "type": "array",
-              "description": "Application servers, at most four, each a catalogue id named once.",
+              "description": "The applications, at most four: each an id named once, or the one entry that asks the person to choose.",
               "uniqueItems": true,
               "maxItems": 4,
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["id"],
                 "properties": {
-                  "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "The server's id in the catalogue of application servers, such as blender." },
+                  "id": { "type": "string", "maxLength": 40, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "The application's id, such as blender, resolved on the person's computer to an application they approved there." },
+                  "choose": { "const": true, "description": "Asks for an application the person chooses when the run starts, from those they approved for what use names. At most one entry chooses; it names no id and no tools." },
+                  "use": { "type": "string", "enum": ["mcp", "computer", "both"], "description": "What of the application the run uses: its MCP server, its windows through computer use, or both. Absent, its server, and its windows too where the line declares computerUse. computer and both need computerUse." },
                   "tools": {
                     "type": "array",
-                    "description": "Narrows the run to these of the catalogue entry's tools; absent, the run has every tool the entry gives. A narrowing never widens.",
+                    "description": "Narrows the run to these tools of the application's server; absent, the run has every tool the server lists. A narrowing never widens.",
                     "uniqueItems": true,
                     "minItems": 1,
                     "items": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" }
                   }
-                }
+                },
+                "oneOf": [
+                  { "required": ["id"], "not": { "required": ["choose"] } },
+                  { "required": ["choose"], "not": { "anyOf": [{ "required": ["id"] }, { "required": ["tools"] }] } }
+                ]
               }
             },
-            "computerUse": { "type": "string", "enum": ["app", "screen"], "description": "Computer use: app holds the agent to the windows of the applications the run uses; screen gives it the whole display." }
+            "computerUse": { "type": "string", "enum": ["app", "screen"], "description": "Computer use: app holds the agent to the windows of the applications the run uses, or of one the person chooses when it names none; screen gives it the whole display." }
           }
         },
         "persistent": {
@@ -314,7 +319,7 @@
             "selfConfigure": { "type": "boolean", "description": "The agent may change its own name and persona." },
             "calendars": { "type": "boolean", "description": "Reading the calendar feeds the person adds." },
             "meetings": { "type": "boolean", "description": "Taking notes in the meetings the person arms." },
-            "desktop": { "type": "boolean", "description": "Being offered the applications on the person's computer, through Agentry Desktop: each application server of the catalogue, and computer use, once the person switches it on. The release's capabilities.desktop line, when it has one, narrows what is offered." },
+            "desktop": { "type": "boolean", "description": "Being offered the applications on the person's computer, through Agentry Desktop: each application the person approved there, and computer use, once the person switches it on. The release's capabilities.desktop line, when it has one, narrows what is offered." },
             "mail": {
               "type": "array",
               "description": "The mail providers the agent may reach once the person signs in. google needs the google-workspace image server and microsoft the microsoft-365 one.",
