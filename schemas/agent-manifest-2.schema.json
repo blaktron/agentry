@@ -279,7 +279,7 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
-                  "id": { "type": "string", "maxLength": 40, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "The application's id, such as blender, resolved on the person's computer to an application they approved there." },
+                  "id": { "type": "string", "maxLength": 40, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "not": { "enum": ["computer", "chosen"] }, "description": "The application's id, such as blender, resolved on the person's computer to an application they approved there. computer and chosen name the desktop link's own entries and are refused." },
                   "choose": { "const": true, "description": "Asks for an application the person chooses when the run starts, from those they approved for what use names. At most one entry chooses; it names no id and no tools." },
                   "use": { "type": "string", "enum": ["mcp", "computer", "both"], "description": "What of the application the run uses: its MCP server, its windows through computer use, or both. Absent, its server, and its windows too where the line declares computerUse. computer and both need computerUse." },
                   "tools": {

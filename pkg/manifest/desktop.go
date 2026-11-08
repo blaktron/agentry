@@ -92,6 +92,18 @@ const MaxDesktopServers = 4
 // MaxDesktopIDLength bounds an application id.
 const MaxDesktopIDLength = 40
 
+// The desktop link's own entry names, agentry-desktop-<name>, which no
+// application id may take: the computer-use entry, and the entry of an
+// application the person chooses when the run starts.
+const (
+	DesktopComputerName = "computer"
+	DesktopChosenName   = "chosen"
+)
+
+// ReservedDesktopIDs are the ids V19 refuses, since they name the desktop
+// link's own entries.
+var ReservedDesktopIDs = []string{DesktopComputerName, DesktopChosenName}
+
 var (
 	desktopIDPattern   = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	desktopToolPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
@@ -265,6 +277,9 @@ func validateDesktop(s *issues, m *Manifest) {
 			continue
 		case len(srv.ID) > MaxDesktopIDLength || !desktopIDPattern.MatchString(srv.ID):
 			s.errf("V19", p+".id", "%q is not an application id: lowercase letters and digits in words joined by single hyphens, at most %d characters", srv.ID, MaxDesktopIDLength)
+			continue
+		case slices.Contains(ReservedDesktopIDs, srv.ID):
+			s.errf("V19", p+".id", "%q is the name of the desktop link's own entry (agentry-desktop-%s), which no application may take", srv.ID, srv.ID)
 			continue
 		case seen[srv.ID]:
 			s.errf("V19", p+".id", "duplicate application %q", srv.ID)

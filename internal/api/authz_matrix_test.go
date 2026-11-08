@@ -320,6 +320,7 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"listUserSessions":            {method: "GET", path: sPath("/api/v1/user/sessions")},
 		"listUserDependencyAlerts":    {method: "GET", path: sPath("/api/v1/user/dependency-alerts")},
 		"listUserActivity":            {method: "GET", path: sPath("/api/v1/user/activity")},
+		"listUserSubmissions":         {method: "GET", path: sPath("/api/v1/user/submissions")},
 		"getUserNotificationSettings": {method: "GET", path: sPath("/api/v1/user/notifications")},
 		"updateUserNotificationSettings": {
 			method: "PUT", path: sPath("/api/v1/user/notifications"),
@@ -465,6 +466,10 @@ func requestFactories(env *testEnv) map[string]opRequest {
 		"getVersionManifest":  {method: "GET", path: agentPath("/versions/9.9.9/manifest")},
 		"yankVersion": {
 			method: "POST", path: agentPath("/versions/9.9.9/yank"),
+			body: func(*matrixSeed, string) any { return map[string]any{"reason": "matrix"} },
+		},
+		"withdrawVersion": {
+			method: "POST", path: agentPath("/versions/9.9.9/withdraw"),
 			body: func(*matrixSeed, string) any { return map[string]any{"reason": "matrix"} },
 		},
 		"downloadVersion":  {method: "GET", path: agentPath("/versions/9.9.9/download")},

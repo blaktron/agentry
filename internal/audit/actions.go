@@ -119,6 +119,7 @@ const (
 	ActionVersionSubmit     Action = "version.submit"
 	ActionVersionTransition Action = "version.transition"
 	ActionVersionYank       Action = "version.yank"
+	ActionVersionWithdraw   Action = "version.withdraw"
 
 	// Security pipeline.
 	ActionReviewDecision  Action = "review.decision"
@@ -195,7 +196,7 @@ func init() {
 		ActionTeamMemberAdd, ActionTeamMemberRemove,
 		ActionAgentCreate, ActionAgentUpdate, ActionAgentGrantSet,
 		ActionAgentGrantRemove, ActionRepoPush,
-		ActionVersionSubmit, ActionVersionTransition, ActionVersionYank,
+		ActionVersionSubmit, ActionVersionTransition, ActionVersionYank, ActionVersionWithdraw,
 		ActionReviewDecision, ActionFindingVerdict, ActionPolicyUpdate,
 		ActionAgentQuarantine, ActionAgentBlock, ActionAgentReinstate,
 		ActionAdvisoryPublish, ActionAgentDependencyAlert, ActionRulesetRelease, ActionAbuseReport,

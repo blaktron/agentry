@@ -1404,6 +1404,17 @@ namespace, the name, the run modes and the visibility and sets up the git
 repository a tag is pushed to, or with `POST /agents`. The Builder's and
 the desktop's Submit create the record themselves.
 
+A version the scan holds for a security reviewer waits in `needs_review`.
+`GET /user/submissions` lists every version you submitted, newest first,
+with where each stands and, for a held one, when its review opened
+(`?status=needs_review` lists only those). While it waits, you can take it
+back: `POST /agents/{ns}/{name}/versions/{version}/withdraw`, with an
+optional `reason`, closes its review item and moves the version to
+`withdrawn`. A withdrawn version is never installable and its number stays
+used, so publish the fix as the next version. Once a reviewer has decided,
+or once a version is published, it is no longer withdrawn: a published one
+is yanked instead.
+
 Before submitting, `agentry review .` runs the built-in Examiner on your
 own computer: the registry's rules, AI Review's questions and a model's
 reading of the files, with the outcome the gate would be expected to

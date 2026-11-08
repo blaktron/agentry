@@ -115,6 +115,7 @@ var routeAuthz = map[string]RouteDecl{
 	"streamVersionEvents":   {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"getVersionManifest":    {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"yankVersion":           {Action: auth.ActAgentPublish, AgentScoped: true},
+	"withdrawVersion":       {Action: auth.ActAgentPublish, AgentScoped: true},
 	"downloadVersion":       {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"listVersionFiles":      {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
 	"getVersionFile":        {Action: auth.ActAgentRead, AgentScoped: true, Anonymous: true},
@@ -264,6 +265,7 @@ var routeAuthz = map[string]RouteDecl{
 	"requestDomainOrgAccess":         {Action: auth.ActUserOrgRequest, SessionOnly: true},
 	"listUserDependencyAlerts":       {Action: auth.ActUserSelfRead},
 	"listUserActivity":               {Action: auth.ActUserSelfRead},
+	"listUserSubmissions":            {Action: auth.ActUserSelfRead},
 	"getUserNotificationSettings":    {Action: auth.ActUserSelfRead},
 	"updateUserNotificationSettings": {Action: auth.ActUserSelfUpdate},
 	// The report theme, a profile setting like the above:

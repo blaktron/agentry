@@ -1884,3 +1884,24 @@ func (q *Queries) UpsertStageResult(ctx context.Context, arg UpsertStageResultPa
 	)
 	return err
 }
+
+const withdrawPendingReviewItem = `-- name: WithdrawPendingReviewItem :one
+UPDATE review_items SET state = 'withdrawn', decided_by = $1, decided_at = now(), rationale = $2
+WHERE version_id = $3 AND state = 'pending'
+RETURNING id
+`
+
+type WithdrawPendingReviewItemParams struct {
+	DecidedBy *uuid.UUID `json:"decided_by"`
+	Rationale *string    `json:"rationale"`
+	VersionID uuid.UUID  `json:"version_id"`
+}
+
+// The version's publisher takes back a pending item: no reviewer decided,
+// so the item closes as withdrawn. No row when a reviewer decided first.
+func (q *Queries) WithdrawPendingReviewItem(ctx context.Context, arg WithdrawPendingReviewItemParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, withdrawPendingReviewItem, arg.DecidedBy, arg.Rationale, arg.VersionID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
