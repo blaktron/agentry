@@ -80,10 +80,10 @@ func TestV5ExecCommandGrammar(t *testing.T) {
 	for _, tc := range execCommandCases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := validSkillManifest()
-			m.Capabilities.Exec = ExecCapability{Commands: []string{"jq", tc.cmd}}
+			m.Capabilities.Exec = ExecCapability{Commands: []string{"cat", tc.cmd}}
 			errs := Validate(m)
 			if tc.ok {
-				wantClean(t, errs)
+				wantClean(t, withoutNonBaseCommandWarnings(errs))
 				return
 			}
 			wantIssue(t, errs, "V5", SeverityError, "capabilities.exec.commands[1]")
@@ -194,5 +194,38 @@ func TestV2SchemaExecCommandPattern(t *testing.T) {
 				t.Fatalf("the exec description does not say what the grammar is")
 			}
 		})
+	}
+}
+
+// withoutNonBaseCommandWarnings drops V5's warning that a declared command is
+// not one every machine provides, for a test about the command grammar alone.
+func withoutNonBaseCommandWarnings(errs []error) []error {
+	var out []error
+	for _, err := range errs {
+		if is, ok := AsIssue(err); ok && is.Rule == "V5" && is.Severity == SeverityWarning && strings.Contains(is.Message, "not one every machine provides") {
+			continue
+		}
+		out = append(out, err)
+	}
+	return out
+}
+
+// TestV5WarnsOnACommandOnlyTheLocalMachineProvides: a declared command
+// outside the base list passes with a warning naming it, since a run in
+// Agentry provides only the base commands; a base command passes clean.
+func TestV5WarnsOnACommandOnlyTheLocalMachineProvides(t *testing.T) {
+	m := validSkillManifest()
+	m.Capabilities.Exec = ExecCapability{Commands: []string{"sha256sum", "jq"}}
+	errs := Validate(m)
+	if len(errs) != 1 {
+		t.Fatalf("want one warning, got:%s", issueStrings(errs))
+	}
+	wantIssue(t, errs, "V5", SeverityWarning, "capabilities.exec.commands[1]")
+	if is, _ := AsIssue(errs[0]); !strings.Contains(is.Message, `"jq"`) || !strings.Contains(is.Message, "never in Agentry") {
+		t.Fatalf("the warning does not name the command or where it is missing: %v", is)
+	}
+	for _, base := range BaseExecCommands() {
+		m.Capabilities.Exec = ExecCapability{Commands: []string{base}}
+		wantClean(t, Validate(m))
 	}
 }

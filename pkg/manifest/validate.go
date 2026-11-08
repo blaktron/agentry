@@ -105,7 +105,7 @@ func Blocking(errs []error) []error {
 // Name and namespace patterns exactly as the database's CHECK
 // constraints.
 var (
-	nameRE      = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$`)
+	nameRE      = regexp.MustCompile(fmt.Sprintf(`^[a-z0-9](?:[a-z0-9-]{0,%d}[a-z0-9])?$`, MaxNameLength-2))
 	namespaceRE = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$`)
 	tagRE       = regexp.MustCompile(`^[a-z0-9-]+$`)
 	envNameRE   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -128,9 +128,12 @@ var execCommandRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 // declare under capabilities.exec.commands.
 func ValidExecCommand(cmd string) bool { return execCommandRE.MatchString(cmd) }
 
+// MaxNameLength is the longest agent name the database's pattern admits.
+const MaxNameLength = 65
+
 // ValidName reports whether s is a valid agent name per the database's
-// pattern (lowercase alphanumeric plus interior hyphens, at most 65
-// chars).
+// pattern (lowercase alphanumeric plus interior hyphens, at most
+// MaxNameLength characters).
 func ValidName(s string) bool { return nameRE.MatchString(s) }
 
 // ValidNamespace reports whether s is a valid namespace handle per the
@@ -546,6 +549,7 @@ func validateSecretIntakeAgreement(s *issues, m *Manifest) {
 		}
 		name := strings.ToUpper(q.ID)
 		if !slices.Contains(c.Secrets, name) {
+			s.errf("V10", fmt.Sprintf("intake[%d].type", i), "secret question %q has no capability secret named %s to carry it, and the runner refuses the run: add %s to capabilities.secrets", q.ID, name, name)
 			continue
 		}
 		p := fmt.Sprintf("intake[%d].required", i)
@@ -748,6 +752,9 @@ func validateCapabilities(s *issues, c Capabilities) {
 			continue
 		}
 		if ValidExecCommand(cmd) {
+			if !slices.Contains(baseExecCommands, cmd) {
+				s.warnf("V5", p, "command %q is not one every machine provides: a run has it only on a computer where it is installed and the runner's policy admits it, never in Agentry", cmd)
+			}
 			continue
 		}
 		if n := utf8.RuneCountInString(cmd); n > MaxExecCommandLength {
@@ -1152,7 +1159,7 @@ func ValidateInContext(m *Manifest, ctx Context) []error {
 
 	resolved := resolveInclude(&s, m, ctx.Files)
 	validateEntrypointInclusion(&s, m, ctx.Files, resolved)
-	validatePublicPublish(&s, m, ctx)
+	validatePublicPublish(&s, m, ctx, resolved)
 	validateShippedPacks(&s, m, ctx, resolved)
 	validatePersistentFolders(&s, m, resolved)
 	validatePersonaInContext(&s, m, ctx, resolved)
@@ -1341,7 +1348,7 @@ func validateEntrypointInclusion(s *issues, m *Manifest, files []FileInfo, resol
 
 // validatePublicPublish is V7: public publish requires a plausible SPDX
 // license id plus LICENSE and README.md files.
-func validatePublicPublish(s *issues, m *Manifest, ctx Context) {
+func validatePublicPublish(s *issues, m *Manifest, ctx Context, resolved []FileInfo) {
 	if !ctx.Public {
 		return
 	}
@@ -1350,16 +1357,32 @@ func validatePublicPublish(s *issues, m *Manifest, ctx Context) {
 	} else if _, _, err := ParseSPDXExpression(m.License); err != nil {
 		s.errf("V7", "license", "%q is not a valid SPDX license expression: %v", m.License, err)
 	}
-	byPath := make(map[string]bool, len(ctx.Files))
+	inRepo := make(map[string]bool, len(ctx.Files))
 	for _, f := range ctx.Files {
-		byPath[f.Path] = true
+		inRepo[f.Path] = true
 	}
-	if !byPath["LICENSE"] && !byPath["LICENSE.md"] && !byPath["LICENSE.txt"] {
-		s.errf("V7", "", "public publish requires a LICENSE file at the repo root")
+	ships := make(map[string]bool, len(resolved))
+	for _, f := range resolved {
+		ships[f.Path] = true
 	}
-	if !byPath["README.md"] {
-		s.errf("V7", "", "public publish requires README.md at the repo root")
+	// The files that will ship decide, not the repository: a LICENSE or a
+	// README that publish.include leaves out is not in the release.
+	need := func(names []string, what string) {
+		for _, n := range names {
+			if ships[n] {
+				return
+			}
+		}
+		for _, n := range names {
+			if inRepo[n] {
+				s.errf("V7", "publish.include", "public publish ships %s, and publish.include leaves %s out: add it", what, n)
+				return
+			}
+		}
+		s.errf("V7", "", "public publish requires %s at the repo root, shipped by publish.include", what)
 	}
+	need([]string{"LICENSE", "LICENSE.md", "LICENSE.txt"}, "a LICENSE file")
+	need([]string{"README.md"}, "README.md")
 }
 
 // validateQuotas is V8's context half: archive quotas over the resolved

@@ -226,22 +226,18 @@ func TestSecretIntakeAgreesWithItsSecret(t *testing.T) {
 			t.Fatalf("refused: %v", errs)
 		}
 	})
+	// A secret question with no declared secret of its name has nowhere to
+	// go: the runner refuses the run, so publishing refuses the release.
 	t.Run("no secret of that name", func(t *testing.T) {
-		// Left to the runner, which refuses a secret question with nowhere
-		// to go; the core's V10 has never judged it.
 		m := mustParse(t, optionalSecretsYAML)
 		m.Intake[0].ID = "unrelated"
-		if errs := publishIssues(t, m); len(errs) != 0 {
-			t.Fatalf("refused: %v", errs)
-		}
+		assertNoSecretForQuestion(t, m, "UNRELATED")
 	})
 	t.Run("a server's secret does not carry a question", func(t *testing.T) {
 		m := mustParse(t, optionalSecretsYAML)
 		m.Intake[0].ID = "search_api_key"
 		m.Intake[0].Required = true
-		if errs := publishIssues(t, m); len(errs) != 0 {
-			t.Fatalf("refused: %v", errs)
-		}
+		assertNoSecretForQuestion(t, m, "SEARCH_API_KEY")
 	})
 }
 
@@ -266,6 +262,17 @@ func TestAnInstalledReleaseKeepsRunning(t *testing.T) {
 	}
 	if !hit {
 		t.Fatal("its next publish is not refused")
+	}
+}
+
+// assertNoSecretForQuestion wants the one V10 error that the first intake
+// question, a secret, has no capability secret named name to carry it.
+func assertNoSecretForQuestion(t *testing.T, m *Manifest, name string) {
+	t.Helper()
+	errs := publishIssues(t, m)
+	if len(errs) != 1 || errs[0].Rule != "V10" || errs[0].Severity != SeverityError || errs[0].Path != "intake[0].type" ||
+		!strings.Contains(errs[0].Message, "add "+name+" to capabilities.secrets") {
+		t.Fatalf("want one V10 refusal naming %s: %v", name, errs)
 	}
 }
 

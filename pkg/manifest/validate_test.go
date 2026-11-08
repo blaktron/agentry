@@ -277,7 +277,7 @@ func TestValidateStaticPasses(t *testing.T) {
 			m.Capabilities.Filesystem.Read = FSAccess{Mode: FSModePaths, Paths: []string{"data/cache.json"}}
 		}},
 		{"exec commands form", func(m *Manifest) {
-			m.Capabilities.Exec = ExecCapability{Commands: []string{"git", "jq"}}
+			m.Capabilities.Exec = ExecCapability{Commands: []string{"sha256sum", "diff"}}
 		}},
 	}
 	for _, tc := range cases {
@@ -345,6 +345,12 @@ func TestValidateInContext(t *testing.T) {
 		{"V7 missing README", nil, func(c *Context) {
 			c.Files = deleteFile(c.Files, "README.md")
 		}, "V7", SeverityError, ""},
+		{"V7 LICENSE left out of the include", func(m *Manifest) {
+			m.Publish.Include = []string{"agent.yaml", "README.md", "prompts/**", "SKILL.md"}
+		}, nil, "V7", SeverityError, "publish.include"},
+		{"V7 README left out of the include", func(m *Manifest) {
+			m.Publish.Include = []string{"agent.yaml", "LICENSE", "prompts/**", "SKILL.md"}
+		}, nil, "V7", SeverityError, "publish.include"},
 
 		{"V8 archive too large", nil, func(c *Context) {
 			for i := range c.Files {
@@ -381,10 +387,12 @@ func TestValidateInContext(t *testing.T) {
 	// with a neighbouring refusal, a message fragment only that refusal
 	// carries, so a different guard cannot answer for it.
 	says := map[string]string{
-		"V3 duplicate on other channel": `already exists on channel "beta"`,
-		"V4 zero resolved files":        "resolve to zero files",
-		"V7 missing LICENSE file":       "LICENSE file",
-		"V7 missing README":             "README.md at the repo root",
+		"V3 duplicate on other channel":      `already exists on channel "beta"`,
+		"V4 zero resolved files":             "resolve to zero files",
+		"V7 missing LICENSE file":            "LICENSE file",
+		"V7 missing README":                  "README.md at the repo root",
+		"V7 LICENSE left out of the include": "publish.include leaves LICENSE out",
+		"V7 README left out of the include":  "publish.include leaves README.md out",
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -629,5 +637,16 @@ func TestParseSPDXExpression(t *testing.T) {
 		if _, _, err := ParseSPDXExpression(bad); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
+	}
+}
+
+// TestNameLengthIsOneConstant: ValidName admits MaxNameLength characters and
+// no more, so a scaffold that reads the constant states the same limit.
+func TestNameLengthIsOneConstant(t *testing.T) {
+	if !ValidName(strings.Repeat("a", MaxNameLength)) {
+		t.Fatalf("a name of MaxNameLength (%d) characters is refused", MaxNameLength)
+	}
+	if ValidName(strings.Repeat("a", MaxNameLength+1)) {
+		t.Fatalf("a name of %d characters is admitted", MaxNameLength+1)
 	}
 }
