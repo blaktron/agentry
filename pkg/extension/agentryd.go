@@ -1172,6 +1172,9 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if k, ok := e.(WrapsKeys); ok {
 			srv.SetKeyWrapper(k.KeyWrapper())
 		}
+		if m, ok := e.(ManagesSettings); ok {
+			srv.SetManagedSettings(e.Name(), m.ManagedSettings)
+		}
 		if x, ok := e.(ErasesAccounts); ok {
 			srv.AddAccountEraser(e.Name(), x.EraseAccount)
 		}

@@ -469,6 +469,23 @@ type ReportSettings interface {
 	DesignWithLogo(ctx context.Context, user uuid.UUID) ([]byte, error)
 }
 
+// ManagesSettings is the optional interface for an extension that answers
+// the managed settings an organization's admins set for its members, which
+// GET /user/managed-settings serves. ManagedSettings returns the person's
+// settings, or nil when none apply to them; it reads membership at the
+// call. The core validates the settings against pkg/managedsettings'
+// catalogue, adds the registry and the account they are bound to, and
+// signs the document with the registry's signer. An extension never signs
+// or binds a document itself. A deployment has one such extension: a
+// second panics at start-up.
+type ManagesSettings interface {
+	ManagedSettings(ctx context.Context, user uuid.UUID) (*ManagedSettingsContent, error)
+}
+
+// ManagedSettingsContent is one member's managed settings as an extension
+// answers them.
+type ManagedSettingsContent = api.ManagedSettingsContent
+
 // Unthrottles is the optional interface for an extension whose receiver
 // of signed callbacks must never be refused by the anonymous rate class
 // (a payment provider's webhook). The routes are "METHOD /path"

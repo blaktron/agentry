@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentry.example/schemas/managed-settings-1.schema.json",
+  "title": "Agentry managed settings document (schema managed-settings/1)",
+  "description": "The payload of a managed settings envelope: the values an organization's admins set for one member's Agentry clients. A registry serves it from GET /api/v1/user/managed-settings as a DSSE envelope of payload type application/vnd.agentry.managed-settings+json, signed with its release-signing key. A client opens it only with a key it already trusts for that registry, and only when registry and account name the registry and the account it is signed in to. Closed schema: unknown keys are invalid. A setting that is locked cannot be changed by the member; one that is not locked is an organization default. No value turns a capability on: each row only narrows what a member could choose.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "registry", "account", "org", "version", "issuedAt", "settings"],
+  "properties": {
+    "schema": { "const": "managed-settings/1" },
+    "registry": { "type": "string", "minLength": 1, "description": "Base URL of the registry that signed the document." },
+    "account": { "type": "string", "minLength": 1, "description": "Id of the account the document was issued to." },
+    "org": { "type": "string", "minLength": 1, "description": "Handle of the organization whose settings these are." },
+    "version": { "type": "integer", "minimum": 1, "description": "Increases with every change the organization's admins make." },
+    "issuedAt": { "type": "string", "format": "date-time", "description": "When the registry signed this copy." },
+    "settings": {
+      "type": "object",
+      "description": "The rows below are this version's catalogue. A registry signs only rows it knows; a newer registry may send rows an older client does not know, each in the same shape. A client keeps such a row: when it is locked, the client cannot enforce it and refuses to run until it is updated; when it is a default, the client passes over it. A field outside settings is a new schema version.",
+      "additionalProperties": { "$ref": "#/$defs/setting" },
+      "properties": {
+        "run.unsafeMode": {
+          "description": "Whether members may turn on Unsafe Mode for local runs. allowed leaves the choice to the member, behind the client's own consent; forbidden makes the client refuse to turn it on and the runner refuse an unsafe run.",
+          "$ref": "#/$defs/setting",
+          "properties": { "value": { "enum": ["allowed", "forbidden"] } }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "setting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "locked"],
+      "properties": {
+        "value": {},
+        "locked": { "type": "boolean", "description": "True: the member cannot change it. False: an organization default." }
+      }
+    }
+  }
+}

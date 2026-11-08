@@ -1368,6 +1368,27 @@
           ]
         },
         {
+          "path": "internal/api/managed_settings_test.go",
+          "tests": [
+            "TestManagedSettingsWithoutExtensionIsNoContent",
+            "TestManagedSettingsNeedsASignedInCaller",
+            "TestManagedSettingsNilAnswerIsNoContent",
+            "TestManagedSettingsSignedAndBound",
+            "TestManagedSettingsRefusesContentOffTheCatalogue",
+            "TestManagedSettingsSourceErrorIsInternal",
+            "TestManagedSettingsWithoutSigningKeyIsUnavailable",
+            "TestSetManagedSettingsTwicePanics",
+            "TestManagedSettingsWithoutBaseURLIsUnavailable"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/meta_brand_test.go",
           "tests": [
             "TestMetaReportsBrandAndUI"
@@ -5011,6 +5032,43 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/managedsettings",
+      "behavior": "Managed settings documents: the catalogue, its schema, and signed envelopes that open only with the right key and type",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/managedsettings/managedsettings_test.go",
+          "tests": [
+            "TestOpenRoundTrip",
+            "TestOpenRefusesAnotherKey",
+            "TestOpenRefusesAnotherPayloadType",
+            "TestAttestationVerifierRefusesADocument",
+            "TestOpenRefusesTamperedPayload",
+            "TestOpenRefusesUnknownFieldsAndRows",
+            "TestValidateRefusesMissingBinding",
+            "TestNoRowTurnsAnythingOn",
+            "TestOpenKeepsRowsANewerRegistryAdded"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/managedsettings/schema_test.go",
+          "tests": [
+            "TestSchemaMatchesCatalogue"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
         }
       ]
     },
