@@ -112,7 +112,7 @@ func TestAPersistentReleaseParsesAndValidates(t *testing.T) {
 // closed set and its words cannot drift apart.
 func TestEveryPersistentKeyHasWords(t *testing.T) {
 	all := &Persistent{Clock: true, Memory: true, Skills: true, Secrets: []string{"A"}, SelfConfigure: true, Calendars: true,
-		Meetings: true, Mail: []string{"fastmail"}, ImageServers: []string{"microsoft-365"}, Coder: true, Web: true, Helper: true, Review: true}
+		Meetings: true, Desktop: true, Mail: []string{"fastmail"}, ImageServers: []string{"microsoft-365"}, Coder: true, Web: true, Helper: true, Review: true}
 	caps := PersistentCapabilities()
 	if got := all.Keys(); len(got) != len(caps) {
 		t.Fatalf("a block declaring everything has keys %v; the set has %d", got, len(caps))
@@ -391,7 +391,7 @@ func TestDiffCapabilitiesPersistent(t *testing.T) {
 	}
 
 	back := DiffCapabilities(next.Contract(), old)
-	if !slices.Contains(back.Widened, "adds a persistent capability: helper ("+persistentCapabilities[11].Words+")") ||
+	if !slices.Contains(back.Widened, "adds a persistent capability: helper ("+persistentWords(t, "helper")+")") ||
 		!slices.Contains(back.Narrowed, "drops a subagent: acme/translate") {
 		t.Fatalf("the reverse diff = %+v", back)
 	}
@@ -479,5 +479,37 @@ func TestV2SchemaPersistentShape(t *testing.T) {
 	}
 	if _, ok := schema.Defs.AgentDependency.Properties["why"]; !ok {
 		t.Error("the schema's agentDependency has no why")
+	}
+}
+
+// persistentWords is a key's words.
+func persistentWords(t *testing.T, key string) string {
+	t.Helper()
+	for _, c := range persistentCapabilities {
+		if c.Key == key {
+			return c.Words
+		}
+	}
+	t.Fatalf("no persistent capability %q", key)
+	return ""
+}
+
+// The desktop key is a persistent capability like the others: valid beside
+// the persistent mode alone, listed with its words, and newly declared it
+// widens the contract, so an upgrade that adds it asks again.
+func TestThePersistentDesktopKeyIsPartOfTheContract(t *testing.T) {
+	old := persistentManifest(t).Contract()
+	m := persistentManifest(t)
+	m.Capabilities.Persistent.Desktop = true
+	wantClean(t, Validate(m))
+	if !slices.Contains(m.Capabilities.Persistent.Keys(), "desktop") {
+		t.Fatalf("keys %v", m.Capabilities.Persistent.Keys())
+	}
+	want := "adds a persistent capability: desktop (" + persistentWords(t, "desktop") + ")"
+	if d := DiffCapabilities(old, m.Contract()); !slices.Contains(d.Widened, want) {
+		t.Fatalf("widened %v, want %q", d.Widened, want)
+	}
+	if !strings.Contains(persistentWords(t, "desktop"), "Agentry Desktop") {
+		t.Fatal("the key's words do not say through what")
 	}
 }

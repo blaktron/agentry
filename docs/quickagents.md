@@ -1012,6 +1012,7 @@ and an older one refuses a key it does not know.
 | `selfConfigure` | `self_configure`: changing its own name and persona |
 | `calendars` | reading the calendar feeds the person adds |
 | `meetings` | the meeting tools: notes in the meetings the person arms |
+| `desktop` | the applications on the person's computer, through Agentry Desktop: each one the person switches on, and computer use; a `capabilities.desktop` line narrows which applications and which scope are offered, and an instruction that names a desktop tool needs that line |
 | `mail` | the person's mail at `google`, `microsoft` or `fastmail` once they sign in; `google` needs the `google-workspace` image server and `microsoft` the `microsoft-365` one |
 | `imageServers` | servers the runner runs from its own pinned images, `google-workspace` and `microsoft-365`, once the person signs in |
 | `coder` | the coding toolchain: any program in the runner's coding image, open web access for its commands, a public browser, a development host, ports and git host accounts |
