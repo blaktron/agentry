@@ -5103,7 +5103,8 @@
             "TestValidExecCommand",
             "TestV5ExecCommandGrammar",
             "TestV5ExecCommandLengthNamesTheCap",
-            "TestV2SchemaExecCommandPattern"
+            "TestV2SchemaExecCommandPattern",
+            "TestV5WarnsOnACommandOnlyTheLocalMachineProvides"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5420,7 +5421,8 @@
             "TestValidateNilManifest",
             "TestValidNameAndNamespace",
             "TestKnownSPDXID",
-            "TestParseSPDXExpression"
+            "TestParseSPDXExpression",
+            "TestNameLengthIsOneConstant"
           ],
           "fuzz": [],
           "benchmarks": [],

@@ -91,6 +91,9 @@ func validateTargetHosts(s *issues, m *Manifest) {
 		}
 		listed[id] = true
 	}
+	if len(c.TargetHosts) > 0 {
+		s.warnf("V14", "capabilities.targetHosts", "a target host is reached only from a run on the person's own computer: a run in Agentry refuses it")
+	}
 	for i, q := range m.Intake {
 		if q.Type == IntakeHost && !listed[q.ID] {
 			s.errf("V14", fmt.Sprintf("intake[%d].type", i), "host question %q is not listed in capabilities.targetHosts: a target host is part of the contract a person consents to", q.ID)
