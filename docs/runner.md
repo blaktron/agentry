@@ -927,6 +927,7 @@ What the runner builds from them:
 | `selfConfigure` | `self_configure`, which changes its name and personality and nothing else |
 | `helper` | the helper tools of [the app link](#the-app-link) |
 | `meetings` | the meeting tools of the app link |
+| `desktop` | the roster's entries for the applications on the person's computer and for computer use, each off until the person switches it on; a switched-on entry's [desktop link](#the-persons-computer-capabilitiesdesktop) is compiled into the agent's next segment |
 | `coder` | [the Coding agent's grant](#the-coding-agents-grant): programs, open egress, a browser, ports and a dev server |
 | `web`, `review`, `calendars`, `mail`, `imageServers`, `secrets` | the web tools, AI Review with the person's own key, the calendar feeds the person adds, the person's mail once they sign in, the runner's pinned image servers and the secrets the person keeps for it in their keychain |
 

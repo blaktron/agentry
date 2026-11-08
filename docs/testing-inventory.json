@@ -5303,7 +5303,8 @@
             "TestASubagentsConstraintAllowsVersions",
             "TestThePersistentBlockAndSubagentsAreInTheContract",
             "TestDiffCapabilitiesPersistent",
-            "TestV2SchemaPersistentShape"
+            "TestV2SchemaPersistentShape",
+            "TestThePersistentDesktopKeyIsPartOfTheContract"
           ],
           "fuzz": [],
           "benchmarks": [],
