@@ -56,8 +56,10 @@ func TestATargetHostParsesAndValidates(t *testing.T) {
 	if got := m.Capabilities.TargetHosts; !slices.Equal(got, []string{"server"}) {
 		t.Fatalf("targetHosts = %v", got)
 	}
-	if b, w := targetHostIssues(Validate(m)); len(b) != 0 || len(w) != 0 {
-		t.Fatalf("a declared target host is refused or warned: %v %v", b, w)
+	// One warning: a target host is reached only from the person's own
+	// computer, so a run in Agentry refuses the release.
+	if b, w := targetHostIssues(Validate(m)); len(b) != 0 || len(w) != 1 || w[0].Path != "capabilities.targetHosts" || !strings.Contains(w[0].Message, "a run in Agentry refuses it") {
+		t.Fatalf("a declared target host is refused, or not warned that it is local only: %v %v", b, w)
 	}
 	if b := publishIssues(t, m); len(b) != 0 {
 		t.Fatalf("a declared target host is refused at publish: %v", b)
@@ -144,6 +146,9 @@ func TestV14PointsAnSSHClientInExecAtTargetHosts(t *testing.T) {
 		}
 		var paths []string
 		for _, is := range w {
+			if is.Path == "capabilities.targetHosts" {
+				continue // the local-only warning, beside the hint
+			}
 			paths = append(paths, is.Path)
 			if !strings.Contains(is.Message, "capabilities.targetHosts") {
 				t.Fatalf("the hint does not name targetHosts: %v", is)

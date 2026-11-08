@@ -157,7 +157,7 @@ only a v2 manifest can declare `interactive` or `persistent`.
 | `modes` | yes | the run modes the release supports: any of `autonomous`, `interactive` and `persistent`, at least one, each once (section below) |
 | `version` | yes | strict semver without a leading `v`; equals the git tag when publishing from a tag; must exceed every existing version on its channel |
 | `summary` | yes | one plain-text line, ≤140 characters |
-| `license` | public publish | SPDX identifier or expression (`MIT OR Apache-2.0`); a `LICENSE` file must be present (its text is not compared) |
+| `license` | public publish | SPDX identifier or expression (`MIT OR Apache-2.0`); a `LICENSE` file and `README.md` at the repository root must be in what `publish.include` ships, not only in the repository (V7; the licence text is not compared) |
 | `authors` | no | `[{name, email?}, …]` |
 | `homepage` | no | informational URL |
 | `tags` | no | lowercase `[a-z0-9-]` search facets |
@@ -206,7 +206,7 @@ intake:
 |---|---|
 | `id` | `[a-z0-9_]{1,64}`, unique within the manifest |
 | `prompt` | required; one plain line, with no control character (an escape, a carriage return, a newline) and no format character (a bidi override, a zero-width space), since the CLI prints it on the terminal before the run and the desktop shows it as written (V10) |
-| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or the run refuses it; and `required` must agree with that secret: `true` for a required secret, absent or `false` for one under `capabilities.optionalSecrets`, or publishing refuses it, V10), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder), `host` (a target host, below), `repository` and `url` (an input source, below) |
+| `type` | `text`, `secret` (injected as a run-scoped secret, never written as text or recorded; the upper-cased id must be listed under `capabilities.secrets`, or publishing refuses it (V10), as the run would; and `required` must agree with that secret: `true` for a required secret, absent or `false` for one under `capabilities.optionalSecrets`, or publishing refuses it, V10), `choice` (needs `choices`), `file` (a host path the runner stages into the inputs folder), `host` (a target host, below), `repository` and `url` (an input source, below) |
 | `choices` | only with `type: choice`; each one plain line, as `prompt` |
 | at most 20 questions | |
 
@@ -303,7 +303,9 @@ capabilities:
   question, once. A release declares at most four. `choices` are refused
   on a `host` question, as on every type but `choice` (V10). An `exec`
   declaration that names `ssh`, `scp`, `sftp` or `rsync` is warned, without
-  failing, toward `targetHosts`, and the scan reports it low (S1).
+  failing, toward `targetHosts`, and the scan reports it low (S1). A release
+  that declares a target host is also warned that it runs only on the
+  person's own computer: a run in Agentry refuses it.
 
 **Which runners reach them.** The CLI reaches a target host from v0.6.105:
 the host link and its tools (`host_run`, `host_read`, `host_write`,
@@ -652,6 +654,12 @@ control character and a format character such as a right-to-left override or
 a zero-width joiner are refused when a version is published, so a name reads
 the same wherever it is shown. A release that is already published keeps
 running.
+
+A command outside the [commands every machine
+provides](runner.md#the-commands-every-machine-provides) passes with a warning
+(V5): a run has it only on a computer where it is installed and the runner's
+policy admits it, and a run in Agentry, which provides only those commands,
+refuses it.
 
 **`secrets`**: a list of environment variable **names**, never values.
 The runner resolves each from the operator's secret source before any
