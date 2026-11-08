@@ -8041,6 +8041,25 @@ components:
             Why a reviewer dismissed or confirmed this finding. Dismissed
             findings stay on the public report WITH their rationale. A finding that vanishes without explanation is exactly
             what the report exists to prevent.
+        description:
+          type: string
+          description: >-
+            What the finding's rule detects and why it matters, from the rule bundle this
+            registry runs. Absent for a finding no bundle rule raised (a stage's own check, AI
+            Review), or whose rule that bundle no longer holds.
+        references:
+          type: array
+          items:
+            type: string
+          description: >-
+            The rule's external references (OWASP ids, advisories, documentation), from the same
+            bundle. Absent when the rule names none or no bundle rule raised the finding.
+        remediation:
+          type: string
+          nullable: true
+          description: >-
+            What a publisher can change so the rule no longer fires, where the rule says. Null
+            when the rule gives none.
 
     ScanReport:
       type: object

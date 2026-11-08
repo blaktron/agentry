@@ -454,7 +454,7 @@ func TestPipelineMaliciousGatesToReview(t *testing.T) {
 	if v.Status != "needs_review" {
 		t.Fatalf("malicious version status = %s, want needs_review", v.Status)
 	}
-	if v.StatusReason == nil || !strings.Contains(*v.StatusReason, "exceed the auto-publish threshold (high)") {
+	if v.StatusReason == nil || !strings.Contains(*v.StatusReason, "exceeds the auto-publish threshold (high is above") {
 		t.Fatalf("status reason = %v, want the gate's over-threshold reason", v.StatusReason)
 	}
 	// No attestation for an unpublished version (sign once, on publish).
@@ -492,7 +492,7 @@ func TestPipelineMaliciousGatesToReview(t *testing.T) {
 	if r.Status != "rejected" {
 		t.Fatalf("version with a private key: status = %s, want rejected", r.Status)
 	}
-	if r.StatusReason == nil || !strings.Contains(*r.StatusReason, "rejected this version for a critical finding") {
+	if r.StatusReason == nil || !strings.Contains(*r.StatusReason, "rejected this version for a critical S") {
 		t.Fatalf("status reason = %v, want the gate's critical reason", r.StatusReason)
 	}
 	if _, err := e.st.Queries().GetPendingReviewItemForVersion(ctx, r.ID); err == nil {

@@ -73,6 +73,10 @@ type Rule struct {
 	Description string `yaml:"description"`
 	// References are external citations (OWASP ids, advisories, docs).
 	References []string `yaml:"references"`
+	// Remediation, where a rule gives one, says what a publisher can change
+	// so it no longer fires. It is read for reports only; matching ignores
+	// it.
+	Remediation string `yaml:"remediation,omitempty"`
 	// Patterns are Go regular expressions; a line/text matching any of them is
 	// a candidate hit. Case-insensitive by default (see compileRule).
 	Patterns []string `yaml:"patterns"`
