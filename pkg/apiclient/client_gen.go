@@ -3977,17 +3977,26 @@ type RulesetRelease struct {
 
 // ScanFinding defines model for ScanFinding.
 type ScanFinding struct {
-	Confidence ScanFindingConfidence   `json:"confidence"`
-	Detail     *map[string]interface{} `json:"detail,omitempty"`
-	Excerpt    *string                 `json:"excerpt,omitempty"`
-	FilePath   *string                 `json:"filePath,omitempty"`
-	Id         *openapi_types.UUID     `json:"id,omitempty"`
-	LineEnd    *int                    `json:"lineEnd,omitempty"`
-	LineStart  *int                    `json:"lineStart,omitempty"`
-	Scanner    string                  `json:"scanner"`
-	Severity   ScanFindingSeverity     `json:"severity"`
-	Title      string                  `json:"title"`
-	Verdict    ScanFindingVerdict      `json:"verdict"`
+	Confidence ScanFindingConfidence `json:"confidence"`
+
+	// Description What the finding's rule detects and why it matters, from the rule bundle this registry runs. Absent for a finding no bundle rule raised (a stage's own check, AI Review), or whose rule that bundle no longer holds.
+	Description *string                 `json:"description,omitempty"`
+	Detail      *map[string]interface{} `json:"detail,omitempty"`
+	Excerpt     *string                 `json:"excerpt,omitempty"`
+	FilePath    *string                 `json:"filePath,omitempty"`
+	Id          *openapi_types.UUID     `json:"id,omitempty"`
+	LineEnd     *int                    `json:"lineEnd,omitempty"`
+	LineStart   *int                    `json:"lineStart,omitempty"`
+
+	// References The rule's external references (OWASP ids, advisories, documentation), from the same bundle. Absent when the rule names none or no bundle rule raised the finding.
+	References *[]string `json:"references,omitempty"`
+
+	// Remediation What a publisher can change so the rule no longer fires, where the rule says. Null when the rule gives none.
+	Remediation *string             `json:"remediation,omitempty"`
+	Scanner     string              `json:"scanner"`
+	Severity    ScanFindingSeverity `json:"severity"`
+	Title       string              `json:"title"`
+	Verdict     ScanFindingVerdict  `json:"verdict"`
 
 	// VerdictReason Why a reviewer dismissed or confirmed this finding. Dismissed findings stay on the public report WITH their rationale. A finding that vanishes without explanation is exactly what the report exists to prevent.
 	VerdictReason *string `json:"verdictReason,omitempty"`
