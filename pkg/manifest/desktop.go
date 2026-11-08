@@ -99,8 +99,8 @@ var (
 
 // Allowed is the tools a run of this server has among a catalogue entry's:
 // the entry's, narrowed to Tools where Tools is set, in the entry's order.
-// It serves the clients that still carry the catalogue of application
-// servers; the contract itself reads no catalogue.
+// Validation, consent and the capability diff do not use it: they read no
+// catalogue.
 func (d DesktopServer) Allowed(e appserver.Server) []appserver.Tool {
 	var out []appserver.Tool
 	for _, t := range e.Tools {
@@ -128,14 +128,15 @@ func (d *Desktop) Server(id string) (DesktopServer, bool) {
 	return DesktopServer{}, false
 }
 
-// UsesServer reports whether the run uses this entry's MCP server.
-func (d *Desktop) UsesServer(s DesktopServer) bool {
+// UsesServer reports whether the run uses this entry's MCP server: an
+// entry that says nothing of use does.
+func (s DesktopServer) UsesServer() bool {
 	return s.Use == "" || s.Use == DesktopUseMCP || s.Use == DesktopUseBoth
 }
 
 // UsesWindows reports whether the run's computer use reaches this entry's
-// windows: an entry that says so, and an entry that says nothing on a line
-// that declares computer use, as every line published before Use read.
+// windows: an entry that says so, and an entry that says nothing of use on
+// a line that declares computer use.
 func (d *Desktop) UsesWindows(s DesktopServer) bool {
 	switch s.Use {
 	case DesktopUseComputer, DesktopUseBoth:
@@ -167,19 +168,42 @@ func (d *Desktop) ChoosesWindows() bool {
 	return !named
 }
 
+// ChoosesServer reports whether the line asks for the MCP server of an
+// application the person chooses when the run starts.
+func (d *Desktop) ChoosesServer() bool {
+	return d != nil && slices.ContainsFunc(d.Servers, func(s DesktopServer) bool { return s.Choose && s.UsesServer() })
+}
+
+// WindowApps names whose windows app-scope computer use reaches: each
+// named application that uses its windows, then "an application you
+// choose" where ChoosesWindows.
+func (d *Desktop) WindowApps() []string {
+	var out []string
+	for _, s := range d.Servers {
+		if !s.Choose && d.UsesWindows(s) {
+			out = append(out, s.ID)
+		}
+	}
+	if d.ChoosesWindows() {
+		out = append(out, "an application you choose")
+	}
+	return out
+}
+
 // UsesAnyServer reports whether the line uses any application's MCP
 // server, whose reach from the person's computer the registry cannot know.
 func (d *Desktop) UsesAnyServer() bool {
-	if d == nil {
-		return false
-	}
-	return slices.ContainsFunc(d.Servers, d.UsesServer)
+	return d != nil && slices.ContainsFunc(d.Servers, DesktopServer.UsesServer)
 }
 
-// desktopKey is an entry's key in a diff: its id, or "choose".
+// chooserKey is the chooser's key in a diff: no application id can spell
+// it, so an application named "choose" never stands for the chooser.
+const chooserKey = "(choose)"
+
+// desktopKey is an entry's key in a diff: its id, or chooserKey.
 func desktopKey(s DesktopServer) string {
 	if s.Choose {
-		return "choose"
+		return chooserKey
 	}
 	return s.ID
 }
@@ -250,7 +274,7 @@ func validateDesktop(s *issues, m *Manifest) {
 		if srv.Tools == nil {
 			continue
 		}
-		if !d.UsesServer(srv) {
+		if !srv.UsesServer() {
 			s.errf("V19", p+".tools", "%s is used through its windows only, so it has no tools to narrow", srv.ID)
 			continue
 		}
@@ -304,16 +328,7 @@ func DescribeComputerUse(d *Desktop) string {
 	case d.ComputerUse == ComputerUseScreen:
 		return "can see and use your whole screen"
 	}
-	var apps []string
-	for _, s := range d.Servers {
-		if !s.Choose && d.UsesWindows(s) {
-			apps = append(apps, s.ID)
-		}
-	}
-	if d.ChoosesWindows() {
-		apps = append(apps, "an application you choose")
-	}
-	return "can see and use the windows of " + joinAnd(apps) + " on your computer"
+	return "can see and use the windows of " + joinAnd(d.WindowApps()) + " on your computer"
 }
 
 // joinAnd is "a", "a and b", "a, b and c".

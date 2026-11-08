@@ -177,7 +177,9 @@ port can drive the open editor.
 
 ## What the runner does with the line
 
-A run that declares the line, from the CLI or the desktop app, binds to
+This is what the CLI and Agentry Desktop released so far do, for the
+applications they carry, `blender` and `unreal`. A run that declares the
+line, from the CLI or the desktop app, binds to
 Agentry Desktop before anything starts, and is refused there, exit 11 with
 the reason `desktop-refused`, when no Agentry Desktop answers on the computer
 (`desktop-unavailable`: "this QuickAgent uses Blender on your computer, which

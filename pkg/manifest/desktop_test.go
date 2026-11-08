@@ -156,7 +156,7 @@ func TestWhatOfAnApplicationTheRunUses(t *testing.T) {
 		{"its windows only", withUse, windows, false, true},
 		{"both", withUse, both, true, true},
 	} {
-		if got := c.d.UsesServer(c.s); got != c.server {
+		if got := c.s.UsesServer(); got != c.server {
 			t.Errorf("%s: UsesServer = %v", c.name, got)
 		}
 		if got := c.d.UsesWindows(c.s); got != c.windows {
@@ -271,6 +271,9 @@ func TestDiffCapabilitiesDesktop(t *testing.T) {
 			&Desktop{Servers: []DesktopServer{{ID: "blender", Tools: []string{"get_scene_info", "look"}}}, ComputerUse: ComputerUseApp}, nil, nil},
 		{"use written out as it read", &Desktop{Servers: []DesktopServer{blender}, ComputerUse: ComputerUseApp},
 			&Desktop{Servers: []DesktopServer{{ID: "blender", Use: DesktopUseBoth}}, ComputerUse: ComputerUseApp}, nil, nil},
+		{"an application called choose, then a chooser", &Desktop{Servers: []DesktopServer{{ID: "choose"}}}, &Desktop{Servers: []DesktopServer{{Choose: true}}},
+			[]string{"uses an application you choose on your computer, through its MCP server (every tool it lists)"},
+			[]string{"no longer uses the application choose on your computer"}},
 		{"an application named instead of chosen", &Desktop{ComputerUse: ComputerUseApp}, &Desktop{Servers: []DesktopServer{blender}, ComputerUse: ComputerUseApp},
 			[]string{uses, "can see and use the windows of blender on your computer"},
 			[]string{"no longer sees or uses the windows of an application you choose on your computer"}},

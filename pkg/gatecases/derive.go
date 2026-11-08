@@ -48,8 +48,9 @@ func CapPersistent(key string) string { return "persistent." + key }
 //     proxy;
 //   - desktop: a line for the person's own computer, readable or not, a
 //     token of its own; and computerUse when that line does computer use
-//     or does not read. The catalogue's egress for the servers it uses
-//     counts as network, as a package server's own egress does;
+//     or does not read. A line that uses any application's server, or does
+//     not read, counts as network too: that server runs on the person's
+//     computer with their network, and what it reaches is not known;
 //   - persistent.<key>: each key capabilities.persistent declares, and every
 //     key when the block does not read;
 //   - subagents: a persistent release that declares subagents, or whose

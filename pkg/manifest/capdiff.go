@@ -600,7 +600,7 @@ func (d *CapabilityDiff) appendDesktopDiff(old, next *Desktop) {
 	added, removed := diffSets(oldKeys, nextKeys)
 	for _, key := range added {
 		srv := desktopEntry(next, key)
-		if next.UsesServer(srv) {
+		if srv.UsesServer() {
 			d.Widened = append(d.Widened, "uses "+DescribeDesktopServer(srv))
 		}
 	}
@@ -613,7 +613,7 @@ func (d *CapabilityDiff) appendDesktopDiff(old, next *Desktop) {
 		}
 		prev, cur := desktopEntry(old, key), desktopEntry(next, key)
 		app := desktopApplication(cur)
-		switch was, is := old.UsesServer(prev), next.UsesServer(cur); {
+		switch was, is := prev.UsesServer(), cur.UsesServer(); {
 		case !was && is:
 			d.Widened = append(d.Widened, "uses "+DescribeDesktopServer(cur))
 			continue
@@ -644,27 +644,13 @@ func (d *CapabilityDiff) appendDesktopDiff(old, next *Desktop) {
 // appendDesktopWindowsDiff compares, under app-scope computer use on both
 // sides, whose windows the agent sees and uses.
 func (d *CapabilityDiff) appendDesktopWindowsDiff(old, next *Desktop) {
-	added, removed := diffSets(desktopWindows(old), desktopWindows(next))
+	added, removed := diffSets(old.WindowApps(), next.WindowApps())
 	for _, w := range added {
 		d.Widened = append(d.Widened, "can see and use the windows of "+w+" on your computer")
 	}
 	for _, w := range removed {
 		d.Narrowed = append(d.Narrowed, "no longer sees or uses the windows of "+w+" on your computer")
 	}
-}
-
-// desktopWindows names whose windows app-scope computer use reaches.
-func desktopWindows(d *Desktop) []string {
-	var out []string
-	for _, s := range d.Servers {
-		if !s.Choose && d.UsesWindows(s) {
-			out = append(out, s.ID)
-		}
-	}
-	if d.ChoosesWindows() {
-		out = append(out, "an application you choose")
-	}
-	return out
 }
 
 // appendDesktopToolsDiff compares one application's tool narrowing: no

@@ -780,8 +780,8 @@ func desktopMissing(c manifest.Capabilities, key, server string) (onDesktop bool
 			Reason: "The instruction calls " + key + ", a computer use tool, and the manifest does not declare " + GrantComputerUse.Path() + "."}
 	}
 	srv, declared := c.Desktop.Server(id)
-	usesServer := declared && c.Desktop.UsesServer(srv)
-	if !linked && !usesServer {
+	usesServer := declared && srv.UsesServer()
+	if !linked && !declared {
 		return false, nil
 	}
 	if !usesServer {
@@ -789,7 +789,7 @@ func desktopMissing(c manifest.Capabilities, key, server string) (onDesktop bool
 			return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
 				Reason: "The instruction calls " + key + ", a tool of " + id + "'s server on the person's computer, and the manifest uses " + id + " through its windows only."}
 		}
-		if chooser(c.Desktop) {
+		if c.Desktop.ChoosesServer() {
 			return true, nil
 		}
 		return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
@@ -800,18 +800,4 @@ func desktopMissing(c manifest.Capabilities, key, server string) (onDesktop bool
 			Reason: "The instruction calls " + key + ", which the run is not given: the line's narrowing of " + id + " leaves it out."}
 	}
 	return true, nil
-}
-
-// chooser reports whether the line asks for an application's server that
-// the person chooses when the run starts.
-func chooser(d *manifest.Desktop) bool {
-	if d == nil {
-		return false
-	}
-	for _, s := range d.Servers {
-		if s.Choose && d.UsesServer(s) {
-			return true
-		}
-	}
-	return false
 }

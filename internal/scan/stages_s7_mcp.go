@@ -217,7 +217,7 @@ func mcpServerEntries(manifestJSON []byte) (declared []declaredServer, uncovered
 	// named as not covered, with why.
 	if d := m.Capabilities.Desktop; d != nil {
 		for _, srv := range d.Servers {
-			if !d.UsesServer(srv) {
+			if !srv.UsesServer() {
 				continue
 			}
 			ref := "desktop:" + srv.ID

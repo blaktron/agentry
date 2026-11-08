@@ -450,6 +450,7 @@ func TestTheDesktopLineGivesApplicationTools(t *testing.T) {
 		{"a tool the narrowing leaves out", manifest.Capabilities{Desktop: narrow}, "Call blender__execute_blender_code first.", toolgrant.GrantDesktop},
 		{"an application the line does not declare, under the link's name", manifest.Capabilities{Desktop: blender}, "Call agentry-desktop-photoshop__open first.", toolgrant.GrantDesktop},
 		{"an application used through its windows only", manifest.Capabilities{Desktop: windows}, "Call agentry-desktop-blender__look first.", toolgrant.GrantDesktop},
+		{"an application used through its windows only, by its id", manifest.Capabilities{Desktop: windows}, "Call blender__look first.", toolgrant.GrantDesktop},
 		{"computer use, no line", manifest.Capabilities{Desktop: blender}, "Take agentry-desktop-computer__screenshot first.", toolgrant.GrantComputerUse},
 		{"a bare id the line does not declare", manifest.Capabilities{}, "Call blender__look first.", toolgrant.GrantMCPServer},
 	} {
