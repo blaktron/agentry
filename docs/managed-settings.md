@@ -74,7 +74,7 @@ to 3 (`Open`). The caller does steps 4 and 5.
 ## The document
 
 The payload is described by
-[`schemas/managed-settings-1.schema.json`](../schemas/managed-settings-1.schema.json):
+`schemas/managed-settings-1.schema.json` in the source repository:
 
 ```json
 {
