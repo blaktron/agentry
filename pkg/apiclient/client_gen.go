@@ -1798,6 +1798,7 @@ const (
 	VersionStatusRejected    VersionStatus = "rejected"
 	VersionStatusScanning    VersionStatus = "scanning"
 	VersionStatusSubmitted   VersionStatus = "submitted"
+	VersionStatusWithdrawn   VersionStatus = "withdrawn"
 	VersionStatusYanked      VersionStatus = "yanked"
 )
 
@@ -1819,6 +1820,8 @@ func (e VersionStatus) Valid() bool {
 	case VersionStatusScanning:
 		return true
 	case VersionStatusSubmitted:
+		return true
+	case VersionStatusWithdrawn:
 		return true
 	case VersionStatusYanked:
 		return true
@@ -2558,7 +2561,7 @@ type AgentVersion struct {
 	// Source Where the version came from: a repository tag, an uploaded package, or an uploaded package the scan proved was a hosted Drafter revision of the agent's current release (`drafter-revision`), which S9 scans with the benefit of the doubt. The set grows by addition, so it is declared extensible: a client keeps a source it does not know as the string it is rather than failing on it.
 	Source string `json:"source"`
 
-	// Status Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
+	// Status Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change. `withdrawn`: the publisher took the version back while it waited in review; terminal, never installable.
 	Status       VersionStatus `json:"status"`
 	StatusReason *string       `json:"statusReason,omitempty"`
 	Version      string        `json:"version"`
@@ -3955,11 +3958,11 @@ type ReviewItem struct {
 	Namespace string             `json:"namespace"`
 	Queue     ReviewItemQueue    `json:"queue"`
 
-	// State Where the item stands. `superseded`: no person decided; the version was published by the gate when a new ruleset judged the review queue again and it passed. The set grows by addition, so it is declared extensible: a client keeps a state it does not know as the string it is rather than failing on it.
+	// State Where the item stands. `superseded`: no person decided; the version was published by the gate when a new ruleset judged the review queue again and it passed. `withdrawn`: the version's publisher took it back before anyone decided. The set grows by addition, so it is declared extensible: a client keeps a state it does not know as the string it is rather than failing on it.
 	State   string `json:"state"`
 	Version string `json:"version"`
 
-	// VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
+	// VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change. `withdrawn`: the publisher took the version back while it waited in review; terminal, never installable.
 	VersionStatus *VersionStatus `json:"versionStatus,omitempty"`
 }
 
@@ -4043,7 +4046,7 @@ type ScanReport struct {
 	// Verdict What a report is: `scanned` when a scan run stands behind it (the findings say the rest), `unscanned` when the version was admitted without one — never conflated with "scanned with a known gap". Absent while a scan is still pending.
 	Verdict *ReportVerdict `json:"verdict,omitempty"`
 
-	// VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
+	// VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change. `withdrawn`: the publisher took the version back while it waited in review; terminal, never installable.
 	VersionStatus VersionStatus `json:"versionStatus"`
 }
 
@@ -4235,6 +4238,22 @@ type SubagentScan struct {
 	Why *string `json:"why,omitempty"`
 }
 
+// Submission One version the caller submitted, and the QuickAgent it belongs to.
+type Submission struct {
+	// InReviewSince When the version's review item opened; present only while it waits for a reviewer (`needs_review`, or a quarantined version under review). A version in `needs_review` can be withdrawn.
+	InReviewSince *time.Time   `json:"inReviewSince,omitempty"`
+	Name          string       `json:"name"`
+	Namespace     string       `json:"namespace"`
+	Version       AgentVersion `json:"version"`
+}
+
+// SubmissionPage defines model for SubmissionPage.
+type SubmissionPage struct {
+	// NextCursor Opaque; absent on the last page.
+	NextCursor  *string      `json:"nextCursor,omitempty"`
+	Submissions []Submission `json:"submissions"`
+}
+
 // TagPage defines model for TagPage.
 type TagPage struct {
 	// NextCursor Opaque; absent on the last page.
@@ -4303,7 +4322,7 @@ type User struct {
 	PlatformStaff *bool       `json:"platformStaff,omitempty"`
 }
 
-// VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change.
+// VersionStatus Publication state machine states. `approved` is reserved and never produced: a reviewer's approval publishes directly (needs_review → published), so clients will not observe it; it is kept because removing an enum value is a breaking change. `withdrawn`: the publisher took the version back while it waited in review; terminal, never installable.
 type VersionStatus string
 
 // Voice The caller's Writing Voice: at most a live version (the one runs attach), a pending one (in review, or flagged with its findings) and the previous one, for Restore.
@@ -4597,7 +4616,7 @@ type UpdateAgentJSONBody struct {
 	PipelineSkip *bool   `json:"pipelineSkip,omitempty"`
 	Summary      *string `json:"summary,omitempty"`
 
-	// Visibility The namespace's administrators only. A token needs `org:admin`, or `agent:manage` when the body sets visibility and nothing else. `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back. It is refused on a fork for good (`409 fork-stays-private`). Making a QuickAgent public while one of its versions, other than a yanked or rejected one, ships a knowledge pack needs `acknowledgeShippedKnowledge: true`, or the answer is `409 shipped-knowledge-unacknowledged`, which names the packs and the versions that ship them.
+	// Visibility The namespace's administrators only. A token needs `org:admin`, or `agent:manage` when the body sets visibility and nothing else. `public` is refused on a retired agent (`409 agent-retired`): Restore is how a retired agent comes back. It is refused on a fork for good (`409 fork-stays-private`). Making a QuickAgent public while one of its versions, other than a yanked, rejected or withdrawn one, ships a knowledge pack needs `acknowledgeShippedKnowledge: true`, or the answer is `409 shipped-knowledge-unacknowledged`, which names the packs and the versions that ship them.
 	Visibility *UpdateAgentJSONBodyVisibility `json:"visibility,omitempty"`
 }
 
@@ -4674,6 +4693,12 @@ type SubmitVersionMultipartBody struct {
 type GetVersionFileParams struct {
 	// Path Repo-relative file path exactly as listVersionFiles reports it.
 	Path string `form:"path" json:"path"`
+}
+
+// WithdrawVersionJSONBody defines parameters for WithdrawVersion.
+type WithdrawVersionJSONBody struct {
+	// Reason Why the version is withdrawn; kept in the audit log.
+	Reason *string `json:"reason,omitempty"`
 }
 
 // YankVersionJSONBody defines parameters for YankVersion.
@@ -5018,6 +5043,13 @@ type PutUserReportDesignLogoMultipartBody struct {
 	File openapi_types.File `json:"file"`
 }
 
+// ListUserSubmissionsParams defines parameters for ListUserSubmissions.
+type ListUserSubmissionsParams struct {
+	Limit  *int           `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string        `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Status *VersionStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = CreateAgentRequest
 
@@ -5041,6 +5073,9 @@ type SubmitVersionJSONRequestBody SubmitVersionJSONBody
 
 // SubmitVersionMultipartRequestBody defines body for SubmitVersion for multipart/form-data ContentType.
 type SubmitVersionMultipartRequestBody SubmitVersionMultipartBody
+
+// WithdrawVersionJSONRequestBody defines body for WithdrawVersion for application/json ContentType.
+type WithdrawVersionJSONRequestBody WithdrawVersionJSONBody
 
 // YankVersionJSONRequestBody defines body for YankVersion for application/json ContentType.
 type YankVersionJSONRequestBody YankVersionJSONBody
@@ -5519,6 +5554,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
 	GetVersionReport(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// WithdrawVersionWithBody Withdraw a version waiting in human review (publish permission).
+	//
+	// Takes back a version whose scan held it for a person's review (`needs_review`). Its review item closes as `withdrawn`, the version moves to the terminal `withdrawn` state, and the audit log records who withdrew it and why. A withdrawn version is never installable, and its version number stays used: publish a fix as a new version. `409` when the version is not waiting in review: still scanning, already published, rejected or withdrawn, or already decided by a reviewer.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/withdraw (the `WithdrawVersion` operationId).
+	WithdrawVersionWithBody(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// WithdrawVersion Withdraw a version waiting in human review (publish permission).
+	//
+	// Takes back a version whose scan held it for a person's review (`needs_review`). Its review item closes as `withdrawn`, the version moves to the terminal `withdrawn` state, and the audit log records who withdrew it and why. A withdrawn version is never installable, and its version number stays used: publish a fix as a new version. `409` when the version is not waiting in review: still scanning, already published, rejected or withdrawn, or already decided by a reviewer.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/withdraw (the `WithdrawVersion` operationId).
+	WithdrawVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, body WithdrawVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// YankVersionWithBody Yank a published version (publish permission).
 	//
@@ -6841,6 +6894,13 @@ type ClientInterface interface {
 	// Corresponds with PUT /user/stars/{ns}/{name} (the `StarAgent` operationId).
 	StarAgent(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListUserSubmissions The versions the caller submitted, with where each stands.
+	//
+	// Every version the caller submitted, newest first, in any state: scanning, held for review (with when its review opened), published, rejected, withdrawn, quarantined, yanked or blocked. A version of a QuickAgent the caller can no longer read is left out. The report of each is `GET /agents/{ns}/{name}/versions/{version}/report`. Keyset-paged like the activity feed; `status` narrows the list to one state.
+	//
+	// Corresponds with GET /user/submissions (the `ListUserSubmissions` operationId).
+	ListUserSubmissions(ctx context.Context, params *ListUserSubmissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListTokens List the caller's personal access tokens (metadata only).
 	//
 	// Corresponds with GET /user/tokens (the `ListTokens` operationId).
@@ -7561,6 +7621,44 @@ func (c *Client) GetVersionManifest(ctx context.Context, ns Namespace, name Agen
 // Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
 func (c *Client) GetVersionReport(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetVersionReportRequest(c.Server, ns, name, version)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// WithdrawVersionWithBody Withdraw a version waiting in human review (publish permission).
+//
+// Takes back a version whose scan held it for a person's review (`needs_review`). Its review item closes as `withdrawn`, the version moves to the terminal `withdrawn` state, and the audit log records who withdrew it and why. A withdrawn version is never installable, and its version number stays used: publish a fix as a new version. `409` when the version is not waiting in review: still scanning, already published, rejected or withdrawn, or already decided by a reviewer.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/versions/{version}/withdraw (the `WithdrawVersion` operationId).
+func (c *Client) WithdrawVersionWithBody(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewWithdrawVersionRequestWithBody(c.Server, ns, name, version, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// WithdrawVersion Withdraw a version waiting in human review (publish permission).
+//
+// Takes back a version whose scan held it for a person's review (`needs_review`). Its review item closes as `withdrawn`, the version moves to the terminal `withdrawn` state, and the audit log records who withdrew it and why. A withdrawn version is never installable, and its version number stays used: publish a fix as a new version. `409` when the version is not waiting in review: still scanning, already published, rejected or withdrawn, or already decided by a reviewer.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /agents/{ns}/{name}/versions/{version}/withdraw (the `WithdrawVersion` operationId).
+func (c *Client) WithdrawVersion(ctx context.Context, ns Namespace, name AgentName, version VersionString, body WithdrawVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewWithdrawVersionRequest(c.Server, ns, name, version, body)
 	if err != nil {
 		return nil, err
 	}
@@ -10722,6 +10820,23 @@ func (c *Client) StarAgent(ctx context.Context, ns Namespace, name AgentName, re
 	return c.Client.Do(req)
 }
 
+// ListUserSubmissions The versions the caller submitted, with where each stands.
+//
+// Every version the caller submitted, newest first, in any state: scanning, held for review (with when its review opened), published, rejected, withdrawn, quarantined, yanked or blocked. A version of a QuickAgent the caller can no longer read is left out. The report of each is `GET /agents/{ns}/{name}/versions/{version}/report`. Keyset-paged like the activity feed; `status` narrows the list to one state.
+//
+// Corresponds with GET /user/submissions (the `ListUserSubmissions` operationId).
+func (c *Client) ListUserSubmissions(ctx context.Context, params *ListUserSubmissionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListUserSubmissionsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListTokens List the caller's personal access tokens (metadata only).
 //
 // Corresponds with GET /user/tokens (the `ListTokens` operationId).
@@ -12574,6 +12689,67 @@ func NewGetVersionReportRequest(server string, ns Namespace, name AgentName, ver
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewWithdrawVersionRequest calls the generic WithdrawVersion builder with application/json body
+func NewWithdrawVersionRequest(server string, ns Namespace, name AgentName, version VersionString, body WithdrawVersionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewWithdrawVersionRequestWithBody(server, ns, name, version, "application/json", bodyReader)
+}
+
+// NewWithdrawVersionRequestWithBody constructs an http.Request for the WithdrawVersion method, with any body, and a specified content type
+func NewWithdrawVersionRequestWithBody(server string, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "ns", ns, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "version", version, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/%s/versions/%s/withdraw", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -18697,6 +18873,84 @@ func NewStarAgentRequest(server string, ns Namespace, name AgentName) (*http.Req
 	return req, nil
 }
 
+// NewListUserSubmissionsRequest constructs an http.Request for the ListUserSubmissions method
+func NewListUserSubmissionsRequest(server string, params *ListUserSubmissionsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/submissions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListTokensRequest constructs an http.Request for the ListTokens method
 func NewListTokensRequest(server string) (*http.Request, error) {
 	var err error
@@ -19449,6 +19703,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /agents/{ns}/{name}/versions/{version}/report (the `GetVersionReport` operationId).
 	GetVersionReportWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, reqEditors ...RequestEditorFn) (*GetVersionReportResponse, error)
+
+	// WithdrawVersionWithBodyWithResponse Withdraw a version waiting in human review (publish permission).
+	//
+	// Takes back a version whose scan held it for a person's review (`needs_review`). Its review item closes as `withdrawn`, the version moves to the terminal `withdrawn` state, and the audit log records who withdrew it and why. A withdrawn version is never installable, and its version number stays used: publish a fix as a new version. `409` when the version is not waiting in review: still scanning, already published, rejected or withdrawn, or already decided by a reviewer.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/withdraw (the `WithdrawVersion` operationId).
+	WithdrawVersionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*WithdrawVersionResponse, error)
+
+	// WithdrawVersionWithResponse Withdraw a version waiting in human review (publish permission).
+	//
+	// Takes back a version whose scan held it for a person's review (`needs_review`). Its review item closes as `withdrawn`, the version moves to the terminal `withdrawn` state, and the audit log records who withdrew it and why. A withdrawn version is never installable, and its version number stays used: publish a fix as a new version. `409` when the version is not waiting in review: still scanning, already published, rejected or withdrawn, or already decided by a reviewer.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{ns}/{name}/versions/{version}/withdraw (the `WithdrawVersion` operationId).
+	WithdrawVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, body WithdrawVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*WithdrawVersionResponse, error)
 
 	// YankVersionWithBodyWithResponse Yank a published version (publish permission).
 	//
@@ -20951,6 +21223,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /user/stars/{ns}/{name} (the `StarAgent` operationId).
 	StarAgentWithResponse(ctx context.Context, ns Namespace, name AgentName, reqEditors ...RequestEditorFn) (*StarAgentResponse, error)
 
+	// ListUserSubmissionsWithResponse The versions the caller submitted, with where each stands.
+	//
+	// Every version the caller submitted, newest first, in any state: scanning, held for review (with when its review opened), published, rejected, withdrawn, quarantined, yanked or blocked. A version of a QuickAgent the caller can no longer read is left out. The report of each is `GET /agents/{ns}/{name}/versions/{version}/report`. Keyset-paged like the activity feed; `status` narrows the list to one state.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/submissions (the `ListUserSubmissions` operationId).
+	ListUserSubmissionsWithResponse(ctx context.Context, params *ListUserSubmissionsParams, reqEditors ...RequestEditorFn) (*ListUserSubmissionsResponse, error)
+
 	// ListTokensWithResponse List the caller's personal access tokens (metadata only).
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -22442,6 +22723,54 @@ func (r GetVersionReportResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetVersionReportResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type WithdrawVersionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r WithdrawVersionResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r WithdrawVersionResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r WithdrawVersionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r WithdrawVersionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r WithdrawVersionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r WithdrawVersionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -29022,6 +29351,54 @@ func (r StarAgentResponse) ContentType() string {
 	return ""
 }
 
+type ListUserSubmissionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SubmissionPage
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListUserSubmissionsResponse) GetJSON200() *SubmissionPage {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListUserSubmissionsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListUserSubmissionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListUserSubmissionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListUserSubmissionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListUserSubmissionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListTokensResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -30159,6 +30536,36 @@ func (c *ClientWithResponses) GetVersionReportWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseGetVersionReportResponse(rsp)
+}
+
+// WithdrawVersionWithBodyWithResponse Withdraw a version waiting in human review (publish permission).
+//
+// Takes back a version whose scan held it for a person's review (`needs_review`). Its review item closes as `withdrawn`, the version moves to the terminal `withdrawn` state, and the audit log records who withdrew it and why. A withdrawn version is never installable, and its version number stays used: publish a fix as a new version. `409` when the version is not waiting in review: still scanning, already published, rejected or withdrawn, or already decided by a reviewer.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/versions/{version}/withdraw (the `WithdrawVersion` operationId).
+func (c *ClientWithResponses) WithdrawVersionWithBodyWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*WithdrawVersionResponse, error) {
+	rsp, err := c.WithdrawVersionWithBody(ctx, ns, name, version, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseWithdrawVersionResponse(rsp)
+}
+
+// WithdrawVersionWithResponse Withdraw a version waiting in human review (publish permission).
+//
+// Takes back a version whose scan held it for a person's review (`needs_review`). Its review item closes as `withdrawn`, the version moves to the terminal `withdrawn` state, and the audit log records who withdrew it and why. A withdrawn version is never installable, and its version number stays used: publish a fix as a new version. `409` when the version is not waiting in review: still scanning, already published, rejected or withdrawn, or already decided by a reviewer.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{ns}/{name}/versions/{version}/withdraw (the `WithdrawVersion` operationId).
+func (c *ClientWithResponses) WithdrawVersionWithResponse(ctx context.Context, ns Namespace, name AgentName, version VersionString, body WithdrawVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*WithdrawVersionResponse, error) {
+	rsp, err := c.WithdrawVersion(ctx, ns, name, version, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseWithdrawVersionResponse(rsp)
 }
 
 // YankVersionWithBodyWithResponse Yank a published version (publish permission).
@@ -32760,6 +33167,21 @@ func (c *ClientWithResponses) StarAgentWithResponse(ctx context.Context, ns Name
 	return ParseStarAgentResponse(rsp)
 }
 
+// ListUserSubmissionsWithResponse The versions the caller submitted, with where each stands.
+//
+// Every version the caller submitted, newest first, in any state: scanning, held for review (with when its review opened), published, rejected, withdrawn, quarantined, yanked or blocked. A version of a QuickAgent the caller can no longer read is left out. The report of each is `GET /agents/{ns}/{name}/versions/{version}/report`. Keyset-paged like the activity feed; `status` narrows the list to one state.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/submissions (the `ListUserSubmissions` operationId).
+func (c *ClientWithResponses) ListUserSubmissionsWithResponse(ctx context.Context, params *ListUserSubmissionsParams, reqEditors ...RequestEditorFn) (*ListUserSubmissionsResponse, error) {
+	rsp, err := c.ListUserSubmissions(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListUserSubmissionsResponse(rsp)
+}
+
 // ListTokensWithResponse List the caller's personal access tokens (metadata only).
 //
 // Returns a wrapper object for the known response body format(s).
@@ -33955,6 +34377,42 @@ func ParseGetVersionReportResponse(rsp *http.Response) (*GetVersionReportRespons
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseWithdrawVersionResponse parses an HTTP response from a WithdrawVersionWithResponse call
+func ParseWithdrawVersionResponse(rsp *http.Response) (*WithdrawVersionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &WithdrawVersionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem
@@ -38570,6 +39028,39 @@ func ParseStarAgentResponse(rsp *http.Response) (*StarAgentResponse, error) {
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListUserSubmissionsResponse parses an HTTP response from a ListUserSubmissionsWithResponse call
+func ParseListUserSubmissionsResponse(rsp *http.Response) (*ListUserSubmissionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListUserSubmissionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SubmissionPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

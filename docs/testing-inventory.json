@@ -1706,6 +1706,19 @@
             "database fixture",
             "HTTP transport"
           ]
+        },
+        {
+          "path": "internal/api/withdraw_test.go",
+          "tests": [
+            "TestWithdrawAVersionHeldForReview"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
         }
       ]
     },

@@ -7,6 +7,7 @@ package storegen
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -328,6 +329,93 @@ func (q *Queries) ListSubagentDependents(ctx context.Context, ref string) ([]Lis
 	return items, nil
 }
 
+const listUserSubmissions = `-- name: ListUserSubmissions :many
+SELECT av.id, av.agent_id, av.version, av.commit_sha, av.manifest, av.capabilities, av.archive_digest, av.archive_key, av.archive_size, av.status, av.status_reason, av.published_at, av.yanked_at, av.yank_reason, av.channel, av.submitted_by, av.source, av.created_at, av.updated_at, av.submitter_ip_hash, av.scan_status, av.draft_run, av.draft_baseline, av.knowledge_shipping, a.name AS agent_name, h.handle AS namespace,
+  ri.created_at AS in_review_since
+FROM agent_versions av
+JOIN agents a ON a.id = av.agent_id
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN review_items ri ON ri.version_id = av.id AND ri.state = 'pending'
+WHERE av.submitted_by = $1
+  AND ($2::text IS NULL OR av.status = $2::text)
+  AND ($3::timestamptz IS NULL
+       OR (av.created_at, av.id) < ($3::timestamptz, $4::uuid))
+ORDER BY av.created_at DESC, av.id DESC
+LIMIT $5
+`
+
+type ListUserSubmissionsParams struct {
+	SubmittedBy uuid.UUID  `json:"submitted_by"`
+	Status      *string    `json:"status"`
+	BeforeTime  *time.Time `json:"before_time"`
+	BeforeID    *uuid.UUID `json:"before_id"`
+	Lim         int32      `json:"lim"`
+}
+
+type ListUserSubmissionsRow struct {
+	AgentVersion  AgentVersion `json:"agent_version"`
+	AgentName     string       `json:"agent_name"`
+	Namespace     string       `json:"namespace"`
+	InReviewSince *time.Time   `json:"in_review_since"`
+}
+
+// The versions a person submitted, newest first, with the agent they belong
+// to and, for one waiting in review, when its review item opened. Keyset-paged
+// on (created_at, id); a status narrows the list when given.
+func (q *Queries) ListUserSubmissions(ctx context.Context, arg ListUserSubmissionsParams) ([]ListUserSubmissionsRow, error) {
+	rows, err := q.db.Query(ctx, listUserSubmissions,
+		arg.SubmittedBy,
+		arg.Status,
+		arg.BeforeTime,
+		arg.BeforeID,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserSubmissionsRow
+	for rows.Next() {
+		var i ListUserSubmissionsRow
+		if err := rows.Scan(
+			&i.AgentVersion.ID,
+			&i.AgentVersion.AgentID,
+			&i.AgentVersion.Version,
+			&i.AgentVersion.CommitSha,
+			&i.AgentVersion.Manifest,
+			&i.AgentVersion.Capabilities,
+			&i.AgentVersion.ArchiveDigest,
+			&i.AgentVersion.ArchiveKey,
+			&i.AgentVersion.ArchiveSize,
+			&i.AgentVersion.Status,
+			&i.AgentVersion.StatusReason,
+			&i.AgentVersion.PublishedAt,
+			&i.AgentVersion.YankedAt,
+			&i.AgentVersion.YankReason,
+			&i.AgentVersion.Channel,
+			&i.AgentVersion.SubmittedBy,
+			&i.AgentVersion.Source,
+			&i.AgentVersion.CreatedAt,
+			&i.AgentVersion.UpdatedAt,
+			&i.AgentVersion.SubmitterIpHash,
+			&i.AgentVersion.ScanStatus,
+			&i.AgentVersion.DraftRun,
+			&i.AgentVersion.DraftBaseline,
+			&i.AgentVersion.KnowledgeShipping,
+			&i.AgentName,
+			&i.Namespace,
+			&i.InReviewSince,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVersions = `-- name: ListVersions :many
 SELECT id, agent_id, version, commit_sha, manifest, capabilities, archive_digest, archive_key, archive_size, status, status_reason, published_at, yanked_at, yank_reason, channel, submitted_by, source, created_at, updated_at, submitter_ip_hash, scan_status, draft_run, draft_baseline, knowledge_shipping FROM agent_versions WHERE agent_id = $1 ORDER BY created_at DESC
 `
@@ -435,7 +523,7 @@ func (q *Queries) ListVersionsByStatus(ctx context.Context, arg ListVersionsBySt
 
 const listVersionsShippingKnowledge = `-- name: ListVersionsShippingKnowledge :many
 SELECT version, status, (capabilities->'knowledge')::jsonb AS packs FROM agent_versions
-WHERE agent_id = $1 AND status NOT IN ('yanked', 'rejected')
+WHERE agent_id = $1 AND status NOT IN ('yanked', 'rejected', 'withdrawn')
   AND jsonb_typeof(capabilities->'knowledge') = 'array'
   AND jsonb_array_length(capabilities->'knowledge') > 0
 ORDER BY created_at, version
@@ -448,8 +536,9 @@ type ListVersionsShippingKnowledgeRow struct {
 }
 
 // The versions of an agent that ship knowledge packs and have not been
-// yanked or rejected: the releases whose packs are, or can still become,
-// readable by whoever can download them. The pack names are the contract's.
+// yanked, rejected or withdrawn: the releases whose packs are, or can still
+// become, readable by whoever can download them. The pack names are the
+// contract's.
 func (q *Queries) ListVersionsShippingKnowledge(ctx context.Context, agentID uuid.UUID) ([]ListVersionsShippingKnowledgeRow, error) {
 	rows, err := q.db.Query(ctx, listVersionsShippingKnowledge, agentID)
 	if err != nil {

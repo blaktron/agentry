@@ -1,0 +1,6 @@
+GET /agents/{ns}/{name}/versions added the new `withdrawn` enum value to the `items/status` response property for the response status `200`
+POST /agents/{ns}/{name}/versions added the new `withdrawn` enum value to the `status` response property for the response status `202`
+GET /agents/{ns}/{name}/versions/{version} added the new `withdrawn` enum value to the `status` response property for the response status `200`
+GET /agents/{ns}/{name}/versions/{version}/report added the new `withdrawn` enum value to the `versionStatus` response property for the response status `200`
+GET /review-items/{id} added the new `withdrawn` enum value to the `item/versionStatus` response property for the response status `200` (shared schema: `VersionStatus`, also at `previous/status`, `versionDetail/status` and 1 more)
+GET /review-queue added the new `withdrawn` enum value to the `items/versionStatus` response property for the response status `200`

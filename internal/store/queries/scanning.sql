@@ -138,6 +138,13 @@ UPDATE review_items SET state = 'superseded', decided_at = now(), rationale = sq
 WHERE version_id = sqlc.arg(version_id) AND state = 'pending'
 RETURNING id;
 
+-- The version's publisher takes back a pending item: no reviewer decided,
+-- so the item closes as withdrawn. No row when a reviewer decided first.
+-- name: WithdrawPendingReviewItem :one
+UPDATE review_items SET state = 'withdrawn', decided_by = sqlc.arg(decided_by), decided_at = now(), rationale = sqlc.arg(rationale)
+WHERE version_id = sqlc.arg(version_id) AND state = 'pending'
+RETURNING id;
+
 -- name: SetReviewPublishPending :exec
 UPDATE review_items SET publish_pending = $2 WHERE id = $1;
 
