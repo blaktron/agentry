@@ -24,6 +24,7 @@ func TestStateMachineEdges(t *testing.T) {
 		{StatusScanning, StatusRejected},
 		{StatusNeedsReview, StatusPublished},
 		{StatusNeedsReview, StatusRejected},
+		{StatusNeedsReview, StatusWithdrawn}, // the publisher takes it back
 		{StatusPublished, StatusQuarantined},
 		{StatusPublished, StatusYanked},
 		{StatusPublished, StatusBlocked}, // T&S confirming a malicious published package: one atomic step
@@ -42,7 +43,11 @@ func TestStateMachineEdges(t *testing.T) {
 		{StatusYanked, StatusPublished},   // yank is permanent
 		{StatusScanning, StatusYanked},
 		{StatusNeedsReview, StatusScanning},
-		{StatusBlocked, StatusPublished}, // reinstate goes via quarantine
+		{StatusBlocked, StatusPublished},   // reinstate goes via quarantine
+		{StatusWithdrawn, StatusPublished}, // withdrawn is terminal
+		{StatusWithdrawn, StatusNeedsReview},
+		{StatusScanning, StatusWithdrawn},  // only a held version is withdrawn
+		{StatusPublished, StatusWithdrawn}, // a published one is yanked
 	}
 	for _, tc := range denied {
 		if transitionAllowed(tc.from, tc.to) {
@@ -61,7 +66,7 @@ func TestStateMachineEdges(t *testing.T) {
 	}
 	states := []Status{
 		StatusSubmitted, StatusScanning, StatusNeedsReview, StatusApproved, StatusPublished,
-		StatusRejected, StatusYanked, StatusQuarantined, StatusBlocked, Status("unknown"),
+		StatusRejected, StatusYanked, StatusQuarantined, StatusBlocked, StatusWithdrawn, Status("unknown"),
 	}
 	edges := 0
 	for _, from := range states {
@@ -113,6 +118,7 @@ func TestTransitionEventNamesTheWebhookOfEachEdge(t *testing.T) {
 		{StatusPublished, StatusBlocked, ""},
 		{StatusQuarantined, StatusBlocked, ""},
 		{StatusPublished, StatusApproved, ""},
+		{StatusNeedsReview, StatusWithdrawn, ""},
 	} {
 		if got := transitionEvent(tc.from, tc.to); got != tc.want {
 			t.Errorf("%s → %s: event %q, want %q", tc.from, tc.to, got, tc.want)

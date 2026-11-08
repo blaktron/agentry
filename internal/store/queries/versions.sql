@@ -7,10 +7,11 @@ RETURNING *;
 
 -- name: ListVersionsShippingKnowledge :many
 -- The versions of an agent that ship knowledge packs and have not been
--- yanked or rejected: the releases whose packs are, or can still become,
--- readable by whoever can download them. The pack names are the contract's.
+-- yanked, rejected or withdrawn: the releases whose packs are, or can still
+-- become, readable by whoever can download them. The pack names are the
+-- contract's.
 SELECT version, status, (capabilities->'knowledge')::jsonb AS packs FROM agent_versions
-WHERE agent_id = $1 AND status NOT IN ('yanked', 'rejected')
+WHERE agent_id = $1 AND status NOT IN ('yanked', 'rejected', 'withdrawn')
   AND jsonb_typeof(capabilities->'knowledge') = 'array'
   AND jsonb_array_length(capabilities->'knowledge') > 0
 ORDER BY created_at, version;
@@ -64,6 +65,23 @@ UPDATE agents SET latest_published_version_id = (
   ORDER BY v.published_at DESC LIMIT 1
 ), updated_at = now()
 WHERE agents.id = $1;
+
+-- The versions a person submitted, newest first, with the agent they belong
+-- to and, for one waiting in review, when its review item opened. Keyset-paged
+-- on (created_at, id); a status narrows the list when given.
+-- name: ListUserSubmissions :many
+SELECT sqlc.embed(av), a.name AS agent_name, h.handle AS namespace,
+  ri.created_at AS in_review_since
+FROM agent_versions av
+JOIN agents a ON a.id = av.agent_id
+JOIN handles h ON h.id = a.namespace_id
+LEFT JOIN review_items ri ON ri.version_id = av.id AND ri.state = 'pending'
+WHERE av.submitted_by = sqlc.arg(submitted_by)
+  AND (sqlc.narg(status)::text IS NULL OR av.status = sqlc.narg(status)::text)
+  AND (sqlc.narg(before_time)::timestamptz IS NULL
+       OR (av.created_at, av.id) < (sqlc.narg(before_time)::timestamptz, sqlc.narg(before_id)::uuid))
+ORDER BY av.created_at DESC, av.id DESC
+LIMIT sqlc.arg(lim);
 
 -- name: ListVersions :many
 SELECT * FROM agent_versions WHERE agent_id = $1 ORDER BY created_at DESC;

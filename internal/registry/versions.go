@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/blaktron/agentry/internal/audit"
@@ -42,6 +43,10 @@ const (
 	StatusYanked      Status = "yanked"
 	StatusQuarantined Status = "quarantined"
 	StatusBlocked     Status = "blocked"
+	// StatusWithdrawn is a version its publisher took back while it waited
+	// in human review. Terminal: a withdrawn version is never installable,
+	// and its number stays consumed.
+	StatusWithdrawn Status = "withdrawn"
 )
 
 // allowedTransitions encodes the state diagram. Keys are from-states.
@@ -57,7 +62,7 @@ const (
 var allowedTransitions = map[Status][]Status{
 	StatusSubmitted:   {StatusScanning, StatusPublished},
 	StatusScanning:    {StatusPublished, StatusNeedsReview, StatusRejected},
-	StatusNeedsReview: {StatusPublished, StatusRejected},
+	StatusNeedsReview: {StatusPublished, StatusRejected, StatusWithdrawn},
 	// published → blocked is not drawn in the base diagram, which reaches
 	// blocked only via quarantined. T&S confirming a malicious PUBLISHED
 	// package needs one atomic step, not a quarantine it must immediately
@@ -65,7 +70,8 @@ var allowedTransitions = map[Status][]Status{
 	StatusPublished:   {StatusQuarantined, StatusYanked, StatusBlocked},
 	StatusQuarantined: {StatusPublished, StatusYanked, StatusBlocked},
 	StatusBlocked:     {StatusQuarantined}, // platform reinstate path
-	// rejected, yanked terminal for v1 (yank is permanent; fix = new version)
+	// rejected, yanked and withdrawn are terminal (yank is permanent; the
+	// fix is a new version)
 }
 
 func transitionAllowed(from, to Status) bool {
@@ -156,6 +162,61 @@ var ErrBadTransition = errors.New("registry: illegal state transition")
 // version was no longer in the state the caller decided from (a decision
 // reached late, after the watchdog routed the version to review). The caller's decision is stale, not wrong; it stops.
 var ErrVersionMoved = errors.New("registry: version moved before the transition")
+
+// ErrNotInReview reports a withdrawal of a version that is not waiting in
+// human review: still scanning, already decided, or never held.
+var ErrNotInReview = errors.New("registry: the version is not waiting in review")
+
+// Withdraw takes back a version waiting in human review on its publisher's
+// word: the pending review item closes as withdrawn and the version moves
+// to the terminal withdrawn state, in one transaction, so the two cannot
+// disagree. The item is closed first, with the same "still pending" guard a
+// reviewer's decision takes, so whichever of a decision and a withdrawal
+// commits first wins and the other changes nothing. A version whose item a
+// reviewer already decided (an approval waiting for its signature, say) is
+// not withdrawn.
+func (s *Service) Withdraw(ctx context.Context, versionID, by uuid.UUID, reason string, actorEvent audit.Event) error {
+	var res TransitionResult
+	err := s.st.WithTx(ctx, func(q *storegen.Queries) error {
+		row, err := q.GetVersionByID(ctx, versionID)
+		if err != nil {
+			return fmt.Errorf("registry: load version: %w", err)
+		}
+		if Status(row.Status) != StatusNeedsReview {
+			return fmt.Errorf("%w: %s is %s", ErrNotInReview, row.Version, row.Status)
+		}
+		rationale := "withdrawn by the publisher"
+		if reason != "" {
+			rationale += ": " + reason
+		}
+		itemID, err := q.WithdrawPendingReviewItem(ctx, storegen.WithdrawPendingReviewItemParams{
+			VersionID: versionID, DecidedBy: &by, Rationale: &rationale,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%w: %s has no open review item", ErrNotInReview, row.Version)
+		}
+		if err != nil {
+			return fmt.Errorf("registry: close review item: %w", err)
+		}
+		e := actorEvent
+		e.Action = audit.ActionVersionWithdraw
+		e.TargetKind, e.TargetID = "review_item", itemID
+		e.Detail = map[string]any{"version_id": versionID.String(), "version": row.Version, "reason": reason}
+		if err := s.aud.Write(ctx, q, e); err != nil {
+			return err
+		}
+		res, err = s.TransitionInTx(ctx, q, versionID, StatusWithdrawn, rationale, actorEvent)
+		if errors.Is(err, ErrBadTransition) {
+			return fmt.Errorf("%w: %v", ErrNotInReview, err)
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	s.EmitTransition(ctx, res)
+	return nil
+}
 
 // Version aliases the row type.
 type Version = storegen.AgentVersion

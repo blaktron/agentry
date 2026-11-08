@@ -390,7 +390,7 @@ pack.
 
 **Making the QuickAgent public.** `PATCH /agents/{ns}/{name}` with
 `visibility: public` is refused `409 shipped-knowledge-unacknowledged` when
-any version of the QuickAgent other than a yanked or rejected one ships a
+any version of the QuickAgent other than a yanked, rejected or withdrawn one ships a
 pack, unless the body also carries `acknowledgeShippedKnowledge: true`. The
 problem's detail and its `versions` name the versions and their packs. The
 check runs again under the agent's row lock, so a version that lands while

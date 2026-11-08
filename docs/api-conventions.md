@@ -100,7 +100,7 @@ or with one that leaves a pack out, is `422
 knowledge-shipping-unacknowledged`; an entry for a pack the release does
 not ship, or an origin that is not true, is `422
 knowledge-shipping-invalid`; both carry the pack names as `packs`. `PATCH`
-to public while a version other than a yanked or rejected one ships a pack,
+to public while a version other than a yanked, rejected or withdrawn one ships a pack,
 without `acknowledgeShippedKnowledge: true`, is `409
 shipped-knowledge-unacknowledged`, carrying `versions`. See
 [knowledge.md](knowledge.md#confirming-what-a-release-ships).
@@ -564,6 +564,11 @@ public approval.
   `detail` says so.
 - Yanked versions still resolve by exact pin, with a warning, and are
   excluded from range resolution.
+- A **withdrawn** version (its publisher took it back while it waited in
+  review) never resolves or downloads; its number stays used. Only a
+  version in `needs_review` whose review item is still open can be
+  withdrawn (`POST …/versions/{version}/withdraw`); anything else is a
+  `409` whose `detail` says what to do instead.
 
 ## Webhooks
 
