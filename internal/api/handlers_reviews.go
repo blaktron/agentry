@@ -47,6 +47,22 @@ func findingToAPI(f storegen.Finding) ScanFinding {
 			out.Detail = &d
 		}
 	}
+	// What the rule says of itself, read after the decision and never by
+	// it: the gate and the scanners saw only the finding.
+	if rule, ok := bundleRuleOf(f.Scanner); ok {
+		if rule.Description != "" {
+			desc := rule.Description
+			out.Description = &desc
+		}
+		if len(rule.References) > 0 {
+			refs := append([]string(nil), rule.References...)
+			out.References = &refs
+		}
+		if rule.Remediation != "" {
+			rem := rule.Remediation
+			out.Remediation = &rem
+		}
+	}
 	// Dismissals stay on the public report with rationale. Without
 	// the rationale a dismissed finding reads as an unexplained disappearance,
 	// which is the opposite of the honesty the report is for.

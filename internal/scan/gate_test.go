@@ -2,6 +2,7 @@ package scan
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -198,5 +199,21 @@ func TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable(t *
 				t.Errorf("%s at score %d = %q, want %q", id, score, got[id], sev)
 			}
 		}
+	}
+}
+
+// TestTheGatesReasonNamesTheFindingThatDecided: a version sent to review
+// over the threshold, or rejected for a critical finding, is told the
+// finding's severity, stage, rule and title, not the severity alone.
+func TestTheGatesReasonNamesTheFindingThatDecided(t *testing.T) {
+	high := Finding{Scanner: "S4/instruction-override-001", Severity: SevHigh, Confidence: ConfHigh, Title: "Instruction override"}
+	d := Evaluate(GateInput{Findings: []Finding{high}})
+	if d.Outcome != OutcomeNeedsReview || !strings.Contains(d.Reason, "a high S4 finding, instruction-override-001 (Instruction override)") || !strings.Contains(d.Reason, "high is above medium") {
+		t.Fatalf("%s: %s", d.Outcome, d.Reason)
+	}
+	crit := Finding{Scanner: "S2/gitleaks", Severity: SevCritical, Confidence: ConfHigh, Title: "A private key"}
+	d = Evaluate(GateInput{Findings: []Finding{crit}})
+	if d.Outcome != OutcomeRejected || d.Reason != "The gate rejected this version for a critical S2 finding, gitleaks (A private key)." {
+		t.Fatalf("%s: %s", d.Outcome, d.Reason)
 	}
 }

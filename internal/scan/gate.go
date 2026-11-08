@@ -1,5 +1,7 @@
 package scan
 
+import "strings"
+
 // Outcome is the gate decision.
 type Outcome string
 
@@ -87,7 +89,7 @@ func Evaluate(in GateInput) GateDecision {
 	// Critical (or S1 structural) ⇒ auto-reject.
 	if worst == SevCritical {
 		return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst, branch: branchCritical,
-			Reason: "The gate rejected this version for a critical finding (" + titleOf(worstFinding) + ")."}
+			Reason: "The gate rejected this version for " + findingPhrase(worstFinding, worst) + "."}
 	}
 
 	// Wildcard egress policy.
@@ -137,7 +139,7 @@ func Evaluate(in GateInput) GateDecision {
 	case severityRank(worst) <= severityRank(maxAuto):
 		return GateDecision{Outcome: OutcomePublish, WorstSeverity: worst, branch: branchWithinThreshold, Reason: "This version's findings are within the auto-publish threshold, so the gate published it."}
 	default:
-		return review(in, worst, branchOverThreshold, "This version's findings exceed the auto-publish threshold ("+string(worst)+"), so the gate sent it to a reviewer.")
+		return review(in, worst, branchOverThreshold, "This version has "+findingPhrase(worstFinding, worst)+", which exceeds the auto-publish threshold ("+string(worst)+" is above "+string(maxAuto)+"), so the gate sent it to a reviewer.")
 	}
 }
 
@@ -197,9 +199,20 @@ func maxSev(a, b Severity) Severity {
 	return b
 }
 
-func titleOf(f *Finding) string {
+// findingPhrase names the finding that decided, for the reason a publisher
+// reads: its severity, its stage, its rule where it has one, and its title
+// ("a high S4 finding, instruction-override-001 (Instruction override)").
+func findingPhrase(f *Finding, sev Severity) string {
 	if f == nil {
-		return ""
+		return "a " + string(sev) + " finding"
 	}
-	return f.Title
+	stage, rule, _ := strings.Cut(f.Scanner, "/")
+	phrase := "a " + string(sev) + " " + stage + " finding"
+	if rule != "" {
+		phrase += ", " + rule
+	}
+	if f.Title != "" {
+		phrase += " (" + f.Title + ")"
+	}
+	return phrase
 }

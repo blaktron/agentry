@@ -1568,6 +1568,16 @@
           ]
         },
         {
+          "path": "internal/api/rule_text_internal_test.go",
+          "tests": [
+            "TestAFindingCarriesItsRulesText"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "internal/api/seams_test.go",
           "tests": [
             "TestAdmissionRunsBeforeTheRow",
@@ -3218,7 +3228,8 @@
             "TestAnOrgAtLowStillHoldsMedium",
             "TestPolicyTightenOnly",
             "TestGateHoldsWhatCouldNotBeScanned",
-            "TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable"
+            "TestVerdictFindingsRateInjectionAndUndeclaredCapabilityHighFromProbable",
+            "TestTheGatesReasonNamesTheFindingThatDecided"
           ],
           "fuzz": [],
           "benchmarks": [],
