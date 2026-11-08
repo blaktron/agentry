@@ -748,14 +748,12 @@ func continuesList(gap string) bool {
 }
 
 // The desktop link's server names in the run's gateway catalog: one per
-// application whose server the run uses, agentry-desktop-<id>, and
+// application whose server the run uses, agentry-desktop-<id>,
+// agentry-desktop-chosen for an application the person chooses, and
 // agentry-desktop-computer for computer use. An instruction may also name
 // such a tool by the application's id alone (blender__look) when the line
 // declares that id.
-const (
-	desktopServerPrefix = "agentry-desktop-"
-	desktopComputer     = "computer"
-)
+const desktopServerPrefix = "agentry-desktop-"
 
 // desktopMissing reads a <server>__<tool> mention as a tool on the person's
 // computer. The registry holds no list of the applications a person may
@@ -766,18 +764,26 @@ const (
 // miss is nil when the desktop line gives the tool, and what is missing when
 // it does not. Which tools an application's server lists is known only on
 // the person's computer, so a tool is checked against the line's narrowing
-// alone; an application the person chooses when the run starts gives any
-// linked application's tools.
+// alone. The tools of an application the person chooses when the run
+// starts are agentry-desktop-chosen__<tool>, given by an entry that chooses
+// one whose server the run uses.
 func desktopMissing(c manifest.Capabilities, key, server string) (onDesktop bool, miss *Missing) {
 	_, tool, _ := strings.Cut(key, "__")
 	name := strings.ReplaceAll(server, "_", "-")
 	id, linked := strings.CutPrefix(name, desktopServerPrefix)
-	if linked && id == desktopComputer {
+	if linked && id == manifest.DesktopComputerName {
 		if c.Desktop.HasComputerUse() {
 			return true, nil
 		}
 		return true, &Missing{Tool: key, Grant: GrantComputerUse, Path: GrantComputerUse.Path(),
 			Reason: "The instruction calls " + key + ", a computer use tool, and the manifest does not declare " + GrantComputerUse.Path() + "."}
+	}
+	if linked && id == manifest.DesktopChosenName {
+		if c.Desktop.ChoosesServer() {
+			return true, nil
+		}
+		return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
+			Reason: "The instruction calls " + key + ", a tool of an application the person chooses when the run starts, and the manifest has no entry in " + GrantDesktop.Path() + " that asks the person to choose one whose server the run uses."}
 	}
 	srv, declared := c.Desktop.Server(id)
 	usesServer := declared && srv.UsesServer()
@@ -788,9 +794,6 @@ func desktopMissing(c manifest.Capabilities, key, server string) (onDesktop bool
 		if declared {
 			return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
 				Reason: "The instruction calls " + key + ", a tool of " + id + "'s server on the person's computer, and the manifest uses " + id + " through its windows only."}
-		}
-		if c.Desktop.ChoosesServer() {
-			return true, nil
 		}
 		return true, &Missing{Tool: key, Grant: GrantDesktop, Path: GrantDesktop.Path(),
 			Reason: "The instruction calls " + key + ", a tool of " + id + "'s server on the person's computer, and the manifest does not declare " + id + " in " + GrantDesktop.Path() + "."}

@@ -77,6 +77,10 @@ func TestV19RefusesWhatTheLineCannotMean(t *testing.T) {
 			"capabilities.desktop.servers[0].use", "needs computerUse"},
 		{"a narrowing of windows alone", Desktop{Servers: []DesktopServer{{ID: "kdenlive", Use: DesktopUseComputer, Tools: []string{"look"}}}, ComputerUse: ComputerUseApp},
 			"capabilities.desktop.servers[0].tools", "windows only"},
+		{"the computer-use entry's name", Desktop{Servers: []DesktopServer{{ID: "computer"}}},
+			"capabilities.desktop.servers[0].id", "the desktop link's own entry"},
+		{"the chosen application's entry name", Desktop{Servers: []DesktopServer{{ID: "chosen"}}},
+			"capabilities.desktop.servers[0].id", "the desktop link's own entry"},
 		{"two entries that choose", Desktop{Servers: []DesktopServer{choose, choose}},
 			"capabilities.desktop.servers[1].choose", "one may"},
 		{"a chooser with an id", Desktop{Servers: []DesktopServer{{Choose: true, ID: "blender"}}},
@@ -350,6 +354,9 @@ func TestV2SchemaDesktopShape(t *testing.T) {
 										ID struct {
 											Pattern   string `json:"pattern"`
 											MaxLength int    `json:"maxLength"`
+											Not       struct {
+												Enum []string `json:"enum"`
+											} `json:"not"`
 										} `json:"id"`
 										Choose struct {
 											Const *bool `json:"const"`
@@ -395,6 +402,9 @@ func TestV2SchemaDesktopShape(t *testing.T) {
 	if items.Properties.ID.Pattern != desktopIDPattern.String() || items.Properties.ID.MaxLength != MaxDesktopIDLength ||
 		items.Properties.Tools.Items.Pattern != desktopToolPattern.String() {
 		t.Fatalf("the schema's grammar is not V19's: id %q (%d), tool %q", items.Properties.ID.Pattern, items.Properties.ID.MaxLength, items.Properties.Tools.Items.Pattern)
+	}
+	if !slices.Equal(items.Properties.ID.Not.Enum, ReservedDesktopIDs) {
+		t.Fatalf("the schema reserves %v; V19 reserves %v", items.Properties.ID.Not.Enum, ReservedDesktopIDs)
 	}
 	if c := items.Properties.Choose.Const; c == nil || !*c {
 		t.Fatal("choose is not the constant true")
