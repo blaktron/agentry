@@ -116,9 +116,9 @@ func TestV2ClosedSchemaOnNewFields(t *testing.T) {
 		"entrypoints key": strings.Replace(v2YAML, "instruction: AGENT.md", "instruction: AGENT.md\n  binary: a.out", 1),
 	}
 	says := map[string]string{
-		"intake key":      "field placeholder not found",
-		"interactive key": "field theme not found",
-		"entrypoints key": "field binary not found",
+		"intake key":      "has no field \"placeholder\"",
+		"interactive key": "has no field \"theme\"",
+		"entrypoints key": "has no field \"binary\"",
 	}
 	for name, y := range cases {
 		t.Run(name, func(t *testing.T) {
