@@ -33,6 +33,7 @@ import (
 	"github.com/blaktron/agentry/internal/scan"
 	"github.com/blaktron/agentry/internal/voice"
 	"github.com/blaktron/agentry/internal/webhook"
+	"github.com/blaktron/agentry/pkg/managedsettings"
 )
 
 // Extension is what an extended build adds. Every method may return the
@@ -469,6 +470,27 @@ type ReportSettings interface {
 	DesignWithLogo(ctx context.Context, user uuid.UUID) ([]byte, error)
 }
 
+// ManagesSettings is the optional interface for an extension that keeps
+// the managed settings an organization's admins set for its members, which
+// GET /user/managed-settings serves. ManagedSettings returns the envelope
+// signed for the person's organization's current version, or nil when none
+// apply to them; it reads membership at the call. The extension stores
+// what Deps.ManagedSettings signed (in the role that holds the signing
+// key, typically a worker job run when an admin saves). The core checks
+// each envelope against the keys the registry advertises before it serves
+// it. A deployment has one such extension: a second panics at start-up.
+type ManagesSettings interface {
+	ManagedSettings(ctx context.Context, user uuid.UUID) (*ManagedSettingsEnvelope, error)
+}
+
+// ManagedSettingsEnvelope is a signed managed settings document.
+type ManagedSettingsEnvelope = managedsettings.Envelope
+
+// ManagedSettingsSigner signs an organization's managed settings: it
+// validates them against the catalogue, binds them to the registry and the
+// organization, and signs them with the registry's signing key.
+type ManagedSettingsSigner = api.ManagedSettingsSigner
+
 // Unthrottles is the optional interface for an extension whose receiver
 // of signed callbacks must never be refused by the anonymous rate class
 // (a payment provider's webhook). The routes are "METHOD /path"
@@ -753,6 +775,10 @@ type Deps struct {
 	// address of its own to a third party, such as an OAuth callback.
 	// Empty when the deployment names none.
 	BaseURL string
+	// ManagedSettings signs organizations' managed settings. It is nil in
+	// a process that holds no signing key (the api and git roles) or knows
+	// no base URL: sign in a job the worker runs.
+	ManagedSettings ManagedSettingsSigner
 }
 
 // Notifier lets an extension tell a person something by mail without

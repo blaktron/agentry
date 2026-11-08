@@ -82,8 +82,9 @@ type DSSESignature struct {
 	Sig   string `json:"sig"` // base64
 }
 
-// VerifyEnvelope checks a DSSE envelope against a PEM public key. Used by the
-// CLI (offline), the server's own tests, and third-party verifiers.
+// VerifyEnvelope checks a DSSE envelope of an in-toto statement against a
+// PEM public key; an envelope of any other payload type is refused. Used by
+// the CLI (offline), the server's own tests, and third-party verifiers.
 //
 // The caller chooses the key. A signature's keyid is a label the signer
 // attached, not evidence of anything: it is never read here, and a verifier
@@ -91,43 +92,55 @@ type DSSESignature struct {
 // envelope names would let the envelope's author pick the key that checks
 // it). The key comes from a source the verifier already trusts.
 func VerifyEnvelope(env DSSEEnvelope, publicKeyPEM string) (InTotoStatement, error) {
-	block, _ := pem.Decode([]byte(publicKeyPEM))
-	if block == nil {
-		return InTotoStatement{}, fmt.Errorf("attest: verify: bad public key PEM")
-	}
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	payload, err := VerifyPayload(env, publicKeyPEM, PayloadType)
 	if err != nil {
-		return InTotoStatement{}, fmt.Errorf("attest: verify: parse key: %w", err)
-	}
-	ecPub, ok := pub.(*ecdsa.PublicKey)
-	if !ok {
-		return InTotoStatement{}, fmt.Errorf("attest: verify: not an ECDSA key")
-	}
-	payload, err := base64.StdEncoding.DecodeString(env.Payload)
-	if err != nil {
-		return InTotoStatement{}, fmt.Errorf("attest: verify: payload decode: %w", err)
-	}
-	pae := PAE(env.PayloadType, payload)
-	digest := sha256.Sum256(pae)
-	ok = false
-	for _, s := range env.Signatures {
-		sig, err := base64.StdEncoding.DecodeString(s.Sig)
-		if err != nil {
-			continue
-		}
-		if ecdsa.VerifyASN1(ecPub, digest[:], sig) {
-			ok = true
-			break
-		}
-	}
-	if !ok {
-		return InTotoStatement{}, fmt.Errorf("attest: verify: no valid signature")
+		return InTotoStatement{}, err
 	}
 	var stmt InTotoStatement
 	if err := json.Unmarshal(payload, &stmt); err != nil {
 		return InTotoStatement{}, err
 	}
 	return stmt, nil
+}
+
+// VerifyPayload checks a DSSE envelope of the given payload type against a
+// PEM public key and returns the signed payload. The same key may sign
+// more than one kind of payload, so the type is checked before anything
+// else: the signature covers it, and an envelope of another type is
+// refused rather than decoded as this one. The key rule is
+// VerifyEnvelope's: the caller chooses the key, never the envelope.
+func VerifyPayload(env DSSEEnvelope, publicKeyPEM, payloadType string) ([]byte, error) {
+	if env.PayloadType != payloadType {
+		return nil, fmt.Errorf("attest: verify: payload type %q, want %q", env.PayloadType, payloadType)
+	}
+	block, _ := pem.Decode([]byte(publicKeyPEM))
+	if block == nil {
+		return nil, fmt.Errorf("attest: verify: bad public key PEM")
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("attest: verify: parse key: %w", err)
+	}
+	ecPub, ok := pub.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("attest: verify: not an ECDSA key")
+	}
+	payload, err := base64.StdEncoding.DecodeString(env.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("attest: verify: payload decode: %w", err)
+	}
+	pae := PAE(env.PayloadType, payload)
+	digest := sha256.Sum256(pae)
+	for _, s := range env.Signatures {
+		sig, err := base64.StdEncoding.DecodeString(s.Sig)
+		if err != nil {
+			continue
+		}
+		if ecdsa.VerifyASN1(ecPub, digest[:], sig) {
+			return payload, nil
+		}
+	}
+	return nil, fmt.Errorf("attest: verify: no valid signature")
 }
 
 // PAE is the DSSE Pre-Authentication Encoding.

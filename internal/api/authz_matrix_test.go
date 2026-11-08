@@ -330,7 +330,8 @@ func requestFactories(env *testEnv) map[string]opRequest {
 				}
 			},
 		},
-		"listUserReportDesigns": {method: "GET", path: sPath("/api/v1/user/report-designs")},
+		"getUserManagedSettings": {method: "GET", path: sPath("/api/v1/user/managed-settings")},
+		"listUserReportDesigns":  {method: "GET", path: sPath("/api/v1/user/report-designs")},
 		"createUserReportDesign": {
 			method: "POST", path: sPath("/api/v1/user/report-designs"),
 			body: func(*matrixSeed, string) any {

@@ -51,6 +51,7 @@ PURPOSES = {
     "pkg/gatecases": "Strict published gate-case format",
     "pkg/handle": "Handle grammar and the reserved names a directory copies",
     "pkg/judge": "External judge wire shapes, bounds, retries, ratings and corpora",
+    "pkg/managedsettings": "Managed settings documents: the catalogue, its schema, and signed envelopes that open only with the right key and type",
     "pkg/manifest": "Manifest parsing, rules, canonical form and capability widening",
     "pkg/packseal": "Encrypted pack round trip, owner-bound metadata and refusal",
     "pkg/reportdesign": "Report design grammar, canonicalization and pixel-only logos",
