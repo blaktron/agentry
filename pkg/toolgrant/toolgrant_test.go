@@ -453,6 +453,9 @@ func TestTheDesktopLineGivesApplicationTools(t *testing.T) {
 		{"an application used through its windows only, by its id", manifest.Capabilities{Desktop: windows}, "Call blender__look first.", toolgrant.GrantDesktop},
 		{"computer use, no line", manifest.Capabilities{Desktop: blender}, "Take agentry-desktop-computer__screenshot first.", toolgrant.GrantComputerUse},
 		{"a bare id the line does not declare", manifest.Capabilities{}, "Call blender__look first.", toolgrant.GrantMCPServer},
+		{"a chosen application's tool, no chooser", manifest.Capabilities{Desktop: blender}, "Call agentry-desktop-chosen__export first.", toolgrant.GrantDesktop},
+		{"a chosen application's tool, a chooser of windows only", manifest.Capabilities{Desktop: &manifest.Desktop{Servers: []manifest.DesktopServer{{Choose: true, Use: manifest.DesktopUseComputer}}, ComputerUse: manifest.ComputerUseApp}}, "Call agentry-desktop-chosen__export first.", toolgrant.GrantDesktop},
+		{"an undeclared application beside a chooser", manifest.Capabilities{Desktop: &manifest.Desktop{Servers: []manifest.DesktopServer{{Choose: true}}}}, "Call agentry-desktop-my-cad__export first.", toolgrant.GrantDesktop},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got := toolgrant.Check(c.caps, c.instr)
@@ -469,7 +472,7 @@ func TestTheDesktopLineGivesApplicationTools(t *testing.T) {
 		{"a declared application", manifest.Capabilities{Desktop: blender}, "Call blender__execute_blender_code and agentry-desktop-blender__look."},
 		{"any tool of an application no list names", manifest.Capabilities{Desktop: &manifest.Desktop{Servers: []manifest.DesktopServer{{ID: "my-cad"}}}}, "Call my-cad__extrude and agentry-desktop-my-cad__export."},
 		{"a tool the narrowing names", manifest.Capabilities{Desktop: narrow}, "Call blender__look."},
-		{"an application the person chooses", manifest.Capabilities{Desktop: &manifest.Desktop{Servers: []manifest.DesktopServer{{Choose: true}}}}, "Call agentry-desktop-my-cad__export."},
+		{"an application the person chooses", manifest.Capabilities{Desktop: &manifest.Desktop{Servers: []manifest.DesktopServer{{Choose: true}}}}, "Call agentry-desktop-chosen__export."},
 		{"computer use declared", manifest.Capabilities{Desktop: &manifest.Desktop{ComputerUse: manifest.ComputerUseApp}}, "Take agentry-desktop-computer__screenshot."},
 		{"a declared MCP server of that name", manifest.Capabilities{MCPServers: []manifest.MCPServer{{PyPI: "mcp-for-blender", Version: "2.2.7"}}}, "Call blender__look."},
 	} {

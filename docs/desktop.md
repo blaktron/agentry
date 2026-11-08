@@ -31,7 +31,8 @@ capabilities:
   the one entry with `choose: true`, which asks the person to choose one of
   their applications when the run starts and names no id and no tools. An id
   is lowercase letters and digits in words joined by single hyphens, at most
-  40 characters. The registry holds no list of applications: the id is
+  40 characters, and never `computer` or `chosen`, which name the desktop
+  link's own entries. The registry holds no list of applications: the id is
   resolved on the person's computer, against the applications they approved
   in Agentry Desktop.
 - **`use`**: what of the application the run uses: `mcp`, its MCP server;
@@ -161,8 +162,9 @@ port can drive the open editor.
   `S6/ungranted-tool` finding naming `capabilities.desktop.servers`, and
   `agentry-desktop-computer__<tool>` without computer use names
   `capabilities.desktop.computerUse`. A bare `<id>__<tool>` for an id the
-  line does not declare is read as a declared MCP server's. A line with an
-  application the person chooses gives any `agentry-desktop-<id>__<tool>`.
+  line does not declare is read as a declared MCP server's. The tools of an
+  application the person chooses are `agentry-desktop-chosen__<tool>`,
+  given by an entry with `choose: true` that uses its server.
 - **S7** asks no advisory database about the line: which server answers for
   an application is known only on the person's computer. It names each
   application whose server the line uses as not covered (`S7/osv-no-data`,
