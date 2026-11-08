@@ -1808,7 +1808,7 @@ its digest, so a run record says which file a run obeyed.
 | `browser.allowPublicWeb` | lets a browser whose scope is `public` reach any public site on ports 80 and 443 (default false → such a release is refused, exit 11); apart from `allowWildcardEgress` |
 | `desktop.allow` | lets a release use an application on the person's computer through Agentry Desktop (`capabilities.desktop`; default true, false refuses every release that declares the line, exit 11) |
 | `desktop.allowScreen` | lets a release's computer use see and use the whole screen (`computerUse: screen`; default false → such a release is refused, exit 11, unless the run passes `--allow-screen` or runs in the desktop's Unsafe Mode) |
-| `desktop.allowCustomServers` | lets a release use an application server the person configured themself, outside the catalogue (default false); the catalogue has no such entry kind yet, so the key admits nothing for now |
+| `desktop.allowCustomServers` | lets a run use an application whose set-up in Agentry Desktop is the person's own: one they added, or a library preset they changed (unset: allowed, since CLI 0.7.35); `false` binds only the library's presets as they are, and refuses any other before the run starts (`desktop-not-granted`) unless Unsafe Mode is on, which the receipt then says |
 | `hosts.allow` / `hosts.deny` | IPv4 networks in CIDR form that narrow the addresses a target host may be at: with `allow` set an address must be in one, and one in `deny` is refused either way ([below](#the-hosts-lists-hosts)) |
 | `images.clamavSignatures` | the ClamAV signature bundle, `<registry>/<repository>:<tag>` (default `ghcr.io/blaktron/agentry-clamav-db:latest`); a mirror must carry the publishing workflow's signature |
 | `hybridAnalysis.apiKeyEnv` / `hybridAnalysis.apiKeySource` | your Hybrid Analysis key for the hash lookup: the variable that holds it (default `HYBRID_API_KEY`), which wins when it is set; with `apiKeySource: keyring`, the keychain entry `provider:hybrid-analysis` when it is not; with no key nothing is looked up |
@@ -2047,7 +2047,7 @@ lower them for your own host.
 | a remote MCP server | the runner image's bridge, launched by the gateway on its relay network behind one relay to the address's host on 443; the gateway itself dials nothing. An `auth: secret` bearer, or an `auth: oauth` connection's access token, is in a 0600 file mounted read-only into that bridge alone, never in the gateway's secrets file; a connection's refresh token and any client secret stay in the runner's store and never enter the run |
 | a package server's `oauth` block | the connection's access token alone, rendered into the block's files in that server's own folder (mounted writable into it alone, the only writable bind besides the output and the workspace, deleted at teardown) or into its env through the gateway's secrets file; renewed before it expires by a rename into the folder; the refresh token and any client secret never enter the run |
 | `browser` | the browser server, a container of its own on the run's own browser network with Chromium's sandbox on, whose one route out is the run's browse proxy, which resolves every name itself and admits only the sites you named with their subdomains, the declared hosts, or any public site where the policy's `browser.allowPublicWeb` allows `scope: public`; browser secrets in a 0600 file bound into that server alone; in a hosted run public sites only ([the browser](#the-browser-a-site-to-test-named-at-run-time)) |
-| `desktop` | one desktop link entry per application server the line uses (`agentry-desktop-<id>`, and `agentry-desktop-computer` for computer use): the runner image with no network, run as you, its one mount the run's relay volume, its tools the catalogue's after the release's narrowing; a relay container of the run's own carries each tool call, and nothing else, to Agentry Desktop, which runs the installed server and answers; never in a hosted run ([the person's computer](#the-persons-computer-capabilitiesdesktop)) |
+| `desktop` | one desktop link entry per application whose MCP server the line uses (`agentry-desktop-<id>`, `agentry-desktop-chosen` for an application the person chooses, and `agentry-desktop-computer` for computer use): the runner image with no network, run as you, its one mount the run's relay volume, its tools the ones Agentry Desktop lists at bind after the release's narrowing; a relay container of the run's own carries each tool call, and nothing else, to Agentry Desktop, which runs the installed server and answers; never in a hosted run ([the person's computer](#the-persons-computer-capabilitiesdesktop)) |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane; before the agent starts they are checked by ClamAV and read in the files image's container (no network, every capability dropped, the files read-only), and their text is mounted read-only at `/inputs-text`; the always-granted `list_inputs`, `read_input` and `search_inputs` serve both ([running with files](#running-with-files)); job output and receipts live on the separate `/out` volume |
 | the scratch folder (the runner's grant to every release and every built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
 | `export_pdf` (granted with the scratch folder to every release, never to a built-in) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
@@ -2980,12 +2980,15 @@ adds a browser, a site, a host or a secret, or moves from `site` to
 ### The person's computer: `capabilities.desktop`
 
 A QuickAgent that works an application on the person's own computer, such
-as Blender, declares `capabilities.desktop`: entries of the catalogue of
-application servers by id, and computer use of their windows or of the whole
-screen ([the person's computer](desktop.md)). The release names an entry,
-never a command: what runs on the person's computer is the entry's pinned
-server, launched as the person by Agentry Desktop, which is the only thing
-that answers the run's calls there. The sandbox keeps its routes; no
+as Blender, declares `capabilities.desktop`: the applications by id, or one
+the person chooses, and computer use of their windows or of the whole screen
+([the person's computer](desktop.md)). The release names an application,
+never a command: what runs on the person's computer is the server the person
+approved for it in Agentry Desktop, launched as the person by Agentry
+Desktop, which is the only thing that answers the run's calls there. From
+CLI 0.7.35 the runner holds no list of applications: any id is bound as
+Agentry Desktop resolves it, and an Agentry Desktop that does not know an id
+refuses the bind. The sandbox keeps its routes; no
 container of the run is given a route to the person's computer.
 
 The line is for a run on the person's own computer or on their own runhost,
@@ -2998,15 +3001,23 @@ application servers, and v0.7.30 or later computer use; a run on a runhost
 a socket only you can open (`<runner home>/s/desktop.sock`) that Agentry
 Desktop serves while it runs (0.7.19 or later for application servers,
 0.7.20 or later for computer use on Linux). The bind names the run, the
-release and the servers and tools it declares; Agentry Desktop checks that
-each application and its server are ready on this computer and answers with
-a token for this run and each server's tools. A run from the desktop app
+release, the applications whose servers it uses with the release's
+narrowing of their tools, and the windows its computer use reaches; Agentry
+Desktop checks that each application and its server are ready on this
+computer and answers with a token for this run, each server's tools with the
+class it gives each, and, to CLI 0.7.35 and later, where each application's
+set-up came from (its library, changed by the person, or the person's own)
+and which application the person chose. A run from the desktop app
 binds the same way, in process. The run is refused, exit 11, before any
 container starts, when:
 
-- no Agentry Desktop answers ("this QuickAgent uses Blender on your
+- no Agentry Desktop answers ("this QuickAgent uses blender on your
   computer, which needs Agentry Desktop running on this computer"), the
   reason `desktop-refused` with the detail `desktop-unavailable`;
+- the release narrows an application to a tool its server does not list,
+  `desktop-not-installed`, naming the tool;
+- `desktop.allowCustomServers` is `false`, Unsafe Mode is off, and an
+  application's set-up is the person's own, `desktop-not-granted`;
 - Agentry Desktop finds a server or its application not ready, with the step
   to take ("Start the MCP server in Blender's sidebar"),
   `desktop-not-installed`;
@@ -3019,13 +3030,16 @@ container starts, when:
   to set.
 
 **The containers.** The compiled plan has one entry of the gateway's catalog
-per application server the line uses, `agentry-desktop-<id>`, and one for
+per application whose server the line uses, `agentry-desktop-<id>` (and
+`agentry-desktop-chosen` for an application the person chooses), and one for
 computer use, `agentry-desktop-computer`. Each is the runner image's
 `desktoplink` role, launched by the gateway with no network, as your user,
-with one mount, the run's relay volume `agentry-<run>-desktop`; the
-gateway's `tools.yaml` holds it to the catalogue's tools after the release's
-narrowing, so a tool the catalogue withholds is refused at the gateway and
-again at the relay. Before the gateway starts, the run starts a relay of its
+with one mount, the run's relay volume `agentry-<run>-desktop`. The plan's
+`tools.yaml` holds each application's entry to the release's narrowing, or
+to no tool at all; before the gateway starts, the run sets it to the tools
+Agentry Desktop listed at bind, narrowed as the release narrows them, so a
+tool the run is not given is refused at the gateway and again at the
+relay. Before the gateway starts, the run starts a relay of its
 own, `desktoplink-relay`: the runner image with no network, a read-only
 root, every capability dropped but `CHOWN`, and the relay volume as its one
 mount, where it serves the link's socket. The CLI holds the relay's standard
@@ -3062,8 +3076,8 @@ nowhere, and Agentry Desktop saves it in the run's folder only while your
 
 | Key | Says |
 |---|---|
-| `desktop` | what the plan gives: each application server, its pinned installed server, its tools and which run code, the hosts it reaches from your computer, and what the run cannot enforce there |
-| `desktop.<id>` | per application server (`desktop.blender`): its installed server, the link entry, the tools allowed, the calls by class and the refusals by reason ("4 calls (2 read, 2 exec); refused: 1 desktop-declined"), the hosts it reaches, and that your computer is outside the run |
+| `desktop` | what the plan gives: each application by id with the release's narrowing of its tools, computer use's scope, how an application set up by the person is treated, and what the run cannot enforce on your computer |
+| `desktop.<id>` | per application (`desktop.blender`): where its set-up came from (Agentry Desktop's library, changed by the person, or the person's own, and Unsafe Mode where it allowed one), the link entry, the tools allowed, the calls by class and the refusals by reason ("4 calls (2 read, 2 exec); refused: 1 desktop-declined"), and that your computer is outside the run |
 | `desktop.computerUse` | the scope (and, for the whole screen, what allowed it), the windows, the session, the tools, the screenshot's size, what the computer's own system enforced as Agentry Desktop states it, whether "Keep what the agent saw" is on, the stop key, and the counts |
 | `desktop.transport` | the relay, its volume and Agentry Desktop's socket, and that every frame carries the run's token |
 
@@ -5134,7 +5148,7 @@ model, the author or the person wrote; at most eight), for some codes a
 | `answer-in-reasoning` | the output: the release's output is schema-checked and the model ended the run on its reasoning, with no final message after it (exit 17); the reasoning is never taken as the result | none | — |
 | `tool-call-as-text` | the output: the model's final message is a tool call written in its own markup, which its provider's server did not parse into a call, so the agent stopped before it finished (exit 14; a one-shot run with a text result, CLI v0.6.1000 or later). The message stays the run's `result` and in the receipts. A local model's server must parse the model's tool calls (its chat template or tool-call setting) | none | — |
 | `host-refused` | readying a [target host](#target-hosts-a-server-named-at-run-time) before anything starts, or the host link's sign-in when the gateway starts it: a host the run will not reach (exit 11, except `host-unreachable` at the host link's start, exit 13) | the target host's question id (never its name or address) | `host-address` (an address a target host never is, one the policy's `hosts` lists exclude, or a name with no IPv4 address), `host-key-unknown` (a key on no file, not accepted at a terminal), `host-key-changed` (a key other than the one on file, or a revoked one), `host-auth` (the host did not accept the sign-in), `host-credential` (no sign-in given, or one that cannot be used; also an unanswered host), `host-unreachable` (the host did not answer on its port), `hosted` (a hosted run never reaches a target host) |
-| `desktop-refused` | binding the run to Agentry Desktop before anything starts ([the person's computer](#the-persons-computer-capabilitiesdesktop)): an application on your computer the run will not reach (exit 11) | the application servers' catalogue ids (`blender`; `computer` for computer use) | `desktop-unavailable` (no Agentry Desktop answers on this computer), `desktop-not-installed` (the installed server or its application is not ready), `desktop-not-granted` (computer use not granted in the scope the release asks, or not given by the computer's own system), `hosted` (a hosted run never reaches your computer); a call refused while the run goes on is not the run's reason, and is counted in the receipt's `desktop.<id>` line instead: `desktop-paused`, `desktop-stopped`, `desktop-declined`, `outside-window`, `desktop-unreachable` |
+| `desktop-refused` | binding the run to Agentry Desktop before anything starts ([the person's computer](#the-persons-computer-capabilitiesdesktop)): an application on your computer the run will not reach (exit 11) | the applications' ids (`blender`; `chosen` for one the person chooses; `computer` for computer use) | `desktop-unavailable` (no Agentry Desktop answers on this computer), `desktop-not-installed` (the installed server or its application is not ready), `desktop-not-granted` (computer use not granted in the scope the release asks, or not given by the computer's own system), `hosted` (a hosted run never reaches your computer); a call refused while the run goes on is not the run's reason, and is counted in the receipt's `desktop.<id>` line instead: `desktop-paused`, `desktop-stopped`, `desktop-declined`, `outside-window`, `desktop-unreachable` |
 
 The four model sign-in codes carry no names; the vendor's own words about a
 plan limit, a policy or a missing credit are in the masked error and the
