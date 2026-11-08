@@ -8557,9 +8557,11 @@ components:
             version.published, version.rejected, version.needs_review,
             version.yanked, agent.quarantined, agent.reinstated,
             advisory.published, agent.dependency_alert, scan.completed,
-            member.added, member.removed, policy.updated and run.ended (a
+            member.added, member.removed, policy.updated, run.ended (a
             run of one of the organization's QuickAgents In Agentry ended;
-            delivered only where the registry runs QuickAgents). A name
+            delivered only where the registry runs QuickAgents) and
+            managed.updated (the organization's admins changed its managed
+            settings; delivered only where the registry keeps them). A name
             outside the catalogue is refused with 422.
           items:
             type: string

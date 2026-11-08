@@ -4476,7 +4476,7 @@ type WebhookEndpointCreated struct {
 
 // WebhookInput defines model for WebhookInput.
 type WebhookInput struct {
-	// Events The events the endpoint subscribes to, by name, from the closed catalogue: agent.created, version.submitted, version.published, version.rejected, version.needs_review, version.yanked, agent.quarantined, agent.reinstated, advisory.published, agent.dependency_alert, scan.completed, member.added, member.removed, policy.updated and run.ended (a run of one of the organization's QuickAgents In Agentry ended; delivered only where the registry runs QuickAgents). A name outside the catalogue is refused with 422.
+	// Events The events the endpoint subscribes to, by name, from the closed catalogue: agent.created, version.submitted, version.published, version.rejected, version.needs_review, version.yanked, agent.quarantined, agent.reinstated, advisory.published, agent.dependency_alert, scan.completed, member.added, member.removed, policy.updated, run.ended (a run of one of the organization's QuickAgents In Agentry ended; delivered only where the registry runs QuickAgents) and managed.updated (the organization's admins changed its managed settings; delivered only where the registry keeps them). A name outside the catalogue is refused with 422.
 	Events []string `json:"events"`
 
 	// Url An absolute https:// URL with a host, and a port from 1 to 65535 if it names one.

@@ -577,11 +577,13 @@ An endpoint subscribes to events by name, from a closed catalogue:
 `version.rejected`, `version.needs_review`, `version.yanked`,
 `agent.quarantined`, `agent.reinstated`, `advisory.published`,
 `agent.dependency_alert`, `scan.completed`, `member.added`,
-`member.removed`, `policy.updated` and `run.ended`. A name outside it is
-refused with `422`. `run.ended` is for a run of one of the organization's
+`member.removed`, `policy.updated`, `run.ended` and `managed.updated`. A
+name outside it is refused with `422`. `run.ended` is for a run of one of the organization's
 QuickAgents In Agentry ending, in any state; only a registry that runs
 QuickAgents delivers it, and a registry without that service accepts the
-subscription and never delivers it.
+subscription and never delivers it. `managed.updated` is for a change the
+organization's admins make to its managed settings, and likewise only a
+registry that keeps managed settings delivers it.
 
 `POST /orgs/{org}/webhooks/{id}/ping` records its delivery with event type
 `ping`, which is deliberately absent from the subscribable event catalogue;

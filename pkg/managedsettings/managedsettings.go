@@ -1,8 +1,9 @@
 // Package managedsettings is the format of a managed settings document:
-// the values an organization's admins set for a member's Agentry clients,
-// as the registry serves them to one signed-in member. A registry signs the
-// document as a DSSE envelope with its release-signing key, and a client
-// opens it only with a key it already trusts for that registry.
+// the values an organization's admins set for its members' Agentry
+// clients. The registry signs one document per organization and version
+// as a DSSE envelope with its release-signing key, and serves it to each
+// active member. A client opens it only with a key it already trusts for
+// that registry, and only for the organization it is a member of.
 //
 // A setting is either locked, which the member cannot change, or a
 // default, which applies until the member chooses otherwise. Every setting
@@ -42,14 +43,15 @@ type Document struct {
 	// Registry is the base URL of the registry that signed the document.
 	// A client accepts it only from that registry.
 	Registry string `json:"registry"`
-	// Account is the id of the member the document was issued to. A client
-	// accepts it only for the account it is signed in as.
-	Account string `json:"account"`
-	// Org is the handle of the organization whose settings these are.
+	// Org is the handle of the organization whose settings these are. A
+	// client accepts the document only while the signed-in account is an
+	// active member of that organization; a person belongs to one.
 	Org string `json:"org"`
 	// Version increases with every change the organization's admins make.
+	// A client refuses a version lower than the last it accepted from the
+	// same organization, so an older copy cannot be replayed to it.
 	Version int64 `json:"version"`
-	// IssuedAt is when the registry signed this copy.
+	// IssuedAt is when the registry signed this version.
 	IssuedAt time.Time `json:"issuedAt"`
 	// Settings maps a catalogue id to its value.
 	Settings map[string]Setting `json:"settings"`
@@ -197,8 +199,6 @@ func (d Document) validate(allowUnknown bool) error {
 		return fmt.Errorf("managed settings: schema %q, want %q", d.Schema, Schema)
 	case d.Registry == "":
 		return errors.New("managed settings: no registry")
-	case d.Account == "":
-		return errors.New("managed settings: no account")
 	case d.Org == "":
 		return errors.New("managed settings: no organization")
 	case d.Version < 1:
@@ -238,9 +238,10 @@ func Wrap(payload []byte, sig attest.DSSESignature) Envelope {
 // refuses another payload type, another schema, a field the format does
 // not have, and a known row with a value it does not take. A row whose id
 // this catalogue does not know is kept, for the caller to judge through
-// Unknown: a newer registry may add rows. It does not check Registry or
-// Account: the caller compares them with the registry and account it is
-// signed in to.
+// Unknown: a newer registry may add rows. It does not check Registry, Org
+// or Version: the caller compares them with the registry it is signed in
+// to, the organization it is a member of, and the last version it
+// accepted.
 func Open(env Envelope, publicKeyPEM string) (Document, error) {
 	payload, err := attest.VerifyPayload(env, publicKeyPEM, PayloadType)
 	if err != nil {

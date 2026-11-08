@@ -50,7 +50,6 @@ func validDoc() Document {
 	return Document{
 		Schema:   Schema,
 		Registry: "https://registry.example",
-		Account:  "6f1c2b9e-0000-4000-8000-000000000001",
 		Org:      "acme",
 		Version:  3,
 		IssuedAt: time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC),
@@ -126,10 +125,10 @@ func TestOpenRefusesTamperedPayload(t *testing.T) {
 func TestOpenRefusesUnknownFieldsAndRows(t *testing.T) {
 	k := newKey(t)
 	for name, payload := range map[string]string{
-		"unknown field": `{"schema":"managed-settings/1","registry":"r","account":"a","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{},"extra":1}`,
-		"bad value":     `{"schema":"managed-settings/1","registry":"r","account":"a","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{"run.unsafeMode":{"value":"on","locked":true}}}`,
-		"other schema":  `{"schema":"managed-settings/2","registry":"r","account":"a","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{}}`,
-		"trailing data": `{"schema":"managed-settings/1","registry":"r","account":"a","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{}} {}`,
+		"unknown field": `{"schema":"managed-settings/1","registry":"r","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{},"extra":1}`,
+		"bad value":     `{"schema":"managed-settings/1","registry":"r","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{"run.unsafeMode":{"value":"on","locked":true}}}`,
+		"other schema":  `{"schema":"managed-settings/2","registry":"r","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{}}`,
+		"trailing data": `{"schema":"managed-settings/1","registry":"r","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{}} {}`,
 	} {
 		env := Wrap([]byte(payload), k.sign(t, PayloadType, []byte(payload)))
 		if _, err := Open(env, k.pem); err == nil {
@@ -141,7 +140,6 @@ func TestOpenRefusesUnknownFieldsAndRows(t *testing.T) {
 func TestValidateRefusesMissingBinding(t *testing.T) {
 	for name, edit := range map[string]func(*Document){
 		"registry": func(d *Document) { d.Registry = "" },
-		"account":  func(d *Document) { d.Account = "" },
 		"org":      func(d *Document) { d.Org = "" },
 		"version":  func(d *Document) { d.Version = 0 },
 		"issuedAt": func(d *Document) { d.IssuedAt = time.Time{} },
@@ -177,7 +175,7 @@ func TestNoRowTurnsAnythingOn(t *testing.T) {
 // A registry never signs such a row itself.
 func TestOpenKeepsRowsANewerRegistryAdded(t *testing.T) {
 	k := newKey(t)
-	payload := []byte(`{"schema":"managed-settings/1","registry":"r","account":"a","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{"run.unsafeMode":{"value":"forbidden","locked":true},"run.later":{"value":"x","locked":true},"run.laterDefault":{"value":"y","locked":false}}}`)
+	payload := []byte(`{"schema":"managed-settings/1","registry":"r","org":"o","version":1,"issuedAt":"2026-11-08T12:00:00Z","settings":{"run.unsafeMode":{"value":"forbidden","locked":true},"run.later":{"value":"x","locked":true},"run.laterDefault":{"value":"y","locked":false}}}`)
 	d, err := Open(Wrap(payload, k.sign(t, PayloadType, payload)), k.pem)
 	if err != nil {
 		t.Fatalf("Open: %v", err)

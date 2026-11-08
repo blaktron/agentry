@@ -2,8 +2,9 @@
 
 An organization's admins can set values for their members' Agentry clients:
 for example, that members may not turn on Unsafe Mode. These are **managed
-settings**. The registry serves each member one signed document with the
-settings that apply to them, and the member's clients verify it and apply it.
+settings**. The registry signs one document for each version of an
+organization's settings and serves it to every active member. The member's
+clients verify it and apply it.
 
 A setting is either:
 
@@ -28,7 +29,7 @@ built from the open core alone serves none, and every member reads back
 | --- | --- |
 | `200` | The caller's managed settings, as a signed envelope. |
 | `204` | No managed settings apply to the caller. |
-| `503` | The registry has no signing key or no base URL, so it cannot serve a document a client could verify. |
+| `503` | The registry has no base URL, or the document it holds does not verify against the keys it advertises. It never serves a document a client would refuse. |
 
 A session, or a personal access token with the `user:profile` scope, may read it. The answer
 is never cached.
@@ -61,7 +62,8 @@ follows:
    in. Never choose the key by the signature's `keyid`.
 3. Decode the payload strictly (no unknown fields) and validate it.
 4. Accept it only if `registry` is the registry the client is signed in to
-   and `account` is the signed-in account's id.
+   and `org` is the organization the signed-in account is an active member
+   of. A person belongs to one organization.
 5. Refuse a document from the same organization whose `version` is lower
    than the last one the client accepted. A document carries no expiry, so
    without this check an older, looser copy could be replayed.
@@ -78,7 +80,6 @@ The payload is described by
 {
   "schema": "managed-settings/1",
   "registry": "https://registry.example",
-  "account": "01a1bc05-113e-7144-90d7-a5550a7b3516",
   "org": "acme",
   "version": 7,
   "issuedAt": "2026-11-08T12:00:00Z",
@@ -88,8 +89,8 @@ The payload is described by
 }
 ```
 
-- `registry` and `account` are set by the registry when it signs, never by
-  the extension that supplies the settings.
+- `registry` is set by the registry when it signs, never by the extension
+  that keeps the settings.
 - `version` increases with every change the organization's admins make.
 - `settings` holds rows of the catalogue below. A registry signs only rows
   it knows, but a newer registry may send rows an older client does not
@@ -110,11 +111,21 @@ The payload is described by
 An extension implements `extension.ManagesSettings`:
 
 ```go
-ManagedSettings(ctx context.Context, user uuid.UUID) (*extension.ManagedSettingsContent, error)
+ManagedSettings(ctx context.Context, user uuid.UUID) (*extension.ManagedSettingsEnvelope, error)
 ```
 
-It returns the organization's handle, the version and the settings for that
-person, or nil when none apply. It reads membership at the call, so a former
-member gets nil at their next fetch. The core validates the settings against
-the catalogue, binds them to the registry and the account, and signs them. A
-deployment has one such extension: a second one panics at start-up.
+It returns the envelope signed for the person's organization's current
+version, or nil when none apply. It reads membership at the call, so a
+former member gets nil at their next fetch.
+
+The extension signs with `Deps.ManagedSettings`, which validates the
+settings against the catalogue, binds them to the registry and the
+organization, and signs them with the registry's signing key. Only a process
+that holds the key has a signer: in a deployment split into roles that is
+the worker, not the api, so the extension signs in a job and stores the
+envelope, and the api serves what was stored. Before it serves an envelope,
+the core checks it against the keys the registry advertises and the registry
+it names. A stored envelope with no signature by the signer's current key
+(`KeyID`) was signed before a key rotation and should be signed again.
+
+A deployment has one such extension: a second one panics at start-up.
