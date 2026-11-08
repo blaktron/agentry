@@ -612,7 +612,9 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 func manifestFieldError(err error) FieldError {
 	is, ok := manifest.AsIssue(err)
 	if !ok {
-		return FieldError{Field: "manifest", Message: sentence(strings.TrimPrefix(err.Error(), "manifest: "))}
+		msg := strings.TrimPrefix(err.Error(), "manifest: ")
+		msg = strings.TrimPrefix(msg, "agent.yaml: ") // the field is the file's
+		return FieldError{Field: "manifest", Message: sentence(msg)}
 	}
 	field := "manifest"
 	if is.Path != "" {
