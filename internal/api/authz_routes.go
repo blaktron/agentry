@@ -270,6 +270,8 @@ var routeAuthz = map[string]RouteDecl{
 	// user:profile, which the sign-in grant carries, so the CLI and the
 	// desktop read it for a local run.
 	// The report design library is the caller's own: self-scoped.
+	// Managed settings are the caller's own: self-scoped.
+	"getUserManagedSettings":            {Action: auth.ActUserSelfRead},
 	"listUserReportDesigns":             {Action: auth.ActUserSelfRead},
 	"createUserReportDesign":            {Action: auth.ActUserSelfUpdate},
 	"setUserReportDesignDefault":        {Action: auth.ActUserSelfUpdate},

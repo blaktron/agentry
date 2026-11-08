@@ -118,6 +118,10 @@ type Server struct {
 	// mounted is every pattern the recorder was given, in registration
 	// order; empty until NewHandler builds the handler.
 	mounted []string
+
+	// managedSettings is the extension that answers members' managed
+	// settings (handlers_managed_settings.go); empty without one.
+	managedSettings managedSettingsState
 }
 
 // MountedRoutes returns what the public mux was actually given — the root

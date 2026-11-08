@@ -678,6 +678,21 @@ func (e KnowledgeScanReportFindingsSeverity) Valid() bool {
 	}
 }
 
+// Defines values for ManagedSettingsEnvelopePayloadType.
+const (
+	ApplicationvndAgentryManagedSettingsJson ManagedSettingsEnvelopePayloadType = "application/vnd.agentry.managed-settings+json"
+)
+
+// Valid indicates whether the value is a known member of the ManagedSettingsEnvelopePayloadType enum.
+func (e ManagedSettingsEnvelopePayloadType) Valid() bool {
+	switch e {
+	case ApplicationvndAgentryManagedSettingsJson:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for McpAdvisoryGateSeverity.
 const (
 	McpAdvisoryGateSeverityCritical McpAdvisoryGateSeverity = "critical"
@@ -3246,6 +3261,23 @@ type LoginResult struct {
 	User      User   `json:"user"`
 }
 
+// ManagedSettingsEnvelope A DSSE envelope over a managed settings document. Verify the signature over the DSSE pre-authentication encoding of `payloadType` and the decoded `payload` with a key the client already trusts for this registry, and refuse any other payload type.
+type ManagedSettingsEnvelope struct {
+	// Payload The document, base64.
+	Payload     []byte                             `json:"payload"`
+	PayloadType ManagedSettingsEnvelopePayloadType `json:"payloadType"`
+	Signatures  []struct {
+		// Keyid A label the signer attached. Never choose the verifying key by it.
+		Keyid string `json:"keyid"`
+
+		// Sig ECDSA P-256 over SHA-256 of the pre-authentication encoding, ASN.1, base64.
+		Sig []byte `json:"sig"`
+	} `json:"signatures"`
+}
+
+// ManagedSettingsEnvelopePayloadType defines model for ManagedSettingsEnvelope.PayloadType.
+type ManagedSettingsEnvelopePayloadType string
+
 // McpAdvisory defines model for McpAdvisory.
 type McpAdvisory struct {
 	Aliases *[]string `json:"aliases,omitempty"`
@@ -4444,7 +4476,7 @@ type WebhookEndpointCreated struct {
 
 // WebhookInput defines model for WebhookInput.
 type WebhookInput struct {
-	// Events The events the endpoint subscribes to, by name, from the closed catalogue: agent.created, version.submitted, version.published, version.rejected, version.needs_review, version.yanked, agent.quarantined, agent.reinstated, advisory.published, agent.dependency_alert, scan.completed, member.added, member.removed, policy.updated and run.ended (a run of one of the organization's QuickAgents In Agentry ended; delivered only where the registry runs QuickAgents). A name outside the catalogue is refused with 422.
+	// Events The events the endpoint subscribes to, by name, from the closed catalogue: agent.created, version.submitted, version.published, version.rejected, version.needs_review, version.yanked, agent.quarantined, agent.reinstated, advisory.published, agent.dependency_alert, scan.completed, member.added, member.removed, policy.updated, run.ended (a run of one of the organization's QuickAgents In Agentry ended; delivered only where the registry runs QuickAgents) and managed.updated (the organization's admins changed its managed settings; delivered only where the registry keeps them). A name outside the catalogue is refused with 422.
 	Events []string `json:"events"`
 
 	// Url An absolute https:// URL with a host, and a port from 1 to 65535 if it names one.
@@ -6576,6 +6608,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
 	PutAccountInstall(ctx context.Context, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUserManagedSettings The managed settings the caller's organization set for them, signed.
+	//
+	// The values an organization's admins set for this member's Agentry clients, as a DSSE envelope of payload type `application/vnd.agentry.managed-settings+json` signed with the registry's release-signing key (the keys at `/.well-known/agentry/signing-keys.json`). The payload is described by `schemas/managed-settings-1.schema.json`. The registry sets its `registry` and `account` fields, and a client accepts a document only from the registry and for the account it is signed in to. A locked setting is one the member cannot change; one that is not locked is an organization default. The answer is 204 when no settings apply to the caller, and 503 when the registry has no signing key or no base URL, since an unsigned or unbound document is never served.
+	//
+	// Corresponds with GET /user/managed-settings (the `GetUserManagedSettings` operationId).
+	GetUserManagedSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetUserNotificationSettings How the registry's alerts reach the caller.
 	//
@@ -10151,6 +10190,23 @@ func (c *Client) PutAccountInstallWithBody(ctx context.Context, ns Namespace, na
 // Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
 func (c *Client) PutAccountInstall(ctx context.Context, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutAccountInstallRequest(c.Server, ns, name, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUserManagedSettings The managed settings the caller's organization set for them, signed.
+//
+// The values an organization's admins set for this member's Agentry clients, as a DSSE envelope of payload type `application/vnd.agentry.managed-settings+json` signed with the registry's release-signing key (the keys at `/.well-known/agentry/signing-keys.json`). The payload is described by `schemas/managed-settings-1.schema.json`. The registry sets its `registry` and `account` fields, and a client accepts a document only from the registry and for the account it is signed in to. A locked setting is one the member cannot change; one that is not locked is an organization default. The answer is 204 when no settings apply to the caller, and 503 when the registry has no signing key or no base URL, since an unsigned or unbound document is never served.
+//
+// Corresponds with GET /user/managed-settings (the `GetUserManagedSettings` operationId).
+func (c *Client) GetUserManagedSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserManagedSettingsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -17743,6 +17799,33 @@ func NewPutAccountInstallRequestWithBody(server string, ns Namespace, name Agent
 	return req, nil
 }
 
+// NewGetUserManagedSettingsRequest constructs an http.Request for the GetUserManagedSettings method
+func NewGetUserManagedSettingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/user/managed-settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetUserNotificationSettingsRequest constructs an http.Request for the GetUserNotificationSettings method
 func NewGetUserNotificationSettingsRequest(server string) (*http.Request, error) {
 	var err error
@@ -20605,6 +20688,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /user/installs/{ns}/{name} (the `PutAccountInstall` operationId).
 	PutAccountInstallWithResponse(ctx context.Context, ns Namespace, name AgentName, body PutAccountInstallJSONRequestBody, reqEditors ...RequestEditorFn) (*PutAccountInstallResponse, error)
+
+	// GetUserManagedSettingsWithResponse The managed settings the caller's organization set for them, signed.
+	//
+	// The values an organization's admins set for this member's Agentry clients, as a DSSE envelope of payload type `application/vnd.agentry.managed-settings+json` signed with the registry's release-signing key (the keys at `/.well-known/agentry/signing-keys.json`). The payload is described by `schemas/managed-settings-1.schema.json`. The registry sets its `registry` and `account` fields, and a client accepts a document only from the registry and for the account it is signed in to. A locked setting is one the member cannot change; one that is not locked is an organization default. The answer is 204 when no settings apply to the caller, and 503 when the registry has no signing key or no base URL, since an unsigned or unbound document is never served.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /user/managed-settings (the `GetUserManagedSettings` operationId).
+	GetUserManagedSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserManagedSettingsResponse, error)
 
 	// GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller.
 	//
@@ -27852,6 +27944,61 @@ func (r PutAccountInstallResponse) ContentType() string {
 	return ""
 }
 
+type GetUserManagedSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ManagedSettingsEnvelope
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUserManagedSettingsResponse) GetJSON200() *ManagedSettingsEnvelope {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetUserManagedSettingsResponse) GetApplicationproblemJSON503() *Problem {
+	return r.ApplicationproblemJSON503
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetUserManagedSettingsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUserManagedSettingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUserManagedSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUserManagedSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUserManagedSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetUserNotificationSettingsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -32175,6 +32322,21 @@ func (c *ClientWithResponses) PutAccountInstallWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParsePutAccountInstallResponse(rsp)
+}
+
+// GetUserManagedSettingsWithResponse The managed settings the caller's organization set for them, signed.
+//
+// The values an organization's admins set for this member's Agentry clients, as a DSSE envelope of payload type `application/vnd.agentry.managed-settings+json` signed with the registry's release-signing key (the keys at `/.well-known/agentry/signing-keys.json`). The payload is described by `schemas/managed-settings-1.schema.json`. The registry sets its `registry` and `account` fields, and a client accepts a document only from the registry and for the account it is signed in to. A locked setting is one the member cannot change; one that is not locked is an organization default. The answer is 204 when no settings apply to the caller, and 503 when the registry has no signing key or no base URL, since an unsigned or unbound document is never served.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /user/managed-settings (the `GetUserManagedSettings` operationId).
+func (c *ClientWithResponses) GetUserManagedSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetUserManagedSettingsResponse, error) {
+	rsp, err := c.GetUserManagedSettings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUserManagedSettingsResponse(rsp)
 }
 
 // GetUserNotificationSettingsWithResponse How the registry's alerts reach the caller.
@@ -37654,6 +37816,49 @@ func ParsePutAccountInstallResponse(rsp *http.Response) (*PutAccountInstallRespo
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUserManagedSettingsResponse parses an HTTP response from a GetUserManagedSettingsWithResponse call
+func ParseGetUserManagedSettingsResponse(rsp *http.Response) (*GetUserManagedSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUserManagedSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ManagedSettingsEnvelope
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Problem

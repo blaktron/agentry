@@ -50,6 +50,10 @@ const (
 	// ended, in any state. The core emits none itself; the build that runs
 	// QuickAgents In Agentry delivers it through the extension seam.
 	EventRunEnded = "run.ended"
+	// EventManagedUpdated: the organization's admins changed its managed
+	// settings. The core emits none itself; the build that keeps managed
+	// settings delivers it through the extension seam.
+	EventManagedUpdated = "managed.updated"
 )
 
 // AllEvents lists the subscribable event types (validation, docs).
@@ -59,7 +63,7 @@ func AllEvents() []string {
 		EventVersionRejected, EventVersionNeedsReview, EventVersionYanked,
 		EventAgentQuarantined, EventAgentReinstated, EventAdvisoryPublished, EventAgentDependencyAlert,
 		EventScanCompleted, EventMemberAdded, EventMemberRemoved, EventPolicyUpdated,
-		EventRunEnded,
+		EventRunEnded, EventManagedUpdated,
 	}
 }
 

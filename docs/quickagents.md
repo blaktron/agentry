@@ -1118,6 +1118,38 @@ In any other release, `dependencies.agents: [{ref: ns/name, version:
 | `publish.include` | **required**; the release archive allowlist of glob patterns (`path.Match` segments; a whole segment `**` matches any depth). Nothing outside it ships, and a v2 manifest must match `agent.yaml` itself: the runner reads the manifest from the installed archive |
 | `publish.channel` | `stable` (default) or `beta` |
 
+### The rules a manifest is checked against
+
+`agentry validate`, the Builder and the registry check a manifest against the
+same rules, and each problem they report names its rule and the field it is
+about (`V10: intake[0].type: …`). A warning names its rule too and does not
+stop a publish.
+
+<!-- manifest-rules: generated from pkg/manifest's rule table by TestDocsListEveryManifestRule; do not edit -->
+
+| Rule | What it checks |
+|---|---|
+| V1 | YAML and the closed schema |
+| V2 | namespace and name match the target repository |
+| V3 | strict semver, tag match, monotonic per channel |
+| V4 | publish.include resolves and carries the entrypoints |
+| V5 | the capability vocabulary |
+| V7 | public publish: licence, LICENSE and README.md |
+| V8 | size and count quotas |
+| V9 | skill frontmatter agrees with the manifest |
+| V10 | intake, interactive hints and the guide |
+| V11 | the knowledge block and its shipped packs |
+| V12 | the inputs declaration |
+| V13 | input sources: intake questions of a source kind |
+| V14 | target hosts: host questions and capabilities.targetHosts |
+| V15 | the browser: capabilities.browser's sites, hosts, scope and secrets |
+| V16 | a persistent agent's capabilities: capabilities.persistent and its folders |
+| V17 | a persistent agent's persona |
+| V18 | a persistent agent's subagents: dependencies.agents |
+| V19 | the person's computer: capabilities.desktop's applications and computer use |
+
+<!-- /manifest-rules -->
+
 ## Installing on this machine
 
 `agentry install ns/name` resolves the release, verifies its sha256

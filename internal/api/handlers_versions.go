@@ -17,6 +17,7 @@ import (
 	"github.com/blaktron/agentry/internal/registry"
 	"github.com/blaktron/agentry/internal/scan"
 	storegen "github.com/blaktron/agentry/internal/store/gen"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // Upload limits for cli-upload archives. maxUploadBytes caps the whole
@@ -192,7 +193,7 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 	case errors.As(err, &vErr):
 		fields := make([]FieldError, 0, len(vErr.Issues))
 		for _, iss := range vErr.Issues {
-			fields = append(fields, FieldError{Field: "manifest", Message: sentence(iss.Error())})
+			fields = append(fields, manifestFieldError(iss))
 		}
 		problemValidation(w, r, "The registry rejected the submission. Each field error says what to fix.", fields...)
 	case errors.Is(err, registry.ErrRetired):
@@ -221,7 +222,7 @@ func (s *Server) writeSubmitError(w http.ResponseWriter, r *http.Request, err er
 	case errors.Is(err, auth.ErrUnauthorized):
 		problemUnauthorized(w, r, "This request carried no valid session or token. Sign in and retry.")
 	case errors.Is(err, auth.ErrForbidden):
-		problemForbidden(w, r, "This credential does not carry the role or scope this action needs.")
+		problemForbidden(w, r, forbiddenDetail(err))
 	default:
 		s.log.ErrorContext(r.Context(), "submit version", "err", err)
 		problemInternal(w, r)
@@ -238,8 +239,15 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 		return
 	}
 	defer ik.abandon(r)
-	a, role, ok := s.resolveAgentForAction(w, r, ns, name, auth.ActAgentPublish)
-	if !ok {
+	a, role, err := s.agentForAction(r.Context(), principalFrom(r.Context()), ns, name, auth.ActAgentPublish)
+	if errors.Is(err, registry.ErrNotFound) {
+		// The same answer whether the record is missing or private and out
+		// of this caller's sight, so it says nothing about which.
+		writeProblem(w, r, http.StatusNotFound, "not-found", "Not found",
+			fmt.Sprintf("There is no QuickAgent %s/%s this credential can publish to. A version is published into a QuickAgent's record, so create it first: POST /api/v1/agents with its namespace and name, or New QuickAgent on the registry's site. A token publishing to a private QuickAgent also needs the agent:read scope.", ns, name))
+		return
+	}
+	if !s.agentAccess(w, r, ns, name, a, err) {
 		return
 	}
 	p := principalFrom(r.Context())
@@ -253,10 +261,7 @@ func (s *Server) SubmitVersion(w http.ResponseWriter, r *http.Request, ns Namesp
 	}
 
 	ct := r.Header.Get("Content-Type")
-	var (
-		version registry.Version
-		err     error
-	)
+	var version registry.Version
 	switch {
 	case strings.HasPrefix(ct, "application/json"):
 		var req SubmitVersionJSONRequestBody
@@ -598,4 +603,26 @@ func (s *Server) ResolveRef(w http.ResponseWriter, r *http.Request, params Resol
 		s.log.WarnContext(r.Context(), "resolve: attestation lookup", "err", err)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// manifestFieldError reports one manifest issue at the field it is about:
+// the rule's path in agent.yaml ("intake[0].type", "publish.include") and
+// the rule id with its message. An issue with no path, or an error that is
+// no rule's (the manifest that would not parse), stays on "manifest".
+func manifestFieldError(err error) FieldError {
+	is, ok := manifest.AsIssue(err)
+	if !ok {
+		msg := strings.TrimPrefix(err.Error(), "manifest: ")
+		msg = strings.TrimPrefix(msg, "agent.yaml: ") // the field is the file's
+		return FieldError{Field: "manifest", Message: sentence(msg)}
+	}
+	field := "manifest"
+	if is.Path != "" {
+		field = is.Path
+	}
+	msg := is.Rule + ": " + is.Message
+	if is.Severity == manifest.SeverityWarning {
+		msg = is.Rule + " (warning): " + is.Message
+	}
+	return FieldError{Field: field, Message: sentence(msg)}
 }

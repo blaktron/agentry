@@ -297,10 +297,10 @@ func TestGuideChangesNothingAboutTheContract(t *testing.T) {
 // TestGuideDecodingStaysStrict: the new block is closed, and every other
 // unknown field is still refused by name.
 func TestGuideDecodingStaysStrict(t *testing.T) {
-	if _, err := Parse([]byte(guideYAML + "  extra: nope\n")); err == nil || !strings.Contains(err.Error(), "field extra not found") {
+	if _, err := Parse([]byte(guideYAML + "  extra: nope\n")); err == nil || !strings.Contains(err.Error(), "has no field \"extra\"") {
 		t.Fatalf("an unknown field inside guide was not refused by name: %v", err)
 	}
-	if _, err := Parse([]byte(v2YAML + "guidance: {}\n")); err == nil || !strings.Contains(err.Error(), "field guidance not found") {
+	if _, err := Parse([]byte(v2YAML + "guidance: {}\n")); err == nil || !strings.Contains(err.Error(), "has no field \"guidance\"") {
 		t.Fatalf("an unknown top-level field was not refused by name: %v", err)
 	}
 }

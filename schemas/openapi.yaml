@@ -787,6 +787,38 @@ paths:
                 $ref: "#/components/schemas/NotificationSettings"
         default:
           $ref: "#/components/responses/Problem"
+  /user/managed-settings:
+    get:
+      operationId: getUserManagedSettings
+      tags: [users]
+      summary: The managed settings the caller's organization set for them, signed.
+      description: >-
+        The values an organization's admins set for this member's Agentry
+        clients, as a DSSE envelope of payload type
+        `application/vnd.agentry.managed-settings+json` signed with the
+        registry's release-signing key (the keys at
+        `/.well-known/agentry/signing-keys.json`). The payload is described
+        by `schemas/managed-settings-1.schema.json`. The registry sets its
+        `registry` and `account` fields, and a client accepts a document
+        only from the registry and for the account it is signed in to. A
+        locked setting is one the member cannot change; one that is not
+        locked is an organization default. The answer is 204 when no
+        settings apply to the caller, and 503 when the registry has no
+        signing key or no base URL, since an unsigned or unbound document
+        is never served.
+      responses:
+        "200":
+          description: The signed managed settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagedSettingsEnvelope"
+        "204":
+          description: No managed settings apply to the caller.
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /user/report-designs:
     get:
       operationId: listUserReportDesigns
@@ -6973,6 +7005,37 @@ components:
         updatedAt:
           type: string
           format: date-time
+    ManagedSettingsEnvelope:
+      type: object
+      description: >-
+        A DSSE envelope over a managed settings document. Verify the
+        signature over the DSSE pre-authentication encoding of
+        `payloadType` and the decoded `payload` with a key the client
+        already trusts for this registry, and refuse any other payload
+        type.
+      required: [payloadType, payload, signatures]
+      properties:
+        payloadType:
+          type: string
+          enum: [application/vnd.agentry.managed-settings+json]
+        payload:
+          type: string
+          format: byte
+          description: The document, base64.
+        signatures:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [keyid, sig]
+            properties:
+              keyid:
+                type: string
+                description: A label the signer attached. Never choose the verifying key by it.
+              sig:
+                type: string
+                format: byte
+                description: ECDSA P-256 over SHA-256 of the pre-authentication encoding, ASN.1, base64.
     ReportDesignList:
       type: object
       description: >-
@@ -8494,9 +8557,11 @@ components:
             version.published, version.rejected, version.needs_review,
             version.yanked, agent.quarantined, agent.reinstated,
             advisory.published, agent.dependency_alert, scan.completed,
-            member.added, member.removed, policy.updated and run.ended (a
+            member.added, member.removed, policy.updated, run.ended (a
             run of one of the organization's QuickAgents In Agentry ended;
-            delivered only where the registry runs QuickAgents). A name
+            delivered only where the registry runs QuickAgents) and
+            managed.updated (the organization's admins changed its managed
+            settings; delivered only where the registry keeps them). A name
             outside the catalogue is refused with 422.
           items:
             type: string

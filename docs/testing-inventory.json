@@ -1368,6 +1368,29 @@
           ]
         },
         {
+          "path": "internal/api/managed_settings_test.go",
+          "tests": [
+            "TestManagedSettingsWithoutExtensionIsNoContent",
+            "TestManagedSettingsNeedsASignedInCaller",
+            "TestManagedSettingsNilAnswerIsNoContent",
+            "TestManagedSettingsSourceErrorIsInternal",
+            "TestManagedSettingsSignedAndServed",
+            "TestManagedSettingsKeylessRoleServesWhatTheKeyHolderSigned",
+            "TestManagedSettingsRefusesWhatItCannotVerify",
+            "TestManagedSettingsRefusesAnotherRegistrysDocument",
+            "TestManagedSettingsSignerRefusesContentOffTheCatalogue",
+            "TestManagedSettingsWithoutBaseURL",
+            "TestSetManagedSettingsTwicePanics"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/meta_brand_test.go",
           "tests": [
             "TestMetaReportsBrandAndUI"
@@ -1450,6 +1473,19 @@
           "benchmarks": [],
           "fixtureEntryPoint": false,
           "dependencyHints": []
+        },
+        {
+          "path": "internal/api/publish_errors_test.go",
+          "tests": [
+            "TestPublishErrorsSayWhatIsMissing"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
         },
         {
           "path": "internal/api/queue_rescue_test.go",
@@ -5015,6 +5051,43 @@
       ]
     },
     {
+      "owner": "pkg/managedsettings",
+      "behavior": "Managed settings documents: the catalogue, its schema, and signed envelopes that open only with the right key and type",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/managedsettings/managedsettings_test.go",
+          "tests": [
+            "TestOpenRoundTrip",
+            "TestOpenRefusesAnotherKey",
+            "TestOpenRefusesAnotherPayloadType",
+            "TestAttestationVerifierRefusesADocument",
+            "TestOpenRefusesTamperedPayload",
+            "TestOpenRefusesUnknownFieldsAndRows",
+            "TestValidateRefusesMissingBinding",
+            "TestNoRowTurnsAnythingOn",
+            "TestOpenKeepsRowsANewerRegistryAdded"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/managedsettings/schema_test.go",
+          "tests": [
+            "TestSchemaMatchesCatalogue"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        }
+      ]
+    },
+    {
       "owner": "pkg/manifest",
       "behavior": "Manifest parsing, rules, canonical form and capability widening",
       "disposition": "retain",
@@ -5291,6 +5364,17 @@
           ]
         },
         {
+          "path": "pkg/manifest/parseerror_test.go",
+          "tests": [
+            "TestParseErrorsSpeakTheManifestsTerms",
+            "TestEveryManifestBlockHasAPath"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "pkg/manifest/persistent_test.go",
           "tests": [
             "TestAPersistentReleaseParsesAndValidates",
@@ -5331,6 +5415,18 @@
           "tests": [
             "TestRulesMatchReportedIDs",
             "TestRulesIsACopy"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "source/file contract"
+          ]
+        },
+        {
+          "path": "pkg/manifest/rulesdoc_test.go",
+          "tests": [
+            "TestDocsListEveryManifestRule"
           ],
           "fuzz": [],
           "benchmarks": [],
