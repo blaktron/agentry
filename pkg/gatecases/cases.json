@@ -1650,6 +1650,7 @@
             "selfConfigure": true,
             "calendars": true,
             "meetings": true,
+            "desktop": true,
             "mail": [
               "google"
             ],
@@ -1675,6 +1676,7 @@
         "declaredCapabilities": [
           "persistent.calendars",
           "persistent.clock",
+          "persistent.desktop",
           "persistent.helper",
           "persistent.imageServers",
           "persistent.mail",
@@ -1715,6 +1717,7 @@
           "persistent.calendars",
           "persistent.clock",
           "persistent.coder",
+          "persistent.desktop",
           "persistent.helper",
           "persistent.imageServers",
           "persistent.mail",

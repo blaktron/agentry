@@ -17,6 +17,7 @@ import (
 //     ordinary run (V16): keep time and tasks, keep a memory, follow
 //     skills, be given stored secrets, change its own name and persona,
 //     reach the person's calendars, meetings, mail and image-run servers,
+//     be offered the applications on the person's computer,
 //     use the coding toolchain, the web tools, Agentry's helper tools and
 //     AI Review. The set is closed and every key is off unless declared,
 //     so a runner grants only what the release names and an older runner
@@ -51,6 +52,12 @@ type Persistent struct {
 	Calendars bool `yaml:"calendars,omitempty" json:"calendars,omitempty"`
 	// Meetings lets the agent take meeting notes the person arms.
 	Meetings bool `yaml:"meetings,omitempty" json:"meetings,omitempty"`
+	// Desktop lets the agent be offered the applications on the person's
+	// computer, through Agentry Desktop: each application server of the
+	// catalogue, and computer use, once the person switches it on. The
+	// release's capabilities.desktop line, when it has one, narrows what is
+	// offered.
+	Desktop bool `yaml:"desktop,omitempty" json:"desktop,omitempty"`
 	// Mail names the mail providers the agent may reach once the person
 	// signs in, from MailProviderNames.
 	Mail []string `yaml:"mail,omitempty" json:"mail,omitempty"`
@@ -93,6 +100,7 @@ var persistentCapabilities = []PersistentCapability{
 	{"selfConfigure", "changing its own name and persona"},
 	{"calendars", "reading the calendar feeds you add"},
 	{"meetings", "taking notes in the meetings you arm"},
+	{"desktop", "using the applications on your computer that you switch on, through Agentry Desktop"},
 	{"mail", "your mail, at the providers you sign in to"},
 	{"imageServers", "servers the runner runs from its own images, once you sign in"},
 	{"coder", "the coding toolchain: any program in the coding image, open web access for its commands, a public browser, a development host, ports and git host accounts"},
@@ -163,6 +171,8 @@ func (p *Persistent) Declares(key string) bool {
 		return p.Calendars
 	case "meetings":
 		return p.Meetings
+	case "desktop":
+		return p.Desktop
 	case "mail":
 		return len(p.Mail) > 0
 	case "imageServers":

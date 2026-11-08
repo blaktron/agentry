@@ -314,6 +314,7 @@
             "selfConfigure": { "type": "boolean", "description": "The agent may change its own name and persona." },
             "calendars": { "type": "boolean", "description": "Reading the calendar feeds the person adds." },
             "meetings": { "type": "boolean", "description": "Taking notes in the meetings the person arms." },
+            "desktop": { "type": "boolean", "description": "Being offered the applications on the person's computer, through Agentry Desktop: each application server of the catalogue, and computer use, once the person switches it on. The release's capabilities.desktop line, when it has one, narrows what is offered." },
             "mail": {
               "type": "array",
               "description": "The mail providers the agent may reach once the person signs in. google needs the google-workspace image server and microsoft the microsoft-365 one.",
