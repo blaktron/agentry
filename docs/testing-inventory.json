@@ -5065,6 +5065,7 @@
             "TestOpenRefusesUnknownFieldsAndRows",
             "TestValidateRefusesMissingBinding",
             "TestNoRowTurnsAnythingOn",
+            "TestEveryRowTakesOnlyItsValues",
             "TestOpenKeepsRowsANewerRegistryAdded"
           ],
           "fuzz": [],
