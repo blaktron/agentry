@@ -92,6 +92,27 @@
             }
           }
         },
+        "codingTools.allowed": {
+          "description": "Which coding tools members' runs may use. A lock lists the tools still allowed. Only ever locked.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "claude-code",
+                  "codex",
+                  "copilot"
+                ]
+              }
+            },
+            "locked": {
+              "const": true
+            }
+          }
+        },
         "deliverables.destinations": {
           "description": "Where a run may send its result and files: a folder, a webhook, an S3 bucket. A lock lists the members still allowed. Only ever locked.",
           "$ref": "#/$defs/setting",
@@ -221,6 +242,125 @@
             }
           }
         },
+        "model.customEndpoints": {
+          "description": "Whether members' runs may use a model endpoint of their own, and whether it may be plain http.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "https-only",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "model.default": {
+          "description": "The model members' runs use: the only one when locked, the one a member who chose none runs on as a default.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "provider",
+                "model"
+              ],
+              "properties": {
+                "provider": {
+                  "enum": [
+                    "anthropic",
+                    "openai",
+                    "google",
+                    "vultr",
+                    "openrouter",
+                    "poe",
+                    "huggingface",
+                    "copilot",
+                    "agentry",
+                    "custom"
+                  ]
+                },
+                "model": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$"
+                }
+              }
+            }
+          }
+        },
+        "model.providers": {
+          "description": "Which model providers members' runs may use. A lock lists the providers still allowed. Only ever locked.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "anthropic",
+                  "openai",
+                  "google",
+                  "vultr",
+                  "openrouter",
+                  "poe",
+                  "huggingface",
+                  "copilot",
+                  "agentry",
+                  "custom"
+                ]
+              }
+            },
+            "locked": {
+              "const": true
+            }
+          }
+        },
+        "model.signIns": {
+          "description": "Which subscriptions and plans of their own members' runs may spend; none when the list is empty. Only ever locked.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "array",
+              "minItems": 0,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "subscription",
+                  "claude-signin",
+                  "chatgpt-plan",
+                  "copilot-signin"
+                ]
+              }
+            },
+            "locked": {
+              "const": true
+            }
+          }
+        },
+        "model.source": {
+          "description": "What pays for members' models: their own keys and plans, the organization's credits, or the organization's own key, which stays with the registry and is never named here.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source"
+              ],
+              "properties": {
+                "source": {
+                  "enum": [
+                    "member",
+                    "agentry-credits",
+                    "organization-key"
+                  ]
+                }
+              }
+            }
+          }
+        },
         "persistentReleases": {
           "description": "Whether members may run persistent QuickAgents from the registry. Values run from the most open to the most restrictive.",
           "$ref": "#/$defs/setting",
@@ -230,6 +370,32 @@
                 "allowed",
                 "forbidden"
               ]
+            }
+          }
+        },
+        "review.source": {
+          "description": "What pays for AI Review: the member's own key, the organization's credits, the organization's key (named by reference, never by value), or no AI Review.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source"
+              ],
+              "properties": {
+                "source": {
+                  "enum": [
+                    "member",
+                    "agentry-credits",
+                    "organization-key",
+                    "off"
+                  ]
+                },
+                "key": {
+                  "$ref": "#/$defs/keyRef"
+                }
+              }
             }
           }
         },
@@ -324,6 +490,41 @@
               "const": true
             }
           }
+        },
+        "webSearch.source": {
+          "description": "What pays for web search: the member's own key, the organization's credits, the organization's key for a provider (named by reference, never by value), or no web search.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source"
+              ],
+              "properties": {
+                "source": {
+                  "enum": [
+                    "member",
+                    "agentry-credits",
+                    "organization-key",
+                    "off"
+                  ]
+                },
+                "provider": {
+                  "enum": [
+                    "brave",
+                    "tavily",
+                    "exa",
+                    "perplexity",
+                    "youcom"
+                  ]
+                },
+                "key": {
+                  "$ref": "#/$defs/keyRef"
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -365,6 +566,25 @@
             "pattern": "^[a-z0-9][a-z0-9-]{0,38}$"
           },
           "description": "Namespaces members may also install from; only with scope organization-and-built-ins."
+        }
+      }
+    },
+    "keyRef": {
+      "description": "A reference to an organization's key and its revision, which a client exchanges for the key. Never the key.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "rev"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,63}$"
+        },
+        "rev": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     }

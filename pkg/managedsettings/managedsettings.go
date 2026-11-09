@@ -102,6 +102,17 @@ const (
 	// KindMinimumVersion is a version "X.Y.Z": a client older than it
 	// refuses runs and names the update.
 	KindMinimumVersion Kind = "minimumVersion"
+	// KindModel is {"provider": …, "model": …}: a provider of the row's
+	// Values and a model id. Locked, it is the only model members' runs
+	// use; as a default, the one a member who chose none runs on.
+	KindModel Kind = "model"
+	// KindSource is {"source": …} with one of the row's Values: what pays
+	// for a service, from the member's own key (the most open) to none at
+	// all. A row that delivers keys (Delivers) carries, with
+	// organization-key and only then, {"key": {"id", "rev"}}: a reference
+	// to the organization's key, never its value. A row with Providers
+	// names the service's provider with organization-key.
+	KindSource Kind = "source"
 )
 
 // Row is one entry of the catalogue.
@@ -120,6 +131,15 @@ type Row struct {
 	// LockOnly says the row is only ever locked: a default would have
 	// nothing to apply (a set, a source list, a version floor).
 	LockOnly bool
+	// AllowEmpty says a set may have no member: nothing of it allowed.
+	AllowEmpty bool
+	// Delivers says a source row's organization-key carries a key
+	// reference, which a client exchanges for the key itself; a row that
+	// does not deliver never carries one.
+	Delivers bool
+	// Providers are the providers a source row's organization-key may
+	// name; empty when the row names none.
+	Providers []string
 	// Summary says in one sentence what the row decides, for consoles and
 	// for the client's own listing.
 	Summary string
@@ -155,6 +175,70 @@ const (
 	MalwareCheck             = "malwareCheck"
 	UpdatesMinimumVersion    = "updates.minimumVersion"
 	BugReports               = "bugReports"
+
+	ModelProviders       = "model.providers"
+	ModelDefault         = "model.default"
+	ModelSource          = "model.source"
+	ModelSignIns         = "model.signIns"
+	ModelCustomEndpoints = "model.customEndpoints"
+	ReviewSource         = "review.source"
+	WebSearchSource      = "webSearch.source"
+	CodingToolsAllowed   = "codingTools.allowed"
+)
+
+// Members of ModelProviders and providers of ModelDefault: the model
+// providers a run may use. ProviderAgentry is the registry's own
+// endpoint, paid from credits or by the organization's key; ProviderCustom
+// is any endpoint of the member's own.
+const (
+	ProviderAnthropic   = "anthropic"
+	ProviderOpenAI      = "openai"
+	ProviderGoogle      = "google"
+	ProviderVultr       = "vultr"
+	ProviderOpenRouter  = "openrouter"
+	ProviderPoe         = "poe"
+	ProviderHuggingFace = "huggingface"
+	ProviderCopilot     = "copilot"
+	ProviderAgentry     = "agentry"
+	ProviderCustom      = "custom"
+)
+
+// Members of ModelSignIns: the subscriptions and plans a run may spend.
+const (
+	SignInSubscription = "subscription"
+	SignInClaude       = "claude-signin"
+	SignInChatGPT      = "chatgpt-plan"
+	SignInCopilot      = "copilot-signin"
+)
+
+// Values of ModelCustomEndpoints.
+const (
+	EndpointsHTTPSOnly = "https-only"
+)
+
+// Values of the source rows, from the most open to none.
+const (
+	SourceMember          = "member"
+	SourceAgentryCredits  = "agentry-credits"
+	SourceOrganizationKey = "organization-key"
+	SourceOff             = "off"
+)
+
+// Providers of WebSearchSource.
+const (
+	SearchBrave      = "brave"
+	SearchTavily     = "tavily"
+	SearchExa        = "exa"
+	SearchPerplexity = "perplexity"
+	SearchYouCom     = "youcom"
+)
+
+// Members of CodingToolsAllowed: the coding tools whose harnesses a run
+// may use.
+const (
+	CodingClaudeCode = "claude-code"
+	CodingCodex      = "codex"
+	CodingCopilot    = "copilot"
 )
 
 // Values of the allowed-or-forbidden choices, UnsafeMode's among them.
@@ -229,6 +313,26 @@ var catalogue = []Row{
 	{ID: UpdatesMinimumVersion, Kind: KindMinimumVersion, LockOnly: true,
 		Summary: "The oldest Agentry client that may run; an older one names the update."},
 	allowedOrForbidden(BugReports, "Whether members may send bug reports from their clients."),
+	{ID: ModelProviders, Kind: KindSet, LockOnly: true,
+		Values:  []string{ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderVultr, ProviderOpenRouter, ProviderPoe, ProviderHuggingFace, ProviderCopilot, ProviderAgentry, ProviderCustom},
+		Summary: "Which model providers members' runs may use."},
+	{ID: ModelDefault, Kind: KindModel,
+		Values:  []string{ProviderAnthropic, ProviderOpenAI, ProviderGoogle, ProviderVultr, ProviderOpenRouter, ProviderPoe, ProviderHuggingFace, ProviderCopilot, ProviderAgentry, ProviderCustom},
+		Summary: "The model members' runs use: the only one when locked, the one a member who chose none runs on as a default."},
+	{ID: ModelSource, Kind: KindSource, Values: []string{SourceMember, SourceAgentryCredits, SourceOrganizationKey},
+		Summary: "What pays for members' models: their own keys and plans, the organization's credits, or the organization's own key, which stays with the registry."},
+	{ID: ModelSignIns, Kind: KindSet, LockOnly: true, AllowEmpty: true,
+		Values:  []string{SignInSubscription, SignInClaude, SignInChatGPT, SignInCopilot},
+		Summary: "Which subscriptions and plans of their own members' runs may spend; none when the list is empty."},
+	{ID: ModelCustomEndpoints, Kind: KindChoice, Values: []string{Allowed, EndpointsHTTPSOnly, Forbidden},
+		Summary: "Whether members' runs may use a model endpoint of their own, and whether it may be plain http."},
+	{ID: ReviewSource, Kind: KindSource, Values: []string{SourceMember, SourceAgentryCredits, SourceOrganizationKey, SourceOff}, Delivers: true,
+		Summary: "What pays for AI Review: the member's own key, the organization's credits, the organization's key, or no AI Review."},
+	{ID: WebSearchSource, Kind: KindSource, Values: []string{SourceMember, SourceAgentryCredits, SourceOrganizationKey, SourceOff}, Delivers: true,
+		Providers: []string{SearchBrave, SearchTavily, SearchExa, SearchPerplexity, SearchYouCom},
+		Summary:   "What pays for web search: the member's own key, the organization's credits, the organization's key for a provider, or no web search."},
+	{ID: CodingToolsAllowed, Kind: KindSet, LockOnly: true, Values: []string{CodingClaudeCode, CodingCodex, CodingCopilot},
+		Summary: "Which coding tools members' runs may use."},
 }
 
 // Catalogue is every row a document may carry, sorted by id.
@@ -247,6 +351,32 @@ func Lookup(id string) (Row, bool) {
 	}
 	return Row{}, false
 }
+
+// Model is the value of a KindModel row.
+type Model struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+}
+
+// Source is the value of a KindSource row.
+type Source struct {
+	Source   string  `json:"source"`
+	Provider string  `json:"provider,omitempty"`
+	Key      *KeyRef `json:"key,omitempty"`
+}
+
+// KeyRef names an organization's key and its revision. It is a reference
+// a client exchanges for the key, never the key.
+type KeyRef struct {
+	ID  string `json:"id"`
+	Rev int64  `json:"rev"`
+}
+
+// modelPattern is a model id as providers name them.
+var modelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$`)
+
+// keyIDPattern is an organization key's id.
+var keyIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,63}$`)
 
 // Sources is the value of an InstallSources row.
 type Sources struct {
@@ -273,8 +403,12 @@ func (r Row) Check(s Setting) error {
 		}
 	case KindSet:
 		var members []string
-		if err := strictJSON(s.Value, &members); err != nil || len(members) == 0 {
-			return fmt.Errorf("managed settings: %s must be a list of at least one of %s", r.ID, strings.Join(r.Values, ", "))
+		if err := strictJSON(s.Value, &members); err != nil || members == nil || (len(members) == 0 && !r.AllowEmpty) {
+			least := "at least one"
+			if r.AllowEmpty {
+				least = "any"
+			}
+			return fmt.Errorf("managed settings: %s must be a list of %s of %s", r.ID, least, strings.Join(r.Values, ", "))
 		}
 		seen := map[string]bool{}
 		for _, m := range members {
@@ -319,8 +453,40 @@ func (r Row) Check(s Setting) error {
 		if err := strictJSON(s.Value, &v); err != nil || !versionPattern.MatchString(v) {
 			return fmt.Errorf("managed settings: %s must be a version X.Y.Z", r.ID)
 		}
+	case KindModel:
+		var v Model
+		if err := strictJSON(s.Value, &v); err != nil || !slices.Contains(r.Values, v.Provider) || !modelPattern.MatchString(v.Model) {
+			return fmt.Errorf("managed settings: %s must be {\"provider\": one of %s, \"model\": a model id}", r.ID, strings.Join(r.Values, ", "))
+		}
+	case KindSource:
+		return r.checkSource(s)
 	default:
 		return fmt.Errorf("managed settings: %s has no kind", r.ID)
+	}
+	return nil
+}
+
+// checkSource checks a KindSource value: a source of the row's, a provider
+// only where the row names providers and only with organization-key, and a
+// key reference exactly when the row delivers keys and the source is
+// organization-key.
+func (r Row) checkSource(s Setting) error {
+	var v Source
+	if err := strictJSON(s.Value, &v); err != nil || !slices.Contains(r.Values, v.Source) {
+		return fmt.Errorf("managed settings: %s must be {\"source\": one of %s}", r.ID, strings.Join(r.Values, ", "))
+	}
+	org := v.Source == SourceOrganizationKey
+	switch {
+	case v.Provider != "" && (!org || !slices.Contains(r.Providers, v.Provider)):
+		return fmt.Errorf("managed settings: %s names a provider only with %s, one of %s", r.ID, SourceOrganizationKey, strings.Join(r.Providers, ", "))
+	case org && len(r.Providers) > 0 && v.Provider == "":
+		return fmt.Errorf("managed settings: %s with %s names its provider, one of %s", r.ID, SourceOrganizationKey, strings.Join(r.Providers, ", "))
+	case v.Key != nil && (!org || !r.Delivers):
+		return fmt.Errorf("managed settings: %s carries a key reference only with %s on a row that delivers keys", r.ID, SourceOrganizationKey)
+	case org && r.Delivers && v.Key == nil:
+		return fmt.Errorf("managed settings: %s with %s names the organization's key", r.ID, SourceOrganizationKey)
+	case v.Key != nil && (!keyIDPattern.MatchString(v.Key.ID) || v.Key.Rev < 1):
+		return fmt.Errorf("managed settings: %s's key reference must be an id and a revision of at least 1", r.ID)
 	}
 	return nil
 }
