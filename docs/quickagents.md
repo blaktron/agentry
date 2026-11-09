@@ -55,6 +55,12 @@ docker-mcp-gateway plane right away — pulling the pinned gateway and
 harness images and building the local runner image. The key itself is
 never stored; only the environment variable *name* that will hold it.
 
+The provider and model setup writes are this computer's first **saved
+model**, and its default. `agentry providers add` and `agentry models add`
+keep more, up to 10, each checked when it is saved, and `agentry run
+--model <name>` runs a QuickAgent on any of them (CLI v0.7.39 or later;
+[providers and saved models](runner.md#providers-and-saved-models)).
+
 | provider | default model | key env var | agent-container egress |
 |---|---|---|---|
 | `anthropic` | claude-sonnet-4-5 | `ANTHROPIC_API_KEY` | api.anthropic.com:443 |
