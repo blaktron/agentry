@@ -1307,7 +1307,7 @@ later); under docker-agent the conversation is summarised before it
 outgrows the window, and a refusal as too long is summarised and sent
 again (CLI v0.7.25 or later); and the agent keeps the steps of its
 task in a checklist, which it reads back after each summary and before its
-final answer (CLI v0.7.43 or later;
+final answer (CLI v0.7.44 or later;
 [the checklist](runner.md#the-scratch-folder)). An instruction for a task
 of many steps can lean on that: name the steps the work must cover, and
 have findings written into the report as they are found.
