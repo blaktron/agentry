@@ -39,6 +39,7 @@ import (
 	"github.com/blaktron/agentry/internal/voice"
 	"github.com/blaktron/agentry/internal/webhook"
 	"github.com/blaktron/agentry/pkg/connector"
+	"github.com/blaktron/agentry/pkg/keyhandover"
 	"github.com/blaktron/agentry/pkg/ruleset"
 	"github.com/blaktron/agentry/pkg/websearch"
 )
@@ -295,8 +296,20 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger, opts ...Option) *
 			// nothing: retired keys stay advertised, and
 			// a key some attestation lacks triggers the re-attestation sweep
 			// once the pipeline below exists to run it.
+			// A new key is handed over to by the outgoing one, which the
+			// operator keeps for this start, so a client that pinned the
+			// outgoing key can trust the new one.
+			prev, perr := scan.NewPreviousSigner(context.Background(), cfg.Signing.PreviousKeyFile, cfg.Signing.PreviousKMSKeyARN, cfg.Signing.KMSRegion)
+			if perr != nil {
+				panic(perr)
+			}
 			var kerr error
-			keyReg, kerr = scan.RegisterSigningKey(context.Background(), st, signer)
+			keyReg, kerr = scan.RotateSigningKey(context.Background(), st, signer, scan.RotationOptions{
+				Registry:        cfg.BaseURL,
+				Previous:        prev,
+				WithoutHandover: cfg.Signing.RotateWithoutHandover,
+				DevInstance:     cfg.DevMode,
+			}, log)
 			if kerr != nil {
 				panic(kerr)
 			}
@@ -786,6 +799,37 @@ func (s *Server) wellKnownSigningKeys(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+// wellKnownSigningKeyHandovers serves
+// /.well-known/agentry/signing-key-handovers.json: every handover the
+// registry's outgoing signing keys made to their successors, oldest first.
+// A client that pinned an earlier key walks it to trust the key that signs
+// now; each link is verified with the key before it, so the document needs
+// no protection of its own. A registry with no handovers serves an empty
+// list.
+func (s *Server) wellKnownSigningKeyHandovers(w http.ResponseWriter, r *http.Request) {
+	out := keyhandover.Chain{Registry: s.cfg.BaseURL, Handovers: []keyhandover.Envelope{}}
+	if s.st != nil {
+		rows, err := s.q().ListSigningKeyHandovers(r.Context())
+		if err != nil {
+			s.log.ErrorContext(r.Context(), "signing key handovers: listing", "err", err)
+			writeProblem(w, r, http.StatusInternalServerError, "internal", "Internal error", "The signing key handovers could not be read.")
+			return
+		}
+		for _, row := range rows {
+			var env keyhandover.Envelope
+			if err := json.Unmarshal(row.DsseEnvelope, &env); err != nil {
+				s.log.ErrorContext(r.Context(), "signing key handovers: a stored envelope does not decode", "from", row.FromKeyID, "to", row.ToKeyID, "err", err)
+				continue
+			}
+			out.Handovers = append(out.Handovers, env)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(out)
+}
+
 // signingKey is one entry in signing-keys.json. notBefore/notAfter are what
 // make 's "rotation = overlapping validity windows" representable: without
 // them the document can only ever describe one key as current, and an operator
@@ -946,6 +990,7 @@ func NewHandlerWithGit(s *Server, mountGit func(httpmux.Mux)) http.Handler {
 	MountFunc(mux, "GET /readyz", s.readyz)
 	MountFunc(mux, "GET /.well-known/agentry/registry.json", s.wellKnownRegistry)
 	MountFunc(mux, "GET /.well-known/agentry/signing-keys.json", s.wellKnownSigningKeys)
+	MountFunc(mux, "GET /.well-known/agentry/signing-key-handovers.json", s.wellKnownSigningKeyHandovers)
 
 	// Prometheus exposition. Mounted outside /api/v1 alongside the
 	// health endpoints and, like them, unauthenticated: a scraper is

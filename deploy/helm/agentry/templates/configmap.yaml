@@ -94,6 +94,18 @@ data:
       {{- end }}
       kmsKeyARN: {{ .Values.config.signing.kmsKeyARN | quote }}
       kmsRegion: {{ .Values.config.signing.kmsRegion | quote }}
+      {{- if and .Values.signingKey.previousKey (not .Values.config.signing.previousKeyFile) }}
+      {{- fail "signingKey.previousKey needs config.signing.previousKeyFile" }}
+      {{- end }}
+      {{- with .Values.config.signing.previousKeyFile }}
+      previousKeyFile: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.config.signing.previousKmsKeyARN }}
+      previousKmsKeyARN: {{ . | quote }}
+      {{- end }}
+      {{- if .Values.config.signing.rotateWithoutHandover }}
+      rotateWithoutHandover: true
+      {{- end }}
       {{- with .Values.config.signing.notBefore }}
       notBefore: {{ . | quote }}
       {{- end }}

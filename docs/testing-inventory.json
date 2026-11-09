@@ -1976,6 +1976,20 @@
           ]
         },
         {
+          "path": "internal/api/signing_handover_test.go",
+          "tests": [
+            "TestARotationWithThePreviousKeyServesItsHandover"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport",
+            "source/file contract"
+          ]
+        },
+        {
           "path": "internal/api/signing_keys_test.go",
           "tests": [
             "TestSigningKeysOmitAnUnsetWindow",
@@ -3357,6 +3371,18 @@
           "fixtureEntryPoint": false,
           "dependencyHints": [
             "source/file contract"
+          ]
+        },
+        {
+          "path": "internal/scan/handover_test.go",
+          "tests": [
+            "TestRotateSigningKeyHandsOverOrRefuses"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture"
           ]
         },
         {
@@ -5041,6 +5067,27 @@
             "TestAVoiceIsAskedTheVoiceSetOnceAsData",
             "TestAVoiceQuestionAtTheLineFlagsTheVoice",
             "TestAVoiceThatIsNotOneOrAFailedJudgeIsNotScanned"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
+      "owner": "pkg/keyhandover",
+      "behavior": "Signing key handovers: statements an outgoing key signs about its successor, and the chain a client walks from a key it pinned",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/keyhandover/keyhandover_test.go",
+          "tests": [
+            "TestFollowAdoptsOneAndTwoLinksInOrder",
+            "TestFollowPassesOverWhatNoTrustedKeySigned",
+            "TestFollowRefusesAnotherRegistrysHandover",
+            "TestOpenRefusesAStatementThatDoesNotMatchItsKeys",
+            "TestPayloadTypesAreKeptApart"
           ],
           "fuzz": [],
           "benchmarks": [],

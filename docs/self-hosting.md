@@ -480,11 +480,13 @@ public part of each key it signs with, keeps the old one listed as `retired`,
 and at the next start queues a sweep that countersigns every attestation the
 new key has not signed (the log says how many were pending and how many it
 signed; a start on a key that some attestation still lacks queues it again),
-so nothing already published stays unverifiable — but a client that pinned
-the old key is told the advertised key ids changed and has to re-pin
-deliberately before it verifies anything published afterwards. Rotate on
-purpose, not by accident; the rotation runbook in `docs/ops/runbooks.md`
-has the steps.
+so nothing already published stays unverifiable. A planned rotation keeps
+the old key for one start (`AGENTRY_SIGNING_PREVIOUS_KEY_FILE`) so that it
+hands over to the new one, which lets a client that pinned it trust the new
+key; a lost key cannot hand over, and then a client that pinned it is told
+the advertised key ids changed and has to re-pin deliberately before it
+verifies anything published afterwards. Rotate on purpose, not by accident;
+the rotation runbook in `docs/ops/runbooks.md` has the steps.
 
 With the compose stack, two lines in `.env` wire the key in (the quickstart
 above writes them; `AGENTRY_SIGNING_KIND` is `file` by default):

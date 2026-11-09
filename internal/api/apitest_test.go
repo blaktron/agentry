@@ -185,6 +185,12 @@ func newTestEnvCfg(t *testing.T, cfgFn func(*config.Config), opts ...func(*api.S
 	if cfgFn != nil {
 		cfgFn(&cfg)
 	}
+	// Every test server shares one database, so each one's key replaces
+	// the last one's with no handover; a test of the handover keeps the
+	// outgoing key as the previous one.
+	if cfg.Signing.PreviousKeyFile == "" && cfg.Signing.PreviousKMSKeyARN == "" {
+		cfg.Signing.RotateWithoutHandover = true
+	}
 	srvObj := api.New(cfg, envSt, nil)
 	for _, o := range opts {
 		o(srvObj)

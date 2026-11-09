@@ -342,6 +342,18 @@ type Signing struct {
 	// YAML/file only — a list does not map onto a single env var, and the
 	// values are public keys, not secrets.
 	AdditionalKeys []VerificationKey `yaml:"additionalKeys"`
+	// PreviousKeyFile (a PEM private key) or PreviousKMSKeyARN names the
+	// key the registry signed with until this start, kept for the start
+	// that rotates to a new key: it signs the handover to the new key,
+	// which lets a client that pinned it trust the new one. Either one,
+	// never both; neither is needed once the rotation has started.
+	PreviousKeyFile   string `yaml:"previousKeyFile"`
+	PreviousKMSKeyARN string `yaml:"previousKmsKeyARN"`
+	// RotateWithoutHandover lets a new key replace the active one with no
+	// handover, for an outgoing key that is lost or compromised. Without
+	// it, a start on a new key that the active key has not handed over to
+	// is refused. Every client that pinned the outgoing key must re-pin.
+	RotateWithoutHandover bool `yaml:"rotateWithoutHandover"`
 }
 
 // VerificationKey is one published entry in signing-keys.json.
@@ -782,6 +794,8 @@ func applyEnv(c *Config) error {
 	str("AGENTRY_SIGNING_KEY_FILE", &c.Signing.KeyFile)
 	str("AGENTRY_SIGNING_NOT_BEFORE", &c.Signing.NotBefore)
 	str("AGENTRY_SIGNING_NOT_AFTER", &c.Signing.NotAfter)
+	str("AGENTRY_SIGNING_PREVIOUS_KEY_FILE", &c.Signing.PreviousKeyFile)
+	str("AGENTRY_SIGNING_PREVIOUS_KMS_KEY_ARN", &c.Signing.PreviousKMSKeyARN)
 	str("AGENTRY_AUTH_SEALING_KEY", &c.Auth.SealingKey)
 	str("AGENTRY_KNOWLEDGE_SEALING_KEY", &c.Knowledge.SealingKey)
 	str("AGENTRY_JUDGE_PROVIDER", &c.Judge.Provider)
@@ -845,6 +859,9 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := boolean("AGENTRY_DATABASE_MIGRATE_ON_START", &c.Database.MigrateOnStart); err != nil {
+		return err
+	}
+	if err := boolean("AGENTRY_SIGNING_ROTATE_WITHOUT_HANDOVER", &c.Signing.RotateWithoutHandover); err != nil {
 		return err
 	}
 	if err := boolean("AGENTRY_AUTH_COOKIE_SECURE", &c.Auth.CookieSecure); err != nil {
@@ -1129,6 +1146,9 @@ func (c Config) Validate() error {
 	}
 	if c.Signing.Kind == "kms" && c.Signing.KMSKeyARN == "" {
 		return fmt.Errorf("config: signing.kmsKeyARN is required when signing.kind is kms")
+	}
+	if c.Signing.PreviousKeyFile != "" && c.Signing.PreviousKMSKeyARN != "" {
+		return fmt.Errorf("config: signing.previousKeyFile and signing.previousKmsKeyARN name one outgoing key: set one of them")
 	}
 	if err := validateWindow("signing", c.Signing.NotBefore, c.Signing.NotAfter); err != nil {
 		return err

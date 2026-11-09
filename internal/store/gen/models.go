@@ -515,6 +515,13 @@ type SigningKey struct {
 	RetiredAt    *time.Time `json:"retired_at"`
 }
 
+type SigningKeyHandover struct {
+	FromKeyID    string    `json:"from_key_id"`
+	ToKeyID      string    `json:"to_key_id"`
+	DsseEnvelope []byte    `json:"dsse_envelope"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type Star struct {
 	UserID    uuid.UUID `json:"user_id"`
 	AgentID   uuid.UUID `json:"agent_id"`

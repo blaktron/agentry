@@ -180,7 +180,18 @@ original signatures.
    clients that pinned it, and **never schedule deletion of a key that
    signed a published version**.
 2. Point signing at the new key (`AGENTRY_SIGNING_KMS_KEY_ARN`, or the file
-   key) and roll the role that holds it: the worker (`all`, on compose). The
+   key) **and keep the outgoing key for this start** as the previous key:
+   `AGENTRY_SIGNING_PREVIOUS_KEY_FILE` (a file key in the same directory as
+   the new one; on Helm, `config.signing.previousKeyFile` and
+   `signingKey.previousKey`, a second key in the signing Secret) or
+   `AGENTRY_SIGNING_PREVIOUS_KMS_KEY_ARN`. At start the outgoing key signs
+   the **handover** to the new one (log: `signing key handed over`), which
+   the registry serves at `/.well-known/agentry/signing-key-handovers.json`
+   and a client that pinned the outgoing key follows to the new key. A
+   start on a key the active key has not handed over to is refused outside
+   dev mode (`the signing key changed with no handover`), naming both keys,
+   so a rotation cannot silently cost every client its trust in the new key.
+   Then roll the role that holds the key: the worker (`all`, on compose). The
    api and git roles hold no key and need no restart: they read the active
    key and the ruleset attestation from what the worker recorded at start,
    within the key set's five-minute cache. At start the log
@@ -196,13 +207,19 @@ original signatures.
    `re-attest: not signed` says why for each (a statement that does not
    describe its release is a corrupted row, not something to vouch for).
    The next start queues the sweep again for whatever is still pending.
-4. `signing.additionalKeys` is still honoured for a key the registry has no
+4. Once the new key is active everywhere, remove the previous key setting.
+   A restart on the new key needs it no more: the handover is recorded.
+5. `signing.additionalKeys` is still honoured for a key the registry has no
    record of (one that signed before the record existed, or a verification
    key from elsewhere); a configured key the registry also has on record
    carries the record's status. Nothing needs removing later: a retired key
    drops out of the set by itself once no attestation carries its signature.
 
-**If the key is suspected compromised:** rotate immediately as above, then
+**If the key is suspected compromised:** rotate immediately as above, but
+with **no handover**: a compromised key must not vouch for its successor.
+Leave the previous key unset and set `AGENTRY_SIGNING_ROTATE_WITHOUT_HANDOVER=true`
+(Helm: `config.signing.rotateWithoutHandover`) for the start; the log warns
+that every client that pinned the outgoing key must re-pin. Then
 audit `kms:Sign` calls against the pipeline's own signing and the sweep, and
 diff the `attestations` table against `agent_versions` where
 `status='published'`. Any attestation without a matching published version
