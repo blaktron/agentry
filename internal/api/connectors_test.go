@@ -9,7 +9,6 @@ import (
 
 	"github.com/blaktron/agentry/internal/api"
 	"github.com/blaktron/agentry/internal/config"
-	"github.com/blaktron/agentry/pkg/appserver"
 	"github.com/blaktron/agentry/pkg/connector"
 )
 
@@ -96,25 +95,9 @@ func TestEveryCatalogueStrategyIsInTheAPI(t *testing.T) {
 	}
 }
 
-// /desktop-apps serves the catalogue of application servers to anyone,
-// every entry whole: its pin, launch, listener, tool classes and egress.
-func TestDesktopAppsServesTheCatalogue(t *testing.T) {
+// /desktop-apps is gone: the library of application presets lives in
+// Agentry Desktop, and the registry holds no list of applications.
+func TestThereIsNoCatalogueOfApplications(t *testing.T) {
 	env := newTestEnvCfg(t, func(*config.Config) {})
-	var got api.DesktopAppCatalogue
-	env.doJSON(anonymous, http.MethodGet, "/api/v1/desktop-apps", nil, &got, http.StatusOK)
-	if got.Version != appserver.Builtin().Version() || len(got.Servers) != len(appserver.Builtin().All()) {
-		t.Fatalf("catalogue version %d with %d servers", got.Version, len(got.Servers))
-	}
-	b := got.Servers[0]
-	if b.Id != "blender" || b.Server.Name != "mcp-for-blender" || b.Server.Version != "2.2.7" || b.Listener.Port != 9876 ||
-		b.Launch == nil || strings.Join(b.Launch.Command, " ") != "uvx mcp-for-blender==2.2.7" || (*b.Launch.Env)["DISABLE_TELEMETRY"] != "true" {
-		t.Fatalf("blender = %+v", b)
-	}
-	classes := map[string]string{}
-	for _, tool := range b.Tools {
-		classes[tool.Name] = string(tool.Class)
-	}
-	if classes["execute_blender_code"] != "exec" || classes["look"] != "read" || b.Egress == nil || len(*b.Egress) == 0 {
-		t.Fatalf("blender's tools %v, egress %v", classes, b.Egress)
-	}
+	env.doJSON(anonymous, http.MethodGet, "/api/v1/desktop-apps", nil, nil, http.StatusNotFound)
 }

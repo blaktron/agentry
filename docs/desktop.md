@@ -7,7 +7,7 @@ its contract with one line, `capabilities.desktop`, naming each application
 by a short id; the run reaches the person's computer only through Agentry
 Desktop, which answers each call with the application the person approved
 on that computer. This page covers the line, what the registry does with
-it, and the application servers the CLI and Agentry Desktop carry today.
+it, how Agentry Desktop resolves an id, and the presets of its library.
 The manifest's other lines are in
 [QuickAgents](quickagents.md#capabilities-the-security-contract).
 
@@ -67,36 +67,56 @@ A run in Agentry never has it. A CLI or desktop that pins a core older than
 this field refuses a manifest that carries it, naming the field, and one
 older than `use` and `choose` refuses an entry that carries either.
 
-## The application servers today's clients carry
+## On the person's computer: approved applications and the library
 
-The CLI and Agentry Desktop released so far bind only the applications of
-the catalogue of application servers below, `blender` and `unreal`, and
-refuse a run that names any other id before it starts, naming the id. The
-catalogue is released with the core, built into those clients, and served
-at `GET /api/v1/desktop-apps`. An entry holds:
+The registry holds no list of applications. An id is resolved on the
+person's computer by Agentry Desktop, against the applications the person
+added to Settings → Your computer, each approved by them for its MCP
+server, its windows, both or neither. Nothing is approved when it is
+added.
 
-| Field | Meaning |
-|---|---|
-| `id`, `application`, `platforms` | what the line names, the application, and the systems it is offered on |
-| `server` | the installed server, pinned by ecosystem (`pypi`, `npm`), name and one exact version, and its source; or, for a server the application ships itself as a plugin, `application`, the plugin's name, the application's release that brought it, and where it is documented |
-| `attachment` | `stdio`, a server Agentry Desktop launches and speaks MCP to over its standard input and output; or `loopback-http`, a server the application runs inside itself at an `http://127.0.0.1` `endpoint` |
-| `launch` | for `stdio`, the command line, which holds the pinned version, and its environment |
-| `listener` | the loopback port the application listens on for its server, checked before a run starts |
-| `tools` | every tool a run may call, each with a class: `read` reads the application's state, `act` changes it or works inside it, `exec` runs code or commands the application interprets and asks the person before each call; `egress: true` marks a tool that reaches the hosts below |
-| `withheld` | tools the server offers that no run is given |
-| `egress` | the hosts the server or the application's add-on is known to reach from the person's computer |
-| `steps` | what the person does once before the first run |
+- **An id the person's list has** is that application. A run that uses its
+  server needs it approved for its server; a run that uses its windows
+  needs computer use on and the application approved for its windows.
+  Either missing refuses the run before it starts (`desktop-not-granted`),
+  naming the switch.
+- **An id the list does not have**, and a `choose: true` entry, are put to
+  the person: the run setup shows the applications approved for that use,
+  or Agentry Desktop asks in a dialog of its own for a run started from the
+  `agentry` command, and the choice is remembered for that QuickAgent. With
+  nothing chosen the run is refused (`desktop-not-installed`), naming the
+  application to add.
+- **What runs** is the server the person's list holds for the application:
+  a command Agentry Desktop starts as the person (`stdio`), or an address on
+  the computer's loopback the application serves (`loopback-http`). The run
+  has every tool that server lists, or the release's narrowing, less the
+  tools the person withheld; a narrowed tool the server does not list
+  refuses the run, naming it.
+- **Each call** is answered by the tool's class on the person's list:
+  `read` reads the application's state, `act` changes it or works inside
+  it, `exec` runs code or commands the application interprets. An `exec`
+  call, and a call of a tool nobody has classed, asks the person first.
+  The classes are the person's or the library's, never the server's own tool
+  annotations, which a server sets as it likes.
+- **Where the set-up came from** is told to the run (from the library, the
+  library's changed by the person, or set up by the person), and the
+  receipt says it. A machine's policy can keep runs to the library's
+  applications as they come (`desktop.allowCustomServers: false`), which
+  Unsafe Mode overrides.
 
-An `application` server is reached, never launched: only a `loopback-http`
-entry names one, its endpoint is on its listener's port, and no package
-registry or advisory database holds it.
+**The library** is Agentry Desktop's set of presets: popular applications
+whose set-up Agentry knows, which the person adds in one click and then
+approves like any other. A preset pins one exact release of the
+application's server, classes its tools, names the hosts it is known to
+reach and the steps the person takes once, and gives the identifiers its
+windows carry. The presets are examples, not a list of what is allowed:
+any application with a local MCP server, or with windows, can be added.
+Releases name a preset by its id, `blender` or `unreal`, below.
 
-The classes are the catalogue's, never the server's own tool annotations,
-which a server sets as it likes. An entry without an exact pin, a launch
-that does not hold the pin, or a tool outside the three classes does not
-load. A newer release of a server is not vetted until its entry moves to it.
+Agentry Desktop 0.7.28 and earlier, and the CLI before 0.7.35, bind only
+`blender` and `unreal`.
 
-### `blender`
+### The `blender` preset
 
 | | |
 |---|---|
@@ -116,7 +136,7 @@ preferences, and starts the add-on's server from the BlenderMCP tab of the
 3D view's sidebar. The add-on listens on loopback without authentication:
 anything on that computer that reaches the port can run Python in Blender.
 
-### `unreal`
+### The `unreal` preset
 
 | | |
 |---|---|
@@ -184,16 +204,18 @@ applications they carry, `blender` and `unreal`. A run that declares the
 line, from the CLI or the desktop app, binds to
 Agentry Desktop before anything starts, and is refused there, exit 11 with
 the reason `desktop-refused`, when no Agentry Desktop answers on the computer
-(`desktop-unavailable`: "this QuickAgent uses Blender on your computer, which
-needs Agentry Desktop running on this computer"), when an application or its
-server is not ready (`desktop-not-installed`, with the step to take), when
-computer use is not granted (`desktop-not-granted`), and always in a hosted
-run (`hosted`). Then the sandbox is built as for any run, with its two routes
+(`desktop-unavailable`: "this QuickAgent uses blender on your computer, which
+needs Agentry Desktop running on this computer"), when an application is not
+on the person's list or its server is not ready (`desktop-not-installed`,
+with the step to take), when the person has not approved what the run uses
+or computer use is off (`desktop-not-granted`), and always in a hosted run
+(`hosted`). Then the sandbox is built as for any run, with its two routes
 unchanged, plus one entry of the gateway's catalog per application server and
 one for computer use: the runner image, with no network, run as the person,
-held to the catalogue's tools. A relay container of the run's own carries
-each tool call of those entries, and nothing else, to Agentry Desktop, which
-answers it on the person's computer by the catalogue's class. Under a
+held to the tools Agentry Desktop bound. A relay container of the run's own
+carries each tool call of those entries, and nothing else, to Agentry
+Desktop, which answers it on the person's computer by the tool's class on
+the person's list. Under a
 sandboxed runtime the entries take `docker.gatewayRuntime` and the relay the
 daemon's default, because a socket shared through a volume is a host socket
 to gVisor.

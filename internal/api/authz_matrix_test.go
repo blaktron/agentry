@@ -269,7 +269,6 @@ func requestFactories(env *testEnv) map[string]opRequest {
 	return map[string]opRequest{
 		"getMeta":        {method: "GET", path: sPath("/api/v1/meta")},
 		"getConnectors":  {method: "GET", path: sPath("/api/v1/connectors")},
-		"getDesktopApps": {method: "GET", path: sPath("/api/v1/desktop-apps")},
 		"getAdvisory":    {method: "GET", path: sPath("/api/v1/advisories/00000000-0000-0000-0000-000000000000")},
 		"getOrg":         {method: "GET", path: orgPath("")},
 		"getUserProfile": {method: "GET", path: func(s *matrixSeed, _ string) string { return "/api/v1/users/" + s.pawnH }},
@@ -849,7 +848,7 @@ func TestAuthzMatrix(t *testing.T) {
 
 	caseN := 0
 	for opID, decl := range api.AllRouteAuthzDecls() {
-		if decl.NoAuthz && opID != "getMeta" && opID != "getConnectors" && opID != "getDesktopApps" {
+		if decl.NoAuthz && opID != "getMeta" && opID != "getConnectors" {
 			continue // register/login/verifyEmail: separate flow tests
 		}
 		if decl.SelfAuthorized {
