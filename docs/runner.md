@@ -5028,7 +5028,11 @@ another.
 holds, and a name it does not hold is refused. A schedule on a runhost keeps
 no key of this computer's: each run there reads its model and key from the
 runhost's store, and a model that is gone is refused, never replaced by the
-default. A one-off `agentry run --on <runhost> --model <name>` may take any
+default. `schedule edit <id> --on <runhost> --model <name|default>` moves a
+schedule there to another saved model the runhost holds, or to its default,
+from its next run; the runhost refuses a name it does not hold or cannot use
+now before anything changes, and nothing of this computer's is sent (CLI
+v0.7.44 or later, on both). A one-off `agentry run --on <runhost> --model <name>` may take any
 of this computer's saved models, and carries that one model's credential
 alone, for that run alone.
 
