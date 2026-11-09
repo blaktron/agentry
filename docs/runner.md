@@ -3217,8 +3217,7 @@ mounts:
 `/scratch` is the agent's own place for notes and working files. It is
 empty when the run starts, nothing in it is copied to the output folder,
 and it is removed with the container at the end of the run. The agent
-reaches it through four tools, and keeps its checklist there
-([below](#the-scratch-folder)):
+reaches it through four tools, and keeps its checklist there (below):
 
 - `scratch_list` lists a folder in it, from an entry `offset` when a long
   listing stopped at one tool result;
@@ -3287,8 +3286,7 @@ Under docker-agent, the summary of Agentry's harness build ends with a
 sentence pointing the agent back to `checklist.md`. So does the message a
 run resumed after a model failure starts with. The checklist is a working
 note: it is never a deliverable and goes with the scratch folder at the
-end of the run. It replaces the `notes.md` file that an autonomous run kept
-from CLI v0.7.29.
+end of the run.
 
 ### Fetch into the scratch folder: `saveTo`
 
