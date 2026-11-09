@@ -118,6 +118,24 @@ func (q *Queries) GetSigningKey(ctx context.Context, keyID string) (SigningKey, 
 	return i, err
 }
 
+const hasSigningKeyHandover = `-- name: HasSigningKeyHandover :one
+SELECT EXISTS (
+  SELECT 1 FROM signing_key_handovers WHERE from_key_id = $1 AND to_key_id = $2
+)
+`
+
+type HasSigningKeyHandoverParams struct {
+	FromKeyID string `json:"from_key_id"`
+	ToKeyID   string `json:"to_key_id"`
+}
+
+func (q *Queries) HasSigningKeyHandover(ctx context.Context, arg HasSigningKeyHandoverParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSigningKeyHandover, arg.FromKeyID, arg.ToKeyID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertRulesetAttestation = `-- name: InsertRulesetAttestation :exec
 INSERT INTO ruleset_attestations (bundle_digest, key_id, dsse_envelope)
 VALUES ($1, $2, $3)
@@ -135,6 +153,28 @@ type InsertRulesetAttestationParams struct {
 func (q *Queries) InsertRulesetAttestation(ctx context.Context, arg InsertRulesetAttestationParams) error {
 	_, err := q.db.Exec(ctx, insertRulesetAttestation, arg.BundleDigest, arg.KeyID, arg.DsseEnvelope)
 	return err
+}
+
+const insertSigningKeyHandover = `-- name: InsertSigningKeyHandover :execrows
+INSERT INTO signing_key_handovers (from_key_id, to_key_id, dsse_envelope)
+VALUES ($1, $2, $3)
+ON CONFLICT (from_key_id, to_key_id) DO NOTHING
+`
+
+type InsertSigningKeyHandoverParams struct {
+	FromKeyID    string `json:"from_key_id"`
+	ToKeyID      string `json:"to_key_id"`
+	DsseEnvelope []byte `json:"dsse_envelope"`
+}
+
+// A handover is written once per pair: a second role starting on the same
+// new key, or a restart, finds it there.
+func (q *Queries) InsertSigningKeyHandover(ctx context.Context, arg InsertSigningKeyHandoverParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertSigningKeyHandover, arg.FromKeyID, arg.ToKeyID, arg.DsseEnvelope)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listAttestationsLackingSignature = `-- name: ListAttestationsLackingSignature :many
@@ -220,6 +260,36 @@ func (q *Queries) ListRetiredSigningKeysInUse(ctx context.Context) ([]SigningKey
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
 			&i.RetiredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSigningKeyHandovers = `-- name: ListSigningKeyHandovers :many
+SELECT from_key_id, to_key_id, dsse_envelope, created_at FROM signing_key_handovers ORDER BY created_at, from_key_id, to_key_id
+`
+
+// Every handover, oldest first: the chain a client walks.
+func (q *Queries) ListSigningKeyHandovers(ctx context.Context) ([]SigningKeyHandover, error) {
+	rows, err := q.db.Query(ctx, listSigningKeyHandovers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SigningKeyHandover
+	for rows.Next() {
+		var i SigningKeyHandover
+		if err := rows.Scan(
+			&i.FromKeyID,
+			&i.ToKeyID,
+			&i.DsseEnvelope,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

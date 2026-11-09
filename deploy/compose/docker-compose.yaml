@@ -315,6 +315,13 @@ services:
       # attestation stops verifying at the next restart.
       AGENTRY_SIGNING_KIND: ${AGENTRY_SIGNING_KIND:-file}
       AGENTRY_SIGNING_KEY_FILE: ${AGENTRY_SIGNING_KEY_FILE:-}
+      # A rotation to a new key keeps the outgoing key, in the same
+      # directory, for the start that rotates: it hands over to the new
+      # key, so clients that pinned it trust the new one. Only for a lost
+      # or compromised outgoing key is AGENTRY_SIGNING_ROTATE_WITHOUT_HANDOVER
+      # set instead, and every client must re-pin.
+      AGENTRY_SIGNING_PREVIOUS_KEY_FILE: ${AGENTRY_SIGNING_PREVIOUS_KEY_FILE:-}
+      AGENTRY_SIGNING_ROTATE_WITHOUT_HANDOVER: ${AGENTRY_SIGNING_ROTATE_WITHOUT_HANDOVER:-false}
     ports:
       - "${AGENTRY_BIND:-127.0.0.1}:8080:8080"
       - "${AGENTRY_SSH_BIND:-0.0.0.0}:${AGENTRY_SSH_PORT:-2222}:2222"

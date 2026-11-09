@@ -87,3 +87,19 @@ JOIN signing_keys k ON k.key_id = ra.key_id
 WHERE ra.bundle_digest = $1 AND k.retired_at IS NULL
 ORDER BY k.last_seen_at DESC
 LIMIT 1;
+
+-- A handover is written once per pair: a second role starting on the same
+-- new key, or a restart, finds it there.
+-- name: InsertSigningKeyHandover :execrows
+INSERT INTO signing_key_handovers (from_key_id, to_key_id, dsse_envelope)
+VALUES ($1, $2, $3)
+ON CONFLICT (from_key_id, to_key_id) DO NOTHING;
+
+-- name: HasSigningKeyHandover :one
+SELECT EXISTS (
+  SELECT 1 FROM signing_key_handovers WHERE from_key_id = $1 AND to_key_id = $2
+);
+
+-- Every handover, oldest first: the chain a client walks.
+-- name: ListSigningKeyHandovers :many
+SELECT * FROM signing_key_handovers ORDER BY created_at, from_key_id, to_key_id;

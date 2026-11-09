@@ -446,6 +446,7 @@ var mountAuthz = map[string]MountDecl{
 	// The discovery documents are what a client reads before it holds
 	// anything to authenticate with; the signing keys are public by
 	// construction, since verification needs them.
-	"GET /.well-known/agentry/registry.json":     {Gate: GatePublic, Class: RateNone, Why: "discovery: read before a caller holds a credential"},
-	"GET /.well-known/agentry/signing-keys.json": {Gate: GatePublic, Class: RateNone, Why: "the keys are public by construction; a verifier needs them"},
+	"GET /.well-known/agentry/registry.json":              {Gate: GatePublic, Class: RateNone, Why: "discovery: read before a caller holds a credential"},
+	"GET /.well-known/agentry/signing-keys.json":          {Gate: GatePublic, Class: RateNone, Why: "the keys are public by construction; a verifier needs them"},
+	"GET /.well-known/agentry/signing-key-handovers.json": {Gate: GatePublic, Class: RateNone, Why: "each handover is signed by the key before it; a verifier walks them from a key it pinned"},
 }
