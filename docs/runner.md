@@ -1252,9 +1252,43 @@ of `receipts/applink.log`, cut at 4 KiB.
 | `memory` | `recall` | the supervisor: searches the agent's own earlier conversations |
 | `helper` | `registry_search`, `quickagent_show`, `quickagent_install`, `quickagent_run`, `run_result`, `installed_list`, `schedule_add`, `schedule_list`, `schedule_pause`, `schedule_remove`, `settings_open`, `docs_read` | the client that runs the agent, each through its own operation and consent |
 | a subagent on the roster | `subagent_list`, `subagent_run`, `subagent_result` | the supervisor ([Subagents](#subagents)) |
+| the Assistant's own publisher part (no key) | `quickagent_mine`, `quickagent_versions`, `quickagent_fetch`, `quickagent_revise`, `quickagent_fork`, `quickagent_submit`, `quickagent_manage` | Agentry Desktop, with the person's own sign-in, asking before every write |
 
 The Assistant declares `selfConfigure`, `clock`, `memory` and `helper`; Agentry
 Helper declares `helper`.
+
+**The publisher tools** are the Assistant's alone (CLI v0.7.41 or later). No
+key gives them, so no published agent can declare them. With them the
+Assistant looks after the QuickAgents the person publishes, in their own
+namespace and each organization they publish for. Agentry Desktop answers
+them (0.7.33 or later); the CLI answers each as needing Agentry Desktop.
+
+- `quickagent_mine` and `quickagent_versions` list the person's QuickAgents,
+  private ones included, and where each version stands.
+- `quickagent_fetch` copies a version's files into the share folder, at
+  `share/quickagents/<namespace>/<name>/`, replacing what was there.
+- `quickagent_revise` has the Drafter revise that folder by the agent's
+  instructions: In Agentry (it revises the version that was fetched, and
+  spends credits as a draft does) or on this computer (the folder itself,
+  with the person's own model and AI Review key). Its manifest, instruction
+  and persona replace the folder's.
+- `quickagent_fork` forks a public QuickAgent into one of those namespaces.
+- `quickagent_submit` submits the folder as a new version, or as a new
+  QuickAgent, which is created private. The manifest's version must be newer
+  than the latest.
+- `quickagent_manage` makes a QuickAgent private, retires it, restores one
+  that was private when it was retired, yanks a published version or
+  withdraws one held for review.
+
+Every fork, revision, submission and owner action asks the person in a
+dialog that names the Assistant, every time; no earlier answer and no "runs
+without asking" setting stands for it. A submission's dialog lists the files
+added, changed and removed since the fetched version, and every capability
+added or widened. The Assistant cannot make a QuickAgent public, delete one,
+or restore one that was public when it was retired: the person does those in
+the Publisher section. Files `quickagent_fetch` and `quickagent_revise` write
+into the share are checked as any file added there is, before the tool
+answers, so the agent reads them in the same turn.
 
 The Assistant lists every tool Agentry Helper does, so it can do whatever the
 Helper can (CLI v0.6.183 and Agentry Desktop 0.6.160 or later). Agentry
