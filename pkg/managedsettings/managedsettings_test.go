@@ -171,6 +171,14 @@ func TestNoRowTurnsAnythingOn(t *testing.T) {
 			if r.Max <= 0 {
 				t.Errorf("%s: a cap needs a largest value", r.ID)
 			}
+		case KindModel:
+			if len(r.Values) < 2 {
+				t.Errorf("%s: a model row needs providers to choose among", r.ID)
+			}
+		case KindSource:
+			if len(r.Values) < 2 || r.Values[0] != SourceMember {
+				t.Errorf("%s: a source row starts from the member's own and narrows from there", r.ID)
+			}
 		case KindSources, KindMinimumVersion:
 		default:
 			t.Errorf("%s: kind %q", r.ID, r.Kind)
@@ -197,6 +205,7 @@ func TestEveryRowTakesOnlyItsValues(t *testing.T) {
 		KindCap:            {`1`, `600`},
 		KindSources:        {`{"scope":"any"}`, `{"scope":"organization-and-built-ins"}`, `{"scope":"organization-and-built-ins","namespaces":["acme","tools-1"]}`},
 		KindMinimumVersion: {`"0.7.38"`, `"1.0.0"`},
+		KindModel:          {`{"provider":"anthropic","model":"claude-sonnet-5-5"}`, `{"provider":"custom","model":"llama-4:70b"}`},
 	}
 	refused := map[Kind][]string{
 		KindChoice:         {`"on"`, `"enabled"`, `""`, `true`, `["allowed"]`, `null`},
@@ -204,6 +213,8 @@ func TestEveryRowTakesOnlyItsValues(t *testing.T) {
 		KindCap:            {`0`, `-5`, `"600"`, `1e12`, `null`, `true`},
 		KindSources:        {`{"scope":"everywhere"}`, `{"scope":"any","namespaces":["acme"]}`, `{"scope":"organization-and-built-ins","namespaces":["Bad Name"]}`, `{"scope":"any","extra":1}`, `"any"`, `null`},
 		KindMinimumVersion: {`"v0.7.38"`, `"0.7"`, `"0.7.38-dev.1"`, `0.7`, `null`},
+		KindModel:          {`{"provider":"acme","model":"m"}`, `{"provider":"anthropic","model":""}`, `{"provider":"anthropic","model":"a b"}`, `{"provider":"anthropic"}`, `{"provider":"anthropic","model":"m","key":"k"}`, `"anthropic"`, `null`},
+		KindSource:         {`{"source":"everyone"}`, `{"source":"member","key":{"id":"k1","rev":1}}`, `{"source":"member","provider":"brave"}`, `"member"`, `null`, `{"source":"member","extra":1}`},
 	}
 	for _, r := range Catalogue() {
 		good := accepted[r.Kind]
@@ -214,6 +225,23 @@ func TestEveryRowTakesOnlyItsValues(t *testing.T) {
 		}
 		if r.Kind == KindSet {
 			good = []string{`["` + r.Values[0] + `"]`, `["` + strings.Join(r.Values, `","`) + `"]`}
+			if r.AllowEmpty {
+				good = append(good, `[]`)
+			}
+		}
+		if r.Kind == KindSource {
+			for _, v := range r.Values {
+				switch {
+				case v != SourceOrganizationKey:
+					good = append(good, `{"source":"`+v+`"}`)
+				case r.Delivers && len(r.Providers) > 0:
+					good = append(good, `{"source":"organization-key","provider":"`+r.Providers[0]+`","key":{"id":"key-1","rev":3}}`)
+				case r.Delivers:
+					good = append(good, `{"source":"organization-key","key":{"id":"key-1","rev":3}}`)
+				default:
+					good = append(good, `{"source":"organization-key"}`)
+				}
+			}
 		}
 		if len(good) == 0 {
 			t.Errorf("%s: no accepted value in the table for kind %s", r.ID, r.Kind)
@@ -231,6 +259,9 @@ func TestEveryRowTakesOnlyItsValues(t *testing.T) {
 			}
 		}
 		for _, v := range refused[r.Kind] {
+			if r.AllowEmpty && v == `[]` {
+				continue
+			}
 			if err := r.Check(set(v, true)); err == nil {
 				t.Errorf("%s: %s was accepted", r.ID, v)
 			}

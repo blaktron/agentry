@@ -35,9 +35,14 @@ func TestSchemaMatchesCatalogue(t *testing.T) {
 							Pattern          string   `json:"pattern"`
 							ExclusiveMinimum *float64 `json:"exclusiveMinimum"`
 							Maximum          *float64 `json:"maximum"`
+							MinItems         *int     `json:"minItems"`
 							Items            struct {
 								Enum []string `json:"enum"`
 							} `json:"items"`
+							Properties map[string]struct {
+								Enum []string `json:"enum"`
+								Ref  string   `json:"$ref"`
+							} `json:"properties"`
 						} `json:"value"`
 						Locked *struct {
 							Const *bool `json:"const"`
@@ -88,6 +93,24 @@ func TestSchemaMatchesCatalogue(t *testing.T) {
 		case KindSet:
 			if v.Type != "array" || !slices.Equal(v.Items.Enum, r.Values) {
 				t.Errorf("%s: schema set %s of %v, catalogue %v", r.ID, v.Type, v.Items.Enum, r.Values)
+			}
+			if least := 1; r.AllowEmpty && (v.MinItems == nil || *v.MinItems != 0) || !r.AllowEmpty && (v.MinItems == nil || *v.MinItems != least) {
+				t.Errorf("%s: schema minItems %v, catalogue allows empty %v", r.ID, v.MinItems, r.AllowEmpty)
+			}
+		case KindModel:
+			if v.Type != "object" || !slices.Equal(v.Properties["provider"].Enum, r.Values) {
+				t.Errorf("%s: schema model providers %v, catalogue %v", r.ID, v.Properties["provider"].Enum, r.Values)
+			}
+		case KindSource:
+			_, provider := v.Properties["provider"]
+			if v.Type != "object" || !slices.Equal(v.Properties["source"].Enum, r.Values) ||
+				!slices.Equal(v.Properties["provider"].Enum, r.Providers) || provider != (len(r.Providers) > 0) {
+				t.Errorf("%s: schema source %v / providers %v, catalogue %v / %v", r.ID, v.Properties["source"].Enum, v.Properties["provider"].Enum, r.Values, r.Providers)
+			}
+			// A row that delivers keys describes the reference; Check also
+			// refuses one on a row that does not.
+			if _, key := v.Properties["key"]; r.Delivers && !key {
+				t.Errorf("%s: the schema does not describe the key reference the row delivers", r.ID)
 			}
 		case KindCap:
 			want := "number"
