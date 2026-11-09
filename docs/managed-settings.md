@@ -147,6 +147,9 @@ would have nothing to apply.
 | `schedules` | choice | `allowed`, `forbidden` | locked or default | Whether members may schedule runs. |
 | `updates.minimumVersion` | minimumVersion | a version, `"X.Y.Z"` | locked only | The oldest Agentry client that may run; an older one names the update. |
 
+How the runner holds a run to each row is in the runner reference,
+[Managed settings](runner.md#managed-settings).
+
 With `run.unsafeMode`, `allowed` leaves the choice to the member, behind the
 client's own confirmation, and `forbidden` makes the client refuse to turn it
 on and the runner refuse an unsafe run. A schedule made with
