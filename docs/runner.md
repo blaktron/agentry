@@ -3255,7 +3255,7 @@ filter runs (a platform other than Linux, macOS and Windows) both are
 folders in the container's own layer and are **not bounded**, and the
 run's `capabilities_enforced.scratch` says so.
 
-**The checklist** (CLI v0.7.43 or later). Every run and session with the
+**The checklist** (CLI v0.7.44 or later). Every run and session with the
 scratch folder has a `checklist` tool, where the agent keeps the steps of
 its task in order. One call replaces the whole list and a call with no
 steps reads it back. Each step has text and a status: `pending`,
@@ -3433,8 +3433,8 @@ states (llama.cpp and vLLM state it), or else against half the refused
 request's size, halved again if the summary itself is refused. Earlier
 harnesses ended such a run with `Failed to get model definition`. A policy
 that pins the vendor's docker-agent image keeps the vendor's behaviour.
-From CLI v0.7.43 the summary points the agent back to its checklist
-([the checklist](#the-scratch-folder)); from v0.7.29 to v0.7.42 an
+From CLI v0.7.44 the summary points the agent back to its checklist
+([the checklist](#the-scratch-folder)); from v0.7.29 to v0.7.43 an
 autonomous run's pointed to its `notes.md`.
 
 Within it:
