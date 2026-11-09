@@ -1773,7 +1773,8 @@
             "TestDeleteAgentWithHistoryLeavesATombstone",
             "TestDeleteWaitsForAVersionInFlight",
             "TestNamespaceListSearchesAndSorts",
-            "TestRestoreToPublicMeetsTheUnscannedRules"
+            "TestRestoreToPublicMeetsTheUnscannedRules",
+            "TestARetiredAgentSaysWhatRestoreGivesBack"
           ],
           "fuzz": [],
           "benchmarks": [],

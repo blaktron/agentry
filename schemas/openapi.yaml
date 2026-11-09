@@ -7703,6 +7703,13 @@ components:
             When the agent was retired: it is private, takes no
             submission, and `POST …/restore` returns the visibility it had.
             Absent on an agent that is not retired.
+        retiredVisibility:
+          type: string
+          enum: [public, private]
+          description: >-
+            The visibility the agent had when it was retired, which
+            `POST …/restore` gives back: `public` means Restore makes it
+            public again. Present only while the agent is retired.
         installs30d:
           type: integer
           description: Installs over the last 30 days. Present on `GET /agents?namespace=`.

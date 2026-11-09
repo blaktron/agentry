@@ -591,3 +591,49 @@ func TestRestoreToPublicMeetsTheUnscannedRules(t *testing.T) {
 		t.Fatalf("restored with nothing unscanned standing: %q, want public", a.Visibility)
 	}
 }
+
+// TestARetiredAgentSaysWhatRestoreGivesBack: a retired agent's read and its
+// namespace's list carry the visibility it had when retired, which Restore
+// gives back, public or private; an agent that is not retired carries none.
+func TestARetiredAgentSaysWhatRestoreGivesBack(t *testing.T) {
+	env := newTestEnv(t)
+	owner := env.register("rv-own")
+	env.verifyEmail(owner)
+	sess := env.login(owner)
+	env.publishedAgent(sess, owner, "was-public")
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": owner, "name": "was-private", "modes": []string{"autonomous"}, "visibility": "private",
+	}, nil, http.StatusCreated)
+
+	type agentOut struct {
+		Name              string  `json:"name"`
+		Visibility        string  `json:"visibility"`
+		RetiredVisibility *string `json:"retiredVisibility"`
+	}
+	read := func(name string) agentOut {
+		t.Helper()
+		var a agentOut
+		env.doJSON(sess, http.MethodGet, "/api/v1/agents/"+owner+"/"+name, nil, &a, http.StatusOK)
+		return a
+	}
+	if a := read("was-public"); a.RetiredVisibility != nil {
+		t.Fatalf("an agent that is not retired: retiredVisibility %q", *a.RetiredVisibility)
+	}
+	for name, want := range map[string]string{"was-public": "public", "was-private": "private"} {
+		env.doJSON(sess, http.MethodPost, "/api/v1/agents/"+owner+"/"+name+"/retire", nil, nil, http.StatusOK)
+		if a := read(name); a.Visibility != "private" || a.RetiredVisibility == nil || *a.RetiredVisibility != want {
+			t.Fatalf("%s retired: visibility %q, retiredVisibility %v, want private and %s", name, a.Visibility, a.RetiredVisibility, want)
+		}
+	}
+	var list []agentOut
+	env.doJSON(sess, http.MethodGet, "/api/v1/agents?namespace="+owner, nil, &list, http.StatusOK)
+	for _, a := range list {
+		if a.RetiredVisibility == nil || (a.Name == "was-public") != (*a.RetiredVisibility == "public") {
+			t.Fatalf("the list's %s: retiredVisibility %v", a.Name, a.RetiredVisibility)
+		}
+	}
+	env.doJSON(sess, http.MethodPost, "/api/v1/agents/"+owner+"/was-public/restore", nil, nil, http.StatusOK)
+	if a := read("was-public"); a.Visibility != "public" || a.RetiredVisibility != nil {
+		t.Fatalf("after Restore: visibility %q, retiredVisibility %v", a.Visibility, a.RetiredVisibility)
+	}
+}
