@@ -270,12 +270,12 @@ var table = func() map[string]Grant {
 }()
 
 // notContract are the runner's tools no line of the contract grants: the
-// inputs, the scratch folder and its search, the report, the knowledge
+// inputs, the scratch folder, its search and the checklist, the report, the knowledge
 // and voice a person attaches, and the built-ins' own. An instruction may
 // name them freely.
 var notContract = []string{
 	"list_inputs", "read_input", "search_inputs", "write_report", "export_pdf",
-	"scratch_list", "scratch_read", "scratch_write", "scratch_search", "grep", "glob",
+	"scratch_list", "scratch_read", "scratch_write", "scratch_search", "checklist", "grep", "glob",
 	"knowledge_list", "knowledge_search", "knowledge_read", "voice_read", "end_blocked",
 	"web_search", "web_read", "registry_search", "ai_review",
 }

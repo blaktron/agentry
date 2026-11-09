@@ -603,11 +603,11 @@ unknown field. The site's and the desktop's run setups show it.
 Closed vocabulary. Omitted or empty means a **pure-text QuickAgent**
 (its run-time tools are `write_report`, the read-only `list_inputs`,
 `read_input` and `search_inputs`, its scratch folder's `scratch_list`,
-`scratch_read`, `scratch_write` and `scratch_search`, `export_pdf`, and
-`grep` and `glob` over its inputs, its scratch folder and any attached
-knowledge, nothing else; the last seven are the runner's grants to every
-release, not lines of the contract, and a built-in has all of them but
-`export_pdf`). The registry scans releases
+`scratch_read`, `scratch_write` and `scratch_search`, its `checklist`,
+`export_pdf`, and `grep` and `glob` over its inputs, its scratch folder and
+any attached knowledge, nothing else; the last eight are the runner's
+grants to every release, not lines of the contract, and a built-in has all
+of them but `export_pdf`). The registry scans releases
 against these declarations, an install prompts on them (egress/exec need
 typed consent; a widened contract re-asks on upgrade), and the runner
 turns each line into a concrete control. The same contract covers support
@@ -1207,6 +1207,7 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 | (always) | `write_report`: write files into the run's output folder, and mark the one the person asked for as the run's [deliverable](#deliverables) |
 | (always) | `list_inputs`, `read_input`, `search_inputs`: the run's provided input files, read-only |
 | (always) | `scratch_list`, `scratch_read`, `scratch_write`, `scratch_search`: the run's [scratch folder](runner.md#the-scratch-folder) at `/scratch`, private to the run and deleted at its end |
+| (always) | `checklist`: the steps of the run's task, kept in `checklist.md` in the scratch folder ([the checklist](runner.md#the-scratch-folder)) |
 | (always, but for the built-ins) | `export_pdf`: a Markdown report as a PDF in `reports/`, in the form the agent picks (`report`, the default, `letter` or `memo`) and laid out in the person's [report design](runner.md#the-report-design) |
 | (always) | `grep`, `glob`: [search file contents](runner.md#searching-files-grep-and-glob) by regular expression and list files by path pattern with ripgrep, one area a call, only what the run's other tools read: `/inputs`, `/knowledge/<pack>`, `/scratch`, and `/workspace` only with `filesystem.read`. ripgrep runs with an empty environment, as a user of its own when the tools server is root, a fixed argument list that never starts another program, and caps on memory and time; where the machine has Landlock it also reads only the searched area and writes nothing, and at Landlock ABI 4 or later opens no TCP connection |
 | `filesystem.read` | `fs_read`, `fs_list` |
@@ -1304,12 +1305,12 @@ its read tools hand it one page at a time, sized to the model's window
 server for that window when the policy records none (CLI v0.7.28 or
 later); under docker-agent the conversation is summarised before it
 outgrows the window, and a refusal as too long is summarised and sent
-again (CLI v0.7.25 or later); and the agent keeps its place and its
-findings in `notes.md` in its scratch folder, which it reads back after
-each summary (CLI v0.7.29 or later;
-[a long task's notes](runner.md#the-scratch-folder)). An instruction for
-a task that reads many files can lean on that: name what the notes should
-collect, and build the deliverable from them.
+again (CLI v0.7.25 or later); and the agent keeps the steps of its
+task in a checklist, which it reads back after each summary and before its
+final answer (CLI v0.7.43 or later;
+[the checklist](runner.md#the-scratch-folder)). An instruction for a task
+of many steps can lean on that: name the steps the work must cover, and
+have findings written into the report as they are found.
 
 **The output folder** (`--out`, default
 `./agentry-out/<ns>-<name>-<runid>/`) holds `reports/…`, `result.json`
