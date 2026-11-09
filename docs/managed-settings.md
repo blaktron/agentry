@@ -105,7 +105,7 @@ The payload is described by
 Every setting is a row of one catalogue, the table in the core's
 `pkg/managedsettings`. The registry checks a document against it before it
 signs, and `schemas/managed-settings-1.schema.json` describes the same rows.
-A row's value has one of five kinds, and each kind narrows in one way only:
+A row's value has one of seven kinds, and each kind narrows in one way only:
 
 - **choice**: one of the row's values, listed from the most open to the most
   restrictive. No value switches anything on.
@@ -118,9 +118,23 @@ A row's value has one of five kinds, and each kind narrows in one way only:
   `organization-and-built-ins` with an optional list of further namespaces.
 - **minimum version**: the oldest client that may run. An older one refuses
   runs and names the update.
+- **model**: `{"provider": …, "model": …}`, a provider of the row's list and
+  a model id. Locked, it is the only model members' runs use; as a default,
+  the one a member who chose none runs on.
+- **source**: `{"source": …}`, what pays for a service, from the member's
+  own key (`member`) through the organization's credits
+  (`agentry-credits`) and the organization's own key (`organization-key`)
+  to, where the row offers it, none at all (`off`). A row that delivers
+  keys names the organization's key with `organization-key` as
+  `{"key": {"id": …, "rev": n}}`: a reference the client exchanges for the
+  key, never the key. The organization's model key is never delivered:
+  `model.source` carries no reference, and runs on it are paid through the
+  registry's own endpoint. Web search also names the key's `provider`.
 
 A set, a source list and a minimum version are only ever locked: a default
-would have nothing to apply.
+would have nothing to apply. A set has at least one member, except
+`model.signIns`, whose empty list spends no subscription or plan of the
+member's.
 
 | Setting | Kind | Value | Strength | What it decides |
 | --- | --- | --- | --- | --- |
@@ -128,6 +142,7 @@ would have nothing to apply.
 | `agents.codingAgent` | choice | `allowed`, `forbidden` | locked or default | Whether members may use the Coding agent. |
 | `browser.publicWeb` | choice | `allowed`, `forbidden` | locked or default | Whether a run's browser may reach the public web. |
 | `bugReports` | choice | `allowed`, `forbidden` | locked or default | Whether members may send bug reports from their clients. |
+| `codingTools.allowed` | set | a list of `claude-code`, `codex`, `copilot` | locked only | Which coding tools members' runs may use. |
 | `deliverables.destinations` | set | a list of `folder`, `webhook`, `s3` | locked only | Where a run may send its result and files: a folder, a webhook, an S3 bucket. |
 | `desktop.applications` | choice | `allowed`, `forbidden` | locked or default | Whether runs may use applications on the member's computer through Agentry Desktop. |
 | `desktop.customServers` | choice | `allowed`, `forbidden` | locked or default | Whether runs may use applications the member set up themselves rather than Agentry's catalogue. |
@@ -138,7 +153,13 @@ would have nothing to apply.
 | `malwareCheck` | choice | `optional`, `required` | locked or default | Whether a run's malware check of what it downloads is required. |
 | `mcpServers.allowVulnerable` | choice | `allowed`, `forbidden` | locked or default | Whether members may run a declared MCP server the registry's gate rates high or critical. |
 | `messengers` | choice | `allowed`, `forbidden` | locked or default | Whether persistent agents may reach messengers. |
+| `model.customEndpoints` | choice | `allowed`, `https-only`, `forbidden` | locked or default | Whether members' runs may use a model endpoint of their own, and whether it may be plain http. |
+| `model.default` | model | `{"provider": …, "model": …}`, a provider of `model.providers`' list | locked or default | The model members' runs use: the only one when locked, the one a member who chose none runs on as a default. |
+| `model.providers` | set | a list of `anthropic`, `openai`, `google`, `vultr`, `openrouter`, `poe`, `huggingface`, `copilot`, `agentry`, `custom` | locked only | Which model providers members' runs may use. |
+| `model.signIns` | set | a list, possibly empty, of `subscription`, `claude-signin`, `chatgpt-plan`, `copilot-signin` | locked only | Which subscriptions and plans of their own members' runs may spend. |
+| `model.source` | source | `member`, `agentry-credits`, `organization-key` | locked or default | What pays for members' models; the organization's key stays with the registry. |
 | `persistentReleases` | choice | `allowed`, `forbidden` | locked or default | Whether members may run persistent QuickAgents from the registry. |
+| `review.source` | source | `member`, `agentry-credits`, `organization-key` with a key reference, `off` | locked or default | What pays for AI Review, or none. |
 | `run.maxCost` | cap | a number above 0, at most 100000 | locked or default | The most a run may cost, in US dollars, as its harness reports it. |
 | `run.maxTurns` | cap | a whole number above 0, at most 100000 | locked or default | The most turns a run may take. |
 | `run.timeout` | cap | a whole number above 0, at most 604800 | locked or default | The longest a run may take, in seconds. |
@@ -146,6 +167,7 @@ would have nothing to apply.
 | `run.where` | set | a list of `local`, `hosted`, `runhost`, `target-host` | locked only | Where members' runs may go: this computer, In Agentry, a runhost, a target host. |
 | `schedules` | choice | `allowed`, `forbidden` | locked or default | Whether members may schedule runs. |
 | `updates.minimumVersion` | minimumVersion | a version, `"X.Y.Z"` | locked only | The oldest Agentry client that may run; an older one names the update. |
+| `webSearch.source` | source | `member`, `agentry-credits`, `organization-key` with a `provider` (`brave`, `tavily`, `exa`, `perplexity`, `youcom`) and a key reference, `off` | locked or default | What pays for web search, or none. |
 
 How the runner holds a run to each row is in the runner reference,
 [Managed settings](runner.md#managed-settings).
