@@ -1750,7 +1750,8 @@
             "TestAMemberForksIntoTheOrganizationWithinItsCap",
             "TestAForkOfATaggedOriginContinuesItsHistory",
             "TestAForkWhoseCopyNeverRunsIsMarkedFailed",
-            "TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization"
+            "TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization",
+            "TestAForkUnderAnotherNameRenamesItsInstructionsFrontmatter"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -1772,7 +1773,8 @@
             "TestDeleteAgentWithHistoryLeavesATombstone",
             "TestDeleteWaitsForAVersionInFlight",
             "TestNamespaceListSearchesAndSorts",
-            "TestRestoreToPublicMeetsTheUnscannedRules"
+            "TestRestoreToPublicMeetsTheUnscannedRules",
+            "TestARetiredAgentSaysWhatRestoreGivesBack"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5449,7 +5451,8 @@
             "TestRenameSetsTheNamespaceAndNameAndKeepsTheRest",
             "TestRenameAddsAMissingKeyInOrder",
             "TestRenameQuotesAValueYAMLWouldReadOtherwise",
-            "TestRenameRefusesWhatIsNotAMapping"
+            "TestRenameRefusesWhatIsNotAMapping",
+            "TestRenameFrontmatterRewritesTheNameLineAlone"
           ],
           "fuzz": [],
           "benchmarks": [],

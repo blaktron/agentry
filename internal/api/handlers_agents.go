@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -31,18 +32,19 @@ func (s *Server) gitSSHURL(ns, name string) string {
 func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 	base := strings.TrimSuffix(s.cfg.BaseURL, "/")
 	out := Agent{
-		Id:              a.ID,
-		Namespace:       a.Namespace,
-		Name:            a.Name,
-		Modes:           apiModes(a.Modes),
-		Visibility:      AgentVisibility(a.Visibility),
-		Summary:         a.Summary,
-		DefaultBranch:   a.DefaultBranch,
-		GitHttpUrl:      base + "/" + a.Namespace + "/" + a.Name + ".git",
-		QuarantineState: AgentQuarantineState(a.QuarantineState),
-		Builtin:         a.Builtin,
-		CreatedAt:       a.CreatedAt,
-		RetiredAt:       a.RetiredAt,
+		Id:                a.ID,
+		Namespace:         a.Namespace,
+		Name:              a.Name,
+		Modes:             apiModes(a.Modes),
+		Visibility:        AgentVisibility(a.Visibility),
+		Summary:           a.Summary,
+		DefaultBranch:     a.DefaultBranch,
+		GitHttpUrl:        base + "/" + a.Namespace + "/" + a.Name + ".git",
+		QuarantineState:   AgentQuarantineState(a.QuarantineState),
+		Builtin:           a.Builtin,
+		CreatedAt:         a.CreatedAt,
+		RetiredAt:         a.RetiredAt,
+		RetiredVisibility: retiredVisibility(a.RetiredAt, a.RetiredVisibility),
 	}
 	if u := s.gitSSHURL(a.Namespace, a.Name); u != "" {
 		out.GitSshUrl = &u
@@ -56,6 +58,16 @@ func (s *Server) agentToAPI(a registry.Agent, maintain bool) Agent {
 		out.PipelineSkip = &ps
 	}
 	return out
+}
+
+// retiredVisibility is the visibility Restore gives back to an agent
+// retired at retiredAt; nil for an agent that is not retired.
+func retiredVisibility(retiredAt *time.Time, v *string) *AgentRetiredVisibility {
+	if retiredAt == nil || v == nil {
+		return nil
+	}
+	rv := AgentRetiredVisibility(*v)
+	return &rv
 }
 
 // agentForAction resolves ns/name and authorizes act for p — the one path
@@ -270,13 +282,14 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, params ListA
 			Id: row.ID, Namespace: row.Namespace, Name: row.Name,
 			Modes: apiModes(row.Modes), Visibility: AgentVisibility(row.Visibility),
 			Summary: row.Summary, DefaultBranch: "main",
-			GitHttpUrl:      base + "/" + row.Namespace + "/" + row.Name + ".git",
-			QuarantineState: AgentQuarantineState(row.QuarantineState),
-			Builtin:         row.Builtin,
-			CreatedAt:       row.CreatedAt,
-			RetiredAt:       row.RetiredAt,
-			Installs30d:     &installs,
-			LastSubmittedAt: row.LastSubmittedAt,
+			GitHttpUrl:        base + "/" + row.Namespace + "/" + row.Name + ".git",
+			QuarantineState:   AgentQuarantineState(row.QuarantineState),
+			Builtin:           row.Builtin,
+			CreatedAt:         row.CreatedAt,
+			RetiredAt:         row.RetiredAt,
+			RetiredVisibility: retiredVisibility(row.RetiredAt, row.RetiredVisibility),
+			Installs30d:       &installs,
+			LastSubmittedAt:   row.LastSubmittedAt,
 		}
 		// Forks: a fork's origin and copy state, a public
 		// agent's count of forks — a count only.

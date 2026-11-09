@@ -105,6 +105,24 @@ func (e AgentQuarantineState) Valid() bool {
 	}
 }
 
+// Defines values for AgentRetiredVisibility.
+const (
+	AgentRetiredVisibilityPrivate AgentRetiredVisibility = "private"
+	AgentRetiredVisibilityPublic  AgentRetiredVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the AgentRetiredVisibility enum.
+func (e AgentRetiredVisibility) Valid() bool {
+	switch e {
+	case AgentRetiredVisibilityPrivate:
+		return true
+	case AgentRetiredVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentVisibility.
 const (
 	AgentVisibilityPrivate AgentVisibility = "private"
@@ -2408,9 +2426,12 @@ type Agent struct {
 	QuarantineState AgentQuarantineState `json:"quarantineState"`
 
 	// RetiredAt When the agent was retired: it is private, takes no submission, and `POST …/restore` returns the visibility it had. Absent on an agent that is not retired.
-	RetiredAt  *time.Time      `json:"retiredAt,omitempty"`
-	Summary    string          `json:"summary"`
-	Visibility AgentVisibility `json:"visibility"`
+	RetiredAt *time.Time `json:"retiredAt,omitempty"`
+
+	// RetiredVisibility The visibility the agent had when it was retired, which `POST …/restore` gives back: `public` means Restore makes it public again. Present only while the agent is retired.
+	RetiredVisibility *AgentRetiredVisibility `json:"retiredVisibility,omitempty"`
+	Summary           string                  `json:"summary"`
+	Visibility        AgentVisibility         `json:"visibility"`
 }
 
 // AgentForkState Present on a fork: `copying` until a worker has copied the repository and submitted the first version, `ready` after, `failed` with `forkDetail`.
@@ -2418,6 +2439,9 @@ type AgentForkState string
 
 // AgentQuarantineState defines model for Agent.QuarantineState.
 type AgentQuarantineState string
+
+// AgentRetiredVisibility The visibility the agent had when it was retired, which `POST …/restore` gives back: `public` means Restore makes it public again. Present only while the agent is retired.
+type AgentRetiredVisibility string
 
 // AgentVisibility defines model for Agent.Visibility.
 type AgentVisibility string

@@ -110,7 +110,8 @@ both open to the namespace's administrators. `POST
 /agents/{ns}/{name}/retire` makes it private and marks it `retiredAt`.
 Every submission to it is then refused with `409 agent-retired`, as is
 `PATCH` to public, and it holds no place under the private-agent cap.
-`POST …/restore` returns the visibility it had, under the same rules as
+While it is retired, its record's `retiredVisibility` says the visibility
+it had. `POST …/restore` returns that visibility, under the same rules as
 any agent becoming public (`409 agent-unscanned`). Back to private it is
 under the cap again (`422 private-agent-cap`). It answers `409
 agent-not-retired` when there is nothing to restore.
@@ -336,7 +337,7 @@ admins) can put it away or end it, and anyone signed in can copy a public
 one.
 
 **Retire.** `POST /agents/{ns}/{name}/retire` makes the agent private and
-labels it `retiredAt`, keeping the visibility it had. A retired agent takes
+labels it `retiredAt`, keeping the visibility it had as `retiredVisibility`. A retired agent takes
 no submission (`409 agent-retired`) and holds no place under the
 private-agent cap. `POST …/restore` puts the visibility back, under the
 rules of any agent becoming public (`409 agent-unscanned`) or of a private
@@ -383,7 +384,9 @@ fork-source`), and have a published version (`409 nothing-to-fork`). A fork:
   origin, whatever their role on it. The objects are copied rather than
   shared, so retiring or deleting the origin later changes nothing in the
   fork. It writes one commit, *Fork of ns/name@version*, that renames the
-  manifest into the fork's namespace. The fork's default branch and a
+  manifest into the fork's namespace and name, and, when the instruction
+  file's frontmatter names the agent, renames it there too, since the
+  frontmatter's name must match the manifest's. The fork's default branch and a
   `v<version>` tag point at it. That tag is submitted through the pipeline
   like any submission, charged like one; a fork's first version is always
   scanned. The fork's history runs back through the origin's release. A

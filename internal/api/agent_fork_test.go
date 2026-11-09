@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -900,6 +901,63 @@ func TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization(t *testi
 		}
 		if err := env.st.Pool().QueryRow(ctx, `SELECT count(*) FROM agent_versions WHERE agent_id = $1`, f.ID).Scan(&versions); err != nil || versions != 0 {
 			t.Errorf("%s: a repeated copy left %d versions (%v), want none", c.org, versions, err)
+		}
+	}
+}
+
+// TestAForkUnderAnotherNameRenamesItsInstructionsFrontmatter: an origin
+// whose instruction file's frontmatter names it forks under another name
+// into a fork whose frontmatter names the fork, so its first version passes
+// the frontmatter check and the fork is ready; a copy that fails is logged
+// with its origin, stage and reason as well as kept on the fork.
+func TestAForkUnderAnotherNameRenamesItsInstructionsFrontmatter(t *testing.T) {
+	env := newForkEnv(t)
+	var logged lockedBuffer
+	env.srvObj.Reg().SetLogger(slog.New(slog.NewTextHandler(&logged, nil)))
+	alice := env.register("fm-alice")
+	env.verifyEmail(alice)
+	aliceS := env.login(alice)
+	bob := env.register("fm-bob")
+	env.verifyEmail(bob)
+	bobS := env.login(bob)
+
+	env.doJSON(aliceS, http.MethodPost, "/api/v1/agents", map[string]any{
+		"namespace": alice, "name": "page-check", "modes": []string{"autonomous"}, "visibility": "public",
+	}, nil, http.StatusCreated)
+	_, pat := env.mintPAT(aliceS, "pub-page-check", "agent:publish", "agent:read")
+	files := skillFiles(alice, "page-check", "1.0.0", nil)
+	files["SKILL.md"] = "---\nname: page-check\ndescription: test\n---\nCheck the page politely.\n"
+	if status, body := env.uploadVersionCLI(alice, "page-check", pat, files); status != http.StatusAccepted {
+		t.Fatalf("publish: %d %s", status, body)
+	}
+	env.waitStatus(alice, "page-check", "1.0.0", "published")
+
+	env.fork(bobS, alice, "page-check", map[string]any{"namespace": bob, "name": "my-check"})
+	env.runCopies()
+	env.wantPublished(bob, "my-check")
+	var ready forkAgentOut
+	env.doJSON(bobS, http.MethodGet, "/api/v1/agents/"+bob+"/my-check", nil, &ready, http.StatusOK)
+	if ready.ForkState == nil || *ready.ForkState != "ready" {
+		t.Fatalf("the renamed fork: state %v detail %v, want ready", ready.ForkState, ready.ForkDetail)
+	}
+	dir := env.repos.Path(env.repoOf(bob, "my-check"))
+	if got := gitIn(t, dir, "show", "v1.0.0:SKILL.md"); got != "---\nname: my-check\ndescription: test\n---\nCheck the page politely." {
+		t.Fatalf("the fork's SKILL.md reads %q", got)
+	}
+
+	// A copy that cannot succeed is logged, not only kept on the fork.
+	env.fork(bobS, alice, "page-check", map[string]any{"namespace": bob, "name": "late-check"})
+	env.doJSON(aliceS, http.MethodPost, "/api/v1/agents/"+alice+"/page-check/versions/1.0.0/yank", map[string]any{"reason": "withdrawn"}, nil, http.StatusNoContent)
+	env.runCopies()
+	line := ""
+	for _, l := range strings.Split(logged.String(), "\n") {
+		if strings.Contains(l, "fork copy failed") {
+			line = l
+		}
+	}
+	for _, want := range []string{"level=WARN", "origin=" + alice + "/page-check", "stage=origin-version", "withdrawn before it was copied"} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("the failure's log line %q lacks %q", line, want)
 		}
 	}
 }

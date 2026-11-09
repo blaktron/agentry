@@ -165,8 +165,11 @@ func (s *RepoStore) CommitFork(ctx context.Context, repoID uuid.UUID, c registry
 			return "", fmt.Errorf("gitsrv: %q is not a ref name", ref)
 		}
 	}
-	if c.ManifestPath == "" || strings.HasPrefix(c.ManifestPath, "-") || strings.Contains(c.ManifestPath, "..") {
-		return "", fmt.Errorf("gitsrv: %q is not a path", c.ManifestPath)
+	files := append([]registry.ForkFile{{Path: c.ManifestPath, Content: c.Manifest}}, c.Files...)
+	for _, f := range files {
+		if f.Path == "" || strings.HasPrefix(f.Path, "-") || strings.Contains(f.Path, "..") || !filepath.IsLocal(f.Path) || hasGitComponent(f.Path) {
+			return "", fmt.Errorf("gitsrv: %q is not a path", f.Path)
+		}
 	}
 	index, err := os.CreateTemp("", "agentry-fork-index-*")
 	if err != nil {
@@ -191,13 +194,15 @@ func (s *RepoStore) CommitFork(ctx context.Context, repoID uuid.UUID, c registry
 			return "", err
 		}
 	}
-	blob, err := s.git(ctx, dir, env, c.Manifest, "hash-object", "-w", "--no-filters", "--stdin")
-	if err != nil {
-		return "", err
-	}
-	if _, err := s.git(ctx, dir, env, nil, "update-index", "--add", "--cacheinfo",
-		"100644,"+strings.TrimSpace(string(blob))+","+c.ManifestPath); err != nil {
-		return "", err
+	for _, f := range files {
+		blob, err := s.git(ctx, dir, env, f.Content, "hash-object", "-w", "--no-filters", "--stdin")
+		if err != nil {
+			return "", err
+		}
+		if _, err := s.git(ctx, dir, env, nil, "update-index", "--add", "--cacheinfo",
+			"100644,"+strings.TrimSpace(string(blob))+","+f.Path); err != nil {
+			return "", err
+		}
 	}
 	tree, err := s.git(ctx, dir, env, nil, "write-tree")
 	if err != nil {
@@ -316,4 +321,14 @@ func hermeticEnv(extra []string) []string {
 	}
 	out = append(out, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_ATTR_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0")
 	return append(out, extra...)
+}
+
+// hasGitComponent says a slash path has a `.git` component, in any case.
+func hasGitComponent(p string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(p), "/") {
+		if strings.EqualFold(part, ".git") {
+			return true
+		}
+	}
+	return false
 }

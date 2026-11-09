@@ -223,6 +223,22 @@ handed over. `agentry runhost schedules lab` lists them, and `agentry runhost
 store lab --remove schedule:<id>` takes one off with everything it kept. Needs
 CLI v0.7.11 or later.
 
+```
+agentry schedule edit <id> --on lab --model Haiku
+agentry schedule edit <id> --on lab --model default
+```
+
+`schedule edit --on` moves a schedule to another saved model the runhost
+holds, or to the runhost's default, from its next run, without making it
+again. The runhost checks the name against its own list and refuses one it
+does not hold or cannot use now, before anything changes; it never puts the
+schedule on its default in its place. Nothing of this computer's is sent: each
+run reads the model and its key from the runhost's store, and a schedule made
+before CLI v0.7.39 gives up the model and key it was handed. With `--on`, only
+`--model` changes; for another repeat or other inputs, remove the schedule and
+make it again. Needs CLI v0.7.44 or later on this computer and on the runhost
+(`agentry runhost update lab` brings the runhost's up to date).
+
 ## Persistent agents
 
 ```
@@ -303,4 +319,5 @@ installed it) and `--remove-images`.
 | `agentry runhost remove <name>` | Takes Agentry off the server, with the admin sign-in. |
 | `agentry run … --on <name>` | A run, or an interactive session, on the runhost. |
 | `agentry schedule add … --on <name>` | A schedule the runhost runs with nobody present (`--check` says what it would keep). |
+| `agentry schedule edit <id> --on <name> --model <saved model\|default>` | Moves one of its schedules to another saved model it holds, or to its default, from the next run. |
 | `agentry agent … --on <name>` | The persistent agents on the runhost. |

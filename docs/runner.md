@@ -1252,9 +1252,43 @@ of `receipts/applink.log`, cut at 4 KiB.
 | `memory` | `recall` | the supervisor: searches the agent's own earlier conversations |
 | `helper` | `registry_search`, `quickagent_show`, `quickagent_install`, `quickagent_run`, `run_result`, `installed_list`, `schedule_add`, `schedule_list`, `schedule_pause`, `schedule_remove`, `settings_open`, `docs_read` | the client that runs the agent, each through its own operation and consent |
 | a subagent on the roster | `subagent_list`, `subagent_run`, `subagent_result` | the supervisor ([Subagents](#subagents)) |
+| the Assistant's own publisher part (no key) | `quickagent_mine`, `quickagent_versions`, `quickagent_fetch`, `quickagent_revise`, `quickagent_fork`, `quickagent_submit`, `quickagent_manage` | Agentry Desktop, with the person's own sign-in, asking before every write |
 
 The Assistant declares `selfConfigure`, `clock`, `memory` and `helper`; Agentry
 Helper declares `helper`.
+
+**The publisher tools** are the Assistant's alone (CLI v0.7.41 or later). No
+key gives them, so no published agent can declare them. With them the
+Assistant looks after the QuickAgents the person publishes, in their own
+namespace and each organization they publish for. Agentry Desktop answers
+them (0.7.33 or later); the CLI answers each as needing Agentry Desktop.
+
+- `quickagent_mine` and `quickagent_versions` list the person's QuickAgents,
+  private ones included, and where each version stands.
+- `quickagent_fetch` copies a version's files into the share folder, at
+  `share/quickagents/<namespace>/<name>/`, replacing what was there.
+- `quickagent_revise` has the Drafter revise that folder by the agent's
+  instructions: In Agentry (it revises the version that was fetched, and
+  spends credits as a draft does) or on this computer (the folder itself,
+  with the person's own model and AI Review key). Its manifest, instruction
+  and persona replace the folder's.
+- `quickagent_fork` forks a public QuickAgent into one of those namespaces.
+- `quickagent_submit` submits the folder as a new version, or as a new
+  QuickAgent, which is created private. The manifest's version must be newer
+  than the latest.
+- `quickagent_manage` makes a QuickAgent private, retires it, restores one
+  that was private when it was retired, yanks a published version or
+  withdraws one held for review.
+
+Every fork, revision, submission and owner action asks the person in a
+dialog that names the Assistant, every time; no earlier answer and no "runs
+without asking" setting stands for it. A submission's dialog lists the files
+added, changed and removed since the fetched version, and every capability
+added or widened. The Assistant cannot make a QuickAgent public, delete one,
+or restore one that was public when it was retired: the person does those in
+the Publisher section. Files `quickagent_fetch` and `quickagent_revise` write
+into the share are checked as any file added there is, before the tool
+answers, so the agent reads them in the same turn.
 
 The Assistant lists every tool Agentry Helper does, so it can do whatever the
 Helper can (CLI v0.6.183 and Agentry Desktop 0.6.160 or later). Agentry
@@ -2127,7 +2161,7 @@ The agentry command has neither path.
 | `browser` | the browser server, a container of its own on the run's own browser network with Chromium's sandbox on, whose one route out is the run's browse proxy, which resolves every name itself and admits only the sites you named with their subdomains, the declared hosts, or any public site where the policy's `browser.allowPublicWeb` allows `scope: public`; browser secrets in a 0600 file bound into that server alone; in a hosted run public sites only ([the browser](#the-browser-a-site-to-test-named-at-run-time)) |
 | `desktop` | one desktop link entry per application whose MCP server the line uses (`agentry-desktop-<id>`, `agentry-desktop-chosen` for an application the person chooses, and `agentry-desktop-computer` for computer use): the runner image with no network, run as you, its one mount the run's relay volume, its tools the ones Agentry Desktop lists at bind after the release's narrowing; a relay container of the run's own carries each tool call, and nothing else, to Agentry Desktop, which runs the installed server and answers; never in a hosted run ([the person's computer](#the-persons-computer-capabilitiesdesktop)) |
 | run inputs | `--file` items land in a per-run folder mounted **read-only** at `/inputs` on the tool plane; before the agent starts they are checked by ClamAV and read in the files image's container (no network, every capability dropped, the files read-only), and their text is mounted read-only at `/inputs-text`; the always-granted `list_inputs`, `read_input` and `search_inputs` serve both ([running with files](#running-with-files)); job output and receipts live on the separate `/out` volume |
-| the scratch folder (the runner's grant to every release and every built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write` and `scratch_search` over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
+| the scratch folder (the runner's grant to every release and every built-in; no contract line) | `scratch_list`, `scratch_read`, `scratch_write`, `scratch_search` and `checklist` (its file `checklist.md`) over `/scratch` on the tools container only, and `fetch`'s `saveTo` into it from the declared egress alone; on Linux `/scratch` and `/tmp` are each a 256 MiB tmpfs the run's docker filter mounts, and the tools server will not start without them (exit 13); under Docker Desktop both are folders in the container's own layer, unbounded; empty at the start, never copied to the output folder, removed with the container ([the scratch folder](#the-scratch-folder)) |
 | `export_pdf` (granted with the scratch folder to every release, never to a built-in) | Typst in the tools container, built without its package downloader, run through the runner's `confine` role with an empty environment, a fresh render root, no write of its own (the PDF comes back on its stdout), TCP refused at Landlock ABI 4 or later, 1 GiB of address space and 60 seconds; the theme is the run's, never the model's; `write_report` refuses a PDF ([PDF reports](#pdf-reports-export_pdf)) |
 | `grep` and `glob` (granted with the scratch folder, a built-in's included) | ripgrep in the tools container, over one area a call and only what the run's other tools read: the inputs, the attached knowledge packs, `/scratch`, and `/workspace` only as `filesystem.read` grants it. Run through the runner's `confine` role with an empty environment and a fixed argument list that never starts another program or follows a link, as a user of its own that owns nothing when the tools server is root, reads held to the searched area and no write of its own (Landlock), TCP refused at Landlock ABI 4 or later, 512 MiB of address space and 30 seconds; where there is no Landlock (gVisor) only that user and the memory cap hold it. A search of the inputs answers as `search_inputs` does ([searching files](#searching-files-grep-and-glob)) |
 | every container of the run | all capabilities dropped (the gateway keeps `DAC_READ_SEARCH`), no-new-privileges, and the memory, CPU and process bounds of [`docker.limits`](#container-limits-dockerlimits); the tool and MCP server containers the gateway launches take its bounds and, on Linux through the run's docker filter, every capability dropped but each kind's own ([above](#container-limits-dockerlimits)) |
@@ -3217,7 +3251,7 @@ mounts:
 `/scratch` is the agent's own place for notes and working files. It is
 empty when the run starts, nothing in it is copied to the output folder,
 and it is removed with the container at the end of the run. The agent
-reaches it through four tools:
+reaches it through four tools, and keeps its checklist there (below):
 
 - `scratch_list` lists a folder in it, from an entry `offset` when a long
   listing stopped at one tool result;
@@ -3255,21 +3289,38 @@ filter runs (a platform other than Linux, macOS and Windows) both are
 folders in the container's own layer and are **not bounded**, and the
 run's `capabilities_enforced.scratch` says so.
 
-**A long task's notes** (CLI v0.7.29 or later). An autonomous run's System
-Prompt tells the agent that a task reading more than a few pages keeps
-`notes.md` in the scratch folder: the task in one line, a cursor saying
-what is done and what is next, and the findings so far, appended after
-each page. When the harness has summarised earlier work to stay inside the
-model's window, the agent reads `notes.md` before anything else and goes
-on from its cursor, and it builds its answer and reports from the notes.
-A page it read before the summary may come back from the tools as
-unchanged; the System Prompt has it read the page again with
-`fresh: true`. Under docker-agent the run's config also sets
-`compaction_notes`, so each summary of Agentry's harness build ends with a
-sentence pointing the agent back to the file. `notes.md` is a working
+**The checklist** (CLI v0.7.44 or later). Every run and session with the
+scratch folder has a `checklist` tool, where the agent keeps the steps of
+its task in order. One call replaces the whole list and a call with no
+steps reads it back. Each step has text and a status: `pending`,
+`in_progress`, `done` or `dropped`. The tool refuses:
+
+- a second step in progress;
+- a dropped step without a one-line reason;
+- a step longer than one line or 500 bytes;
+- a list of more than 100 steps;
+- a step that holds the value of one of the run's secrets.
+
+Every answer shows the list and how many steps are still open. The list is
+kept as Markdown in `checklist.md` in the scratch folder, one step a line,
+which `scratch_read` reads as it is. A persistent agent keeps its list in
+its data folder, since its scratch folder lasts one segment.
+
+The System Prompt's paragraph on it, in every mode, asks the agent to:
+
+- start a task of more than a few steps with a list;
+- keep one step in progress, and mark each step done the moment it is;
+- write its findings into the report as it goes;
+- read the checklist before anything else after a summary of earlier work,
+  and read a page that comes back as unchanged again with `fresh: true`;
+- before its final answer, have every step done, or dropped with the
+  reason given in the answer.
+
+Under docker-agent, the summary of Agentry's harness build ends with a
+sentence pointing the agent back to `checklist.md`. So does the message a
+run resumed after a model failure starts with. The checklist is a working
 note: it is never a deliverable and goes with the scratch folder at the
-end of the run. An interactive session and a persistent agent get neither
-(a persistent agent keeps its notes in its own folders).
+end of the run.
 
 ### Fetch into the scratch folder: `saveTo`
 
@@ -3416,8 +3467,9 @@ states (llama.cpp and vLLM state it), or else against half the refused
 request's size, halved again if the summary itself is refused. Earlier
 harnesses ended such a run with `Failed to get model definition`. A policy
 that pins the vendor's docker-agent image keeps the vendor's behaviour.
-From CLI v0.7.29 the summary of an autonomous run points the agent back to
-its notes ([a long task's notes](#the-scratch-folder)).
+From CLI v0.7.44 the summary points the agent back to its checklist
+([the checklist](#the-scratch-folder)); from v0.7.29 to v0.7.43 an
+autonomous run's pointed to its `notes.md`.
 
 Within it:
 
@@ -4976,7 +5028,11 @@ another.
 holds, and a name it does not hold is refused. A schedule on a runhost keeps
 no key of this computer's: each run there reads its model and key from the
 runhost's store, and a model that is gone is refused, never replaced by the
-default. A one-off `agentry run --on <runhost> --model <name>` may take any
+default. `schedule edit <id> --on <runhost> --model <name|default>` moves a
+schedule there to another saved model the runhost holds, or to its default,
+from its next run; the runhost refuses a name it does not hold or cannot use
+now before anything changes, and nothing of this computer's is sent (CLI
+v0.7.44 or later, on both). A one-off `agentry run --on <runhost> --model <name>` may take any
 of this computer's saved models, and carries that one model's credential
 alone, for that run alone.
 
