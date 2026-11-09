@@ -137,7 +137,7 @@ is `{"schema": "signing-key-handover/1", "registry", "from", "to": {"keyId",
 "algorithm", "publicKeyPem"}, "at"}`, and the incoming key's id must be the id
 of the public key it carries. A client that pinned an earlier key can walk
 the chain, verifying each link with the key before it, and so trust the
-newest key without re-pinning: a link signed by a key it never trusted
+newest key without re-pinning: a link signed by a key it never pinned or adopted
 proves nothing to it and is passed over. The Go package
 `github.com/blaktron/agentry/pkg/keyhandover` opens handovers and walks the
 chain.
