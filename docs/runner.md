@@ -5344,11 +5344,6 @@ GitHub's page opened. For a connect you type the model id. A Claude sign-in
 made only by the installed Claude Code does not count for the desktop, which
 runs the image.
 
-### Known limits
-
-`agentry setup` asks for a Copilot plan's model and lists none;
-`agentry models add` checks it against Copilot CLI's own list.
-
 ## The output folder
 
 ```
