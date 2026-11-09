@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -76,13 +78,48 @@ func (s Setting) String() string {
 	return v
 }
 
+// Kind is how a row's value is written and how it narrows.
+type Kind string
+
+const (
+	// KindChoice is one of the row's Values, which run from the most open
+	// to the most restrictive. No row has a value that switches anything
+	// on.
+	KindChoice Kind = "choice"
+	// KindSet is a JSON array of the row's Values with no repeats and at
+	// least one member: the members still allowed. A lock never adds a
+	// member the row does not list.
+	KindSet Kind = "set"
+	// KindCap is a positive JSON number (an integer where the row says
+	// so). A lock is the highest value a member may use; a default is the
+	// value used when the member set none. A cap never lifts a member's
+	// own lower limit.
+	KindCap Kind = "cap"
+	// KindSources is {"scope": "any"} or {"scope":
+	// "organization-and-built-ins", "namespaces": [...]}: where a member
+	// may install from.
+	KindSources Kind = "sources"
+	// KindMinimumVersion is a version "X.Y.Z": a client older than it
+	// refuses runs and names the update.
+	KindMinimumVersion Kind = "minimumVersion"
+)
+
 // Row is one entry of the catalogue.
 type Row struct {
 	// ID is the setting's name in a document.
 	ID string
-	// Values are the values the row takes, from the most open to the most
-	// restrictive.
+	// Kind says how the value is written and how it narrows.
+	Kind Kind
+	// Values are a choice's values, from the most open to the most
+	// restrictive, or a set's members.
 	Values []string
+	// Integer says a cap is a whole number.
+	Integer bool
+	// Max is the largest cap a registry accepts.
+	Max float64
+	// LockOnly says the row is only ever locked: a default would have
+	// nothing to apply (a set, a source list, a version floor).
+	LockOnly bool
 	// Summary says in one sentence what the row decides, for consoles and
 	// for the client's own listing.
 	Summary string
@@ -96,20 +133,102 @@ const (
 	// or "forbidden" (the client refuses to turn it on, and the runner
 	// refuses an unsafe run). No value turns it on.
 	UnsafeMode = "run.unsafeMode"
+
+	InstallSources           = "install.sources"
+	InstallAcceptRisk        = "install.acceptRisk"
+	RunWhere                 = "run.where"
+	RunTimeout               = "run.timeout"
+	RunMaxTurns              = "run.maxTurns"
+	RunMaxCost               = "run.maxCost"
+	EgressWildcard           = "egress.wildcard"
+	BrowserPublicWeb         = "browser.publicWeb"
+	MCPAllowVulnerable       = "mcpServers.allowVulnerable"
+	DesktopApplications      = "desktop.applications"
+	DesktopScreen            = "desktop.screen"
+	DesktopCustomServers     = "desktop.customServers"
+	Messengers               = "messengers"
+	PersistentReleases       = "persistentReleases"
+	AgentsCodingAgent        = "agents.codingAgent"
+	AgentsAssistant          = "agents.assistant"
+	Schedules                = "schedules"
+	DeliverablesDestinations = "deliverables.destinations"
+	MalwareCheck             = "malwareCheck"
+	UpdatesMinimumVersion    = "updates.minimumVersion"
+	BugReports               = "bugReports"
 )
 
-// Values of UnsafeMode.
+// Values of the allowed-or-forbidden choices, UnsafeMode's among them.
 const (
 	UnsafeModeAllowed   = "allowed"
 	UnsafeModeForbidden = "forbidden"
+
+	Allowed   = "allowed"
+	Forbidden = "forbidden"
 )
 
+// Values of MalwareCheck.
+const (
+	MalwareCheckOptional = "optional"
+	MalwareCheckRequired = "required"
+)
+
+// Members of RunWhere.
+const (
+	WhereLocal      = "local"
+	WhereHosted     = "hosted"
+	WhereRunhost    = "runhost"
+	WhereTargetHost = "target-host"
+)
+
+// Members of DeliverablesDestinations.
+const (
+	DestinationFolder  = "folder"
+	DestinationWebhook = "webhook"
+	DestinationS3      = "s3"
+)
+
+// Scopes of InstallSources.
+const (
+	SourcesAny                  = "any"
+	SourcesOrganizationBuiltIns = "organization-and-built-ins"
+)
+
+// allowedOrForbidden is a row that forbids something a member may do.
+func allowedOrForbidden(id, summary string) Row {
+	return Row{ID: id, Kind: KindChoice, Values: []string{Allowed, Forbidden}, Summary: summary}
+}
+
 var catalogue = []Row{
-	{
-		ID:      UnsafeMode,
-		Values:  []string{UnsafeModeAllowed, UnsafeModeForbidden},
-		Summary: "Whether members may turn on Unsafe Mode for local runs.",
-	},
+	allowedOrForbidden(UnsafeMode, "Whether members may turn on Unsafe Mode for local runs."),
+	{ID: InstallSources, Kind: KindSources, LockOnly: true,
+		Summary: "Where members may install QuickAgents from: anywhere, or the organization, the built-ins and the namespaces listed."},
+	allowedOrForbidden(InstallAcceptRisk, "Whether members may accept a release's risk at install (an unsigned or unscanned release)."),
+	{ID: RunWhere, Kind: KindSet, Values: []string{WhereLocal, WhereHosted, WhereRunhost, WhereTargetHost}, LockOnly: true,
+		Summary: "Where members' runs may go: this computer, In Agentry, a runhost, a target host."},
+	{ID: RunTimeout, Kind: KindCap, Integer: true, Max: 7 * 24 * 3600,
+		Summary: "The longest a run may take, in seconds."},
+	{ID: RunMaxTurns, Kind: KindCap, Integer: true, Max: 100000,
+		Summary: "The most turns a run may take."},
+	{ID: RunMaxCost, Kind: KindCap, Max: 100000,
+		Summary: "The most a run may cost, in US dollars, as its harness reports it."},
+	allowedOrForbidden(EgressWildcard, "Whether members' policies may allow wildcard egress hosts."),
+	allowedOrForbidden(BrowserPublicWeb, "Whether a run's browser may reach the public web."),
+	allowedOrForbidden(MCPAllowVulnerable, "Whether members may run a declared MCP server the registry's gate rates high or critical."),
+	allowedOrForbidden(DesktopApplications, "Whether runs may use applications on the member's computer through Agentry Desktop."),
+	allowedOrForbidden(DesktopScreen, "Whether runs may see and use the member's screen (computer use)."),
+	allowedOrForbidden(DesktopCustomServers, "Whether runs may use applications the member set up themselves rather than Agentry's catalogue."),
+	allowedOrForbidden(Messengers, "Whether persistent agents may reach messengers."),
+	allowedOrForbidden(PersistentReleases, "Whether members may run persistent QuickAgents from the registry."),
+	allowedOrForbidden(AgentsCodingAgent, "Whether members may use the Coding agent."),
+	allowedOrForbidden(AgentsAssistant, "Whether members may use the Assistant."),
+	allowedOrForbidden(Schedules, "Whether members may schedule runs."),
+	{ID: DeliverablesDestinations, Kind: KindSet, Values: []string{DestinationFolder, DestinationWebhook, DestinationS3}, LockOnly: true,
+		Summary: "Where a run may send its result and files: a folder, a webhook, an S3 bucket."},
+	{ID: MalwareCheck, Kind: KindChoice, Values: []string{MalwareCheckOptional, MalwareCheckRequired},
+		Summary: "Whether a run's malware check of what it downloads is required."},
+	{ID: UpdatesMinimumVersion, Kind: KindMinimumVersion, LockOnly: true,
+		Summary: "The oldest Agentry client that may run; an older one names the update."},
+	allowedOrForbidden(BugReports, "Whether members may send bug reports from their clients."),
 }
 
 // Catalogue is every row a document may carry, sorted by id.
@@ -127,6 +246,97 @@ func Lookup(id string) (Row, bool) {
 		}
 	}
 	return Row{}, false
+}
+
+// Sources is the value of an InstallSources row.
+type Sources struct {
+	Scope      string   `json:"scope"`
+	Namespaces []string `json:"namespaces,omitempty"`
+}
+
+// namespacePattern is a registry handle.
+var namespacePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,38}$`)
+
+// versionPattern is a release version a client compares itself with.
+var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$`)
+
+// Check says whether s is a value this row takes: its shape, and for a row
+// that is only ever locked, its lock.
+func (r Row) Check(s Setting) error {
+	if r.LockOnly && !s.Locked {
+		return fmt.Errorf("managed settings: %s is only ever locked", r.ID)
+	}
+	switch r.Kind {
+	case KindChoice:
+		if !slices.Contains(r.Values, s.String()) {
+			return fmt.Errorf("managed settings: %s must be one of %s", r.ID, strings.Join(r.Values, ", "))
+		}
+	case KindSet:
+		var members []string
+		if err := strictJSON(s.Value, &members); err != nil || len(members) == 0 {
+			return fmt.Errorf("managed settings: %s must be a list of at least one of %s", r.ID, strings.Join(r.Values, ", "))
+		}
+		seen := map[string]bool{}
+		for _, m := range members {
+			if !slices.Contains(r.Values, m) || seen[m] {
+				return fmt.Errorf("managed settings: %s must list each of %s at most once, and nothing else", r.ID, strings.Join(r.Values, ", "))
+			}
+			seen[m] = true
+		}
+	case KindCap:
+		var n float64
+		if err := strictJSON(s.Value, &n); err != nil || n <= 0 || n > r.Max || (r.Integer && n != math.Trunc(n)) {
+			what := "a number"
+			if r.Integer {
+				what = "a whole number"
+			}
+			return fmt.Errorf("managed settings: %s must be %s above 0 and at most %g", r.ID, what, r.Max)
+		}
+	case KindSources:
+		var v Sources
+		if err := strictJSON(s.Value, &v); err != nil {
+			return fmt.Errorf("managed settings: %s must be {\"scope\": …, \"namespaces\": […]}", r.ID)
+		}
+		switch v.Scope {
+		case SourcesAny:
+			if len(v.Namespaces) > 0 {
+				return fmt.Errorf("managed settings: %s lists namespaces only with scope %s", r.ID, SourcesOrganizationBuiltIns)
+			}
+		case SourcesOrganizationBuiltIns:
+			if len(v.Namespaces) > 100 {
+				return fmt.Errorf("managed settings: %s lists at most 100 namespaces", r.ID)
+			}
+			for _, ns := range v.Namespaces {
+				if !namespacePattern.MatchString(ns) {
+					return fmt.Errorf("managed settings: %s: %q is not a namespace", r.ID, ns)
+				}
+			}
+		default:
+			return fmt.Errorf("managed settings: %s scope must be %s or %s", r.ID, SourcesAny, SourcesOrganizationBuiltIns)
+		}
+	case KindMinimumVersion:
+		var v string
+		if err := strictJSON(s.Value, &v); err != nil || !versionPattern.MatchString(v) {
+			return fmt.Errorf("managed settings: %s must be a version X.Y.Z", r.ID)
+		}
+	default:
+		return fmt.Errorf("managed settings: %s has no kind", r.ID)
+	}
+	return nil
+}
+
+// strictJSON decodes one JSON value into v, refusing fields v lacks and
+// anything after the value.
+func strictJSON(raw json.RawMessage, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if dec.More() {
+		return errors.New("trailing data")
+	}
+	return nil
 }
 
 // ValidateSettings checks every setting against the catalogue: a known id,
@@ -148,9 +358,8 @@ func validateSettings(settings map[string]Setting, allowUnknown bool) error {
 			}
 			return fmt.Errorf("managed settings: unknown setting %q", id)
 		}
-		v := settings[id].String()
-		if !slices.Contains(row.Values, v) {
-			return fmt.Errorf("managed settings: %s must be one of %s", id, strings.Join(row.Values, ", "))
+		if err := row.Check(settings[id]); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -153,17 +153,97 @@ func TestValidateRefusesMissingBinding(t *testing.T) {
 }
 
 // TestNoRowTurnsAnythingOn holds the catalogue to its rule: a row's values
-// only narrow, so no value may switch a capability on. Every row's first
-// value is the open one, and none of the values names an "on" state.
+// only narrow, so no value may switch a capability on. A choice's first
+// value is the open one and none names an "on" state; a set lists only
+// what a member could already use; a cap is a limit, never a floor.
 func TestNoRowTurnsAnythingOn(t *testing.T) {
 	for _, r := range Catalogue() {
-		if len(r.Values) < 2 {
-			t.Errorf("%s: a row needs an open value and at least one narrower one", r.ID)
+		switch r.Kind {
+		case KindChoice:
+			if len(r.Values) < 2 {
+				t.Errorf("%s: a choice needs an open value and at least one narrower one", r.ID)
+			}
+		case KindSet:
+			if len(r.Values) < 2 {
+				t.Errorf("%s: a set needs at least two members to narrow", r.ID)
+			}
+		case KindCap:
+			if r.Max <= 0 {
+				t.Errorf("%s: a cap needs a largest value", r.ID)
+			}
+		case KindSources, KindMinimumVersion:
+		default:
+			t.Errorf("%s: kind %q", r.ID, r.Kind)
 		}
 		for _, v := range r.Values {
 			switch strings.ToLower(v) {
 			case "on", "enabled", "true", "required-on", "forced":
 				t.Errorf("%s: value %q would switch something on", r.ID, v)
+			}
+		}
+		if r.Summary == "" {
+			t.Errorf("%s: no summary", r.ID)
+		}
+	}
+}
+
+// TestEveryRowTakesOnlyItsValues is the table over every row and value
+// class: what each kind accepts, what it refuses, and that a row which is
+// only ever locked refuses a default.
+func TestEveryRowTakesOnlyItsValues(t *testing.T) {
+	set := func(v string, locked bool) Setting { return Setting{Value: json.RawMessage(v), Locked: locked} }
+	accepted := map[Kind][]string{
+		KindSet:            {`["local"]`, `["local","hosted"]`},
+		KindCap:            {`1`, `600`},
+		KindSources:        {`{"scope":"any"}`, `{"scope":"organization-and-built-ins"}`, `{"scope":"organization-and-built-ins","namespaces":["acme","tools-1"]}`},
+		KindMinimumVersion: {`"0.7.38"`, `"1.0.0"`},
+	}
+	refused := map[Kind][]string{
+		KindChoice:         {`"on"`, `"enabled"`, `""`, `true`, `["allowed"]`, `null`},
+		KindSet:            {`[]`, `["everywhere"]`, `["local","local"]`, `"local"`, `null`, `["local"] 1`},
+		KindCap:            {`0`, `-5`, `"600"`, `1e12`, `null`, `true`},
+		KindSources:        {`{"scope":"everywhere"}`, `{"scope":"any","namespaces":["acme"]}`, `{"scope":"organization-and-built-ins","namespaces":["Bad Name"]}`, `{"scope":"any","extra":1}`, `"any"`, `null`},
+		KindMinimumVersion: {`"v0.7.38"`, `"0.7"`, `"0.7.38-dev.1"`, `0.7`, `null`},
+	}
+	for _, r := range Catalogue() {
+		good := accepted[r.Kind]
+		if r.Kind == KindChoice {
+			for _, v := range r.Values {
+				good = append(good, `"`+v+`"`)
+			}
+		}
+		if r.Kind == KindSet {
+			good = []string{`["` + r.Values[0] + `"]`, `["` + strings.Join(r.Values, `","`) + `"]`}
+		}
+		if len(good) == 0 {
+			t.Errorf("%s: no accepted value in the table for kind %s", r.ID, r.Kind)
+		}
+		for _, v := range good {
+			if err := r.Check(set(v, true)); err != nil {
+				t.Errorf("%s: locked %s refused: %v", r.ID, v, err)
+			}
+			err := r.Check(set(v, false))
+			if r.LockOnly && err == nil {
+				t.Errorf("%s: a default %s was accepted for a row that is only ever locked", r.ID, v)
+			}
+			if !r.LockOnly && err != nil {
+				t.Errorf("%s: default %s refused: %v", r.ID, v, err)
+			}
+		}
+		for _, v := range refused[r.Kind] {
+			if err := r.Check(set(v, true)); err == nil {
+				t.Errorf("%s: %s was accepted", r.ID, v)
+			}
+		}
+		if r.Kind == KindCap {
+			if r.Integer {
+				if err := r.Check(set(`1.5`, true)); err == nil {
+					t.Errorf("%s: a fraction was accepted for a whole-number cap", r.ID)
+				}
+			}
+			over, _ := json.Marshal(r.Max + 1)
+			if err := r.Check(set(string(over), true)); err == nil {
+				t.Errorf("%s: %s, above the largest cap, was accepted", r.ID, over)
 			}
 		}
 	}

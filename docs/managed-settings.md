@@ -102,9 +102,62 @@ The payload is described by
 
 ## The catalogue
 
-| Setting | Values | What it decides |
-| --- | --- | --- |
-| `run.unsafeMode` | `allowed`, `forbidden` | Whether members may turn on Unsafe Mode for local runs. With `allowed`, the member decides, behind the client's own confirmation. With `forbidden`, the client will not turn it on and the runner refuses an unsafe run. No value turns Unsafe Mode on. |
+Every setting is a row of one catalogue, the table in the core's
+`pkg/managedsettings`. The registry checks a document against it before it
+signs, and `schemas/managed-settings-1.schema.json` describes the same rows.
+A row's value has one of five kinds, and each kind narrows in one way only:
+
+- **choice**: one of the row's values, listed from the most open to the most
+  restrictive. No value switches anything on.
+- **set**: a list of the row's members with no repeats and at least one
+  member: the members still allowed.
+- **cap**: a number above 0. Locked, it is the highest value a member may
+  use. As a default, it is the value used when the member set none. A member
+  may always choose a lower limit.
+- **sources**: where a member may install from: `any`, or
+  `organization-and-built-ins` with an optional list of further namespaces.
+- **minimum version**: the oldest client that may run. An older one refuses
+  runs and names the update.
+
+A set, a source list and a minimum version are only ever locked: a default
+would have nothing to apply.
+
+| Setting | Kind | Value | Strength | What it decides |
+| --- | --- | --- | --- | --- |
+| `agents.assistant` | choice | `allowed`, `forbidden` | locked or default | Whether members may use the Assistant. |
+| `agents.codingAgent` | choice | `allowed`, `forbidden` | locked or default | Whether members may use the Coding agent. |
+| `browser.publicWeb` | choice | `allowed`, `forbidden` | locked or default | Whether a run's browser may reach the public web. |
+| `bugReports` | choice | `allowed`, `forbidden` | locked or default | Whether members may send bug reports from their clients. |
+| `deliverables.destinations` | set | a list of `folder`, `webhook`, `s3` | locked only | Where a run may send its result and files: a folder, a webhook, an S3 bucket. |
+| `desktop.applications` | choice | `allowed`, `forbidden` | locked or default | Whether runs may use applications on the member's computer through Agentry Desktop. |
+| `desktop.customServers` | choice | `allowed`, `forbidden` | locked or default | Whether runs may use applications the member set up themselves rather than Agentry's catalogue. |
+| `desktop.screen` | choice | `allowed`, `forbidden` | locked or default | Whether runs may see and use the member's screen (computer use). |
+| `egress.wildcard` | choice | `allowed`, `forbidden` | locked or default | Whether members' policies may allow wildcard egress hosts. |
+| `install.acceptRisk` | choice | `allowed`, `forbidden` | locked or default | Whether members may accept a release's risk at install (an unsigned or unscanned release). |
+| `install.sources` | sources | `{"scope": "any"}` or `{"scope": "organization-and-built-ins", "namespaces": [...]}` | locked only | Where members may install QuickAgents from: anywhere, or the organization, the built-ins and the namespaces listed. |
+| `malwareCheck` | choice | `optional`, `required` | locked or default | Whether a run's malware check of what it downloads is required. |
+| `mcpServers.allowVulnerable` | choice | `allowed`, `forbidden` | locked or default | Whether members may run a declared MCP server the registry's gate rates high or critical. |
+| `messengers` | choice | `allowed`, `forbidden` | locked or default | Whether persistent agents may reach messengers. |
+| `persistentReleases` | choice | `allowed`, `forbidden` | locked or default | Whether members may run persistent QuickAgents from the registry. |
+| `run.maxCost` | cap | a number above 0, at most 100000 | locked or default | The most a run may cost, in US dollars, as its harness reports it. |
+| `run.maxTurns` | cap | a whole number above 0, at most 100000 | locked or default | The most turns a run may take. |
+| `run.timeout` | cap | a whole number above 0, at most 604800 | locked or default | The longest a run may take, in seconds. |
+| `run.unsafeMode` | choice | `allowed`, `forbidden` | locked or default | Whether members may turn on Unsafe Mode for local runs. |
+| `run.where` | set | a list of `local`, `hosted`, `runhost`, `target-host` | locked only | Where members' runs may go: this computer, In Agentry, a runhost, a target host. |
+| `schedules` | choice | `allowed`, `forbidden` | locked or default | Whether members may schedule runs. |
+| `updates.minimumVersion` | minimumVersion | a version, `"X.Y.Z"` | locked only | The oldest Agentry client that may run; an older one names the update. |
+
+With `run.unsafeMode`, `allowed` leaves the choice to the member, behind the
+client's own confirmation, and `forbidden` makes the client refuse to turn it
+on and the runner refuse an unsafe run. A schedule made with
+`agentry schedule add --in-unsafe-mode` (a schedule whose consents were given
+in Agentry Desktop's Unsafe Mode) does not run while `forbidden` is locked,
+and runs again once it is lifted.
+
+**A client applies the rows it enforces.** A client refuses to run while a
+document locks a row it does not enforce, naming the setting and the update
+it needs, and passes over a default it does not apply. A new row reaches
+existing clients that way, so a lock is never silently ignored.
 
 ## For an extension
 

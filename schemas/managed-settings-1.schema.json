@@ -5,22 +5,325 @@
   "description": "The payload of a managed settings envelope: the values an organization's admins set for one member's Agentry clients. A registry serves it from GET /api/v1/user/managed-settings as a DSSE envelope of payload type application/vnd.agentry.managed-settings+json, signed with its release-signing key. A client opens it only with a key it already trusts for that registry, only when registry names the registry it is signed in to and org the organization its account is an active member of, and never at a version lower than the last it accepted from that organization. Closed schema: unknown keys are invalid. A setting that is locked cannot be changed by the member; one that is not locked is an organization default. No value turns a capability on: each row only narrows what a member could choose.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "registry", "org", "version", "issuedAt", "settings"],
+  "required": [
+    "schema",
+    "registry",
+    "org",
+    "version",
+    "issuedAt",
+    "settings"
+  ],
   "properties": {
-    "schema": { "const": "managed-settings/1" },
-    "registry": { "type": "string", "minLength": 1, "description": "Base URL of the registry that signed the document." },
-    "org": { "type": "string", "minLength": 1, "description": "Handle of the organization whose settings these are. A client accepts the document only while the signed-in account is an active member of it." },
-    "version": { "type": "integer", "minimum": 1, "description": "Increases with every change the organization's admins make. A client refuses a version lower than the last it accepted from the same organization." },
-    "issuedAt": { "type": "string", "format": "date-time", "description": "When the registry signed this version." },
+    "schema": {
+      "const": "managed-settings/1"
+    },
+    "registry": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Base URL of the registry that signed the document."
+    },
+    "org": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Handle of the organization whose settings these are. A client accepts the document only while the signed-in account is an active member of it."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Increases with every change the organization's admins make. A client refuses a version lower than the last it accepted from the same organization."
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the registry signed this version."
+    },
     "settings": {
       "type": "object",
       "description": "The rows below are this version's catalogue. A registry signs only rows it knows; a newer registry may send rows an older client does not know, each in the same shape. A client keeps such a row: when it is locked, the client cannot enforce it and refuses to run until it is updated; when it is a default, the client passes over it. A field outside settings is a new schema version.",
-      "additionalProperties": { "$ref": "#/$defs/setting" },
+      "additionalProperties": {
+        "$ref": "#/$defs/setting"
+      },
       "properties": {
-        "run.unsafeMode": {
-          "description": "Whether members may turn on Unsafe Mode for local runs. allowed leaves the choice to the member, behind the client's own consent; forbidden makes the client refuse to turn it on and the runner refuse an unsafe run.",
+        "agents.assistant": {
+          "description": "Whether members may use the Assistant. Values run from the most open to the most restrictive.",
           "$ref": "#/$defs/setting",
-          "properties": { "value": { "enum": ["allowed", "forbidden"] } }
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "agents.codingAgent": {
+          "description": "Whether members may use the Coding agent. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "browser.publicWeb": {
+          "description": "Whether a run's browser may reach the public web. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "bugReports": {
+          "description": "Whether members may send bug reports from their clients. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "deliverables.destinations": {
+          "description": "Where a run may send its result and files: a folder, a webhook, an S3 bucket. A lock lists the members still allowed. Only ever locked.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "folder",
+                  "webhook",
+                  "s3"
+                ]
+              }
+            },
+            "locked": {
+              "const": true
+            }
+          }
+        },
+        "desktop.applications": {
+          "description": "Whether runs may use applications on the member's computer through Agentry Desktop. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "desktop.customServers": {
+          "description": "Whether runs may use applications the member set up themselves rather than Agentry's catalogue. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "desktop.screen": {
+          "description": "Whether runs may see and use the member's screen (computer use). Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "egress.wildcard": {
+          "description": "Whether members' policies may allow wildcard egress hosts. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "install.acceptRisk": {
+          "description": "Whether members may accept a release's risk at install (an unsigned or unscanned release). Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "install.sources": {
+          "description": "Where members may install QuickAgents from: anywhere, or the organization, the built-ins and the namespaces listed. Only ever locked.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/sources"
+            },
+            "locked": {
+              "const": true
+            }
+          }
+        },
+        "malwareCheck": {
+          "description": "Whether a run's malware check of what it downloads is required. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "optional",
+                "required"
+              ]
+            }
+          }
+        },
+        "mcpServers.allowVulnerable": {
+          "description": "Whether members may run a declared MCP server the registry's gate rates high or critical. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "messengers": {
+          "description": "Whether persistent agents may reach messengers. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "persistentReleases": {
+          "description": "Whether members may run persistent QuickAgents from the registry. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "run.maxCost": {
+          "description": "The most a run may cost, in US dollars, as its harness reports it. Locked, it is the highest value a member may use; as a default, the value used when the member set none.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100000
+            }
+          }
+        },
+        "run.maxTurns": {
+          "description": "The most turns a run may take. Locked, it is the highest value a member may use; as a default, the value used when the member set none.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100000
+            }
+          }
+        },
+        "run.timeout": {
+          "description": "The longest a run may take, in seconds. Locked, it is the highest value a member may use; as a default, the value used when the member set none.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 604800
+            }
+          }
+        },
+        "run.unsafeMode": {
+          "description": "Whether members may turn on Unsafe Mode for local runs. allowed leaves the choice to the member, behind the client's own consent; forbidden makes the client refuse to turn it on and the runner refuse an unsafe run. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "run.where": {
+          "description": "Where members' runs may go: this computer, In Agentry, a runhost, a target host. A lock lists the members still allowed. Only ever locked.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "local",
+                  "hosted",
+                  "runhost",
+                  "target-host"
+                ]
+              }
+            },
+            "locked": {
+              "const": true
+            }
+          }
+        },
+        "schedules": {
+          "description": "Whether members may schedule runs. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "updates.minimumVersion": {
+          "description": "The oldest Agentry client that may run; an older one names the update. A client older than it refuses runs and names the update. Only ever locked.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})$"
+            },
+            "locked": {
+              "const": true
+            }
+          }
         }
       }
     }
@@ -29,10 +332,40 @@
     "setting": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["value", "locked"],
+      "required": [
+        "value",
+        "locked"
+      ],
       "properties": {
         "value": {},
-        "locked": { "type": "boolean", "description": "True: the member cannot change it. False: an organization default." }
+        "locked": {
+          "type": "boolean",
+          "description": "True: the member cannot change it. False: an organization default."
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "any",
+            "organization-and-built-ins"
+          ]
+        },
+        "namespaces": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,38}$"
+          },
+          "description": "Namespaces members may also install from; only with scope organization-and-built-ins."
+        }
       }
     }
   }
