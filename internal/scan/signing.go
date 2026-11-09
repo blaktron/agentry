@@ -172,3 +172,19 @@ func NewSigner(ctx context.Context, opt SignerOptions) (Signer, error) {
 		return nil, fmt.Errorf("scan: unknown signer kind %q", opt.Kind)
 	}
 }
+
+// NewPreviousSigner builds the outgoing key's signer for the start that
+// rotates away from it: a file key from keyFile, or a KMS key from
+// kmsKeyARN. It is nil when neither is set. The outgoing key signs one
+// thing, the handover to the new key.
+func NewPreviousSigner(ctx context.Context, keyFile, kmsKeyARN, kmsRegion string) (Signer, error) {
+	switch {
+	case keyFile != "" && kmsKeyARN != "":
+		return nil, fmt.Errorf("scan: the previous signing key is either a file or a KMS key, not both")
+	case keyFile != "":
+		return NewFileSigner(keyFile, false)
+	case kmsKeyARN != "":
+		return NewKMSSigner(ctx, KMSOptions{KeyARN: kmsKeyARN, Region: kmsRegion})
+	}
+	return nil, nil
+}

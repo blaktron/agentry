@@ -114,6 +114,39 @@ which is why it is served with a short cache lifetime rather than as
 immutable. Keys the registry signed with before it kept this record cannot
 be listed; the attestations they signed verify through the countersignature.
 
+A planned rotation is also **handed over** by the outgoing key. At the first
+start on the new key, the outgoing key, which the operator keeps for that
+start, signs a statement naming the new key: its id, its algorithm and its
+public key, the registry's address and the time. The registry keeps every
+handover and serves them, oldest first, at
+`/.well-known/agentry/signing-key-handovers.json`:
+
+```json
+{
+  "registry": "https://registry.example",
+  "handovers": [
+    { "payloadType": "application/vnd.agentry.signing-key-handover+json", "payload": "…", "signatures": [ { "keyid": "…", "sig": "…" } ] }
+  ]
+}
+```
+
+Each handover is a DSSE envelope of its own payload type, signed by the key
+it hands over from, so it never verifies as an attestation or a managed
+settings document, and neither of those verifies as a handover. Its payload
+is `{"schema": "signing-key-handover/1", "registry", "from", "to": {"keyId",
+"algorithm", "publicKeyPem"}, "at"}`, and the incoming key's id must be the id
+of the public key it carries. A client that pinned an earlier key can walk
+the chain, verifying each link with the key before it, and so trust the
+newest key without re-pinning: a link signed by a key it never trusted
+proves nothing to it and is passed over. The Go package
+`github.com/blaktron/agentry/pkg/keyhandover` opens handovers and walks the
+chain.
+
+A key that is lost or compromised hands over nothing. The registry then
+starts on the new key only when its operator says so explicitly
+(`signing.rotateWithoutHandover`), and a client that pinned the old key has
+to re-pin deliberately, as described above.
+
 ## What this does not guarantee
 
 The language throughout the product is **"scanned, N findings, signed"**,

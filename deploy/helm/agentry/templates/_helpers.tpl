@@ -210,6 +210,13 @@ change; an operator's copy would render the key twice. */ -}}
     items:
       - key: {{ $.Values.signingKey.key }}
         path: {{ base $.Values.config.signing.keyFile }}
+      {{- with $.Values.signingKey.previousKey }}
+      {{- if ne (dir $.Values.config.signing.previousKeyFile) (dir $.Values.config.signing.keyFile) }}
+      {{- fail "config.signing.previousKeyFile must be in config.signing.keyFile's directory: both come from signingKey.existingSecret" }}
+      {{- end }}
+      - key: {{ . }}
+        path: {{ base $.Values.config.signing.previousKeyFile }}
+      {{- end }}
 {{- end }}
 {{- end }}
 

@@ -122,6 +122,15 @@ config:
     # below is mounted at its directory, which must not be under /etc/agentry
     # (the read-only config mount: a mount nested in it cannot be created).
     keyFile: /etc/agentry-signing/signing-key.pem
+    # A rotation keeps the outgoing key for the start that rotates, so it
+    # hands over to the new key and clients that pinned it trust the new
+    # one: previousKeyFile (in keyFile's directory, from
+    # signingKey.previousKey below) or previousKmsKeyARN. Remove it once
+    # the rotation has rolled out. rotateWithoutHandover is only for an
+    # outgoing key that is lost or compromised: every client must re-pin.
+    previousKeyFile: ""
+    previousKmsKeyARN: ""
+    rotateWithoutHandover: false
     # Rotation is done with OVERLAPPING validity windows, so the key
     # discovery document must be able to list more than one key. notBefore/
     # notAfter (RFC3339) bound the ACTIVE key; additionalKeys publishes
@@ -177,6 +186,9 @@ config:
 signingKey:
   existingSecret: ""
   key: signing-key.pem
+  # The Secret's key holding the outgoing key's PEM during a rotation,
+  # projected to config.signing.previousKeyFile; empty otherwise.
+  previousKey: ""
 
 # Object-store credentials for config.storage.kind=s3 on a cluster without
 # workload identity: a Secret with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY,
