@@ -105,7 +105,10 @@ agentry run acme/digest --on lab
 
 The release is resolved and verified on this computer as for a local run, your
 consent is asked here, and the run's secrets, model key, files and intake are
-read here. One SSH session carries the job to the service, followed by the
+read here. The model is this computer's default saved model, or the one
+`--model` names, which may be any of this computer's
+[saved models](runner.md#providers-and-saved-models): the run carries that one
+model's credential, for that run alone, and nothing of any other. One SSH session carries the job to the service, followed by the
 release when the runhost does not already keep it. The service verifies the
 release again with its own CLI's keys, keeps it in its store, and runs it
 under gVisor in a job directory of its own:
@@ -126,11 +129,12 @@ jobs, and `collect` and `cancel` act on one. An interactive session runs there
 too (`--mode interactive --on lab`), driven from this terminal.
 
 Claude Code, Codex and Copilot run on a runhost only as their images, under
-gVisor: `agentry runhost model lab --sign-in claude|chatgpt|copilot` signs the
-runhost in to your plan from this computer's browser, and the sign-in is the
-runhost's own. `agentry runhost model lab --provider agentry` gives it a token
-that can only pay for model use with your Agentry credits, revoked by `unpair`
-and `remove`.
+gVisor. A plan's sign-in is made on the runhost from this computer's browser
+and is the runhost's own: nothing of this computer's sign-in is sent. Agentry
+credits are paid there with a token that can only pay for model use, revoked
+by `unpair` and `remove`. [Saved models](#saved-models) below makes either
+happen for a saved model; `agentry runhost model lab --sign-in
+claude|chatgpt|copilot` and `--provider agentry` do it alone.
 
 A target host a release reaches is resolved and reached from the runhost, with
 this computer's sign-in for it.
@@ -138,8 +142,8 @@ this computer's sign-in for it.
 ## The store
 
 The runhost keeps what it must hold between runs in its store: the releases it
-has run, its model sign-ins and credits token, the model key its persistent
-agents run on, what each schedule needs to run with nobody present, and its
+has run, its model sign-ins and credits token, the keys of the saved models it
+holds, what each schedule needs to run with nobody present, and its
 persistent agents' stored secrets and accounts. **Nothing is written to it
 without a consent that names it and the server**, and `agentry runhost store
 lab` lists it, never a value.
@@ -151,15 +155,66 @@ into memory only. **This protects a copied disk or a backup, not a running
 server's root**, which can open what the account can. Below systemd 256 the
 key is a file the account owns, and the runhost takes no schedule.
 
+## Saved models
+
+```
+agentry runhost model lab --add Sonnet
+agentry runhost model lab --add Qwen
+agentry runhost model lab
+```
+
+A runhost holds some of this computer's
+[saved models](runner.md#providers-and-saved-models), for its persistent agents
+and its schedules (CLI v0.7.39 or later). `--add <saved model>` makes one
+available there, with the credential its provider pays with:
+
+- a **key** is read on this computer and kept, encrypted, in the runhost's
+  store once you agree (`--yes` agrees from a script);
+- a **plan's sign-in** (Claude, ChatGPT, Copilot) is made on the runhost from
+  this computer's browser, unless the runhost keeps one already;
+- **Agentry credits** are paid with a token of the runhost's own, made on your
+  account, unless it keeps one for that registry;
+- an **endpoint of your own** that takes no key is sent its address alone.
+
+The runhost then checks the model from where it is, as a save is checked on
+this computer, and refuses it, keeping nothing, when it cannot reach it: an
+endpoint this computer reaches on its own loopback or network may be out of
+the runhost's reach. Checking a Claude subscription's model there sends it
+one short message, which counts toward the plan's usage, and needs your
+agreement here. A pasted Claude token, a connected Hugging Face token (only
+this computer renews it) and a key from a variable the runhost does not take
+are refused before anything is sent. Adding a model again replaces the
+runhost's copy and keeps its id.
+
+The first saved model made available is the runhost's default; `--default
+<saved model>` makes another one the default. `--remove <saved model>` takes one
+away, with its provider's credential when no other saved model there uses it
+(`--keep-credential` keeps it): the key is deleted from the store, the sign-in
+ended at its vendor, or the credits token revoked. The removal is refused while
+one of the runhost's agents or schedules names the model, unless `--move-to`
+names the saved model they move to; removing the default needs `--move-to`
+too. With no flag, `agentry runhost model lab` lists what the runhost holds,
+and `runhost list` names each runhost's models as this computer last read them.
+
+A runhost set up before CLI v0.7.39 with `--provider <api provider> [--model]`
+holds that one model as its default saved model. `--provider` is refused once
+a runhost holds saved models.
+
 ## Schedules
 
 ```
-agentry schedule add acme/digest --on lab --daily 07:00 --zone UTC
+agentry schedule add acme/digest --on lab --model Sonnet --daily 07:00 --zone UTC
 ```
 
 The schedule is prepared here as a run is, then handed to the runhost with
-what its occurrences need: the release, its secrets and model key, its files,
-its destinations and target hosts, each named in the consent. The runhost fires
+what its occurrences need: the release, its secrets, its files, its
+destinations and target hosts, each named in the consent. It names one of the
+saved models the runhost holds (`--model`; the runhost's default without it),
+and keeps no key of this computer's: each occurrence reads its model and key
+from the runhost's store when it runs, and a model the runhost no longer holds
+is refused by its name, never replaced by the default. A runhost that holds no
+saved model refuses the schedule. A schedule made with a CLI before v0.7.39
+keeps the model and key it was handed, and runs as it did. The runhost fires
 its occurrences itself, with nobody present, and each one's output waits sealed
 for the next collection. An OAuth connection the release signs in to is the
 runhost's own: you sign the runhost in from this computer's browser, and it
@@ -171,14 +226,17 @@ CLI v0.7.11 or later.
 ## Persistent agents
 
 ```
-agentry runhost model lab --provider anthropic --model claude-sonnet-5-5
+agentry runhost model lab --add Sonnet
+agentry agent configure assistant --on lab --model Qwen
 agentry agent start assistant --on lab
 agentry agent chat assistant --on lab
 ```
 
-The persistent agents run on the runhost under its service, on the model the
-runhost keeps (`agentry runhost model … --provider <provider>` keeps that
-provider's key in its store). `agentry agent list|show|start|stop|chat|attach|
+The persistent agents run on the runhost under its service, each on one of the
+[saved models](#saved-models) the runhost holds: the one `agent configure
+--on lab --model <name>` names, or the runhost's default. A name the runhost
+does not hold is refused, and a running agent takes a change at its next
+turn. `agentry agent list|show|start|stop|chat|attach|
 enable|disable|reset|grant|configure|tasks|secret --on lab` drive them; what an
 agent would be given for the first time is agreed to on this computer. A stored
 secret, a git host account's token, the Fastmail token and a calendar feed's
@@ -237,7 +295,7 @@ installed it) and `--remove-images`.
 | `agentry runhost doctor <name>` | Its engine, gVisor for every container, its images and its service. |
 | `agentry runhost update [<name>…]` | Brings runhosts to this CLI's version. |
 | `agentry runhost pair <name> ssh://…` / `unpair <name>` | Pairs another computer / takes this one off. |
-| `agentry runhost model <name>` | `--sign-in claude\|chatgpt\|copilot`, `--provider agentry`, or `--provider <api provider> [--model] [--api-key-env]` for its persistent agents. |
+| `agentry runhost model <name>` | Lists the saved models it holds; `--add <saved model>`, `--remove <saved model> [--move-to] [--keep-credential]`, `--default <saved model>`; `--sign-in claude\|chatgpt\|copilot` or `--provider agentry` alone; `--provider <api provider> [--model] [--api-key-env]` for a runhost that holds no saved models. |
 | `agentry runhost set <name> --unsafe-mode on\|off` | Unsafe Mode, with the admin sign-in. |
 | `agentry runhost store <name> [--remove …]` | What its store keeps; removes the credits token, a sign-in or a schedule. |
 | `agentry runhost schedules <name> [--run <id>]` | Its schedules and their runs. |

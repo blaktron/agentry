@@ -33,6 +33,9 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
    and name the key `OPENAI_API_KEY`: the provider name and the variable
    name are passed to the harness as given (see the
    [provider table](quickagents.md#machine-setup-agentry-setup)).
+   Setup makes one provider and one saved model, and that model is the
+   default; `agentry providers` and `agentry models` add more, up to 10
+   ([providers and saved models](#providers-and-saved-models)).
    **A model server on this computer** (Ollama, LM Studio, llama.cpp,
    vLLM) is named as you reach it, `http://localhost:<port>/v1` or the
    computer's own name (CLI v0.6.206 or later). The run's egress proxy
@@ -56,7 +59,8 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
    Ollama's `/api/ps` (the running model's window) or the `num_ctx` of
    `/api/show`. A terminal setup offers what it found as the answer's
    default; under `--yes` it is taken as it is; `--context-window <tokens>`
-   sets it outright. It is written as `model.contextWindow`. The harness
+   sets it outright. It is written as `model.contextWindow` (a saved
+   model's `contextWindow` in a version 2 policy). The harness
    compacts a run's conversation as it nears that window; without it, a
    model the harness cannot look up is never compacted, and a long run
    fails with `Error: Failed to get model definition` once the server
@@ -148,6 +152,7 @@ One QuickAgent, one job, one container tree, then gone.
 | `--keep-profile true\|false` | this run's MCP-profile completion choice (default: the profile's own setting, else policy) |
 | `--reconfigure-profile` | re-run guided profile setup over an existing profile |
 | `--timeout N` / `--max-turns N` / `--max-cost USD` | override the policy budgets (exit 15 / 16 on breach; cost is the harness's running total, `0` = unlimited; `--max-cost` is refused, exit 2, for a run paid by a [model sign-in](#tokens-not-dollars), which records tokens and no dollars) |
+| `--model NAME` | run on this [saved model](#providers-and-saved-models), by its name or id (default: the default saved model); its provider's credential pays, and the harness follows that credential unless `--adapter` names one; a name this computer does not have, or one whose key or sign-in is not here, is refused (exit 11), never run on the default. With `--on`, its credential alone travels with the run (CLI v0.7.39 or later) |
 | `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`, or the image adapter a [model sign-in](#model-sign-ins) names: `codex-image`, `claude-image` or `copilot-image`; `claude` and `codex` drive your own installation of those CLIs, see below) |
 | `--local DIR` | run an unpublished QuickAgent tree (unsigned by definition: requires `--allow-unsigned`) |
 | `--allow-unsigned` | run a release the registry has no attestation for; a *mismatched* attestation always refuses |
@@ -420,10 +425,13 @@ entry: `add <ref>` with `--once "YYYY-MM-DD HH:MM"`, `--daily HH:MM`,
 HH:MM`, in `--zone` (an IANA name; the machine's by default), ending
 `--until DATE` or after `--times N` runs, with the run's own flags (`--deliver-to DIR` and `--destination NAME`
 among them, kept with the schedule and passed to each run, with no destination
-meaning none) and a
+meaning none, and `--model NAME`, the [saved
+model](#providers-and-saved-models) every run of the schedule is on, kept by
+its id; without it each run takes the default as it is then) and a
 required `--out DIR` (`--local DIR`, with `--allow-unsigned`, schedules a
 folder held to its digest). `list`, `show`, `edit` (the name, a whole new
-repeat, `--out`, the limits, `--deliver-to`, `--destination`), `pause`, `resume`, `run` (Run now), `remove`
+repeat, `--out`, the limits, `--deliver-to`, `--destination`, `--model`, where
+`--model ""` goes back to the default), `pause`, `resume`, `run` (Run now), `remove`
 and `sync` (every entry rewritten from the store, any without a schedule
 removed) manage them. A schedule pins the exact
 version and digest it was made for, takes that version's consent when it is
@@ -432,14 +440,18 @@ could not reach what it needs from the system's own scheduler (the model
 key in the keychain, each declared secret in the MCP profile or the
 policy's `envFile`, Docker and the keychain answering a probe run there),
 and `add --check` reports the same gaps and keeps nothing (a version not
-yet installed is checked when `add` installs it). Each schedule is
+yet installed is checked when `add` installs it). A schedule whose saved
+model is gone, or whose key or sign-in is not here, is refused at each run by
+the model's name, and `show` says why (`modelRefusal` in `--json`). Each schedule is
 kept under `~/.agentry/runner/schedules/<id>/`, with one entry in the
 system's scheduler (a systemd user timer, a LaunchAgent, a Task Scheduler
 task) that runs `agentry schedule fire <id>`; no file and no entry holds a
 credential. On Linux with Docker Engine, `--signed-out` also runs a
 schedule while you are signed out, its keys sealed in an encrypted systemd
-credential (`check-signed-out` says whether this machine can, and whether
-your model setup's key would be refused then; `reseal` seals them again).
+credential: only the key of the schedule's own saved model is sealed
+(`check-signed-out` says whether this machine can, and whether that key
+would be refused then; `reseal` seals them again, and `edit --model` reseals
+them for the new model).
 `--in-unsafe-mode` records that the schedule's consents were given in Agentry
 Desktop's Unsafe Mode (it sets nothing by itself): while an organization's
 managed settings forbid Unsafe Mode on this computer, `add` with it is
@@ -513,22 +525,22 @@ has it. Installing a published agent needs CLI v0.6.1015 or later.
 |---|---|---|
 | `install <ns/name[@version]>`, `install --local DIR` | installs a persistent release as an agent, or updates it ([below](#installing-updating-and-uninstalling-an-agent)) | yes |
 | `uninstall <ref> [--remove-data --confirm REF]` | removes an installed agent, keeping its conversation and files unless `--remove-data` | yes |
-| `list` | the agents with `running`, `stopped`, `disabled` or `desktop only`, who runs a running one, since when, and its segment | yes |
-| `show <name> [--transcript N]` | state, segment, usage, share folder, [roster](#the-roster), volumes and folder; for a published agent also its version, source, persona, packs and subagents; `--transcript N` adds the last N transcript lines | yes |
+| `list` | the agents with `running`, `stopped`, `disabled` or `desktop only`, who runs a running one, since when, its segment, and the saved model it runs on (MODEL) | yes |
+| `show <name> [--transcript N]` | state, segment, its saved model (`model:`: the one it names, the default it follows, or why its next turn would be refused), usage, share folder, [roster](#the-roster), volumes and folder; for a published agent also its version, source, persona, packs and subagents; `--transcript N` adds the last N transcript lines | yes |
 | `enable <name>`, `disable <name>` | allows or stops allowing a start; `disable` stops a running agent first, in whichever client runs it, and keeps its conversation and files (before CLI v0.7.19 it needed the agent stopped) | no |
 | `start <name> [--yes] [--policy FILE]` | agrees to what is given for the first time (`--yes`, else asked at a terminal), then starts the agent in the background and prints `supervisor.log` until its socket answers (at most 20 minutes) | yes: the status |
 | `stop <name>` | ends the segment and prints its envelope file | yes: `status`, `resultFile`, `error` |
 | `chat <name>` | the terminal chat, after the last 500 transcript lines; leaving it leaves the agent running | no |
 | `attach <name> --json` | `chat` for a program ([below](#attach-for-a-program)); refused without `--json` and on Windows | required |
 | `grant <name> <entry> on\|off [--yes]` | switches a roster entry; a running agent takes it at its next turn | yes: the roster |
-| `configure <name> …` | name, personality, share folder, servers, packs, ports, dev server; flags below | yes: the roster |
+| `configure <name> …` | name, personality, saved model, share folder, servers, packs, ports, dev server; flags below | yes: the roster |
 | `reset <name> [--confirm NAME]` | puts the agent back to its defaults, stopping a running one first; asks for the agent's name, or takes `--confirm` with no terminal | no |
 
 `start` needs the agent enabled, the container engine available and the
 operator policy resolved (`--policy` names another file, as for `run`). An
 installed agent is enabled and left stopped by `install`.
 `--json` on `list` prints one object per agent (`agent`, `displayName`,
-`state`, and `holder` and `status` while it runs); on `show` it adds `config`,
+`state`, `model`, and `holder` and `status` while it runs); on `show` it adds `config`,
 `usage`, `volumes`, `stateDir`, `share`, `roster` and `transcript`.
 
 `reset` removes the agent's two volumes, its transcript, usage totals, share
@@ -548,6 +560,7 @@ At least one flag. Several change together.
 |---|---|
 | `--name TEXT` | the name the agent goes by; empty clears it; at most 64 bytes, one printable line |
 | `--personality-file FILE` | the personality, UTF-8 text of at most 32 KiB |
+| `--model NAME` | the [saved model](#providers-and-saved-models) it runs on, by name or id, kept as its id; `default` follows the default. A running agent takes it at its next turn, with nothing new to agree to; with `--on`, one the runhost holds (CLI v0.7.39 or later) |
 | `--share DIR` | the share folder (made absolute, `~` expanded); empty returns to `~/agentry/<agent>share`; refused folders are listed under [the share folder](#the-share-folder-and-the-data-volume) |
 | `--run-on-start true\|false` | start the agent when Agentry Desktop starts |
 | `--add-server FILE` | one MCP server in a QuickAgent manifest's [server shape](#declared-mcp-servers), YAML of at most 64 KiB, unknown fields refused |
@@ -572,7 +585,7 @@ terminal first.
 | Exit | Meaning |
 |---|---|
 | `2` usage | an unknown agent; any command but `list` and `show` on `main`; `install` of a release that is not persistent, of a built-in's reference, or of an agent that is running; `uninstall` of a running agent or a built-in; `--remove-data` with a reference that does not match, or with no terminal and no `--confirm`; `--allow-unsigned` without `--local`; `start` on a disabled agent or one another process runs (the message names the holder); `stop`, `chat` or `attach` on an agent that is not running; `disable` or `reset` on a running one; `reset` with a name that does not match, or with no terminal and no `--confirm`; `configure` with no flag or with `--dev-host` beside `--no-dev-host`; a change the roster refuses (an unknown entry, a share folder on the refused list, a repeated port) |
-| `11` policy | a policy with `allowPersistentReleases: false` and an `install` of anything but a built-in; a release that declares filesystem access or a target host, which a persistent agent is never given; the change or start needs agreement and none was given: `--json` without `--yes`, no terminal without `--yes`, or the answer was no; a dev server outside the policy's host lists; a package server version the registry rates high or critical |
+| `11` policy | a policy with `allowPersistentReleases: false` and an `install` of anything but a built-in; a release that declares filesystem access or a target host, which a persistent agent is never given; the change or start needs agreement and none was given: `--json` without `--yes`, no terminal without `--yes`, or the answer was no; a dev server outside the policy's host lists; a package server version the registry rates high or critical; a start, or `configure --model`, naming a saved model this computer (or, with `--on`, the runhost) does not have; a start on a saved model whose key or sign-in is not here |
 | `1` | the container engine is not available; the supervisor did not start |
 | `15` | the agent did not answer within 20 minutes of `start` |
 
@@ -1038,7 +1051,10 @@ each entry's signature (an image server's grants, the dev server's saved
 sign-in, a knowledge pack's or voice's digest), the installed release, and the
 digest of the parts of the runner's policy that shape a segment (the model,
 the harness, the malware check, the limits, the registries, the web search and
-AI Review keys). Any difference starts the next segment before the turn. A
+AI Review keys), and the [saved model](#providers-and-saved-models) the agent
+names. Any difference starts the next segment before the turn. A saved model
+that cannot be used (gone, or its key or sign-in not here) fails that turn
+with one error naming it, and the running segment goes on as it was. A
 policy that cannot be read keeps the last one read. A harness change starts a
 new conversation that carries the last exchange, and a model change reopens
 the credits session.
@@ -1785,10 +1801,11 @@ its digest, so a run record says which file a run obeyed.
 | `images.gateway` | the MCP gateway's image (digest recommended) |
 | `images.goBuilder` | the Go image the runner image is compiled in on first use (the default is pinned by digest). Its Go must be at least the CLI's own, to the patch: the build context names that version, and an older builder stops the build with "images.goBuilder … is older than the Go the runner needs" |
 | `images.runner` | override the locally built runner image tag (pin this when the CLI and desktop app share a machine) |
-| `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | the LLM the default adapter drives; the key env var name is yours |
+| `providers` / `models` / `default` | a version 2 policy's providers, up to 10 saved models and the default ([providers and saved models](#the-policy-version-2)); a version 2 file has no `model` block |
+| `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | a version 1 policy's one model, which reads as one provider and the default saved model; the key env var name is yours |
 | `model.contextWindow` | the model's context window in tokens, 1,024 to 2^30 (CLI v0.7.9 or later): the harness compacts the conversation as it nears it, and a model the harness cannot look up without it fails once the endpoint refuses the conversation as too long. Unset, the harness looks the model up itself. `agentry setup` fills it for a model server of your own ([above](#agentry-setup)); where set, it wins over the harness's own figure. From CLI v0.7.20 it also sizes a run's pages ([pages](#one-tool-result-at-a-time-pages)). From CLI v0.7.28, a run on a model server of your own with none here asks the server for it, for that run only |
-| `model.apiKeyKind` | what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
-| `model.proxyAllow` | host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
+| `model.apiKeyKind` | (version 1; a provider's `apiKeyKind` in version 2) what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
+| `model.proxyAllow` | (version 1; a provider's `proxyAllow` in version 2) host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
 | `allowPersistentReleases` | `false` refuses `agentry agent install` and the start of every persistent agent but the three built into Agentry ([Installing, updating and uninstalling an agent](#installing-updating-and-uninstalling-an-agent)); unset or `true` allows them. `agentry setup` never writes it |
 | `secretSource.mode` (`env` \| `envFile`) + `secretSource.envFile` | fallback secret resolution behind profiles |
@@ -1804,7 +1821,7 @@ its digest, so a run record says which file a run obeyed.
 | `images.harnessImages.<adapter>` | the harness image of each adapter that runs in a container, `docker-agent` included: `{ ref: <name>@sha256:… }` for a published image, or, for an image your computer builds, the `ref` and the `artifact` hash it is built from ([model sign-ins](#model-sign-ins)); an adapter left out takes the CLI's default, which for `claude-image` and `codex-image` is the vendor's newest release when it passes its checks ([newest releases first](#newest-releases-first)). An entry of your own is never replaced by a newer release. `docker-agent` is a published image, so its entry carries no `artifact`. Older policy files name docker-agent's image as `images.harnessDockerAgent`, which is still read; naming it both ways with different images is refused |
 | `harness.<adapter>.signInTokenRoute` | `auth-command` (the default) or `restart`: how a ChatGPT plan's token reaches Codex ([below](#a-chatgpt-plan)) |
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
-| `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
+| `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms (a block that names a `model` reads as a saved model of its own, named for the adapter, on the provider the model block or the default is on; its key fields apply only to runs on that provider) — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
 | `images.nodeRuntime` / `images.pythonRuntime` | pinned runtime images that install and run declared npm/PyPI MCP servers |
 | `images.pythonFallbackRuntime` | the pinned Python image used instead of `images.pythonRuntime` for a PyPI server whose `requires_python` excludes the default's Python (by default Python 3.14); a policy that sets its own `images.pythonRuntime` gets exactly that image and no fallback |
 | `images.unsafe` | the base of the desktop's Unsafe Mode exec images: `agentry-unsafe-kali`, Kali Linux with a command index and an extras list, pinned by digest (Unsafe Mode refuses a base without `@sha256:` when it loads it). Unset, the CLI's pinned default is used and moves with the CLI. It names an image and turns nothing on: only the desktop's Unsafe Mode switch uses it, for runs on that computer, and no policy key or `agentry run` flag enables Unsafe Mode ([Unsafe Mode](agentry/unsafe-mode.md)) |
@@ -4644,13 +4661,267 @@ outgrows it again when it is resumed, so the resumes run out and the run fails
 as before. Record the model's window (`model.contextWindow`) so the harness
 compacts in time.
 
+## Providers and saved models
+
+A computer keeps several models and runs each QuickAgent, schedule and
+persistent agent on the one it names (CLI v0.7.39 or later; the lists and
+`agentry models` and `agentry providers` arrived in v0.7.38):
+
+- A **provider** is a credential: a vendor's API key, a [model
+  sign-in](#model-sign-ins) (your ChatGPT, Claude or Copilot plan), a
+  [connected account](#connect-your-account) (OpenRouter, Poe, Hugging
+  Face), your Agentry credits, or an OpenAI-compatible endpoint of your own
+  with its address. A named vendor has one provider, whose id is the
+  vendor's name (`anthropic`, `openai`, `copilot`, `agentry`, …). Each
+  endpoint of your own is a provider of its own, `custom-<name>`.
+- A **saved model** is a provider plus a model id, under a name you give it.
+  A computer keeps up to **10**. A second saved model on a provider asks for
+  no new key or sign-in.
+- The **default** is the saved model a run, a schedule or a persistent agent
+  uses when it names none. The first saved model is the default until you
+  choose another.
+
+`agentry setup` still sets up one provider and one model, and that model is
+the default. Agentry Desktop's Settings → Models manages the same lists
+([the desktop app](#the-desktop-app)), and the two clients apply the same
+rules.
+
+### The policy: version 2
+
+The lists live in the operator policy, `policy.yaml`. A file that holds them
+is `policyVersion: "2"`. Here are two providers and three saved models:
+
+```yaml
+policyVersion: "2"
+providers:
+  anthropic:
+    apiKeyEnv: ANTHROPIC_API_KEY
+    apiKeySource: keyring
+    proxyAllow: ["api.anthropic.com:443"]
+  custom-lab:
+    name: Lab
+    baseUrl: http://192.168.1.20:11434/v1
+    proxyAllow: ["192.168.1.20:11434"]
+models:
+  - id: 3f9c0a12
+    name: Sonnet
+    provider: anthropic
+    model: claude-sonnet-5-5
+  - id: 7b21e4d0
+    name: Haiku
+    provider: anthropic
+    model: claude-haiku-4-5
+  - id: c04d88a1
+    name: Qwen
+    provider: custom-lab
+    model: qwen3
+    contextWindow: 32768
+default: 3f9c0a12
+```
+
+| Key | Meaning |
+|---|---|
+| `providers.<id>` | one credential, by provider id: a vendor's name, or `custom-<slug>` for an endpoint of your own (letters and digits of the name you gave it, joined by `-`). An id never holds a colon or whitespace |
+| `providers.<id>.apiKeyEnv` / `.apiKeySource` / `.apiKeyKind` / `.baseUrl` / `.proxyAllow` | what the version 1 `model` block's keys of the same names say, for this provider. The key itself is never in the file: `apiKeyEnv` names the variable, and with `apiKeySource: keyring` the OS keychain entry `provider:<id>` holds it. An endpoint of your own may take no key (no `apiKeyEnv`), and a run on it is given none |
+| `providers.<id>.name` | an endpoint of your own: the name you gave it |
+| `models[]` | the saved models, at most 10, each with `id` (made when it is saved, never changed: what a schedule or an agent names it by), `name` (yours, unique on the computer whatever its case), `provider` (a key of `providers`), `model` (the id the provider is asked for) and, for an endpoint of your own, `contextWindow` |
+| `default` | the `id` of the default saved model |
+
+The policy refuses an eleventh saved model, two of one name, a model whose
+provider is not there, a `default` that names no model, and a
+`custom-<slug>` provider without `baseUrl`. A version 2 file holds no `model`
+block, and a version 1 file holds no lists.
+
+**Version 1 is still read, and still written when it says enough.** A
+version 1 file's `model` block reads as one provider, named for its vendor,
+and the default saved model, named for the provider. Each `harness.<adapter>`
+block that names a `model` reads as a saved model of its own on the same
+provider, named for the adapter. Their ids are fixed by where they came
+from, so every read gives the same ones. The CLI writes `policyVersion: "2"`
+only when the lists hold something version 1 cannot say: a second provider
+or saved model, a `custom-<slug>` provider for an endpoint of your own, or a
+saved model's own name. Otherwise it writes version 1, so a CLI or desktop
+app older than v0.7.38 on the same computer keeps working. That older build
+refuses a version 2 file by its version.
+
+### `agentry providers`
+
+| Command | Does |
+|---|---|
+| `providers list` | each provider, how it pays (a key and where it is read from, a plan's sign-in, a connected account, Agentry credits, or no key), whether its credential is here (`key set`, `key in the keychain`, `signed in as …`, or `key missing` and `needs sign-in`), and the saved models on it; never a key |
+| `providers add <vendor>` | adds a provider; save a model on it next with `models add` |
+| `providers remove <id> [--move-to <saved model>] [--keep-credential]` | removes the provider and every saved model on it, and forgets its credential on this computer |
+
+`providers add` takes the credential in one of these ways:
+
+| Vendor | Flags | What pays |
+|---|---|---|
+| `anthropic`, `openai`, `google`, `vultr`, `openrouter`, `poe`, `huggingface` | `--api-key-env NAME`, or `--key-stdin` | a key in its variable (the vendor's usual one by default), or read from the standard input and kept in the OS keychain as `provider:<vendor>`; `--api-key-source keyring` reads the keychain when the variable is unset |
+| `openai`, `anthropic` | `--sign-in` | your ChatGPT plan, or your Claude subscription through Claude Code (`--installed` signs in the Claude Code installed on this computer instead of its image) |
+| `copilot` | `--copilot-plan individual\|business\|enterprise`, `--oauth-app` | your Copilot plan, signed in with GitHub |
+| `openrouter`, `poe`, `huggingface` | `--connect` | an account you connect in your browser |
+| `agentry` | none | your Agentry credits, through the registry you are signed in to (`agentry login` first) |
+| `custom` | `--name NAME --base-url URL`, with `--api-key-env` or `--key-stdin` when it takes a key | an OpenAI-compatible endpoint of your own, as the provider `custom-<name>` |
+
+A sign-in or a connect that is not kept yet is made then, in your browser, as
+`agentry model-signins add` makes it. A second provider for a named vendor
+is refused: remove the first. A plain `http` address that leaves this
+computer is warned about and taken.
+
+`providers remove` deletes the provider's key from the keychain, or removes
+its sign-in or connected account as `agentry model-signins remove` does,
+unless `--keep-credential`. While a schedule or a persistent agent names one
+of its saved models, the removal is refused with them listed, unless
+`--move-to` names the saved model they move to; that is also the new default
+when the default is on the provider.
+
+`agentry model-signins` still lists, adds and removes the sign-ins and
+connected accounts themselves ([below](#signing-in-agentry-setup-and-agentry-model-signins)).
+
+### `agentry models`
+
+| Command | Does |
+|---|---|
+| `models list` | the saved models, `*` marking the default, each with its provider, model id and context window; then how many of 10 |
+| `models add <name> --provider <id> --model <model id> [--default] [--context-window N] [--yes]` | checks the model, then saves it; `--default` makes it the default |
+| `models edit <name> [--name NEW] [--provider <id>] [--model <model id>] [--context-window N] [--yes]` | changes a saved model and keeps its id, so whatever names it stays on it; a new provider or model id is checked first |
+| `models default <name>` | makes a saved model the default |
+| `models check <name> [--yes]` | checks a saved model again, as a save does, and changes nothing |
+| `models remove <name> [--move-to <name>]` | removes a saved model |
+
+Each takes a saved model by its name or its id, and `--policy FILE` for
+another policy file. The eleventh model, a name in use, or a provider the
+computer does not have is refused before the provider is asked anything.
+
+### The check when a model is saved
+
+`models add`, a `models edit` that changes the provider or the model id, and
+`models check` ask the provider before anything is written. A model the
+check refuses is not saved. A check that cannot reach the provider refuses
+the save with the reason (exit 11): run it again once the provider answers.
+
+| Provider pays with | The check |
+|---|---|
+| a key | the provider's model list, asked with the key, must name the model id |
+| a connected account | the same, at OpenRouter's, Poe's or Hugging Face's model list; an id's routing suffix after `:` (`:nitro`, a Hugging Face inference provider) is matched on the id before it |
+| an endpoint of your own | its model list (`<base URL>/models`) must name the id, asked with the key when it takes one. The window the endpoint reports for the model fills `contextWindow` ([the context window](#agentry-setup)), unless `--context-window` sets it |
+| a ChatGPT plan | the plan's own model list |
+| a Copilot plan | Copilot CLI's own model list, which runs in two containers; `auto` is never listed and is always taken |
+| a Claude subscription | one short message through Claude Code, since it has no list. The CLI says first: "To check this model, Agentry sends it one short message through Claude Code. The message counts toward your Claude plan's usage." and asks, or takes `--yes`; with no terminal and no `--yes` nothing is sent and nothing saved. An alias (`sonnet`, `opus`) is kept as typed, and the id it resolved to is shown beside it |
+| Agentry credits | the model is `agentry`, and a credits session must open and is ended at once |
+
+A list is asked over `http` or `https` alone, follows no redirect, is bounded
+in time and size, and no error carries the key. A refusal of a model id the
+provider does not offer names what it does offer.
+
+### Which model a run is on
+
+| Where | How it names a saved model | When it names none |
+|---|---|---|
+| a run | `agentry run --model <name\|id>` | the default |
+| a schedule | `schedule add` or `edit --model <name\|id>`, kept as the saved model's id; `edit --model ""` goes back to the default | the default when each run starts, so a new default moves it |
+| a persistent agent | `agent configure <agent> --model <name\|id\|default>`, kept as the saved model's id in its `config.yaml`; a running agent takes it at its next turn | the default |
+| a runhost's agents and schedules | one of the saved models that runhost holds ([on a runhost](#on-a-remote-runhost)) | the runhost's default |
+
+A run compiles from its saved model alone: its provider's credential,
+endpoint and `proxyAllow`, its model id and its context window. No other
+provider's key is read, and the agent container's egress is that provider's
+endpoint. The harness follows the credential, as it does for the default: a
+key runs on docker-agent, a ChatGPT plan on Codex, a Claude subscription on
+Claude Code and a Copilot plan on Copilot CLI ([model
+sign-ins](#model-sign-ins)). `--adapter` still overrides the harness. A
+saved model read from a version 1 `harness.<adapter>` block runs on that
+adapter, with that block's key, as `--adapter <adapter>` did; `--adapter
+<adapter>` with no `--model` runs on that block's saved model.
+
+**Nothing falls back to the default.** A run, a schedule's run or an agent's
+turn that names a saved model the computer does not have is refused (exit
+11), naming it. So is one whose provider's key is in neither its variable nor
+the keychain, or whose sign-in is not kept, before anything is laid down for
+it: the refusal names the saved model, its provider and the fix. A running
+persistent agent whose next turn is refused stays on the segment it has, and
+the next turn asks again. A plan is cached per saved model, so a run on
+another model compiles its own.
+
+`budgets.maxCostUsd` holds for whichever saved model a run is on. A run on a
+model paid by a sign-in records no dollars, so it is refused by the model's
+name while the policy sets a cost budget; `--max-cost 0` lifts the budget for
+that run ([tokens, not dollars](#tokens-not-dollars)).
+
+Moving a schedule or an agent to another saved model asks for no new
+consent: the model is your choice on your computer. A running agent says
+"The agent's model changed: its model is now <name> (<provider>/<model>)" at
+its next turn, and a model on another harness starts a new conversation that
+carries the last exchange ([segments](#segments)).
+
+Agentry Helper runs only in Agentry Desktop, so `agent configure main` is
+refused from the CLI; the desktop sets its model, and a removal moves it.
+
+### Removing a saved model
+
+`models remove` and `providers remove` are refused while a schedule, a
+persistent agent or Agentry Helper names a saved model being removed, and
+the refusal lists them (exit 11). `--move-to <saved model>` moves them there
+first, and a running agent takes the move at its next turn. Removing the
+default needs `--move-to` too, which names the new default. Nothing moves to
+the default on its own. With `--json`, the answer lists `removed`, `moved`
+(each schedule or agent, with the id of the model it named), `movedTo` and
+the `default`, and for a provider what became of its credential.
+
+### On a remote runhost
+
+A [remote runhost](remote-runhosts.md#saved-models) holds some of this
+computer's saved models, for its persistent agents and its schedules:
+
+| Command | Does |
+|---|---|
+| `agentry runhost model <runhost>` | lists the saved models the runhost holds, and its default |
+| `runhost model <runhost> --add <saved model> [--yes]` | makes one of this computer's saved models available there, checked there |
+| `runhost model <runhost> --remove <saved model> [--move-to <saved model>] [--keep-credential]` | takes one away |
+| `runhost model <runhost> --default <saved model>` | makes one of the runhost's saved models its default |
+
+`--add` gives the runhost the model's credential the way it already took
+each kind: a key is read here and kept in the runhost's store after you
+agree; a plan's sign-in is made on the runhost from your browser here,
+unless it keeps one; Agentry credits are paid with a token of the runhost's
+own; an endpoint that takes no key is sent its address alone. The runhost
+then runs the check above from where it is, and refuses the model, keeping
+nothing, when it cannot reach it. The first saved model a runhost holds is
+its default. `--remove` takes the provider's credential away with its last
+saved model there unless `--keep-credential`, and is refused while one of
+the runhost's agents or schedules names the model, unless `--move-to` names
+another.
+
+`agent configure <agent> --on <runhost> --model <name>` and `schedule add
+--on <runhost> --model <name>` name one of the saved models that runhost
+holds, and a name it does not hold is refused. A schedule on a runhost keeps
+no key of this computer's: each run there reads its model and key from the
+runhost's store, and a model that is gone is refused, never replaced by the
+default. A one-off `agentry run --on <runhost> --model <name>` may take any
+of this computer's saved models, and carries that one model's credential
+alone, for that run alone.
+
+### What the receipt records
+
+The run plan's and the envelope's `harness` block carry `savedModel`, the
+saved model's `id` and `name`, beside `model` (`<provider>/<model id>`) and
+the adapter. A persistent agent's segment and a runhost's job record it the
+same way. `run --plan --json` gains `model` (`savedModel`, `model`,
+`adapter`). `schedule show --json` gives `savedModel`, `followsDefault` and,
+when its next run would be refused for its model, `modelRefusal`. `agent list`
+has a MODEL column, and `agent show` a `model:` line; with `--json`, `model`
+holds `savedModel`, `model`, `followsDefault` and `refusal`. None of them
+ever names a key, an account or a token.
+
 ## Model sign-ins
 
 A **model sign-in** is your own grant that lets the runs on **your computer**
 spend a model vendor's plan instead of an API key: a ChatGPT plan, a Claude
-subscription through Claude Code, or a GitHub Copilot plan. You choose one in
-model setup, machine-wide, beside any number of kept keys; one choice is
-active at a time. A hosted run never spends one: it spends the model access of
+subscription through Claude Code, or a GitHub Copilot plan. A sign-in is a
+[provider](#providers-and-saved-models), and every saved model on it spends
+it: a run, a schedule or a persistent agent spends the plan when it is on one
+of those saved models, the default included. One sign-in is kept per vendor.
+A hosted run never spends one: it spends the model access of
 the deployment that runs it, and `agentry run` refuses a model sign-in plan
 for a hosted run (a run grant, a connections file or `--session-protocol`)
 before anything is installed.
@@ -4661,12 +4932,13 @@ account](#connect-your-account) (OpenRouter, Poe, Hugging Face) is not a model
 sign-in either: the vendor makes an ordinary key and a run spends it as it
 spends any key.
 
-A run may spend a plan you hold, by your explicit choice in model setup. A
-run on a key still spends the key.
+A run spends a plan you hold only when its saved model is on that plan's
+provider, which you chose. A run on a key still spends the key.
 
 ### The credential kinds
 
-The policy's `model.apiKeyKind` says what pays for the model:
+A provider's `apiKeyKind` (`model.apiKeyKind` in a version 1 policy) says
+what pays for its models:
 
 | `apiKeyKind` | Provider | What pays | Adapter a run uses by default |
 |---|---|---|---|
@@ -4684,7 +4956,7 @@ separate route of a pasted token; it is not the Claude sign-in below.
 Each kind has one egress allowlist, and the compiler refuses a run whose
 `model.proxyAllow` is anything else, so a run paid by a plan reaches the model
 and nothing else (never the vendor's token endpoint, which only the CLI talks
-to):
+to). The provider's `proxyAllow` is that list:
 
 | Kind | `model.proxyAllow` |
 |---|---|
@@ -4707,6 +4979,10 @@ connect is one of the ways. Without the question, a flag says it:
 | `copilot` | none: the sign-in is its only way to pay | `--provider copilot`, with `--copilot-plan individual\|business\|enterprise` (default `individual`: Free, Pro, Pro+ and Max) and `--oauth-app` | a Copilot plan; the model defaults to `auto` |
 | `openrouter`, `poe`, `huggingface` | `connect \| key` | `--connect` | a connected key ([below](#connect-your-account)); you type the model id |
 
+`agentry providers add openai --sign-in`, `providers add anthropic --sign-in`,
+`providers add copilot` and `providers add <vendor> --connect` make the same
+providers beside the ones a computer has, and `agentry models add` saves
+models on them ([providers and saved models](#agentry-providers)).
 Choosing a sign-in signs in (or offers the one already kept), asks for the
 model, writes the policy above, and prepares the image of the harness that
 choice needs instead of docker-agent's (`--skip-images` skips it). The Copilot
@@ -4881,6 +5157,18 @@ The installed Claude Code also refuses to run when a `CLAUDE.md` sits in
 an ancestor of the run directory, and its managed settings, which the machine's
 administrator owns, are closed by no flag.
 
+**Checking a model.** A Claude subscription has no model list, so saving or
+checking a model on it (`agentry models add`, `edit`, `check`, `runhost
+model --add`, and Agentry Desktop's Settings → Models) sends one short
+message through Claude Code with the run's flags and one turn, and reads
+whether Claude Code answered. Before it does, the CLI and the desktop say:
+"To check this model, Agentry sends it one short message through Claude
+Code. The message counts toward your Claude plan's usage." Nothing is sent
+until you agree (`--yes` agrees from a script). An unknown or retired model
+id is refused at no cost, and an alias is kept as typed, with the id it
+resolved to shown beside it: an alias can resolve to another model under
+another Claude Code release.
+
 **Outcomes.** A rejected `rate_limit_event`, or `credits_required`, is the
 plan's limit, reported once with Claude Code's own reset time.
 
@@ -5010,8 +5298,11 @@ words are in the masked error and the receipts, never in the reason.
 A plan pays, so a run on a sign-in records tokens and no dollars:
 `usage.costUsd` stays 0 whatever the harness reports, and the receipt's
 `model.cost` says tokens, not dollars. `--max-cost` has nothing to measure and
-is refused with a sign-in (exit 2); so is a `budgets.maxCostUsd` above 0 in the
-policy. Bound the run with `--max-turns` and `--timeout`.
+is refused with a sign-in (exit 2). A `budgets.maxCostUsd` above 0 in the
+policy is refused beside a default saved model on a sign-in, and a run on
+another saved model on a sign-in is refused by the model's name while the
+policy sets one (exit 11); `--max-cost 0` lifts it for that run. Bound the run
+with `--max-turns` and `--timeout`.
 
 ### Built-in QuickAgents
 
@@ -5037,13 +5328,14 @@ as a run's does. Every token handed to a run is masked in every file under
 
 ### In the desktop app
 
-The desktop's model setup, in its first-run wizard and in Settings → Model
-provider, offers each provider's ways to pay with a sign-in first: Sign in with
-ChatGPT or an API key, Use your Claude subscription or an API key, Sign in
-with GitHub, and Connect your account or a key for the three connects. Any
-number are kept and one is active; each shows *Signed in as …* or *Connected as
-…* with Remove or Disconnect, and Settings lists everything kept on the
-computer, the CLI's included. Every sign-in runs through the CLI's own
+The desktop's model setup, in its first-run wizard and in Settings → Models'
+*Add a provider…*, offers each provider's ways to pay with a sign-in first:
+Sign in with ChatGPT or an API key, Use your Claude subscription or an API
+key, Sign in with GitHub, and Connect your account or a key for the three
+connects. A sign-in is a provider, and any number of saved models can be on
+it; Settings → Models shows *Signed in as …* or *Connected as …*, marks a
+model whose sign-in is gone *Needs sign-in* with *Sign in again…*, and lists
+every sign-in kept on the computer, the CLI's included. Every sign-in runs through the CLI's own
 packages on the store they share, so there is one refresher per machine, and a
 run uses the harness the choice needs, not always docker-agent. Where the Claude
 relay cannot work (its port is in use) the sign-in ends with that reason and
@@ -5051,11 +5343,6 @@ offers no paste. GitHub's device code is shown, put on the clipboard, and
 GitHub's page opened. For a connect you type the model id. A Claude sign-in
 made only by the installed Claude Code does not count for the desktop, which
 runs the image.
-
-### Known limits
-
-Listing a Copilot plan's models through the harness is not supported; setup
-asks for the model.
 
 ## The output folder
 
@@ -5190,7 +5477,9 @@ The [desktop app](https://github.com/blaktron/agentry-desktop) mirrors
 the registry (browse, report cards, the MCP servers & tools section) and
 drives the same runner packages as the CLI: one-click setup with the
 provider table (including a prerequisites installer for the docker engine
-on Linux), guided profile configuration and intake questions as forms,
+on Linux), Settings → Models for the [providers and saved
+models](#providers-and-saved-models) under the same rules as `agentry
+models` (desktop v0.7.30 or later), a Model list wherever something runs, guided profile configuration and intake questions as forms,
 and in-app runs with task input, file/folder pickers for `/inputs` and the
 output folder, a keep-profile toggle, a live log stream, and the result
 envelope. An interactive release opens as a chat in the same run panel,
@@ -5664,9 +5953,15 @@ key variable's **name** only.
 | `uninstall ns/name [--plan] --json` | `ref`, `plan`, `installs[]`, `profiles[]`, `keptProfiles[]` (under `--keep-mcp`), `consentRecord` — with `--plan`, what would be removed and nothing removed |
 | `list [--check] --json` | `path` (the state file), `records[]` (each `installed.yaml` record plus `present`: its directory exists; with `--check`, `latest`, `updateAvailable` and `checkError` per record) |
 | `validate DIR --json` | `passed`, `manifest`, `issues[]` (`rule`, `severity`, `path`, `message`), `inventory[]`, `findings[]` (`ruleId`, `scanner`, `severity`, `confidence`, `title`, `filePath`, `lineStart`, `lineEnd`, `excerpt`, `detail`), `readErrors[]`, `fileCount`, `bundle`, `counts`, `strict`; the report prints and the exit is 1 when it failed |
+| `models list --json` | `default` (the default's id), `max` (10), `models[]` (`id`, `name`, `provider`, `model`, `contextWindow`, `default`) |
+| `models add\|edit\|default --json` | the saved model as saved (as one entry of `models[]`, with `resolved`, the id a Claude alias resolved to at the check) |
+| `models check <name> --json` | `ok`, `model` (as above, with `resolved`), `contextWindow` (what an endpoint of your own reported), `warning` |
+| `models remove\|providers remove --json` | `removed[]`, `moved[]` (each schedule or agent moved: `kind`, `name`, `id`, and `model`, the id it named), `movedTo`, `default`, and for a provider `provider` and `credential` (what became of its key or sign-in) |
+| `providers list --json` | `providers[]` (`id`, `vendor`, `name`, `kind`, `baseUrl`, `apiKeyEnv` (a name), `apiKeySource`, `state`, `models[]` by name) |
+| `runhost model <name> --json` | `runhost`, `models[]`: the saved models the runhost holds |
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `contextWindow` (when the policy names one; CLI v0.7.9 or later), `images` ready\|skipped |
-| `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
-| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness`, `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made and each send to a [destination](#destinations-sending-a-runs-result-somewhere): `destination`, `kind`, `host` and `onMyNetwork` for a send, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
+| `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `model` (the saved model the plan was compiled on: `savedModel` with its `id` and `name`, `model` as `<provider>/<model id>`, and `adapter`), `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
+| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness` (with `savedModel`, the saved model's `id` and `name`, beside `model`, `<provider>/<model id>`), `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made and each send to a [destination](#destinations-sending-a-runs-result-somewhere): `destination`, `kind`, `host` and `onMyNetwork` for a send, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
 | `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts), `corrections` (how many slips were corrected), `repaired` (whether the one repair turn ran) and `check` (AI Review's check as one word: `pass`, `flagged`, `not_scanned`, or `unanswered`; absent for a draft that could not be rendered). The envelope's usage is both turns' together. A draft that stops before the Drafter runs still writes one envelope with its class and stage |
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `sources[]` (each `--repo` and `--url`: `kind` repository or url, `url` with any query hidden, `ref`, `commit`, `document` it is cited under, `files`, `bytes`, `leftOut` by reason, and `token`, where the token came from (flag, keychain or prompt), never the token itself), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
@@ -5718,3 +6013,4 @@ page covers authoring and publishing in depth.
 | `agentry fork ns/name [--into NS] [--name NAME] [--yes] [--wait]` | forks a public QuickAgent into your own namespace, or `--into` an organization you publish for, under its name unless `--name` gives another ([Retire, delete and fork](api-conventions.md#retire-delete-and-fork) has the rules). A fork stays private for good, and its first version is a submission through the pipeline, charged like any. On a terminal the command says so and asks for a typed "yes"; off one it sends nothing without `--yes`. `--wait` follows the copy until the first version is submitted; `--json` prints the fork's record |
 | `agentry files ensure [--policy FILE]` | pulls the files image the policy names, by digest, and refreshes the ClamAV signatures, so no run has to download either; a sandbox host runs it at each update ([running with files](#running-with-files)) |
 | `agentry install` / `uninstall` / `profiles` / `doctor` / `setup` | above |
+| `agentry models` / `agentry providers` | the saved models and the providers that pay for them ([above](#providers-and-saved-models)) |
