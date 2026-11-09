@@ -86,11 +86,17 @@ you never did. After that, a signature counts only if a pinned key made it.
 When a later login finds a different key set, the client says what changed
 and keeps the pin:
 
-- If the registry added a key and still lists every pinned one, the client
-  reports a possible key rotation. It cannot tell a rotation from a key
-  added by whoever answers for the registry's address, so it asks you to
-  confirm with the registry's operator and then re-pin deliberately. Until
-  you do, a release signed only by the new key is refused.
+- If a key you pinned handed over to the new one (described below), the
+  client pins the new key, records the one it replaced as retired, and says
+  so once. It does this at login, when no pinned key verifies a release, and
+  when managed settings signed by the new key arrive (agentry v0.7.40 and
+  later; Agentry Desktop takes the CLI's behaviour with it).
+- If the registry added a key with no handover from a pinned one, and still
+  lists every pinned key, the client reports a possible key rotation. It
+  cannot tell a rotation from a key added by whoever answers for the
+  registry's address, so it asks you to confirm with the registry's
+  operator and then re-pin deliberately. Until you do, a release signed
+  only by the new key is refused.
 - If a pinned key is gone, or a pinned key id now carries a different
   public key, the client warns. A rotation never does either.
 
