@@ -1092,7 +1092,7 @@
             "TestConnectorsListsTheCatalogue",
             "TestConnectorsServeTheConfiguredPublicClientID",
             "TestEveryCatalogueStrategyIsInTheAPI",
-            "TestDesktopAppsServesTheCatalogue"
+            "TestThereIsNoCatalogueOfApplications"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4517,31 +4517,6 @@
       ]
     },
     {
-      "owner": "pkg/appserver",
-      "behavior": "Application server catalogue validation: exact pins, launches and the closed tool classes",
-      "disposition": "retain",
-      "files": [
-        {
-          "path": "pkg/appserver/appserver_test.go",
-          "tests": [
-            "TestTheBlenderEntryIsTheVettedServerAtItsPin",
-            "TestEveryEntryClassesEveryToolFromTheClosedSet",
-            "TestAnEntryWithoutAnExactPinIsRefused",
-            "TestTheCatalogueRefusesWhatItCannotVouchFor",
-            "TestALoopbackServerIsReachedOnLoopbackAlone",
-            "TestTheStepsNameThePinnedRelease",
-            "TestLookupHandsOutACopy",
-            "TestTheApplicationsOwnServerIsReachedNotLaunched",
-            "TestTheUnrealEntryIsEpicsPluginOnLoopback"
-          ],
-          "fuzz": [],
-          "benchmarks": [],
-          "fixtureEntryPoint": false,
-          "dependencyHints": []
-        }
-      ]
-    },
-    {
       "owner": "pkg/archive",
       "behavior": "Reproducible packing and hostile archive extraction",
       "disposition": "retain",
@@ -5182,7 +5157,6 @@
             "TestWhatOfAnApplicationTheRunUses",
             "TestDesktopIsAV2Field",
             "TestDesktopIsInTheContract",
-            "TestAllowedIsTheCatalogueNarrowed",
             "TestDiffCapabilitiesDesktop",
             "TestV2SchemaDesktopShape",
             "TestAnApplicationIsNamedByItsIDAlone"

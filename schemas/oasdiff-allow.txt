@@ -1,0 +1,1 @@
+GET /desktop-apps api path removed without deprecation

@@ -6,8 +6,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/blaktron/agentry/pkg/appserver"
 )
 
 // The person's computer (V19): capabilities.desktop names applications by
@@ -225,20 +223,6 @@ func TestDesktopIsInTheContract(t *testing.T) {
 	if err := json.Unmarshal(raw, &back); err != nil || back.Capabilities.Desktop == nil ||
 		!slices.Equal(back.Capabilities.Desktop.Servers[0].Tools, []string{"get_scene_info", "execute_blender_code"}) {
 		t.Fatalf("the canonical form does not read back: %v %+v", err, back.Capabilities.Desktop)
-	}
-}
-
-// TestAllowedIsTheCatalogueNarrowed: a narrowing keeps the catalogue's
-// order and classes, and no narrowing is every tool the entry gives.
-func TestAllowedIsTheCatalogueNarrowed(t *testing.T) {
-	e, _ := appserver.Builtin().Lookup("blender")
-	all := DesktopServer{ID: "blender"}.Allowed(e)
-	if len(all) != len(e.Tools) {
-		t.Fatalf("no narrowing gives %d tools; the entry gives %d", len(all), len(e.Tools))
-	}
-	got := DesktopServer{ID: "blender", Tools: []string{"look", "execute_blender_code"}}.Allowed(e)
-	if len(got) != 2 || got[0].Name != "execute_blender_code" || got[0].Class != appserver.ClassExec || got[1].Name != "look" {
-		t.Fatalf("narrowed = %+v", got)
 	}
 }
 
