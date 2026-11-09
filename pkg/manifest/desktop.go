@@ -5,8 +5,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-
-	"github.com/blaktron/agentry/pkg/appserver"
 )
 
 // The person's own computer. A release that works an application on the
@@ -108,20 +106,6 @@ var (
 	desktopIDPattern   = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	desktopToolPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 )
-
-// Allowed is the tools a run of this server has among a catalogue entry's:
-// the entry's, narrowed to Tools where Tools is set, in the entry's order.
-// Validation, consent and the capability diff do not use it: they read no
-// catalogue.
-func (d DesktopServer) Allowed(e appserver.Server) []appserver.Tool {
-	var out []appserver.Tool
-	for _, t := range e.Tools {
-		if len(d.Tools) == 0 || slices.Contains(d.Tools, t.Name) {
-			out = append(out, t)
-		}
-	}
-	return out
-}
 
 // HasComputerUse reports whether the line declares computer use.
 func (d *Desktop) HasComputerUse() bool { return d != nil && d.ComputerUse != "" }

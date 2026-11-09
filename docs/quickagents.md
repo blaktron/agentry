@@ -748,11 +748,12 @@ used, a narrowing lifted or a tool added to it, computer use declared, or
 `app` to `screen` is a widening, so an upgrade that does one asks for
 consent again. The line is for a run on the person's own computer or on
 their own runhost, never a run in Agentry, and
-`GET /search?capability=desktop` finds such releases. The CLI and Agentry
-Desktop released so far bind only `blender` and `unreal`, the applications
-of the catalogue served at `GET /api/v1/desktop-apps`. A CLI or desktop that
-pins a core older than this field refuses a manifest that carries it,
-naming the field.
+`GET /search?capability=desktop` finds such releases. An id is resolved on
+the person's computer, against the applications they approved in Agentry
+Desktop, whose library has presets with known ids (`blender`, `unreal`);
+the registry holds no list of applications ([the person's
+computer](desktop.md)). A CLI or desktop that pins a core older than this
+field refuses a manifest that carries it, naming the field.
 
 **`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.

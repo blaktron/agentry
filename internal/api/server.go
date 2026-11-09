@@ -38,7 +38,6 @@ import (
 	"github.com/blaktron/agentry/internal/version"
 	"github.com/blaktron/agentry/internal/voice"
 	"github.com/blaktron/agentry/internal/webhook"
-	"github.com/blaktron/agentry/pkg/appserver"
 	"github.com/blaktron/agentry/pkg/connector"
 	"github.com/blaktron/agentry/pkg/ruleset"
 	"github.com/blaktron/agentry/pkg/websearch"
@@ -721,17 +720,6 @@ func (s *Server) GetConnectors(w http.ResponseWriter, r *http.Request) {
 		out.Connectors = append(out.Connectors, info)
 	}
 	writeJSON(w, http.StatusOK, out)
-}
-
-// GetDesktopApps implements GET /api/v1/desktop-apps: the catalogue of
-// application servers this build carries, every entry whole. It serves the
-// embedded catalogue alone, so it needs no store and no credential.
-func (s *Server) GetDesktopApps(w http.ResponseWriter, r *http.Request) {
-	c := appserver.Builtin()
-	writeJSON(w, http.StatusOK, struct {
-		Version int                `json:"version"`
-		Servers []appserver.Server `json:"servers"`
-	}{c.Version(), c.All()})
 }
 
 // Readyz is the readiness handler for a role that assembles its own mux —
