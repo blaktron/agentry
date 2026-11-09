@@ -110,7 +110,8 @@ both open to the namespace's administrators. `POST
 /agents/{ns}/{name}/retire` makes it private and marks it `retiredAt`.
 Every submission to it is then refused with `409 agent-retired`, as is
 `PATCH` to public, and it holds no place under the private-agent cap.
-`POST …/restore` returns the visibility it had, under the same rules as
+While it is retired, its record's `retiredVisibility` says the visibility
+it had. `POST …/restore` returns that visibility, under the same rules as
 any agent becoming public (`409 agent-unscanned`). Back to private it is
 under the cap again (`422 private-agent-cap`). It answers `409
 agent-not-retired` when there is nothing to restore.
@@ -336,7 +337,7 @@ admins) can put it away or end it, and anyone signed in can copy a public
 one.
 
 **Retire.** `POST /agents/{ns}/{name}/retire` makes the agent private and
-labels it `retiredAt`, keeping the visibility it had. A retired agent takes
+labels it `retiredAt`, keeping the visibility it had as `retiredVisibility`. A retired agent takes
 no submission (`409 agent-retired`) and holds no place under the
 private-agent cap. `POST …/restore` puts the visibility back, under the
 rules of any agent becoming public (`409 agent-unscanned`) or of a private
