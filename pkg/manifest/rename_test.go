@@ -84,3 +84,33 @@ func TestRenameRefusesWhatIsNotAMapping(t *testing.T) {
 		}
 	}
 }
+
+// TestRenameFrontmatterRewritesTheNameLineAlone: a fork under another name
+// has its instruction's frontmatter name rewritten, every other byte kept;
+// a file with no frontmatter, no name or the same name is left as it is.
+func TestRenameFrontmatterRewritesTheNameLineAlone(t *testing.T) {
+	in := "---\nname: seo-page-check   # the skill's name\ndescription: \"Checks a page.\"\nmetadata:\n  name: inner\n---\n# SEO page check\n\nname: not frontmatter\n"
+	out, changed, err := RenameFrontmatter([]byte(in), "my-fork")
+	if err != nil || !changed {
+		t.Fatalf("changed %v, %v", changed, err)
+	}
+	want := strings.Replace(in, "name: seo-page-check   # the skill's name", "name: my-fork", 1)
+	if string(out) != want {
+		t.Fatalf("got\n%s\nwant\n%s", out, want)
+	}
+	if fm, _, _ := ParseFrontmatter(out); fm.Name != "my-fork" || fm.Description != "Checks a page." {
+		t.Fatalf("frontmatter after: %+v", fm)
+	}
+	crlf := strings.ReplaceAll("---\nname: 'seo'\n---\nBody\n", "\n", "\r\n")
+	if out, changed, err := RenameFrontmatter([]byte(crlf), "fork"); err != nil || !changed || string(out) != strings.Replace(crlf, "name: 'seo'", "name: fork", 1) {
+		t.Fatalf("CRLF: %q %v %v", out, changed, err)
+	}
+	for _, same := range []string{"No frontmatter.\n", "---\ndescription: x\n---\nBody\n", "---\nname: fork\n---\nBody\n"} {
+		if out, changed, err := RenameFrontmatter([]byte(same), "fork"); err != nil || changed || string(out) != same {
+			t.Errorf("%q: changed %v, %v", same, changed, err)
+		}
+	}
+	if _, _, err := RenameFrontmatter([]byte("---\nname: >\n  seo\n---\n"), "fork"); err == nil {
+		t.Error("a block scalar name was rewritten")
+	}
+}

@@ -383,7 +383,9 @@ fork-source`), and have a published version (`409 nothing-to-fork`). A fork:
   origin, whatever their role on it. The objects are copied rather than
   shared, so retiring or deleting the origin later changes nothing in the
   fork. It writes one commit, *Fork of ns/name@version*, that renames the
-  manifest into the fork's namespace. The fork's default branch and a
+  manifest into the fork's namespace and name, and, when the instruction
+  file's frontmatter names the agent, renames it there too, since the
+  frontmatter's name must match the manifest's. The fork's default branch and a
   `v<version>` tag point at it. That tag is submitted through the pipeline
   like any submission, charged like one; a fork's first version is always
   scanned. The fork's history runs back through the origin's release. A

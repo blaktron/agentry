@@ -102,6 +102,10 @@ type ForkCommit struct {
 	// ManifestPath's content is replaced with Manifest.
 	ManifestPath string
 	Manifest     []byte
+	// Files are the other files the rename rewrites, each replaced with
+	// its Content: the instruction file whose frontmatter names the
+	// origin.
+	Files []ForkFile
 	// Parent is the commit the fork's continues; empty for a root commit.
 	Parent  string
 	Message string
@@ -113,6 +117,12 @@ type ForkCommit struct {
 	AuthorName  string
 	AuthorEmail string
 	When        time.Time
+}
+
+// ForkFile is a file of the fork's tree replaced with Content.
+type ForkFile struct {
+	Path    string
+	Content []byte
 }
 
 // SetForkRepos wires the repositories CopyFork copies.
@@ -232,14 +242,17 @@ func (s *Service) Fork(ctx context.Context, p *auth.Principal, src Agent, in For
 	}
 	if err := s.forkHandOff.CopyFork(ctx, CopyForkArgs{AgentID: agentID, UserID: p.UserID}); err != nil {
 		s.logger().Error("registry: fork hand-off failed", "agent", agentID, "err", err)
-		s.failFork(ctx, agentID, "Agentry could not start copying this fork. Delete it and fork again.")
+		s.failFork(ctx, agentID, src.Namespace+"/"+src.Name, "hand-off", "Agentry could not start copying this fork. Delete it and fork again.")
 	}
 	return s.Resolve(ctx, in.Namespace, name)
 }
 
-// failFork marks a fork failed with detail, the sentence its readers see.
-// From `copying` only; a fork that is ready stays ready.
-func (s *Service) failFork(ctx context.Context, agentID uuid.UUID, detail string) {
+// failFork marks a fork failed with detail, the sentence its readers see,
+// and logs why: the origin it was copied from (ns/name, or "" when it is
+// not known), the stage the copy failed at and that sentence. From
+// `copying` only; a fork that is ready stays ready.
+func (s *Service) failFork(ctx context.Context, agentID uuid.UUID, origin, stage, detail string) {
+	s.logger().Warn("registry: fork copy failed", "agent", agentID, "origin", origin, "stage", stage, "reason", detail)
 	if _, err := s.st.Queries().SetForkState(ctx, storegen.SetForkStateParams{ID: agentID, ForkState: ptr(ForkFailed), ForkDetail: detail}); err != nil {
 		s.logger().Error("registry: could not mark a fork failed", "agent", agentID, "err", err)
 	}
@@ -278,8 +291,13 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 	if s.forkRepos == nil || s.blobs == nil {
 		return errors.New("registry: this role cannot copy forks (no repositories or no object store)")
 	}
+	origin, err := q.GetAgentByID(ctx, *row.ForkedFromAgentID)
+	if err != nil {
+		return err
+	}
+	from := origin.Namespace + "/" + origin.Name
 	if p == nil {
-		s.failFork(ctx, fork.ID, "The account that forked this QuickAgent no longer stands, so its first version was not submitted.")
+		s.failFork(ctx, fork.ID, from, "account", "The account that forked this QuickAgent no longer stands, so its first version was not submitted.")
 		return nil
 	}
 	// The organization may have been suspended or put on its decommission
@@ -288,7 +306,7 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 	if err := s.OrgGateFor(ctx, fork, auth.ActAgentPublish); err != nil {
 		var gate *OrgGateError
 		if errors.As(err, &gate) {
-			s.failFork(ctx, fork.ID, "The organization "+fork.Namespace+" is not taking new versions now, so the fork's first version was not submitted.")
+			s.failFork(ctx, fork.ID, from, "organization", "The organization "+fork.Namespace+" is not taking new versions now, so the fork's first version was not submitted.")
 			return nil
 		}
 		return err
@@ -297,7 +315,7 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 	// flag, set by an organization's administrator while the copy waited):
 	// the first version of a fork is always scanned.
 	if fork.PipelineSkip {
-		s.failFork(ctx, fork.ID, "This fork was taken off the pipeline before its first version, which a fork's first version never is. Clear pipeline: skip, delete this fork and fork again.")
+		s.failFork(ctx, fork.ID, from, "pipeline-skip", "This fork was taken off the pipeline before its first version, which a fork's first version never is. Clear pipeline: skip, delete this fork and fork again.")
 		return nil
 	}
 	// The account may have lost its place in the namespace since it
@@ -305,7 +323,7 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 	if role, err := s.EffectiveRole(ctx, p, fork); err != nil {
 		return err
 	} else if auth.CheckAgent(p, auth.AgentResource{EffectiveRole: role}, auth.ActAgentPublish) != nil {
-		s.failFork(ctx, fork.ID, "The account that forked this QuickAgent can no longer publish in "+fork.Namespace+", so its first version was not submitted.")
+		s.failFork(ctx, fork.ID, from, "role", "The account that forked this QuickAgent can no longer publish in "+fork.Namespace+", so its first version was not submitted.")
 		return nil
 	}
 	ov, err := q.GetVersionByID(ctx, *row.ForkedFromVersionID)
@@ -313,12 +331,8 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 		return err
 	}
 	if Status(ov.Status) != StatusPublished {
-		s.failFork(ctx, fork.ID, "The version this fork was taken from was withdrawn before it was copied, so the fork has no first version.")
+		s.failFork(ctx, fork.ID, from, "origin-version", "The version this fork was taken from was withdrawn before it was copied, so the fork has no first version.")
 		return nil
-	}
-	origin, err := q.GetAgentByID(ctx, *row.ForkedFromAgentID)
-	if err != nil {
-		return err
 	}
 	// A version already recorded means an earlier attempt got as far as
 	// the submission; the fork is ready.
@@ -346,10 +360,10 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 	if err := s.forkRepos.CopyHistory(ctx, origin.RepoID, fork.RepoID, fork.DefaultBranch, history); err != nil {
 		return err
 	}
-	if _, err := s.forkCommit(ctx, fork, origin.Namespace+"/"+origin.Name, ov, p); err != nil {
+	if _, err := s.forkCommit(ctx, fork, from, ov, p); err != nil {
 		var refused *forkRefusal
 		if errors.As(err, &refused) {
-			s.failFork(ctx, fork.ID, refused.detail)
+			s.failFork(ctx, fork.ID, from, "commit", refused.detail)
 			return nil
 		}
 		return err
@@ -380,7 +394,7 @@ func (s *Service) CopyFork(ctx context.Context, args CopyForkArgs, p *auth.Princ
 		// the copy meanwhile: the version is there.
 		return q.MarkForkReady(ctx, fork.ID)
 	case isForkSubmitRefusal(err):
-		s.failFork(ctx, fork.ID, "The fork's first version was refused: "+refusalWords(err))
+		s.failFork(ctx, fork.ID, from, "submission", "The fork's first version was refused: "+refusalWords(err))
 		return nil
 	default:
 		return err
@@ -445,6 +459,36 @@ func (s *Service) forkCommit(ctx context.Context, fork Agent, originPath string,
 		return "", &forkRefusal{detail: "The forked version's agent.yaml could not be renamed: " + err.Error()}
 	}
 	c.Manifest = renamed
+	// The instruction's frontmatter may name the agent too, and must name
+	// the fork (V9), so it is renamed with the manifest.
+	if m, err := manifest.Parse(renamed); err == nil {
+		read := func(p string) ([]byte, error) {
+			if has {
+				return s.forkRepos.ReadFileAt(ctx, fork.RepoID, ov.CommitSha, p)
+			}
+			return os.ReadFile(filepath.Join(c.Dir, filepath.FromSlash(p))) //nolint:gosec // a local path within the server-created directory
+		}
+		for _, p := range m.InstructionCandidates() {
+			if !filepath.IsLocal(p) || p == c.ManifestPath {
+				continue
+			}
+			text, err := read(p)
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return "", err
+			}
+			out, changed, err := manifest.RenameFrontmatter(text, fork.Name)
+			if err != nil {
+				return "", &forkRefusal{detail: "The forked version's " + p + " names " + originPath + " in its frontmatter in a form that could not be renamed."}
+			}
+			if changed {
+				c.Files = append(c.Files, ForkFile{Path: p, Content: out})
+			}
+			break
+		}
+	}
 	commit, err := s.forkRepos.CommitFork(ctx, fork.RepoID, c)
 	if errors.Is(err, ErrForkTree) {
 		// Not something a retry changes.
@@ -530,7 +574,7 @@ func (s *Service) ReconcileStuckForks(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("registry: list stuck forks: %w", err)
 	}
 	for _, id := range ids {
-		s.failFork(ctx, id, fmt.Sprintf("The copy did not finish within %s of the fork. Delete this fork and fork again.", StuckForkCap))
+		s.failFork(ctx, id, "", "watchdog", fmt.Sprintf("The copy did not finish within %s of the fork. Delete this fork and fork again.", StuckForkCap))
 	}
 	return len(ids), nil
 }

@@ -1750,7 +1750,8 @@
             "TestAMemberForksIntoTheOrganizationWithinItsCap",
             "TestAForkOfATaggedOriginContinuesItsHistory",
             "TestAForkWhoseCopyNeverRunsIsMarkedFailed",
-            "TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization"
+            "TestTheCopyRefusesAForkTakenOffThePipelineOrInAStoppedOrganization",
+            "TestAForkUnderAnotherNameRenamesItsInstructionsFrontmatter"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5449,7 +5450,8 @@
             "TestRenameSetsTheNamespaceAndNameAndKeepsTheRest",
             "TestRenameAddsAMissingKeyInOrder",
             "TestRenameQuotesAValueYAMLWouldReadOtherwise",
-            "TestRenameRefusesWhatIsNotAMapping"
+            "TestRenameRefusesWhatIsNotAMapping",
+            "TestRenameFrontmatterRewritesTheNameLineAlone"
           ],
           "fuzz": [],
           "benchmarks": [],
