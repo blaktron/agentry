@@ -2058,6 +2058,61 @@ The defaults suit the `docker-agent` harness and an npm or PyPI server's
 install. They are not a sizing for several runs on one machine: raise or
 lower them for your own host.
 
+## Managed settings
+
+An organization's admins can hold their members' runs to
+[managed settings](managed-settings.md). The runner applies every verified
+document it holds on this computer, whichever registry a run comes from:
+each one only narrows. A lock holds whatever the policy file says. Your
+file keeps your own values, and they apply again once the lock is lifted.
+A setting is applied at compile and again when a run starts, so a plan
+compiled before a lock arrived is held to it too. A refusal exits 11 and
+names the organization and the setting.
+
+| Setting | What the runner does under a lock |
+| --- | --- |
+| `run.unsafeMode` | `forbidden` refuses a run compiled in Unsafe Mode, whoever asked for it. |
+| `egress.wildcard` | `forbidden` refuses a release that declares `network.egress: "*"`, whatever `allowWildcardEgress` says. |
+| `browser.publicWeb` | `forbidden` refuses a browser with `scope: public`, whatever `browser.allowPublicWeb` says. |
+| `mcpServers.allowVulnerable` | `forbidden` refuses a declared server the registry rates high or critical. Neither `--allow-vulnerable-mcp` nor `mcpServers.allowVulnerable` admits it. |
+| `desktop.applications` | `forbidden` refuses a release that declares `capabilities.desktop`. |
+| `desktop.screen` | `forbidden` refuses screen-scope computer use, whether the policy, `--allow-screen` or Unsafe Mode would allow it. |
+| `desktop.customServers` | `forbidden` refuses an application you set up yourself in Agentry Desktop, in Unsafe Mode too. |
+| `messengers` | `forbidden` keeps every messenger off a persistent agent, and `agentry agent messenger add` refuses one. |
+| `persistentReleases` | `forbidden` refuses a persistent agent that is not built into Agentry, at `agentry agent install` and when it starts. |
+| `agents.assistant`, `agents.codingAgent` | `forbidden` refuses the Assistant or the Coding agent when it starts. |
+| `malwareCheck` | `required` turns the whole malware check on, as `malwareCheck: true` does. |
+| `run.timeout`, `run.maxTurns`, `run.maxCost` | A cap: a budget above it, or none at all, becomes the cap, flags included. A lower budget of your own stays. |
+| `install.sources` | With `organization-and-built-ins`, only the organization's namespace, `agentry`'s built-ins and the listed namespaces install or run. The check runs at `agentry install`, `install --local`, `agent install` and every run. A release installed before the lock stays on disk, and its runs are refused. |
+| `install.acceptRisk` | `forbidden` refuses a release admitted by `--allow-unsigned` or `--allow-unscanned`, at install and at every run. A local folder is unsigned, so it is refused too. |
+| `deliverables.destinations` | A destination of a kind the list leaves out (`folder` for `--deliver-to`, `webhook`, `s3`) refuses the run before it starts, and `agentry deliver` refuses it too. |
+| `schedules` | `forbidden` refuses `schedule add`, and holds every schedule. A fire is recorded as refused, and `schedule run` and `edit` are refused. `pause` and `remove` still work. |
+| `run.where` | A run on this computer needs `local`, a run with `--on` needs `runhost`, and a run that reaches target hosts needs `target-host`. |
+| `updates.minimumVersion` | An agentry older than the version refuses every run and names the registry's download page. A pre-release of that version, or a build with no version, counts as older. |
+| `bugReports` | The agentry command sends no bug reports. Agentry Desktop holds this row for its own. |
+
+An **organization default** applies only where your policy file leaves the
+field unset:
+
+- `desktop.allow`, `desktop.allowCustomServers`, `allowMessengers`,
+  `allowPersistentReleases` and `malwareCheck`;
+- for the budgets, a value still at the fresh policy's (`timeoutSeconds:
+  1800`, no turn or cost limit).
+
+A default of `allowed` changes nothing. A default on a setting with no field
+of yours (schedules, the two agents, accepting a risk) has nothing to fill.
+
+A run sent to a runhost (`--on`) is judged on the device that sends it:
+where it goes, where its release comes from, a risk you accepted, and the
+minimum version. Its locks on the settings above, its malware check and
+its caps travel with the job. The runhost applies them beside its own
+managed settings, and can only be refused by them.
+
+`run.where` and `bugReports` also govern paths a client has of its own:
+runs In Agentry and bug reports. An application that links the runner
+refuses every run under a lock on either until it holds that path itself.
+The agentry command has neither path.
+
 ## What a run enforces
 
 | Contract line | Mechanism |
