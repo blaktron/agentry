@@ -4748,9 +4748,19 @@ refuses a version 2 file by its version.
 
 | Command | Does |
 |---|---|
-| `providers list` | each provider, how it pays (a key and where it is read from, a plan's sign-in, a connected account, Agentry credits, or no key), whether its credential is here (`key set`, `key in the keychain`, `signed in as …`, or `key missing` and `needs sign-in`), and the saved models on it; never a key |
-| `providers add <vendor>` | adds a provider; save a model on it next with `models add` |
+| `providers list` | each provider, how it pays (a key and where it is read from, a plan's sign-in, a connected account, Agentry credits, or no key), whether its credential is here (`key set`, `key in the keychain`, `signed in as …`, or `key missing` and `needs sign-in`), and the saved models on it; for one a sign-in or connected account pays, that account, the app it went through and when it was last used. Then every sign-in and connected account kept with no provider using it, each with the command that removes it. Never a key or a token |
+| `providers add <vendor>` | adds a provider; save a model on it next with `models add`. On a provider already here that a sign-in or connected account pays, signs in or connects again |
 | `providers remove <id> [--move-to <saved model>] [--keep-credential]` | removes the provider and every saved model on it, and forgets its credential on this computer |
+| `providers remove <id>`, with no provider `<id>` here | removes the sign-in or connected account still kept for it |
+| `providers remove <id> --sign-in` or `--connect` | removes the kept sign-in (`openai`, `anthropic`, `copilot`) or connected account (`openrouter`, `poe`, `huggingface`) alone, and leaves the provider |
+
+`providers list --json` prints `providers[]` and `signIns[]`. Each kept
+sign-in and connected account is in `signIns[]`, with its `vendor`, `kind`,
+`state`, `account`, `createdAt`, `lastUsedAt`, `provider` (the provider id it
+pays for) and `inUse` (false when no provider here uses it). A provider row a
+sign-in or connected account pays carries its `account`, `createdAt`,
+`lastUsedAt`, `app` and `keyExpiresAt`. The sign-ins and their place in
+`providers` need CLI v0.7.41 or later.
 
 `providers add` takes the credential in one of these ways:
 
@@ -4763,20 +4773,34 @@ refuses a version 2 file by its version.
 | `agentry` | none | your Agentry credits, through the registry you are signed in to (`agentry login` first) |
 | `custom` | `--name NAME --base-url URL`, with `--api-key-env` or `--key-stdin` when it takes a key | an OpenAI-compatible endpoint of your own, as the provider `custom-<name>` |
 
-A sign-in or a connect that is not kept yet is made then, in your browser, as
-`agentry model-signins add` makes it. A second provider for a named vendor
-is refused: remove the first. A plain `http` address that leaves this
+A sign-in or a connect that is not kept yet is made then, in your browser
+([signing in](#signing-in-agentry-setup-and-agentry-providers)).
+`openai --sign-in --new-account` signs in to another ChatGPT account than the
+one this computer is registered for. A plain `http` address that leaves this
 computer is warned about and taken.
 
-`providers remove` deletes the provider's key from the keychain, or removes
-its sign-in or connected account as `agentry model-signins remove` does,
-unless `--keep-credential`. While a schedule or a persistent agent names one
-of its saved models, the removal is refused with them listed, unless
-`--move-to` names the saved model they move to; that is also the new default
-when the default is on the provider.
+A second provider for a named vendor is refused, with one exception: on a
+provider already here that your plan's sign-in or a connected account pays,
+`providers add` signs in or connects again (`openai --sign-in`, `anthropic
+--sign-in [--installed]`, `copilot`, `openrouter|poe|huggingface
+--connect`) and replaces the kept credential, revoking the one before where
+the vendor can. The provider and its saved models are left as they are, and
+the command says so; a flag that would change the provider (`--copilot-plan`,
+`--api-key-env`, `--base-url`, …) is refused. A provider paid by a key is set
+up again by removing it first. These need CLI v0.7.41 or later.
 
-`agentry model-signins` still lists, adds and removes the sign-ins and
-connected accounts themselves ([below](#signing-in-agentry-setup-and-agentry-model-signins)).
+`providers remove` deletes the provider's key from the keychain, or removes
+its sign-in or connected account (below), unless `--keep-credential`. While a
+schedule or a persistent agent names one of its saved models, the removal is
+refused with them listed, unless `--move-to` names the saved model they move
+to; that is also the new default when the default is on the provider. A
+sign-in or connected account kept with no provider using it is removed by
+`providers remove` with its provider's id (`openai` for the ChatGPT sign-in,
+`anthropic` for Claude, `copilot`, `openrouter`, `poe`, `huggingface`), and
+`--sign-in` or `--connect` removes one alone beside a provider that stays.
+`--json` says what was removed: `provider`, `providerRemoved` (true when the
+provider went), `credential`, and for a sign-in or connected account `signIn`
+(the name it is kept under) and `revocation`.
 
 ### `agentry models`
 
@@ -4967,7 +4991,7 @@ to). The provider's `proxyAllow` is that list:
 An adapter declares the kinds it can spend; any other adapter handed a
 sign-in is refused by policy at plan time (exit 11).
 
-### Signing in: `agentry setup` and `agentry model-signins`
+### Signing in: `agentry setup` and `agentry providers`
 
 Model setup asks how to pay for a provider's models whenever a sign-in or a
 connect is one of the ways. Without the question, a flag says it:
@@ -4988,18 +5012,29 @@ model, writes the policy above, and prepares the image of the harness that
 choice needs instead of docker-agent's (`--skip-images` skips it). The Copilot
 plan is checked before any sign-in starts.
 
-`agentry model-signins` manages what is kept, apart from `agentry connections`:
+`agentry providers` manages what is kept, apart from `agentry connections`.
+Each sign-in and connected account is kept under a name of its own, and pays
+for one provider:
 
-| Command | Does |
-|---|---|
-| `agentry model-signins add <vendor>` | signs in or connects: `chatgpt`, `claude`, `copilot`, `openrouter`, `poe`, `huggingface` |
-| `agentry model-signins list` | lists what is kept: vendor, account, kind, state (`signed in`, `connected`, or `broken: …`), when it was last used; never a token (`--json` for machines) |
-| `agentry model-signins remove <vendor>` | removes a sign-in or disconnects an account; what that does at the vendor differs by vendor, below |
+| Kept as | Provider | Signed in or connected again by | Removed alone by |
+|---|---|---|---|
+| `chatgpt` | `openai` | `agentry providers add openai --sign-in [--new-account]` | `agentry providers remove openai --sign-in` |
+| `claude` | `anthropic` | `agentry providers add anthropic --sign-in [--installed]` | `agentry providers remove anthropic --sign-in` |
+| `copilot` | `copilot` | `agentry providers add copilot [--oauth-app]` | `agentry providers remove copilot --sign-in` |
+| `openrouter`, `poe`, `huggingface` | the same | `agentry providers add <vendor> --connect` | `agentry providers remove <vendor> --connect` |
 
-`add` takes `--new-account` for `chatgpt` (register again for another ChatGPT
-account), `--installed` for `claude` (sign in the Claude Code installed on
-this computer rather than the image's) and `--oauth-app` for `copilot`.
-`agentry doctor` checks a sign-in in the store.
+`agentry providers list` shows what is kept: account, kind, state (`signed
+in`, `connected`, or `broken: …`), when it was last used; never a token.
+`--new-account` registers again for another ChatGPT account, `--installed`
+signs in the Claude Code installed on this computer rather than the image's,
+and `--oauth-app` signs in to Copilot through Agentry's OAuth App. `agentry
+doctor` checks a sign-in in the store.
+
+`agentry model-signins add|list|remove` is the deprecated alias of these
+since CLI v0.7.41: hidden from the help, it still works with its own
+arguments (`add chatgpt`, `remove claude`, …) and `--json` shapes, and says
+on stderr which `providers` command replaces it. It will be removed in a
+later release.
 
 A sign-in prints its address and opens your browser (`AGENTRY_NO_BROWSER`
 stops it opening one). ChatGPT's sign-in and the connects wait up to ten
@@ -5055,11 +5090,12 @@ complete is never a success. A plan run sets `request_max_retries = 0` in
 Codex's provider block, so Codex does not ask a 429 again, at the price of no
 longer retrying a transient 5xx or network failure.
 
-**Removing it.** `remove chatgpt` revokes the grant at OpenAI's revocation
-endpoint (held to OpenAI's own domain) and forgets it. OpenAI asks that a
-sign-out keep the account-to-client registration and the host id, so those two
-files stay and the next sign-in presents the same registration; a sign-in as a
-different account through it is refused until `add chatgpt --new-account`.
+**Removing it.** Removing the ChatGPT sign-in revokes the grant at OpenAI's
+revocation endpoint (held to OpenAI's own domain) and forgets it. OpenAI asks
+that a sign-out keep the account-to-client registration and the host id, so
+those two files stay and the next sign-in presents the same registration; a
+sign-in as a different account through it is refused until `agentry providers
+add openai --sign-in --new-account`.
 
 ### A Claude subscription
 
@@ -5072,8 +5108,8 @@ directory is and which account `claude auth status` names. Only a `claude.ai`
 login counts: a Console or API-key login is refused and nothing is kept. The
 runner never reads what Claude Code keeps in that directory.
 
-**The sign-in is the browser's alone.** `agentry model-signins add claude`
-signs in the Claude Code image, in a container that is the one kind Agentry
+**The sign-in is the browser's alone.** `agentry providers add anthropic
+--sign-in` signs in the Claude Code image, in a container that is the one kind Agentry
 starts with open egress, because Claude Code reaches Anthropic's pages and
 token endpoint itself. Claude Code's callback listens on the container's own
 loopback, which Docker cannot publish. The image therefore carries a stand-in
@@ -5092,7 +5128,7 @@ gives its opener no address within ten seconds; with nothing to paste into, as
 in the desktop, the sign-in ends instead. A first sign-in that fails deletes
 the volume it made.
 
-`add claude --installed` signs in the Claude Code installed on this computer
+`--installed` signs in the Claude Code installed on this computer
 instead, with that Claude Code's own browser, in the directory
 `model-signins/claude-code` under the runner home. Each Claude Code is signed
 in separately, where it runs: the image's directory is the docker volume
@@ -5172,7 +5208,7 @@ another Claude Code release.
 **Outcomes.** A rejected `rate_limit_event`, or `credits_required`, is the
 plan's limit, reported once with Claude Code's own reset time.
 
-**Removing it.** `remove claude` runs Claude Code's own `claude auth logout` in
+**Removing it.** Removing the Claude sign-in runs Claude Code's own `claude auth logout` in
 the image and in the installed Claude Code, each against its own directory, then
 deletes exactly the volume `agentry-claude-signin` and the directory
 `model-signins/claude-code`, whatever a record says, and forgets the record. A
@@ -5229,7 +5265,7 @@ every tool call, which the driver does not do). GitHub refusing the token says
 to sign in again.
 
 **Removing it.** GitHub's grant revocation needs a client secret that no client
-of Agentry's holds, so `remove copilot` submits the access token and both
+of Agentry's holds, so removing the Copilot sign-in submits the access token and both
 refresh tokens to GitHub's credential revocation. That endpoint answers 202
 before it acts, so the command says the tokens were **submitted**, not revoked,
 and that Agentry's app stays in your authorized apps (`https://github.com/settings/applications`)
@@ -5239,9 +5275,9 @@ within its eight hours.
 ### Connect your account
 
 OpenRouter, Poe and Hugging Face can be paid by a key the vendor makes for
-Agentry in your browser, instead of one you copy. `agentry model-signins add
-openrouter|poe|huggingface`, or the `connect` choice in setup (`--connect`),
-runs it. This is a **key**, not a model sign-in:
+Agentry in your browser, instead of one you copy. `agentry providers add
+openrouter|poe|huggingface --connect`, or the `connect` choice in setup
+(`--connect`), runs it. This is a **key**, not a model sign-in:
 
 | | OpenRouter | Poe | Hugging Face |
 |---|---|---|---|
