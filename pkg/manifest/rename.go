@@ -64,3 +64,44 @@ func setScalar(m *yaml.Node, key, value, after string) {
 	}
 	m.Content = append(m.Content[:at], append(pair, m.Content[at:]...)...)
 }
+
+// RenameFrontmatter returns content, an instruction file, with the name in
+// its leading `---` frontmatter set to name, and whether it changed
+// anything. V9 refuses an instruction whose frontmatter name differs from
+// the manifest's, so a fork that takes another name renames both. Only the
+// top-level name line is rewritten; every other byte stays as written. A
+// file with no frontmatter, or whose frontmatter names no agent or names
+// this one already, is returned unchanged. It refuses a name written in a
+// form it cannot rewrite in place (a block scalar, a key spread over
+// lines), since the result would still contradict the manifest.
+func RenameFrontmatter(content []byte, name string) ([]byte, bool, error) {
+	fm, ok, err := ParseFrontmatter(content)
+	if !ok || err != nil || fm.Name == "" || fm.Name == name {
+		return content, false, nil
+	}
+	lines := bytes.SplitAfter(content, []byte("\n"))
+	if len(lines) == 0 {
+		return content, false, nil
+	}
+	// The first line is the opening ---, after a byte order mark; the
+	// block ends at the next --- or ... line.
+	for i := 1; i < len(lines); i++ {
+		line := lines[i]
+		body := bytes.TrimRight(line, "\r\n")
+		if t := string(body); t == "---" || t == "..." {
+			break
+		}
+		key, _, found := bytes.Cut(body, []byte(":"))
+		if !found || !bytes.EqualFold(bytes.TrimRight(key, " \t"), []byte("name")) || len(key) == 0 || key[0] == ' ' || key[0] == '\t' {
+			continue
+		}
+		ending := line[len(body):]
+		lines[i] = append(append([]byte(string(bytes.TrimRight(key, " \t"))+": "), name...), ending...)
+		out := bytes.Join(lines, nil)
+		if got, _, err := ParseFrontmatter(out); err != nil || got.Name != name {
+			return content, false, fmt.Errorf("manifest: rename: the frontmatter's name could not be rewritten in place")
+		}
+		return out, true, nil
+	}
+	return content, false, errors.New("manifest: rename: the frontmatter's name could not be found to rewrite")
+}
