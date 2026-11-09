@@ -3322,6 +3322,41 @@ run resumed after a model failure starts with. The checklist is a working
 note: it is never a deliverable and goes with the scratch folder at the
 end of the run.
 
+**The finish check** (CLI v0.7.45 or later). A release's one-shot run under
+docker-agent ends when the model answers without calling a tool, whatever
+is left of its task. If the run's checklist still has steps pending or in
+progress at that answer, the runner starts the harness again on the same
+conversation with one message that names them:
+
+```text
+Your checklist has open steps:
+- query each package (in progress)
+- write the report (pending)
+Continue them, or drop each one with its reason and finish.
+```
+
+It asks at most twice; the second ask adds that it is the last and that the
+answer must name every step left open, and why. The ending after the
+second ask stands, and the run's result is `ok` either way: a run the agent
+could not finish is ended with `end_blocked`, not by the check.
+
+- The runner reads the list from the tools server's copy in the run's
+  receipts, `receipts/checklist.md`, which the `checklist` tool writes each
+  time it saves or reads the list, never from the model's answer.
+- No ask follows an answer the harness ended with an error, a run ended
+  blocked, a list whose open steps were all dropped, or a run with no list.
+- Each start counts in the run's turn, cost and time budgets, and none is
+  begun with less than two minutes of the run's time left.
+- Only a container harness that keeps its conversation in the run's store
+  is asked: docker-agent. A run under `claude` or `codex`, an interactive
+  session and a persistent agent's turn are not.
+
+The envelope records how the list ended ([the `checklist`
+block](#the-envelopes-checklist-block)), and the harness's
+`receipts/agent-stderr.log` has a line for each start:
+`agentry: the harness is started again on its conversation (run-1) for a
+finish check (1 of 2): …`.
+
 ### Fetch into the scratch folder: `saveTo`
 
 A run whose QuickAgent declares egress can keep a file it fetches, of any
@@ -3449,9 +3484,11 @@ limits, none of which needs the window:
   newer tool results pass half the window (64k tokens when no window is
   recorded), each older one is sent to the model as a placeholder; the
   stored conversation keeps it whole.
-- **`compaction_threshold: 0.7`**, on a model server of your own. The
-  conversation is compacted at 70% of the window rather than docker-agent's
-  90%. With no window recorded, docker-agent cannot compact ahead of time.
+- **`compaction_threshold`**: 0.7 on a model server of your own, 0.8 on a
+  hosted model (CLI v0.7.45 or later; docker-agent's own 0.9 before). The
+  conversation is compacted at that share of the window, leaving room for
+  the summary and the newest turns it keeps. With no window recorded on a
+  server of your own, docker-agent cannot compact ahead of time.
 - **`stream_idle_timeout: 30m`** in the model's `provider_opts`, on a model
   server of your own (CLI v0.7.25 or later). The harness waits up to 30
   minutes for a silent model stream before it gives up, rather than 5: a
@@ -3470,6 +3507,22 @@ that pins the vendor's docker-agent image keeps the vendor's behaviour.
 From CLI v0.7.44 the summary points the agent back to its checklist
 ([the checklist](#the-scratch-folder)); from v0.7.29 to v0.7.43 an
 autonomous run's pointed to its `notes.md`.
+
+**What a summary keeps** (CLI v0.7.45 or later, on Agentry's build of
+docker-agent). docker-agent's own request for a summary asks for what was
+done, what is being done, the files in play and what comes next. The run's
+config adds a `pre_compact` hook that appends, to that request, the
+headings the summary must keep:
+
+- the task, in the words you used;
+- the checklist, every step with its status, copied from its latest result;
+- what is done, what is in progress, and what is blocked and why;
+- the next step;
+- the files, paths and identifiers in play;
+- the constraints the task set, and the approaches that failed.
+
+The hook prints a fixed text and reads nothing. A policy that pins another
+docker-agent image gets no hook.
 
 Within it:
 
@@ -3903,6 +3956,36 @@ The runner picks, so a run that never heard of marking still shows its work:
 A file the runner picked has `"marked": false`. A run that failed lists no
 deliverables and writes no `deliverable.md`, and neither does a run whose
 teardown could not delete a secret and so ended as a failure.
+
+### The envelope's `checklist` block
+
+A release's one-shot run that keeps a checklist (CLI v0.7.45 or later) has a
+`checklist` block in its envelope, recording the agent's own list as it
+ended and the finish checks the runner made ([the finish
+check](#the-scratch-folder)):
+
+```json
+"checklist": {
+  "ending": "finished with 1 open step: write the report",
+  "steps": 3,
+  "open": ["write the report"],
+  "finishChecks": [
+    {"open": 2, "message": "Your checklist has open steps:\n- query each package (in progress)\n- write the report (pending)\nContinue them, or drop each one with its reason and finish."}
+  ]
+}
+```
+
+- `ending` is `all steps done` (every step is marked done or dropped),
+  `no checklist` (the agent kept none), or `finished with N open steps: …`
+  naming them.
+- `steps` counts the list's steps and `open` names those pending or in
+  progress.
+- `finishChecks` has one entry for each ask, at most two: how many steps
+  were open and the message the harness was started with.
+
+The block says what the agent marked, not that the work was checked. A run
+that is not a release's one-shot run, a built-in's for instance, has no
+`checklist` block.
 
 ### The envelope's `deliverables` block
 
