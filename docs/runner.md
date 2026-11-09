@@ -440,6 +440,12 @@ credential. On Linux with Docker Engine, `--signed-out` also runs a
 schedule while you are signed out, its keys sealed in an encrypted systemd
 credential (`check-signed-out` says whether this machine can, and whether
 your model setup's key would be refused then; `reseal` seals them again).
+`--in-unsafe-mode` records that the schedule's consents were given in Agentry
+Desktop's Unsafe Mode (it sets nothing by itself): while an organization's
+managed settings forbid Unsafe Mode on this computer, `add` with it is
+refused, its fires and `run` are refused (exit 11) and recorded, `edit` is
+refused, and `list` and `show` say it is held; it runs again once they stop
+(see [Managed settings](managed-settings.md)).
 A release that asks for a server is given it at `add`: `--intake
 id=[user@]host[:port]` and the `--host-*` flags, its host key accepted then
 and its sign-in kept in the keychain

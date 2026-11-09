@@ -26,10 +26,22 @@ func TestSchemaMatchesCatalogue(t *testing.T) {
 			} `json:"schema"`
 			Settings struct {
 				Properties map[string]struct {
-					Properties struct {
+					Description string `json:"description"`
+					Properties  struct {
 						Value struct {
-							Enum []string `json:"enum"`
+							Enum             []string `json:"enum"`
+							Type             string   `json:"type"`
+							Ref              string   `json:"$ref"`
+							Pattern          string   `json:"pattern"`
+							ExclusiveMinimum *float64 `json:"exclusiveMinimum"`
+							Maximum          *float64 `json:"maximum"`
+							Items            struct {
+								Enum []string `json:"enum"`
+							} `json:"items"`
 						} `json:"value"`
+						Locked *struct {
+							Const *bool `json:"const"`
+						} `json:"locked"`
 					} `json:"properties"`
 				} `json:"properties"`
 			} `json:"settings"`
@@ -64,8 +76,41 @@ func TestSchemaMatchesCatalogue(t *testing.T) {
 			t.Errorf("%s: not in the schema", r.ID)
 			continue
 		}
-		if !slices.Equal(p.Properties.Value.Enum, r.Values) {
-			t.Errorf("%s: schema values %v, catalogue %v", r.ID, p.Properties.Value.Enum, r.Values)
+		if p.Description == "" {
+			t.Errorf("%s: no description", r.ID)
+		}
+		v := p.Properties.Value
+		switch r.Kind {
+		case KindChoice:
+			if !slices.Equal(v.Enum, r.Values) {
+				t.Errorf("%s: schema values %v, catalogue %v", r.ID, v.Enum, r.Values)
+			}
+		case KindSet:
+			if v.Type != "array" || !slices.Equal(v.Items.Enum, r.Values) {
+				t.Errorf("%s: schema set %s of %v, catalogue %v", r.ID, v.Type, v.Items.Enum, r.Values)
+			}
+		case KindCap:
+			want := "number"
+			if r.Integer {
+				want = "integer"
+			}
+			if v.Type != want || v.ExclusiveMinimum == nil || *v.ExclusiveMinimum != 0 || v.Maximum == nil || *v.Maximum != r.Max {
+				t.Errorf("%s: schema cap %s (0, %v], catalogue %s (0, %v]", r.ID, v.Type, v.Maximum, want, r.Max)
+			}
+		case KindSources:
+			if v.Ref != "#/$defs/sources" {
+				t.Errorf("%s: schema value %q, want the sources definition", r.ID, v.Ref)
+			}
+		case KindMinimumVersion:
+			if v.Type != "string" || v.Pattern != versionPattern.String() {
+				t.Errorf("%s: schema pattern %q, catalogue %q", r.ID, v.Pattern, versionPattern.String())
+			}
+		default:
+			t.Errorf("%s: kind %q", r.ID, r.Kind)
+		}
+		lockOnly := p.Properties.Locked != nil && p.Properties.Locked.Const != nil && *p.Properties.Locked.Const
+		if lockOnly != r.LockOnly {
+			t.Errorf("%s: schema lock-only %v, catalogue %v", r.ID, lockOnly, r.LockOnly)
 		}
 	}
 }
