@@ -1790,10 +1790,12 @@
       },
       "want": {
         "declaredCapabilities": [
+          "persistent.browser",
           "persistent.calendars",
           "persistent.clock",
           "persistent.coder",
           "persistent.desktop",
+          "persistent.fetch",
           "persistent.helper",
           "persistent.imageServers",
           "persistent.mail",
@@ -1804,6 +1806,56 @@
           "persistent.selfConfigure",
           "persistent.skills",
           "persistent.web"
+        ],
+        "unrestrictedNetwork": true
+      }
+    },
+    {
+      "name": "a persistent agent's browser drives any public site, so it asks for the network without naming where",
+      "manifest": {
+        "modes": [
+          "persistent"
+        ],
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "exec": "none",
+          "persistent": {
+            "browser": true,
+            "memory": true
+          }
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "persistent.browser",
+          "persistent.memory"
+        ],
+        "unrestrictedNetwork": true
+      }
+    },
+    {
+      "name": "a persistent agent's fetch reaches any public address, so it asks for the network without naming where",
+      "manifest": {
+        "modes": [
+          "persistent"
+        ],
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "exec": "none",
+          "persistent": {
+            "fetch": true,
+            "memory": true
+          }
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "persistent.fetch",
+          "persistent.memory"
         ],
         "unrestrictedNetwork": true
       }

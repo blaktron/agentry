@@ -97,9 +97,9 @@ func Evaluate(in GateInput) GateDecision {
 		switch in.Policy.WildcardEgress {
 		case "reject":
 			return GateDecision{Outcome: OutcomeRejected, WorstSeverity: worst, branch: branchWildcardEgressReject,
-				Reason: "Policy refuses unrestricted network access (\"*\" egress, a browser on any public site or a persistent agent's coding toolchain), so the gate rejected this version."}
+				Reason: "Policy refuses unrestricted network access (\"*\" egress, a browser on any public site, or a persistent agent's coding toolchain, browser or fetch), so the gate rejected this version."}
 		case "review", "":
-			return review(in, worst, branchWildcardEgressReview, "This version asks for unrestricted network access (\"*\" egress, a browser on any public site or a persistent agent's coding toolchain), so the gate sent it to human review.")
+			return review(in, worst, branchWildcardEgressReview, "This version asks for unrestricted network access (\"*\" egress, a browser on any public site, or a persistent agent's coding toolchain, browser or fetch), so the gate sent it to human review.")
 		}
 	}
 

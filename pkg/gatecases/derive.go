@@ -116,9 +116,8 @@ func DeclaredCapabilities(manifestJSON []byte) []string {
 // UnrestrictedNetwork reports whether a manifest asks for the network
 // without naming where: "*" egress, or a browser whose scope is any public
 // site, or a browser line that does not read, which is taken the strict way,
-// or a persistent agent's coding toolchain (capabilities.persistent.coder,
-// or a block that does not read), whose commands reach the open web and
-// whose browser any public site.
+// or a persistent agent's coder, browser or fetch key (or a block that
+// does not read), none of which names a host.
 // It is the gate's Case.WildcardEgress, which the policy's wildcardEgress
 // decides.
 func UnrestrictedNetwork(manifestJSON []byte) bool {
@@ -128,7 +127,7 @@ func UnrestrictedNetwork(manifestJSON []byte) bool {
 			return true
 		}
 	}
-	if p, declared, ok := c.Persistent(); declared && (!ok || p.Coder) {
+	if p, declared, ok := c.Persistent(); declared && (!ok || p.Coder || p.Browser || p.Fetch) {
 		return true
 	}
 	b, declared, ok := c.Browser()
@@ -169,8 +168,16 @@ func Declaration(manifestJSON []byte) rules.Declared {
 	// A persistent agent's coding toolchain reaches the open web from its
 	// commands and drives a public browser. A block that does not read
 	// declares none of it here, the side this rating fails toward.
-	if p, declared, ok := c.Persistent(); declared && ok && p.Coder {
-		d.EgressAny, d.BrowserAny = true, true
+	if p, declared, ok := c.Persistent(); declared && ok {
+		if p.Coder {
+			d.EgressAny, d.BrowserAny = true, true
+		}
+		if p.Browser {
+			d.BrowserAny = true
+		}
+		if p.Fetch {
+			d.EgressAny = true
+		}
 	}
 	d.Secrets = append([]string(nil), c.Secrets...)
 	for _, srv := range c.MCPServers {
