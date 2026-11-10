@@ -184,6 +184,34 @@ document locks a row it does not enforce, naming the setting and the update
 it needs, and passes over a default it does not apply. A new row reaches
 existing clients that way, so a lock is never silently ignored.
 
+## Delivered keys
+
+When `review.source` or `webSearch.source` names the organization's key, the
+member's client exchanges the reference for the key itself:
+
+1. The client makes a key pair for this one request and sends the registry
+   the public half, with the key's id and the revision the document names.
+2. The registry checks that the caller is an active member, that the newest
+   signed document names that key at that revision, and that it holds the
+   key at that revision. It then seals the key to the client's public key
+   with HPKE (RFC 9180) and answers the sealed value once.
+3. The client opens it with the private half, which never left the client,
+   stores the key in the operating system's keychain apart from the member's
+   own keys, and drops the private half.
+
+The suite is `hpke-mlkem768x25519-hkdfsha256-chacha20poly1305`: ML-KEM-768
+with X25519, HKDF-SHA256 and ChaCha20-Poly1305. The seal binds in the
+registry's origin, the organization's handle, the account, the key's id and
+its revision, so a sealed key opens only for the request it answers.
+`pkg/managedsettings` has both sides: `NewDeliveryKey` and
+`DeliveryKey.Open` for a client, `SealDelivery` for a registry.
+
+A client never shows a delivered key, and never writes it into a plan, a
+receipt or a log. It asks again when the document names a new revision, and
+deletes the key when no document names it, or when the member leaves the
+organization. A key on a member's computer can be read by whoever
+administers that computer, as the member's own keys can.
+
 ## For an extension
 
 An extension implements `extension.ManagesSettings`:
