@@ -179,7 +179,7 @@ func TestNoRowTurnsAnythingOn(t *testing.T) {
 			if len(r.Values) < 2 || r.Values[0] != SourceMember {
 				t.Errorf("%s: a source row starts from the member's own and narrows from there", r.ID)
 			}
-		case KindSources, KindMinimumVersion:
+		case KindSources, KindMinimumVersion, KindQuickAgents:
 		default:
 			t.Errorf("%s: kind %q", r.ID, r.Kind)
 		}
@@ -206,6 +206,8 @@ func TestEveryRowTakesOnlyItsValues(t *testing.T) {
 		KindSources:        {`{"scope":"any"}`, `{"scope":"organization-and-built-ins"}`, `{"scope":"organization-and-built-ins","namespaces":["acme","tools-1"]}`},
 		KindMinimumVersion: {`"0.7.38"`, `"1.0.0"`},
 		KindModel:          {`{"provider":"anthropic","model":"claude-sonnet-5-5"}`, `{"provider":"custom","model":"llama-4:70b"}`},
+		KindQuickAgents: {`[]`, `[{"ref":"acme/report-writer","version":"latest","mode":"required"}]`,
+			`[{"ref":"acme/report-writer","version":"1.4.0","mode":"offered","preset":{"model":{"provider":"anthropic","model":"claude-sonnet-5-5"},"timeoutSeconds":900,"maxTurns":40,"where":"local","inputs":{"region":"emea"}},"presetLocked":true},{"ref":"tools/csv-check","version":"latest","mode":"offered"}]`},
 	}
 	refused := map[Kind][]string{
 		KindChoice:         {`"on"`, `"enabled"`, `""`, `true`, `["allowed"]`, `null`},
@@ -214,7 +216,16 @@ func TestEveryRowTakesOnlyItsValues(t *testing.T) {
 		KindSources:        {`{"scope":"everywhere"}`, `{"scope":"any","namespaces":["acme"]}`, `{"scope":"organization-and-built-ins","namespaces":["Bad Name"]}`, `{"scope":"any","extra":1}`, `"any"`, `null`},
 		KindMinimumVersion: {`"v0.7.38"`, `"0.7"`, `"0.7.38-dev.1"`, `0.7`, `null`},
 		KindModel:          {`{"provider":"acme","model":"m"}`, `{"provider":"anthropic","model":""}`, `{"provider":"anthropic","model":"a b"}`, `{"provider":"anthropic"}`, `{"provider":"anthropic","model":"m","key":"k"}`, `"anthropic"`, `null`},
-		KindSource:         {`{"source":"everyone"}`, `{"source":"member","key":{"id":"k1","rev":1}}`, `{"source":"member","provider":"brave"}`, `"member"`, `null`, `{"source":"member","extra":1}`},
+		KindQuickAgents: {`{}`, `null`, `[{"ref":"acme","version":"latest","mode":"required"}]`, `[{"ref":"Acme/x","version":"latest","mode":"required"}]`,
+			`[{"ref":"acme/x","version":"v1","mode":"required"}]`, `[{"ref":"acme/x","version":"latest","mode":"pinned"}]`,
+			`[{"ref":"acme/x","version":"latest","mode":"required"},{"ref":"acme/x","version":"1.0.0","mode":"offered"}]`,
+			`[{"ref":"acme/x","version":"latest","mode":"required","presetLocked":true}]`,
+			`[{"ref":"acme/x","version":"latest","mode":"required","preset":{"where":"anywhere"}}]`,
+			`[{"ref":"acme/x","version":"latest","mode":"required","preset":{"timeoutSeconds":999999999}}]`,
+			`[{"ref":"acme/x","version":"latest","mode":"required","preset":{"model":{"provider":"acme","model":"m"}}}]`,
+			`[{"ref":"acme/x","version":"latest","mode":"required","preset":{"inputs":{"bad name":"v"}}}]`,
+			`[{"ref":"acme/x","version":"latest","mode":"required","extra":1}]`},
+		KindSource: {`{"source":"everyone"}`, `{"source":"member","key":{"id":"k1","rev":1}}`, `{"source":"member","provider":"brave"}`, `"member"`, `null`, `{"source":"member","extra":1}`},
 	}
 	for _, r := range Catalogue() {
 		good := accepted[r.Kind]

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/blaktron/agentry/pkg/attest"
+	"github.com/blaktron/agentry/pkg/manifest"
 )
 
 // PayloadType is the DSSE payload type of a managed settings document.
@@ -113,6 +114,11 @@ const (
 	// to the organization's key, never its value. A row with Providers
 	// names the service's provider with organization-key.
 	KindSource Kind = "source"
+	// KindQuickAgents is a list of Assignment: the QuickAgents an
+	// organization gives its members, each required or offered, pinned to a
+	// version or following the latest, with an optional preset of run
+	// settings. It is only ever locked: the list is the organization's.
+	KindQuickAgents Kind = "quickAgents"
 )
 
 // Row is one entry of the catalogue.
@@ -184,7 +190,52 @@ const (
 	ReviewSource         = "review.source"
 	WebSearchSource      = "webSearch.source"
 	CodingToolsAllowed   = "codingTools.allowed"
+
+	QuickAgents = "quickagents"
 )
+
+// An assignment's modes and its version that follows the newest release.
+const (
+	// AssignRequired is installed on every member's signed-in client, and
+	// cannot be uninstalled while the organization requires it.
+	AssignRequired = "required"
+	// AssignOffered is listed for the member, who installs it on demand.
+	AssignOffered = "offered"
+	// VersionLatest follows the newest version the member could install.
+	VersionLatest = "latest"
+)
+
+// The bounds of a quickagents value.
+const (
+	MaxAssignments  = 100
+	MaxPresetInputs = 32
+	MaxInputBytes   = 4096
+)
+
+// Assignment is one QuickAgent an organization gives its members.
+type Assignment struct {
+	// Ref is the release, "namespace/name".
+	Ref string `json:"ref"`
+	// Version is "X.Y.Z" to pin it, or VersionLatest.
+	Version string `json:"version"`
+	// Mode is AssignRequired or AssignOffered.
+	Mode string `json:"mode"`
+	// Preset is the run settings a member would otherwise choose.
+	Preset *Preset `json:"preset,omitempty"`
+	// PresetLocked makes the preset a lock rather than a default.
+	PresetLocked bool `json:"presetLocked,omitempty"`
+}
+
+// Preset is the run settings of an assignment's runs: each a default the
+// member may change, or, with Assignment.PresetLocked, fixed. A field left
+// out is the member's to choose.
+type Preset struct {
+	Model          *Model            `json:"model,omitempty"`
+	TimeoutSeconds int               `json:"timeoutSeconds,omitempty"`
+	MaxTurns       int               `json:"maxTurns,omitempty"`
+	Where          string            `json:"where,omitempty"`
+	Inputs         map[string]string `json:"inputs,omitempty"`
+}
 
 // Members of ModelProviders and providers of ModelDefault: the model
 // providers a run may use. ProviderAgentry is the registry's own
@@ -333,6 +384,8 @@ var catalogue = []Row{
 		Summary:   "What pays for web search: the member's own key, the organization's credits, the organization's key for a provider, or no web search."},
 	{ID: CodingToolsAllowed, Kind: KindSet, LockOnly: true, Values: []string{CodingClaudeCode, CodingCodex, CodingCopilot},
 		Summary: "Which coding tools members' runs may use."},
+	{ID: QuickAgents, Kind: KindQuickAgents, LockOnly: true,
+		Summary: "The QuickAgents the organization gives its members: each required (installed for every member) or offered, pinned or following the latest, with an optional preset of run settings."},
 }
 
 // Catalogue is every row a document may carry, sorted by id.
@@ -460,8 +513,93 @@ func (r Row) Check(s Setting) error {
 		}
 	case KindSource:
 		return r.checkSource(s)
+	case KindQuickAgents:
+		return r.checkQuickAgents(s)
 	default:
 		return fmt.Errorf("managed settings: %s has no kind", r.ID)
+	}
+	return nil
+}
+
+// inputNamePattern is a preset's input name, as a manifest names its
+// inputs.
+var inputNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]{0,63}$`)
+
+// checkQuickAgents checks a KindQuickAgents value: at most MaxAssignments,
+// one per release, each with a release reference, a version or
+// VersionLatest, a mode, and a preset whose fields are each within the
+// catalogue's own bounds for the setting it presets.
+func (r Row) checkQuickAgents(s Setting) error {
+	var list []Assignment
+	if err := strictJSON(s.Value, &list); err != nil || list == nil {
+		return fmt.Errorf("managed settings: %s must be a list of {\"ref\", \"version\", \"mode\", \"preset\", \"presetLocked\"}", r.ID)
+	}
+	if len(list) > MaxAssignments {
+		return fmt.Errorf("managed settings: %s lists at most %d QuickAgents", r.ID, MaxAssignments)
+	}
+	seen := map[string]bool{}
+	for _, a := range list {
+		ns, name, ok := strings.Cut(a.Ref, "/")
+		if !ok || !manifest.ValidNamespace(ns) || !manifest.ValidName(name) {
+			return fmt.Errorf("managed settings: %s: %q is not a QuickAgent namespace/name", r.ID, a.Ref)
+		}
+		if seen[a.Ref] {
+			return fmt.Errorf("managed settings: %s lists %s more than once", r.ID, a.Ref)
+		}
+		seen[a.Ref] = true
+		if a.Version != VersionLatest && !versionPattern.MatchString(a.Version) {
+			return fmt.Errorf("managed settings: %s: %s's version must be X.Y.Z or %s", r.ID, a.Ref, VersionLatest)
+		}
+		if a.Mode != AssignRequired && a.Mode != AssignOffered {
+			return fmt.Errorf("managed settings: %s: %s's mode must be %s or %s", r.ID, a.Ref, AssignRequired, AssignOffered)
+		}
+		if a.Preset == nil {
+			if a.PresetLocked {
+				return fmt.Errorf("managed settings: %s: %s locks a preset it does not have", r.ID, a.Ref)
+			}
+			continue
+		}
+		if err := checkPreset(r.ID, a.Ref, *a.Preset); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkPreset holds each field of a preset to the row it presets.
+func checkPreset(id, ref string, p Preset) error {
+	bad := func(what string) error { return fmt.Errorf("managed settings: %s: %s's preset %s", id, ref, what) }
+	if p.Model != nil {
+		row, _ := Lookup(ModelDefault)
+		if !slices.Contains(row.Values, p.Model.Provider) || !modelPattern.MatchString(p.Model.Model) {
+			return bad(fmt.Sprintf("model must be {\"provider\": one of %s, \"model\": a model id}", strings.Join(row.Values, ", ")))
+		}
+	}
+	for _, c := range []struct {
+		row string
+		n   int
+	}{{RunTimeout, p.TimeoutSeconds}, {RunMaxTurns, p.MaxTurns}} {
+		row, _ := Lookup(c.row)
+		if c.n < 0 || float64(c.n) > row.Max {
+			return bad(fmt.Sprintf("%s must be above 0 and at most %g", c.row, row.Max))
+		}
+	}
+	if p.Where != "" {
+		row, _ := Lookup(RunWhere)
+		if !slices.Contains(row.Values, p.Where) {
+			return bad("where must be one of " + strings.Join(row.Values, ", "))
+		}
+	}
+	if len(p.Inputs) > MaxPresetInputs {
+		return bad(fmt.Sprintf("sets at most %d inputs", MaxPresetInputs))
+	}
+	for k, v := range p.Inputs {
+		if !inputNamePattern.MatchString(k) {
+			return bad(fmt.Sprintf("names an input %q that is not an input name", k))
+		}
+		if len(v) > MaxInputBytes {
+			return bad(fmt.Sprintf("input %s is over %d bytes", k, MaxInputBytes))
+		}
 	}
 	return nil
 }
