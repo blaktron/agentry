@@ -794,7 +794,8 @@
         "additionalProperties": false,
         "required": [
           "name",
-          "url"
+          "url",
+          "auth"
         ],
         "properties": {
           "name": {
@@ -805,7 +806,13 @@
             "type": "string",
             "format": "uri",
             "pattern": "^https://",
-            "maxLength": 2048
+            "maxLength": 512
+          },
+          "auth": {
+            "enum": [
+              "oauth",
+              "none"
+            ]
           }
         }
       }

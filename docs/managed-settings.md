@@ -142,7 +142,12 @@ capability of their own:
   characters but newlines and tabs: an agent's name or personality.
 - **toggle**: `true` or `false`: whether an agent starts with Agentry.
 - **servers**: a list of at most 20 remote MCP servers, each
-  `{"name": …, "url": …}` with a lower-case name and an `https` address.
+  `{"name": …, "url": …, "auth": …}` with a lower-case name, an address a
+  remote server may have (`https`, a public host, port 443, no query, at
+  most 512 characters) and `oauth` or `none` to sign in with. The
+  organization delivers no secret for them: an `oauth` server signs in with
+  the member's connection, or through the organization's identity provider
+  for a server it manages.
 - **packs**: a list of at most 20 of the organization's shared knowledge
   packs, by name.
 - **tool models**: `{"claude-code": …, "codex": …, "copilot": …}`, any of
@@ -160,10 +165,10 @@ member's.
 | `agents.assistant.name` | text | at most 64 characters | locked or default | The name members' Assistant goes by. |
 | `agents.assistant.personality` | text | at most 4000 characters | locked or default | The personality members' Assistant takes on. |
 | `agents.assistant.runOnStart` | toggle | `true`, `false` | locked or default | Whether members' Assistant starts when Agentry starts. |
-| `agents.assistant.servers` | servers | a list of `{"name", "url"}` | locked or default | Remote MCP servers on members' Assistant. |
+| `agents.assistant.servers` | servers | a list of `{"name", "url", "auth"}` | locked or default | Remote MCP servers on members' Assistant. |
 | `agents.codingAgent` | choice | `allowed`, `forbidden` | locked or default | Whether members may use the Coding agent. |
 | `agents.codingAgent.knowledge` | packs | a list of the organization's shared packs | locked or default | Knowledge packs on members' Coding agent. |
-| `agents.codingAgent.servers` | servers | a list of `{"name", "url"}` | locked or default | Remote MCP servers on members' Coding agent. |
+| `agents.codingAgent.servers` | servers | a list of `{"name", "url", "auth"}` | locked or default | Remote MCP servers on members' Coding agent. |
 | `agents.unreviewed` | choice | `allowed`, `forbidden` | locked or default | Whether members may let a persistent agent read web pages Without AI Review. |
 | `browser.publicWeb` | choice | `allowed`, `forbidden` | locked or default | Whether a run's browser may reach the public web. |
 | `bugReports` | choice | `allowed`, `forbidden` | locked or default | Whether members may send bug reports from their clients. |

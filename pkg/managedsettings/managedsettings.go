@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/url"
 	"regexp"
 	"slices"
 	"sort"
@@ -232,14 +231,17 @@ const (
 	MaxPersonalityLength = 4000
 	MaxAgentServers      = 20
 	MaxAgentPacks        = 20
-	MaxServerURLLength   = 2048
 )
 
-// Server is one remote MCP server of a KindServers row: a name the agent
-// knows it by and its https address.
+// Server is one remote MCP server of a KindServers row: a name it is shown
+// by, its https address, and how it is signed in to: "oauth" (the member's
+// connection, or the organization's identity provider for a server the
+// organization manages) or "none". The organization delivers no secret
+// for it.
 type Server struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
+	Auth string `json:"auth"`
 }
 
 // An assignment's modes and its version that follows the newest release.
@@ -636,11 +638,12 @@ func hasControl(v string) bool {
 }
 
 // checkServers checks a KindServers value: at most MaxAgentServers, each
-// with its own name and an https address with a host and no credentials.
+// with its own name, an address a remote MCP server may have, and oauth or
+// none to sign in with.
 func (r Row) checkServers(s Setting) error {
 	var list []Server
 	if err := strictJSON(s.Value, &list); err != nil || list == nil || len(list) > MaxAgentServers {
-		return fmt.Errorf("managed settings: %s must be a list of at most %d {\"name\", \"url\"}", r.ID, MaxAgentServers)
+		return fmt.Errorf("managed settings: %s must be a list of at most %d {\"name\", \"url\", \"auth\"}", r.ID, MaxAgentServers)
 	}
 	seen := map[string]bool{}
 	for _, sv := range list {
@@ -648,9 +651,11 @@ func (r Row) checkServers(s Setting) error {
 			return fmt.Errorf("managed settings: %s must name each server once, with a lower-case name", r.ID)
 		}
 		seen[sv.Name] = true
-		u, err := url.Parse(sv.URL)
-		if err != nil || len(sv.URL) > MaxServerURLLength || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
-			return fmt.Errorf("managed settings: %s: %s must be an https address with no credentials", r.ID, sv.Name)
+		if err := manifest.CheckRemoteAddress(sv.URL); err != nil {
+			return fmt.Errorf("managed settings: %s: %s: %w", r.ID, sv.Name, err)
+		}
+		if sv.Auth != string(manifest.AuthOAuth) && sv.Auth != string(manifest.AuthNone) {
+			return fmt.Errorf("managed settings: %s: %s's auth must be oauth or none", r.ID, sv.Name)
 		}
 	}
 	return nil
