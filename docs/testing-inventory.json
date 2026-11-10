@@ -5104,6 +5104,17 @@
       "disposition": "retain",
       "files": [
         {
+          "path": "pkg/managedsettings/delivery_test.go",
+          "tests": [
+            "TestADeliveredKeyOpensOnlyForItsRequest",
+            "TestADeliveryRefusesABadPublicKeyOrRequest"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "pkg/managedsettings/managedsettings_test.go",
           "tests": [
             "TestOpenRoundTrip",
