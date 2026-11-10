@@ -373,6 +373,18 @@
             }
           }
         },
+        "quickagents": {
+          "description": "The QuickAgents the organization gives its members: each required (installed for every member, not uninstallable while required) or offered (listed for the member to install), pinned to a version or following the latest, with an optional preset of run settings that is a default unless presetLocked. Only ever locked.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/quickagents"
+            },
+            "locked": {
+              "const": true
+            }
+          }
+        },
         "review.source": {
           "description": "What pays for AI Review: the member's own key, the organization's credits, the organization's key (named by reference, never by value), or no AI Review.",
           "$ref": "#/$defs/setting",
@@ -585,6 +597,106 @@
         "rev": {
           "type": "integer",
           "minimum": 1
+        }
+      }
+    },
+    "quickagents": {
+      "type": "array",
+      "maxItems": 100,
+      "description": "One assignment per QuickAgent; a ref appears at most once.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ref",
+          "version",
+          "mode"
+        ],
+        "properties": {
+          "ref": {
+            "type": "string",
+            "description": "The release, namespace/name.",
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?/[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+          },
+          "version": {
+            "type": "string",
+            "description": "X.Y.Z to pin the release, or latest to follow the newest version.",
+            "pattern": "^(latest|(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5}))$"
+          },
+          "mode": {
+            "enum": [
+              "required",
+              "offered"
+            ]
+          },
+          "preset": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Run settings for the QuickAgent's runs; a field left out is the member's to choose.",
+            "properties": {
+              "model": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "provider",
+                  "model"
+                ],
+                "properties": {
+                  "provider": {
+                    "enum": [
+                      "anthropic",
+                      "openai",
+                      "google",
+                      "vultr",
+                      "openrouter",
+                      "poe",
+                      "huggingface",
+                      "copilot",
+                      "agentry",
+                      "custom"
+                    ]
+                  },
+                  "model": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$"
+                  }
+                }
+              },
+              "timeoutSeconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 604800
+              },
+              "maxTurns": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000
+              },
+              "where": {
+                "enum": [
+                  "local",
+                  "hosted",
+                  "runhost",
+                  "target-host"
+                ]
+              },
+              "inputs": {
+                "type": "object",
+                "maxProperties": 32,
+                "propertyNames": {
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_-]{0,63}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "maxLength": 4096
+                }
+              }
+            }
+          },
+          "presetLocked": {
+            "type": "boolean",
+            "description": "The preset is a lock rather than a default; only with a preset."
+          }
         }
       }
     }

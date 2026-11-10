@@ -159,6 +159,7 @@ member's.
 | `model.signIns` | set | a list, possibly empty, of `subscription`, `claude-signin`, `chatgpt-plan`, `copilot-signin` | locked only | Which subscriptions and plans of their own members' runs may spend. |
 | `model.source` | source | `member`, `agentry-credits`, `organization-key` | locked or default | What pays for members' models; the organization's key stays with the registry. |
 | `persistentReleases` | choice | `allowed`, `forbidden` | locked or default | Whether members may run persistent QuickAgents from the registry. |
+| `quickagents` | quickAgents | a list, at most 100, of `{"ref": "ns/name", "version": "X.Y.Z" or "latest", "mode": "required" or "offered", "preset": {…}, "presetLocked": true or false}`, one per ref | locked only | The QuickAgents the organization gives its members, and the run settings their runs start from. |
 | `review.source` | source | `member`, `agentry-credits`, `organization-key` with a key reference, `off` | locked or default | What pays for AI Review, or none. |
 | `run.maxCost` | cap | a number above 0, at most 100000 | locked or default | The most a run may cost, in US dollars, as its harness reports it. |
 | `run.maxTurns` | cap | a whole number above 0, at most 100000 | locked or default | The most turns a run may take. |
@@ -168,6 +169,19 @@ member's.
 | `schedules` | choice | `allowed`, `forbidden` | locked or default | Whether members may schedule runs. |
 | `updates.minimumVersion` | minimumVersion | a version, `"X.Y.Z"` | locked only | The oldest Agentry client that may run; an older one names the update. |
 | `webSearch.source` | source | `member`, `agentry-credits`, `organization-key` with a `provider` (`brave`, `tavily`, `exa`, `perplexity`, `youcom`) and a key reference, `off` | locked or default | What pays for web search, or none. |
+
+In `quickagents`, a **required** QuickAgent is installed on every member's
+signed-in client through the ordinary install path (its digest, signature,
+the gate's verdict and the malware check all apply), and cannot be
+uninstalled while the organization requires it; an **offered** one is listed
+for the member to install. `version` pins a release or follows the newest
+(`latest`). The member still consents to a QuickAgent's contract on its first
+run: an assignment never consents on their behalf. A `preset` holds run
+settings: `model` (`{"provider", "model"}`), `timeoutSeconds`, `maxTurns`,
+`where` (a place of `run.where`) and `inputs` (at most 32, each value at most
+4 KiB). Each is a default the member may change, or fixed with
+`presetLocked`. Every other row still holds the run, so a preset never lifts
+a cap or a lock.
 
 How the runner holds a run to each row is in the runner reference,
 [Managed settings](runner.md#managed-settings).
