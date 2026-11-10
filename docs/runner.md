@@ -3508,6 +3508,18 @@ From CLI v0.7.44 the summary points the agent back to its checklist
 ([the checklist](#the-scratch-folder)); from v0.7.29 to v0.7.43 an
 autonomous run's pointed to its `notes.md`.
 
+**When the model repeats a call** (CLI v0.7.51 or later). If the model makes
+the same tool call with the same arguments five times in a row, the default
+harness does not end the run. It adds a message after the call's results
+telling the model that repeating it will not change the result, and to reach
+its goal another way: a different tool or different arguments, or what its
+checklist says is left. If the goal cannot be reached, the model is told to
+say why and move on or finish. Each later streak gets the message again. The
+run's own limits (`--max-turns`, `--max-cost`, the timeout) still end a run
+that never stops repeating, and the receipt counts the messages in
+`usage.loopNudges`. Earlier harnesses, and a policy that pins the vendor's
+docker-agent image, end the run at the fifth identical call.
+
 **What a summary keeps** (CLI v0.7.45 or later, on Agentry's build of
 docker-agent). docker-agent's own request for a summary asks for what was
 done, what is being done, the files in play and what comes next. The run's
