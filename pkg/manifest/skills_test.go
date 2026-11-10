@@ -192,8 +192,17 @@ func TestV20RefusesASkillTheRunnerCouldNotList(t *testing.T) {
 		})
 	}
 
+	// A skills/ folder the include leaves out is named as such.
+	m := skillsManifest(t)
+	m.Publish.Include = []string{"agent.yaml", "README.md", "AGENT.md", "LICENSE"}
+	errs := ValidateInContext(m, skillsContext(nil))
+	wantIssue(t, errs, "V20", SeverityError, "publish.include")
+	if !strings.Contains(issueStrings(errs), "leaves skills/ out") {
+		t.Fatalf("a folder left out of the include is not named:%s", issueStrings(errs))
+	}
+
 	// The key with no skill in the archive grants nothing.
-	errs := ValidateInContext(skillsManifest(t), skillsContext(map[string]string{
+	errs = ValidateInContext(skillsManifest(t), skillsContext(map[string]string{
 		"skills/triage/SKILL.md": "", "skills/triage/labels.md": "", "skills/reproduce/SKILL.md": "",
 	}))
 	wantIssue(t, errs, "V20", SeverityError, "capabilities.skills")

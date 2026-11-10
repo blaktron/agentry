@@ -454,7 +454,7 @@ func granted(c manifest.Capabilities, g Grant) bool {
 	case GrantSubagents:
 		return len(c.Subagents) > 0
 	case GrantSkills:
-		return c.Skills || c.Persistent.Declares("skills")
+		return c.ShipsSkills()
 	}
 	if key := g.persistentKey(); key != "" {
 		return c.Persistent.Declares(key)

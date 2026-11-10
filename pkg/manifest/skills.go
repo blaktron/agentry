@@ -44,8 +44,32 @@ var skillNameRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 // ShipsSkills reports whether the release gives its runs the skills in its
 // skills/ folder: capabilities.skills, or a persistent agent's
 // capabilities.persistent.skills.
-func (m *Manifest) ShipsSkills() bool {
-	return m.Capabilities.Skills || m.Capabilities.Persistent.Declares("skills")
+func (m *Manifest) ShipsSkills() bool { return m.Capabilities.ShipsSkills() }
+
+// ShipsSkills reports whether the contract gives a run the skills the
+// release ships, under either key.
+func (c Capabilities) ShipsSkills() bool {
+	return c.Skills || c.Persistent.Declares("skills")
+}
+
+// skillFolders scans the archive's skills/ folder: each folder directly
+// under it, with whether it carries SKILL.md, and the files that sit
+// directly in skills/ rather than in a skill's folder.
+func skillFolders(files []FileInfo) (folders map[string]bool, stray []string) {
+	folders = map[string]bool{}
+	for _, f := range files {
+		rest, ok := strings.CutPrefix(f.Path, SkillsDir+"/")
+		if !ok {
+			continue
+		}
+		name, inner, nested := strings.Cut(rest, "/")
+		if !nested {
+			stray = append(stray, f.Path)
+			continue
+		}
+		folders[name] = folders[name] || inner == SkillFile
+	}
+	return folders, stray
 }
 
 // validateSkills is V20's manifest half: capabilities.skills is a v2
@@ -81,20 +105,7 @@ func validateShippedSkills(s *issues, m *Manifest, ctx Context, resolved []FileI
 		return
 	}
 	declared := m.Capabilities.Skills
-	var stray []string
-	folders := map[string]bool{}
-	for _, f := range resolved {
-		rest, ok := strings.CutPrefix(f.Path, SkillsDir+"/")
-		if !ok {
-			continue
-		}
-		name, inner, nested := strings.Cut(rest, "/")
-		if !nested {
-			stray = append(stray, f.Path)
-			continue
-		}
-		folders[name] = folders[name] || inner == SkillFile
-	}
+	folders, stray := skillFolders(resolved)
 	if !declared {
 		if len(folders) > 0 || len(stray) > 0 {
 			s.warnf("V20", "publish.include", "the archive carries %s/, which gives the agent skills only with capabilities.skills; without it the runner does not read it", SkillsDir)
@@ -105,6 +116,10 @@ func validateShippedSkills(s *issues, m *Manifest, ctx Context, resolved []FileI
 		s.errf("V20", "publish.include", "%q is not in a skill's folder: each skill is %s/<name>/ with its %s", p, SkillsDir, SkillFile)
 	}
 	if len(folders) == 0 {
+		if inRepo, _ := skillFolders(ctx.Files); len(inRepo) > 0 {
+			s.errf("V20", "publish.include", "capabilities.skills is declared but publish.include leaves %s/ out of the archive: add %s/**", SkillsDir, SkillsDir)
+			return
+		}
 		s.errf("V20", "capabilities.skills", "capabilities.skills is declared but the archive ships no skill: add %s/<name>/%s, or remove the key", SkillsDir, SkillFile)
 		return
 	}

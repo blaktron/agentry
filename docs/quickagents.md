@@ -786,8 +786,8 @@ publish:
 The runner lists each skill to the model by its name and description, and
 the model reads a skill when a step matches it, so an instruction can say
 "triage each issue with the triage skill" without carrying the procedure
-itself. A skill guides the agent and grants it nothing: its scripts run
-only through `run_command` and only the commands `exec` declares. The
+itself. A skill adds no capability: running its scripts still needs
+`exec` to declare their commands, as any other command does. The
 archive's `skills/` folder is read only with the key; without it,
 validation warns that the runner leaves the folder unread. With it, the
 archive ships at least one skill and at most 16, each in a folder of its
