@@ -214,6 +214,13 @@ var persistentTools = map[Grant][]string{
 // host.
 var coderGrants = []Grant{GrantExec, GrantEgress, GrantBrowser, GrantTargetHosts}
 
+// persistentReach are the capabilities.persistent keys that hold a run
+// grant without its line: browser gives the browser server's tools to
+// public websites, and fetch gives fetch to public addresses. A
+// persistent release that calls those tools declares the key, so a
+// missing one is reported at the key.
+var persistentReach = map[Grant]string{GrantBrowser: "browser", GrantEgress: "fetch"}
+
 // reading is the tool vocabulary one release is read with.
 type reading struct {
 	table       map[string]Grant
@@ -405,6 +412,11 @@ func (rd reading) check(c manifest.Capabilities, instruction string) []Missing {
 					// A persistent agent declares its skills in its own block.
 					path = "capabilities.persistent.skills"
 				}
+				if key, ok := persistentReach[g]; ok && c.Persistent != nil {
+					// A persistent agent's browser and fetch are keys of its
+					// own block.
+					path = "capabilities.persistent." + key
+				}
 				miss = Missing{Tool: m.key, Grant: g, Path: path,
 					Reason: "The instruction calls " + m.key + ", which only a run with " + g.what() + " has, and the manifest does not declare " + path + "."}
 			case m.key == browserEvaluate && c.Browser != nil && len(c.Browser.Secrets) > 0:
@@ -428,6 +440,9 @@ func (rd reading) check(c manifest.Capabilities, instruction string) []Missing {
 // serverDeclared, never here.
 func granted(c manifest.Capabilities, g Grant) bool {
 	if c.Persistent.Declares("coder") && slices.Contains(coderGrants, g) {
+		return true
+	}
+	if key, ok := persistentReach[g]; ok && c.Persistent.Declares(key) {
 		return true
 	}
 	switch g {

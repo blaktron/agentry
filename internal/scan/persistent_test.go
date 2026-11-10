@@ -137,3 +137,35 @@ func TestS9CountsANewPersistentKeyAndANewOrChangedSubagent(t *testing.T) {
 		t.Fatalf("the first subagent: %+v", got)
 	}
 }
+
+// A persistent agent's browser drives any public site and its fetch
+// reaches any public address, so under the baseline either sends the
+// version to human review as "*" egress does, a policy that rejects "*"
+// egress rejects it, and a policy can name either key's token.
+func TestAPersistentBrowserOrFetchIsHeldAsWildcardEgress(t *testing.T) {
+	for _, key := range []string{"browser", "fetch"} {
+		t.Run(key, func(t *testing.T) {
+			doc := strings.Replace(persistentScanYAML, "    clock: true\n", "    clock: true\n    "+key+": true\n", 1)
+			mj := persistentInput(t, doc, "", "").ManifestJSON
+			gate := func(p Policy) GateDecision {
+				return Evaluate(GateInput{Policy: p, DeclaredCapabilities: declaredCaps(mj), WildcardEgress: unrestrictedNetwork(mj)})
+			}
+			d := gate(DefaultBaseline())
+			if d.Outcome != OutcomeNeedsReview || d.branch != branchWildcardEgressReview || !strings.Contains(d.Reason, "browser or fetch") {
+				t.Fatalf("under the baseline: %+v", d)
+			}
+			reject := DefaultBaseline()
+			reject.WildcardEgress = "reject"
+			if d := gate(reject); d.Outcome != OutcomeRejected || d.branch != branchWildcardEgressReject {
+				t.Fatalf("under wildcardEgress: reject: %+v", d)
+			}
+			if !declaredCaps(mj)[gatecases.CapPersistent(key)] {
+				t.Fatalf("no persistent.%s token in %v", key, declaredCaps(mj))
+			}
+		})
+	}
+	// Without either key the same release names where it goes.
+	if mj := persistentInput(t, "", "", "").ManifestJSON; unrestrictedNetwork(mj) {
+		t.Fatal("a persistent release with the clock alone asks for the network without naming where")
+	}
+}
