@@ -299,6 +299,10 @@
             "computerUse": { "type": "string", "enum": ["app", "screen"], "description": "Computer use: app holds the agent to the windows of the applications the run uses, or of one the person chooses when it names none; screen gives it the whole display." }
           }
         },
+        "skills": {
+          "type": "boolean",
+          "description": "Gives the run the skills the archive ships (V20): each skills/<name>/SKILL.md, whose frontmatter gives the skill's name (its folder's) and a one-line description; at most 16. The runner lists them to the model by name and description and lets it read one when a step matches. Part of the capability contract: consent names it, and declaring it asks again. A persistent agent declares its skills as persistent.skills instead, never both."
+        },
         "persistent": {
           "type": "object",
           "description": "What a persistent agent may do beyond an ordinary run (V16), valid only with persistent in modes. Every key is off unless declared, and the set is closed: a runner grants only what is named. Part of the capability contract: consent lists each key, and a newly declared one asks again.",

@@ -198,8 +198,8 @@ const (
 	// capabilities.persistent.memory.
 	MemorySeedDir = "memory"
 	// SkillsDir is the archive folder of shipped skills, with
-	// capabilities.persistent.skills: one Agent Skills folder per skill,
-	// each with its SkillFile.
+	// capabilities.skills or capabilities.persistent.skills: one Agent
+	// Skills folder per skill, each with its SkillFile.
 	SkillsDir = "skills"
 	// SkillFile is the file that makes a folder under SkillsDir a skill.
 	SkillFile = "SKILL.md"
@@ -298,33 +298,9 @@ func validatePersistentFolders(s *issues, m *Manifest, resolved []FileInfo) {
 		return
 	}
 	p := m.Capabilities.Persistent
-	var memory, skills bool
-	skillFolders := map[string]bool{}
-	for _, f := range resolved {
-		top, rest, nested := strings.Cut(f.Path, "/")
-		if !nested {
-			continue
-		}
-		switch top {
-		case MemorySeedDir:
-			memory = true
-		case SkillsDir:
-			skills = true
-			name, inner, ok := strings.Cut(rest, "/")
-			if !ok {
-				if p.Declares("skills") {
-					s.errf("V16", "publish.include", "%q is not in a skill's folder: each skill is skills/<name>/ with its %s", f.Path, SkillFile)
-				}
-				continue
-			}
-			if _, seen := skillFolders[name]; !seen {
-				skillFolders[name] = false
-			}
-			if inner == SkillFile {
-				skillFolders[name] = true
-			}
-		}
-	}
+	memory := slices.ContainsFunc(resolved, func(f FileInfo) bool { return strings.HasPrefix(f.Path, MemorySeedDir+"/") })
+	folders, stray := skillFolders(resolved)
+	skills := len(folders) > 0 || len(stray) > 0
 	if memory && !p.Declares("memory") {
 		s.warnf("V16", "publish.include", "the archive carries %s/, which seeds a memory only with capabilities.persistent.memory; without it the runner does not read it", MemorySeedDir)
 	}
@@ -334,8 +310,11 @@ func validatePersistentFolders(s *issues, m *Manifest, resolved []FileInfo) {
 	if !p.Declares("skills") {
 		return
 	}
-	for _, name := range slices.Sorted(maps.Keys(skillFolders)) {
-		if !skillFolders[name] {
+	for _, f := range stray {
+		s.errf("V16", "publish.include", "%q is not in a skill's folder: each skill is %s/<name>/ with its %s", f, SkillsDir, SkillFile)
+	}
+	for _, name := range slices.Sorted(maps.Keys(folders)) {
+		if !folders[name] {
 			s.errf("V16", "publish.include", "the skill folder %s/%s/ has no %s", SkillsDir, name, SkillFile)
 		}
 	}

@@ -101,7 +101,7 @@ func TestTheDerivationsCoverEveryToken(t *testing.T) {
 		}
 		unrestricted[d.Want.UnrestrictedNetwork] = true
 	}
-	want := []string{CapNetwork, CapFSRead, CapFSWrite, CapExec, CapEnv, CapTargetHosts, CapBrowser, CapSubagents}
+	want := []string{CapNetwork, CapFSRead, CapFSWrite, CapExec, CapEnv, CapTargetHosts, CapBrowser, CapSubagents, CapSkills}
 	for _, k := range manifest.PersistentCapabilities() {
 		want = append(want, CapPersistent(k.Key))
 	}

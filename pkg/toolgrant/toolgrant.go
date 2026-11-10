@@ -70,6 +70,10 @@ const (
 	// GrantComputerUse is capabilities.desktop.computerUse: the computer
 	// use tools.
 	GrantComputerUse Grant = "computerUse"
+	// GrantSkills is capabilities.skills, or a persistent agent's
+	// capabilities.persistent.skills: skill_read, which reads the skills
+	// the release ships.
+	GrantSkills Grant = "skills"
 	// GrantClock is capabilities.persistent.clock: a persistent agent's
 	// task tools.
 	GrantClock Grant = "persistent.clock"
@@ -98,7 +102,7 @@ const (
 // Grants returns every grant, in a fixed order.
 func Grants() []Grant {
 	return []Grant{GrantBrowser, GrantExec, GrantEgress, GrantTargetHosts, GrantFSRead, GrantFSWrite, GrantMCPServer,
-		GrantDesktop, GrantComputerUse, GrantClock, GrantMemory, GrantSelfConfigure, GrantMeetings, GrantHelper, GrantWeb, GrantReview, GrantSubagents}
+		GrantDesktop, GrantComputerUse, GrantSkills, GrantClock, GrantMemory, GrantSelfConfigure, GrantMeetings, GrantHelper, GrantWeb, GrantReview, GrantSubagents}
 }
 
 // persistentKey is the capabilities.persistent key a persistent grant is;
@@ -132,6 +136,8 @@ func (g Grant) Path() string {
 		return "capabilities.desktop.servers"
 	case GrantComputerUse:
 		return "capabilities.desktop.computerUse"
+	case GrantSkills:
+		return "capabilities.skills"
 	case GrantSubagents:
 		return "dependencies.agents"
 	}
@@ -162,6 +168,8 @@ func (g Grant) what() string {
 		return "an application on the person's computer"
 	case GrantComputerUse:
 		return "computer use on the person's computer"
+	case GrantSkills:
+		return "skills the release ships"
 	case GrantClock:
 		return "a persistent agent's clock and tasks"
 	case GrantMemory:
@@ -259,6 +267,7 @@ var table = func() map[string]Grant {
 		"fs_write":    GrantFSWrite,
 		"fetch":       GrantEgress,
 		"run_command": GrantExec,
+		"skill_read":  GrantSkills,
 	}
 	for _, n := range browserTools {
 		t[n] = GrantBrowser
@@ -391,8 +400,13 @@ func (rd reading) check(c manifest.Capabilities, instruction string) []Missing {
 			g := m.grant
 			switch {
 			case !granted(c, g):
-				miss = Missing{Tool: m.key, Grant: g, Path: g.Path(),
-					Reason: "The instruction calls " + m.key + ", which only a run with " + g.what() + " has, and the manifest does not declare " + g.Path() + "."}
+				path := g.Path()
+				if g == GrantSkills && c.Persistent != nil {
+					// A persistent agent declares its skills in its own block.
+					path = "capabilities.persistent.skills"
+				}
+				miss = Missing{Tool: m.key, Grant: g, Path: path,
+					Reason: "The instruction calls " + m.key + ", which only a run with " + g.what() + " has, and the manifest does not declare " + path + "."}
 			case m.key == browserEvaluate && c.Browser != nil && len(c.Browser.Secrets) > 0:
 				miss = Missing{Tool: m.key, Grant: g, Path: "capabilities.browser.secrets",
 					Reason: "The instruction calls browser_evaluate, which a browser that may type secrets (capabilities.browser.secrets) is not given."}
@@ -439,6 +453,8 @@ func granted(c manifest.Capabilities, g Grant) bool {
 		return fsGranted(c.Filesystem.Write)
 	case GrantSubagents:
 		return len(c.Subagents) > 0
+	case GrantSkills:
+		return c.ShipsSkills()
 	}
 	if key := g.persistentKey(); key != "" {
 		return c.Persistent.Declares(key)

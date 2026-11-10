@@ -28,6 +28,8 @@ const (
 	CapComputerUse = "computerUse"
 	// CapSubagents is a persistent release that declares subagents.
 	CapSubagents = "subagents"
+	// CapSkills is a release that ships skills: capabilities.skills.
+	CapSkills = "skills"
 )
 
 // CapPersistent is the token of one key of capabilities.persistent, such as
@@ -54,7 +56,10 @@ func CapPersistent(key string) string { return "persistent." + key }
 //   - persistent.<key>: each key capabilities.persistent declares, and every
 //     key when the block does not read;
 //   - subagents: a persistent release that declares subagents, or whose
-//     dependencies do not read.
+//     dependencies do not read;
+//   - skills: capabilities.skills, a token of its own: the skills it ships
+//     guide the agent and grant it nothing. A persistent agent's are
+//     persistent.skills.
 //
 // A manifest that is not JSON, or has no capabilities block, declares
 // nothing.
@@ -100,6 +105,9 @@ func DeclaredCapabilities(manifestJSON []byte) []string {
 	}
 	if agents, ok := manifestcaps.Subagents(manifestJSON); !ok || len(agents) > 0 {
 		out = append(out, CapSubagents)
+	}
+	if c.ShipsSkills() {
+		out = append(out, CapSkills)
 	}
 	sort.Strings(out)
 	return out
