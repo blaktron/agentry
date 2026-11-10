@@ -799,8 +799,9 @@ V20). Declaring the key is a widening, so an upgrade that adds it asks for
 consent again, and `GET /search?capability=skills` finds such releases. A
 persistent agent declares its skills as `capabilities.persistent.skills`
 instead ([below](#a-persistent-agent-capabilitiespersistent-persona-and-subagents)),
-never both. A CLI or desktop that pins a core older than this field refuses
-a manifest that carries it, naming the field.
+never both. A run lists the skills and reads them with `skill_read` from CLI
+v0.7.47; a CLI or desktop that pins a core older than this field refuses a
+manifest that carries it, naming the field.
 
 **`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.
@@ -1258,6 +1259,7 @@ model API. A per-run Docker MCP Gateway fronts the companion tools server.
 | `exec.commands` | `run_command` |
 | `browser` | the [browser tools](runner.md#the-browser-a-site-to-test-named-at-run-time) (`browser_navigate`, `browser_click`, …), from the browser server |
 | `targetHosts` | the host tools (`host_run`, `host_read`, …), from the host link |
+| `skills` | `skill_read`: a skill the release ships, its `SKILL.md` or a file in its folder, read-only in `/skills` (CLI v0.7.47 or later) |
 | `mcpServers` | each declared server's own tools |
 
 A tool whose line the manifest does not declare is absent from the run, not
