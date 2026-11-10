@@ -1082,6 +1082,8 @@ and an older one refuses a key it does not know.
 | `imageServers` | servers the runner runs from its own pinned images, `google-workspace` and `microsoft-365`, once the person signs in |
 | `coder` | the coding toolchain: any program in the runner's coding image, open web access for its commands, a public browser, a development host, ports and git host accounts |
 | `web` | the web tools: searching the web and reading pages |
+| `browser` | a headless browser to public websites, in a container of its own that reaches public addresses alone and types no secret; which sites it may open, and whether AI Review reads its pages first, are the person's settings, never the release's |
+| `fetch` | `fetch`, for public addresses only; which hosts it may reach, and whether AI Review reads its responses first, are the person's settings, never the release's |
 | `helper` | Agentry's helper tools: show, install, run and schedule QuickAgents, read their results, list what is installed, open settings and read the docs; each install, schedule change and first run of a new version still asks the person |
 | `review` | AI Review with the person's own key |
 
@@ -1090,15 +1092,17 @@ newly declared key or one more name in a list asks again, the gate names
 each key as a capability (`persistent.clock`, `persistent.coder`, …) that a
 publication policy's `requireHumanReview.whenCapabilities` and
 `blockedCapabilities` can name, and S9 reports a newly declared one.
-`coder` is held as unrestricted network, as `"*"` egress and a browser on
-any public site are, so the publication policy's `wildcardEgress` decides
-it. `coder` is never declared beside `web`, `review` or
-`calendars`: its programs run in the tools container that would hold the
-person's search and review keys and calendar feed addresses. Those three
-sit together, and `coder` sits beside every other key. An
-instruction that calls for a tool its key gives (`task_add` without
-`clock`, `quickagent_run` without `helper`) is held for a person at
-publish, as an ungranted browser or command is.
+`coder`, `browser` and `fetch` are held as unrestricted network, as `"*"`
+egress and a browser on any public site are, so the publication policy's
+`wildcardEgress` decides them: none of them names a host. `coder` is never
+declared beside `web`, `review` or `calendars`: its programs run in the
+tools container that would hold the person's search and review keys and
+calendar feed addresses. Nor is it declared beside `browser` or `fetch`,
+since the coding toolchain already has a public browser and open egress.
+Every other key sits beside any other. An instruction that calls for a
+tool its key gives (`task_add` without `clock`, `quickagent_run` without
+`helper`, `browser_navigate` without `browser`, `fetch` without `fetch`) is
+held for a person at publish, as an ungranted browser or command is.
 
 In a persistent release, `memory/` is a memory seed only with `memory` and
 `skills/` is read only with `skills`; without its key, each folder is left

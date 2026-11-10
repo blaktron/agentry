@@ -112,7 +112,7 @@ func TestAPersistentReleaseParsesAndValidates(t *testing.T) {
 // closed set and its words cannot drift apart.
 func TestEveryPersistentKeyHasWords(t *testing.T) {
 	all := &Persistent{Clock: true, Memory: true, Skills: true, Secrets: []string{"A"}, SelfConfigure: true, Calendars: true,
-		Meetings: true, Desktop: true, Mail: []string{"fastmail"}, ImageServers: []string{"microsoft-365"}, Coder: true, Web: true, Helper: true, Review: true}
+		Meetings: true, Desktop: true, Mail: []string{"fastmail"}, ImageServers: []string{"microsoft-365"}, Coder: true, Web: true, Browser: true, Fetch: true, Helper: true, Review: true}
 	caps := PersistentCapabilities()
 	if got := all.Keys(); len(got) != len(caps) {
 		t.Fatalf("a block declaring everything has keys %v; the set has %d", got, len(caps))
@@ -155,6 +155,8 @@ func TestV16RefusesWhatTheBlockCannotMean(t *testing.T) {
 		{"coder beside calendars", func(m *Manifest) {
 			*m.Capabilities.Persistent = Persistent{Coder: true, Calendars: true}
 		}, "capabilities.persistent"},
+		{"coder beside browser", func(m *Manifest) { *m.Capabilities.Persistent = Persistent{Coder: true, Browser: true} }, "capabilities.persistent"},
+		{"coder beside fetch", func(m *Manifest) { *m.Capabilities.Persistent = Persistent{Coder: true, Fetch: true} }, "capabilities.persistent"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -170,10 +172,14 @@ func TestV16RefusesWhatTheBlockCannotMean(t *testing.T) {
 	wantIssue(t, Validate(m), "V1", SeverityError, "capabilities.persistent")
 }
 
-// web, review and calendars sit together; coder sits beside every other key.
+// web, review, calendars, browser and fetch sit together; coder sits
+// beside every other key.
 func TestV16PassesCoderAloneAndTheOtherThreeTogether(t *testing.T) {
 	for _, p := range []Persistent{
 		{Web: true, Review: true, Calendars: true},
+		{Web: true, Review: true, Calendars: true, Browser: true, Fetch: true},
+		{Browser: true},
+		{Fetch: true},
 		{Coder: true, Clock: true, Memory: true, Skills: true, Secrets: []string{"GITHUB_TOKEN"}, SelfConfigure: true, Meetings: true, Helper: true},
 	} {
 		m := persistentManifest(t)

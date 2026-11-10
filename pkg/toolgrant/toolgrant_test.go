@@ -416,6 +416,40 @@ func TestCoderHoldsTheToolchainsGrants(t *testing.T) {
 	}
 }
 
+// A persistent agent's browser and fetch keys hold the browser's tools and
+// fetch without the run lines, and a persistent release that calls them
+// without the keys is pointed at its own block. They hold nothing else.
+func TestAPersistentBrowserAndFetchHoldTheirTools(t *testing.T) {
+	text := "Open the page with browser_navigate, read it with browser_snapshot, call the API with `fetch` and save it with `run_command`.\n"
+	release := func(p *manifest.Persistent) *manifest.Manifest {
+		return &manifest.Manifest{SchemaVersion: "2", Modes: []manifest.Mode{manifest.ModePersistent}, Capabilities: manifest.Capabilities{Persistent: p}}
+	}
+	paths := func(ms []toolgrant.Missing) []string {
+		var out []string
+		for _, m := range ms {
+			out = append(out, m.Path)
+		}
+		return out
+	}
+	got := toolgrant.CheckRelease(release(&manifest.Persistent{Memory: true}), text)
+	if want := []string{"capabilities.persistent.browser", "capabilities.persistent.browser", "capabilities.persistent.fetch", "capabilities.exec.commands"}; !slices.Equal(paths(got), want) {
+		t.Fatalf("without the keys: %v, want %v", paths(got), want)
+	}
+	got = toolgrant.CheckRelease(release(&manifest.Persistent{Memory: true, Browser: true, Fetch: true}), text)
+	if want := []string{"capabilities.exec.commands"}; !slices.Equal(paths(got), want) {
+		t.Fatalf("with browser and fetch: %v, want %v", paths(got), want)
+	}
+	got = toolgrant.CheckRelease(release(&manifest.Persistent{Memory: true, Browser: true}), text)
+	if want := []string{"capabilities.persistent.fetch", "capabilities.exec.commands"}; !slices.Equal(paths(got), want) {
+		t.Fatalf("with browser alone: %v, want %v", paths(got), want)
+	}
+	// A release that is not persistent is still pointed at the run lines.
+	run := &manifest.Manifest{SchemaVersion: "2", Modes: []manifest.Mode{manifest.ModeAutonomous}}
+	if want := []string{"capabilities.browser", "capabilities.browser", "capabilities.network.egress", "capabilities.exec.commands"}; !slices.Equal(paths(toolgrant.CheckRelease(run, text)), want) {
+		t.Fatalf("an autonomous release: %v, want %v", paths(toolgrant.CheckRelease(run, text)), want)
+	}
+}
+
 // The subagent tools are given to a persistent agent whose release
 // declares a subagent: in a persistent release that declares none, an
 // instruction that calls for one names dependencies.agents, and declaring a

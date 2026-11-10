@@ -69,8 +69,18 @@ type Persistent struct {
 	// runner's coding image, open web egress for its commands, a public
 	// browser, a development host, ports, and git host accounts.
 	Coder bool `yaml:"coder,omitempty" json:"coder,omitempty"`
-	// Web gives the agent the web tools, web_search and web_fetch.
+	// Web gives the agent the web tools, web_search and web_read.
 	Web bool `yaml:"web,omitempty" json:"web,omitempty"`
+	// Browser gives the agent a headless browser to public websites, in a
+	// container of its own behind the runner's browse proxy, which admits
+	// public addresses alone. It types no secret. Which sites, and
+	// whether its pages are reviewed first, are the person's settings,
+	// never the release's.
+	Browser bool `yaml:"browser,omitempty" json:"browser,omitempty"`
+	// Fetch gives the agent the fetch tool for public addresses. Which
+	// hosts, and whether its responses are reviewed first, are the
+	// person's settings, never the release's.
+	Fetch bool `yaml:"fetch,omitempty" json:"fetch,omitempty"`
 	// Helper gives the agent Agentry's helper tools: search the registry,
 	// show, install and run QuickAgents, read their results, list what is
 	// installed, keep schedules, open settings and read the docs. Each
@@ -105,6 +115,8 @@ var persistentCapabilities = []PersistentCapability{
 	{"imageServers", "servers the runner runs from its own images, once you sign in"},
 	{"coder", "the coding toolchain: any program in the coding image, open web access for its commands, a public browser, a development host, ports and git host accounts"},
 	{"web", "searching the web and reading pages"},
+	{"browser", "a headless browser to public websites"},
+	{"fetch", "fetching from public addresses"},
 	{"helper", "finding, installing, running and scheduling QuickAgents, each install and new version with your agreement"},
 	{"review", "AI Review with your own key"},
 }
@@ -181,6 +193,10 @@ func (p *Persistent) Declares(key string) bool {
 		return p.Coder
 	case "web":
 		return p.Web
+	case "browser":
+		return p.Browser
+	case "fetch":
+		return p.Fetch
 	case "helper":
 		return p.Helper
 	case "review":
@@ -255,6 +271,15 @@ func validatePersistent(s *issues, m *Manifest) {
 		if len(beside) > 0 {
 			s.errf("V16", "capabilities.persistent", "coder is never declared beside %s: the coding toolchain runs any program the agent asks for, on open egress, in the container that would hold the keys and feed addresses those keys put there", strings.Join(beside, " or "))
 		}
+		var again []string
+		for _, k := range coderAlreadyGives {
+			if p.Declares(k) {
+				again = append(again, k)
+			}
+		}
+		if len(again) > 0 {
+			s.errf("V16", "capabilities.persistent", "coder is never declared beside %s: the coding toolchain already gives a public browser and open egress, under switches of its own", strings.Join(again, " or "))
+		}
 	}
 
 	closedNames(s, "capabilities.persistent.mail", "mail provider", p.Mail, MailProviderNames)
@@ -271,6 +296,12 @@ func validatePersistent(s *issues, m *Manifest) {
 // keys, the review key, the calendar feeds' addresses). They sit beside one
 // another, and never beside coder, whose programs run in that container.
 var coderAloneBeside = []string{"web", "review", "calendars"}
+
+// coderAlreadyGives are the keys whose reach the coding toolchain holds
+// already: a public browser, and egress that fetch would only narrow.
+// Declaring them beside coder would give the agent the same reach twice,
+// under two consents.
+var coderAlreadyGives = []string{"browser", "fetch"}
 
 // closedNames checks that every entry of names is one of known, once.
 func closedNames(s *issues, at, what string, names, known []string) {

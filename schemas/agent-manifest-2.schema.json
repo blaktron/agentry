@@ -340,6 +340,8 @@
             },
             "coder": { "type": "boolean", "description": "The coding toolchain: any program in the runner's coding image, open web access for its commands, a public browser, a development host, ports and git host accounts." },
             "web": { "type": "boolean", "description": "The web tools: searching the web and reading pages." },
+            "browser": { "type": "boolean", "description": "A headless browser to public websites, in a container of its own that reaches public addresses alone and types no secret. Which sites it may open, and whether AI Review reads its pages first, are the person's settings, not the release's. Never beside coder, which has a browser of its own." },
+            "fetch": { "type": "boolean", "description": "The fetch tool, for public addresses only. Which hosts it may reach, and whether AI Review reads its responses first, are the person's settings, not the release's. Never beside coder, whose commands have open egress." },
             "helper": { "type": "boolean", "description": "Agentry's helper tools: search the registry, show, install, run and schedule QuickAgents, read their results, open settings and read the docs; each install and new version is the person's to agree to." },
             "review": { "type": "boolean", "description": "AI Review with the person's own key." }
           }

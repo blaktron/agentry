@@ -4887,6 +4887,7 @@
           "path": "pkg/gatecases/declaration_test.go",
           "tests": [
             "TestDeclarationReadsEveryField",
+            "TestDeclarationOfAPersistentBrowserAndFetch",
             "TestDeclarationOfNothing"
           ],
           "fuzz": [],
@@ -5849,6 +5850,7 @@
             "TestThePersistentToolsNeedTheirKeys",
             "TestAPersistentAgentsSkillsHoldSkillRead",
             "TestCoderHoldsTheToolchainsGrants",
+            "TestAPersistentBrowserAndFetchHoldTheirTools",
             "TestTheSubagentToolsNeedASubagent",
             "TestTheDesktopLineGivesApplicationTools"
           ],

@@ -41,6 +41,26 @@ func TestDeclarationReadsEveryField(t *testing.T) {
 	}
 }
 
+// TestDeclarationOfAPersistentBrowserAndFetch: a persistent agent's browser
+// drives any public site and its fetch reaches any public address, so S4
+// reads them as a browser and egress that name no host.
+func TestDeclarationOfAPersistentBrowserAndFetch(t *testing.T) {
+	for _, c := range []struct {
+		block              string
+		egressAny, browser bool
+	}{
+		{`{"browser":true}`, false, true},
+		{`{"fetch":true}`, true, false},
+		{`{"browser":true,"fetch":true,"web":true}`, true, true},
+		{`{"web":true}`, false, false},
+	} {
+		d := Declaration([]byte(`{"modes":["persistent"],"capabilities":{"network":{"egress":"none"},"exec":"none","persistent":` + c.block + `}}`))
+		if d.EgressAny != c.egressAny || d.BrowserAny != c.browser || d.Egress != nil || d.BrowserHosts != nil {
+			t.Errorf("%s declares %+v", c.block, d)
+		}
+	}
+}
+
 // TestDeclarationOfNothing: a manifest that declares nothing, and one that
 // does not read, declare nothing but the base commands; "*" egress names
 // no host, and exec none is no command list.
