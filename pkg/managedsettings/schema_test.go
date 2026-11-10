@@ -124,6 +124,10 @@ func TestSchemaMatchesCatalogue(t *testing.T) {
 			if v.Ref != "#/$defs/sources" {
 				t.Errorf("%s: schema value %q, want the sources definition", r.ID, v.Ref)
 			}
+		case KindQuickAgents:
+			if v.Ref != "#/$defs/quickagents" {
+				t.Errorf("%s: schema value %q, want the quickagents definition", r.ID, v.Ref)
+			}
 		case KindMinimumVersion:
 			if v.Type != "string" || v.Pattern != versionPattern.String() {
 				t.Errorf("%s: schema pattern %q, catalogue %q", r.ID, v.Pattern, versionPattern.String())
