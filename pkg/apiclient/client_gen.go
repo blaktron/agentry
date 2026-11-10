@@ -500,6 +500,7 @@ const (
 	PersistentReview        DraftUngrantedToolGrant = "persistent.review"
 	PersistentSelfConfigure DraftUngrantedToolGrant = "persistent.selfConfigure"
 	PersistentWeb           DraftUngrantedToolGrant = "persistent.web"
+	Skills                  DraftUngrantedToolGrant = "skills"
 	Subagents               DraftUngrantedToolGrant = "subagents"
 	TargetHosts             DraftUngrantedToolGrant = "targetHosts"
 )
@@ -536,6 +537,8 @@ func (e DraftUngrantedToolGrant) Valid() bool {
 	case PersistentSelfConfigure:
 		return true
 	case PersistentWeb:
+		return true
+	case Skills:
 		return true
 	case Subagents:
 		return true
@@ -4827,7 +4830,7 @@ type SearchAgentsParams struct {
 	// Mode Only agents that support this run mode.
 	Mode *AgentMode `form:"mode,omitempty" json:"mode,omitempty"`
 
-	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess`, or `targetHosts` (a machine the person names when the run starts), or `browser` (a headless browser for the sites the person names), or `desktop` (applications on the person's own computer, through Agentry Desktop). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent.
+	// Capability Capability the latest published version actually asks for, e.g. `network`, `filesystem`, `exec`, `secrets`, `dataAccess`, or `targetHosts` (a machine the person names when the run starts), or `browser` (a headless browser for the sites the person names), or `desktop` (applications on the person's own computer, through Agentry Desktop), or `skills` (skills the release ships for the agent to follow). A capability declared as `none`, null, or empty does not match: `network: {egress: none}` is not a network agent.
 	Capability *string `form:"capability,omitempty" json:"capability,omitempty"`
 
 	// License SPDX identifier from the latest published manifest.

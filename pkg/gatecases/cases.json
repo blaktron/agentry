@@ -1389,6 +1389,50 @@
       }
     },
     {
+      "name": "shipped skills are their own token, not network",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "skills": true
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "skills"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
+      "name": "a skills key that does not read counts as declared",
+      "manifest": {
+        "capabilities": {
+          "network": {
+            "egress": "none"
+          },
+          "filesystem": {
+            "read": "none",
+            "write": "none"
+          },
+          "exec": "none",
+          "skills": "yes"
+        }
+      },
+      "want": {
+        "declaredCapabilities": [
+          "skills"
+        ],
+        "unrestrictedNetwork": false
+      }
+    },
+    {
       "name": "a site-scoped browser is its own token, not unrestricted",
       "manifest": {
         "capabilities": {

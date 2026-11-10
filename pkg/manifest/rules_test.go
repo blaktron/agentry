@@ -42,6 +42,7 @@ func TestRulesMatchReportedIDs(t *testing.T) {
 		{"V5", "capability"}, {"V7", "licence"}, {"V8", "quotas"}, {"V9", "frontmatter"}, {"V10", "guide"},
 		{"V11", "knowledge"}, {"V12", "inputs"}, {"V13", "input sources"}, {"V14", "target hosts"}, {"V15", "browser"},
 		{"V16", "capabilities.persistent"}, {"V17", "persona"}, {"V18", "subagents"}, {"V19", "capabilities.desktop"},
+		{"V20", "capabilities.skills"},
 	}
 	got := Rules()
 	if len(got) != len(wantTitle) {

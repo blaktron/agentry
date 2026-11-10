@@ -198,8 +198,8 @@ const (
 	// capabilities.persistent.memory.
 	MemorySeedDir = "memory"
 	// SkillsDir is the archive folder of shipped skills, with
-	// capabilities.persistent.skills: one Agent Skills folder per skill,
-	// each with its SkillFile.
+	// capabilities.skills or capabilities.persistent.skills: one Agent
+	// Skills folder per skill, each with its SkillFile.
 	SkillsDir = "skills"
 	// SkillFile is the file that makes a folder under SkillsDir a skill.
 	SkillFile = "SKILL.md"

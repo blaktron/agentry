@@ -138,7 +138,8 @@ my-quickagent/
 ├── README.md                   # rendered on the registry page; required for public publication
 ├── LICENSE                     # required for public publication
 ├── output.schema.json          # optional: structured-output contract
-└── knowledge/<name>/           # optional: a knowledge pack the release ships
+├── knowledge/<name>/           # optional: a knowledge pack the release ships
+└── skills/<name>/SKILL.md      # optional: a skill the release ships (capabilities.skills)
 ```
 
 Support files (scripts, templates, examples) ship too when
@@ -761,6 +762,46 @@ the registry holds no list of applications ([the person's
 computer](desktop.md)). A CLI or desktop that pins a core older than this
 field refuses a manifest that carries it, naming the field.
 
+**`skills`** (v2): `true` gives the run the skills the release ships. A
+skill is a folder of instructions for one kind of work,
+`skills/<name>/SKILL.md` in the archive, with any files it refers to
+beside it. `SKILL.md` opens with frontmatter that names the skill and says
+when to use it:
+
+```markdown
+---
+name: triage
+description: Sort an issue into bug, feature or question, with a priority
+---
+Read the issue, then ...
+```
+
+```yaml
+capabilities:
+  skills: true
+publish:
+  include: [agent.yaml, AGENT.md, skills/**]
+```
+
+The runner lists each skill to the model by its name and description, and
+the model reads a skill when a step matches it, so an instruction can say
+"triage each issue with the triage skill" without carrying the procedure
+itself. A skill guides the agent and grants it nothing: its scripts run
+only through `run_command` and only the commands `exec` declares. The
+archive's `skills/` folder is read only with the key; without it,
+validation warns that the runner leaves the folder unread. With it, the
+archive ships at least one skill and at most 16, each in a folder of its
+own whose name is lowercase letters, digits and single hyphens, at most 64
+characters. Each folder carries `SKILL.md`, its frontmatter's `name` is the
+folder's and its `description` is one plain line of at most 1024 bytes; a
+release that breaks any of these is refused, with the folder named (rule
+V20). Declaring the key is a widening, so an upgrade that adds it asks for
+consent again, and `GET /search?capability=skills` finds such releases. A
+persistent agent declares its skills as `capabilities.persistent.skills`
+instead ([below](#a-persistent-agent-capabilitiespersistent-persona-and-subagents)),
+never both. A CLI or desktop that pins a core older than this field refuses
+a manifest that carries it, naming the field.
+
 **`dataAccess`** holds semantic categories for review and audit: `email`,
 `calendar`, `files`, `tickets`, `code`, `messages`, `payments`, `other`.
 Operators may catalog extra MCP servers per category in their runner
@@ -1154,6 +1195,7 @@ stop a publish.
 | V17 | a persistent agent's persona |
 | V18 | a persistent agent's subagents: dependencies.agents |
 | V19 | the person's computer: capabilities.desktop's applications and computer use |
+| V20 | a QuickAgent's skills: capabilities.skills and its skills/ folder |
 
 <!-- /manifest-rules -->
 

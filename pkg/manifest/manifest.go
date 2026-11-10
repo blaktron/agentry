@@ -439,6 +439,12 @@ type Capabilities struct {
 	// person, and computer use of their windows or of the whole screen. Absent, a run reaches nothing
 	// on that computer (desktop.go).
 	Desktop *Desktop `yaml:"desktop,omitempty" json:"desktop,omitempty"`
+	// Skills gives the run the skills the archive ships, each
+	// skills/<name>/SKILL.md (v2, V20): the runner lists them to the model
+	// by name and description and lets it read one when a step matches.
+	// A persistent agent declares its skills as Persistent.Skills
+	// instead (skills.go).
+	Skills bool `yaml:"skills,omitempty" json:"skills,omitempty"`
 	// Persistent declares what a persistent agent may do beyond an
 	// ordinary run (v2, V16), valid only with the persistent mode; nil
 	// declares nothing (persistent.go).

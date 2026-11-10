@@ -40,6 +40,20 @@ type Caps struct {
 	// DesktopLine is capabilities.desktop, kept raw and read by Desktop()
 	// for the same reason.
 	DesktopLine json.RawMessage `json:"desktop"`
+	// SkillsKey is capabilities.skills, kept raw and read by ShipsSkills()
+	// for the same reason.
+	SkillsKey json.RawMessage `json:"skills"`
+}
+
+// ShipsSkills reports whether capabilities.skills declares the skills the
+// archive ships. Anything but absent, null or false declares them, so a
+// value of an odd shape is taken the strict way.
+func (c Caps) ShipsSkills() bool {
+	switch string(c.SkillsKey) {
+	case "", "null", "false":
+		return false
+	}
+	return true
 }
 
 // Desktop reads the line for the person's computer. declared is false when

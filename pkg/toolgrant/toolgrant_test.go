@@ -97,6 +97,7 @@ func TestEachGrantIsReportedWhenMissingAndNotWhenDeclared(t *testing.T) {
 		{"filesystem write", "Save the fixed file with fs_write.", "  filesystem:\n    read: workspace\n    write: none\n", "  filesystem:\n    write:\n      paths: [out]\n", []string{"fs_write"}, toolgrant.GrantFSWrite},
 		{"browser family", "Drive the site with the browser_* tools.", "", "  browser:\n    scope: public\n", []string{"browser_*"}, toolgrant.GrantBrowser},
 		{"harness prefix", "Call mcp__gateway__fetch for each URL.", "", "  network:\n    egress: [example.com]\n", []string{"fetch"}, toolgrant.GrantEgress},
+		{"skills", "Read the triage skill with skill_read before you sort an issue.", "", "  skills: true\n", []string{"skill_read"}, toolgrant.GrantSkills},
 		{"mcp server", "File the result with github__create_issue.", "", "  mcpServers:\n    - npm: \"@modelcontextprotocol/server-github\"\n      version: 1.0.0\n", []string{"github__create_issue"}, toolgrant.GrantMCPServer},
 	}
 	for _, tc := range cases {
@@ -378,6 +379,25 @@ func TestThePersistentToolsNeedTheirKeys(t *testing.T) {
 				t.Errorf("%s with %s declared: %+v", tool, key, got)
 			}
 		}
+	}
+}
+
+// A persistent agent's skills hold skill_read as capabilities.skills does,
+// and a persistent agent without them is pointed at its own block.
+func TestAPersistentAgentsSkillsHoldSkillRead(t *testing.T) {
+	text := "Read the weekly-plan skill with skill_read first.\n"
+	release := func(p *manifest.Persistent) *manifest.Manifest {
+		return &manifest.Manifest{SchemaVersion: "2", Modes: []manifest.Mode{manifest.ModePersistent}, Capabilities: manifest.Capabilities{Persistent: p}}
+	}
+	if got := toolgrant.CheckRelease(release(&manifest.Persistent{Skills: true}), text); len(got) != 0 {
+		t.Fatalf("skill_read with capabilities.persistent.skills: %+v", got)
+	}
+	got := toolgrant.CheckRelease(release(&manifest.Persistent{Clock: true}), text)
+	if len(got) != 1 || got[0].Grant != toolgrant.GrantSkills || got[0].Path != "capabilities.persistent.skills" {
+		t.Fatalf("skill_read without skills in a persistent agent: %+v", got)
+	}
+	if got := toolgrant.ToolsOf(toolgrant.GrantSkills); !slices.Equal(got, []string{"skill_read"}) {
+		t.Fatalf("the skills grant gives %v", got)
 	}
 }
 
