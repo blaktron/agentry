@@ -33,6 +33,7 @@ func TestSchemaMatchesCatalogue(t *testing.T) {
 							Type             string   `json:"type"`
 							Ref              string   `json:"$ref"`
 							Pattern          string   `json:"pattern"`
+							MaxLength        *int     `json:"maxLength"`
 							ExclusiveMinimum *float64 `json:"exclusiveMinimum"`
 							Maximum          *float64 `json:"maximum"`
 							MinItems         *int     `json:"minItems"`
@@ -127,6 +128,18 @@ func TestSchemaMatchesCatalogue(t *testing.T) {
 		case KindQuickAgents:
 			if v.Ref != "#/$defs/quickagents" {
 				t.Errorf("%s: schema value %q, want the quickagents definition", r.ID, v.Ref)
+			}
+		case KindText:
+			if v.Type != "string" || v.MaxLength == nil || *v.MaxLength != r.MaxLength {
+				t.Errorf("%s: schema text %s of %v, catalogue %d", r.ID, v.Type, v.MaxLength, r.MaxLength)
+			}
+		case KindToggle:
+			if v.Type != "boolean" {
+				t.Errorf("%s: schema type %q, want boolean", r.ID, v.Type)
+			}
+		case KindServers, KindPacks, KindToolModels:
+			if want := "#/$defs/" + string(r.Kind); v.Ref != want {
+				t.Errorf("%s: schema value %q, want %q", r.ID, v.Ref, want)
 			}
 		case KindMinimumVersion:
 			if v.Type != "string" || v.Pattern != versionPattern.String() {

@@ -157,6 +157,16 @@ var internalSuffixes = []string{".localhost", ".local", ".internal", ".lan", ".h
 // expands (`$`, braces), what a URL never carries unescaped, and quoting.
 const addressBadChars = " \"<>\\^`{|}$'"
 
+// CheckRemoteAddress says whether raw is an address a remote MCP server may
+// have: at most MaxRemoteURLLength characters, in the shape
+// checkHTTPSAddress holds it to.
+func CheckRemoteAddress(raw string) error {
+	if n := len(raw); n > MaxRemoteURLLength {
+		return fmt.Errorf("a remote server's address must be at most %d characters (got %d)", MaxRemoteURLLength, n)
+	}
+	return checkHTTPSAddress(raw)
+}
+
 // checkHTTPSAddress holds a remote server's address or an issuer to the
 // shape the runner can reach through a relay and the guard: https, a
 // public lowercase DNS name whose top-level label starts with a letter (so
