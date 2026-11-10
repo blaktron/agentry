@@ -161,7 +161,6 @@ member's.
 | `agents.assistant.personality` | text | at most 4000 characters | locked or default | The personality members' Assistant takes on. |
 | `agents.assistant.runOnStart` | toggle | `true`, `false` | locked or default | Whether members' Assistant starts when Agentry starts. |
 | `agents.assistant.servers` | servers | a list of `{"name", "url"}` | locked or default | Remote MCP servers on members' Assistant. |
-| `agents.assistant.writingVoice` | choice | `allowed`, `forbidden` | locked or default | Whether members' Assistant may write in the member's Writing Voice. |
 | `agents.codingAgent` | choice | `allowed`, `forbidden` | locked or default | Whether members may use the Coding agent. |
 | `agents.codingAgent.knowledge` | packs | a list of the organization's shared packs | locked or default | Knowledge packs on members' Coding agent. |
 | `agents.codingAgent.servers` | servers | a list of `{"name", "url"}` | locked or default | Remote MCP servers on members' Coding agent. |

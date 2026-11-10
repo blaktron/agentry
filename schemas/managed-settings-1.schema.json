@@ -567,18 +567,6 @@
             }
           }
         },
-        "agents.assistant.writingVoice": {
-          "description": "Whether members' Assistant may write in the member's Writing Voice. Values run from the most open to the most restrictive.",
-          "$ref": "#/$defs/setting",
-          "properties": {
-            "value": {
-              "enum": [
-                "allowed",
-                "forbidden"
-              ]
-            }
-          }
-        },
         "agents.assistant.servers": {
           "description": "Remote MCP servers on members' Assistant. Each member consents to them at the agent's next start, and the runner's own server rules still apply. Locked, the member cannot switch them off.",
           "$ref": "#/$defs/setting",

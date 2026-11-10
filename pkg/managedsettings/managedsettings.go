@@ -215,16 +215,15 @@ const (
 
 	QuickAgents = "quickagents"
 
-	AgentsAssistantName         = "agents.assistant.name"
-	AgentsAssistantPersonality  = "agents.assistant.personality"
-	AgentsAssistantRunOnStart   = "agents.assistant.runOnStart"
-	AgentsAssistantWritingVoice = "agents.assistant.writingVoice"
-	AgentsAssistantServers      = "agents.assistant.servers"
-	AgentsAssistantKnowledge    = "agents.assistant.knowledge"
-	AgentsCodingAgentServers    = "agents.codingAgent.servers"
-	AgentsCodingAgentKnowledge  = "agents.codingAgent.knowledge"
-	CodingToolsModels           = "codingTools.models"
-	AgentsUnreviewed            = "agents.unreviewed"
+	AgentsAssistantName        = "agents.assistant.name"
+	AgentsAssistantPersonality = "agents.assistant.personality"
+	AgentsAssistantRunOnStart  = "agents.assistant.runOnStart"
+	AgentsAssistantServers     = "agents.assistant.servers"
+	AgentsAssistantKnowledge   = "agents.assistant.knowledge"
+	AgentsCodingAgentServers   = "agents.codingAgent.servers"
+	AgentsCodingAgentKnowledge = "agents.codingAgent.knowledge"
+	CodingToolsModels          = "codingTools.models"
+	AgentsUnreviewed           = "agents.unreviewed"
 )
 
 // The bounds of an agent configuration's rows.
@@ -442,7 +441,6 @@ var catalogue = []Row{
 		Summary: "The personality members' Assistant takes on."},
 	{ID: AgentsAssistantRunOnStart, Kind: KindToggle,
 		Summary: "Whether members' Assistant starts when Agentry starts."},
-	allowedOrForbidden(AgentsAssistantWritingVoice, "Whether members' Assistant may write in the member's Writing Voice."),
 	{ID: AgentsAssistantServers, Kind: KindServers,
 		Summary: "Remote MCP servers on members' Assistant, which each member consents to at its next start."},
 	{ID: AgentsAssistantKnowledge, Kind: KindPacks,
