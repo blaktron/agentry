@@ -137,6 +137,15 @@ func DiffCapabilities(old, next Capabilities) CapabilityDiff {
 		d.Narrowed = append(d.Narrowed, "no longer ships knowledge: "+k)
 	}
 
+	// Shipped skills: their text enters the agent's context and guides
+	// its steps, so declaring them asks again.
+	switch {
+	case next.Skills && !old.Skills:
+		d.Widened = append(d.Widened, "adds skills: "+ShippedSkillsWords)
+	case old.Skills && !next.Skills:
+		d.Narrowed = append(d.Narrowed, "no longer ships skills")
+	}
+
 	d.appendPersistentDiff(old.Persistent, next.Persistent)
 	d.appendSubagentDiff(old.Subagents, next.Subagents)
 

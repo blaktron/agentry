@@ -4931,7 +4931,8 @@ paths:
             `targetHosts` (a machine the person names when the run starts),
             or `browser` (a headless browser for the sites the person names),
             or `desktop` (applications on the person's own computer, through
-            Agentry Desktop).
+            Agentry Desktop), or `skills` (skills the release ships for the
+            agent to follow).
             A capability declared as `none`, null, or empty does not match:
             `network: {egress: none}` is not a network agent.
           schema:
@@ -7488,7 +7489,7 @@ components:
             an application server's on the person's computer.
         grant:
           type: string
-          enum: [browser, exec, egress, targetHosts, filesystem.read, filesystem.write, mcpServers, desktop, computerUse, persistent.clock, persistent.memory, persistent.selfConfigure, persistent.meetings, persistent.helper, persistent.web, persistent.review, subagents]
+          enum: [browser, exec, egress, targetHosts, filesystem.read, filesystem.write, mcpServers, desktop, computerUse, skills, persistent.clock, persistent.memory, persistent.selfConfigure, persistent.meetings, persistent.helper, persistent.web, persistent.review, subagents]
           description: The line of the capability contract the tool needs.
         path:
           type: string

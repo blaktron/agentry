@@ -5496,6 +5496,22 @@
           ]
         },
         {
+          "path": "pkg/manifest/skills_test.go",
+          "tests": [
+            "TestAReleaseThatShipsSkillsParsesValidatesAndRoundTrips",
+            "TestAReleaseWithoutTheKeyEncodesAsBefore",
+            "TestV20RefusesTheKeyWhereItCannotMeanAnything",
+            "TestV20WarnsOfASkillsFolderWithoutTheKey",
+            "TestV20RefusesASkillTheRunnerCouldNotList",
+            "TestV20LeavesAPersistentAgentsSkillsToV16",
+            "TestTheDiffAsksAgainForSkills"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "pkg/manifest/sources_test.go",
           "tests": [
             "TestSourceQuestionsParseAndValidate",
@@ -5831,6 +5847,7 @@
             "TestALargeInstructionIsReadInLinearTime",
             "TestTheAnswerIsBounded",
             "TestThePersistentToolsNeedTheirKeys",
+            "TestAPersistentAgentsSkillsHoldSkillRead",
             "TestCoderHoldsTheToolchainsGrants",
             "TestTheSubagentToolsNeedASubagent",
             "TestTheDesktopLineGivesApplicationTools"
