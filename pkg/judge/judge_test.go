@@ -460,12 +460,14 @@ func TestAskRetriesOnceOn429AndRedactsTheKey(t *testing.T) {
 	if _, _, err := c.Ask(ctx, st, ModelInputQuestions()); err != nil || *n != 2 || time.Since(start) < 80*time.Millisecond {
 		t.Fatalf("the retry must wait RetryWait: %v after %d requests in %v", err, *n, time.Since(start))
 	}
-	c, n = slow(2 * time.Second)
-	cctx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	// The deadline is long enough that the first request is always made and
+	// answered, and far shorter than the pause, so only the pause can meet it.
+	c, n = slow(time.Minute)
+	cctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
 	start = time.Now()
 	_, _, err = c.Ask(cctx, st, ModelInputQuestions())
-	if !errors.Is(err, context.DeadlineExceeded) || *n != 1 || time.Since(start) > 1500*time.Millisecond {
+	if !errors.Is(err, context.DeadlineExceeded) || *n != 1 || time.Since(start) > 20*time.Second {
 		t.Fatalf("a deadline during the pause must end the request: %v after %d requests in %v", err, *n, time.Since(start))
 	}
 
