@@ -537,6 +537,104 @@
               }
             }
           }
+        },
+        "agents.assistant.name": {
+          "description": "The name members' Assistant goes by: the only one when locked, the one a member who set none sees as a default.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        },
+        "agents.assistant.personality": {
+          "description": "The personality members' Assistant takes on: fixed when locked, a starting point the member may change as a default.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          }
+        },
+        "agents.assistant.runOnStart": {
+          "description": "Whether members' Assistant starts when Agentry starts.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "type": "boolean"
+            }
+          }
+        },
+        "agents.assistant.writingVoice": {
+          "description": "Whether members' Assistant may write in the member's Writing Voice. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
+        },
+        "agents.assistant.servers": {
+          "description": "Remote MCP servers on members' Assistant. Each member consents to them at the agent's next start, and the runner's own server rules still apply. Locked, the member cannot switch them off.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/servers"
+            }
+          }
+        },
+        "agents.assistant.knowledge": {
+          "description": "The organization's shared knowledge packs on members' Assistant, by name. Each member consents to them at the agent's next start. Locked, the member cannot switch them off.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/packs"
+            }
+          }
+        },
+        "agents.codingAgent.servers": {
+          "description": "Remote MCP servers on members' Coding agent, as agents.assistant.servers.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/servers"
+            }
+          }
+        },
+        "agents.codingAgent.knowledge": {
+          "description": "The organization's shared knowledge packs on members' Coding agent, as agents.assistant.knowledge.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/packs"
+            }
+          }
+        },
+        "codingTools.models": {
+          "description": "The model each coding tool uses in members' runs: the only one when locked, the one a member who chose none uses as a default.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/toolModels"
+            }
+          }
+        },
+        "agents.unreviewed": {
+          "description": "Whether members may let a persistent agent read web pages Without AI Review. Values run from the most open to the most restrictive.",
+          "$ref": "#/$defs/setting",
+          "properties": {
+            "value": {
+              "enum": [
+                "allowed",
+                "forbidden"
+              ]
+            }
+          }
         }
       }
     }
@@ -697,6 +795,58 @@
             "type": "boolean",
             "description": "The preset is a lock rather than a default; only with a preset."
           }
+        }
+      }
+    },
+    "servers": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "maxLength": 2048
+          }
+        }
+      }
+    },
+    "packs": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+      }
+    },
+    "toolModels": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "claude-code": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$"
+        },
+        "codex": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$"
+        },
+        "copilot": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$"
         }
       }
     }

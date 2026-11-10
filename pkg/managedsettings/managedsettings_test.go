@@ -180,6 +180,19 @@ func TestNoRowTurnsAnythingOn(t *testing.T) {
 				t.Errorf("%s: a source row starts from the member's own and narrows from there", r.ID)
 			}
 		case KindSources, KindMinimumVersion, KindQuickAgents:
+		case KindText, KindToggle:
+			// A preference (a name, a personality, starting with Agentry)
+			// grants no capability.
+			if r.Kind == KindText && r.MaxLength <= 0 {
+				t.Errorf("%s: a text row needs a longest value", r.ID)
+			}
+		case KindServers, KindPacks:
+			// Entries on an agent's roster, which the member consents to
+			// at its next start as to their own.
+		case KindToolModels:
+			if len(r.Values) == 0 {
+				t.Errorf("%s: a tool-models row needs the tools it sets", r.ID)
+			}
 		default:
 			t.Errorf("%s: kind %q", r.ID, r.Kind)
 		}
@@ -206,6 +219,11 @@ func TestEveryRowTakesOnlyItsValues(t *testing.T) {
 		KindSources:        {`{"scope":"any"}`, `{"scope":"organization-and-built-ins"}`, `{"scope":"organization-and-built-ins","namespaces":["acme","tools-1"]}`},
 		KindMinimumVersion: {`"0.7.38"`, `"1.0.0"`},
 		KindModel:          {`{"provider":"anthropic","model":"claude-sonnet-5-5"}`, `{"provider":"custom","model":"llama-4:70b"}`},
+		KindText:           {`""`, `"Ada"`, `"Warm and brief.\nAsks before it acts."`, `"` + strings.Repeat("é", 64) + `"`},
+		KindToggle:         {`true`, `false`},
+		KindServers:        {`[]`, `[{"name":"tickets","url":"https://mcp.acme.example/tickets"}]`, `[{"name":"a","url":"https://a.example"},{"name":"b-2","url":"https://b.example:8443/mcp"}]`},
+		KindPacks:          {`[]`, `["handbook"]`, `["handbook","sales-2026"]`},
+		KindToolModels:     {`{"claude-code":"claude-sonnet-5-5"}`, `{"codex":"gpt-5.5","copilot":"auto"}`},
 		KindQuickAgents: {`[]`, `[{"ref":"acme/report-writer","version":"latest","mode":"required"}]`,
 			`[{"ref":"acme/report-writer","version":"1.4.0","mode":"offered","preset":{"model":{"provider":"anthropic","model":"claude-sonnet-5-5"},"timeoutSeconds":900,"maxTurns":40,"where":"local","inputs":{"region":"emea"}},"presetLocked":true},{"ref":"tools/csv-check","version":"latest","mode":"offered"}]`},
 	}
@@ -225,7 +243,12 @@ func TestEveryRowTakesOnlyItsValues(t *testing.T) {
 			`[{"ref":"acme/x","version":"latest","mode":"required","preset":{"model":{"provider":"acme","model":"m"}}}]`,
 			`[{"ref":"acme/x","version":"latest","mode":"required","preset":{"inputs":{"bad name":"v"}}}]`,
 			`[{"ref":"acme/x","version":"latest","mode":"required","extra":1}]`},
-		KindSource: {`{"source":"everyone"}`, `{"source":"member","key":{"id":"k1","rev":1}}`, `{"source":"member","provider":"brave"}`, `"member"`, `null`, `{"source":"member","extra":1}`},
+		KindText:       {`"` + strings.Repeat("a", MaxPersonalityLength+1) + `"`, `"a\u0000b"`, `"bell\u0007"`, `1`, `null`, `["a"]`},
+		KindToggle:     {`"true"`, `1`, `null`, `"on"`},
+		KindServers:    {`{}`, `null`, `[{"name":"t","url":"http://a.example"}]`, `[{"name":"T","url":"https://a.example"}]`, `[{"name":"t","url":"https://user:pw@a.example"}]`, `[{"name":"t","url":"https://a.example"},{"name":"t","url":"https://b.example"}]`, `[{"name":"t","url":"https:///path"}]`, `[{"name":"t","url":"https://a.example","extra":1}]`, `[{"name":"t","url":"https://a.example#x"}]`},
+		KindPacks:      {`null`, `{}`, `["Handbook"]`, `["a","a"]`, `[""]`, `"handbook"`},
+		KindToolModels: {`{}`, `null`, `{"vim":"m"}`, `{"codex":""}`, `{"codex":"a b"}`, `["codex"]`},
+		KindSource:     {`{"source":"everyone"}`, `{"source":"member","key":{"id":"k1","rev":1}}`, `{"source":"member","provider":"brave"}`, `"member"`, `null`, `{"source":"member","extra":1}`},
 	}
 	for _, r := range Catalogue() {
 		good := accepted[r.Kind]

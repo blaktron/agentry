@@ -19,11 +19,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/blaktron/agentry/pkg/attest"
 	"github.com/blaktron/agentry/pkg/manifest"
@@ -119,6 +122,23 @@ const (
 	// version or following the latest, with an optional preset of run
 	// settings. It is only ever locked: the list is the organization's.
 	KindQuickAgents Kind = "quickAgents"
+	// KindText is a JSON string of at most the row's MaxLength characters,
+	// with no control characters but newlines: a preference such as an
+	// agent's name, which grants nothing.
+	KindText Kind = "text"
+	// KindToggle is a JSON boolean: a preference such as whether an agent
+	// starts with Agentry, which grants nothing.
+	KindToggle Kind = "toggle"
+	// KindServers is a list of Server: remote MCP servers put on an agent's
+	// roster. The member still consents to them at the agent's next start,
+	// and the runner's own server rules still apply to them.
+	KindServers Kind = "servers"
+	// KindPacks is a list of the organization's shared knowledge packs by
+	// name, put on an agent's roster; the member still consents to them.
+	KindPacks Kind = "packs"
+	// KindToolModels maps a coding tool of the row's Values to the model id
+	// it uses.
+	KindToolModels Kind = "toolModels"
 )
 
 // Row is one entry of the catalogue.
@@ -146,6 +166,8 @@ type Row struct {
 	// Providers are the providers a source row's organization-key may
 	// name; empty when the row names none.
 	Providers []string
+	// MaxLength is the most characters a text row takes.
+	MaxLength int
 	// Summary says in one sentence what the row decides, for consoles and
 	// for the client's own listing.
 	Summary string
@@ -192,7 +214,34 @@ const (
 	CodingToolsAllowed   = "codingTools.allowed"
 
 	QuickAgents = "quickagents"
+
+	AgentsAssistantName         = "agents.assistant.name"
+	AgentsAssistantPersonality  = "agents.assistant.personality"
+	AgentsAssistantRunOnStart   = "agents.assistant.runOnStart"
+	AgentsAssistantWritingVoice = "agents.assistant.writingVoice"
+	AgentsAssistantServers      = "agents.assistant.servers"
+	AgentsAssistantKnowledge    = "agents.assistant.knowledge"
+	AgentsCodingAgentServers    = "agents.codingAgent.servers"
+	AgentsCodingAgentKnowledge  = "agents.codingAgent.knowledge"
+	CodingToolsModels           = "codingTools.models"
+	AgentsUnreviewed            = "agents.unreviewed"
 )
+
+// The bounds of an agent configuration's rows.
+const (
+	MaxAgentNameLength   = 64
+	MaxPersonalityLength = 4000
+	MaxAgentServers      = 20
+	MaxAgentPacks        = 20
+	MaxServerURLLength   = 2048
+)
+
+// Server is one remote MCP server of a KindServers row: a name the agent
+// knows it by and its https address.
+type Server struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
 
 // An assignment's modes and its version that follows the newest release.
 const (
@@ -386,6 +435,25 @@ var catalogue = []Row{
 		Summary: "Which coding tools members' runs may use."},
 	{ID: QuickAgents, Kind: KindQuickAgents, LockOnly: true,
 		Summary: "The QuickAgents the organization gives its members: each required (installed for every member) or offered, pinned or following the latest, with an optional preset of run settings."},
+
+	{ID: AgentsAssistantName, Kind: KindText, MaxLength: MaxAgentNameLength,
+		Summary: "The name members' Assistant goes by."},
+	{ID: AgentsAssistantPersonality, Kind: KindText, MaxLength: MaxPersonalityLength,
+		Summary: "The personality members' Assistant takes on."},
+	{ID: AgentsAssistantRunOnStart, Kind: KindToggle,
+		Summary: "Whether members' Assistant starts when Agentry starts."},
+	allowedOrForbidden(AgentsAssistantWritingVoice, "Whether members' Assistant may write in the member's Writing Voice."),
+	{ID: AgentsAssistantServers, Kind: KindServers,
+		Summary: "Remote MCP servers on members' Assistant, which each member consents to at its next start."},
+	{ID: AgentsAssistantKnowledge, Kind: KindPacks,
+		Summary: "The organization's shared knowledge packs on members' Assistant, which each member consents to at its next start."},
+	{ID: AgentsCodingAgentServers, Kind: KindServers,
+		Summary: "Remote MCP servers on members' Coding agent, which each member consents to at its next start."},
+	{ID: AgentsCodingAgentKnowledge, Kind: KindPacks,
+		Summary: "The organization's shared knowledge packs on members' Coding agent, which each member consents to at its next start."},
+	{ID: CodingToolsModels, Kind: KindToolModels, Values: []string{CodingClaudeCode, CodingCodex, CodingCopilot},
+		Summary: "The model each coding tool uses in members' runs."},
+	allowedOrForbidden(AgentsUnreviewed, "Whether members may let a persistent agent read web pages Without AI Review."),
 }
 
 // Catalogue is every row a document may carry, sorted by id.
@@ -515,8 +583,77 @@ func (r Row) Check(s Setting) error {
 		return r.checkSource(s)
 	case KindQuickAgents:
 		return r.checkQuickAgents(s)
+	case KindText:
+		var v string
+		if err := strictJSON(s.Value, &v); err != nil || isNull(s.Value) || utf8.RuneCountInString(v) > r.MaxLength || !utf8.ValidString(v) || hasControl(v) {
+			return fmt.Errorf("managed settings: %s must be text of at most %d characters, with no control characters but newlines", r.ID, r.MaxLength)
+		}
+	case KindToggle:
+		var v bool
+		if err := strictJSON(s.Value, &v); err != nil || isNull(s.Value) {
+			return fmt.Errorf("managed settings: %s must be true or false", r.ID)
+		}
+	case KindServers:
+		return r.checkServers(s)
+	case KindPacks:
+		var names []string
+		if err := strictJSON(s.Value, &names); err != nil || names == nil || len(names) > MaxAgentPacks {
+			return fmt.Errorf("managed settings: %s must be a list of at most %d knowledge pack names", r.ID, MaxAgentPacks)
+		}
+		seen := map[string]bool{}
+		for _, n := range names {
+			if !agentNamePattern.MatchString(n) || seen[n] {
+				return fmt.Errorf("managed settings: %s must name each knowledge pack once, by its name", r.ID)
+			}
+			seen[n] = true
+		}
+	case KindToolModels:
+		var v map[string]string
+		if err := strictJSON(s.Value, &v); err != nil || len(v) == 0 {
+			return fmt.Errorf("managed settings: %s must map at least one of %s to a model id", r.ID, strings.Join(r.Values, ", "))
+		}
+		for tool, model := range v {
+			if !slices.Contains(r.Values, tool) || !modelPattern.MatchString(model) {
+				return fmt.Errorf("managed settings: %s must map each of %s to a model id, and nothing else", r.ID, strings.Join(r.Values, ", "))
+			}
+		}
 	default:
 		return fmt.Errorf("managed settings: %s has no kind", r.ID)
+	}
+	return nil
+}
+
+// agentNamePattern is a server's name on an agent, or a knowledge pack's
+// name, as a manifest names them.
+var agentNamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
+
+// isNull says a value is JSON null, which decodes into a string or a
+// boolean with no error.
+func isNull(raw json.RawMessage) bool { return string(bytes.TrimSpace(raw)) == "null" }
+
+// hasControl says v holds a control character other than a newline or a
+// tab.
+func hasControl(v string) bool {
+	return strings.ContainsFunc(v, func(r rune) bool { return unicode.IsControl(r) && r != '\n' && r != '\t' })
+}
+
+// checkServers checks a KindServers value: at most MaxAgentServers, each
+// with its own name and an https address with a host and no credentials.
+func (r Row) checkServers(s Setting) error {
+	var list []Server
+	if err := strictJSON(s.Value, &list); err != nil || list == nil || len(list) > MaxAgentServers {
+		return fmt.Errorf("managed settings: %s must be a list of at most %d {\"name\", \"url\"}", r.ID, MaxAgentServers)
+	}
+	seen := map[string]bool{}
+	for _, sv := range list {
+		if !agentNamePattern.MatchString(sv.Name) || seen[sv.Name] {
+			return fmt.Errorf("managed settings: %s must name each server once, with a lower-case name", r.ID)
+		}
+		seen[sv.Name] = true
+		u, err := url.Parse(sv.URL)
+		if err != nil || len(sv.URL) > MaxServerURLLength || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
+			return fmt.Errorf("managed settings: %s: %s must be an https address with no credentials", r.ID, sv.Name)
+		}
 	}
 	return nil
 }

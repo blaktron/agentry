@@ -105,7 +105,8 @@ The payload is described by
 Every setting is a row of one catalogue, the table in the core's
 `pkg/managedsettings`. The registry checks a document against it before it
 signs, and `schemas/managed-settings-1.schema.json` describes the same rows.
-A row's value has one of seven kinds, and each kind narrows in one way only:
+A row's value has one of thirteen kinds. The first eight narrow in one way
+only:
 
 - **choice**: one of the row's values, listed from the most open to the most
   restrictive. No value switches anything on.
@@ -131,6 +132,22 @@ A row's value has one of seven kinds, and each kind narrows in one way only:
   `model.source` carries no reference, and runs on it are paid through the
   registry's own endpoint. Web search also names the key's `provider`.
 
+- **quickAgents**: the list of QuickAgents the organization gives its
+  members, described below.
+
+The other five configure the members' persistent agents. They grant no
+capability of their own:
+
+- **text**: a string of at most the row's length, with no control
+  characters but newlines and tabs: an agent's name or personality.
+- **toggle**: `true` or `false`: whether an agent starts with Agentry.
+- **servers**: a list of at most 20 remote MCP servers, each
+  `{"name": …, "url": …}` with a lower-case name and an `https` address.
+- **packs**: a list of at most 20 of the organization's shared knowledge
+  packs, by name.
+- **tool models**: `{"claude-code": …, "codex": …, "copilot": …}`, any of
+  them, each mapped to a model id.
+
 A set, a source list and a minimum version are only ever locked: a default
 would have nothing to apply. A set has at least one member, except
 `model.signIns`, whose empty list spends no subscription or plan of the
@@ -139,10 +156,20 @@ member's.
 | Setting | Kind | Value | Strength | What it decides |
 | --- | --- | --- | --- | --- |
 | `agents.assistant` | choice | `allowed`, `forbidden` | locked or default | Whether members may use the Assistant. |
+| `agents.assistant.knowledge` | packs | a list of the organization's shared packs | locked or default | Knowledge packs on members' Assistant. |
+| `agents.assistant.name` | text | at most 64 characters | locked or default | The name members' Assistant goes by. |
+| `agents.assistant.personality` | text | at most 4000 characters | locked or default | The personality members' Assistant takes on. |
+| `agents.assistant.runOnStart` | toggle | `true`, `false` | locked or default | Whether members' Assistant starts when Agentry starts. |
+| `agents.assistant.servers` | servers | a list of `{"name", "url"}` | locked or default | Remote MCP servers on members' Assistant. |
+| `agents.assistant.writingVoice` | choice | `allowed`, `forbidden` | locked or default | Whether members' Assistant may write in the member's Writing Voice. |
 | `agents.codingAgent` | choice | `allowed`, `forbidden` | locked or default | Whether members may use the Coding agent. |
+| `agents.codingAgent.knowledge` | packs | a list of the organization's shared packs | locked or default | Knowledge packs on members' Coding agent. |
+| `agents.codingAgent.servers` | servers | a list of `{"name", "url"}` | locked or default | Remote MCP servers on members' Coding agent. |
+| `agents.unreviewed` | choice | `allowed`, `forbidden` | locked or default | Whether members may let a persistent agent read web pages Without AI Review. |
 | `browser.publicWeb` | choice | `allowed`, `forbidden` | locked or default | Whether a run's browser may reach the public web. |
 | `bugReports` | choice | `allowed`, `forbidden` | locked or default | Whether members may send bug reports from their clients. |
 | `codingTools.allowed` | set | a list of `claude-code`, `codex`, `copilot` | locked only | Which coding tools members' runs may use. |
+| `codingTools.models` | tool models | `{"claude-code": …, "codex": …, "copilot": …}`, any of them | locked or default | The model each coding tool uses in members' runs. |
 | `deliverables.destinations` | set | a list of `folder`, `webhook`, `s3` | locked only | Where a run may send its result and files: a folder, a webhook, an S3 bucket. |
 | `desktop.applications` | choice | `allowed`, `forbidden` | locked or default | Whether runs may use applications on the member's computer through Agentry Desktop. |
 | `desktop.customServers` | choice | `allowed`, `forbidden` | locked or default | Whether runs may use applications the member set up themselves rather than Agentry's catalogue. |
@@ -182,6 +209,17 @@ settings: `model` (`{"provider", "model"}`), `timeoutSeconds`, `maxTurns`,
 4 KiB). Each is a default the member may change, or fixed with
 `presetLocked`. Every other row still holds the run, so a preset never lifts
 a cap or a lock.
+
+The `agents.assistant.*` and `agents.codingAgent.*` rows configure the
+members' Assistant and Coding agent. A locked value replaces the member's
+own and its control is shown as managed; a default fills only what the
+member has not set. Servers and knowledge packs are put on the agent's
+roster as the organization's, and the member consents to them at the
+agent's next start, as to anything they add themselves. The runner's own
+rules for servers (`mcpServers.allowVulnerable`, `desktop.customServers`)
+still apply. Locked, they have no switch; as a default, the member may
+switch them off. `agents.unreviewed` decides whether a member may switch a
+persistent agent's web reading to Without AI Review. No row turns that on.
 
 How the runner holds a run to each row is in the runner reference,
 [Managed settings](runner.md#managed-settings).
