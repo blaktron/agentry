@@ -71,15 +71,13 @@ type Persistent struct {
 	Coder bool `yaml:"coder,omitempty" json:"coder,omitempty"`
 	// Web gives the agent the web tools, web_search and web_read.
 	Web bool `yaml:"web,omitempty" json:"web,omitempty"`
-	// Browser gives the agent a headless browser to public websites, in a
-	// container of its own behind the runner's browse proxy, which admits
-	// public addresses alone. It types no secret. Which sites, and
-	// whether its pages are reviewed first, are the person's settings,
-	// never the release's.
+	// Browser gives the agent a headless browser to public websites.
+	// Which sites, and whether its pages are reviewed first, are the
+	// person's settings, so the release names no host.
 	Browser bool `yaml:"browser,omitempty" json:"browser,omitempty"`
 	// Fetch gives the agent the fetch tool for public addresses. Which
 	// hosts, and whether its responses are reviewed first, are the
-	// person's settings, never the release's.
+	// person's settings, so the release names no host.
 	Fetch bool `yaml:"fetch,omitempty" json:"fetch,omitempty"`
 	// Helper gives the agent Agentry's helper tools: search the registry,
 	// show, install and run QuickAgents, read their results, list what is
@@ -262,22 +260,10 @@ func validatePersistent(s *issues, m *Manifest) {
 	}
 
 	if p.Coder {
-		var beside []string
-		for _, k := range coderAloneBeside {
-			if p.Declares(k) {
-				beside = append(beside, k)
-			}
-		}
-		if len(beside) > 0 {
+		if beside := p.declaredOf(coderAloneBeside); len(beside) > 0 {
 			s.errf("V16", "capabilities.persistent", "coder is never declared beside %s: the coding toolchain runs any program the agent asks for, on open egress, in the container that would hold the keys and feed addresses those keys put there", strings.Join(beside, " or "))
 		}
-		var again []string
-		for _, k := range coderAlreadyGives {
-			if p.Declares(k) {
-				again = append(again, k)
-			}
-		}
-		if len(again) > 0 {
+		if again := p.declaredOf(coderAlreadyGives); len(again) > 0 {
 			s.errf("V16", "capabilities.persistent", "coder is never declared beside %s: the coding toolchain already gives a public browser and open egress, under switches of its own", strings.Join(again, " or "))
 		}
 	}
@@ -302,6 +288,17 @@ var coderAloneBeside = []string{"web", "review", "calendars"}
 // Declaring them beside coder would give the agent the same reach twice,
 // under two consents.
 var coderAlreadyGives = []string{"browser", "fetch"}
+
+// declaredOf returns the keys among keys that p declares, in their order.
+func (p *Persistent) declaredOf(keys []string) []string {
+	var out []string
+	for _, k := range keys {
+		if p.Declares(k) {
+			out = append(out, k)
+		}
+	}
+	return out
+}
 
 // closedNames checks that every entry of names is one of known, once.
 func closedNames(s *issues, at, what string, names, known []string) {

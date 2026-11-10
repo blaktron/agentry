@@ -172,9 +172,9 @@ func TestV16RefusesWhatTheBlockCannotMean(t *testing.T) {
 	wantIssue(t, Validate(m), "V1", SeverityError, "capabilities.persistent")
 }
 
-// web, review, calendars, browser and fetch sit together; coder sits
-// beside every other key.
-func TestV16PassesCoderAloneAndTheOtherThreeTogether(t *testing.T) {
+// web, review, calendars, browser and fetch sit together, and coder sits
+// beside the keys that are none of them.
+func TestV16PassesCoderAloneAndTheOtherKeysTogether(t *testing.T) {
 	for _, p := range []Persistent{
 		{Web: true, Review: true, Calendars: true},
 		{Web: true, Review: true, Calendars: true, Browser: true, Fetch: true},

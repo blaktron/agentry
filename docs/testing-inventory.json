@@ -3466,7 +3466,8 @@
           "tests": [
             "TestAPersistentReleaseDeclaresAGateTokenPerKey",
             "TestS6ReadsTheInstructionAndThePersonaAgainstThePersistentBlock",
-            "TestS9CountsANewPersistentKeyAndANewOrChangedSubagent"
+            "TestS9CountsANewPersistentKeyAndANewOrChangedSubagent",
+            "TestAPersistentBrowserOrFetchIsHeldAsWildcardEgress"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -5440,7 +5441,7 @@
             "TestAPersistentReleaseParsesAndValidates",
             "TestEveryPersistentKeyHasWords",
             "TestV16RefusesWhatTheBlockCannotMean",
-            "TestV16PassesCoderAloneAndTheOtherThreeTogether",
+            "TestV16PassesCoderAloneAndTheOtherKeysTogether",
             "TestV16ReadsTheFoldersOnlyWithTheirKeys",
             "TestV17RefusesWhatThePersonaCannotBe",
             "TestV18MakesAPersistentReleasesDependenciesSubagents",

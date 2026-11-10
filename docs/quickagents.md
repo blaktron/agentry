@@ -1082,7 +1082,7 @@ and an older one refuses a key it does not know.
 | `imageServers` | servers the runner runs from its own pinned images, `google-workspace` and `microsoft-365`, once the person signs in |
 | `coder` | the coding toolchain: any program in the runner's coding image, open web access for its commands, a public browser, a development host, ports and git host accounts |
 | `web` | the web tools: searching the web and reading pages |
-| `browser` | a headless browser to public websites, in a container of its own that reaches public addresses alone and types no secret; which sites it may open, and whether AI Review reads its pages first, are the person's settings, never the release's |
+| `browser` | a headless browser to public websites; which sites it may open, and whether AI Review reads its pages first, are the person's settings, never the release's |
 | `fetch` | `fetch`, for public addresses only; which hosts it may reach, and whether AI Review reads its responses first, are the person's settings, never the release's |
 | `helper` | Agentry's helper tools: show, install, run and schedule QuickAgents, read their results, list what is installed, open settings and read the docs; each install, schedule change and first run of a new version still asks the person |
 | `review` | AI Review with the person's own key |

@@ -116,11 +116,8 @@ func DeclaredCapabilities(manifestJSON []byte) []string {
 // UnrestrictedNetwork reports whether a manifest asks for the network
 // without naming where: "*" egress, or a browser whose scope is any public
 // site, or a browser line that does not read, which is taken the strict way,
-// or a persistent agent's coding toolchain, browser or fetch
-// (capabilities.persistent.coder, browser or fetch, or a block that does
-// not read): the toolchain's commands reach the open web and its browser
-// any public site, the persistent browser any public site, and fetch any
-// public address, each narrowed only by the person's own settings.
+// or a persistent agent's coder, browser or fetch key (or a block that
+// does not read), none of which names a host.
 // It is the gate's Case.WildcardEgress, which the policy's wildcardEgress
 // decides.
 func UnrestrictedNetwork(manifestJSON []byte) bool {
@@ -175,8 +172,6 @@ func Declaration(manifestJSON []byte) rules.Declared {
 		if p.Coder {
 			d.EgressAny, d.BrowserAny = true, true
 		}
-		// A persistent browser drives any public site, and fetch reaches
-		// any public address: the release names no host for either.
 		if p.Browser {
 			d.BrowserAny = true
 		}

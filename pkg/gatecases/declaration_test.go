@@ -46,8 +46,8 @@ func TestDeclarationReadsEveryField(t *testing.T) {
 // reads them as a browser and egress that name no host.
 func TestDeclarationOfAPersistentBrowserAndFetch(t *testing.T) {
 	for _, c := range []struct {
-		block              string
-		egressAny, browser bool
+		block                 string
+		egressAny, browserAny bool
 	}{
 		{`{"browser":true}`, false, true},
 		{`{"fetch":true}`, true, false},
@@ -55,7 +55,7 @@ func TestDeclarationOfAPersistentBrowserAndFetch(t *testing.T) {
 		{`{"web":true}`, false, false},
 	} {
 		d := Declaration([]byte(`{"modes":["persistent"],"capabilities":{"network":{"egress":"none"},"exec":"none","persistent":` + c.block + `}}`))
-		if d.EgressAny != c.egressAny || d.BrowserAny != c.browser || d.Egress != nil || d.BrowserHosts != nil {
+		if d.EgressAny != c.egressAny || d.BrowserAny != c.browserAny || d.Egress != nil || d.BrowserHosts != nil {
 			t.Errorf("%s declares %+v", c.block, d)
 		}
 	}
