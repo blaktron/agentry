@@ -2,6 +2,7 @@ package managedsettings
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"slices"
@@ -60,12 +61,8 @@ func TestSchemaMatchesCatalogue(t *testing.T) {
 		t.Errorf("schema const %q, want %q", schema.Properties.Schema.Const, Schema)
 	}
 
-	var fields []string
-	typ := reflect.TypeOf(Document{})
-	for i := range typ.NumField() {
-		fields = append(fields, strings.Split(typ.Field(i).Tag.Get("json"), ",")[0])
-	}
-	sort.Strings(fields)
+	// The first schema's documents name no members.
+	fields := slices.DeleteFunc(documentFields(), func(f string) bool { return f == "members" })
 	required := slices.Clone(schema.Required)
 	sort.Strings(required)
 	if !slices.Equal(fields, required) {
@@ -152,5 +149,67 @@ func TestSchemaMatchesCatalogue(t *testing.T) {
 		if lockOnly != r.LockOnly {
 			t.Errorf("%s: schema lock-only %v, catalogue %v", r.ID, lockOnly, r.LockOnly)
 		}
+	}
+}
+
+// documentFields are the Document type's JSON fields, sorted.
+func documentFields() []string {
+	var fields []string
+	typ := reflect.TypeOf(Document{})
+	for i := range typ.NumField() {
+		fields = append(fields, strings.Split(typ.Field(i).Tag.Get("json"), ",")[0])
+	}
+	sort.Strings(fields)
+	return fields
+}
+
+// TestBoundSchemaMatchesDocument holds the second published schema to the
+// Go type: every field of Document required, its schema constant, the
+// first schema's settings by reference, and the binding's shape.
+func TestBoundSchemaMatchesDocument(t *testing.T) {
+	raw, err := os.ReadFile("../../schemas/managed-settings-2.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Required   []string `json:"required"`
+		Properties struct {
+			Schema struct {
+				Const string `json:"const"`
+			} `json:"schema"`
+			Settings struct {
+				Ref string `json:"$ref"`
+			} `json:"settings"`
+			Members struct {
+				Required   []string `json:"required"`
+				Properties struct {
+					Digests struct {
+						MaxItems int `json:"maxItems"`
+						Items    struct {
+							Pattern string `json:"pattern"`
+						} `json:"items"`
+					} `json:"digests"`
+				} `json:"properties"`
+			} `json:"members"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if schema.Properties.Schema.Const != SchemaMembers {
+		t.Errorf("schema const %q, want %q", schema.Properties.Schema.Const, SchemaMembers)
+	}
+	required := slices.Clone(schema.Required)
+	sort.Strings(required)
+	if !slices.Equal(required, documentFields()) {
+		t.Errorf("schema requires %v, Document has %v", required, documentFields())
+	}
+	if want := "managed-settings-1.schema.json#/properties/settings"; schema.Properties.Settings.Ref != want {
+		t.Errorf("settings refer to %q, want %q", schema.Properties.Settings.Ref, want)
+	}
+	m := schema.Properties.Members
+	if !slices.Equal(m.Required, []string{"salt", "digests"}) || m.Properties.Digests.MaxItems != maxMembers ||
+		m.Properties.Digests.Items.Pattern != fmt.Sprintf("^[0-9a-f]{%d}$", 2*digestSize) {
+		t.Errorf("members: %+v", m)
 	}
 }
