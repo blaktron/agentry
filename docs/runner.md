@@ -4947,6 +4947,37 @@ harness does not end a run for repeating: it tells the model, after every
 fifth identical call in a row, to reach the goal another way, and leaves the
 decision to stop to the model and the run's budgets.
 
+### When an answer reaches the output limit
+
+CLI v0.7.55 or later. A model's answer can run into its output limit (the
+`max_tokens` a run sends, [`model.maxOutputTokens`](#the-models-settings-on-a-server-of-your-own)
+or a family's cap): a model caught repeating itself, or one that reasons
+through the whole limit before it replies. On the default harness the run does
+not end there. The harness takes the cut answer out of the conversation, keeps
+a one-line note in its place saying what was cut, and tells the model:
+
+- after a cut answer, that it ran past the limit and may have been repeating
+  itself, and to take one concrete step or give a short final answer;
+- after reasoning that reached the limit with no reply, not to reason it all
+  through again, and to take one concrete step or give a short final answer;
+- after a tool call cut off in its arguments, that the call was not run, and
+  to make it again with complete arguments, split into smaller calls if they
+  are long.
+
+A cut tool call is never run. The cut text is not the run's result and is not
+sent to the model again. This happens at most twice in a run; the second
+message says that another cut answer will end the run. The receipt counts
+each in `usage.lengthRecoveries`, by what was cut (`answer`, `reasoning`,
+`toolCall`).
+
+A run whose last answer still ends at the limit, the third time on the default
+harness or the first on a policy that pins the vendor's docker-agent image,
+fails with exit class `harness` and the reason `answer-cut`: its answer is
+incomplete. The envelope's `result` keeps the cut text for you to read. The
+run is not started again on its conversation, which would meet the same
+limit. A larger `model.maxOutputTokens` gives the model more room. Before
+CLI v0.7.55 such a run ended successfully with the cut text as its result.
+
 ### The model's settings on a server of your own
 
 CLI v0.7.53 or later. A model on a server of your own (`custom`, or `openai`
@@ -5792,6 +5823,7 @@ model, the author or the person wrote; at most eight), for some codes a
 | `out-of-credits` | the agent: the model's provider answered 402, or said so: the account that pays has no credits (exit 16; never retried) | none | — |
 | `answer-in-reasoning` | the output: the release's output is schema-checked and the model ended the run on its reasoning, with no final message after it (exit 17); the reasoning is never taken as the result | none | — |
 | `tool-call-as-text` | the output: the model's final message is a tool call written in its own markup, which its provider's server did not parse into a call, so the agent stopped before it finished (exit 14; a one-shot run with a text result, CLI v0.6.1000 or later). The message stays the run's `result` and in the receipts. A local model's server must parse the model's tool calls (its chat template or tool-call setting) | none | — |
+| `answer-cut` | the agent: the model's last answer stopped at its [output limit](#when-an-answer-reaches-the-output-limit), so the run has no complete answer (exit 14; never started again) | none | — |
 | `host-refused` | readying a [target host](#target-hosts-a-server-named-at-run-time) before anything starts, or the host link's sign-in when the gateway starts it: a host the run will not reach (exit 11, except `host-unreachable` at the host link's start, exit 13) | the target host's question id (never its name or address) | `host-address` (an address a target host never is, one the policy's `hosts` lists exclude, or a name with no IPv4 address), `host-key-unknown` (a key on no file, not accepted at a terminal), `host-key-changed` (a key other than the one on file, or a revoked one), `host-auth` (the host did not accept the sign-in), `host-credential` (no sign-in given, or one that cannot be used; also an unanswered host), `host-unreachable` (the host did not answer on its port), `hosted` (a hosted run never reaches a target host) |
 | `desktop-refused` | binding the run to Agentry Desktop before anything starts ([the person's computer](#the-persons-computer-capabilitiesdesktop)): an application on your computer the run will not reach (exit 11) | the applications' ids (`blender`; `chosen` for one the person chooses; `computer` for computer use) | `desktop-unavailable` (no Agentry Desktop answers on this computer), `desktop-not-installed` (the installed server or its application is not ready), `desktop-not-granted` (computer use not granted in the scope the release asks, or not given by the computer's own system), `hosted` (a hosted run never reaches your computer); a call refused while the run goes on is not the run's reason, and is counted in the receipt's `desktop.<id>` line instead: `desktop-paused`, `desktop-stopped`, `desktop-declined`, `outside-window`, `desktop-unreachable` |
 
