@@ -534,6 +534,7 @@ has it. Installing a published agent needs CLI v0.6.1015 or later.
 | `attach <name> --json` | `chat` for a program ([below](#attach-for-a-program)); refused without `--json` and on Windows | required |
 | `grant <name> <entry> on\|off [--yes]` | switches a roster entry; a running agent takes it at its next turn | yes: the roster |
 | `configure <name> …` | name, personality, saved model, share folder, servers, packs, ports, dev server; flags below | yes: the roster |
+| `connect <name> [address] [--again\|--remove]` | signs in to the agent's remote servers that sign in by OAuth, with your own connection, on a terminal; `--again` makes a working one again, `--remove` removes them ([a persistent agent's connections](#a-persistent-agents-connections); CLI v0.7.53 or later) | no |
 | `reset <name> [--confirm NAME]` | puts the agent back to its defaults, stopping a running one first; asks for the agent's name, or takes `--confirm` with no terminal | no |
 
 `start` needs the agent enabled, the container engine available and the
@@ -544,7 +545,9 @@ installed agent is enabled and left stopped by `install`.
 `usage`, `volumes`, `stateDir`, `share`, `roster` and `transcript`.
 
 `reset` removes the agent's two volumes, its transcript, usage totals, share
-verdicts and installed servers, and every choice in `config.yaml` but whether
+verdicts and installed servers, the connections its servers signed in with
+(revoked at the vendor where the vendor offers it; CLI v0.7.53 or later), and
+every choice in `config.yaml` but whether
 the agent is enabled (its name, personality, servers, packs, switches,
 agreements, share folder, ports, dev server and run-on-start). It keeps the
 segments' receipts, every file in the share folder, model sign-ins and a dev
@@ -1162,8 +1165,10 @@ agent's grant, packs, servers, subagents.
 | `subagent:<ns>/<name>:ask` | `subagent` | off | you |
 
 An entry's state is `on`, `off`, `pending` (switched since the running segment
-started; the next turn applies it), `needs-sign-in` (an OAuth server, which
-cannot be switched on), or, in a segment's envelope, `not-applied` (switched on,
+started; the next turn applies it), `needs-sign-in` (a remote server that
+signs in by OAuth and has no working connection, whose reason names
+`agentry agent connect`; or a package server that signs in by OAuth, which
+a persistent agent is not given and which cannot be switched on), or, in a segment's envelope, `not-applied` (switched on,
 then off again because the next segment could not start with it). Its **sentence** says what it gives the agent.
 
 **Agreement.** Turning an entry on records its sentence in `consented`; an
@@ -1608,6 +1613,40 @@ its own; the same version's later runs reuse it without asking.
 
 What the vendor's server does with the access it is granted is not something
 the run checks: the consent screen and the scopes are where you decide it.
+
+#### A persistent agent's connections
+
+A remote server on a persistent agent that signs in by OAuth (`auth:
+oauth`), whether you added it or your organization's managed settings put it
+on the agent, signs in with a connection of yours too (CLI v0.7.53 or
+later). It is kept for **the agent**, not for a release: its key names the
+agent (`agent:<name>` in `agentry connections list`), so it outlives the
+agent's updates.
+
+- **Making it.** `agentry agent connect <name>` on a terminal, for each of
+  the agent's servers that signs in, or the one at the address you name. The
+  consent is the one above: the issuer, the client and the scopes, then the
+  vendor's screen. A server already connected is left alone; `--again` makes
+  its connection again.
+- **What a segment gets.** The server's access token alone, refreshed by the
+  runner before the segment starts and renewed before it expires while the
+  segment runs. The refresh token and any client secret stay in the store on
+  your computer. The segment's redactor masks the token, and the roster and
+  the segment's envelope record the server, never the token.
+- **Without one.** A server that is on and has no working connection (none
+  yet, one the vendor refused, or a refresh that failed) is left out of the
+  segment, which starts without it. The roster shows it `needs-sign-in`, and
+  its reason says to run `agentry agent connect`. A connection made or
+  broken while the agent runs is taken at its next turn.
+- **Removing it.** `agentry agent connect <name> --remove` (or with the
+  server's address, that one), or a full `agentry agent reset`. Either
+  revokes it at the vendor where the vendor offers it. `reset
+  --keep-credentials` keeps it.
+- **Not given.** A package server with an `oauth` block. It stays
+  `needs-sign-in` and cannot be switched on. A server that signs in by OAuth
+  is never given the agent's share folder.
+- **A runhost's agent** reads the runhost's own store, so a connection made
+  on your computer does not reach it.
 
 **Known vulnerabilities.** Before a declared server is resolved, the runner
 asks the registry what its scan and daily sweep recorded for that exact
@@ -5420,13 +5459,13 @@ on, so nothing outranks the sign-in.
 
 **Which harness.** The `claude-image` adapter: Claude Code, unmodified, in an
 image your computer builds at first use and nobody publishes, because Claude
-Code's licence grants no redistribution. The image is `agentry-claude-code:2.1.296`,
-built from `@anthropic-ai/claude-code@2.1.296` and its musl native package on
+Code's licence grants no redistribution. The image is `agentry-claude-code:2.1.322`
+(CLI v0.7.53 or later), built from `@anthropic-ai/claude-code@2.1.322` and its musl native package on
 agentry-dockerimages' `agentry-node-alpine` base. The policy's pin is the npm
 integrity of the first package (the `artifact` of the CLI's default
 `images.harnessImages.claude-image`, `sha512-…`); the CLI also carries the native package's, and holds both
 downloads to them before docker is touched, so a package whose bytes differ
-builds nothing. The native package is about 110 MB. The receipt's
+builds nothing. The native package is about 150 MB. The receipt's
 `harness.imagePin` reads `artifact sha512-…`, and the label is the build's own
 word: anyone with the docker daemon could tag another image that way. An
 image built under an older recipe of the Dockerfile is built again the next time
