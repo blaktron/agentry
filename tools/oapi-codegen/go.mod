@@ -1,6 +1,6 @@
 module github.com/blaktron/agentry/tools/oapi-codegen
 
-go 1.27.3
+go 1.27.4
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 
