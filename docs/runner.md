@@ -1838,6 +1838,8 @@ its digest, so a run record says which file a run obeyed.
 | `providers` / `models` / `default` | a version 2 policy's providers, up to 10 saved models and the default ([providers and saved models](#the-policy-version-2)); a version 2 file has no `model` block |
 | `model.provider` / `model.name` / `model.apiKeyEnv` / `model.baseUrl` | a version 1 policy's one model, which reads as one provider and the default saved model; the key env var name is yours |
 | `model.contextWindow` | the model's context window in tokens, 1,024 to 2^30 (CLI v0.7.9 or later): the harness compacts the conversation as it nears it, and a model the harness cannot look up without it fails once the endpoint refuses the conversation as too long. Unset, the harness looks the model up itself. `agentry setup` fills it for a model server of your own ([above](#agentry-setup)); where set, it wins over the harness's own figure. From CLI v0.7.20 it also sizes a run's pages ([pages](#one-tool-result-at-a-time-pages)). From CLI v0.7.28, a run on a model server of your own with none here asks the server for it, for that run only |
+| `model.sampling` | (CLI v0.7.53 or later) the sampling for a model on a server of your own, each key optional: `temperature` (0 to 2), `topP` (0 to 1), `topK` (0 to 100,000), `minP` (0 to 1), `presencePenalty` (-2 to 2), `repetitionPenalty` (0 to 2). Each key you set replaces the one from [the model's family](#the-models-settings-on-a-server-of-your-own); the rest keep theirs. Hosted models ignore it |
+| `model.maxOutputTokens` | (CLI v0.7.53 or later) the longest one answer may be, in tokens, for a model on a server of your own. It replaces the cap from the model's family, and sets one where the family has none |
 | `model.apiKeyKind` | (version 1; a provider's `apiKeyKind` in version 2) what pays for the model: `api` (the default), `subscription`, or a [model sign-in](#the-credential-kinds) kind: `chatgpt-plan`, `claude-signin`, `copilot-signin` (setup writes these) |
 | `model.proxyAllow` | (version 1; a provider's `proxyAllow` in version 2) host:port list — the agent container's **only** egress; a model sign-in kind fixes it to the vendor's hosts |
 | `allowWildcardEgress` | gates manifest `egress: "*"` (default false → refused, exit 11); where the docker filter runs, that tools server reaches out from a network of the run's own, and under `docker.runtime` it needs `docker.resolvers` or the plan is refused (exit 11; CLI v0.6.122 or later) — [below](#the-hosts-name-servers-dockerresolvers) |
@@ -3496,7 +3498,7 @@ limits, none of which needs the window:
   sends anything. Hosted models keep 5 minutes.
 
 **When the server refuses the conversation as too long** (CLI v0.7.25 or
-later, whose default harness is Agentry's build of docker-agent 1.157.2).
+later, whose default harness is Agentry's build of docker-agent 1.157.2 or later).
 docker-agent recognises the refusal of llama.cpp, LM Studio, vLLM and
 OpenAI-compatible servers, compacts the conversation and sends the request
 again. With no window recorded it compacts against the window the refusal
@@ -3575,6 +3577,22 @@ declared MCP server's own results are its own, and settings a person can
 change in a harness (Claude Code's `MAX_MCP_OUTPUT_TOKENS`, Copilot's
 `COPILOT_LARGE_OUTPUT_THRESHOLD_BYTES`) are outside what the budget
 assumes.
+
+### A call repeated without a change
+
+CLI v0.7.53 or later. The runner's tools server counts, across a whole run,
+each call by its tool and arguments, and each failure by its tool and error.
+When the same call returns the same result a third time, or the same tool
+fails with the same error a third time, a short note follows the result:
+
+> Note: this is call 3 with these arguments, and the result has not changed.
+> Take a different step toward the goal, read the checklist, or finish.
+
+It comes again at the sixth. The call itself runs and its result is unchanged;
+the note never refuses a call. A call whose result changed is not a repeat,
+and the `checklist` tool is never counted. This works on every harness, and
+sees a repeat whatever came between, where a harness's own check sees only
+calls in a row.
 
 ### PDF reports: `export_pdf`
 
@@ -4862,6 +4880,59 @@ A conversation that outgrew a window the harness cannot compact in usually
 outgrows it again when it is resumed, so the resumes run out and the run fails
 as before. Record the model's window (`model.contextWindow`) so the harness
 compacts in time.
+
+### When the model stops without an answer
+
+CLI v0.7.53 or later. Some models, reasoning ones served locally most of all,
+end a turn with an empty answer, or with reasoning and no reply, while their
+task is unfinished. When an autonomous run under docker-agent ends that way
+after its first tool call, the runner starts the harness again on the run's
+conversation with one message:
+
+> Your last turn ended without a reply. Continue the task from where you are,
+> or give your final answer now.
+
+It asks at most twice. These starts share their limit of two with the
+[finish check](#the-envelopes-checklist-block), so a run is started again at
+most twice in all for either reason. A run that ended blocked, or that has
+too little time left, is not asked. The run's stderr announces each start, its
+usage and budgets count every one, and the envelope's `restarts` lists each
+with its `reason` (`empty_answer`, `reasoning_only_answer`, `finish_check` or
+`loop_detected`) and the message sent. The third ending stands, and the run's
+result is what the model gave then.
+
+A run on a harness that ends the run when the same call repeats (the
+`loop_detected` reason) is started again the same way, asked to take a
+different step, to finish with what it has, or to end as blocked. The default
+harness does not end a run for repeating: it tells the model, after every
+fifth identical call in a row, to reach the goal another way, and leaves the
+decision to stop to the model and the run's budgets.
+
+### The model's settings on a server of your own
+
+CLI v0.7.53 or later. A model on a server of your own (`custom`, or `openai`
+with a `baseUrl`) is sent the settings its maker recommends for its family,
+found from the model's name:
+
+- **Sampling**: temperature, `top_p`, and where the maker gives them `top_k`,
+  `min_p`, a presence penalty or a repetition penalty. Several makers name a
+  presence penalty as the cure for a model that repeats itself without end.
+- **A cap on one answer** (`max_tokens`): the longest answer the maker's card
+  shows, held to a quarter of the model's window. Without a cap a server
+  generates until the model stops, and a model caught repeating itself does
+  not stop. A family whose card gives no length gets no cap.
+- **Reasoning**: whether the chat template is told to reason
+  (`enable_thinking`), and whether earlier turns' reasoning is sent back. Some
+  templates read earlier reasoning only when it is sent back, and others are
+  trained without it.
+
+The families are NVIDIA Nemotron 3 and 3.5, Qwen3.5, 3.6 and 3.8 and
+Qwen3-Coder, DeepSeek, GLM, Kimi, MiniMax, Mistral (Magistral, Small 4, Large
+4, Devstral), Gemma 4 and Granite 4.2, with the values their model cards gave
+on 2026-11-10. A model of another family is sent nothing more than before,
+and the server's own defaults apply. `model.sampling` and
+`model.maxOutputTokens` in the policy replace a family's values key by key.
+Hosted models are sent nothing new.
 
 ## Providers and saved models
 
