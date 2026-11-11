@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentry.example/schemas/managed-settings-2.schema.json",
+  "title": "Agentry managed settings document bound to its members (schema managed-settings/2)",
+  "description": "The payload of a managed settings envelope that the registry binds to the accounts it is for. A registry that signs several documents for one organization at one version, one for each combination of teams with settings, binds each to its members, so that a member who holds another member's document cannot put it in place of their own. Everything managed-settings-1.schema.json says holds, and in addition a client applies the document only when members names the account it is signed in as. Closed schema: unknown keys are invalid.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "registry",
+    "org",
+    "version",
+    "issuedAt",
+    "settings",
+    "members"
+  ],
+  "properties": {
+    "schema": {
+      "const": "managed-settings/2"
+    },
+    "registry": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Base URL of the registry that signed the document."
+    },
+    "org": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Handle of the organization whose settings these are. A client accepts the document only while the signed-in account is an active member of it."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Increases with every change the organization's admins make. A client refuses a version lower than the last it accepted from the same organization."
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the registry signed this version."
+    },
+    "settings": {
+      "$ref": "managed-settings-1.schema.json#/properties/settings"
+    },
+    "members": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "salt",
+        "digests"
+      ],
+      "description": "The accounts the document is for. Each digest is the first 16 bytes of SHA-256 over the bytes \"agentry managed-settings member\", a zero byte, the salt and the account's id, so the document names its members only to a client that knows its own account.",
+      "properties": {
+        "salt": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{22}==$",
+          "description": "16 random bytes drawn for this document, base64 (standard, padded)."
+        },
+        "digests": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "description": "Sorted, distinct lowercase hex digests, one for each account.",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          }
+        }
+      }
+    }
+  }
+}

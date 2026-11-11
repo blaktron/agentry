@@ -1375,6 +1375,7 @@
             "TestManagedSettingsNilAnswerIsNoContent",
             "TestManagedSettingsSourceErrorIsInternal",
             "TestManagedSettingsSignedAndServed",
+            "TestManagedSettingsBoundToTheCaller",
             "TestManagedSettingsKeylessRoleServesWhatTheKeyHolderSigned",
             "TestManagedSettingsRefusesWhatItCannotVerify",
             "TestManagedSettingsRefusesAnotherRegistrysDocument",
@@ -5136,9 +5137,24 @@
           "dependencyHints": []
         },
         {
+          "path": "pkg/managedsettings/members_test.go",
+          "tests": [
+            "TestABoundDocumentIsRefusedForAnotherMember",
+            "TestAnUnboundDocumentAppliesToAnyAccount",
+            "TestEachBindingDrawsItsOwnSalt",
+            "TestBindMembersRefusesNoneAndEmpty",
+            "TestValidateHoldsTheSchemaToItsMembers"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
           "path": "pkg/managedsettings/schema_test.go",
           "tests": [
-            "TestSchemaMatchesCatalogue"
+            "TestSchemaMatchesCatalogue",
+            "TestBoundSchemaMatchesDocument"
           ],
           "fuzz": [],
           "benchmarks": [],

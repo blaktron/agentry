@@ -770,9 +770,13 @@ paths:
         `application/vnd.agentry.managed-settings+json` signed with the
         registry's release-signing key (the keys at
         `/.well-known/agentry/signing-keys.json`). The payload is described
-        by `schemas/managed-settings-1.schema.json`. The registry sets its
-        `registry` and `account` fields, and a client accepts a document
-        only from the registry and for the account it is signed in to. A
+        by `schemas/managed-settings-1.schema.json`, or, for a document
+        bound to the members it is for, `schemas/managed-settings-2.schema.json`.
+        The registry sets its `registry` field and, in a bound document, its
+        `members`. A client accepts a document only from the registry it is
+        signed in to, and a bound one only when `members` names the
+        signed-in account; the registry never serves a bound document to an
+        account it does not name. A
         locked setting is one the member cannot change; one that is not
         locked is an organization default. The answer is 204 when no
         settings apply to the caller, and 503 when the registry has no

@@ -29,6 +29,12 @@ type ManagedSettingsSigner interface {
 	// Sign validates the settings against the catalogue, binds them to
 	// this registry and the organization, and signs them.
 	Sign(org string, version int64, settings map[string]managedsettings.Setting) (managedsettings.Envelope, error)
+	// SignFor signs them as Sign does, bound to the accounts (user ids)
+	// they are for: a document of the members schema, which a client
+	// applies only for an account it names. The registry signs this way
+	// whenever it signs more than one document for an organization at one
+	// version, so that no member can use another's in place of their own.
+	SignFor(org string, version int64, settings map[string]managedsettings.Setting, accounts []string) (managedsettings.Envelope, error)
 	// KeyID is the signing key's id: a stored envelope without a
 	// signature by it was signed before a rotation and wants signing
 	// again.
@@ -67,14 +73,21 @@ func (s *Server) registryURL() string { return strings.TrimRight(s.cfg.BaseURL, 
 type managedSettingsSigner struct{ s *Server }
 
 func (m managedSettingsSigner) Sign(org string, version int64, settings map[string]managedsettings.Setting) (managedsettings.Envelope, error) {
-	payload, err := managedsettings.Seal(managedsettings.Document{
-		Schema:   managedsettings.Schema,
-		Registry: m.s.registryURL(),
-		Org:      org,
-		Version:  version,
-		IssuedAt: time.Now().UTC().Truncate(time.Second),
-		Settings: settings,
-	})
+	return m.sign(managedsettings.Document{Schema: managedsettings.Schema, Org: org, Version: version, Settings: settings})
+}
+
+func (m managedSettingsSigner) SignFor(org string, version int64, settings map[string]managedsettings.Setting, accounts []string) (managedsettings.Envelope, error) {
+	members, err := managedsettings.BindMembers(accounts)
+	if err != nil {
+		return managedsettings.Envelope{}, err
+	}
+	return m.sign(managedsettings.Document{Schema: managedsettings.SchemaMembers, Org: org, Version: version, Settings: settings, Members: members})
+}
+
+// sign binds d to this registry and the time, seals it and signs it.
+func (m managedSettingsSigner) sign(d managedsettings.Document) (managedsettings.Envelope, error) {
+	d.Registry, d.IssuedAt = m.s.registryURL(), time.Now().UTC().Truncate(time.Second)
+	payload, err := managedsettings.Seal(d)
 	if err != nil {
 		return managedsettings.Envelope{}, err
 	}
@@ -120,7 +133,7 @@ func (s *Server) GetUserManagedSettings(w http.ResponseWriter, r *http.Request) 
 			"This registry has no base URL configured, so it cannot serve managed settings.")
 		return
 	}
-	if err := s.checkManagedSettings(ctx, *env); err != nil {
+	if err := s.checkManagedSettings(ctx, *env, p.UserID.String()); err != nil {
 		s.log.ErrorContext(ctx, "managed settings: stored envelope refused", "user", p.UserID, "from", s.managedSettings.from, "err", err)
 		writeProblem(w, r, http.StatusServiceUnavailable, "managed-settings-unverified",
 			"Managed settings unavailable",
@@ -131,8 +144,9 @@ func (s *Server) GetUserManagedSettings(w http.ResponseWriter, r *http.Request) 
 }
 
 // checkManagedSettings opens a stored envelope with the keys this registry
-// advertises and checks that it names this registry.
-func (s *Server) checkManagedSettings(ctx context.Context, env managedsettings.Envelope) error {
+// advertises and checks that it names this registry and applies to the
+// caller's account.
+func (s *Server) checkManagedSettings(ctx context.Context, env managedsettings.Envelope, account string) error {
 	lastErr := errors.New("no signing key is advertised")
 	for _, k := range s.signingKeySet(ctx) {
 		doc, err := managedsettings.Open(env, k.PublicKey)
@@ -143,7 +157,7 @@ func (s *Server) checkManagedSettings(ctx context.Context, env managedsettings.E
 		if doc.Registry != s.registryURL() {
 			return errors.New("the document names another registry: " + doc.Registry)
 		}
-		return nil
+		return doc.For(account)
 	}
 	return lastErr
 }
