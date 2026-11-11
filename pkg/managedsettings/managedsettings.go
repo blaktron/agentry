@@ -37,8 +37,9 @@ import (
 // payload type refuses a document as an attestation.
 const PayloadType = "application/vnd.agentry.managed-settings+json"
 
-// Schema names this version of the document's shape. A client refuses a
-// document whose schema it does not know.
+// Schema names the document's shape when every member of the organization
+// receives it alike. A client refuses a document whose schema it does not
+// know; SchemaMembers is the other shape.
 const Schema = "managed-settings/1"
 
 // Document is one member's managed settings.
@@ -60,6 +61,10 @@ type Document struct {
 	IssuedAt time.Time `json:"issuedAt"`
 	// Settings maps a catalogue id to its value.
 	Settings map[string]Setting `json:"settings"`
+	// Members binds the document to the accounts it is for. A document
+	// of SchemaMembers has it; one of Schema, which every member of the
+	// organization receives alike, has none.
+	Members *Members `json:"members,omitempty"`
 }
 
 // Setting is one managed value.
@@ -848,8 +853,12 @@ func (d Document) Validate() error {
 
 func (d Document) validate(allowUnknown bool) error {
 	switch {
-	case d.Schema != Schema:
-		return fmt.Errorf("managed settings: schema %q, want %q", d.Schema, Schema)
+	case d.Schema != Schema && d.Schema != SchemaMembers:
+		return fmt.Errorf("managed settings: schema %q, want %q or %q", d.Schema, Schema, SchemaMembers)
+	case d.Schema == Schema && d.Members != nil:
+		return fmt.Errorf("managed settings: a document of %q must not name members", Schema)
+	case d.Schema == SchemaMembers && d.Members == nil:
+		return fmt.Errorf("managed settings: a document of %q must name its members", SchemaMembers)
 	case d.Registry == "":
 		return errors.New("managed settings: no registry")
 	case d.Org == "":
@@ -858,6 +867,11 @@ func (d Document) validate(allowUnknown bool) error {
 		return errors.New("managed settings: version must be at least 1")
 	case d.IssuedAt.IsZero():
 		return errors.New("managed settings: no issue time")
+	}
+	if d.Members != nil {
+		if err := d.Members.validate(); err != nil {
+			return err
+		}
 	}
 	return validateSettings(d.Settings, allowUnknown)
 }
@@ -891,10 +905,10 @@ func Wrap(payload []byte, sig attest.DSSESignature) Envelope {
 // refuses another payload type, another schema, a field the format does
 // not have, and a known row with a value it does not take. A row whose id
 // this catalogue does not know is kept, for the caller to judge through
-// Unknown: a newer registry may add rows. It does not check Registry, Org
-// or Version: the caller compares them with the registry it is signed in
-// to, the organization it is a member of, and the last version it
-// accepted.
+// Unknown: a newer registry may add rows. It does not check Registry, Org,
+// Version or Members: the caller compares them with the registry it is
+// signed in to, the organization it is a member of, the last version it
+// accepted, and the account it is signed in as (For).
 func Open(env Envelope, publicKeyPEM string) (Document, error) {
 	payload, err := attest.VerifyPayload(env, publicKeyPEM, PayloadType)
 	if err != nil {

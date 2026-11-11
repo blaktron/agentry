@@ -168,6 +168,40 @@ func TestManagedSettingsSignedAndServed(t *testing.T) {
 	}
 }
 
+// TestManagedSettingsBoundToTheCaller: a document signed for some members
+// of an organization is served to an account it names and never to another,
+// so the registry never hands a member a document their client would
+// refuse.
+func TestManagedSettingsBoundToTheCaller(t *testing.T) {
+	var stored *managedsettings.Envelope
+	var signer api.ManagedSettingsSigner
+	env := newTestEnvCfg(t, withRegistryURL, servingEnvelope(&stored), func(s *api.Server) { signer = s.ManagedSettingsSigner() })
+	member, other := env.register("ms-bound"), env.register("ms-other")
+	signed, err := signer.SignFor("acme", 7, forbidUnsafe(), []string{env.userID(member)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored = &signed
+
+	res, got := getManagedSettings(t, env, env.login(member))
+	if res.StatusCode != http.StatusOK || got.Payload != signed.Payload {
+		t.Fatalf("the member it names: status %d", res.StatusCode)
+	}
+	var doc managedsettings.Document
+	for _, k := range env.allSigningKeys(t) {
+		if d, err := managedsettings.Open(got, k.PublicKey); err == nil {
+			doc = d
+			break
+		}
+	}
+	if doc.Schema != managedsettings.SchemaMembers || doc.For(env.userID(member)) != nil || doc.For(env.userID(other)) == nil {
+		t.Fatalf("document %+v is not bound to the member alone", doc)
+	}
+	if res, _ := getManagedSettings(t, env, env.login(other)); res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("another account: status %d, want 503", res.StatusCode)
+	}
+}
+
 // TestManagedSettingsKeylessRoleServesWhatTheKeyHolderSigned is the split
 // deployment: the worker holds the key and signs, the api holds none and
 // serves the stored envelope, checking it against the key the record

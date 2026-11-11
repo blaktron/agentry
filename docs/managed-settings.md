@@ -67,9 +67,13 @@ follows:
 5. Refuse a document from the same organization whose `version` is lower
    than the last one the client accepted. A document carries no expiry, so
    without this check an older, looser copy could be replayed.
+6. When the document is bound to its members (schema `managed-settings/2`,
+   below), accept it only if `members` names the signed-in account. Check
+   this every time the client loads a document, its own cached copy
+   included.
 
 The Go package `github.com/blaktron/agentry/pkg/managedsettings` does steps 1
-to 3 (`Open`). The caller does steps 4 and 5.
+to 3 (`Open`) and step 6 (`Document.For`). The caller does steps 4 and 5.
 
 ## The document
 
@@ -99,6 +103,38 @@ The payload is described by
   When it is a default, the client passes over it.
 - A field outside `settings` is a new version of the document, with a new
   `schema` value. A client refuses a schema it does not know.
+
+### Documents bound to their members
+
+An organization whose admins set settings for teams has more than one
+document at each version: one for each combination of teams that some
+member belongs to, and one for the members in none of them. The registry
+binds each of these to the accounts it is for, so that a member who holds a
+colleague's document cannot put it in place of their own. Such a document has
+the schema `managed-settings/2`, described by
+`schemas/managed-settings-2.schema.json`, and one more field:
+
+```json
+"members": {
+  "salt": "q3T1Yk0Cq8n2vZb6m4V0xw==",
+  "digests": ["0c4f…", "9a17…"]
+}
+```
+
+- `salt` is 16 random bytes, base64, drawn for this document.
+- `digests` holds one entry for each account the document is for: the first
+  16 bytes of SHA-256 over the bytes `agentry managed-settings member`, a
+  zero byte, the salt and the account's id, in lowercase hex, sorted. The
+  document names its members only to a client that knows its own account.
+- A client accepts it only if the digest of its signed-in account's id is
+  in the list. When a member joins or leaves a team, the registry signs the
+  documents again at the same version.
+
+An organization without team settings has one document at each version,
+which every member receives alike, with the schema `managed-settings/1` and
+no `members`. Team settings need Agentry CLI 0.7.55 or later, or a desktop
+that includes it, since an older client refuses the second schema and keeps
+the copy it already holds.
 
 ## The catalogue
 
