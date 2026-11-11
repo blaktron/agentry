@@ -146,8 +146,8 @@ capability of their own:
   remote server may have (`https`, a public host, port 443, no query, at
   most 512 characters) and `oauth` or `none` to sign in with. The
   organization delivers no secret for them: an `oauth` server signs in with
-  the member's connection, or through the organization's identity provider
-  for a server it manages.
+  the member's own connection, made with `agentry agent connect` (CLI v0.7.53
+  or later), and until then the agent starts without it.
 - **packs**: a list of at most 20 of the organization's shared knowledge
   packs, by name.
 - **tool models**: `{"claude-code": …, "codex": …, "copilot": …}`, any of
