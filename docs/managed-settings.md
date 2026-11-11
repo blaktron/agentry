@@ -268,6 +268,68 @@ deletes the key when no document names it, or when the member leaves the
 organization. A key on a member's computer can be read by whoever
 administers that computer, as the member's own keys can.
 
+## Machine settings
+
+Machine settings are managed settings that the administrator of a computer
+deploys: with a mobile device management configuration profile, Group
+Policy, or their own tools. Agentry's CLI reads them from v0.7.55. Agentry
+Desktop holds its runs to their settings and `requireOrg` from the release
+built on that CLI. The desktop's own registry choice is not pinned by them.
+They need no registry feature, so a self-hosted deployment can use them too.
+
+| System | Where |
+|---|---|
+| Linux and other Unix systems | `/etc/agentry/managed.json` |
+| macOS | the managed preferences domain `net.secureagentry.agentry`, `/Library/Managed Preferences/net.secureagentry.agentry.plist` (a configuration profile's payload) |
+| Windows | the values `Registry`, `RequireOrg` and `Settings` of `HKLM\SOFTWARE\Policies\SecureAgentry\Agentry` |
+
+The file holds three keys, each optional. On macOS they are the profile
+payload's keys, and on Windows they are string values, with `Settings` as a
+JSON object in a string.
+
+```json
+{
+  "registry": "https://secureagentry.net",
+  "requireOrg": "acme",
+  "settings": {
+    "run.unsafeMode": { "value": "forbidden", "locked": true }
+  }
+}
+```
+
+- **`registry`** pins the registry. The client uses it whatever `--registry`,
+  `AGENTRY_REGISTRY` or the client's own configuration names, and says once
+  that the other registry is not used. It must be an `https` address, or
+  `http` on this computer's own address.
+- **`requireOrg`** is an organization's handle on the pinned registry. Until
+  the person is signed in there as an active member of it, no run starts.
+  The refusal names the organization and the sign-in command. Membership is
+  known from that organization's signed document, so the organization must
+  hold at least one managed setting for its members.
+- **`settings`** are catalogue settings, each locked or a default, as in an
+  organization's document. They come before every organization's settings,
+  so a lock set here wins, and they stay in force when the person signs out.
+  A source (`model.source`, `review.source`, `webSearch.source`) may be
+  `member` or `off` here. An organization's key or credits need a registry's
+  document.
+
+**Who can write it.** On Linux, other Unix systems and macOS, the file and
+every folder above it must belong to root and be writable by no group or
+other, and the file must be a regular file. Otherwise the client cannot use
+the settings. No run starts, and every command that picks a registry stops,
+because the administrator's registry is then unknown; the refusal says why. `HKLM\SOFTWARE\Policies`
+on Windows is writable by administrators alone. `agentry managed show` lists
+the machine settings, where they were read, the pinned registry and the
+required organization. Its `--json` output carries them under `machine`.
+
+**What they do not stop.** Machine settings govern Agentry's own clients.
+They raise what it takes to lift a lock from "the person" to "this
+computer's administrator", which is where a computer managed by an IT
+department already is. A person who administers their own computer can
+still remove the settings, uninstall the client or run a modified build.
+Machine settings are not tamper-proofing against the computer's
+administrator.
+
 ## For an extension
 
 An extension implements `extension.ManagesSettings`:
