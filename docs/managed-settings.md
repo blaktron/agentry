@@ -308,10 +308,9 @@ administers that computer, as the member's own keys can.
 
 Machine settings are managed settings that the administrator of a computer
 deploys: with a mobile device management configuration profile, Group
-Policy, or their own tools. Agentry's CLI reads them from v0.7.55. Agentry
-Desktop holds its runs to their settings and `requireOrg` from the release
-built on that CLI. The desktop's own registry choice is not pinned by them.
-They need no registry feature, so a self-hosted deployment can use them too.
+Policy, or their own tools. Agentry's CLI reads them from v0.7.55, and
+Agentry Desktop from 0.7.43. They need no registry feature, so a
+self-hosted deployment can use them too.
 
 | System | Where |
 |---|---|
@@ -335,11 +334,13 @@ JSON object in a string.
 
 - **`registry`** pins the registry. The client uses it whatever `--registry`,
   `AGENTRY_REGISTRY` or the client's own configuration names, and says once
-  that the other registry is not used. It must be an `https` address, or
+  that the other registry is not used. Agentry Desktop lists no other
+  registry, adds none and sends a sign-in to no other. It must be an `https` address, or
   `http` on this computer's own address.
 - **`requireOrg`** is an organization's handle on the pinned registry. Until
   the person is signed in there as an active member of it, no run starts.
-  The refusal names the organization and the sign-in command. Membership is
+  The refusal names the organization and the sign-in command, and Agentry
+  Desktop opens on its sign-in with the same sentence. Membership is
   known from that organization's signed document, so the organization must
   hold at least one managed setting for its members.
 - **`settings`** are catalogue settings, each locked or a default, as in an
@@ -357,6 +358,17 @@ because the administrator's registry is then unknown; the refusal says why. `HKL
 on Windows is writable by administrators alone. `agentry managed show` lists
 the machine settings, where they were read, the pinned registry and the
 required organization. Its `--json` output carries them under `machine`.
+
+**Templates.** Each release of the CLI and of Agentry Desktop carries
+`agentry-<version>-machine-settings-templates.zip` (the desktop's is
+`agentry-desktop-<version>-machine-settings-templates.zip`), listed in the
+release's signed `SHA256SUMS`. It holds `agentry.admx` and
+`en-US/agentry.adml`, an administrative template for Group Policy and
+Intune with the three values, and `agentry.mobileconfig`, a sample macOS
+configuration profile for the managed preferences domain. Download it from
+the release on [the CLI's releases](https://github.com/blaktron/agentry-cli/releases)
+or [the desktop's](https://github.com/blaktron/agentry-desktop/releases),
+and check it against the release's sums as you would a binary.
 
 **What they do not stop.** Machine settings govern Agentry's own clients.
 They raise what it takes to lift a lock from "the person" to "this
