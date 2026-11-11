@@ -5420,13 +5420,13 @@ on, so nothing outranks the sign-in.
 
 **Which harness.** The `claude-image` adapter: Claude Code, unmodified, in an
 image your computer builds at first use and nobody publishes, because Claude
-Code's licence grants no redistribution. The image is `agentry-claude-code:2.1.296`,
-built from `@anthropic-ai/claude-code@2.1.296` and its musl native package on
+Code's licence grants no redistribution. The image is `agentry-claude-code:2.1.322`
+(CLI v0.7.53 or later), built from `@anthropic-ai/claude-code@2.1.322` and its musl native package on
 agentry-dockerimages' `agentry-node-alpine` base. The policy's pin is the npm
 integrity of the first package (the `artifact` of the CLI's default
 `images.harnessImages.claude-image`, `sha512-…`); the CLI also carries the native package's, and holds both
 downloads to them before docker is touched, so a package whose bytes differ
-builds nothing. The native package is about 110 MB. The receipt's
+builds nothing. The native package is about 150 MB. The receipt's
 `harness.imagePin` reads `artifact sha512-…`, and the label is the build's own
 word: anyone with the docker daemon could tag another image that way. An
 image built under an older recipe of the Dockerfile is built again the next time
