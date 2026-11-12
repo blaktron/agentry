@@ -207,7 +207,9 @@ and the CLI opens a chat in the terminal. Type to talk, `/add PATH` to
 drop a file or directory into the read-only inputs folder, `/caps` to
 print the enforced contract, `/finish` to end the session with the
 agent's final result (validated against `output.schema.json` like an
-autonomous result), `/quit` to abandon it, `/help`. The release's
+autonomous result), `/quit` to abandon it, `/help`. A message you send
+while the agent is still answering is handled as
+[a message during a turn](#a-message-during-a-turn). The release's
 `interactive.opening` line starts the conversation when no task text was
 given. A permission request from inside the sandbox is granted only for
 a tool the plan's gateway already serves, and refused for anything else
@@ -234,6 +236,33 @@ as an agent, and a CLI before v0.6.1015 refuses the manifest as declaring
 an unknown mode. A release that declares `persistent` beside another mode
 runs in that other mode under `agentry run`, as `--mode` chooses.
 
+#### A message during a turn
+
+CLI v0.7.56 or later. A turn runs from your message to the agent's answer,
+and the agent may make many tool calls in between. What happens to a message
+you send before the answer depends on the harness the session runs on:
+
+- **A harness that takes a message during a turn** (today
+  `--adapter agentry-harness`) adds it to the conversation after the results
+  of the tool calls it is running, or at the point where the model would
+  otherwise have ended its answer, and the turn goes on with it. The chat shows the line as "You, during the turn". The
+  session records a `steer` event with your text and a `steered` event where
+  the message joined the conversation, in `events.ndjson`, and the transcript
+  shows the message under "User, during the turn".
+- **Any other harness**, the default `docker-agent` and the model sign-in
+  adapters included, takes a message only between turns. The chat keeps what
+  you typed in the input line and says the agent is still answering; send it
+  when the turn ends. Before v0.7.56 the line was dropped.
+
+A persistent agent's chat (`agentry agent chat`) takes a message only
+between turns on every harness.
+
+A message sent this way counts as one of the session's user messages, so the
+policy's cap on them holds: one over the cap is refused and the turn in
+flight goes on. A file added during a turn (`/add`) is announced to the agent
+in that turn on a harness that takes a message, and ahead of the next turn on
+any other.
+
 #### Driving a session from a program
 
 Without a terminal, an interactive run is refused: the chat is its input.
@@ -246,14 +275,25 @@ agentry run ns/name --mode interactive --session-protocol \
 ```
 
 - **Commands** arrive on stdin, one JSON object a line:
-  `{"send":{"text":"…"}}` sends a message, `{"add":{"path":"…"}}` adds a
-  file, and `{"end":{"finish":true}}` asks the agent for its final result
-  and ends (`false` ends without one). End of input is an end without a
-  result. The task comes only from `--input`, since stdin is the command
-  stream.
+  `{"send":{"text":"…"}}` sends a message, `{"steer":{"text":"…"}}` sends
+  one into the turn in flight (CLI v0.7.56 or later),
+  `{"add":{"path":"…"}}` adds a file, and `{"end":{"finish":true}}` asks the
+  agent for its final result and ends (`false` ends without one). End of
+  input is an end without a result. The task comes only from `--input`,
+  since stdin is the command stream.
 - **One turn at a time.** A `send` is refused from a `user_turn` event to
   the event that closes the turn, the task's own turn included when there
   is one.
+- **A message during a turn.** A `steer` is taken only while a turn is in
+  flight, on a harness that takes
+  [a message during a turn](#a-message-during-a-turn). The session answers
+  it with a `steer` event carrying the text, and a `steered` event follows
+  where the message joined the conversation; the turn still ends in its one
+  `assistant_turn`. With no turn in flight the steer is refused `no_turn`,
+  and the driver sends the text as a turn. On a harness that takes a message
+  only between turns it is refused `cannot_steer`, and for any other reason,
+  the cap on user messages for one, `steer_refused`. A CLI older than
+  v0.7.56 refuses it `unknown_command`.
 - **Files.** An `add` must name a regular file directly in
   `--session-inputs DIR`, where the driver stages it; a relative path is
   taken there, and a path that resolves into a subdirectory or out of the
@@ -267,7 +307,8 @@ agentry run ns/name --mode interactive --session-protocol \
   so no process the CLI starts can write to it.
 - **Refusals.** A command the protocol will not take is answered on
   descriptor 3 by an `error` event carrying `refused`: `malformed`,
-  `unknown_command`, `busy` or `input_refused`. A refusal never ends the
+  `unknown_command`, `busy`, `input_refused`, or for a steer `no_turn`,
+  `cannot_steer` or `steer_refused`. A refusal never ends the
   session and is not a session event, so the receipts do not hold it.
 - **stdout and stderr** are what they are for any run: the envelope under
   `--output-format json`, and the usage narration.
@@ -612,7 +653,8 @@ commands a line on stdin (`send`, `end`) and the agent's events as JSON lines
 on descriptor 3, which the driver opens. A `send` while another chat's turn is
 in flight is refused as `busy`. `end`, or the end of input, detaches and leaves
 the agent running. It takes no files (`add` is refused; put them in the share
-folder). A reader on descriptor 3 that stops taking events is let go; the
+folder), and a `steer` is refused `cannot_steer`: a persistent agent takes a
+message only between turns, whatever harness it runs on. A reader on descriptor 3 that stops taking events is let go; the
 events are in the transcript. Needs CLI v0.6.157 or later.
 
 ### `agentry install <ref>`
