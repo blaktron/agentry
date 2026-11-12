@@ -139,7 +139,7 @@ func TestDesktopGrantExchange(t *testing.T) {
 	}
 	slices.Sort(granted)
 	wantScopes := []string{
-		"agent:manage", "agent:publish", "agent:read", "knowledge:read", "knowledge:write",
+		"agent:manage", "agent:publish", "agent:read", "connection:broker", "knowledge:read", "knowledge:write",
 		"repo:read", "repo:write", "run:read", "run:write", "secret:write",
 		"user:profile", "voice:read", "voice:write",
 	}

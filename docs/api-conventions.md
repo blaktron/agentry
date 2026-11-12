@@ -433,6 +433,7 @@ scopes:
 | `voice:read` | read the account's Writing Voice: every version's text and its AI Review report |
 | `voice:write` | put a new version of the account's Writing Voice for review, restore the previous one, drop the pending one, set always-attach and delete the voice |
 | `credits:session` | open, renew and end a credits session, which pays for a run's model with the account's credits; nothing else, so a machine that runs the account's work unattended can pay for its model without holding an account-wide token |
+| `connection:broker` | connect a vendor whose token endpoint needs a client secret: start the sign-in, which the registry completes with the deployment's secret, collect it, and refresh and revoke that connection through the registry; the connection stays on the person's machine and the registry keeps nothing |
 
 `run:read` and `run:write` are consumed only by a registry that mounts the
 runs extension (`GET /meta` lists it); on a registry without it a token
@@ -445,12 +446,14 @@ signed-in session. `credits:session` is consumed only by a registry that
 mounts the credits extension, which admits it for opening, renewing and
 ending a credits session (`/api/v1/x/inference/sessions`); every other
 route, the core's and every extension's, refuses a token carrying only it,
-but for revoking itself, and the sign-in grant does not ask for it. A
+but for revoking itself, and the sign-in grant does not ask for it.
+`connection:broker` is consumed only by a registry that mounts the vault
+extension. A
 remote runhost's grant asks for it alone (below). The desktop app's sign-in grant
 asks for a fixed set (`agent:read`, `agent:publish`, `agent:manage`,
 `repo:read`, `repo:write`, `user:profile`, `run:read`, `run:write`,
 `knowledge:read`, `knowledge:write`, `secret:write`, `voice:read`,
-`voice:write`). `agent:manage` lets the desktop's Publisher
+`voice:write`, `connection:broker`). `agent:manage` lets the desktop's Publisher
 section make a QuickAgent public or private, retire, restore and delete
 it; the caller must still be the namespace itself or an admin of its
 organization, and no other setting of the agent, grant or organization
