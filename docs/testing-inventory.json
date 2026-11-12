@@ -933,6 +933,19 @@
           ]
         },
         {
+          "path": "internal/api/org_sso_seam_test.go",
+          "tests": [
+            "TestOrgSSOSeamAnswersAsTheCoreDoes"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": [
+            "database fixture",
+            "HTTP transport"
+          ]
+        },
+        {
           "path": "internal/api/staff_org_test.go",
           "tests": [
             "TestStaffIsMembershipOfTheStaffOrg",
@@ -4612,6 +4625,25 @@
       ]
     },
     {
+      "owner": "pkg/brokered",
+      "behavior": "Sealed answers of a registry-completed sign-in that open only for their request and key",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/brokered/brokered_test.go",
+          "tests": [
+            "TestASealOpensForItsRequest",
+            "TestASealOpensForNothingElse",
+            "TestSealRefusesWhatItCannotAnswer"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
       "owner": "pkg/connector",
       "behavior": "Connector catalogue validation and which servers get an Agentry app",
       "disposition": "retain",
@@ -4624,7 +4656,11 @@
             "TestGitHubAndAsanaGoOnlyToTheirOwnServers",
             "TestAPackageMatchesOnlyAsListed",
             "TestTheCatalogueCannotBeChangedThroughWhatItReturns",
-            "TestParseRefusesAMalformedCatalogue"
+            "TestParseRefusesAMalformedCatalogue",
+            "TestMicrosoft365VetsSofteriasServerAsListed",
+            "TestMicrosoft365BlocksAreValidInARelease",
+            "TestTheAdminStepAnswersItsRefusalsAlone",
+            "TestEntraAdminConsentURL"
           ],
           "fuzz": [],
           "benchmarks": [],
@@ -4872,6 +4908,16 @@
           "path": "pkg/extension/org_gate_test.go",
           "tests": [
             "TestOrgGateIsBoundAndAnswersByState"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        },
+        {
+          "path": "pkg/extension/org_sso_test.go",
+          "tests": [
+            "TestOrgSSOIsBoundAndAnswersByTheRequirement"
           ],
           "fuzz": [],
           "benchmarks": [],

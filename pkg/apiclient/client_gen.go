@@ -1589,23 +1589,24 @@ func (e ScanFindingVerdict) Valid() bool {
 
 // Defines values for Scope.
 const (
-	AgentManage    Scope = "agent:manage"
-	AgentPublish   Scope = "agent:publish"
-	AgentRead      Scope = "agent:read"
-	AuditRead      Scope = "audit:read"
-	CreditsSession Scope = "credits:session"
-	KnowledgeRead  Scope = "knowledge:read"
-	KnowledgeWrite Scope = "knowledge:write"
-	OrgAdmin       Scope = "org:admin"
-	RepoRead       Scope = "repo:read"
-	RepoWrite      Scope = "repo:write"
-	ReviewAct      Scope = "review:act"
-	RunRead        Scope = "run:read"
-	RunWrite       Scope = "run:write"
-	SecretWrite    Scope = "secret:write"
-	UserProfile    Scope = "user:profile"
-	VoiceRead      Scope = "voice:read"
-	VoiceWrite     Scope = "voice:write"
+	AgentManage      Scope = "agent:manage"
+	AgentPublish     Scope = "agent:publish"
+	AgentRead        Scope = "agent:read"
+	AuditRead        Scope = "audit:read"
+	ConnectionBroker Scope = "connection:broker"
+	CreditsSession   Scope = "credits:session"
+	KnowledgeRead    Scope = "knowledge:read"
+	KnowledgeWrite   Scope = "knowledge:write"
+	OrgAdmin         Scope = "org:admin"
+	RepoRead         Scope = "repo:read"
+	RepoWrite        Scope = "repo:write"
+	ReviewAct        Scope = "review:act"
+	RunRead          Scope = "run:read"
+	RunWrite         Scope = "run:write"
+	SecretWrite      Scope = "secret:write"
+	UserProfile      Scope = "user:profile"
+	VoiceRead        Scope = "voice:read"
+	VoiceWrite       Scope = "voice:write"
 )
 
 // Valid indicates whether the value is a known member of the Scope enum.
@@ -1618,6 +1619,8 @@ func (e Scope) Valid() bool {
 	case AgentRead:
 		return true
 	case AuditRead:
+		return true
+	case ConnectionBroker:
 		return true
 	case CreditsSession:
 		return true
@@ -3933,7 +3936,12 @@ type ScanReport struct {
 // pays for a run's model with the account's credits, and does nothing
 // else: it is minted with no other scope, and every other route
 // refuses a token carrying it, but for revoking itself. It is consumed only by a registry that
-// mounts the credits extension.
+// mounts the credits extension. `connection:broker` starts a sign-in
+// that the registry completes with the deployment's client secret, for
+// a vendor whose token endpoint needs one, collects its result, and
+// refreshes and revokes that connection, which stays on the person's
+// machine; nothing else. It is consumed only by a registry that mounts
+// the vault extension.
 type Scope string
 
 // ScopeGranted A scope as it appears on a token the registry reports back (the

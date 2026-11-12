@@ -855,6 +855,7 @@ func TestAgentManageScope(t *testing.T) {
 	wantGrant := []string{
 		"agent:read", "agent:publish", "agent:manage", "repo:read", "repo:write", "user:profile",
 		"run:read", "run:write", "knowledge:read", "knowledge:write", "secret:write", "voice:read", "voice:write",
+		"connection:broker",
 	}
 	if got := SignInGrantScopes(); !slices.Equal(got, wantGrant) {
 		t.Fatalf("SignInGrantScopes() = %v, want %v (no review:act, no org scopes)", got, wantGrant)
@@ -891,7 +892,7 @@ func TestScopeListIsClosed(t *testing.T) {
 	want := []string{
 		"repo:read", "repo:write", "agent:publish", "agent:read", "agent:manage", "org:admin", "review:act",
 		"audit:read", "user:profile", "run:read", "run:write", "knowledge:read", "knowledge:write",
-		"secret:write", "voice:read", "voice:write", "credits:session",
+		"secret:write", "voice:read", "voice:write", "credits:session", "connection:broker",
 	}
 	var got []string
 	for _, sc := range AllScopes() {

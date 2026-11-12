@@ -71,6 +71,65 @@ type Connector struct {
 	GrantURL string `yaml:"grantURL,omitempty" json:"grantURL,omitempty"`
 	// Servers are what it vets; none vets nothing.
 	Servers []Server `yaml:"servers,omitempty" json:"servers,omitempty"`
+	// AdminStep, where set, is what to show a person whose consent the
+	// vendor refused because an administrator must approve it.
+	AdminStep *AdminStep `yaml:"adminStep,omitempty" json:"adminStep,omitempty"`
+}
+
+// AdminStepKind is the step a person is shown to pass to an administrator.
+type AdminStepKind string
+
+// AdminStepEntraConsent is a Microsoft Entra tenant's admin-consent link
+// for the connector's public client and the server's scopes
+// (EntraAdminConsentURL).
+const AdminStepEntraConsent AdminStepKind = "entra-admin-consent"
+
+// AdminStep is a connector's refusals that mean an administrator's
+// approval, and the step that answers them.
+type AdminStep struct {
+	Kind AdminStepKind `yaml:"kind" json:"kind"`
+	// Refusals are error codes, or the codes a vendor's error description
+	// carries (Entra's AADSTS numbers), that mean an administrator must
+	// approve the consent.
+	Refusals []string `yaml:"refusals" json:"refusals"`
+}
+
+// NeedsAdmin reports whether a consent the vendor refused with this OAuth
+// error code and description is one the connector's admin step answers:
+// the code is one of its refusals, or the description carries one as a
+// whole word. A connector without an admin step answers none.
+func (c Connector) NeedsAdmin(code, description string) bool {
+	if c.AdminStep == nil {
+		return false
+	}
+	for _, r := range c.AdminStep.Refusals {
+		if code == r || containsWord(description, r) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsWord reports whether s holds w with no letter, digit or
+// underscore directly before or after it, so AADSTS9009 is not found in
+// AADSTS90094.
+func containsWord(s, w string) bool {
+	for i := 0; w != "" && i+len(w) <= len(s); {
+		j := strings.Index(s[i:], w)
+		if j < 0 {
+			return false
+		}
+		at, end := i+j, i+j+len(w)
+		if (at == 0 || !wordByte(s[at-1])) && (end == len(s) || !wordByte(s[end])) {
+			return true
+		}
+		i = at + 1
+	}
+	return false
+}
+
+func wordByte(b byte) bool {
+	return b == '_' || '0' <= b && b <= '9' || 'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z'
 }
 
 // Server is one vetted server: a remote address, or a package.
@@ -253,6 +312,11 @@ func (c Catalogue) Match(server manifest.MCPServer, issuer string) (Connector, b
 
 func (c Connector) clone() Connector {
 	c.Servers = slices.Clone(c.Servers)
+	if c.AdminStep != nil {
+		a := *c.AdminStep
+		a.Refusals = slices.Clone(a.Refusals)
+		c.AdminStep = &a
+	}
 	for i, s := range c.Servers {
 		if s.Package != nil {
 			p := *s.Package
@@ -266,6 +330,10 @@ func (c Connector) clone() Connector {
 }
 
 var idRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// refusalRE is an OAuth error code or a vendor's numbered code: letters,
+// digits and underscores.
+var refusalRE = regexp.MustCompile(`^[A-Za-z0-9_]{3,64}$`)
 
 // Parse reads and validates a catalogue: unknown fields, a repeated or
 // malformed id, an unknown strategy, a server that is neither or both a
@@ -310,6 +378,23 @@ func (c Connector) validate() error {
 		return errors.New("the issuer is not a plain https address")
 	case c.GrantURL != "" && (!strings.Contains(c.GrantURL, "{client_id}") || !plainHTTPS(strings.ReplaceAll(c.GrantURL, "{client_id}", "x"))):
 		return errors.New("a grant address is https and holds {client_id}")
+	}
+	if a := c.AdminStep; a != nil {
+		switch {
+		case a.Kind != AdminStepEntraConsent:
+			return fmt.Errorf("unknown admin step %q", a.Kind)
+		case !c.HasPublicClient():
+			return errors.New("an Entra admin-consent step needs a connector with a public client")
+		case !IsEntraIssuer(c.Issuer):
+			return errors.New("an Entra admin-consent step needs an Entra issuer")
+		case len(a.Refusals) == 0:
+			return errors.New("an admin step names at least one refusal")
+		}
+		for _, r := range a.Refusals {
+			if !refusalRE.MatchString(r) {
+				return fmt.Errorf("the refusal %q is not an error code", r)
+			}
+		}
 	}
 	for _, s := range c.Servers {
 		switch {

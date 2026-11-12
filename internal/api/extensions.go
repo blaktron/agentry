@@ -474,6 +474,30 @@ func (s *Server) OrgReadable(ctx context.Context, orgID uuid.UUID) (bool, error)
 	return s.orgPermits(ctx, orgID, auth.ActOrgMembersRead)
 }
 
+// OrgSSOAllows is the core's single sign-on check for
+// pkg/extension.Deps.OrgSSO: whether p meets the organization's SSO
+// requirement, as the core's own organization routes decide it
+// (enforceSSO). An organization that does not require SSO allows every
+// caller; one that does admits a session within auth.ssoMaxAge of a
+// sign-in its SSO asserted, and a token bound to it. An organization that
+// does not exist allows, since the route answers it as absent; a fault
+// reading it is an error, never permission.
+func (s *Server) OrgSSOAllows(ctx context.Context, p *auth.Principal, orgID uuid.UUID) (bool, error) {
+	if s.st == nil {
+		return false, errors.New("api: no database to read the organization's single sign-on from")
+	}
+	org, err := s.q().GetOrgByID(ctx, orgID)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return true, nil
+	case err != nil:
+		return false, err
+	case !org.SsoRequired:
+		return true, nil
+	}
+	return p.SSOSatisfied(orgID, s.cfg.Auth.SSOMaxAge), nil
+}
+
 // OrgWritable is OrgReadable for an act that changes the organization or
 // spends what it holds: only an active organization permits it, so one in
 // its decommission hold is readable and not writable, and a suspended,

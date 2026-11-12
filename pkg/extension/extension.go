@@ -544,7 +544,8 @@ type Principal = auth.Principal
 // Scope is a PAT scope as the core spells it; those an extension may
 // require are the hosted-run scopes, the knowledge scopes, for a route
 // that writes into a person's knowledge through the Knowledge seam, the
-// vault's secret:write and credits:session, for a credits session. A session carries no scopes and the
+// vault's secret:write and connection:broker, and credits:session, for a
+// credits session. A session carries no scopes and the
 // account's full authority; a PAT carries what it was minted with,
 // flat: no scope implies another.
 type Scope = auth.Scope
@@ -564,6 +565,10 @@ const (
 	// extension's, must refuse a token carrying only it, which
 	// ScopeAllows does for any other scope.
 	ScopeCreditsSession = auth.ScopeCreditsSession
+	// ScopeConnectionBroker lets a token start a sign-in the registry
+	// completes with the deployment's client secret, collect it, and
+	// refresh and revoke that connection; the vault extension requires it.
+	ScopeConnectionBroker = auth.ScopeConnectionBroker
 )
 
 // ScopeAllows is how the core reads a scope for a route: an anonymous
@@ -682,6 +687,12 @@ type Deps struct {
 	// memberships and says nothing of the organization's state. nil when
 	// the server runs without a database.
 	OrgGate OrgGate
+	// OrgSSO is the core's single sign-on check as an extension may ask
+	// it: whether a caller meets an organization's SSO requirement. An
+	// extension's organization routes never pass through the core's
+	// authorization, so they ask here before they act. nil when the
+	// server runs without a database.
+	OrgSSO OrgSSO
 	// Agents is the core's read of an agent as an extension may ask it.
 	// nil when the server runs without a database.
 	Agents Agents
@@ -1090,6 +1101,21 @@ type OrgGate interface {
 	// permits it. One in its decommission hold is readable and not
 	// writable; a suspended, erased or unknown one is neither.
 	Writable(ctx context.Context, orgID uuid.UUID) (bool, error)
+}
+
+// OrgSSO answers for an organization's single sign-on requirement the way
+// the core's own organization routes do, so that an extension mirrors none
+// of the rule.
+type OrgSSO interface {
+	// Allows reports whether p meets the organization's SSO requirement.
+	// An organization that does not require SSO allows every caller. One
+	// that does admits a session only within the deployment's SSO
+	// freshness window of a sign-in that organization's SSO asserted, and a
+	// personal access token only if it is bound to the organization; any
+	// other principal is refused. An organization that does not exist
+	// allows, since the route answers it as absent. An error is a fault to
+	// answer as one, never as permission.
+	Allows(ctx context.Context, p *Principal, orgID uuid.UUID) (bool, error)
 }
 
 // BlobStore is the core's object store: put (write-once per key, so an
