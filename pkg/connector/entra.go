@@ -11,6 +11,13 @@ import (
 // on it alone.
 const entraHost = "login.microsoftonline.com"
 
+// entraAdminConsentRedirect is where Entra sends the administrator's
+// browser once they have approved: the loopback callback a connector's
+// public client registers, which Entra requires the link to name. Nothing
+// listens there for an administrator, so the page may not load; the
+// approval is made by then.
+const entraAdminConsentRedirect = "http://localhost/callback"
+
 // graphScopePrefix qualifies a Microsoft Graph permission.
 const graphScopePrefix = "https://graph.microsoft.com/"
 
@@ -60,6 +67,6 @@ func EntraAdminConsentURL(publicClientID string, scopes []string) (string, error
 	if len(granted) == 0 {
 		return "", errors.New("connector: no Microsoft Graph permission to approve")
 	}
-	q := url.Values{"client_id": {publicClientID}, "scope": {strings.Join(granted, " ")}}
+	q := url.Values{"client_id": {publicClientID}, "scope": {strings.Join(granted, " ")}, "redirect_uri": {entraAdminConsentRedirect}}
 	return "https://" + entraHost + "/organizations/v2.0/adminconsent?" + q.Encode(), nil
 }

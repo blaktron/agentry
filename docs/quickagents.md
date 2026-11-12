@@ -976,24 +976,25 @@ capabilities:
     under it.
   - **Asana**: `https://mcp.asana.com/v2` and the addresses under it.
   - **Microsoft 365**: the npm package `@softeria/ms-365-mcp-server` at
-    version `0.184.0`, with the issuer
-    `https://login.microsoftonline.com/common/v2.0`, the access token in the
-    env entry `MS365_MCP_OAUTH_TOKEN: "{access_token}"`, and exactly one of
-    two scope lists, in this order. To read:
-    `https://graph.microsoft.com/User.Read`, `…/Mail.Read`,
-    `…/Calendars.Read`, `…/Contacts.Read`, `…/Files.Read`,
-    `…/MailboxSettings.Read` and `offline_access`. To read and make
-    changes: `…/User.Read`, `…/Mail.ReadWrite`, `…/Mail.Send`,
-    `…/Calendars.ReadWrite`, `…/Contacts.ReadWrite`, `…/Files.Read`,
-    `…/MailboxSettings.Read` and `offline_access` (each `…` is
-    `https://graph.microsoft.com`). Declare `egress: [graph.microsoft.com]`,
-    and run it with `--read-only` and an `--enabled-tools` list that keeps
-    to the scopes. The server reads its token once when it starts and does
-    not renew it, so a run longer than the token's life, about an hour,
-    loses Microsoft Graph until it is run again. When an organization's
-    policy needs an administrator to approve the permissions, the sign-in
-    says so and gives the link to send them, which approves Agentry's app
-    for the whole organization.
+    version `0.184.0`, declared with:
+    - the issuer `https://login.microsoftonline.com/common/v2.0`;
+    - the env entry `MS365_MCP_OAUTH_TOKEN: "{access_token}"`;
+    - exactly one of two scope lists, in this order, where each `…` is
+      `https://graph.microsoft.com`. To read: `…/User.Read`,
+      `…/Mail.Read`, `…/Calendars.Read`, `…/Contacts.Read`,
+      `…/Files.Read`, `…/MailboxSettings.Read`, `offline_access`. To read
+      and make changes: `…/User.Read`, `…/Mail.ReadWrite`, `…/Mail.Send`,
+      `…/Calendars.ReadWrite`, `…/Contacts.ReadWrite`, `…/Files.Read`,
+      `…/MailboxSettings.Read`, `offline_access`;
+    - `egress: [graph.microsoft.com]`, and `--read-only` with an
+      `--enabled-tools` list that keeps to the scopes.
+
+    The server reads its token once when it starts and does not renew it,
+    so a run longer than the token's life, about an hour, loses Microsoft
+    Graph until it is run again. When an organization's policy needs an
+    administrator to approve the permissions, the sign-in says so and gives
+    the link to send them, which approves Agentry's app for the whole
+    organization.
 - **An `oauth` block on a package server** names the authorization server
   (`issuer`, `https://`), the `scopes` consent asks for, and how the access
   token reaches the server. For Microsoft 365 the issuer is

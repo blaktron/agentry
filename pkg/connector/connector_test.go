@@ -360,7 +360,7 @@ func TestEntraAdminConsentURL(t *testing.T) {
 		t.Fatalf("the link: %s", got)
 	}
 	q := u.Query()
-	if q.Get("client_id") != id || len(q) != 2 ||
+	if q.Get("client_id") != id || len(q) != 3 || q.Get("redirect_uri") != "http://localhost/callback" ||
 		q.Get("scope") != "https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Calendars.Read https://graph.microsoft.com/Contacts.Read https://graph.microsoft.com/Files.Read https://graph.microsoft.com/MailboxSettings.Read" {
 		t.Fatalf("the query: %v", q)
 	}
