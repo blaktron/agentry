@@ -4624,7 +4624,11 @@
             "TestGitHubAndAsanaGoOnlyToTheirOwnServers",
             "TestAPackageMatchesOnlyAsListed",
             "TestTheCatalogueCannotBeChangedThroughWhatItReturns",
-            "TestParseRefusesAMalformedCatalogue"
+            "TestParseRefusesAMalformedCatalogue",
+            "TestMicrosoft365VetsSofteriasServerAsListed",
+            "TestMicrosoft365BlocksAreValidInARelease",
+            "TestTheAdminStepAnswersItsRefusalsAlone",
+            "TestEntraAdminConsentURL"
           ],
           "fuzz": [],
           "benchmarks": [],
