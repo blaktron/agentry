@@ -22,6 +22,12 @@
 #               package: one package by ecosystem (npm, pypi), name,
 #                 exact version and its whole oauth block
 #             An entry with no servers vets nothing yet.
+#   adminStep what to show when the vendor refuses consent because an
+#             administrator must approve it (optional):
+#               kind: the step; entra-admin-consent is the tenant's
+#                 admin-consent link for the connector's public client
+#               refusals: the error codes, or the codes an error's
+#                 description carries, that mean an administrator's approval
 connectors:
   - id: github
     vendor: GitHub
@@ -41,9 +47,53 @@ connectors:
     servers:
       - remote: https://mcp.asana.com/v2
 
-  # No server is listed: the entry vets nothing and carries only the public
-  # client id a deployment configures for it.
+  # Softeria's server, run on an access token alone (MS365_MCP_OAUTH_TOKEN):
+  # it reads the token once at start and does not renew it, so a run longer
+  # than the token's life (about an hour) loses Microsoft Graph until it is
+  # started again. One entry per scope tier: read, and read with changes and
+  # sending mail. Run it with --read-only and a tool allow-list that keeps to
+  # the tier.
   - id: microsoft-365
     vendor: Microsoft
     name: Microsoft 365
     strategy: agentry-public
+    issuer: https://login.microsoftonline.com/common/v2.0
+    servers:
+      - package:
+          ecosystem: npm
+          name: "@softeria/ms-365-mcp-server"
+          version: 0.184.0
+          oauth:
+            issuer: https://login.microsoftonline.com/common/v2.0
+            scopes:
+              - https://graph.microsoft.com/User.Read
+              - https://graph.microsoft.com/Mail.Read
+              - https://graph.microsoft.com/Calendars.Read
+              - https://graph.microsoft.com/Contacts.Read
+              - https://graph.microsoft.com/Files.Read
+              - https://graph.microsoft.com/MailboxSettings.Read
+              - offline_access
+            env:
+              MS365_MCP_OAUTH_TOKEN: "{access_token}"
+      - package:
+          ecosystem: npm
+          name: "@softeria/ms-365-mcp-server"
+          version: 0.184.0
+          oauth:
+            issuer: https://login.microsoftonline.com/common/v2.0
+            scopes:
+              - https://graph.microsoft.com/User.Read
+              - https://graph.microsoft.com/Mail.ReadWrite
+              - https://graph.microsoft.com/Mail.Send
+              - https://graph.microsoft.com/Calendars.ReadWrite
+              - https://graph.microsoft.com/Contacts.ReadWrite
+              - https://graph.microsoft.com/Files.Read
+              - https://graph.microsoft.com/MailboxSettings.Read
+              - offline_access
+            env:
+              MS365_MCP_OAUTH_TOKEN: "{access_token}"
+    # AADSTS90094: an administrator must grant the permissions; AADSTS65001:
+    # consent was not granted; consent_required: the tenant asks for it.
+    adminStep:
+      kind: entra-admin-consent
+      refusals: [AADSTS90094, AADSTS65001, consent_required]
