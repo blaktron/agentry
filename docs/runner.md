@@ -4910,6 +4910,12 @@ harness`](#agentry-harness)). What follows it:
 - **`--adapter` still names the harness of one run**, `--adapter
   docker-agent` and `--adapter agentry-harness` included.
 
+The policy file holds the key only while the choice is not the default. Its
+keys are a closed set, so an Agentry CLI older than v0.7.57, or an Agentry
+Desktop built on one, refuses a policy that holds `containerHarness`. Update
+those on the same computer before you choose `agentry-harness`;
+`agentry harness use docker-agent` takes the key out again.
+
 ### The Agentry harness
 
 The Agentry harness (`agentry-harness`) is the model loop the runner carries itself. It is a
