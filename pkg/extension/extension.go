@@ -687,6 +687,12 @@ type Deps struct {
 	// memberships and says nothing of the organization's state. nil when
 	// the server runs without a database.
 	OrgGate OrgGate
+	// OrgSSO is the core's single sign-on check as an extension may ask
+	// it: whether a caller meets an organization's SSO requirement. An
+	// extension's organization routes never pass through the core's
+	// authorization, so they ask here before they act. nil when the
+	// server runs without a database.
+	OrgSSO OrgSSO
 	// Agents is the core's read of an agent as an extension may ask it.
 	// nil when the server runs without a database.
 	Agents Agents
@@ -1095,6 +1101,21 @@ type OrgGate interface {
 	// permits it. One in its decommission hold is readable and not
 	// writable; a suspended, erased or unknown one is neither.
 	Writable(ctx context.Context, orgID uuid.UUID) (bool, error)
+}
+
+// OrgSSO answers for an organization's single sign-on requirement the way
+// the core's own organization routes do, so that an extension mirrors none
+// of the rule.
+type OrgSSO interface {
+	// Allows reports whether p meets the organization's SSO requirement.
+	// An organization that does not require SSO allows every caller. One
+	// that does admits a session only within the deployment's SSO
+	// freshness window of a sign-in that organization's SSO asserted, and a
+	// personal access token only if it is bound to the organization; any
+	// other principal is refused. An organization that does not exist
+	// allows, since the route answers it as absent. An error is a fault to
+	// answer as one, never as permission.
+	Allows(ctx context.Context, p *Principal, orgID uuid.UUID) (bool, error)
 }
 
 // BlobStore is the core's object store: put (write-once per key, so an

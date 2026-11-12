@@ -388,6 +388,21 @@ func (g serverOrgGate) Writable(ctx context.Context, orgID uuid.UUID) (bool, err
 	return g.srv.OrgWritable(ctx, orgID)
 }
 
+// orgSSOOf adapts the server's single sign-on check to OrgSSO: nil without
+// a database, the way Deps.DB is.
+func orgSSOOf(srv *api.Server, pool *pgxpool.Pool) OrgSSO {
+	if pool == nil {
+		return nil
+	}
+	return serverOrgSSO{srv}
+}
+
+type serverOrgSSO struct{ srv *api.Server }
+
+func (s serverOrgSSO) Allows(ctx context.Context, p *Principal, orgID uuid.UUID) (bool, error) {
+	return s.srv.OrgSSOAllows(ctx, p, orgID)
+}
+
 // agentsOf adapts the server's agent read to Agents: nil without a
 // database, the way Deps.DB is.
 func agentsOf(srv *api.Server, pool *pgxpool.Pool) Agents {
@@ -1141,7 +1156,7 @@ func applyExtensions(srv *api.Server, exts []Extension) {
 		if b, ok := e.(Binds); ok {
 			pool, log, write, writeIn := srv.ExtensionDeps()
 			b.Bind(Deps{DB: pool, Log: log.With("extension", e.Name()), Audit: auditWriter{write: write, writeIn: writeIn},
-				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), OrgGate: orgGateOf(srv, pool), Agents: agentsOf(srv, pool), Versions: versionsOf(srv, pool), Principals: principalsOf(srv, pool),
+				Entitlements: srv.CoreEntitlements(), Blobs: srv.Blobs(), Orgs: orgsOf(srv, pool), OrgGate: orgGateOf(srv, pool), OrgSSO: orgSSOOf(srv, pool), Agents: agentsOf(srv, pool), Versions: versionsOf(srv, pool), Principals: principalsOf(srv, pool),
 				ScheduleCredentials: scheduleCredentialsOf(srv, pool),
 				Notifier:            notifierOf(srv, pool), Webhooks: webhooksOf(srv, pool), Knowledge: knowledgeOf(srv, pool),
 				Voice: voiceOf(srv, pool), ReportDesigns: reportDesignsOf(srv, pool), ReportSettings: reportSettingsOf(srv, pool), Meter: meterOf(srv, pool, e.Name()), BaseURL: srv.BaseURL(),
