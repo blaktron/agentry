@@ -96,7 +96,14 @@ Prepares a machine for QuickAgent runs — re-runnable, idempotent:
 2. Stands up the **docker-mcp-gateway plane**: verifies the
    [container engine](#container-engines), pulls the pinned gateway and harness images, and builds the
    local runner image from the CLI's embedded, stdlib-only build context
-   (`--skip-images` configures policy only).
+   (`--skip-images` configures policy only). The harness image is the one
+   runs on this model use: docker-agent's, a model sign-in's, or none when
+   the policy chooses [the Agentry harness](#the-agentry-harness), which is part
+   of the runner image.
+
+Setup's summary ends with the harness runs use (`harness: docker-agent`, and
+`harness` in `--json`; CLI v0.7.57 or later), and re-running it keeps the
+[container harness](#choosing-the-container-harness) the policy chose.
 
 `agentry run` performs the same steps lazily on first use, so setup is a
 convenience, not a gate. Note: setup rewrites `policy.yaml` as generated
@@ -111,7 +118,11 @@ source, the [container engine](#container-engines) (its `docker` line is the
 receipt's `engine` line, or why a run on that engine would be refused), the
 pinned gateway/harness/runner images (and the
 node/python runtime images when the agent declares MCP servers of that
-ecosystem), and the registry's `/healthz`. With a ref or `--local DIR` it
+ecosystem), and the registry's `/healthz`. Its `harness` line (CLI v0.7.57
+or later) names the harness a run takes when it names none: the [container
+harness](#choosing-the-container-harness) the policy chooses, or the vendor's for a model
+paid by a model sign-in. With the Agentry harness chosen it asks for no
+harness image, and it fails a model that harness does not reach. With a ref or `--local DIR` it
 also checks that QuickAgent: resolution, the verified install (a warning
 until the first `run --prepare`), the declared MCP servers' store, the
 compiled plan, the MCP profile, the registry's vulnerability verdict on each
@@ -153,7 +164,7 @@ One QuickAgent, one job, one container tree, then gone.
 | `--reconfigure-profile` | re-run guided profile setup over an existing profile |
 | `--timeout N` / `--max-turns N` / `--max-cost USD` | override the policy budgets (exit 15 / 16 on breach; cost is the harness's running total, `0` = unlimited; `--max-cost` is refused, exit 2, for a run paid by a [model sign-in](#tokens-not-dollars), which records tokens and no dollars) |
 | `--model NAME` | run on this [saved model](#providers-and-saved-models), by its name or id (default: the default saved model); its provider's credential pays, and the harness follows that credential unless `--adapter` names one; a name this computer does not have, or one whose key or sign-in is not here, is refused (exit 11), never run on the default. With `--on`, its credential alone travels with the run (CLI v0.7.39 or later) |
-| `--adapter NAME` / `--list-adapters` | harness adapter (default `docker-agent`, or the image adapter a [model sign-in](#model-sign-ins) names: `codex-image`, `claude-image` or `copilot-image`; `claude` and `codex` drive your own installation of those CLIs, see below) |
+| `--adapter NAME` / `--list-adapters` | harness adapter for this run (default: the [container harness](#choosing-the-container-harness) the policy chooses, `docker-agent` unless you chose `agentry-harness`, or the image adapter a [model sign-in](#model-sign-ins) names: `codex-image`, `claude-image` or `copilot-image`; `claude` and `codex` drive your own installation of those CLIs, see below) |
 | `--local DIR` | run an unpublished QuickAgent tree (unsigned by definition: requires `--allow-unsigned`) |
 | `--allow-unsigned` | run a release the registry has no attestation for; a *mismatched* attestation always refuses |
 | `--allow-vulnerable-mcp` | run even though the registry's gate rates an advisory of a declared MCP server version high or critical (the receipt records the override) |
@@ -243,7 +254,7 @@ and the agent may make many tool calls in between. What happens to a message
 you send before the answer depends on the harness the session runs on:
 
 - **A harness that takes a message during a turn** (today
-  `--adapter agentry-harness`) adds it to the conversation after the results
+  [`agentry-harness`](#the-agentry-harness)) adds it to the conversation after the results
   of the tool calls it is running, or at the point where the model would
   otherwise have ended its answer, and the turn goes on with it. The chat shows the line as "You, during the turn". The
   session records a `steer` event with your text and a `steered` event where
@@ -519,6 +530,27 @@ newer version — can ever reference it. The version's
 [connections](#connections) go with the profile, each revoked at its vendor
 where the vendor offers that; `--keep-mcp` keeps them too. Embedded installs
 (claude-skill / mcp / agents-md exports) are separate state and untouched.
+
+### `agentry harness`
+
+CLI v0.7.57 or later. Shows the container harness runs use, and
+`agentry harness use docker-agent|agentry-harness` chooses it:
+
+```text
+$ agentry harness
+harness: docker-agent (Docker Agent), the default
+$ agentry harness use agentry-harness
+harness: agentry-harness (the harness built into the runner) (was docker-agent)
+```
+
+The choice is the policy's `containerHarness`, so it stays through an
+upgrade of the CLI and a re-run of `agentry setup`. `use docker-agent`
+removes the key, which is the default. Any other name is refused (exit 2)
+with the two names. `--json` prints `harness`, `default`, `choices`,
+`runsOn` (the harness a run on the default model takes, which is its
+vendor's when a model sign-in pays for it), `policyPath`, and after a change
+`previous`. [Choosing the container harness](#choosing-the-container-harness) says what
+follows the choice and how the two differ.
 
 ### `agentry profiles`
 
@@ -1936,6 +1968,7 @@ its digest, so a run record says which file a run obeyed.
 | `exec.packages` | the exec catalog: command name → apk package (optionally `=version`) the exec image installs for a QuickAgent that declares that command; a declared command with no entry is refused at plan time (exit 11) |
 | `exec.apkMirror` | the Alpine mirror the exec image build installs from (default: the runner image's own repositories) — egress of the image build only, over ordinary docker networking; a run's network posture is unchanged |
 | `images.harnessImages.<adapter>` | the harness image of each adapter that runs in a container, `docker-agent` included: `{ ref: <name>@sha256:… }` for a published image, or, for an image your computer builds, the `ref` and the `artifact` hash it is built from ([model sign-ins](#model-sign-ins)); an adapter left out takes the CLI's default, which for `claude-image` and `codex-image` is the vendor's newest release when it passes its checks ([newest releases first](#newest-releases-first)). An entry of your own is never replaced by a newer release. `docker-agent` is a published image, so its entry carries no `artifact`. Older policy files name docker-agent's image as `images.harnessDockerAgent`, which is still read; naming it both ways with different images is refused |
+| `containerHarness` | (CLI v0.7.57 or later) the container harness a run, a session and a persistent agent use when the run names none and the model is paid by a key, a connected account or Agentry credits: `docker-agent` (the default, also when unset) or `agentry-harness`; any other value is refused when the policy is read. [`agentry harness`](#agentry-harness) reads and sets it ([choosing the container harness](#choosing-the-container-harness)) |
 | `harness.<adapter>.signInTokenRoute` | `auth-command` (the default) or `restart`: how a ChatGPT plan's token reaches Codex ([below](#a-chatgpt-plan)) |
 | `harness.<adapter>.path` | the executable a host-run harness adapter uses instead of looking it up on `PATH` |
 | `harness.<adapter>.baseUrl` / `.model` / `.apiKeyEnv` | the model endpoint that adapter is given, in its own vendor's terms (a block that names a `model` reads as a saved model of its own, named for the adapter, on the provider the model block or the default is on; its key fields apply only to runs on that provider) — a host-run harness speaks its vendor's API, which is not always the one `model.*` describes. The host must also be in `model.proxyAllow` or the run's proxy denies it (`agentry doctor --adapter <name>` says so before a run finds out). |
@@ -3431,8 +3464,13 @@ could not finish is ended with `end_blocked`, not by the check.
 - Each start counts in the run's turn, cost and time budgets, and none is
   begun with less than two minutes of the run's time left.
 - Only a container harness that keeps its conversation in the run's store
-  is asked: docker-agent. A run under `claude` or `codex`, an interactive
-  session and a persistent agent's turn are not.
+  is asked: docker-agent and [the Agentry harness](#the-agentry-harness). A run
+  under `claude` or `codex`, an interactive session and a persistent agent's
+  turn are not.
+- The Agentry harness is asked without a restart: it asks the runner before
+  it ends the run, and the same message joins the conversation as the turn
+  goes on. An answer with no text and no tool call is answered the same way,
+  with a message that says nothing came back.
 
 The envelope records how the list ended ([the `checklist`
 block](#the-envelopes-checklist-block)), and the harness's
@@ -3541,6 +3579,7 @@ tools spec:
 | Harness (adapter) | One tool result holds at most | The harness's own limit, measured from its pinned release |
 |---|---|---|
 | `docker-agent` | 48 KiB and 1,900 lines | 50 KiB or 2,000 lines, then the last 50 KiB is kept |
+| The Agentry harness (`agentry-harness`) | 48 KiB and 1,900 lines | the run's page itself: a result past it keeps its start, cut after a whole line, and ends with a notice that gives both sizes |
 | Claude Code (`claude`, `claude-image`) | 46 KiB and 1,900 lines | 50,000 characters, then the result is saved to a file the agent cannot open |
 | Copilot (`copilot-image`) | 19 KiB and 1,900 lines | 20,480 bytes, then the result is saved to a file and 500 characters shown |
 | Codex (`codex`, `codex-image`) | 20 KiB and 1,900 lines | 48,000 bytes, set by the runner in the model catalog it gives Codex, the middle cut out; an input tool's result is sent as escaped JSON, which can double it |
@@ -4105,9 +4144,10 @@ A one-shot run's envelope carries them from the versions named. From CLI
 v0.7.56 the envelope of an interactive session and of each segment of a
 persistent agent carries them too. Every count comes from what the harness
 reports of itself, so a harness that does not report one leaves it out: a
-one-shot run on the default harness reports `loopNudges` and
+one-shot run on docker-agent reports `loopNudges` and
 `lengthRecoveries`, and leaves `resultClears` and `compactions` out even when
-its conversation was cleared or summarised.
+its conversation was cleared or summarised. The Agentry harness reports all
+four.
 
 ### The envelope's `checklist` block
 
@@ -4832,11 +4872,76 @@ plan, so `agentry run` picks it without `--adapter`.
 | Adapter | What runs | Modes | Isolation |
 |---|---|---|---|
 | `docker-agent` (default) | Docker Agent, built from its pinned upstream commit and published signed as `ghcr.io/blaktron/agentry-docker-agent-src`, pinned by digest | autonomous, interactive (Agent Client Protocol over the container's stdio) | a container on the run's internal network: it has no route out but the proxy |
+| `agentry-harness` | the harness built into the runner: part of the runner image your computer builds from the CLI's own source, so nothing is pulled for it | autonomous, interactive (its own line-delimited JSON over the container's stdio) | a container on the run's internal network, as for `docker-agent`, running as an unprivileged user on a read-only root with the conversation's record as its one writable mount |
 | `claude` | **your own installation** of Claude Code, as a process of your user | autonomous, interactive (Claude Code's own bidirectional stream-json) | the harness is outside the run's network boundary — see below |
 | `codex` | **your own installation** of the OpenAI Codex CLI, as a process of your user | autonomous, interactive (codex's own app-server protocol) | as for `claude` — see below |
 | `codex-image` | OpenAI's Codex CLI in agentry-dockerimages' signed `agentry-codex` image, pinned by digest | autonomous, interactive (codex's app-server; an autonomous run is one session turn) | a container on the run's internal network, as for `docker-agent`; the default for a ChatGPT plan |
 | `claude-image` | Claude Code in an image **your computer builds** from pinned npm packages, never published | autonomous, interactive (stream-json) | a container, as above; runs only on a Claude subscription sign-in, and is its default |
 | `copilot-image` | GitHub's Copilot CLI in an image your computer builds from a checksummed release download, never published | autonomous, interactive (Copilot CLI's JSON-RPC server mode, driven by the runner) | a container, as above, with nothing mounted; runs only on a Copilot plan sign-in, and is its default |
+
+### Choosing the container harness
+
+CLI v0.7.57 or later. Two harnesses run a QuickAgent in a container for a
+model paid by a key, a connected account or your Agentry credits:
+`docker-agent`, the default, and `agentry-harness`. Both run the same
+QuickAgents under the same policy, tools, network boundary and budgets, and
+a run's envelope names the one that ran (`harness.adapter`, beside
+`harness.imagePin`).
+
+```text
+agentry harness                       # which one runs use
+agentry harness use agentry-harness   # choose the Agentry harness
+agentry harness use docker-agent      # go back to the default
+```
+
+The choice is the policy's `containerHarness` ([`agentry
+harness`](#agentry-harness)). What follows it:
+
+- **A run, a schedule's run and an interactive session** that name no
+  `--adapter`, from their next start. One under way finishes on the harness
+  it started on.
+- **A persistent agent**, at its next turn. A stored conversation belongs to
+  the harness that stored it, so the agent's next segment starts a new one
+  from its memory and the last exchange, in either direction
+  ([Segments](#segments)).
+- **Not a model paid by a model sign-in.** A ChatGPT plan, a Claude
+  subscription and a Copilot plan each run on their vendor's harness
+  whatever the policy chooses.
+- **`--adapter` still names the harness of one run**, `--adapter
+  docker-agent` and `--adapter agentry-harness` included.
+
+### The Agentry harness
+
+The Agentry harness (`agentry-harness`) is the model loop the runner carries itself. It is a
+role of the runner image, which the CLI builds on your computer from its own
+source, so it moves with the CLI and the envelope pins it as `source
+<build> (built on this machine from the CLI's own source)`. It has no tool
+of its own: the run's gateway is its one tool source, and its configuration
+cannot name another.
+
+It reaches the model itself, through the run's proxy, on every provider
+`agentry setup` offers for a key: Anthropic, OpenAI, Google, Vultr,
+OpenRouter, Poe, Hugging Face, a server of your own (`custom`, or `openai`
+with a `baseUrl`) and Agentry credits. Another provider name is refused when
+the plan is compiled (exit 11), naming `docker-agent` as the way to run it,
+and so is an Anthropic subscription token.
+
+What differs from `docker-agent`:
+
+| | `docker-agent` | `agentry-harness` |
+|---|---|---|
+| One tool result | the run's [page](#one-tool-result-at-a-time-pages); a result past the harness's own 50 KiB keeps its **last** 50 KiB | the same page; a result past it keeps its **start**, cut after a whole line, with a notice that gives both sizes |
+| Cost | the harness reports its own running cost | the harness counts cost from a price list compiled into the CLI (a copy of the models.dev catalogue, read at no point in a run). Tokens are always reported; `usage.costUsd` is 0 for a model the list does not price, which includes a server of your own and Agentry credits, and `--max-cost` then has nothing to hold |
+| [The finish check](#the-scratch-folder) | the runner starts the harness again on the same conversation | the harness asks the runner before it ends the run, and the message joins the same turn; an answer with no text and no call is answered too |
+| [A message during a turn](#a-message-during-a-turn) | kept until the turn ends | joins the turn in flight |
+| Old tool results, when a session's or a persistent agent's turn starts after the model server's cache has expired | each result older than the two turns before gives way to a placeholder, and each browser result but the two newest | the same, but a result under 4 KiB stays unless it is a browser's, and the placeholder says the result was read in full at the time |
+| [The envelope's counts](#the-envelopes-usage-counts) | `loopNudges`, `lengthRecoveries` | those, and `resultClears` and `compactions` |
+| The stored conversation | Docker Agent's own session store | an append-only record of the run's own, on the session volume |
+
+Both summarise a conversation as it nears the model's window, answer a tool
+call repeated without a change, go on from an answer cut at the output
+limit, and wait out a model server that is busy. A conversation one harness
+stored is not read by the other.
 
 ### `claude`
 
@@ -5277,9 +5382,10 @@ A run compiles from its saved model alone: its provider's credential,
 endpoint and `proxyAllow`, its model id and its context window. No other
 provider's key is read, and the agent container's egress is that provider's
 endpoint. The harness follows the credential, as it does for the default: a
-key runs on docker-agent, a ChatGPT plan on Codex, a Claude subscription on
-Claude Code and a Copilot plan on Copilot CLI ([model
-sign-ins](#model-sign-ins)). `--adapter` still overrides the harness. A
+key runs on the [container harness](#choosing-the-container-harness) the policy chooses
+(docker-agent unless you chose the Agentry harness), a ChatGPT plan on Codex,
+a Claude subscription on Claude Code and a Copilot plan on Copilot CLI
+([model sign-ins](#model-sign-ins)). `--adapter` still overrides the harness. A
 saved model read from a version 1 `harness.<adapter>` block runs on that
 adapter, with that block's key, as `--adapter <adapter>` did; `--adapter
 <adapter>` with no `--model` runs on that block's saved model.
@@ -6426,7 +6532,8 @@ key variable's **name** only.
 | `models remove\|providers remove --json` | `removed[]`, `moved[]` (each schedule or agent moved: `kind`, `name`, `id`, and `model`, the id it named), `movedTo`, `default`, and for a provider `provider` and `credential` (what became of its key or sign-in) |
 | `providers list --json` | `providers[]` (`id`, `vendor`, `name`, `kind`, `baseUrl`, `apiKeyEnv` (a name), `apiKeySource`, `state`, `models[]` by name) |
 | `runhost model <name> --json` | `runhost`, `models[]`: the saved models the runhost holds |
-| `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `contextWindow` (when the policy names one; CLI v0.7.9 or later), `images` ready\|skipped |
+| `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `contextWindow` (when the policy names one; CLI v0.7.9 or later), `harness` (the harness runs on this model use; CLI v0.7.57 or later), `images` ready\|skipped |
+| `harness --json`, `harness use <name> --json` | (CLI v0.7.57 or later) `harness` (the container harness chosen), `default`, `choices[]`, `runsOn` (the harness a run on the default model takes), `policyPath`, and after a change `previous` |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `model` (the saved model the plan was compiled on: `savedModel` with its `id` and `name`, `model` as `<provider>/<model id>`, and `adapter`), `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
 | `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness` (with `savedModel`, the saved model's `id` and `name`, beside `model`, `<provider>/<model id>`), `usage` (tokens, cost, time and turns, and [the counts of what the harness did](#the-envelopes-usage-counts)), `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made and each send to a [destination](#destinations-sending-a-runs-result-somewhere): `destination`, `kind`, `host` and `onMyNetwork` for a send, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
