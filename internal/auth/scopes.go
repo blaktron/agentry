@@ -55,6 +55,15 @@ const (
 	// without that extension treats a token carrying only this as a token
 	// with no scope at all.
 	ScopeCreditsSession Scope = "credits:session"
+	// ScopeConnectionBroker lets a token start a sign-in that the registry
+	// completes for a vendor whose token endpoint needs a client secret,
+	// collect its result, refresh that connection and revoke it, and do
+	// nothing else: the connection stays on the person's machine, and the
+	// registry adds the deployment's secret to each exchange and keeps
+	// nothing. No core route consumes it; the vault extension requires it
+	// through pkg/extension, so a registry without that extension treats a
+	// token carrying only this as a token with no scope at all.
+	ScopeConnectionBroker Scope = "connection:broker"
 )
 
 // ScheduleScopes are the scopes a schedule's credential carries:
@@ -78,6 +87,7 @@ func AllScopes() []Scope {
 		ScopeAgentManage, ScopeOrgAdmin, ScopeReviewAct, ScopeAuditRead, ScopeUserProfile,
 		ScopeRunRead, ScopeRunWrite, ScopeKnowledgeRead, ScopeKnowledgeWrite,
 		ScopeSecretWrite, ScopeVoiceRead, ScopeVoiceWrite, ScopeCreditsSession,
+		ScopeConnectionBroker,
 	}
 }
 
@@ -90,7 +100,8 @@ func AllScopes() []Scope {
 // and the account's Writing Voice, read, uploaded and downloaded
 // (voice:read, voice:write), and the owner actions on the person's own
 // QuickAgents and their organizations' where they are an admin
-// (agent:manage).
+// (agent:manage), and connecting a vendor whose token endpoint needs a
+// client secret through the registry (connection:broker).
 // Deliberately no review:act and no org scopes. Fixed server-side so a
 // caller of the grant endpoint cannot widen it, and shown verbatim on the
 // approval page.
@@ -100,7 +111,7 @@ func SignInGrantScopes() []string {
 		string(ScopeRepoRead), string(ScopeRepoWrite),
 		string(ScopeUserProfile), string(ScopeRunRead), string(ScopeRunWrite),
 		string(ScopeKnowledgeRead), string(ScopeKnowledgeWrite), string(ScopeSecretWrite),
-		string(ScopeVoiceRead), string(ScopeVoiceWrite),
+		string(ScopeVoiceRead), string(ScopeVoiceWrite), string(ScopeConnectionBroker),
 	}
 }
 

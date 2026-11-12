@@ -4612,6 +4612,25 @@
       ]
     },
     {
+      "owner": "pkg/brokered",
+      "behavior": "Sealed answers of a registry-completed sign-in that open only for their request and key",
+      "disposition": "retain",
+      "files": [
+        {
+          "path": "pkg/brokered/brokered_test.go",
+          "tests": [
+            "TestASealOpensForItsRequest",
+            "TestASealOpensForNothingElse",
+            "TestSealRefusesWhatItCannotAnswer"
+          ],
+          "fuzz": [],
+          "benchmarks": [],
+          "fixtureEntryPoint": false,
+          "dependencyHints": []
+        }
+      ]
+    },
+    {
       "owner": "pkg/connector",
       "behavior": "Connector catalogue validation and which servers get an Agentry app",
       "disposition": "retain",

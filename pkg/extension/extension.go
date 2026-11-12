@@ -544,7 +544,8 @@ type Principal = auth.Principal
 // Scope is a PAT scope as the core spells it; those an extension may
 // require are the hosted-run scopes, the knowledge scopes, for a route
 // that writes into a person's knowledge through the Knowledge seam, the
-// vault's secret:write and credits:session, for a credits session. A session carries no scopes and the
+// vault's secret:write and connection:broker, and credits:session, for a
+// credits session. A session carries no scopes and the
 // account's full authority; a PAT carries what it was minted with,
 // flat: no scope implies another.
 type Scope = auth.Scope
@@ -564,6 +565,10 @@ const (
 	// extension's, must refuse a token carrying only it, which
 	// ScopeAllows does for any other scope.
 	ScopeCreditsSession = auth.ScopeCreditsSession
+	// ScopeConnectionBroker lets a token start a sign-in the registry
+	// completes with the deployment's client secret, collect it, and
+	// refresh and revoke that connection; the vault extension requires it.
+	ScopeConnectionBroker = auth.ScopeConnectionBroker
 )
 
 // ScopeAllows is how the core reads a scope for a route: an anonymous

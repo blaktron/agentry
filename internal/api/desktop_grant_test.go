@@ -130,8 +130,8 @@ func TestDesktopGrantExchange(t *testing.T) {
 		t.Fatalf("pat.create audit row: actor %s %s, detail %s", auditActor, auditUser, auditDetail)
 	}
 	scopes, _ := pat["scopes"].([]any)
-	if len(scopes) != 13 {
-		t.Fatalf("desktop PAT scopes = %v, want the thirteen desktop scopes", scopes)
+	if len(scopes) != 14 {
+		t.Fatalf("desktop PAT scopes = %v, want the fourteen desktop scopes", scopes)
 	}
 	var granted []string
 	for _, sc := range scopes {
@@ -139,7 +139,7 @@ func TestDesktopGrantExchange(t *testing.T) {
 	}
 	slices.Sort(granted)
 	wantScopes := []string{
-		"agent:manage", "agent:publish", "agent:read", "knowledge:read", "knowledge:write",
+		"agent:manage", "agent:publish", "agent:read", "connection:broker", "knowledge:read", "knowledge:write",
 		"repo:read", "repo:write", "run:read", "run:write", "secret:write",
 		"user:profile", "voice:read", "voice:write",
 	}
