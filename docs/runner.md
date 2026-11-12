@@ -3558,7 +3558,7 @@ checklist says is left. If the goal cannot be reached, the model is told to
 say why and move on or finish. Each later streak gets the message again. The
 run's own limits (`--max-turns`, `--max-cost`, the timeout) still end a run
 that never stops repeating, and the receipt counts the messages in
-`usage.loopNudges`. Earlier harnesses, and a policy that pins the vendor's
+`usage.loopNudges` ([the envelope's `usage` counts](#the-envelopes-usage-counts)). Earlier harnesses, and a policy that pins the vendor's
 docker-agent image, end the run at the fifth identical call.
 
 **What a summary keeps** (CLI v0.7.45 or later, on Agentry's build of
@@ -4025,6 +4025,47 @@ The runner picks, so a run that never heard of marking still shows its work:
 A file the runner picked has `"marked": false`. A run that failed lists no
 deliverables and writes no `deliverable.md`, and neither does a run whose
 teardown could not delete a secret and so ended as a failure.
+
+### The envelope's `usage` counts
+
+Beside its tokens, cost, time and turns, the envelope's `usage` block counts
+what the harness did to carry the conversation on. A count of nothing is left
+out, so most envelopes have none of them:
+
+```json
+"usage": {
+  "inputTokens": 48211, "outputTokens": 1930, "costUsd": 0.0421, "wallMs": 96114, "turns": 14,
+  "loopNudges": 1,
+  "lengthRecoveries": {"answer": 1},
+  "resultClears": 1,
+  "compactions": {"threshold": 2, "request": 1}
+}
+```
+
+- `loopNudges` (CLI v0.7.51 or later) counts the times the harness told the
+  model to stop repeating the same tool call
+  ([when the model repeats a call](#one-tool-result-at-a-time-pages)).
+- `lengthRecoveries` (CLI v0.7.55 or later) counts the answers taken out of
+  the conversation because the output limit cut them off, by what was cut:
+  `answer`, `reasoning` or `toolCall`
+  ([when an answer reaches the output limit](#when-an-answer-reaches-the-output-limit)).
+- `resultClears` (CLI v0.7.56 or later) counts the times the harness replaced
+  old tool results in the conversation with short placeholders, after the
+  model server's cache of the conversation had expired. One clear may replace
+  several results.
+- `compactions` (CLI v0.7.56 or later) counts the times the conversation was
+  replaced by a summary of it, by why: `threshold` when it neared the model's
+  window, `overflow` when the model's server refused it as too long, and
+  `request` when the runner asked for the summary, as it may for a persistent
+  agent's conversation.
+
+A one-shot run's envelope carries them from the versions named. From CLI
+v0.7.56 the envelope of an interactive session and of each segment of a
+persistent agent carries them too. Every count comes from what the harness
+reports of itself, so a harness that does not report one leaves it out: a
+one-shot run on the default harness reports `loopNudges` and
+`lengthRecoveries`, and leaves `resultClears` and `compactions` out even when
+its conversation was cleared or summarised.
 
 ### The envelope's `checklist` block
 
@@ -6345,7 +6386,7 @@ key variable's **name** only.
 | `runhost model <name> --json` | `runhost`, `models[]`: the saved models the runhost holds |
 | `setup --json` | `policyPath`, `provider`, `model`, `apiKeyEnv` (a name), `baseUrl`, `contextWindow` (when the policy names one; CLI v0.7.9 or later), `images` ready\|skipped |
 | `run ns/name --plan --json` (or `--local DIR`) | the consent-free preview a client shows before a person consents: `ref`, `version`, `digest`, `mode`, `modes`, `plan` (the compiled plan, canonical — what a run would enforce), `planSha256` (the receipt's `runPlanSha256`, over the plan's canonical indented form — match it, do not re-derive it from the compact `plan` bytes), `contract`, `contractDigest`, `model` (the saved model the plan was compiled on: `savedModel` with its `id` and `name`, `model` as `<provider>/<model id>`, and `adapter`), `attestation` verified\|unsigned\|local\|mismatch\|unverifiable, `keyId`, `signed`, `installed`, `diff`, `needsConfirmation`, `reason`, `refusals[]` (every refusal the attestation and vulnerable-server gates would meet, in the order a run meets them: `kind` attestation\|vulnerable_server, `message`, `lift` — the flag that lifts it, `--allow-unsigned`, `--allow-unscanned` or `--allow-vulnerable-mcp`, absent when none does), `refusal` (deprecated: the first refusal's message). Asks nothing, records nothing, materializes into a temp home; exit 0 whether or not a run would be refused (`--dry-run` is the plan for a person who consented on the terminal) |
-| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness` (with `savedModel`, the saved model's `id` and `name`, beside `model`, `<provider>/<model id>`), `usage`, `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made and each send to a [destination](#destinations-sending-a-runs-result-somewhere): `destination`, `kind`, `host` and `onMyNetwork` for a send, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
+| `run … --output-format json` | the result envelope: `agentry` (`run/v1`), `status`, `exitCode` and `exitClass`, `error`, for a failed run `stage` and `reason` ([Exit codes, stage and reason](#exit-codes-stage-and-reason)), `runId`, `ref`, `digest`, `attestation`, `capabilities_enforced`, `harness` (with `savedModel`, the saved model's `id` and `name`, beside `model`, `<provider>/<model id>`), `usage` (tokens, cost, time and turns, and [the counts of what the harness did](#the-envelopes-usage-counts)), `result`, `outDir`, `resultFile`, `receipts` (`dir`, `runPlanSha256`), `pdfs` (when the run exported a PDF: `theme` with `name`, `version` and `sha256`, and `files[]` with `path`, `sha256`, `pages` and `bytes`; [what the receipt records](#what-the-receipt-records)), `deliverables` (the files the run was for: `files[]` with `path`, `title`, `sha256`, `bytes`, `type` and `marked`; [deliverables](#deliverables)), `deliveries` (each copy `--deliver-to` made and each send to a [destination](#destinations-sending-a-runs-result-somewhere): `destination`, `kind`, `host` and `onMyNetwork` for a send, `object`, `sha256`, `status` and `error`), `fetchSaves` (when `fetch` saved a body into the scratch folder: `files`, `bytes`, `asked` and `ledger`; [the fetch ledger](#the-fetch-ledger-and-fetchsaves)), and `policy` (`path` of the operator policy file the run enforced, absolute; `source` default\|flag\|env — the runner home's file, `--policy`, or a home relocated by `AGENTRY_RUNNER_HOME`; `sha256`, the plan's `policySha256` — the digest of that file) |
 | `draft … --json` | the draft itself, `draft.json`: `manifest` (the v2 manifest as JSON), `instructions`, `notes`, `matches[]` (`ref`, `why`), `sources[]` (`url`, `used`, `withheld`), `openQuestions[]`, `drafter` (`ref`, `build`, `model`, `runId`), `aiReview` (the description's verdict, the receipt's web counts as its own fields — `scan`, `pages`, `read`, `passed`, `withheld`, … — `withheldSources[]` with `tool`, `url` and `reason`, and `check`, AI Review's check of the finished draft: `rubric` (`verdict` pass, flagged or not_scanned, `scores`, `findings[]` with `id`, `score` and `path`, `rubricHash`, `failure`), `draft` (`verdict`, `score`, `scores`, `flagged[]`, `questionSet`, `failure`), `model`, `requests`, `inputTokens`, `checks` (how many checks were asked, at most 2), or `unanswered`, the reason it has no answer, with no verdicts), `validation` (the `validate --json` report on the rendered package), `manifestError` |
 | `draft … --output-format json` | the Drafter run's result envelope, as `run … --output-format json` writes one (its `usage`, the attestation `builtin`, the `web` counts), with an empty `result` and the draft's report under `draft`: `file` (where `draft.json` is), `rendered`, `passed`, `manifestError` (a flag), `matches`, `openQuestions` and `withheld` (counts), `corrections` (how many slips were corrected), `repaired` (whether the one repair turn ran) and `check` (AI Review's check as one word: `pass`, `flagged`, `not_scanned`, or `unanswered`; absent for a draft that could not be rendered). The envelope's usage is both turns' together. A draft that stops before the Drafter runs still writes one envelope with its class and stage |
 | `knowledge create NAME --json` / `knowledge add DIR --json` | `dir`, `manifest` (the pack's `manifest.json`: `schema`, `name`, `id`, `created`, `updated`, `creator`, `pages`, `bytes`, `sha256`, and `scan`, the string `not scanned` or a registry's record), `documents[]` (what the run was given), `skipped[]` (documents not ingested), `written[]` (the paths the build applied), `dropped[]` (`path`, `reason`, `kept`), `sources[]` (each `--repo` and `--url`: `kind` repository or url, `url` with any query hidden, `ref`, `commit`, `document` it is cited under, `files`, `bytes`, `leftOut` by reason, and `token`, where the token came from (flag, keychain or prompt), never the token itself), `receipts` (the Creator run's receipt directory), `decode` (the decode step's report, when documents were decoded), `stopped` (the budget or error that stopped the run early, when one did) |
