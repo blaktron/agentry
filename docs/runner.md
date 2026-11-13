@@ -685,9 +685,15 @@ commands a line on stdin (`send`, `end`) and the agent's events as JSON lines
 on descriptor 3, which the driver opens. A `send` while another chat's turn is
 in flight is refused as `busy`. `end`, or the end of input, detaches and leaves
 the agent running. It takes no files (`add` is refused; put them in the share
-folder), and a `steer` is refused `cannot_steer`: a persistent agent takes a
-message only between turns, whatever harness it runs on. A reader on descriptor 3 that stops taking events is let go; the
-events are in the transcript. Needs CLI v0.6.157 or later.
+folder). From CLI v0.7.58 a `steer` joins a chat's turn in flight when the
+agent runs on the Agentry harness, as in a session: the agent answers it with
+a `steer` event, then `steered` where the message joined the conversation.
+It is refused `no_turn` when no chat's turn is in flight (send it as a turn),
+and `cannot_steer` when the turn in flight is the agent's own (a scheduled or
+messenger turn) or the harness takes a message only between turns, as Docker
+Agent does. An older CLI refuses every `steer` `cannot_steer`. A reader on
+descriptor 3 that stops taking events is let go; the events are in the
+transcript. Needs CLI v0.6.157 or later.
 
 ### `agentry install <ref>`
 
@@ -4143,11 +4149,13 @@ out, so most envelopes have none of them:
 A one-shot run's envelope carries them from the versions named. From CLI
 v0.7.56 the envelope of an interactive session and of each segment of a
 persistent agent carries them too. Every count comes from what the harness
-reports of itself, so a harness that does not report one leaves it out: a
-one-shot run on docker-agent reports `loopNudges` and
-`lengthRecoveries`, and leaves `resultClears` and `compactions` out even when
-its conversation was cleared or summarised. The Agentry harness reports all
-four.
+reports of itself, so a harness that does not report one leaves it out. A
+one-shot run on Docker Agent reports `loopNudges`, `lengthRecoveries` and,
+from CLI v0.7.58, `compactions`; it leaves `resultClears` out, since its
+cache-expiry clear happens only when a conversation resumes. An interactive
+session or a persistent agent on Docker Agent reports neither
+`resultClears` nor `compactions`. The Agentry harness reports all four
+everywhere.
 
 ### The envelope's `checklist` block
 
@@ -4941,7 +4949,7 @@ What differs from `docker-agent`:
 | [The finish check](#the-scratch-folder) | the runner starts the harness again on the same conversation | the harness asks the runner before it ends the run, and the message joins the same turn; an answer with no text and no call is answered too |
 | [A message during a turn](#a-message-during-a-turn) | kept until the turn ends | joins the turn in flight |
 | Old tool results, when a session's or a persistent agent's turn starts after the model server's cache has expired | each result older than the two turns before gives way to a placeholder, and each browser result but the two newest | the same, but a result under 4 KiB stays unless it is a browser's, and the placeholder says the result was read in full at the time |
-| [The envelope's counts](#the-envelopes-usage-counts) | `loopNudges`, `lengthRecoveries` | those, and `resultClears` and `compactions` |
+| [The envelope's counts](#the-envelopes-usage-counts) | `loopNudges`, `lengthRecoveries`, and in a one-shot run `compactions` (CLI v0.7.58 or later) | those, and `resultClears` and `compactions` everywhere |
 | The stored conversation | Docker Agent's own session store | an append-only record of the run's own, on the session volume |
 
 Both summarise a conversation as it nears the model's window, answer a tool
@@ -5940,7 +5948,8 @@ runs the image.
     events.ndjson        the raw harness event stream
     agent-stderr.log     the harness process's stderr
     gateway.log          the gateway's own log, tool calls included
-    proxy.log            the LLM egress proxy's decisions: one allow/deny line per CONNECT
+    proxy.log            the LLM egress proxy's decisions: one allow/deny line per CONNECT,
+                         and per request to a plain-http model endpoint (allow http / deny http)
     browser-proxy.log    a browser's browse proxy: every refusal, with its reason
     run-plan.json        the exact compiled plan that ran
     meta.json, task.txt  run identity, timing, budgets, the task input
